@@ -1,0 +1,9 @@
+# 备份忽略文件
+.DS_Store
+*.pyc
+__pycache__/
+*.log
+temp/
+tmp/
+*.bak
+*.backup
