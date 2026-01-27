@@ -1,850 +1,829 @@
+## 📐 Word文档格式规范（中南大学医学博士标准）
 
-# 如果自动安装失败，提示用户
-echo "⚠️ 自动安装失败，请手动执行："
-echo "pip3 install python-docx"
+### 页面设置
+
+- **纸张**：A4（21cm × 29.7cm）
+- **页边距**：上下2.54cm，左右3.17cm（版心240mm×146mm）
+- **页眉距边界**：1.5cm
+- **页脚距边界**：1.75cm
+
+### 样式规范
+
+#### 1. 章标题（一级标题）
+- **字体**：三号黑体加粗（16pt）
+- **对齐**：居中
+- **编号**：阿拉伯数字（如"1"），与标题间空1字
+- **间距**：段前18磅，段后12磅
+- **分页**：每章另起一页
+
+#### 2. 节标题（二级标题）
+- **字体**：四号宋体（14pt），英文Times New Roman
+- **对齐**：顶格（左对齐）
+- **编号**：如"1.1"（末位数字后不加点）
+- **间距**：段前10磅，段后8磅
+
+#### 3. 小节标题（三级标题）
+- **字体**：小四号宋体（12pt），英文Times New Roman
+- **对齐**：顶格
+- **编号**：如"1.1.1"
+- **间距**：段前10磅，段后8磅
+
+#### 4. 正文
+- **字体**：小四号宋体（12pt），英文Times New Roman
+- **首行缩进**：2字符
+- **行距**：固定值20磅
+- **对齐**：两端对齐
+
+#### 5. 图注
+- **字体**：五号楷体（10.5pt），英文Times New Roman
+- **对齐**：居中
+- **位置**：图片下方
+- **格式**：图 X-X 图名\nFig. X-X Figure name
+- **间距**：段前0行，段后1行
+
+#### 6. 表注
+- **字体**：五号楷体（10.5pt），英文Times New Roman
+- **对齐**：居中
+- **位置**：表格上方
+- **格式**：表 X-X 表名\nTable X-X Table name
+- **间距**：段前1行，段后0行
+
+### 图表规范
+
+**图（Figure）**：
+```
+（正文）
+
+[图片居中，宽14cm]
+
+图 3-1 纳米载体的TEM表征图
+Fig. 3-1 TEM characterization of nanocarriers
+（五号楷体居中）
+
+（正文）
 ```
 
-**依赖验证结果示例**：
+**表（Table）**：
 ```
-✅ Python 3.11.5 已安装
-✅ python-docx 已安装
-✅ 所有依赖就绪
-```
+（正文）
 
----
+表 2-1 主要实验试剂及来源
+Table 2-1 Main reagents and sources
+（五号楷体居中）
 
-## 🚀 启动检测：新项目 vs 续写 vs 查询
+[三线表：上1.5磅，中0.75磅，下1.5磅]
+[表内：五号宋体，单倍行距，居中]
 
-**AI首先判断用户意图（在任何操作前执行）**：
-
-### 用户意图识别表
-
-| 用户说法 | 意图类型 | AI响应流程 |
-|----------|----------|------------|
-| "我有一篇SCI论文..." / "帮我扩写论文" | 新项目 | → **流程A：新项目** |
-| "继续写" / "继续生成" / "接着写" | 续写项目 | → **流程B：断点续写** |
-| "我的论文写到哪了" / "查看进度" / "状态" | 状态查询 | → **流程C：状态查询** |
-| "还剩多少字" / "字数统计" | 统计查询 | → **流程C：状态查询** |
-| "修改第X章" / "改一下..." | 修改章节 | → **流程D：章节修改** |
-
----
-
-## 流程A：新项目完整流程
-
-### 步骤A1：收集用户基本信息
-
-**在开始任何写作前，必须先收集以下信息用于封面和扉页：**
-
-```
-请提供以下基本信息（用于生成封面和扉页）：
-
-1. 学校信息：
-   - 学校名称：[默认：中南大学]
-   - 学院名称：[如：湘雅药学院]
-
-2. 个人信息：
-   - 姓名：
-   - 学号：
-   - 年级/入学年份：[如：2020级]
-
-3. 学科信息：
-   - 学科门类：[默认：医学]
-   - 学科专业：[如：药剂学]
-   - 研究方向：[如：纳米药物递送系统]
-
-4. 导师信息：
-   - 正指导教师：[姓名 + 职称，如：张三 教授]
-   - 副指导教师（如有）：[姓名 + 职称，仅在扉页显示]
-
-5. 答辩信息：
-   - 预计答辩时间：[如：2026年6月]
-   - 学位类型：[默认：学术学位]
-
-6. 其他：
-   - 分类号：[如：R944]
-   - UDC号：[如不清楚可留空]
-
-7. 项目路径（可选）：
-   - 默认路径：/Users/wsxwj/Desktop/博士论文_[主题]_[姓名]/
-   - 自定义路径：[留空使用默认，或输入完整路径]
-
-请逐项填写，未填写的项将使用默认值或提示补充。
+（正文）
 ```
 
-### 步骤A2：上传SCI论文文件
+### 摘要格式
 
+**中文摘要**：
 ```
-请上传您的SCI论文文件：
-- 支持格式：PDF 或 Word (.docx)
-- 如有补充材料（图片、数据），也请一并上传
+[论文标题]
+（三号黑体加粗居中，段前18磅段后12磅）
 
-上传后，我会：
-1. 自动读取论文内容
-2. 提取关键信息（研究主题、方法、结果）
-3. 生成详细大纲
-4. 委托@librarian进行文献调研（120篇）
-```
+摘要：
+（四号黑体加粗顶格）
+    [摘要正文约1000字]
+（四号宋体，首行缩进2字符，行距20磅）
 
-### 步骤A3：初始化项目
+本研究共有图XX幅，表XX个，参考文献XXX篇。
+（空一行后顶格，四号宋体）
 
-**AI执行以下操作**：
-```bash
-# 1. 确定项目路径
-PROJECT_ROOT="/Users/wsxwj/Desktop/博士论文_[主题]_[姓名]"
+关键字：关键词1；关键词2；关键词3
+（空两行后顶格，"关键字："四号黑体加粗）
 
-# 2. 创建完整文件夹结构
-mkdir -p "$PROJECT_ROOT/00_项目管理"
-mkdir -p "$PROJECT_ROOT/01_前置部分"
-mkdir -p "$PROJECT_ROOT/02_正文章节"
-mkdir -p "$PROJECT_ROOT/03_后置部分"
-mkdir -p "$PROJECT_ROOT/04_图表文件"
-mkdir -p "$PROJECT_ROOT/05_原始材料"
-mkdir -p "$PROJECT_ROOT/06_版本历史"
-
-echo "✅ 项目文件夹创建完成"
-```
-
-**保存用户基本信息到本地**：
-```bash
-cat > "$PROJECT_ROOT/00_项目管理/用户基本信息.txt" << 'EOF'
-学校：中南大学
-学院：湘雅药学院
-姓名：XXX
-学号：XXXXXXXXXX
-年级：2020级
-学科专业：药剂学
-研究方向：纳米药物递送系统
-正指导教师：张三 教授
-副指导教师：李四 副教授
-答辩时间：2026年6月
 分类号：R944
-UDC号：615.014
-创建时间：2026-01-27 16:45:00
-EOF
-
-echo "✅ 用户信息已保存"
+（顶格，"分类号："四号黑体加粗）
 ```
 
-**复制辅助脚本到项目目录**：
-```bash
-# 从技能目录复制脚本
-cp /Users/wsxwj/.config/opencode/skills/sci2doc/scripts/*.py "$PROJECT_ROOT/00_项目管理/"
+**英文摘要**：
+```
+[English Title]
+（三号Times New Roman加粗居中，上空一行）
 
-echo "✅ 辅助脚本已部署"
+Abstract:
+（四号Times New Roman加粗顶格）
+    [Abstract content about 1000 words]
+（四号Times New Roman，首行缩进2字符，行距20磅）
+
+Keywords: keyword1; keyword2; keyword3
+（空两行后顶格，"Keywords:"四号Times New Roman加粗）
+
+Classification: R944
+（顶格，"Classification:"四号Times New Roman加粗）
 ```
 
-### 步骤A4：读取和分析SCI论文
+### 参考文献格式
 
-```python
-# 1. 读取SCI论文
-sci_paper_path = f"{project_root}/05_原始材料/原始SCI论文.pdf"
+```
+参考文献
+（三号黑体加粗居中，段前18磅段后12磅）
 
-# 使用markdownify转换
-paper_content = markdownify_pdf-to-markdown(sci_paper_path)
+（空一行）
 
-# 2. 提取关键信息
-research_info = {
-    "title": extract_title(paper_content),
-    "authors": extract_authors(paper_content),
-    "journal": extract_journal(paper_content),
-    "keywords": extract_keywords(paper_content),
-    "abstract": extract_abstract(paper_content),
-    "methods": extract_methods_section(paper_content),
-    "results": extract_results_section(paper_content),
-    "figures_count": count_figures(paper_content)
-}
-
-print(f"✅ 已读取SCI论文：{research_info['title']}")
-print(f"   期刊：{research_info['journal']}")
-print(f"   关键词：{', '.join(research_info['keywords'])}")
+[1] 作者1, 作者2, 作者3, 等. 题名[J]. 刊名, 年, 卷(期): 起止页码.
+[2] Author1, Author2, Author3, et al. Title[J]. Journal, Year, Volume(Issue): Pages.
+（小四号宋体/Times New Roman，顶格，悬挂缩进2字符）
 ```
 
-### 步骤A5：生成详细大纲
+**格式要求**：
+- 作者：写到第三位，余者写",等"或",et al."
+- 编号：顺序编码制[1]，方括号
+- 标点：中文全角，英文半角
+- 数量：医学博士≥80篇（推荐≥120篇）
 
-**AI基于SCI论文内容生成大纲**：
-```python
-# 根据SCI论文结构生成博士论文大纲
-outline = {
-    "title_cn": "[基于原文翻译或优化]",
-    "title_en": research_info['title'],
-    "chapters": [
-        {
-            "num": "第一章",
-            "name": "前言",
-            "target_words": 12200,
-            "sections": [
-                {"num": "1.1", "name": "研究背景与意义", "words": 3500},
-                {"num": "1.2", "name": "国内外研究现状", "words": 6200},
-                {"num": "1.3", "name": "本研究的主要内容与创新点", "words": 2500}
-            ]
-        },
-        {
-            "num": "第二章",
-            "name": "材料与方法",
-            "target_words": 7200,
-            "sections": [
-                {"num": "2.1", "name": "实验材料", "words": 2000},
-                {"num": "2.2", "name": "实验仪器", "words": 1500},
-                {"num": "2.3", "name": "实验方法", "words": 3700}
-            ]
-        },
-        # ... 根据SCI论文结构生成其他章节
-    ],
-    "total_target": 53000  # 留buffer
-}
+### 页眉页脚
 
-# 显示大纲给用户确认
-print("━" * 60)
-print("📋 生成的论文大纲：")
-print("━" * 60)
-for chapter in outline['chapters']:
-    print(f"{chapter['num']} {chapter['name']}（目标{chapter['target_words']}字）")
-    for section in chapter['sections']:
-        print(f"  {section['num']} {section['name']}（{section['words']}字）")
+**页眉**：
+- 左侧：中南大学博士学位论文
+- 右侧：第 X 章 章名
+- 字体：宋体五号
 
-print("\n请确认：")
-print("1. 直接开始生成（输入：开始）")
-print("2. 调整字数分配（输入：调整）")
-print("3. 修改章节结构（输入：修改）")
-print("4. 查看完整大纲文件（输入：查看）")
-```
-
-### 步骤A6：创建记忆实体（核心）
-
-**保存完整项目信息到知识图谱**：
-```python
-memory_create_entities({
-  "entities": [{
-    "name": f"{user_name}_博士论文项目_{research_topic}_{date_str}",
-    "entityType": "博士论文项目",
-    "observations": [
-      # ===== 基本信息 =====
-      f"学校：{school}",
-      f"学院：{college}",
-      f"姓名：{user_name}",
-      f"学号：{student_id}",
-      f"年级：{grade}",
-      f"学科专业：{major}",
-      f"研究方向：{research_direction}",
-      f"研究主题：{research_topic}",
-      f"正指导教师：{supervisor_main}",
-      f"副指导教师：{supervisor_vice}",
-      f"答辩时间：{defense_date}",
-      f"分类号：{classification}",
-      f"UDC号：{udc}",
-      
-      # ===== 项目路径（关键） =====
-      f"项目路径：{project_root}",
-      
-      # ===== 论文标题 =====
-      f"论文标题（中文）：{outline['title_cn']}",
-      f"论文标题（英文）：{outline['title_en']}",
-      
-      # ===== 大纲结构 =====
-      f"章节总数：{len(outline['chapters'])}",
-      f"正文目标字数：50000",
-      f"综述目标字数：5000",
-      
-      # 每章详细信息
-      *[f"{ch['num']}：{ch['name']}（目标{ch['target_words']}字）" 
-        for ch in outline['chapters']],
-      
-      # ===== 进度跟踪（初始状态） =====
-      "当前章节：未开始",
-      "总字数：0 / 50000",
-      "完成度：0.0%",
-      "状态：已初始化",
-      
-      # ===== SCI论文信息 =====
-      f"SCI论文标题：{research_info['title']}",
-      f"SCI论文期刊：{research_info['journal']}",
-      f"SCI论文关键词：{', '.join(research_info['keywords'])}",
-      
-      # ===== 图表规划 =====
-      f"图表总数：待定（基于SCI论文{research_info['figures_count']}图扩展）",
-      
-      # ===== 参考文献 =====
-      "参考文献状态：待调研",
-      "参考文献目标：≥120篇",
-      
-      # ===== 术语表引用 =====
-      f"术语表实体：{research_topic}_术语表_{date_str}",
-      
-      # ===== 时间戳 =====
-      f"创建时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-      f"最后更新：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-      f"生成版本：v1.0"
-    ]
-  }]
-})
-
-print("✅ 项目信息已保存到知识图谱")
-```
-
-**创建术语表实体**：
-```python
-# 从SCI论文提取术语
-terms = extract_terminology(paper_content)
-
-memory_create_entities({
-  "entities": [{
-    "name": f"{research_topic}_术语表_{date_str}",
-    "entityType": "术语表",
-    "observations": [
-      f"项目名称：{research_topic}",
-      f"术语总数：{len(terms)}",
-      *[f"{term['cn']} = {term['en']}（缩写：{term.get('abbr', '无')}）" 
-        for term in terms]
-    ]
-  }]
-})
-
-print(f"✅ 术语表已创建（{len(terms)}个术语）")
-```
-
-**保存大纲到本地文件**：
-```python
-# 生成Markdown格式的大纲文件
-outline_md = generate_outline_markdown(outline, research_info)
-
-filesystem_write_file(
-    path=f"{project_root}/00_项目管理/论文大纲_{date_str}.md",
-    content=outline_md
-)
-
-print("✅ 大纲已保存到本地")
-```
-
-### 步骤A7：委托@librarian文献调研
-
-**使用background_task调用librarian**：
-```python
-# 提取关键词用于文献检索
-keywords = research_info['keywords']
-field = research_info.get('research_field', '医学')
-
-# 调用librarian（同步等待）
-literature_task = background_task(
-    agent="librarian",
-    description=f"文献调研：{research_topic}",
-    prompt=f"""
-请协助完成博士论文的文献调研任务：
-
-**研究领域**：{field}
-**核心关键词**：{', '.join(keywords)}
-**SCI论文标题**：{research_info['title']}
-**SCI论文期刊**：{research_info['journal']}
-
-**需要收集的文献类型和数量**：
-
-1. **综述文献（15-20篇）**：
-   - 该领域最新综述（2021-2024年，影响因子>10）
-   - 经典奠基性综述（引用量>500）
-   - 搜索关键词：{keywords[0]}, {keywords[1]}, review
-   - 推荐来源：Nature Reviews Drug Discovery, Advanced Drug Delivery Reviews, Chemical Reviews
-
-2. **方法学文献（20-30篇）**：
-   - 与本研究方法相似的文献
-   - 该方法的原创文献和改进文献
-   - 关键实验技术的标准操作文献
-   - 搜索关键词：{keywords[2]}, methodology, characterization
-
-3. **结果对比文献（30-40篇）**：
-   - 研究对象相同但方法不同的文献
-   - 研究方法相同但对象不同的文献
-   - 最近5年的代表性工作
-   - 得出相似或不同结论的文献（用于讨论）
-
-4. **争议性讨论文献（10-15篇）**：
-   - 该领域当前争议焦点
-   - 不同学术观点的代表性文献
-   - 最新的反驳或质疑文章
-   - 未解决的科学问题
-
-5. **临床转化文献（10-15篇，医学类必需）**：
-   - 该技术的临床前研究
-   - 类似技术的临床试验文献
-   - 临床应用的安全性和有效性评价
-   - FDA批准的纳米药物案例
-
-**返回格式要求**：
-
-请以Markdown格式返回，每篇文献包含：
-
-```markdown
-### [序号] 中文标题
-- **英文标题**：...
-- **作者**：First Author, Second Author, et al.
-- **期刊**：Journal Name, Year, Volume(Issue): Pages
-- **影响因子**：X.XXX (2023)
-- **DOI**：10.xxxx/xxxxx
-- **核心观点**：（用1-2句话概括该文献的主要发现和结论）
-- **相关性**：高/中/低
-- **建议引用章节**：前言1.2节 / 方法2.3节 / 讨论5.1节 / 综述
-```
-
-**质量要求**：
-- 总数：至少120篇
-- 近5年文献占比：≥60%
-- 高影响因子（>10）：≥20篇
-- 覆盖该领域的主流研究方向和最新进展
-""",
-    sync=True
-)
-
-print("⏳ 正在进行文献调研（预计需要2-3分钟）...")
-
-# 获取结果
-literature_result = background_output(task_id=literature_task['task_id'], block=True)
-
-print(f"✅ 文献调研完成")
-```
-
-**保存文献到本地和记忆**：
-```python
-# 1. 保存到本地文件
-filesystem_write_file(
-    path=f"{project_root}/00_项目管理/参考文献_{date_str}.md",
-    content=literature_result
-)
-
-# 2. 统计文献数量
-ref_count = len(re.findall(r'^###\s+\[\d+\]', literature_result, re.MULTILINE))
-
-# 3. 更新项目记忆
-memory_add_observations({
-    "observations": [{
-        "entityName": f"{user_name}_博士论文项目_{research_topic}_{date_str}",
-        "contents": [
-            f"参考文献状态：已完成调研",
-            f"参考文献总数：{ref_count}篇",
-            f"文献调研日期：{date_str}",
-            f"文献文件：00_项目管理/参考文献_{date_str}.md"
-        ]
-    }]
-})
-
-print(f"✅ 文献已保存（{ref_count}篇）")
-```
+**页码**：
+- 前置部分：罗马数字（I, II, III...）
+- 正文部分：阿拉伯数字（1, 2, 3...，从第一章重新编号）
+- 字体：Times New Roman小五号，居中
 
 ---
 
-## 流程B：断点续写（最重要）
+## 🛡️ 错误处理机制
 
-### 步骤B1：查询记忆中的项目
+### 常见错误及解决方案
 
+**错误1：word-mcp工具调用失败**
 ```python
-# 1. 搜索所有博士论文项目
-print("🔍 正在查询您的论文项目...")
+try:
+    word-mcp_create_document(filename=chapter_file)
+    print("✅ 文档创建成功")
+except Exception as e:
+    print(f"❌ 创建文档失败：{e}")
+    print("⚠️ 将使用备用方案...")
+    
+    # 备用方案：提示用户手动创建
+    print(f"请手动创建Word文档：{chapter_file}")
+    print("创建后回复'已创建'继续")
+    
+    # 等待用户确认
+    input("按回车继续...")
+```
 
-projects = memory_search_nodes(query="博士论文项目")
+**错误2：python-docx未安装**
+```python
+# 检查依赖
+check_result = bash("python3 -c 'import docx' 2>&1")
 
-# 2. 判断结果
-if not projects or len(projects) == 0:
-    print("❌ 未找到之前的项目记录")
-    print("\n可能原因：")
-    print("1. 这是您第一次使用此功能")
-    print("2. 记忆数据已清空")
-    print("3. 项目名称不匹配")
+if check_result['exit_code'] != 0:
+    print("❌ python-docx未安装")
+    print("正在尝试安装...")
     
-    print("\n请选择：")
-    print("1. 开始新项目（需要提供SCI论文）")
-    print("2. 从本地文件恢复项目（如果文件夹还在）")
+    install_result = bash("pip3 install python-docx 2>&1")
     
-    choice = input("请输入选项（1/2）：")
-    
-    if choice == "1":
-        # 转到新项目流程
-        print("请提供您的SCI论文文件...")
-        # 跳转到流程A
-    elif choice == "2":
-        # 从本地恢复
-        project_path = input("请输入项目文件夹路径：")
-        # 执行本地恢复流程（见步骤B3）
-
-elif len(projects) == 1:
-    # 只有一个项目，直接使用
-    selected = projects[0]
-    print(f"✅ 找到项目：{selected['name']}")
-
-else:
-    # 多个项目，让用户选择
-    print(f"✅ 找到 {len(projects)} 个项目：\n")
-    for i, proj in enumerate(projects):
-        # 解析项目名称显示更友好
-        name_parts = proj['name'].split('_')
-        print(f"  {i+1}. {name_parts[2] if len(name_parts) > 2 else proj['name']}")
-    
-    choice = input("\n请输入序号选择项目（直接回车选择最新的）：")
-    
-    if choice == "":
-        selected = projects[0]  # 默认最新
-        print(f"📌 已选择最新项目")
+    if install_result['exit_code'] == 0:
+        print("✅ python-docx安装成功")
     else:
-        try:
-            selected = projects[int(choice) - 1]
-            print(f"📌 已选择项目 {choice}")
-        except:
-            print("❌ 输入无效，使用最新项目")
-            selected = projects[0]
-```
-
-### 步骤B2：读取项目完整状态
-
-```python
-# 1. 打开项目实体
-print("📖 正在读取项目状态...")
-
-project_entity = memory_open_nodes(names=[selected['name']])
-observations = project_entity[0]['observations']
-
-# 2. 解析所有信息
-project_info = {
-    "基本信息": {},
-    "大纲结构": [],
-    "进度信息": {},
-    "文件信息": {}
-}
-
-for obs in observations:
-    if "：" in obs:
-        key, value = obs.split("：", 1)
-        key = key.strip()
-        value = value.strip()
+        print("⚠️ 自动安装失败")
+        print("请手动执行：pip3 install python-docx")
+        print("安装完成后回复'已安装'")
         
-        # 分类存储
-        if key in ["学校", "学院", "姓名", "学号", "研究主题", "正指导教师", "答辩时间"]:
-            project_info["基本信息"][key] = value
-        elif key == "项目路径":
-            project_info["文件信息"]["路径"] = value
-        elif key.startswith("第") and "章" in key:
-            project_info["大纲结构"].append({"key": key, "value": value})
-        elif key in ["当前章节", "总字数", "完成度", "状态"]:
-            project_info["进度信息"][key] = value
-        elif key.startswith("进度："):
-            # 解析进度信息
-            if "已完成" in value:
-                if "已完成章节" not in project_info["进度信息"]:
-                    project_info["进度信息"]["已完成章节"] = []
-                project_info["进度信息"]["已完成章节"].append(obs)
-
-# 3. 显示项目信息
-print("✅ 项目状态已加载")
-print(f"   项目：{project_info['基本信息'].get('研究主题', '未命名')}")
-print(f"   作者：{project_info['基本信息'].get('姓名', '未知')}")
-print(f"   路径：{project_info['文件信息'].get('路径', '未知')}")
-
-# 提取关键信息
-project_root = project_info['文件信息'].get('路径')
-completed_count = len(project_info['进度信息'].get('已完成章节', []))
-total_chapters = len(project_info['大纲结构'])
-
-print(f"   进度：{completed_count}/{total_chapters} 章")
+        input("按回车继续...")
 ```
 
-### 步骤B3：检查本地文件完整性
-
+**错误3：文件路径不存在**
 ```python
-# 1. 验证项目路径
-if not project_root:
-    print("⚠️ 记忆中未找到项目路径")
-    project_root = input("请输入项目文件夹路径：")
-    
-    # 更新记忆
-    memory_add_observations({
-        "observations": [{
-            "entityName": selected['name'],
-            "contents": [f"项目路径：{project_root}"]
-        }]
-    })
-
-# 2. 检查路径是否存在
 if not os.path.exists(project_root):
     print(f"❌ 项目路径不存在：{project_root}")
-    print("\n请选择：")
-    print("1. 重新创建项目文件夹（推荐）")
-    print("2. 重新指定路径")
-    print("3. 取消操作")
+    print("正在创建...")
     
-    choice = input("请输入选项（1/2/3）：")
-    
-    if choice == "1":
-        # 重新创建文件夹结构
+    try:
         bash(f"mkdir -p '{project_root}'")
         bash(f"mkdir -p '{project_root}'/{{00_项目管理,01_前置部分,02_正文章节,03_后置部分,04_图表文件,05_原始材料,06_版本历史}}")
-        print("✅ 项目文件夹已重建")
-    elif choice == "2":
-        # 重新指定
-        project_root = input("请输入新的项目路径：")
-        # 更新记忆...
-    else:
-        return  # 取消
-
-# 3. 检查必需文件
-print("\n🔍 检查项目文件...")
-
-# 检查辅助脚本
-scripts_dir = f"{project_root}/00_项目管理"
-required_scripts = ["merge_documents.py", "count_words.py", "check_quality.py"]
-
-missing_scripts = []
-for script in required_scripts:
-    script_path = f"{scripts_dir}/{script}"
-    if not os.path.exists(script_path):
-        missing_scripts.append(script)
-
-if missing_scripts:
-    print(f"⚠️ 缺少辅助脚本：{', '.join(missing_scripts)}")
-    print("正在部署...")
-    
-    # 从技能目录复制
-    skill_scripts = "/Users/wsxwj/.config/opencode/skills/sci2doc/scripts"
-    for script in missing_scripts:
-        bash(f"cp '{skill_scripts}/{script}' '{scripts_dir}/'")
-    
-    print("✅ 辅助脚本已部署")
-
-# 检查章节文件
-chapter_dir = f"{project_root}/02_正文章节"
-if os.path.exists(chapter_dir):
-    existing_chapters = bash(f"ls '{chapter_dir}' 2>/dev/null | grep '第.*章.*\\.docx' || echo ''")
-    chapter_files = [f.strip() for f in existing_chapters.stdout.strip().split('\n') if f.strip()]
-    
-    print(f"✅ 找到 {len(chapter_files)} 个章节文件")
-    for cf in chapter_files:
-        print(f"   - {cf}")
-else:
-    print("⚠️ 正文章节目录不存在，将创建")
-    bash(f"mkdir -p '{chapter_dir}'")
+        print("✅ 项目文件夹已创建")
+    except Exception as e:
+        print(f"❌ 创建失败：{e}")
+        print("请检查：")
+        print("1. 路径是否有权限")
+        print("2. 磁盘空间是否充足")
+        print("3. 路径格式是否正确")
 ```
 
-### 步骤B4：确定下一步操作
-
+**错误4：合并脚本执行失败**
 ```python
-# 1. 从大纲中提取所有章节
-all_chapters = [ch['key'] for ch in project_info['大纲结构']]
+merge_result = bash(f"cd '{project_root}/00_项目管理' && python3 merge_documents.py 2>&1")
 
-# 2. 从进度中提取已完成章节
-completed_chapters = []
-for comp in project_info['进度信息'].get('已完成章节', []):
-    match = re.search(r'(第[一二三四五六七八九十]+章)', comp)
-    if match:
-        completed_chapters.append(match.group(1))
-
-# 3. 确定下一章
-next_chapter = None
-for chapter_key in all_chapters:
-    chapter_name = re.search(r'(第[一二三四五六七八九十]+章)', chapter_key)
-    if chapter_name and chapter_name.group(1) not in completed_chapters:
-        next_chapter = chapter_key
-        break
-
-# 4. 显示状态并询问用户
-print("\n" + "━" * 60)
-print("📊 当前项目状态")
-print("━" * 60)
-
-for chapter_key in all_chapters:
-    chapter_name = re.search(r'(第[一二三四五六七八九十]+章：.*?)（', chapter_key)
-    if chapter_name:
-        ch_name = chapter_name.group(1)
-        # 提取字数信息
-        words_match = re.search(r'(\d+)字', chapter_key)
-        target_words = words_match.group(1) if words_match else "未知"
-        
-        # 判断状态
-        if ch_name.split('：')[0] in completed_chapters:
-            status = "✅"
-            # 可以从进度信息中获取实际字数
-        else:
-            status = "❌" if ch_name != next_chapter else "⏳"
-        
-        print(f"{status} {ch_name:<30} 目标{target_words}字")
-
-total_words = project_info['进度信息'].get('总字数', '0 / 50000')
-print(f"\n总字数：{total_words}")
-
-# 5. 询问用户
-if next_chapter:
-    print(f"\n➡️ 下一步：{next_chapter}")
-    print("\n请选择操作：")
-    print("1. 开始生成下一章（输入：开始 或 1）")
-    print("2. 查看详细大纲（输入：大纲 或 2）")
-    print("3. 查看已完成章节内容（输入：查看 或 3）")
-    print("4. 修改某个章节（输入：修改 或 4）")
-    print("5. 重新生成某章（输入：重新生成 或 5）")
+if merge_result['exit_code'] != 0:
+    print(f"❌ 合并失败：{merge_result['stderr']}")
     
-    user_choice = input("\n请输入选项：")
+    print("\n请检查：")
+    print("1. 所有章节文件是否存在")
+    print("2. 文件是否被其他程序占用（请关闭Word）")
+    print("3. 磁盘空间是否充足")
+    print("4. python-docx是否正确安装")
     
-    # 根据用户选择执行...
-    
+    print("\n手动合并方法：")
+    print("1. 打开Word")
+    print("2. 依次插入所有章节文件内容")
+    print("3. 保存为 完整版_最新.docx")
 else:
-    print("\n✅ 所有正文章节已完成！")
-    print("\n接下来可以：")
-    print("1. 生成综述（≥5,000字）")
-    print("2. 生成中英文摘要")
-    print("3. 生成目录")
-    print("4. 合并完整版文档")
-    print("5. 执行最终质量检查")
+    print("✅ 合并成功")
 ```
 
----
+### 检查点机制（防止中断丢失）
 
-## 流程C：状态查询
-
-**用户随时可以询问项目状态**：
+**每章生成分为5步，每步完成后保存检查点**：
 
 ```python
-def generate_status_report(project_entity):
-    """生成详细的项目状态报告"""
+def generate_chapter_with_checkpoints(chapter_num, chapter_name, target_words, project_root):
+    """带检查点的章节生成"""
     
-    observations = project_entity[0]['observations']
+    # 检查点文件
+    checkpoint_file = f"{project_root}/00_项目管理/.checkpoint_{chapter_num}.json"
     
-    # 解析信息
-    info = {}
-    for obs in observations:
-        if "：" in obs:
-            key, value = obs.split("：", 1)
-            info[key.strip()] = value.strip()
-    
-    # 生成报告
-    report = f"""
-📊 项目状态报告
-{'━' * 60}
-项目名称：{info.get('研究主题', '未知')}
-作者：{info.get('姓名', '未知')}
-学院：{info.get('学院', '未知')}
-项目路径：{info.get('项目路径', '未知')}
-
-{'━' * 60}
-📝 正文进度（目标50,000字，不含综述）
-{'━' * 60}
-"""
-    
-    # 提取章节和进度信息
-    chapters = []
-    completed = []
-    
-    for obs in observations:
-        if obs.startswith("第") and "章：" in obs and "（目标" in obs:
-            chapters.append(obs)
-        elif obs.startswith("进度：") and "已完成" in obs:
-            completed.append(obs)
-    
-    # 显示每章状态
-    for chapter in chapters:
-        # 解析章节名和目标字数
-        match = re.match(r'(第.+?章)：(.+?)（目标(\d+)字）', chapter)
-        if match:
-            ch_num, ch_name, target = match.groups()
-            
-            # 检查是否完成
-            is_completed = any(ch_num in comp for comp in completed)
-            
-            if is_completed:
-                # 从completed中提取实际字数
-                actual_words = 0
-                for comp in completed:
-                    if ch_num in comp:
-                        words_match = re.search(r'(\d+)字', comp)
-                        if words_match:
-                            actual_words = int(words_match.group(1))
-                status = f"✅ {ch_num} {ch_name:<20} {actual_words:>7,}字 / {target}字"
-            else:
-                status = f"❌ {ch_num} {ch_name:<20} {'0':>7}字 / {target}字"
-            
-            report += status + "\n"
-    
-    # 总字数
-    total_words_str = info.get('总字数', '0 / 50000')
-    if '/' in total_words_str:
-        current, target = total_words_str.split('/')
-        current = int(current.strip())
-        target = int(target.strip())
-        percent = current / target * 100
-        report += f"\n当前总字数：{current:,} / {target:,}（{percent:.1f}%）\n"
-    
-    # 下一步
-    current_ch = info.get('当前章节', '未知')
-    if current_ch != "未开始" and current_ch != "已完成":
-        report += f"下一步：继续生成{current_ch}\n"
-    elif len(completed) < len(chapters):
-        report += f"下一步：生成未完成章节\n"
-    else:
-        report += f"下一步：生成综述和摘要\n"
-    
-    report += f"\n{'━' * 60}\n"
-    report += f"📚 其他部分状态\n"
-    report += f"{'━' * 60}\n"
-    
-    # 其他部分
-    parts_status = {
-        "封面扉页": check_files_exist(project_root, ["01_前置部分/封面.docx", "01_前置部分/扉页.docx"]),
-        "中英文摘要": check_files_exist(project_root, ["01_前置部分/中文摘要.docx", "01_前置部分/英文摘要.docx"]),
-        "目录": check_files_exist(project_root, ["01_前置部分/目录.docx"]),
-        "参考文献": info.get('参考文献总数', '未知') + "篇",
-        "综述": check_files_exist(project_root, ["03_后置部分/综述.docx"]),
-        "致谢": check_files_exist(project_root, ["03_后置部分/致谢.docx"])
+    # 定义步骤
+    steps = {
+        "1_created": "创建文档",
+        "2_styles": "应用样式",
+        "3_content": "写入内容",
+        "4_figures": "添加图表",
+        "5_verified": "验证完成"
     }
     
-    for part_name, status in parts_status.items():
-        if status == True:
-            report += f"✅ {part_name}\n"
-        elif status == False:
-            report += f"❌ {part_name}\n"
-        else:
-            report += f"✅ {part_name}：{status}\n"
+    # 加载检查点
+    if os.path.exists(checkpoint_file):
+        with open(checkpoint_file, 'r') as f:
+            completed = json.load(f)
+        print(f"📍 从检查点恢复：{chapter_name}")
+        print(f"   已完成：{', '.join([steps[k] for k in completed])}")
+    else:
+        completed = []
     
-    report += f"\n{'━' * 60}\n"
-    report += f"最后更新：{info.get('最后更新', '未知')}\n"
-    report += f"{'━' * 60}\n"
+    # 执行步骤
+    chapter_file = f"{project_root}/02_正文章节/{chapter_num}_{chapter_name}.docx"
     
-    print(report)
+    # 步骤1：创建文档
+    if "1_created" not in completed:
+        print(f"▶️ 1/5 创建文档...")
+        try:
+            word-mcp_create_document(filename=chapter_file, title=f"{chapter_num} {chapter_name}")
+            completed.append("1_created")
+            with open(checkpoint_file, 'w') as f:
+                json.dump(completed, f)
+            print("   ✅ 完成")
+        except Exception as e:
+            print(f"   ❌ 失败：{e}")
+            return False
     
-    # 保存报告
-    project_root = info.get('项目路径')
-    if project_root:
-        report_path = f"{project_root}/00_项目管理/状态报告_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
-        filesystem_write_file(path=report_path, content=report)
-        print(f"📄 报告已保存：{report_path}\n")
+    # 步骤2：应用样式
+    if "2_styles" not in completed:
+        print(f"▶️ 2/5 应用样式...")
+        try:
+            # 创建所有必需样式
+            styles = [
+                {"name": "章标题", "font": "黑体", "size": 16, "bold": True},
+                {"name": "节标题", "font": "宋体", "size": 14, "bold": False},
+                {"name": "小节标题", "font": "宋体", "size": 12, "bold": False},
+                {"name": "正文", "font": "宋体", "size": 12, "bold": False},
+                {"name": "图注", "font": "楷体", "size": 10.5, "bold": False},
+                {"name": "表注", "font": "楷体", "size": 10.5, "bold": False}
+            ]
+            
+            for style in styles:
+                word-mcp_create_custom_style(
+                    filename=chapter_file,
+                    style_name=style["name"],
+                    font_name=style["font"],
+                    font_size=style["size"],
+                    bold=style["bold"]
+                )
+            
+            completed.append("2_styles")
+            with open(checkpoint_file, 'w') as f:
+                json.dump(completed, f)
+            print("   ✅ 完成")
+        except Exception as e:
+            print(f"   ❌ 失败：{e}")
+            return False
     
-    return project_info
+    # 步骤3：写入内容
+    if "3_content" not in completed:
+        print(f"▶️ 3/5 写入内容（目标{target_words}字）...")
+        try:
+            # 添加章标题
+            word-mcp_add_heading(
+                filename=chapter_file,
+                text=f"{chapter_num.replace('第', '').replace('章', '')} {chapter_name}",
+                level=1
+            )
+            
+            # 根据章节生成内容
+            content = generate_chapter_content(chapter_num, chapter_name, target_words)
+            
+            # 逐节添加
+            for section in content['sections']:
+                # 节标题
+                word-mcp_add_heading(
+                    filename=chapter_file,
+                    text=section['title'],
+                    level=2
+                )
+                
+                # 正文段落
+                for paragraph in section['paragraphs']:
+                    word-mcp_add_paragraph(
+                        filename=chapter_file,
+                        text=paragraph
+                    )
+            
+            completed.append("3_content")
+            with open(checkpoint_file, 'w') as f:
+                json.dump(completed, f)
+            print("   ✅ 完成")
+        except Exception as e:
+            print(f"   ❌ 失败：{e}")
+            return False
+    
+    # 步骤4：添加图表
+    if "4_figures" not in completed:
+        print(f"▶️ 4/5 添加图表...")
+        try:
+            fig_result = detect_and_insert_figures(chapter_num, chapter_file, project_root)
+            print(f"   ✅ 完成（{fig_result['method']}，{fig_result['count']}个）")
+            
+            completed.append("4_figures")
+            with open(checkpoint_file, 'w') as f:
+                json.dump(completed, f)
+        except Exception as e:
+            print(f"   ⚠️ 图表处理失败，使用占位标识：{e}")
+            completed.append("4_figures")
+            with open(checkpoint_file, 'w') as f:
+                json.dump(completed, f)
+    
+    # 步骤5：验证
+    if "5_verified" not in completed:
+        print(f"▶️ 5/5 验证...")
+        try:
+            # 统计字数
+            doc_text = word-mcp_get_document_text(filename=chapter_file)
+            actual_words = quick_count_words(doc_text)
+            
+            print(f"   字数：{actual_words:,} / {target_words:,}")
+            
+            # 简单质量检查
+            issues = quick_quality_check(doc_text)
+            if issues:
+                print(f"   ⚠️ 发现 {len(issues)} 个潜在问题")
+                for issue in issues[:3]:  # 只显示前3个
+                    print(f"      - {issue}")
+            else:
+                print("   ✅ 无明显问题")
+            
+            completed.append("5_verified")
+            with open(checkpoint_file, 'w') as f:
+                json.dump(completed, f)
+            
+        except Exception as e:
+            print(f"   ⚠️ 验证失败：{e}")
+    
+    # 删除检查点（所有步骤完成）
+    os.remove(checkpoint_file)
+    print(f"\n🎉 {chapter_num} {chapter_name} 生成完成")
+    
+    return True
+```
 
-# 调用函数
-project_info = generate_status_report(project_entity)
+### 辅助函数
+
+**快速字数统计**：
+```python
+def quick_count_words(text):
+    """快速统计字数（近似）"""
+    import re
+    
+    # 排除图表题注
+    lines = text.split('\n')
+    filtered_lines = [line for line in lines 
+                     if not re.match(r'^(图|表|Fig|Table)\s*\d', line)]
+    clean_text = '\n'.join(filtered_lines)
+    
+    # 统计
+    chinese = len(re.findall(r'[\u4e00-\u9fa5]', clean_text))
+    english = len(re.findall(r'\b[a-zA-Z]+\b', clean_text))
+    numbers = len(re.findall(r'\d+', clean_text))
+    
+    return chinese + english + numbers
+```
+
+**快速质量检查**：
+```python
+def quick_quality_check(text):
+    """快速检查常见问题"""
+    issues = []
+    
+    # 检查列点式内容
+    if re.search(r'\n\s*[-•]\s+\w', text):
+        issues.append("检测到列点式内容，建议改为段落式")
+    
+    # 检查AI痕迹
+    ai_phrases = [
+        "首先、其次、再次、最后",
+        "综上所述，本研究的主要创新点包括：",
+        "总之，本章主要内容包括："
+    ]
+    for phrase in ai_phrases:
+        if phrase in text:
+            issues.append(f"检测到AI痕迹：'{phrase}'")
+    
+    # 检查段落长度
+    paragraphs = text.split('\n\n')
+    long_paras = [p for p in paragraphs if len(p) > 1000]
+    if long_paras:
+        issues.append(f"发现{len(long_paras)}个超长段落（>1000字）")
+    
+    return issues
 ```
 
 ---
 
-## 核心写作原则 🎯
+## 🏁 完整生成流程示例
 
-### 段落式学术写作（必须遵守）
-**严禁使用列点式、条目式写作。所有正文内容必须采用流畅的段落形式。**
+### 示例：从新项目到完成
 
-**❌ 错误示例（列点式）**：
 ```
-本研究的主要创新点包括：
-- 首次提出了基于XXX的新型载体设计策略
-- 系统研究了载体的体内外性能
-- 阐明了药物释放的分子机制
+【用户】我有一篇关于pH敏感型纳米载体的SCI论文，需要扩写成博士论文。
+
+【AI】好的！在开始前，我需要收集一些基本信息。
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+基本信息收集
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+请提供以下信息：
+1. 学院名称：
+2. 姓名：
+3. 学号：
+4. 年级：
+5. 学科专业：
+6. 研究方向：
+7. 正指导教师：
+8. 副指导教师（如有）：
+9. 预计答辩时间：
+10. 分类号：
+11. UDC号（可选）：
+12. 项目保存路径（留空使用默认）：
+
+【用户】
+2. 湘雅药学院
+3. 王小明
+4. 20201234567
+5. 2020级
+6. 药剂学
+7. 纳米药物递送系统
+8. 张教授 教授
+9. 李副教授 副教授
+10. 2026年6月
+11. R944
+12. 615.014
+13. [留空]
+
+【AI】
+✅ 信息收集完成
+
+项目路径：/Users/wsxwj/Desktop/博士论文_pH敏感纳米载体_王小明/
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+项目初始化
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ 创建项目文件夹结构
+✅ 保存用户信息
+✅ 检查依赖：Python 3.11.5, python-docx ✅
+✅ 部署辅助脚本
+
+现在请上传您的SCI论文PDF文件。
+
+【用户】[上传文件]
+
+【AI】
+✅ 已接收文件：原始SCI论文.pdf
+✅ 正在读取论文内容...
+
+论文信息：
+- 标题：pH-Dual-Responsive Polymer-Lipid Nanocarrier...
+- 期刊：Journal of Controlled Release
+- 关键词：pH-sensitive, nanocarrier, cancer therapy...
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+文献调研
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+正在委托@librarian进行文献调研（预计2-3分钟）...
+
+⏳ 正在搜索综述文献...
+⏳ 正在搜索方法学文献...
+⏳ 正在搜索结果对比文献...
+⏳ 正在搜索临床转化文献...
+
+✅ 文献调研完成（125篇）
+   - 综述：18篇
+   - 方法：28篇
+   - 结果：38篇
+   - 讨论：13篇
+   - 临床：10篇
+
+已保存到：00_项目管理/参考文献_20260127.md
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+生成大纲
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+基于您的SCI论文，我生成了以下大纲：
+
+论文标题（中文）：基于pH双响应聚合物-脂质复合纳米载体的抗肿瘤药物递送系统研究
+论文标题（英文）：pH-Dual-Responsive Polymer-Lipid Nanocarrier...
+
+第一章 前言（目标12,200字）
+  1.1 研究背景与意义（3,500字）
+  1.2 国内外研究现状（6,200字）
+  1.3 本研究的主要内容与创新点（2,500字）
+
+第二章 材料与方法（目标7,200字）
+  2.1 实验材料（2,000字）
+  2.2 实验仪器（1,500字）
+  2.3 实验方法（3,700字）
+
+第三章 纳米载体的制备与表征（目标9,800字）
+  3.1 纳米载体的制备（2,500字）
+  3.2 理化性质表征（3,800字）
+  3.3 体外药物释放研究（3,500字）
+
+...（共7章，总计53,000字）
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+请确认：
+1. 直接开始生成（输入：开始）
+2. 调整字数分配（输入：调整）
+3. 修改章节结构（输入：修改）
+4. 查看完整大纲（输入：查看）
+
+【用户】开始
+
+【AI】
+✅ 已保存项目信息到知识图谱
+✅ 已保存大纲到本地文件
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+开始生成论文
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+▶️ 正在生成：第一章 前言（目标12,200字）
+
+  ▶️ 1/5 创建文档...
+     ✅ 完成
+  
+  ▶️ 2/5 应用样式...
+     ✅ 完成（6个样式）
+  
+  ▶️ 3/5 写入内容...
+     正在生成 1.1 研究背景与意义...
+     正在生成 1.2 国内外研究现状...
+     正在生成 1.3 本研究的主要内容与创新点...
+     ✅ 完成
+  
+  ▶️ 4/5 添加图表...
+     ✅ 完成（占位标识，2图）
+  
+  ▶️ 5/5 验证...
+     字数：12,350 / 12,200 ✅
+     ✅ 无明显问题
+
+🎉 第一章 前言 生成完成
+
+✅ 已保存版本：第一章_前言_v1.0_20260127_初稿.docx
+✅ 已更新进度到记忆
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+当前进度：1/7章（24.7%）
+总字数：12,350 / 50,000
+
+下一步：
+1. 继续生成第二章（输入：继续）
+2. 查看第一章内容（输入：查看）
+3. 修改第一章（输入：修改）
+4. 暂停，稍后继续（输入：暂停）
+
+【用户】继续
+
+【AI】
+▶️ 正在生成：第二章 材料与方法（目标7,200字）
+...
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+【多次"继续"后】
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+【AI】
+✅ 所有正文章节已完成！
+
+📊 完成统计：
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ 第一章 前言              12,350字
+✅ 第二章 材料与方法         7,450字
+✅ 第三章 制备与表征         9,950字
+✅ 第四章 体外活性评价       8,680字
+✅ 第五章 体内效果评价       7,420字
+✅ 第六章 讨论              6,550字
+✅ 第七章 结论              1,580字
+
+正文总字数：53,980字 ✅（超出目标3,980字）
+
+接下来生成：
+- 综述（5,000字，不计入正文）
+- 中英文摘要
+- 目录
+- 致谢
+
+是否继续？（输入：是 / 查看统计 / 暂停）
+
+【用户】是
+
+【AI】
+▶️ 正在生成综述...
+✅ 综述已完成（6,500字）
+
+▶️ 正在生成摘要...
+✅ 中文摘要已完成（1,050字）
+✅ 英文摘要已完成（1,020字）
+
+▶️ 正在生成其他部分...
+✅ 封面、扉页、声明已完成
+✅ 英文缩略词说明已完成（28个术语）
+✅ 参考文献已完成（125篇）
+✅ 攻读学位期间成果已完成
+✅ 致谢已完成
+
+▶️ 正在生成目录...
+✅ 目录已完成
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+合并完整版文档
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+执行合并脚本...
+
+📁 项目根目录：/Users/wsxwj/Desktop/博士论文_pH敏感纳米载体_王小明
+
+开始合并 18 个文档...
+
+✅ 已加载基础文档：封面.docx
+✅ 已合并：扉页.docx
+✅ 已合并：原创性声明.docx
+✅ 已合并：中文摘要.docx
+✅ 已合并：英文摘要.docx
+✅ 已合并：目录.docx
+✅ 已合并：英文缩略词说明.docx
+📄 检测到章节：第一章_前言.docx
+📄 检测到章节：第二章_材料与方法.docx
+📄 检测到章节：第三章_制备与表征.docx
+📄 检测到章节：第四章_体外活性评价.docx
+📄 检测到章节：第五章_体内效果评价.docx
+📄 检测到章节：第六章_讨论.docx
+📄 检测到章节：第七章_结论.docx
+✅ 已合并：第一章_前言.docx
+✅ 已合并：第二章_材料与方法.docx
+✅ 已合并：第三章_制备与表征.docx
+✅ 已合并：第四章_体外活性评价.docx
+✅ 已合并：第五章_体内效果评价.docx
+✅ 已合并：第六章_讨论.docx
+✅ 已合并：第七章_结论.docx
+✅ 已合并：参考文献.docx
+✅ 已合并：综述.docx
+✅ 已合并：攻读学位期间成果.docx
+✅ 已合并：致谢.docx
+
+🎉 合并完成！
+   输出文件：/Users/wsxwj/Desktop/博士论文_pH敏感纳米载体_王小明/完整版_最新.docx
+   📊 总计合并 18 个文档
+   📦 文件大小：8.52 MB
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+精确字数统计
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+执行统计脚本...
+
+============================================================
+逐章字数统计
+============================================================
+
+第一章_前言.docx:
+  汉字：11,800
+  英文单词：520
+  数字组：30
+  等效字数：12,350
+
+第二章_材料与方法.docx:
+  汉字：6,900
+  英文单词：520
+  数字组：30
+  等效字数：7,450
+
+...
+
+============================================================
+★ 正文总字数（第一章至结论 + 摘要）：56,050 字
+最低要求：50,000 字
+达标状态：✅ 达标（超出6,050字）
+============================================================
+
+★ 综述字数（单独要求，不计入正文）：6,500 字
+最低要求：5,000 字
+达标状态：✅ 达标
+============================================================
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+最终质量检查
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+执行质量检查...
+
+✅ 文件完整性：所有必需文件齐全（18/18）
+✅ 格式规范：符合中南大学标准
+✅ 内容质量：字数达标，文献充足
+✅ 技术细节：图表编号连续，术语一致
+
+📊 总体评价：28/28 项通过
+
+🎉 恭喜！论文已达到交付标准！
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+交付说明
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📁 您的论文文件位于：
+   /Users/wsxwj/Desktop/博士论文_pH敏感纳米载体_王小明/
+
+📄 完整版文档：完整版_最新.docx（可直接提交）
+
+📂 分章节文件：02_正文章节/（便于后续修改）
+
+🔧 如需修改某章：
+   1. 告诉我"修改第X章"
+   2. 我会读取该章docx文件
+   3. 根据您的要求修改
+   4. 重新运行合并脚本更新完整版
+
+🔄 手动合并方法：
+   cd /Users/wsxwj/Desktop/博士论文_pH敏感纳米载体_王小明/00_项目管理
+   python3 merge_documents.py
+
+后续建议：
+1. 请导师审阅内容和学术深度
+2. 进行查重检测（知网/万方）
+3. 如使用占位标识，请替换为实际图片（共45个图表）
+4. 根据反馈意见修改
+5. 准备答辩PPT
+
+祝您答辩顺利！🎓
 ```
 
-**✅ 正确示例（段落式）**：
-```
-本研究在纳米药物递送系统的设计和应用方面取得了若干创新性进展。首先，我们基于肿瘤微环境的独特生理特征，提出了一种智能响应型载体设计策略，该策略能够根据pH值和氧化还原电位的变化实现药物的可控释放。在此基础上，通过系统的体外细胞实验和体内动物模型评价，我们证实了该载体在肿瘤靶向性、药物释放动力学以及抗肿瘤效果方面的显著优势。更重要的是，通过分子生物学和生物物理化学手段，我们深入阐明了载体与细胞膜相互作用的分子机制，揭示了药物释放过程中涉及的关键信号通路，为理解纳米载体的生物学效应提供了新的理论依据。
-```
+---
 
-### 避免AI感的策略
-1. **使用过渡性表达**：然而、此外、值得注意的是、在此基础上、进一步分析表明
-2. **采用学术化叙述**：本研究发现、实验结果提示、数据分析揭示
-3. **增加逻辑推理**：基于上述观察、综合考虑多方面因素、从机制角度分析
-4. **适度使用限定语**：在一定程度上、初步证据表明、可能与...有关
-5. **避免机械重复**：同一概念在不同段落中使用不同表述方式
+## 📚 后续修改流程（流程D）
 
-### 学术语言自然化
-- 避免"首先、其次、再次、最后"的机械排列
-- 使用"在...研究中"、"通过...分析"等自然过渡
-- 段落间通过内容逻辑自然衔接，而非格式化标记
+### 修改某个章节
+
+```
+【用户】修改第三章，1.2节需要补充更多文献
+
+【AI】
+好的，我来修改第三章。
+
+▶️ 1/3 读取文件...
+✅ 已读取：02_正文章节/第三章_制备与表征.docx
+
+▶️ 2/3 定位内容...
+找到1.2节：理化性质表征
+当前字数：3,800字
+
+▶️ 3/3 补充内容...
+
+[使用word-mcp_search_and_replace或重新生成相关段落]
+
+✅ 修改完成
+   新增字数：+450字
+   新版本：第三章_制备与表征_v1.1_20260128_导师修改.docx
+
+是否重新合并完整版？（输入：是 / 否）
+
+【用户】是
+
+【AI】
+执行合并...
+✅ 合并完成
+✅ 完整版已更新
+```
 
 ---
 
