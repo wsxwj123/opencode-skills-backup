@@ -31,15 +31,15 @@ class ConfigPackager:
         # 需要排除的文件和目录
         self.exclude_patterns = [
             "*.pyc", "*.pyo", "__pycache__", ".git", ".DS_Store",
-            "node_modules", "*.log", "*.tmp", "*.temp"
+            "node_modules", "*.log", "*.tmp", "*.temp", 
+            ".venv", "venv", ".cache", "*.pyc", "dist", "build",
+            ".pytest_cache", ".mypy_cache", ".tox", "coverage",
+            "*.egg-info", ".eggs"
         ]
         
-        # 敏感信息模式（需要过滤或替换）
-        self.sensitive_patterns = {
-            "api_key": r"(?i)(api[_-]?key|secret|token|password|auth)[\s]*[:=][\s]*['\"]?([a-zA-Z0-9_\-]{20,})['\"]?",
-            "bearer_token": r"Bearer\s+([a-zA-Z0-9_\-]{20,})",
-            "private_key": r"-----BEGIN (RSA|DSA|EC|OPENSSH) PRIVATE KEY-----"
-        }
+        # 敏感信息模式（用户要求保留 API keys，所以禁用过滤）
+        self.sensitive_patterns = {}  # 空字典，不过滤任何内容
+        self.filter_sensitive = False  # 禁用敏感信息过滤
     
     def _get_platform_info(self) -> Dict[str, str]:
         """获取平台信息"""
@@ -76,49 +76,53 @@ class ConfigPackager:
         return False
     
     def _filter_sensitive_content(self, content: str, filepath: str) -> str:
-        """过滤敏感内容"""
-        filtered = content
-        
-        # 过滤 API 密钥等敏感信息
-        import re
-        
-        # 替换 API 密钥
-        for key_type, pattern in self.sensitive_patterns.items():
-            matches = re.findall(pattern, filtered)
-            for match in matches:
-                if isinstance(match, tuple):
-                    # 模式匹配了多个组
-                    for group in match:
-                        if len(group) > 10:  # 可能是密钥
-                            masked = f"[FILTERED_{key_type.upper()}]"
-                            filtered = filtered.replace(group, masked)
-                elif len(match) > 10:
-                    masked = f"[FILTERED_{key_type.upper()}]"
-                    filtered = filtered.replace(match, masked)
-        
-        # 特定文件处理
-        if "opencode.json" in filepath:
-            # 在 OpenCode 配置中过滤提供商密钥
-            try:
-                config = json.loads(filtered)
-                if "provider" in config:
-                    for provider_name, provider_config in config["provider"].items():
-                        if "options" in provider_config and "headers" in provider_config["options"]:
-                            headers = provider_config["options"]["headers"]
-                            if "Authorization" in headers:
-                                # 保留 Bearer 前缀但隐藏实际令牌
-                                auth_header = headers["Authorization"]
-                                if auth_header.startswith("Bearer "):
-                                    headers["Authorization"] = "Bearer [FILTERED_API_KEY]"
-                                elif auth_header.startswith("sk-"):
-                                    headers["Authorization"] = "[FILTERED_API_KEY]"
-                
-                filtered = json.dumps(config, indent=2, ensure_ascii=False)
-            except:
-                pass  # 如果 JSON 解析失败，保持原样
-        
-        return filtered
+        """过滤敏感内容 - 用户要求保留所有内容，直接返回原文"""
+        return content
     
+    def _extract_mcp_paths_from_config(self) -> List[Path]:
+        """从配置文件中提取本地 MCP 服务器路径"""
+        mcp_paths = []
+        config_file = self.opencode_config_dir / "opencode.json"
+        
+        if not config_file.exists():
+            return mcp_paths
+        
+        try:
+            with open(config_file, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+            
+            if "mcp" not in config:
+                return mcp_paths
+            
+            for server_name, server_config in config["mcp"].items():
+                if "command" in server_config:
+                    command = server_config["command"]
+                    
+                    # 查找命令中的本地路径
+                    for arg in command:
+                        if isinstance(arg, str) and (arg.startswith("/") or ":" in arg):
+                            # 这是一个文件路径
+                            path = Path(arg)
+                            if path.exists():
+                                # 获取 MCP 服务器的根目录
+                                # 通常是包含 package.json 或 requirements.txt 的目录
+                                mcp_root = path.parent
+                                while mcp_root != mcp_root.parent:
+                                    if (mcp_root / "package.json").exists() or \
+                                       (mcp_root / "requirements.txt").exists() or \
+                                       (mcp_root / "pyproject.toml").exists():
+                                        if mcp_root not in mcp_paths:
+                                            mcp_paths.append(mcp_root)
+                                            if self.verbose:
+                                                print(f"  找到本地 MCP 服务器: {mcp_root}")
+                                        break
+                                    mcp_root = mcp_root.parent
+        except Exception as e:
+            if self.verbose:
+                print(f"  警告: 解析 MCP 配置失败: {e}")
+        
+        return mcp_paths
+
     def scan_config_files(self) -> List[Path]:
         """扫描 OpenCode 配置文件"""
         print("📁 扫描 OpenCode 配置文件...")
@@ -156,6 +160,18 @@ class ConfigPackager:
                         config_files.append(item)
                         if self.verbose and len(config_files) % 50 == 0:
                             print(f"    已找到 {len(config_files)} 个文件...")
+        
+        # 扫描本地 MCP 服务器
+        print("  扫描本地 MCP 服务器程序...")
+        mcp_paths = self._extract_mcp_paths_from_config()
+        
+        for mcp_root in mcp_paths:
+            print(f"    打包 MCP 服务器: {mcp_root.name}")
+            for item in mcp_root.rglob("*"):
+                if not self._should_exclude(item):
+                    config_files.append(item)
+                    if len(config_files) % 100 == 0:
+                        print(f"      已添加 {len(config_files)} 个文件...")
         
         print(f"✅ 共找到 {len(config_files)} 个配置文件")
         return config_files
@@ -257,9 +273,16 @@ class ConfigPackager:
             # 计算相对路径
             try:
                 rel_path = file_path.relative_to(self.opencode_config_dir)
+                zip_path = Path("opencode_config") / rel_path
             except ValueError:
-                # 文件不在 OpenCode 目录内，使用绝对路径
-                rel_path = Path("external") / file_path.relative_to(self.home_dir)
+                # 文件不在 OpenCode 目录内（如 MCP 服务器）
+                # 保持原始路径结构，以便在目标设备上恢复
+                if str(file_path).startswith(str(self.home_dir)):
+                    rel_path = file_path.relative_to(self.home_dir)
+                    zip_path = Path("user_home") / rel_path
+                else:
+                    # 完全外部路径，使用绝对路径
+                    zip_path = Path("external") / file_path.name
             
             # 处理敏感信息
             if file_path.is_file():
@@ -273,11 +296,12 @@ class ConfigPackager:
                         filtered_content = self._filter_sensitive_content(content, str(file_path))
                         
                         # 添加到 ZIP
-                        zipf.writestr(str(rel_path), filtered_content)
+                        zipf.writestr(str(zip_path), filtered_content)
                         
                         # 记录文件信息
                         file_info = {
-                            "path": str(rel_path),
+                            "path": str(zip_path),
+                            "original_path": str(file_path),
                             "original_size": len(content),
                             "filtered_size": len(filtered_content),
                             "sensitive_filtered": content != filtered_content
@@ -286,21 +310,23 @@ class ConfigPackager:
                         
                     except UnicodeDecodeError:
                         # 二进制文件，直接复制
-                        zipf.write(file_path, str(rel_path))
+                        zipf.write(file_path, str(zip_path))
                         self.package_info["files"].append({
-                            "path": str(rel_path),
+                            "path": str(zip_path),
+                            "original_path": str(file_path),
                             "binary": True
                         })
                 else:
                     # 二进制文件，直接复制
-                    zipf.write(file_path, str(rel_path))
+                    zipf.write(file_path, str(zip_path))
                     self.package_info["files"].append({
-                        "path": str(rel_path),
+                        "path": str(zip_path),
+                        "original_path": str(file_path),
                         "binary": True
                     })
             else:
                 # 目录，创建空目录条目
-                zipf.writestr(str(rel_path) + "/", "")
+                zipf.writestr(str(zip_path) + "/", "")
             
             if self.verbose and len(self.package_info["files"]) % 100 == 0:
                 print(f"    已添加 {len(self.package_info['files'])} 个文件...")

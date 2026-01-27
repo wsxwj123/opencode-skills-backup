@@ -1,0 +1,95 @@
+{
+  "project_config_template": {
+    "project_name": "",
+    "target_journal": "Nature Nanotechnology",
+    "delivery_system_type": "",
+    "disease_model": "",
+    "word_limits": {
+      "abstract": 250,
+      "introduction": [800, 1500],
+      "main_text": [5000, 7000]
+    },
+    "created_date": "",
+    "last_modified": ""
+  },
+  
+  "storyline_template": {
+    "innovation_core": "",
+    "main_hypothesis": "",
+    "sections": {
+      "Introduction": {
+        "para_1": {
+          "claim": "",
+          "evidence_needed": [],
+          "literature_status": "pending",
+          "ref_ids": []
+        }
+      },
+      "Results": {
+        "section_3.1": {
+          "title": "",
+          "main_figures": [],
+          "key_claims": [],
+          "literature_needed": [],
+          "status": "pending"
+        }
+      }
+    }
+  },
+  
+  "writing_progress_template": {
+    "current_phase": "initialization",
+    "completed_sections": [],
+    "pending_sections": [],
+    "word_count": {},
+    "pending_issues": [],
+    "last_user_input": "",
+    "next_action": "Run /preview to start"
+  },
+  
+  "context_memory_template": "# 写作上下文记忆 - 最后更新：YYYY-MM-DD HH:MM\n\n## 当前状态\n- 正在撰写：[章节名]\n- 已完成字数：X/7000 words\n\n## 最近讨论要点\n1. [决策内容]\n\n## 待办事项\n- [ ] [待办1]\n\n## 关键决策记录\n- YYYY-MM-DD：[决策内容]\n",
+  
+  "literature_index_template": [
+    {
+      "ref_id": "ref_001",
+      "title": "",
+      "doi": "",
+      "journal": "",
+      "year": 2024,
+      "impact_factor": null,
+      "abstract": "",
+      "key_finding": "",
+      "cited_in_sections": [],
+      "search_query": "",
+      "validation_status": "DOI_verified",
+      "citation_count": null,
+      "relevance_score": null,
+      "literature_type": "background/gap/innovation/mechanism/method"
+    }
+  ],
+  
+  "figures_database_template": [
+    {
+      "fig_id": "Figure_1A",
+      "parent_figure": "Figure_1",
+      "subplot": "A",
+      "title": "",
+      "location": "Main/SI",
+      "experiment_type": "Characterization/In_vitro/In_vivo",
+      "key_finding": "",
+      "statistical_test": "",
+      "p_value": null,
+      "n_value": null,
+      "comparison_groups": [],
+      "caption_provided_by_user": "",
+      "data_status": "pending/confirmed",
+      "screenshot_path": ""
+    }
+  ],
+  
+  "version_history_template": {
+    "snapshots": [],
+    "current_version": "v0_initialized",
+    "max_snapshots": 10
+  }
+}
