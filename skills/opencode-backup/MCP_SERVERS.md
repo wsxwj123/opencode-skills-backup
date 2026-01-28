@@ -103,7 +103,7 @@
 - **部署步骤**:
   ```bash
   cd ~/Documents/Cline/MCP/word-mcp
-  git clone <REPOSITORY_URL> Office-Word-MCP-Server
+  git clone https://github.com/GongRzhe/Office-Word-MCP-Server.git Office-Word-MCP-Server
   cd Office-Word-MCP-Server
   python3 -m venv .venv
   source .venv/bin/activate  # Windows: .venv\Scripts\activate
@@ -116,7 +116,7 @@
 - **部署步骤**:
   ```bash
   cd ~/Documents/Cline/MCP/document
-  git clone <REPOSITORY_URL> .
+  git clone https://github.com/alejandroBallesterosC/document-edit-mcp.git .
   python3 -m venv .venv
   source .venv/bin/activate  # Windows: .venv\Scripts\activate
   pip install -e .
@@ -141,7 +141,7 @@
 - **部署步骤**:
   ```bash
   cd ~/Documents/Cline/MCP/paper-search-mcp
-  git clone <REPOSITORY_URL> paper-search-mcp
+  git clone https://github.com/openags/paper-search-mcp.git paper-search-mcp
   cd paper-search-mcp
   # 使用 uv 工具运行，无需手动创建虚拟环境
   ```
@@ -178,7 +178,7 @@
 - **部署步骤**:
   ```bash
   cd ~/Documents/Cline/MCP
-  git clone <REPOSITORY_URL> quickchart-mcp-server
+  git clone https://github.com/GongRzhe/quickchart-mcp-server.git quickchart-mcp-server
   cd quickchart-mcp-server
   npm install
   npm run build
@@ -190,7 +190,7 @@
 - **部署步骤**:
   ```bash
   cd ~/Documents/Cline/MCP/drawio-mcp-server
-  git clone <REPOSITORY_URL> drawio-mcp-server
+  git clone https://github.com/lgazo/drawio-mcp-server.git drawio-mcp-server
   cd drawio-mcp-server
   npm install
   npm run build
@@ -202,7 +202,7 @@
 - **部署步骤**:
   ```bash
   cd ~/Documents/Cline/MCP
-  git clone <REPOSITORY_URL> markdownify
+  git clone https://github.com/zcaceres/markdownify-mcp.git markdownify
   cd markdownify
   npm install
   npm run build

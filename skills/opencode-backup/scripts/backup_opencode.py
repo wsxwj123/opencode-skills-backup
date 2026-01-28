@@ -91,6 +91,7 @@ class OpenCodeBackup:
                 "node_modules",
                 ".DS_Store",
                 ".git",
+                "backup-repo",
                 "*.pyc",
                 "__pycache__",
                 "*.log",
