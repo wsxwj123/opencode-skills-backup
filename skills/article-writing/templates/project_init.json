@@ -10,7 +10,8 @@
       "main_text": [5000, 7000]
     },
     "created_date": "",
-    "last_modified": ""
+    "last_modified": "",
+    "smart_snapshot_enabled": true
   },
   
   "storyline_template": {
@@ -25,14 +26,27 @@
           "ref_ids": []
         }
       },
-      "Results": {
+      "Results_Discussion": {
         "section_3.1": {
           "title": "",
+          "is_key_section": true,
           "main_figures": [],
-          "key_claims": [],
+          "results_data": [],
+          "discussion_points": {
+            "mechanism": "",
+            "comparison": "",
+            "significance": ""
+          },
           "literature_needed": [],
           "status": "pending"
         }
+      },
+      "Conclusion": {
+        "content_points": [
+          "Summary of core findings",
+          "Limitations (Material, Instrument, Method, Translation)",
+          "Future Outlook"
+        ]
       }
     }
   },
@@ -47,7 +61,7 @@
     "next_action": "Run /preview to start"
   },
   
-  "context_memory_template": "# 写作上下文记忆 - 最后更新：YYYY-MM-DD HH:MM\n\n## 当前状态\n- 正在撰写：[章节名]\n- 已完成字数：X/7000 words\n\n## 最近讨论要点\n1. [决策内容]\n\n## 待办事项\n- [ ] [待办1]\n\n## 关键决策记录\n- YYYY-MM-DD：[决策内容]\n",
+  "context_memory_template": "# 写作上下文记忆 (v2.0) - 最后更新：YYYY-MM-DD HH:MM\n\n## 当前状态\n- 正在撰写：[章节名]\n- 已完成字数：X/7000 words\n\n## 最近讨论要点\n1. [决策内容]\n\n## 待办事项\n- [ ] [待办1]\n\n## 关键决策记录\n- YYYY-MM-DD：[决策内容]\n",
   
   "literature_index_template": [
     {
