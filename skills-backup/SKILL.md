@@ -1,3 +1,8 @@
+---
+name: skills-backup
+description: Use when the user asks to backup or sync their skills. This skill automatically detects the OS (Windows/Mac) and syncs the entire skills directory to the configured Git repository, handling cross-platform conflicts like line endings and paths.
+---
+
 # Skills Backup & Sync (Cross-Platform)
 
 这个 Skill 用于在 Windows 和 macOS 之间自动同步 OpenCode Skills。
@@ -24,7 +29,7 @@
 - "把 skills 传到云端"
 
 ## 运行原理
-该 Skill 会执行 `sync_skills.py` 脚本：
+该 Skill 会执行 `scripts/sync_skills.py` 脚本：
 1. 检测当前操作系统。
 2. 检查 Git 状态。
 3. 执行 `git stash` (保存未提交修改)。
