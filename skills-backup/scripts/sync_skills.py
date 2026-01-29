@@ -3,6 +3,7 @@ import sys
 import subprocess
 import platform
 import datetime
+import argparse
 
 # Force UTF-8 for Windows output
 if sys.platform == 'win32':
@@ -59,7 +60,7 @@ def ensure_gitattributes():
         except Exception as e:
             print(f"Warning: Could not write .gitattributes: {e}")
 
-def sync():
+def sync(specific_skills=None):
     print(f"📂 Skills Directory: {SKILLS_ROOT}")
     
     # 1. Check if git repo exists
@@ -101,11 +102,25 @@ def sync():
 
     # 4. Add and Commit
     print("\n💾 Checking for local changes...")
-    run_command(['git', 'add', '.'])
+    
+    if specific_skills:
+        print(f"🎯 Syncing specific skills: {', '.join(specific_skills)}")
+        for skill in specific_skills:
+            skill_path = os.path.join(SKILLS_ROOT, skill)
+            if os.path.exists(skill_path):
+                run_command(['git', 'add', skill])
+            else:
+                print(f"⚠️ Warning: Skill '{skill}' not found in {SKILLS_ROOT}")
+    else:
+        run_command(['git', 'add', '.'])
     
     status = run_command(['git', 'status', '--porcelain'])
     if status:
-        commit_msg = f"Sync from {os_name} ({machine}) - {timestamp}"
+        if specific_skills:
+             commit_msg = f"Sync skills: {', '.join(specific_skills)} from {os_name}"
+        else:
+             commit_msg = f"Sync from {os_name} ({machine}) - {timestamp}"
+             
         print(f"📝 Committing: {commit_msg}")
         run_command(['git', 'commit', '-m', commit_msg])
         
@@ -122,4 +137,8 @@ def sync():
         print("✅ Sync complete.")
 
 if __name__ == "__main__":
-    sync()
+    parser = argparse.ArgumentParser(description="Sync OpenCode Skills")
+    parser.add_argument("skills", nargs="*", help="Specific skills to sync (optional)")
+    args = parser.parse_args()
+    
+    sync(args.skills)

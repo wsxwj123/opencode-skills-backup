@@ -383,6 +383,96 @@ class OpenCodeBackup:
             print(f"❌ 备份目录失败 {dirname}: {e}")
             return False
     
+    def backup_specific_skill(self, skill_name: str, dry_run: bool = False) -> bool:
+        """
+        备份特定技能
+        
+        Args:
+            skill_name: 技能名称
+            dry_run: 是否试运行
+            
+        Returns:
+            是否成功
+        """
+        config = self.load_config()
+        if not config["repo_url"]:
+            print("❌ 错误：请先初始化备份仓库")
+            return False
+
+        skill_src = self.opencode_path / "skills" / skill_name
+        skill_dst = self.backup_dir / "skills" / skill_name
+        
+        if not skill_src.exists():
+            print(f"❌ 错误：技能不存在: {skill_name}")
+            return False
+            
+        print(f"📦 开始备份技能: {skill_name}")
+        
+        if dry_run:
+            print(f"试运行模式: 将从 {skill_src} 复制到 {skill_dst}")
+            return True
+            
+        try:
+            # 确保父目录存在
+            skill_dst.parent.mkdir(parents=True, exist_ok=True)
+            
+            # 删除旧备份
+            if skill_dst.exists():
+                shutil.rmtree(skill_dst)
+            
+            # 获取排除模式
+            exclude_patterns = config.get("backup_items", {}).get("exclude_patterns", [])
+            if not exclude_patterns:
+                exclude_patterns = self.get_default_backup_items()["exclude_patterns"]
+            
+            import fnmatch
+            # 复制目录
+            shutil.copytree(skill_src, skill_dst, ignore=shutil.ignore_patterns(*exclude_patterns))
+            
+            # 验证
+            if not skill_dst.exists():
+                print("❌ 验证失败：目标目录未创建")
+                return False
+                
+            print(f"✓ 技能文件已复制到: {skill_dst}")
+            
+            # Git 提交特定的变更
+            rel_path = f"skills/{skill_name}"
+            
+            # git add
+            subprocess.run(["git", "add", rel_path], cwd=self.backup_dir, check=True, capture_output=True)
+            
+            # 检查是否有变更需要提交
+            status = subprocess.run(["git", "status", "--porcelain", rel_path], 
+                                  cwd=self.backup_dir, capture_output=True, text=True)
+            
+            if not status.stdout.strip():
+                print("✅ 技能没有变更，无需提交")
+                return True
+                
+            # git commit
+            commit_msg = f"Backup skill: {skill_name}"
+            subprocess.run(["git", "commit", "-m", commit_msg], 
+                         cwd=self.backup_dir, check=True, capture_output=True)
+            
+            # git push
+            print("正在推送到远程仓库...")
+            result = subprocess.run(["git", "push", "origin", "main"], 
+                                  cwd=self.backup_dir, capture_output=True, text=True)
+            
+            if result.returncode == 0:
+                print("✅ 已推送到远程仓库")
+                return True
+            else:
+                subprocess.run(["git", "push", "-u", "origin", "main"], 
+                             cwd=self.backup_dir, check=True, capture_output=True)
+                print("✅ 已推送到远程仓库")
+                return True
+                
+        except Exception as e:
+            print(f"❌ 备份技能失败: {e}")
+            return False
+
     def commit_backup(self, incremental: bool = False) -> bool:
         """提交备份到 Git"""
         try:
@@ -600,6 +690,11 @@ def main():
     restore_parser = subparsers.add_parser("restore", help="从备份恢复")
     restore_parser.add_argument("--no-confirm", action="store_true", help="跳过确认提示")
     
+    # backup-skill 命令
+    skill_parser = subparsers.add_parser("backup-skill", help="备份特定技能")
+    skill_parser.add_argument("skill_name", help="技能名称")
+    skill_parser.add_argument("--dry-run", action="store_true", help="试运行，不实际备份")
+    
     args = parser.parse_args()
     
     if not args.command:
@@ -627,6 +722,10 @@ def main():
             
         elif args.command == "restore":
             success = backup.restore_backup(confirm=not args.no_confirm)
+            sys.exit(0 if success else 1)
+            
+        elif args.command == "backup-skill":
+            success = backup.backup_specific_skill(args.skill_name, dry_run=args.dry_run)
             sys.exit(0 if success else 1)
             
     except KeyboardInterrupt:
