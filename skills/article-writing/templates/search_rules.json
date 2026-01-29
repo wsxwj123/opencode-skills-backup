@@ -42,9 +42,9 @@
     }
   },
   "search_tools_priority": {
-    "primary": "paper-search (PubMed, Google Scholar)",
-    "secondary": "arxiv (预印本前沿)",
-    "fallback": "tavily (仅用于概念澄清)"
+    "primary": "paper-search (PubMed)",
+    "secondary": "paper-search (Semantic Scholar) & arxiv/biorxiv (Preprints)",
+    "fallback": "paper-search (Google Scholar) (仅在需要最新文献补充时使用)"
   },
   "doi_validation_rules": {
     "method": "交叉验证DOI与标题",

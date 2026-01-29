@@ -1,5 +1,32 @@
 # Changelog - Article Writing Skill
 
+## [2.3.0] - 2024-01-29
+
+### 🛡️ 逻辑熔断与检索优化
+
+#### 核心变更
+- **数据依赖熔断 (Hard Stop)**: 在撰写 Results/Discussion 章节前，强制检查 Figure 数据的完整性。若数据状态为 `pending`，AI 必须立即停止并请求数据，严禁编造或使用占位符。
+- **文献检索优先级调整**:
+  - **Primary**: PubMed (医学/药剂学首选)
+  - **Secondary**: Semantic Scholar (速度/广度) + bioRxiv (预印本)
+  - **Fallback**: Google Scholar (仅作补充)
+  - **Forbidden**: Tavily (禁止用于学术检索)
+
+---
+
+## [2.2.0] - 2024-01-29
+
+### 🛡️ 安全与规范升级
+
+#### 核心变更
+- **原子化文件管理**: 强制执行"一小节一文件"策略（如 `04_Results_3.1_Characterization.md`），彻底解决大文件覆盖导致的数据丢失问题。
+- **写入安全协议**: 在执行 `write_file` 前必须先读取旧文件比对差异，若存在覆盖风险，自动创建 `.bak` 备份。
+- **严格工具纪律**: 明确锁定文献检索工具优先级。
+  - **Primary**: `paper-search` (PubMed/Scholar), `arxiv` (Preprints).
+  - **Forbidden**: 禁止使用 `tavily` 检索学术引用（仅限宽泛概念查询）。
+
+---
+
 ## [2.1.0] - 2024-01-28
 
 ### 🎉 核心升级

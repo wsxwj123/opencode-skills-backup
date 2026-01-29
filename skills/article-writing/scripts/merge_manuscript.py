@@ -6,14 +6,15 @@ import json
 
 def merge_and_convert():
     # 1. 定义顺序
-    order = [
-        '01_Abstract.md',
-        '02_Introduction.md',
-        '03_Methods.md',
-        '04_Results_*.md',
-        '05_Discussion.md',
-        '06_Conclusion.md',
-        '07_References.md'
+    # 这里的通配符非常重要，必须能匹配原子化文件 (如 04_Results_3.1_Title.md)
+    order_patterns = [
+        '01_Abstract*.md',
+        '02_Introduction*.md',
+        '03_Methods*.md',
+        '04_Results*.md',     # 匹配所有 04_Results 开头的文件
+        '05_Discussion*.md',
+        '06_Conclusion*.md',
+        '07_References*.md'
     ]
     
     manuscript_dir = 'manuscripts'
@@ -28,12 +29,14 @@ def merge_and_convert():
     full_content = ""
     print("🔄 Merging files...")
     
-    for pattern in order:
+    # 这一步会自动按文件名排序，这正是我们想要的 (04_Results_3.1 < 04_Results_3.2)
+    for pattern in order_patterns:
         full_pattern = os.path.join(manuscript_dir, pattern)
         files = sorted(glob.glob(full_pattern))
         
-        if not files and '*' not in pattern:
-            print(f"⚠️ Warning: {pattern} not found.")
+        if not files:
+            # 如果没有找到文件，不报错，继续下一个（可能该章节还未写）
+            continue
             
         for file_path in files:
             print(f"   + Adding {os.path.basename(file_path)}")
