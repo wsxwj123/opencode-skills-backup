@@ -72,16 +72,16 @@
 - **核心论点 (Key Claims)**：必须展开讨论。包含：数据描述 + 统计意义 + 机制解释 + 文献对比 + 意义阐述。
 - **辅助数据 (Supporting Data)**：仅描述结果和直接结论。
 
-### 4. 自我修正回路 (Self-Correction Loop) - v2.1新增
-**在生成任何正文段落时，必须在内部执行以下隐式思维链**：
-1. **Draft**: 生成初稿。
-2. **Critique**:
-   - "这是否太啰嗦？"
-   - "是否用了'It is well known'等废话？"
-   - "核心论点是否展开了200词以上？"
-   - "逻辑连接词是否自然？"
-3. **Polish**: 根据 Critique 修改。
-**输出原则**：只输出 Polish 后的最终版本，不要向用户展示修改过程。
+### 5. SI 主动建议与整合 (SI Proactive Loop) - v2.5新增 (Context-Aware)
+**在完成每一小节的正文初稿后，必须执行以下步骤**：
+1. **Analyze (分析)**：读取当前小节的 Storyline 和 Hypothesis。思考：
+   - "为了从数据A跳跃到结论B，中间缺失了什么逻辑链？"
+   - "是否有排除混杂因素的对照实验在Main Text中为了简洁被省略了？"
+   - "方法学上是否有需要验证的细节（如纯度、特异性）？"
+2. **Propose (建议)**：基于上述分析，提出具体的SI列表。
+   - *禁止*：不要机械地问"是否有稳定性数据"。
+   - *必须*：结合具体实验设计。例如："您在Main Text中展示了最终疗效，但为了证明这是由于免疫激活引起的，建议在SI中补充免疫细胞分型的流式图 (Figure S3)。"
+3. **Integrate (整合)**：获得用户反馈后，**重写该小节**，将SI引用（如 `(Figure S1, Table S2)`）作为完整证据链的一部分自然插入。
 
 ---
 
@@ -111,7 +111,7 @@
 ### Phase 3: 文献检索 (`/literature`)
 分阶段检索（Phase 1核心，Phase 2写作时实时补充）。
 
-### Phase 4: 逐节撰写 (融合模式 + 原子化文件)
+### Phase 4: 逐节撰写 (融合模式 + 原子化文件 + SI循环)
 
 **核心指令**：`/write [section]`
 
@@ -119,13 +119,15 @@
 - **Target Path**: `manuscripts/{Chapter}_{Subsection}_{Keyword}.md`
 - **Example**: `/write results_3.1` -> `manuscripts/04_Results_3.1_Characterization.md`
 
-**安全写入流程**：
-1. **Pre-Write Check**: 检查文献/Figure。
-2. **Drafting**: 生成内容（Results + Discussion）。
-3. **Safety Check**:
-   - 如果文件已存在：`read(path)` -> 比较差异 -> 如果差异大，`rename(old_path, old_path + ".bak")`。
-4. **Writing**: 写入新内容。
-5. **Snapshot**: 触发智能快照。
+**执行流程 (v2.4 Upgrade)**：
+1. **Pre-Write Check**: 检查数据完整性。
+2. **Drafting (Main)**: 撰写包含 Main Figures 和 References 的初稿。
+3. **SI Proactive Proposal**: 
+   - AI 主动思考："针对本节结论，需要补充什么SI数据？"
+   - AI 输出："已生成初稿。建议补充以下SI以增强论证：[列表]。您是否有这些数据？"
+4. **User Feedback**: 用户确认或提供SI数据。
+5. **Final Integration**: AI 重写该节，插入 `(Figure S1)` 等标记，形成最终版。
+6. **Safety Write**: 检查文件差异 -> 写入文件 -> 智能快照。
 
 **融合写作策略**：
 1. **数据呈现 (Results)**：描述Figure结果 + 统计数据。
