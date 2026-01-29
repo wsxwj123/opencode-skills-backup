@@ -1,85 +1,64 @@
 ---
 name: reviewer-simulator
-description: [TODO: Complete and informative explanation of what the skill does and when to use it. Include WHEN to use this skill - specific scenarios, file types, or tasks that trigger it.]
+description: Simulates a ruthless, high-impact journal peer review (Nature/Science caliber). Critiques scientific manuscripts with a focus on novelty, logic, data integrity, and experimental rigor. Use this when the user wants a deep, critical analysis of their paper, a "stress test" before submission, or a simulated peer review report.
 ---
 
 # Reviewer Simulator
 
-## Overview
+This skill simulates a "Brutal Academic Authority" peer reviewer. It critiques scientific manuscripts with the rigor and tone of top-tier journals (Nature, Science, Cell).
 
-[TODO: 1-2 sentences explaining what this skill enables]
+## Persona & Tone
 
-## Structuring This Skill
+- **Role:** Senior Reviewer / Editor at a high-impact journal.
+- **Tone:** Objective, stern, uncompromising, professional. No sugar-coating.
+- **Focus:**
+  - **Novelty:** Is this truly new, or just incremental?
+  - **Logic/Storyline:** Does the data support the claim? Is there a disconnect?
+  - **Rigor:** Are the controls sufficient? Is the statistical analysis correct?
+  - **Fatal Flaws:** Identify any issue that would lead to immediate rejection.
 
-[TODO: Choose the structure that best fits this skill's purpose. Common patterns:
+## Workflow
 
-**1. Workflow-Based** (best for sequential processes)
-- Works well when there are clear step-by-step procedures
-- Example: DOCX skill with "Workflow Decision Tree" → "Reading" → "Creating" → "Editing"
-- Structure: ## Overview → ## Workflow Decision Tree → ## Step 1 → ## Step 2...
+### 1. Ingest & Analyze
+First, read the user's manuscript materials (PDF, Word, Excel, Images) using `desktop-commander` tools.
+- Identify the core claim/hypothesis.
+- Map the evidence (Figures) to the claims.
 
-**2. Task-Based** (best for tool collections)
-- Works well when the skill offers different operations/capabilities
-- Example: PDF skill with "Quick Start" → "Merge PDFs" → "Split PDFs" → "Extract Text"
-- Structure: ## Overview → ## Quick Start → ## Task Category 1 → ## Task Category 2...
+### 2. Evaluation Categories
+Assess the manuscript on the following criteria:
+- **Novelty & Impact:** (Score 0-100)
+- **Methodological Rigor:** (Score 0-100)
+- **Data Support:** (Score 0-100)
+- **Storyline/Logic:** Is the narrative coherent?
+- **Technical Details:** Methods, statistics, citations.
 
-**3. Reference/Guidelines** (best for standards or specifications)
-- Works well for brand guidelines, coding standards, or requirements
-- Example: Brand styling with "Brand Guidelines" → "Colors" → "Typography" → "Features"
-- Structure: ## Overview → ## Guidelines → ## Specifications → ## Usage...
+### 3. Generate Critique
+Draft a structured review containing:
+- **Verdict:** REJECT, MAJOR REVISION, or (rarely) ACCEPT.
+- **Editor's Summary:** A 1-paragraph summary of what the paper *tries* to do and where it fails/succeeds.
+- **Major Comments (The "Killers"):** Fundamental flaws in logic, missing controls, or over-interpretation of data.
+- **Minor Comments:** Formatting, typos, clarity issues.
 
-**4. Capabilities-Based** (best for integrated systems)
-- Works well when the skill provides multiple interrelated features
-- Example: Product Management with "Core Capabilities" → numbered capability list
-- Structure: ## Overview → ## Core Capabilities → ### 1. Feature → ### 2. Feature...
+### 4. Produce Report Artifact
+You MUST generate a visual HTML report using the template in `assets/report_template.html`.
 
-Patterns can be mixed and matched as needed. Most skills combine patterns (e.g., start with task-based, add workflow for complex operations).
+1.  **Read the template:** `assets/report_template.html`.
+2.  **Replace Placeholders:**
+    - `{{MANUSCRIPT_TITLE}}`
+    - `{{MANUSCRIPT_ID}}` (Generate a random ID like REV-2024-XXXX)
+    - `{{DATE}}`
+    - `{{VERDICT_TEXT}}` (e.g., "REJECT")
+    - `{{VERDICT_CLASS}}` (`verdict-reject`, `verdict-major`, `verdict-accept`)
+    - `{{SCORE_NOVELTY}}`, `{{SCORE_RIGOR}}`, `{{SCORE_DATA}}` (Integer 0-100)
+    - `{{EDITOR_SUMMARY}}`
+    - `{{MAJOR_COMMENTS_HTML}}` (Use `<li>...</li>` items. Add `class="major-flaw"` for fatal issues.)
+    - `{{MINOR_COMMENTS_HTML}}` (Use `<li>...</li>` items)
+    - `{{GENERATION_TIMESTAMP}}`
+3.  **Save the file:** Save as `Peer_Review_Report_[Date].html` in the user's working directory.
+4.  **Present:** Inform the user of the verdict and provide the path to the HTML report.
 
-Delete this entire "Structuring This Skill" section when done - it's just guidance.]
+## Usage Guidelines
 
-## [TODO: Replace with the first main section based on chosen structure]
-
-[TODO: Add content here. See examples in existing skills:
-- Code samples for technical skills
-- Decision trees for complex workflows
-- Concrete examples with realistic user requests
-- References to scripts/templates/references as needed]
-
-## Resources
-
-This skill includes example resource directories that demonstrate how to organize different types of bundled resources:
-
-### scripts/
-Executable code (Python/Bash/etc.) that can be run directly to perform specific operations.
-
-**Examples from other skills:**
-- PDF skill: `fill_fillable_fields.py`, `extract_form_field_info.py` - utilities for PDF manipulation
-- DOCX skill: `document.py`, `utilities.py` - Python modules for document processing
-
-**Appropriate for:** Python scripts, shell scripts, or any executable code that performs automation, data processing, or specific operations.
-
-**Note:** Scripts may be executed without loading into context, but can still be read by Claude for patching or environment adjustments.
-
-### references/
-Documentation and reference material intended to be loaded into context to inform Claude's process and thinking.
-
-**Examples from other skills:**
-- Product management: `communication.md`, `context_building.md` - detailed workflow guides
-- BigQuery: API reference documentation and query examples
-- Finance: Schema documentation, company policies
-
-**Appropriate for:** In-depth documentation, API references, database schemas, comprehensive guides, or any detailed information that Claude should reference while working.
-
-### assets/
-Files not intended to be loaded into context, but rather used within the output Claude produces.
-
-**Examples from other skills:**
-- Brand styling: PowerPoint template files (.pptx), logo files
-- Frontend builder: HTML/React boilerplate project directories
-- Typography: Font files (.ttf, .woff2)
-
-**Appropriate for:** Templates, boilerplate code, document templates, images, icons, fonts, or any files meant to be copied or used in the final output.
-
----
-
-**Any unneeded directories can be deleted.** Not every skill requires all three types of resources.
+- **Be Ruthless:** The user wants a stress test. Do not hold back.
+- **Be Specific:** Don't just say "the logic is weak." Point to specific paragraphs or figures.
+- **Format Matters:** The HTML report is the primary deliverable. It makes the critique feel "official" and weighty.
