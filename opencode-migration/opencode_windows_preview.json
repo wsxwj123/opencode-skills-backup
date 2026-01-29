@@ -1,0 +1,669 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "deepseek/deepseek-chat",
+  "plugin": [
+    "oh-my-opencode-slim",
+    "./plugins/superpowers.js"
+  ],
+  "mcp": {
+    "memory": {
+      "type": "local",
+      "command": [
+        "npx",
+        "-y",
+        "@modelcontextprotocol\\server-memory"
+      ],
+      "enabled": true
+    },
+    "desktop-commander": {
+      "type": "local",
+      "command": [
+        "npx",
+        "-y",
+        "@wonderwhy-er\\desktop-commander"
+      ],
+      "enabled": true
+    },
+    "sequential-thinking": {
+      "type": "local",
+      "command": [
+        "npx",
+        "-y",
+        "@modelcontextprotocol\\server-sequential-thinking"
+      ],
+      "enabled": false
+    },
+    "context7": {
+      "type": "local",
+      "command": [
+        "npx",
+        "-y",
+        "@upstash\\context7-mcp"
+      ],
+      "enabled": false
+    },
+    "quickchart": {
+      "type": "local",
+      "command": [
+        "node",
+        "C:\\Users\\wsxwj\\Documents\\Cline\\MCP\\quickchart-mcp-server\\build\\index.js",
+        "--stdio"
+      ],
+      "enabled": true
+    },
+    "drawio": {
+      "type": "local",
+      "command": [
+        "node",
+        "C:\\Users\\wsxwj\\Documents\\Cline\\MCP\\drawio-mcp-server\\drawio-mcp-server\\build\\index.js",
+        "--stdio"
+      ],
+      "enabled": true
+    },
+    "file-to-pdf": {
+      "type": "local",
+      "command": [
+        "C:\\Users\\wsxwj\\Documents\\Cline\\MCP\\file-to-pdf\\file-converter-mcp\\venv\\bin\\python",
+        "C:\\Users\\wsxwj\\Documents\\Cline\\MCP\\file-to-pdf\\file-converter-mcp\\file_converter_server.py",
+        "--stdio"
+      ],
+      "enabled": true
+    },
+    "office-editor": {
+      "type": "local",
+      "command": [
+        "C:\\Users\\wsxwj\\Documents\\Cline\\MCP\\ms-edit-mcp\\office-editor-mcp-main\\.venv\\bin\\python",
+        "C:\\Users\\wsxwj\\Documents\\Cline\\MCP\\ms-edit-mcp\\office-editor-mcp-main\\general_server.py",
+        "--stdio"
+      ],
+      "enabled": true
+    },
+    "ppt-mcp": {
+      "type": "local",
+      "command": [
+        "C:\\Users\\wsxwj\\Documents\\Cline\\MCP\\ppt-mcp\\.venv\\bin\\python",
+        "C:\\Users\\wsxwj\\Documents\\Cline\\MCP\\ppt-mcp\\ppt_mcp_server.py",
+        "--stdio"
+      ],
+      "enabled": true
+    },
+    "word-mcp": {
+      "type": "local",
+      "command": [
+        "C:\\Users\\wsxwj\\Documents\\Cline\\MCP\\word-mcp\\Office-Word-MCP-Server\\.venv\\bin\\python",
+        "C:\\Users\\wsxwj\\Documents\\Cline\\MCP\\word-mcp\\Office-Word-MCP-Server\\word_mcp_server.py",
+        "--stdio"
+      ],
+      "enabled": true
+    },
+    "claude-document": {
+      "type": "local",
+      "command": [
+        "C:\\Users\\wsxwj\\Documents\\Cline\\MCP\\document\\.venv\\bin\\python",
+        "-m",
+        "claude_document_mcp.server",
+        "--stdio"
+      ],
+      "enabled": true
+    },
+    "playwright": {
+      "type": "local",
+      "command": [
+        "npx",
+        "-y",
+        "@executeautomation\\playwright-mcp-server"
+      ],
+      "enabled": true
+    },
+    "reddit": {
+      "type": "local",
+      "command": [
+        "C:\\Users\\wsxwj\\Documents\\Cline\\MCP\\mcp-server-reddit\\mcp_reddit_venv\\bin\\python",
+        "-m",
+        "mcp_server_reddit"
+      ],
+      "enabled": true
+    },
+    "paper-search": {
+      "type": "local",
+      "command": [
+        "uv",
+        "run",
+        "--directory",
+        "C:\\Users\\wsxwj\\Documents\\Cline\\MCP\\paper-search-mcp\\paper-search-mcp",
+        "-m",
+        "paper_search_mcp.server"
+      ],
+      "enabled": true
+    },
+    "arxiv": {
+      "type": "local",
+      "command": [
+        "uv",
+        "tool",
+        "run",
+        "arxiv-mcp-server",
+        "--storage-path",
+        "C:\\Users\\wsxwj\\Downloads\\reference"
+      ],
+      "enabled": true
+    },
+    "markdownify": {
+      "type": "local",
+      "command": [
+        "node",
+        "C:\\Users\\wsxwj\\Documents\\Cline\\MCP\\markdownify\\dist\\index.js"
+      ],
+      "enabled": true
+    },
+    "pandoc": {
+      "type": "local",
+      "command": [
+        "uvx",
+        "mcp-pandoc"
+      ],
+      "enabled": true
+    },
+    "tavily": {
+      "type": "local",
+      "command": [
+        "npx",
+        "-y",
+        "tavily-mcp@0.1.4"
+      ],
+      "environment": {
+        "TAVILY_API_KEY": "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"
+      },
+      "enabled": true
+    },
+    "fetch": {
+      "type": "local",
+      "command": [
+        "uvx",
+        "mcp-server-fetch",
+        "--ignore-robots-txt"
+      ],
+      "enabled": true
+    },
+    "filesystem": {
+      "type": "local",
+      "command": [
+        "npx",
+        "-y",
+        "@modelcontextprotocol\\server-filesystem",
+        "C:\\Users\\wsxwj\\Desktop",
+        "C:\\Users\\wsxwj"
+      ],
+      "enabled": true
+    }
+  },
+  "provider": {
+    "linkapi-all": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "LinkAPI All",
+      "options": {
+        "baseURL": "https://linkapi.cc/v1",
+        "headers": {
+          "Authorization": "Bearer sk-Edj6Y6fZjK1q8FoFnT9al7oDOF3pd7KUoSAOLvSpqh3lzDHR"
+        }
+      },
+      "models": {
+        "[次]claude-sonnet-4-5": {
+          "name": "[次]claude-sonnet-4-5",
+          "limit": {
+            "context": 200000,
+            "output": 8192
+          }
+        },
+        "[次]claude-sonnet-4-5-thinking": {
+          "name": "[次]claude-sonnet-4-5-thinking",
+          "limit": {
+            "context": 200000,
+            "output": 8192
+          }
+        },
+        "[次]claude-opus-4-5-thinking": {
+          "name": "[次]claude-opus-4-5-thinking",
+          "limit": {
+            "context": 200000,
+            "output": 8192
+          }
+        },
+        "[次]claude-opus-4-5": {
+          "name": "[次]claude-opus-4-5",
+          "limit": {
+            "context": 200000,
+            "output": 8192
+          }
+        },
+        "[次]claude-opus-4-1-thinking": {
+          "name": "[次]claude-opus-4-1-thinking",
+          "limit": {
+            "context": 200000,
+            "output": 8192
+          }
+        },
+        "[次]claude-opus-4-1": {
+          "name": "[次]claude-opus-4-1",
+          "limit": {
+            "context": 200000,
+            "output": 8192
+          }
+        },
+        "[次]gemini-2.5-pro": {
+          "name": "[次]gemini-2.5-pro",
+          "limit": {
+            "context": 2000000,
+            "output": 8192
+          }
+        },
+        "[次]gemini-3-pro-preview": {
+          "name": "[次]gemini-3-pro-preview",
+          "limit": {
+            "context": 2000000,
+            "output": 8192
+          }
+        },
+        "[次]gpt-5.2": {
+          "name": "[次]gpt-5.2",
+          "limit": {
+            "context": 200000,
+            "output": 8192
+          }
+        },
+        "AWS/claude-sonnet-4-5-20250929": {
+          "name": "AWS/claude-sonnet-4-5-20250929",
+          "limit": {
+            "context": 200000,
+            "output": 8192
+          }
+        },
+        "claude-sonnet-4-5-20250929-thinking-r": {
+          "name": "claude-sonnet-4-5-20250929-thinking-r",
+          "limit": {
+            "context": 200000,
+            "output": 8192
+          }
+        },
+        "claude-sonnet-4-5-20250929-r": {
+          "name": "claude-sonnet-4-5-20250929-r",
+          "limit": {
+            "context": 200000,
+            "output": 8192
+          }
+        },
+        "claude-opus-4-1-20250805-thinking-r": {
+          "name": "claude-opus-4-1-20250805-thinking-r",
+          "limit": {
+            "context": 200000,
+            "output": 8192
+          }
+        }
+      }
+    },
+    "kuaiapi": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "KuaiAPI (快API)",
+      "options": {
+        "baseURL": "https://chat.kaxsx.top/v1",
+        "headers": {
+          "Authorization": "Bearer sk-UGRRuyfhOpEdQx82rj1IxuTCYNkTJ6Nbu51B7GzomYfRwDET"
+        }
+      },
+      "models": {
+        "[vertex按量]gemini-3-pro-preview": {
+          "name": "[vertex按量]gemini-3-pro-preview",
+          "limit": {
+            "context": 2000000,
+            "output": 8192
+          }
+        },
+        "[vertex按量]gemini-2.5-pro": {
+          "name": "[vertex按量]gemini-2.5-pro",
+          "limit": {
+            "context": 2000000,
+            "output": 8192
+          }
+        },
+        "[g2]gemini-3-pro-preview": {
+          "name": "[g2]gemini-3-pro-preview",
+          "limit": {
+            "context": 2000000,
+            "output": 8192
+          }
+        },
+        "[g2]gemini-2.5-pro-preview-06-05": {
+          "name": "[g2]gemini-2.5-pro-preview-06-05",
+          "limit": {
+            "context": 2000000,
+            "output": 8192
+          }
+        },
+        "[g2]gemini-2.5-pro": {
+          "name": "[g2]gemini-2.5-pro",
+          "limit": {
+            "context": 2000000,
+            "output": 8192
+          }
+        },
+        "[g1]gemini-3-pro-preview": {
+          "name": "[g1]gemini-3-pro-preview",
+          "limit": {
+            "context": 2000000,
+            "output": 8192
+          }
+        },
+        "[g4]claude-3-7-sonnet-20250219": {
+          "name": "[g4]claude-3-7-sonnet-20250219",
+          "limit": {
+            "context": 200000,
+            "output": 8192
+          }
+        },
+        "[g4]claude-opus-4-5-20251101": {
+          "name": "[g4]claude-opus-4-5-20251101",
+          "limit": {
+            "context": 200000,
+            "output": 8192
+          }
+        },
+        "[g4]claude-sonnet-4-20250514": {
+          "name": "[g4]claude-sonnet-4-20250514",
+          "limit": {
+            "context": 200000,
+            "output": 8192
+          }
+        },
+        "[g4]claude-sonnet-4-5-20250929": {
+          "name": "[g4]claude-sonnet-4-5-20250929",
+          "limit": {
+            "context": 200000,
+            "output": 8192
+          }
+        },
+        "[vertex]gemini-2.5-pro": {
+          "name": "[vertex]gemini-2.5-pro",
+          "limit": {
+            "context": 2000000,
+            "output": 8192
+          }
+        },
+        "[vertex]gemini-3-pro-preview": {
+          "name": "[vertex]gemini-3-pro-preview",
+          "limit": {
+            "context": 2000000,
+            "output": 8192
+          }
+        },
+        "claude-opus-4-5-20251101": {
+          "name": "claude-opus-4-5-20251101",
+          "limit": {
+            "context": 200000,
+            "output": 8192
+          }
+        },
+        "claude-sonnet-4-5-20250929": {
+          "name": "claude-sonnet-4-5-20250929",
+          "limit": {
+            "context": 200000,
+            "output": 8192
+          }
+        },
+        "claude-sonnet-4-5-20250929-thinking": {
+          "name": "claude-sonnet-4-5-20250929-thinking",
+          "limit": {
+            "context": 200000,
+            "output": 8192
+          }
+        }
+      }
+    },
+    "mmw-gemini": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "MMW Gemini (猫猫屋)",
+      "options": {
+        "baseURL": "https://pro.chr6.com/v1",
+        "headers": {
+          "Authorization": "Bearer sk-upnGoeTLqO1KRKaYzWvGIVbhoALFfBMxIQuiyE7V8wlX2UOT"
+        }
+      },
+      "models": {
+        "[A]gemini-3-pro-preview": {
+          "name": "[A]gemini-3-pro-preview",
+          "limit": {
+            "context": 2000000,
+            "output": 8192
+          }
+        },
+        "[mmw3x]gemini-3-pro-preview-thinking": {
+          "name": "[mmw3x]gemini-3-pro-preview-thinking",
+          "limit": {
+            "context": 2000000,
+            "output": 8192
+          }
+        },
+        "[mmw3x]gemini-3-flash-preview-thinking": {
+          "name": "[mmw3x]gemini-3-flash-preview-thinking",
+          "limit": {
+            "context": 1000000,
+            "output": 8192
+          }
+        },
+        "[mmw3x]gemini-2.5-pro-thinking": {
+          "name": "[mmw3x]gemini-2.5-pro-thinking",
+          "limit": {
+            "context": 2000000,
+            "output": 8192
+          }
+        },
+        "[mmw3x]gemini-2.5-flash-thinking": {
+          "name": "[mmw3x]gemini-2.5-flash-thinking",
+          "limit": {
+            "context": 1000000,
+            "output": 8192
+          }
+        },
+        "[mmw+++]gemini-3-pro-preview": {
+          "name": "[mmw+++]gemini-3-pro-preview",
+          "limit": {
+            "context": 2000000,
+            "output": 8192
+          }
+        },
+        "[mmw+++]gemini-3-pro-preview-thinking": {
+          "name": "[mmw+++]gemini-3-pro-preview-thinking",
+          "limit": {
+            "context": 2000000,
+            "output": 8192
+          }
+        },
+        "[mmw+++]gemini-2.5-pro-thinking": {
+          "name": "[mmw+++]gemini-2.5-pro-thinking",
+          "limit": {
+            "context": 2000000,
+            "output": 8192
+          }
+        },
+        "[mmw+++]gemini-2.5-pro": {
+          "name": "[mmw+++]gemini-2.5-pro",
+          "limit": {
+            "context": 2000000,
+            "output": 8192
+          }
+        },
+        "[mmw]gemini-3-pro-preview-thinking": {
+          "name": "[mmw]gemini-3-pro-preview-thinking",
+          "limit": {
+            "context": 2000000,
+            "output": 8192
+          }
+        }
+      }
+    },
+    "mmw": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "MMW Claude (猫猫屋)",
+      "options": {
+        "baseURL": "https://mmwapi.xuancat.cn/v1",
+        "headers": {
+          "Authorization": "Bearer sk-sx1KW0Lsbgw3IIVBLMgAZYGZLo9mVtw0GW2oizVGfZ5FxPBA"
+        }
+      },
+      "models": {
+        "claude-opus-4-1-20250805": {
+          "name": "claude-opus-4-1-20250805",
+          "limit": {
+            "context": 200000,
+            "output": 8192
+          }
+        },
+        "claude-opus-4-1-20250805-thinking": {
+          "name": "claude-opus-4-1-20250805-thinking",
+          "limit": {
+            "context": 200000,
+            "output": 8192
+          }
+        },
+        "claude-opus-4-5-20251101": {
+          "name": "claude-opus-4-5-20251101",
+          "limit": {
+            "context": 200000,
+            "output": 8192
+          }
+        },
+        "claude-opus-4-5-20251101-thinking": {
+          "name": "claude-opus-4-5-20251101-thinking",
+          "limit": {
+            "context": 200000,
+            "output": 8192
+          }
+        },
+        "claude-sonnet-4-5-20250929": {
+          "name": "claude-sonnet-4-5-20250929",
+          "limit": {
+            "context": 200000,
+            "output": 8192
+          }
+        },
+        "claude-sonnet-4-5-20250929-thinking": {
+          "name": "claude-sonnet-4-5-20250929-thinking",
+          "limit": {
+            "context": 200000,
+            "output": 8192
+          }
+        }
+      }
+    },
+    "aistudio": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "AIStudio Proxy (Local)",
+      "options": {
+        "baseURL": "http://127.0.0.1:2048/v1",
+        "headers": {
+          "Authorization": "Bearer 123"
+        }
+      },
+      "models": {
+        "gemini-2.5-flash": {
+          "name": "gemini-2.5-flash",
+          "limit": {
+            "context": 1000000,
+            "output": 8192
+          }
+        },
+        "nano-banana": {
+          "name": "nano-banana",
+          "limit": {
+            "context": 200000,
+            "output": 8192
+          }
+        },
+        "gemini-2.5-flash-lite": {
+          "name": "gemini-2.5-flash-lite",
+          "limit": {
+            "context": 1000000,
+            "output": 8192
+          }
+        },
+        "gemini-2.5-pro": {
+          "name": "gemini-2.5-pro",
+          "limit": {
+            "context": 2000000,
+            "output": 8192
+          }
+        },
+        "gemini-3-flash-preview": {
+          "name": "gemini-3-flash-preview",
+          "limit": {
+            "context": 1000000,
+            "output": 8192
+          }
+        },
+        "gemini-3-pro-preview": {
+          "name": "gemini-3-pro-preview",
+          "limit": {
+            "context": 2000000,
+            "output": 8192
+          }
+        }
+      }
+    },
+    "linkapi": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "LinkAPI",
+      "options": {
+        "baseURL": "https://linkapi.cc/v1",
+        "headers": {
+          "Authorization": "Bearer sk-hZocD1d7DyjDavBeyuvLoVrDMSdKL82asZNSlOfGnSFVNzEz"
+        }
+      },
+      "models": {
+        "claude-sonnet-4-5-20250929": {
+          "name": "claude-sonnet-4-5-20250929",
+          "limit": {
+            "context": 200000,
+            "output": 8192
+          }
+        },
+        "claude-opus-4-5-20251101": {
+          "name": "claude-opus-4-5-20251101",
+          "limit": {
+            "context": 200000,
+            "output": 8192
+          }
+        },
+        "claude-haiku-4-5-20251001": {
+          "name": "claude-haiku-4-5-20251001",
+          "limit": {
+            "context": 200000,
+            "output": 8192
+          }
+        }
+      }
+    },
+    "google": {
+      "name": "Google",
+      "models": {
+        "antigravity-gemini-3-pro-high": {
+          "name": "Gemini 3 Pro High (Antigravity)",
+          "thinking": true,
+          "attachment": true,
+          "limit": {
+            "context": 1048576,
+            "output": 65535
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

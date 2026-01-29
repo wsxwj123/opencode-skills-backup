@@ -1,0 +1,47 @@
+{
+  "repo_url": "https://github.com/wsxwj123/opencode-backup-macmini.git",
+  "last_backup": null,
+  "backup_count": 0,
+  "backup_items": {
+    "config_files": [
+      "opencode.json",
+      "oh-my-opencode.json",
+      "oh-my-opencode-slim.json",
+      "package.json",
+      "bun.lock",
+      ".gitignore"
+    ],
+    "directories": [
+      "plugins",
+      "skills",
+      "agents",
+      "commands",
+      "lib"
+    ],
+    "tool_scripts": [
+      "add_khazix_metadata.py",
+      "fix_github_urls.py",
+      "fix_updated_skills.py",
+      "restore_skills.py",
+      "update_skills.py"
+    ],
+    "documentation": [
+      "OpenCode_Skill_Format_规范说明.md",
+      "OpenCode_Skill_Format_总结.md"
+    ],
+    "exclude_patterns": [
+      "node_modules",
+      ".DS_Store",
+      ".git",
+      "*.pyc",
+      "__pycache__",
+      "*.log",
+      "*.tmp",
+      "*.temp"
+    ]
+  },
+  "git_config": {
+    "user_name": "OpenCode Backup",
+    "user_email": "backup@opencode.local"
+  }
+}

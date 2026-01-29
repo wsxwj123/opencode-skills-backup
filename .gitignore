@@ -1,9 +1,15 @@
-# 备份忽略文件
+# Backup Ignore Files
 .DS_Store
+Thumbs.db
 *.pyc
+*.py[cod]
+*$py.class
 __pycache__/
 *.log
 temp/
 tmp/
 *.bak
 *.backup
+.vscode/
+.idea/
+node_modules/
