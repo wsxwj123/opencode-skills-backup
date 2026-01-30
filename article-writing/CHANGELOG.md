@@ -1,5 +1,28 @@
 # Changelog - Article Writing Skill
 
+## [2.8.0] - 2024-01-30
+
+### 🔄 全局状态持久化 (Continuity Upgrade)
+
+#### 核心变更
+- **Global Context Persistence**: 强制在**每次回复结束前**自动更新 `context_memory.md`。无论是在进行问答、头脑风暴还是写作，当前的对话状态、决策和待办事项都会被实时保存。
+- **Auto-Snapshot Logic**: 智能快照现在会监控 `context_memory.md` 的实质性变更，确保在对话中断后能无缝恢复到最新状态。
+
+---
+
+## [2.7.0] - 2024-01-29
+
+### 🚫 去除 AI 味关键升级
+
+#### 核心变更
+- **NO BULLET POINTS POLICY (段落式写作强制令)**:
+  - 明确禁止在正文（Abstract, Intro, Results, Discussion）中使用列点符号。
+  - 强制要求使用逻辑连接词（Furthermore, Consequently）将观点串联成连贯段落，模拟真人科学家的写作习惯。
+- **Final System Enforcement**:
+  - 在 Skill 末尾增加了最高优先级的执行指令，再次强调"强制交互版块"（反向拷问/你可能想知道）和"禁止列点"规则，防止 LLM 在长上下文中遗忘。
+
+---
+
 ## [2.6.0] - 2024-01-29
 
 ### 💬 交互深度恢复

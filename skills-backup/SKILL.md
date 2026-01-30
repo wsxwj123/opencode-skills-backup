@@ -30,6 +30,21 @@ description: Use when the user asks to backup or sync their skills. This skill a
 - "备份 xlsx 技能" (仅同步 xlsx)
 - "同步 writing-plans 和 theme-factory" (同步指定的两个技能)
 
+## 自动备份 (Auto Backup)
+你可以设置每小时自动备份，确保技能永不丢失。
+
+**安装方法：**
+在 OpenCode 中运行：
+```python
+python3 /Users/wsxwj/.config/opencode/skills/skills-backup/setup_auto_backup.py
+```
+或者让 AI 帮你运行："设置自动备份"。
+
+**自动备份特性：**
+- **频率**：每小时运行一次。
+- **日志**：记录在 `skills-backup/logs/history.md`。
+- **静默**：后台运行，不打扰工作。
+
 ## 运行原理
 该 Skill 会执行 `scripts/sync_skills.py` 脚本：
 1. 检测当前操作系统。

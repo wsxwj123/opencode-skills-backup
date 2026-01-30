@@ -1,14 +1,14 @@
-# Article Writing Skill - Nature级SCI论文一键生成系统 (v2.2)
+# Article Writing Skill - Nature级SCI论文一键生成系统 (v2.9)
 
 ## 🎯 Skill概述
 
 本skill用于撰写符合Nature/Science/Cell发表标准的SCI研究论文（Article类型），专注于广义药物递送系统领域。
 
-**核心升级 (v2.2)**：
+**核心升级 (v2.9)**：
+- **引用格式标准化**：强制使用 `[n]` 格式，严禁其他变体。
+- **小节参考文献列表**：每节末尾自动附上引用列表。
+- **全局状态持久化**：每次回复前强制读取所有上下文文件（含进度），回复后自动保存状态。
 - **原子化文件管理**：强制"一小节一文件"（如 `04_Results_3.1.md`），杜绝大文件覆盖风险。
-- **写入安全协议**：写入前自动比对差异，防止意外覆盖数据。
-- **严格工具纪律**：锁定文献检索工具优先级（Paper Search >>> Tavily）。
-- **Results & Discussion深度融合**：不再割裂，数据阐述即时伴随深度讨论。
 
 ---
 
@@ -24,11 +24,21 @@
 3.  **兜底检索**：Google Scholar (仅在上述工具无果时尝试)。
 4.  **概念查询**：仅当查询宽泛非学术概念时才使用 `tavily`。禁止用 Tavily 找论文。
 
+**语言风格**：
+- 美式英语母语水平
+- **海明威式科学写作 (v2.0增强)**：
+  - **简练有力**：句子结构简单，逻辑强。
+  - **段落叙事 (No Bullet Points)**：严禁在正文中使用列点（Bullet Points）阐述观点。所有论证必须通过逻辑连接词（Furthermore, However, Consequently）串联成连贯的段落。
+    - *例外*：仅允许在 Methodology 中列出具体的配方或参数清单。
+  - **弹性深度**：简练不代表贫乏。对于**Key Findings**，必须进行Deep Analysis（解释Why & How，对比文献）；对于**Supporting Data**，一笔带过。
+- **严禁AI味**：拒绝"delve into", "comprehensive landscape", "pivotal role"
+- **精确性**：拒绝"significant effect"，必须写"5-fold increase (P<0.001)"
+
 ---
 
-## 🧠 核心交互协议 (v2.3)
+## 🧠 核心交互协议 (Core Interactive Protocol)
 
-### 1. 数据依赖熔断机制 (Data Dependency Hard Stop) - v2.3新增
+### 1. 数据依赖熔断机制 (Data Dependency Hard Stop)
 **在执行 `/write` 撰写 Results/Discussion 章节前，必须执行以下检查**：
 1. **Check Data Status**: 检查 `figures_database.json` 中该章节涉及的 Figure 的 `data_status`。
 2. **If Pending**:
@@ -45,34 +55,54 @@
   - ✅ `04_Results_3.2_Uptake.md`
   - ❌ `04_Results.md`
 
-### 2. 写入安全检查 (Anti-Overwrite Check)
+### 3. 写入安全检查 (Anti-Overwrite Check)
 在执行 `write_file` 之前，必须进行以下**自查**：
 1. **Check Existence**: 目标路径是否存在文件？
 2. **Diff Check**: 如果存在，读取旧内容。如果新内容是旧内容的**完全覆盖**（而非追加或优化），必须先将旧文件重命名备份为 `.bak`，或者向用户发出**高风险警告**。
 3. **Report**: 告知用户："已创建新文件 [Filename]" 或 "已更新 [Filename] (原文件已备份)"。
 
-### 3. 上下文显式验证 (Mandatory Context Check)
-在开始任何撰写任务前，**必须**显式检查并输出以下状态块：
+### 4. 上下文显式验证 (Mandatory Context Check)
+**在每次回复前（特别是涉及决策或写作时），必须显式检查并输出以下状态块**：
 ```markdown
 [Context Check]
 - Storyline: ✅ Loaded (Focus: Section X.X)
 - Literature: ✅ Loaded (Total: XX refs)
 - Figures: ✅ Loaded (Status: Confirmed)
+- Progress: ✅ Loaded (writing_progress.json)
 - Memory: ✅ Loaded (Last update: [Time])
 ```
+*如果发现任何一项缺失或过时，必须先读取相应文件再继续。*
 
-### 2. 智能快照判断 (Smart Snapshot)
+### 5. 引用格式强制 (Strict Citation Format) - v2.9新增
+- **正文标记**: 严禁使用 `[Ref 1]`, `[Author, 2023]`, `(1)` 等格式。
+  - **必须使用**: **`[n]`** 格式。
+  - *Examples*: `[1]`, `[1,2]`, `[5-7]`, `[1,3,5]`.
+- **小节末尾列表**: 在撰写每个小节（Markdown文件）的末尾，**必须**附上该小节所引用的参考文献列表（Vancouver格式）。
+  - *格式*: `1. Author AA, et al. Title. Journal. Year;Vol:Page.`
+
+### 6. 智能快照判断 (Smart Snapshot)
 在每次回复结束时，进行内部判断：
 - "我刚刚生成了新的正文段落吗？"
 - "用户刚刚确认了一个关键决策吗？"
 - "我刚刚添加了新的文献到索引吗？"
 **如果有任意一个为Yes** → **主动执行** `/snapshot` 并告知用户。
 
-### 3. 弹性写作深度 (Elastic Depth)
+### 7. 弹性写作深度 (Elastic Depth)
 - **核心论点 (Key Claims)**：必须展开讨论。包含：数据描述 + 统计意义 + 机制解释 + 文献对比 + 意义阐述。
 - **辅助数据 (Supporting Data)**：仅描述结果和直接结论。
 
-### 5. SI 主动建议与整合 (SI Proactive Loop) - v2.5新增 (Context-Aware)
+### 8. 自我修正回路 (Self-Correction Loop)
+**在生成任何正文段落时，必须在内部执行以下隐式思维链**：
+1. **Draft**: 生成初稿。
+2. **Critique**:
+   - "这是否太啰嗦？"
+   - "是否用了'It is well known'等废话？"
+   - "核心论点是否展开了200词以上？"
+   - "逻辑连接词是否自然？"
+3. **Polish**: 根据 Critique 修改。
+**输出原则**：只输出 Polish 后的最终版本，不要向用户展示修改过程。
+
+### 9. SI 主动建议与整合 (SI Proactive Loop)
 **在完成每一小节的正文初稿后，必须执行以下步骤**：
 1. **Analyze (分析)**：读取当前小节的 Storyline 和 Hypothesis。思考：
    - "为了从数据A跳跃到结论B，中间缺失了什么逻辑链？"
@@ -83,9 +113,7 @@
    - *必须*：结合具体实验设计。例如："您在Main Text中展示了最终疗效，但为了证明这是由于免疫激活引起的，建议在SI中补充免疫细胞分型的流式图 (Figure S3)。"
 3. **Integrate (整合)**：获得用户反馈后，**重写该小节**，将SI引用（如 `(Figure S1, Table S2)`）作为完整证据链的一部分自然插入。
 
----
-
-### 6. 强制交互版块 (Mandatory Response Structure) - v2.6新增
+### 10. 强制交互版块 (Mandatory Response Structure)
 **除了命令执行结果外，每次回复（除简单确认外）必须包含以下两个版块**：
 
 #### 🤔 反向拷问 (Reverse Interrogation)
@@ -136,23 +164,20 @@
 - **Target Path**: `manuscripts/{Chapter}_{Subsection}_{Keyword}.md`
 - **Example**: `/write results_3.1` -> `manuscripts/04_Results_3.1_Characterization.md`
 
-**执行流程 (v2.4 Upgrade)**：
+**执行流程 (v2.9 Upgrade)**：
 1. **Pre-Write Check**: 检查数据完整性。
 2. **Drafting (Main)**: 撰写包含 Main Figures 和 References 的初稿。
-3. **SI Proactive Proposal**: 
-   - AI 主动思考："针对本节结论，需要补充什么SI数据？"
-   - AI 输出："已生成初稿。建议补充以下SI以增强论证：[列表]。您是否有这些数据？"
-4. **User Feedback**: 用户确认或提供SI数据。
-5. **Final Integration**: AI 重写该节，插入 `(Figure S1)` 等标记，形成最终版。
-6. **Safety Write**: 检查文件差异 -> 写入文件 -> 智能快照。
+   - **Citation Format**: 严格使用 `[n]`。
+3. **Reference List Generation**: 在文末生成本节引用的文献列表 (Vancouver style)。
+4. **SI Proactive Proposal**: AI 主动思考并建议 SI 数据。
+5. **User Feedback**: 用户确认。
+6. **Final Integration**: AI 重写该节，插入 SI 标记。
+7. **Safety Write**: 检查文件差异 -> 写入文件 -> 智能快照。
 
 **融合写作策略**：
 1. **数据呈现 (Results)**：描述Figure结果 + 统计数据。
 2. **即时讨论 (Discussion)**：机制解释 + 文献对比 + 意义阐述。
 3. **深度控制**：Key Section > 500词，Supporting Section ~200词。
-
-**示例**：
-> "Transmission electron microscopy revealed a uniform size of 120 nm (Fig 1A). **This specific size range is critical because** particles <100 nm penetrate poorly in dense stroma [Ref 1]. **Our result contrasts with** Smith et al., who reported aggregation [Ref 2]..."
 
 ### Phase 5: 质量控制 (`/check`)
 检查引用密度、字数、冲突。
@@ -189,7 +214,6 @@ Storyline阶段逻辑检查 + Final阶段完整报告。
 ---
 
 ## 🛡️ 写作禁忌
-
 1. **严禁割裂**：不要在Results里只罗列数字，然后在Discussion里才解释意思。
 2. **严禁简略**：对于Key Findings，如果只写了一两句话，视为**失败**。
 3. **严禁遗忘**：每次写作前，**必须**查阅`literature_index.json`和`figures_database.json`。
@@ -197,12 +221,42 @@ Storyline阶段逻辑检查 + Final阶段完整报告。
 ---
 
 ## 📝 模板文件说明
-
 - `project_init.json`: 包含初始配置。
 - `reviewer_concerns.json`: 包含针对不同递送系统的质疑库。
 - `search_rules.json`: 包含文献检索强度定义。
 
 ---
 
-**版本**: 2.1.0
-**更新**: BibTeX支持，自我修正回路，脚本实装。
+**版本**: 2.9.0
+**更新**: 强制`[n]`引用格式，小节末尾附参考文献，强化上下文检查。
+
+---
+
+## 🛑 FINAL SYSTEM ENFORCEMENT (优先级最高)
+
+**为了消除AI味并模拟真人科学家，必须严格执行以下三条红线**：
+
+### 1. 绝对禁止列点 (NO BULLET POINTS POLICY)
+- **规则**：在 `Abstract`, `Introduction`, `Results`, `Discussion`, `Conclusion` 的正文撰写中，**严禁使用列点符号** (如 1., -, *) 来阐述观点。
+- **强制转换**：必须使用逻辑连接词将观点串联成**连贯的段落 (Coherent Paragraphs)**。
+- *唯一例外*：`Methods` 章节中的具体配方列表。
+
+### 2. 引用格式强制 (STRICT CITATION FORMAT)
+- **规则**：正文中引用文献必须使用 **`[n]`** 格式（如 `[1]`, `[1,3]`）。
+- **禁止**：严禁使用 `[Ref 1]`, `[Author, 2023]`, `(1)` 等其他变体。
+- **列表**：每个撰写的小节末尾必须附上该节的 **References List** (Vancouver style)。
+
+### 3. 全局状态持久化 (GLOBAL STATE PERSISTENCE)
+**为了防止对话中断导致上下文丢失，必须执行以下操作**：
+- **Read First**: 每次回复前，**必须**读取 `context_memory.md`, `writing_progress.json`, `storyline.json`, `literature_index.json`, `figures_database.json`。
+- **Update Last**: 在每次回复结束前，**必须**根据当前对话内容更新 `context_memory.md`。
+- **Auto-Snapshot**: 如果 `context_memory.md` 发生了实质性变更，**必须**触发 `/snapshot`。
+
+### 4. 强制交互输出 (MANDATORY INTERACTION)
+每次回复（除简单确认外）的末尾，**必须**包含以下两个版块，不得遗漏：
+
+#### 🤔 反向拷问
+(针对用户当前思路的批判性提问)
+
+#### 💡 你可能想知道
+(相关的背景知识或下一步建议)
