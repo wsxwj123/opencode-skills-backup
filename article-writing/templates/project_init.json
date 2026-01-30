@@ -105,5 +105,7 @@
     "snapshots": [],
     "current_version": "v0_initialized",
     "max_snapshots": 10
-  }
+  },
+
+  "si_database_template": []
 }

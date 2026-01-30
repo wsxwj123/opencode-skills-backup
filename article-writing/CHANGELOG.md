@@ -1,5 +1,27 @@
 # Changelog - Article Writing Skill
 
+## [2.14.0] - 2026-01-30
+
+### 📏 严谨性与完整性升级
+
+#### 核心变更
+- **Point-by-Point Response Protocol (逐条致密回复协议)**:
+  - 将 "逐条致密回复" 列为最高优先级的系统执行红线 (Final Enforcement #6)。
+  - 强制 AI 必须细致回答用户的所有问题，严禁忽略或简略回答，确保学术交流的深度与完整性。
+- **Figure Caption Generation (图注生成协议)**:
+  - Phase 4 写作流程新增 "Figure Caption Generation" 步骤。
+  - 强制在每小节末尾生成 Figure Legends，并包含具体的统计信息 (n=X) 和显微标尺 (scale bar = X μm)。
+
+## [2.13.0] - 2026-01-30
+
+### 🔄 SI 持久化与主动管理
+
+#### 核心变更
+- **SI Persistence Protocol**: 引入 `si_database.json` 作为新的核心状态文件，强制记录所有在对话中确认的 Supplementary Information。
+- **Auto-Persistence**: `state_manager.py` 脚本升级，支持自动加载和保存 `si_database.json`。
+- **Proactive Query Loop**: 在 Phase 4 (Writing) 的 SI 建议环节，增加了对 `si_database.json` 的检查步骤。若发现缺失证据且数据库为空，必须主动询问用户并立即保存反馈。
+- **Strict Enforcement**: 将 "SI Must Be Persisted" 列为最高优先级的系统执行红线，严禁仅在 Memory 中提及 SI。
+
 ## [2.11.0] - 2026-01-30
 
 ### 🛡️ 检索健壮性升级

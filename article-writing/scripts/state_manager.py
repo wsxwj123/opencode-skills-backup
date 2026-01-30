@@ -14,7 +14,8 @@ STATE_FILES = {
     "literature_index": "literature_index.json",
     "figures_database": "figures_database.json",
     "reviewer_concerns": "reviewer_concerns.json",
-    "version_history": "version_history.json"
+    "version_history": "version_history.json",
+    "si_database": "si_database.json"
 }
 
 def load_state():

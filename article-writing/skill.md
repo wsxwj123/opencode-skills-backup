@@ -1,12 +1,15 @@
-# Article Writing Skill - Nature级SCI论文一键生成系统 (v2.11)
+# Article Writing Skill - Nature级SCI论文一键生成系统 (v2.14)
 
 ## 🎯 Skill概述
 
 本skill用于撰写符合Nature/Science/Cell发表标准的SCI研究论文（Article类型），专注于广义药物递送系统领域。
 
-**核心升级 (v2.11)**：
+**核心升级 (v2.14)**：
+- **逐条致密回复协议**：严禁简略回答，必须逐条、细致地回应用户所有问题，保持学术严谨性。
+- **图注生成协议**：每小节（Subsection）末尾强制生成 Figure Legends，严格规定统计图必须含 "n=X"，显微图必须含 "scale bar"。
+- **SI 持久化协议**：引入 `si_database.json` 管理 Supplementary Information，防止SI细节在对话中丢失。
 - **摘要补全协议**：针对无摘要论文引入 Google Scholar -> Semantic -> Tavily 的强制补全链，严禁直接丢弃。
-- **状态管理自动化**：引入 `scripts/state_manager.py` 脚本，一键加载/更新所有状态文件。
+- **状态管理自动化**：引入 `scripts/state_manager.py` 脚本，一键加载/更新所有状态文件（含SI数据）。
 - **输出洁癖协议**：Context Check 信息仅作为内部校验，严禁污染用户回复界面。
 - **引用格式标准化**：强制使用 `[n]` 格式，严禁其他变体。
 - **小节参考文献列表**：每节末尾自动附上引用列表。
@@ -72,6 +75,7 @@
 - Storyline: ✅ Loaded (Focus: Section X.X)
 - Literature: ✅ Loaded (Total: XX refs)
 - Figures: ✅ Loaded (Status: Confirmed)
+- SI Data: ✅ Loaded (X items)
 - Progress: ✅ Loaded (writing_progress.json)
 - Memory: ✅ Loaded (Last update: [Time])
 ```
@@ -108,14 +112,18 @@
 
 ### 9. SI 主动建议与整合 (SI Proactive Loop)
 **在完成每一小节的正文初稿后，必须执行以下步骤**：
-1. **Analyze (分析)**：读取当前小节的 Storyline 和 Hypothesis。思考：
+1. **Analyze (分析)**：读取当前小节的 Storyline 和 Hypothesis，并**检查 `si_database.json`**。思考：
    - "为了从数据A跳跃到结论B，中间缺失了什么逻辑链？"
    - "是否有排除混杂因素的对照实验在Main Text中为了简洁被省略了？"
    - "方法学上是否有需要验证的细节（如纯度、特异性）？"
-2. **Propose (建议)**：基于上述分析，提出具体的SI列表。
-   - *禁止*：不要机械地问"是否有稳定性数据"。
-   - *必须*：结合具体实验设计。例如："您在Main Text中展示了最终疗效，但为了证明这是由于免疫激活引起的，建议在SI中补充免疫细胞分型的流式图 (Figure S3)。"
-3. **Integrate (整合)**：获得用户反馈后，**重写该小节**，将SI引用（如 `(Figure S1, Table S2)`）作为完整证据链的一部分自然插入。
+   - "当前SI数据库中是否已存在相关证据？如果不存在，必须主动询问。"
+2. **Propose & Ask (建议与询问)**：
+   - 如果发现逻辑缺环且 `si_database.json` 中无对应数据，**必须主动询问 (Proactively Ask)** 用户。
+   - *Example*: "为了证明疗效并非源于载体毒性，建议在SI中补充空白载体的细胞毒性数据 (Figure S2)。您手头有这个数据吗？"
+3. **Persist (持久化)**：
+   - 获得用户确认的SI内容后，**立即**将其写入 `si_database.json` 保存。
+4. **Integrate (整合)**：
+   - 将SI引用（如 `(Figure S1, Table S2)`）作为完整证据链的一部分自然插入正文。
 
 ### 10. 强制交互版块 (Mandatory Response Structure)
 **除了命令执行结果外，每次回复（除简单确认外）必须包含以下两个版块**：
@@ -175,12 +183,15 @@
 - **Target Path**: `manuscripts/{Chapter}_{Subsection}_{Keyword}.md`
 - **Example**: `/write results_3.1` -> `manuscripts/04_Results_3.1_Characterization.md`
 
-**执行流程 (v2.9 Upgrade)**：
+**执行流程 (v2.14 Upgrade)**：
 1. **Pre-Write Check**: 检查数据完整性。
 2. **Drafting (Main)**: 撰写包含 Main Figures 和 References 的初稿。
    - **Citation Format**: 严格使用 `[n]`。
 3. **Reference List Generation**: 在文末生成本节引用的文献列表 (Vancouver style)。
-4. **SI Proactive Proposal**: AI 主动思考并建议 SI 数据。
+4. **Figure Caption Generation**: 在参考文献列表后，必须生成 "Figure Legends" 版块。
+   - **Content**: 包含整体描述和分图说明 (e.g., "Figure 1. Characterization... (A) TEM image...").
+   - **Strict Rules**: 统计图必须声明 "n=X"；显微镜图必须声明 "scale bar = X μm"。
+5. **SI Proactive Proposal**: AI 主动思考并建议 SI 数据。
 5. **User Feedback**: 用户确认。
 6. **Final Integration**: AI 重写该节，插入 SI 标记。
 7. **Safety Write**: 检查文件差异 -> 写入文件 -> 智能快照。
@@ -273,3 +284,14 @@ Storyline阶段逻辑检查 + Final阶段完整报告。
 
 #### 💡 你可能想知道
 (相关的背景知识或下一步建议)
+
+### 5. SI 必须落地 (SI PERSISTENCE)
+**SI 不仅仅是聊天话题，必须变成资产**：
+- **规则**：任何在对话中确认的 Supplementary Information (Figure/Table/Method)，必须**实时**写入 `si_database.json`。
+- **禁止**：严禁仅在 Memory 中提及 "用户答应提供SI"，而不更新数据库。只有进入 `si_database.json` 才算有效。
+
+### 6. 逐条致密回复 (POINT-BY-POINT RESPONSE)
+**严禁敷衍或遗漏用户的指令**：
+- **规则**：AI 必须逐条、细致地回答用户的所有问题，严禁忽略、省略或简略回答。
+- **态度**：保持学术严谨性 (Academic Rigor)，每一个回答都必须有理有据，深度展开。
+- **禁止**：严禁使用 "I'll do that" 这种空洞的承诺，必须立即展示执行结果或详细计划。
