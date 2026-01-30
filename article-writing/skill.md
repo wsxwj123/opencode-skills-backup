@@ -1,10 +1,13 @@
-# Article Writing Skill - Nature级SCI论文一键生成系统 (v2.9)
+# Article Writing Skill - Nature级SCI论文一键生成系统 (v2.11)
 
 ## 🎯 Skill概述
 
 本skill用于撰写符合Nature/Science/Cell发表标准的SCI研究论文（Article类型），专注于广义药物递送系统领域。
 
-**核心升级 (v2.9)**：
+**核心升级 (v2.11)**：
+- **摘要补全协议**：针对无摘要论文引入 Google Scholar -> Semantic -> Tavily 的强制补全链，严禁直接丢弃。
+- **状态管理自动化**：引入 `scripts/state_manager.py` 脚本，一键加载/更新所有状态文件。
+- **输出洁癖协议**：Context Check 信息仅作为内部校验，严禁污染用户回复界面。
 - **引用格式标准化**：强制使用 `[n]` 格式，严禁其他变体。
 - **小节参考文献列表**：每节末尾自动附上引用列表。
 - **全局状态持久化**：每次回复前强制读取所有上下文文件（含进度），回复后自动保存状态。
@@ -62,7 +65,8 @@
 3. **Report**: 告知用户："已创建新文件 [Filename]" 或 "已更新 [Filename] (原文件已备份)"。
 
 ### 4. 上下文显式验证 (Mandatory Context Check)
-**在每次回复前（特别是涉及决策或写作时），必须显式检查并输出以下状态块**：
+**在每次回复前（特别是涉及决策或写作时），必须调用 `python scripts/state_manager.py load` 读取所有状态。**
+**禁止**将加载日志或下方的Check block输出到最终回复中（Keep it internal）：
 ```markdown
 [Context Check]
 - Storyline: ✅ Loaded (Focus: Section X.X)
@@ -71,7 +75,7 @@
 - Progress: ✅ Loaded (writing_progress.json)
 - Memory: ✅ Loaded (Last update: [Time])
 ```
-*如果发现任何一项缺失或过时，必须先读取相应文件再继续。*
+*如果发现任何一项缺失或过时，必须先修复再继续。*
 
 ### 5. 引用格式强制 (Strict Citation Format) - v2.9新增
 - **正文标记**: 严禁使用 `[Ref 1]`, `[Author, 2023]`, `(1)` 等格式。
@@ -127,6 +131,13 @@
 - **内容**：预测下一步需求，提供 Proactive 的建议或相关背景知识。
 - **原则**：不重复上文，紧扣当前上下文。
 - *Example*: "如果要增强 Introduction 的说服力，您可能想知道：最近 Nature Reviews 发表了一篇关于 'EPR 效应异质性' 的综述 [Ref X]，非常适合引用。"
+
+### 11. 摘要补全协议 (Abstract Recovery Protocol)
+**针对检索结果中缺失摘要（Abstract）的文献，严禁直接丢弃。必须严格执行以下补全回退链（Mandatory Fallback Chain）**：
+1. **Google Scholar (Primary)**: 必须优先使用 `paper-search_search_google_scholar` 检索论文标题。
+2. **Semantic Scholar (Secondary)**: 若前者失败，使用 `paper-search_search_semantic` 检索。
+3. **Tavily (Final Fallback)**: 若前两者均失败，使用 `tavily_tavily-search` 搜索 "Title abstract"。
+**终止条件**：仅当上述三个步骤均无法获取摘要时，才允许将该文献标记为 "Abstract Missing" 并询问用户手动补充。
 
 ---
 
@@ -216,7 +227,7 @@ Storyline阶段逻辑检查 + Final阶段完整报告。
 ## 🛡️ 写作禁忌
 1. **严禁割裂**：不要在Results里只罗列数字，然后在Discussion里才解释意思。
 2. **严禁简略**：对于Key Findings，如果只写了一两句话，视为**失败**。
-3. **严禁遗忘**：每次写作前，**必须**查阅`literature_index.json`和`figures_database.json`。
+3. **严禁遗忘**：每次写作前，**必须**执行 `python scripts/state_manager.py load` 以获取最新上下文。
 
 ---
 
@@ -227,8 +238,8 @@ Storyline阶段逻辑检查 + Final阶段完整报告。
 
 ---
 
-**版本**: 2.9.0
-**更新**: 强制`[n]`引用格式，小节末尾附参考文献，强化上下文检查。
+**版本**: 2.11.0
+**更新**: 新增摘要补全协议（Google Scholar优先），引入 `state_manager.py` 脚本化管理状态，净化用户输出，强制 v2.9 的引用规范。
 
 ---
 
@@ -248,8 +259,10 @@ Storyline阶段逻辑检查 + Final阶段完整报告。
 
 ### 3. 全局状态持久化 (GLOBAL STATE PERSISTENCE)
 **为了防止对话中断导致上下文丢失，必须执行以下操作**：
-- **Read First**: 每次回复前，**必须**读取 `context_memory.md`, `writing_progress.json`, `storyline.json`, `literature_index.json`, `figures_database.json`。
-- **Update Last**: 在每次回复结束前，**必须**根据当前对话内容更新 `context_memory.md`。
+- **Read First**: 每次回复前，**必须**执行 `python scripts/state_manager.py load`。
+- **Update Last**: 在每次回复结束前，如果状态（如Memory, Progress）发生变化：
+  1. 将更新内容写入临时文件 `_temp_update.json`。
+  2. 执行 `python scripts/state_manager.py update _temp_update.json`。
 - **Auto-Snapshot**: 如果 `context_memory.md` 发生了实质性变更，**必须**触发 `/snapshot`。
 
 ### 4. 强制交互输出 (MANDATORY INTERACTION)

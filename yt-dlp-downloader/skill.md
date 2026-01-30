@@ -31,7 +31,11 @@ Download videos/audio from YouTube, Bilibili, Twitter, TikTok, and 1000+ platfor
 - **桌面**：`/Users/wsxwj/Desktop`
 - **自定义**：用户指定的完整路径
 
-### 5. 可选项 (根据需要问)
+### 5. 播放速度 (可选)
+- **原速** (默认)
+- **倍速** (如 1.25x, 1.5x, 2.0x) - *注意：需要重新编码，处理时间较长*
+
+### 6. 可选项 (根据需要问)
 - 是否下载字幕？（中文/英文/自动生成）
 - 播放列表处理？（全部/指定范围/单个视频）
 - 需要登录？（B站高清/私密视频）
@@ -42,6 +46,7 @@ Download videos/audio from YouTube, Bilibili, Twitter, TikTok, and 1000+ platfor
 - 质量：1080p封顶
 - 视频容器：mp4
 - 音频格式：mp3
+- 播放速度：原速 (1.0x)
 - 输出目录：`/Users/wsxwj/Downloads/video-download`
 - 文件名：`%(title)s [%(id)s].%(ext)s`（保留中文）
 
@@ -133,6 +138,38 @@ yt-dlp \
   -o "%(title)s [%(id)s].%(ext)s" \
   "https://www.bilibili.com/video/BV1SC6TBqEF9/"
 ```
+
+## 倍速下载 (特殊功能)
+
+若用户选择倍速（例如 1.25x），需要添加 `--postprocessor-args` 参数调用 ffmpeg 进行转码。
+
+**公式：**
+- 视频滤镜：`setpts=1/SPEED*PTS`
+- 音频滤镜：`atempo=SPEED`
+
+**1.25x 倍速示例：**
+```bash
+yt-dlp \
+  -f "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best" \
+  --merge-output-format mp4 \
+  --postprocessor-args "ffmpeg:-filter:v setpts=0.8*PTS -filter:a atempo=1.25" \
+  -P "/Users/wsxwj/Downloads/video-download" \
+  -o "%(title)s_1.25x [%(id)s].%(ext)s" \
+  "VIDEO_URL"
+```
+
+**2.0x 倍速示例：**
+```bash
+yt-dlp \
+  -f "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best" \
+  --merge-output-format mp4 \
+  --postprocessor-args "ffmpeg:-filter:v setpts=0.5*PTS -filter:a atempo=2.0" \
+  -P "/Users/wsxwj/Downloads/video-download" \
+  -o "%(title)s_2.0x [%(id)s].%(ext)s" \
+  "VIDEO_URL"
+```
+
+> **注意**：倍速处理需要重新编码整个视频，下载完成后会占用大量 CPU 资源进行转换，耗时较长。建议告知用户。
 
 ## 批量下载
 

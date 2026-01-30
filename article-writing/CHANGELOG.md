@@ -1,5 +1,34 @@
 # Changelog - Article Writing Skill
 
+## [2.11.0] - 2026-01-30
+
+### 🛡️ 检索健壮性升级
+
+#### 核心变更
+- **Abstract Recovery Protocol (摘要补全协议)**: 针对检索结果中摘要缺失的情况，建立了强制性的三级回退机制。
+  - **Mandatory Chain**: Google Scholar (Primary) > Semantic Scholar > Tavily。
+  - **Strict Policy**: 严禁因摘要缺失直接丢弃相关性高的文献，必须跑完上述补全流程。仅当所有工具失效时才允许标记为 Missing。
+
+## [2.10.0] - 2026-01-30
+
+### 🤖 自动化与输出净化
+
+#### 核心变更
+- **State Manager Automation**: 引入 `scripts/state_manager.py`，实现跨平台、标准化的状态加载与原子化更新，彻底告别手动读写多个状态文件的繁琐。
+- **Clean Output Protocol**: 强制 `[Context Check]` 块仅作为内部验证日志，**严禁**出现在用户最终回复中，提供沉浸式的无干扰交互体验。
+- **Version Compatibility**: 脚本内置 `context_memory.md` 的版本轮转逻辑 (v-1, v-2)，确保历史回溯功能的稳定性。
+
+## [2.9.0] - 2024-01-30
+
+### 📏 引用规范与上下文强化
+
+#### 核心变更
+- **Strict Citation Format**: 强制正文引用使用 `[n]` 格式，严禁其他变体。在每个小节末尾自动附上该节引用的参考文献列表（Vancouver style）。
+- **Mandatory Context Read**: 强化了上下文检查协议，明确要求在每次回复前读取所有 5 个核心文件（含 `writing_progress.json`）。
+- **Final Enforcement**: 将引用格式规则加入到最高优先级的系统执行指令中。
+
+---
+
 ## [2.8.0] - 2024-01-30
 
 ### 🔄 全局状态持久化 (Continuity Upgrade)
