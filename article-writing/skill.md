@@ -44,7 +44,24 @@
 
 ## 🧠 核心交互协议 (Core Interactive Protocol)
 
-### 1. 数据依赖熔断机制 (Data Dependency Hard Stop)
+### 1. 跨平台路径协商与自包含初始化 (Cross-Platform & Self-Contained Init)
+**为了确保在 Windows/Mac 间无缝迁移，严禁依赖 Skill 的安装路径。项目必须是自包含的。**
+
+**Step 1: 路径询问 (Mandatory Path Check)**
+在执行 `/init` 前，**必须**先询问用户：
+> "请问您希望将论文项目保存在哪里？(建议：桌面/Manuscripts)"
+- *Mac*: Use `~/Desktop/Manuscripts`
+- *Windows*: Use `C:\Users\[User]\Desktop\Manuscripts`
+
+**Step 2: 便携化部署 (Portable Deployment)**
+获得路径后，执行初始化时，**必须**将 Skill 目录下的 `scripts/` 文件夹完整**拷贝**到用户指定的项目根目录下。
+- **Why?**：确保项目文件夹包含所有运行所需的 Python 脚本。即使拷贝到另一台没装此 Skill 的电脑上，依然可以通过简单的 Python 命令维护状态。
+- **Command Logic**:
+  1. `mkdir -p [Target_Path]/scripts`
+  2. `cp [Skill_Path]/scripts/*.py [Target_Path]/scripts/`
+  3. `cp [Skill_Path]/templates/*.json [Target_Path]/`
+
+### 2. 数据依赖熔断机制 (Data Dependency Hard Stop)
 **在执行 `/write` 撰写 Results/Discussion 章节前，必须执行以下检查**：
 1. **Check Data Status**: 检查 `figures_database.json` 中该章节涉及的 Figure 的 `data_status`。
 2. **If Pending**:
@@ -68,18 +85,23 @@
 3. **Report**: 告知用户："已创建新文件 [Filename]" 或 "已更新 [Filename] (原文件已备份)"。
 
 ### 4. 上下文显式验证 (Mandatory Context Check)
-**在每次回复前（特别是涉及决策或写作时），必须调用 `python scripts/state_manager.py load` 读取所有状态。**
-**禁止**将加载日志或下方的Check block输出到最终回复中（Keep it internal）：
-```markdown
-[Context Check]
-- Storyline: ✅ Loaded (Focus: Section X.X)
-- Literature: ✅ Loaded (Total: XX refs)
-- Figures: ✅ Loaded (Status: Confirmed)
-- SI Data: ✅ Loaded (X items)
-- Progress: ✅ Loaded (writing_progress.json)
-- Memory: ✅ Loaded (Last update: [Time])
-```
-*如果发现任何一项缺失或过时，必须先修复再继续。*
+**为了解决“健忘”并让用户安心，每次回复的【第一部分】必须是详细的上下文加载报告。**
+
+**协议**：
+1. **位置**：必须位于回复的最顶端。
+2. **隔离**：此部分仅用于与用户交互，**严禁**写入生成的 Markdown 稿件文件中。
+3. **格式**：必须列出所有核心文件的加载状态。
+
+**[🚀 Context Loading Dashboard]**
+- `project_config.json`: ✅ Loaded
+- `storyline.json`: ✅ Loaded (Focus: Section [X.X])
+- `literature_index.json`: ✅ Loaded ([N] refs)
+- `figures_database.json`: ✅ Loaded
+- `si_database.json`: ✅ Loaded ([N] items)
+- `writing_progress.json`: ✅ Loaded
+- `context_memory.md`: ✅ Loaded
+
+*(如果发现任何文件加载失败，必须立即停止并报错)*
 
 ### 5. 引用格式强制 (Strict Citation Format) - v2.9新增
 - **正文标记**: 严禁使用 `[Ref 1]`, `[Author, 2023]`, `(1)` 等格式。
@@ -125,20 +147,38 @@
 4. **Integrate (整合)**：
    - 将SI引用（如 `(Figure S1, Table S2)`）作为完整证据链的一部分自然插入正文。
 
-### 10. 强制交互版块 (Mandatory Response Structure)
-**除了命令执行结果外，每次回复（除简单确认外）必须包含以下两个版块**：
+### 10. 强制交互结构 (Mandatory Response Architecture)
+**为了解决“健忘”问题，每次回复（除极简确认外）必须严格遵守以下结构。严禁遗漏任何板块！**
 
-#### 🤔 反向拷问 (Reverse Interrogation)
-- **触发**：当用户阐述思路、提供数据或做出决策时。
-- **内容**：挑战用户的假设、指出盲点或提出替代方案。
-- **风格**：犀利、直接、无废话（<100字）。
-- *Example*: "您选择静脉给药，但考虑到该材料的半衰期仅为 5 分钟，是否考虑过腹腔注射以维持血药浓度？"
+#### 🏗️ Part 1: 执行内容 (Execution Core)
+- 正常的对话回复、代码执行、文件写入结果。
+- **如果有数据输入**：必须包含 **`🧪 实验逻辑批判 (Experimental Critique)`**。
+  - **触发**：用户提供 Figure Legends 或 结果分析。
+  - **内容**：
+    1. **Design Check**: 对照组设置是否合理？（如：是否包含了空白载体对照？）
+    2. **Reliability**: n值是否足够？统计方法是否明确？
+    3. **Consistency**: Fig A 的结论是否与 Fig B 矛盾？
+    4. **Verdict**: 明确指出 "Reliable" 或 "Flaw Detected"。
 
-#### 💡 你可能想知道 (You Might Want to Know)
-- **触发**：在回答用户问题后。
-- **内容**：预测下一步需求，提供 Proactive 的建议或相关背景知识。
-- **原则**：不重复上文，紧扣当前上下文。
-- *Example*: "如果要增强 Introduction 的说服力，您可能想知道：最近 Nature Reviews 发表了一篇关于 'EPR 效应异质性' 的综述 [Ref X]，非常适合引用。"
+#### 📊 Part 2: 状态仪表盘 (Status Dashboard)
+**（必须在回复末尾显式输出此表格，不得隐藏）**
+
+| Metric | Status / Value | Details |
+| :--- | :--- | :--- |
+| **Word Count** | Sect: **[X]** / Total: **[Y]** | (Target: >500 for Key Sections) |
+| **Data Logic** | [✅ Pass / ⚠️ Flaw] | [See Part 1 if Flaw] |
+| **SI Loop** | [Pending: X] | [Proactive Proposal Needed?] |
+| **Snapshot** | [✅ Created / ⚪ Skipped] | (vX.X.X) |
+
+**[💾 State Persistence Log]** (List ONLY files updated in this turn)
+- *Example*: `writing_progress.json` (Updated), `si_database.json` (New Entry Added)
+- *If no changes*: "No state files updated."
+
+#### 🤔 Part 3: 深度交互 (Deep Interaction)
+1. **反向拷问 (Reverse Interrogation)**: 针对用户思路的犀利挑战 (<100字)。
+2. **你可能想知道 (You Might Want to Know)**: 预测性建议或背景知识。
+
+---
 
 ### 11. 摘要补全协议 (Abstract Recovery Protocol)
 **针对检索结果中缺失摘要（Abstract）的文献，严禁直接丢弃。必须严格执行以下补全回退链（Mandatory Fallback Chain）**：
@@ -163,8 +203,13 @@
 
 ## 🚀 核心工作流程
 
-### Phase 0: 项目初始化 (`/init`)
-创建完整文件结构。
+### Phase 0: 项目初始化 (`/init`) - 跨平台便携模式
+1. **Ask Path**: 询问用户保存路径 (默认 Desktop)。
+2. **Create Dir**: 创建项目根目录。
+3. **Copy Scripts**: 将 Skill 中的 `scripts/*.py` 拷贝到 `[Project_Root]/scripts/`。
+   - *注意*：这是实现 Windows/Mac 兼容的关键，确保脚本随项目走。
+4. **Init Config**: 基于模板生成 `project_config.json` 等文件。
+5. **Verify**: 尝试运行 `python scripts/state_manager.py load` 验证环境。
 
 ### Phase 1: 预审模式 (`/preview`)
 生成3000词可行性报告。
@@ -249,8 +294,12 @@ Storyline阶段逻辑检查 + Final阶段完整报告。
 
 ---
 
-**版本**: 2.11.0
-**更新**: 新增摘要补全协议（Google Scholar优先），引入 `state_manager.py` 脚本化管理状态，净化用户输出，强制 v2.9 的引用规范。
+**版本**: 2.14.0
+**更新**: 
+1. **跨平台重构**: 引入 "Portable Deployment" 协议，`/init` 时强制拷贝脚本到项目目录，彻底解决路径依赖和跨系统兼容问题。
+2. **路径协商**: 强制 AI 在初始化前询问用户保存路径。
+3. **显式上下文加载**: 每次回复前必须展示 `[🚀 Context Loading Dashboard]`。
+4. **细粒度状态同步**: 每次回复后必须展示 `[💾 State Persistence Log]`。
 
 ---
 

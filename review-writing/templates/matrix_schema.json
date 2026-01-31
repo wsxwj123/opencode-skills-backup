@@ -1,0 +1,28 @@
+{
+  "_instruction": "For every primary research paper you intend to cite, you MUST extract these fields. If a field is not applicable, write 'N/A'.",
+  "fields": [
+    "Delivery System",
+    "Preparation Method",
+    "Drug Release Mechanism",
+    "Targeting Strategy",
+    "Disease Model",
+    "Key Target/Pathway",
+    "Administration Route",
+    "Key Finding",
+    "Contribution",
+    "Limitation"
+  ],
+  "example_entry": {
+    "Paper ID": "Smith2023",
+    "Delivery System": "Liposomes",
+    "Preparation Method": "Thin-film hydration",
+    "Drug Release Mechanism": "pH-sensitive release",
+    "Targeting Strategy": "Folate receptor targeting",
+    "Disease Model": "MCF-7 xenograft mice",
+    "Key Target/Pathway": "PI3K/Akt pathway",
+    "Administration Route": "Intravenous injection",
+    "Key Finding": "Enhanced accumulation in tumor tissue compared to free drug",
+    "Contribution": "Demonstrates efficacy of pH-sensitive liposomes in breast cancer",
+    "Limitation": "Short circulation half-life requiring PEGylation"
+  }
+}

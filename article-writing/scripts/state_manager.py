@@ -3,6 +3,8 @@ import json
 import os
 import sys
 import shutil
+import glob
+import re
 from pathlib import Path
 
 # Define state files map
@@ -18,10 +20,41 @@ STATE_FILES = {
     "si_database": "si_database.json"
 }
 
+def calculate_word_counts():
+    """Calculates word counts for all markdown files in manuscripts/ directory."""
+    word_counts = {
+        "total": 0,
+        "sections": {}
+    }
+    
+    manuscript_dir = "manuscripts"
+    if not os.path.exists(manuscript_dir):
+        return word_counts
+        
+    files = glob.glob(os.path.join(manuscript_dir, "*.md"))
+    
+    for file_path in files:
+        filename = os.path.basename(file_path)
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+                # Simple word count: split by whitespace
+                # Remove markdown headers/formatting for better accuracy if needed, 
+                # but raw split is usually sufficient for draft estimation
+                # Excluding references list could be an improvement, but keeping it simple for now
+                words = len(content.split())
+                word_counts["sections"][filename] = words
+                word_counts["total"] += words
+        except Exception:
+            word_counts["sections"][filename] = 0
+            
+    return word_counts
+
 def load_state():
     """Reads all state files and returns a consolidated JSON object to stdout."""
     combined_state = {}
     
+    # 1. Load standard state files
     for key, filename in STATE_FILES.items():
         if os.path.exists(filename):
             try:
@@ -37,6 +70,10 @@ def load_state():
                 combined_state[key] = f"<Error loading {filename}: {str(e)}>"
         else:
             combined_state[key] = None  # Explicitly mark as missing
+            
+    # 2. Inject Real-time Word Counts
+    # This overrides any static word count in writing_progress.json with live data
+    combined_state["live_word_counts"] = calculate_word_counts()
             
     print(json.dumps(combined_state, indent=2, ensure_ascii=False))
 
