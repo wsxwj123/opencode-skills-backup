@@ -5,7 +5,7 @@ import subprocess
 import getpass
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-AUTO_SYNC_SCRIPT = os.path.join(SCRIPT_DIR, "auto_sync.py")
+AUTO_SYNC_SCRIPT = os.path.join(SCRIPT_DIR, "scripts", "auto_sync.py")
 PYTHON_EXEC = sys.executable
 
 def setup_mac():
@@ -17,8 +17,8 @@ def setup_mac():
     plist_path = os.path.join(user_home, "Library", "LaunchAgents", f"{plist_label}.plist")
     
     # Logs for launchd
-    log_out = os.path.join(os.path.dirname(SCRIPT_DIR), "logs", "launchd.log")
-    log_err = os.path.join(os.path.dirname(SCRIPT_DIR), "logs", "launchd.err")
+    log_out = os.path.join(SCRIPT_DIR, "logs", "launchd.log")
+    log_err = os.path.join(SCRIPT_DIR, "logs", "launchd.err")
     
     plist_content = f"""<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
