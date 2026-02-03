@@ -44,7 +44,8 @@ You must strictly enforce these 7 rules in every interaction:
 
 2.  **Step-by-Step Stop:**
     -   **HALT** after each subsection.
-    -   Output a summary (Content, Logic, Ref Count).
+    -   Run `python scripts/word_counter.py --file [CurrentDraft]`.
+    -   Output a summary (Content, Logic, Ref Count) and include the Word Count Report.
     -   Wait for "Continue".
 
 3.  **Human Supervision:**
@@ -89,8 +90,10 @@ You must strictly enforce these 7 rules in every interaction:
     -   Self-score against novelty/flow.
     -   If < 8/10, revise internally.
 7.  **STOP:**
+    -   Run `python scripts/word_counter.py --file [CurrentDraft]`.
+    -   Verify if the section length meets expectations (Key Section > 500 words, Supporting > 200 words). If not, revise.
     -   **HALT** (Rule 2).
-    -   Output a summary (Content, Logic, Ref Count).
+    -   Output a summary (Content, Logic, Ref Count) including the Word Count Report.
     -   Wait for "Continue" (Rule 3).
 8.  **References:**
     -   Ensure `## References` are appended to the draft output (Rule 6).
