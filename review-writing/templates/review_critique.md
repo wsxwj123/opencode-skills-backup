@@ -26,3 +26,11 @@ Transform the draft from a passive summary of literature into an authoritative, 
 *   **Paragraph Architecture:** STRICTLY enforce the structure: **Topic Sentence -> Evidence (Synthesis) -> Critical Analysis/Arbitration -> Concluding Thought**.
 *   **No Bullet Points:** *Nature Reviews* articles are narrative. Convert any lists or bullet points into cohesive, flowing prose.
 *   **Transitions:** Ensure logical flow between paragraphs. The argument should build, not just jump between topics.
+
+## 6. Turing Test (AI Flavor Check)
+*   **Vocabulary Red Flags:** Does the text use "Delve", "Landscape", "Tapestry", "Crucial", "Foster", "Underscore"? **Immediate Fail**. These are AI hallmarks.
+*   **Sentence Structure Red Flags:** 
+    *   "Not only... but also..." (Overused balancing)
+    *   "From X to Y..." (Vague scope setting)
+    *   "-ing" tails like "...highlighting the significance" or "...underscoring the importance".
+*   **Verdict:** If the text sounds like ChatGPT (smooth but hollow, over-balanced, repetitive markers), REJECT it. It must sound human, sharp, and opinionated.
