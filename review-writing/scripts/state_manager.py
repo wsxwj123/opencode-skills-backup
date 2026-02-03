@@ -25,6 +25,7 @@ def load_state(section=None):
     """
     combined_state = {}
     
+    # 1. Load all data first
     for key, filename in STATE_FILES.items():
         if os.path.exists(filename):
             try:
@@ -32,34 +33,7 @@ def load_state(section=None):
                     with open(filename, 'r', encoding='utf-8') as f:
                         # Handle empty files gracefully
                         content = f.read().strip()
-                        data = json.loads(content) if content else {}
-                        
-                        # Smart Loading: Filter literature_index if section is provided
-                        if key == "literature_index" and section and isinstance(data, list):
-                            filtered_data = []
-                            for item in data:
-                                # Ensure global_id is present (even if None/missing in legacy data)
-                                if "global_id" not in item:
-                                    item["global_id"] = None
-                                
-                                # Check if 'related_sections' exists and contains the section
-                                if "related_sections" in item and isinstance(item["related_sections"], list):
-                                    if section in item["related_sections"]:
-                                        filtered_data.append(item)
-                                # Fallback: if 'sections' tag exists
-                                elif "sections" in item and isinstance(item["sections"], list):
-                                    if section in item["sections"]:
-                                        filtered_data.append(item)
-                            
-                            # If filtering returned nothing or section logic not found, 
-                            # maybe return recent ones as fallback?
-                            if not filtered_data and data:
-                                # Fallback: return last 20 items if specific filtering yielded 0
-                                filtered_data = data[-20:]
-                                
-                            combined_state[key] = filtered_data
-                        else:
-                            combined_state[key] = data
+                        combined_state[key] = json.loads(content) if content else {}
                 else:
                     with open(filename, 'r', encoding='utf-8') as f:
                         combined_state[key] = f.read()
@@ -67,6 +41,46 @@ def load_state(section=None):
                 combined_state[key] = f"<Error loading {filename}: {str(e)}>"
         else:
             combined_state[key] = None  # Explicitly mark as missing
+
+    # 2. Apply filtering if section is provided
+    if section:
+        # Filter literature_index
+        lit_data = combined_state.get("literature_index")
+        if isinstance(lit_data, list):
+            filtered_lit = []
+            for item in lit_data:
+                # Ensure global_id is present (even if None/missing in legacy data)
+                if "global_id" not in item:
+                    item["global_id"] = None
+                
+                # Check if 'related_sections' exists and contains the section
+                if "related_sections" in item and isinstance(item["related_sections"], list):
+                    if section in item["related_sections"]:
+                        filtered_lit.append(item)
+                # Fallback: if 'sections' tag exists
+                elif "sections" in item and isinstance(item["sections"], list):
+                    if section in item["sections"]:
+                        filtered_lit.append(item)
+            
+            # If filtering returned nothing or section logic not found, 
+            # maybe return recent ones as fallback?
+            if not filtered_lit and lit_data:
+                # Fallback: return last 20 items if specific filtering yielded 0
+                filtered_lit = lit_data[-20:]
+                
+            combined_state["literature_index"] = filtered_lit
+
+            # Filter synthesis_matrix based on filtered literature
+            # Get IDs from the (now filtered) literature_index
+            relevant_ids = {item.get("global_id") for item in filtered_lit if item.get("global_id") is not None}
+            
+            matrix_data = combined_state.get("synthesis_matrix")
+            if isinstance(matrix_data, list):
+                filtered_matrix = [
+                    row for row in matrix_data 
+                    if row.get("global_id") in relevant_ids
+                ]
+                combined_state["synthesis_matrix"] = filtered_matrix
             
     print(json.dumps(combined_state, indent=2, ensure_ascii=False))
 
