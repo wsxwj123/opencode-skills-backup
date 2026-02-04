@@ -1,13 +1,17 @@
 #!/bin/bash
+# Claude-Mem MCP Server Launcher
+# This script ensures the worker service is running and launches the MCP server
+
 SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REPO_DIR="$SKILL_DIR/repo"
 
-cd "$REPO_DIR"
+cd "$REPO_DIR" || exit 1
 
-# Ensure worker service is running
-# We suppress output because we need stdout for the MCP server JSON-RPC
+# Start worker service (suppresses output to not interfere with MCP JSON-RPC)
 bun plugin/scripts/worker-service.cjs start >/dev/null 2>&1
 
-# Run MCP server
-# It uses stdio for communication
-node plugin/scripts/mcp-server.cjs
+# Give worker a moment to initialize
+sleep 1
+
+# Run MCP server (uses stdio for JSON-RPC communication)
+exec node plugin/scripts/mcp-server.cjs
