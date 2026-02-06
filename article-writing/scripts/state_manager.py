@@ -50,30 +50,64 @@ def calculate_word_counts():
             
     return word_counts
 
-def load_state():
-    """Reads all state files and returns a consolidated JSON object to stdout."""
+def load_state(target_files=None, compact=False):
+    """Reads state files.
+    Args:
+        target_files (list): Optional list of specific keys to load (e.g. ['storyline', 'literature_index']).
+        compact (bool): If True, removes bulky fields like 'abstract' to save tokens.
+    """
     combined_state = {}
     
+    # Determine which files to load
+    keys_to_load = target_files if target_files else STATE_FILES.keys()
+    
     # 1. Load standard state files
-    for key, filename in STATE_FILES.items():
+    for key in keys_to_load:
+        if key not in STATE_FILES:
+            continue
+            
+        filename = STATE_FILES[key]
         if os.path.exists(filename):
             try:
                 if filename.endswith(".json"):
                     with open(filename, 'r', encoding='utf-8') as f:
-                        # Handle empty files gracefully
                         content = f.read().strip()
-                        combined_state[key] = json.loads(content) if content else {}
+                        data = json.loads(content) if content else {}
+                        
+                        # Apply compaction logic
+                        if compact:
+                            if key == "literature_index" and isinstance(data, list):
+                                for item in data:
+                                    # Keep only critical info for citation
+                                    keep_keys = {"ref_id", "title", "year", "author", "journal", "citation_key"}
+                                    for k in list(item.keys()):
+                                        if k not in keep_keys:
+                                            item.pop(k, None)
+                            elif key == "storyline":
+                                # Maybe just keep section titles? For now keep full structure as it's logic
+                                pass
+                                
+                        combined_state[key] = data
                 else:
                     with open(filename, 'r', encoding='utf-8') as f:
-                        combined_state[key] = f.read()
+                        # For context_memory.md, maybe just read last 50 lines?
+                        content = f.read()
+                        if compact and key == "context_memory":
+                            lines = content.split('\n')
+                            if len(lines) > 50:
+                                combined_state[key] = "...(truncated)...\n" + "\n".join(lines[-50:])
+                            else:
+                                combined_state[key] = content
+                        else:
+                            combined_state[key] = content
             except Exception as e:
                 combined_state[key] = f"<Error loading {filename}: {str(e)}>"
         else:
-            combined_state[key] = None  # Explicitly mark as missing
+            combined_state[key] = None
             
-    # 2. Inject Real-time Word Counts
-    # This overrides any static word count in writing_progress.json with live data
-    combined_state["live_word_counts"] = calculate_word_counts()
+    # 2. Inject Real-time Word Counts (Only if loading progress or generic load)
+    if not target_files or "writing_progress" in target_files:
+        combined_state["live_word_counts"] = calculate_word_counts()
             
     print(json.dumps(combined_state, indent=2, ensure_ascii=False))
 
@@ -173,7 +207,9 @@ def main():
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     # Load command
-    subparsers.add_parser("load", help="Load and print all state files as JSON")
+    load_parser = subparsers.add_parser("load", help="Load state files")
+    load_parser.add_argument("--files", help="Comma-separated list of files to load (e.g. 'storyline,progress')")
+    load_parser.add_argument("--compact", action="store_true", help="Remove bulky fields like abstracts")
 
     # Update command
     update_parser = subparsers.add_parser("update", help="Update state files from a payload")
@@ -185,7 +221,8 @@ def main():
     args = parser.parse_args()
 
     if args.command == "load":
-        load_state()
+        files = args.files.split(",") if args.files else None
+        load_state(target_files=files, compact=args.compact)
     elif args.command == "update":
         update_state(args.payload_file)
     elif args.command == "snapshot":

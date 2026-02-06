@@ -63,6 +63,7 @@
   3. `cp [Skill_Path]/templates/*.json [Target_Path]/`
 
 ### 2. 数据依赖熔断机制 (Data Dependency Hard Stop)
+**Scope**: 此机制仅适用于 **Phase 4 (/write)** 的 Results/Discussion 章节。**严禁**在 Phase 1 (/preview) 或 Phase 2 (/storyline) 阶段因缺失具体实验数据而阻断流程。
 **在执行 `/write` 撰写 Results/Discussion 章节前，必须执行以下检查**：
 1. **Check Data Status**: 检查 `figures_database.json` 中该章节涉及的 Figure 的 `data_status`。
 2. **If Pending**:
@@ -91,20 +92,15 @@
 **协议**：
 1. **位置**：必须位于回复的最顶端。
 2. **隔离**：此部分仅用于与用户交互，**严禁**写入生成的 Markdown 稿件文件中。
-3. **格式**：必须列出所有核心文件的加载状态。
+3. **命令**：必须优先使用 `Read` 工具直接读取 `writing_progress.json` 和 `context_memory.md` (建议读取最后50行)。仅在涉及复杂状态更新（如快照/合并）时才调用 `scripts/state_manager.py`。
 
 **[🚀 Context Loading Dashboard]**
-- `project_config.json`: ✅ Loaded
-- `storyline.json`: ✅ Loaded (Focus: Section [X.X])
-- `literature_index.json`: ✅ Loaded ([N] refs)
-- `figures_database.json`: ✅ Loaded
-- `si_database.json`: ✅ Loaded ([N] items)
 - `writing_progress.json`: ✅ Loaded
-- `context_memory.md`: ✅ Loaded
-
-*(如果发现任何文件加载失败，必须立即停止并报错)*
+- `context_memory.md`: ✅ Loaded (Tail)
+*(其他文件仅在需要时按需加载)*
 
 ### 5. 引用格式强制 (Strict Citation Format) - v2.9新增
+- **索引绑定**：在 Phase 3 (/literature) 阶段，必须将检索到的文献写入 `literature_index.json`。文中的 `[n]` 必须对应 `literature_index.json` 中的列表索引（n = Index + 1）。
 - **正文标记**: 严禁使用 `[Ref 1]`, `[Author, 2023]`, `(1)` 等格式。
   - **必须使用**: **`[n]`** 格式。
   - *Examples*: `[1]`, `[1,2]`, `[5-7]`, `[1,3,5]`.
@@ -309,6 +305,7 @@ Storyline阶段逻辑检查 + Final阶段完整报告。
 **为了消除AI味并模拟真人科学家，必须严格执行以下三条红线**：
 
 ### 1. 绝对禁止列点 (NO BULLET POINTS POLICY)
+- **适用范围**：仅限 **论文正文稿件 (Manuscripts)**。**交互对话 (Chat Response)** 必须使用结构化列表 (Point-by-Point) 以清晰回应用户。
 - **规则**：在 `Abstract`, `Introduction`, `Results`, `Discussion`, `Conclusion` 的正文撰写中，**严禁使用列点符号** (如 1., -, *) 来阐述观点。
 - **强制转换**：必须使用逻辑连接词将观点串联成**连贯的段落 (Coherent Paragraphs)**。
 - *唯一例外*：`Methods` 章节中的具体配方列表。
@@ -320,7 +317,7 @@ Storyline阶段逻辑检查 + Final阶段完整报告。
 
 ### 3. 全局状态持久化 (GLOBAL STATE PERSISTENCE)
 **为了防止对话中断导致上下文丢失，必须执行以下操作**：
-- **Read First**: 每次回复前，**必须**执行 `python scripts/state_manager.py load`。
+- **Read First**: 每次回复前，**必须**确保 `writing_progress.json` 和 `context_memory.md` 已被读取（通过 `Read` 或 `load` 脚本）。**严禁**在无上下文状态下直接回复。
 - **Update Last**: 在每次回复结束前，如果状态（如Memory, Progress）发生变化：
   1. 将更新内容写入临时文件 `_temp_update.json`。
   2. 执行 `python scripts/state_manager.py update _temp_update.json`。
