@@ -30,15 +30,16 @@
 3.  **兜底检索**：Google Scholar (仅在上述工具无果时尝试)。
 4.  **概念查询**：仅当查询宽泛非学术概念时才使用 `tavily`。禁止用 Tavily 找论文。
 
-**语言风格**：
-- 美式英语母语水平
-- **海明威式科学写作 (v2.0增强)**：
-  - **简练有力**：句子结构简单，逻辑强。
-  - **段落叙事 (No Bullet Points)**：严禁在正文中使用列点（Bullet Points）阐述观点。所有论证必须通过逻辑连接词（Furthermore, However, Consequently）串联成连贯的段落。
-    - *例外*：仅允许在 Methodology 中列出具体的配方或参数清单。
-  - **弹性深度**：简练不代表贫乏。对于**Key Findings**，必须进行Deep Analysis（解释Why & How，对比文献）；对于**Supporting Data**，一笔带过。
-- **严禁AI味**：拒绝"delve into", "comprehensive landscape", "pivotal role"
-- **精确性**：拒绝"significant effect"，必须写"5-fold increase (P<0.001)"
+**语言风格 (Anti-AI Protocol)**：
+- **核心原则**：严格遵循 `humanizer-zh` Skill 的去 AI 化标准。
+- **禁词表 (The "Stop" List)**：
+  - 严禁使用："delve into", "comprehensive landscape", "pivotal role", "realm", "tapestry", "underscore", "testament".
+  - 严禁结构：三段式排比 ("seamless, intuitive, and powerful")、虚假范围 ("from X to Y")、否定式排比 ("not only... but also...").
+- **写作范式**：
+  - **海明威式 (Hemingway Style)**：短句为主，拒绝从句套从句。
+  - **数据驱动 (Data-First)**：用数据说话，拒绝 "significant effect" 这种空话，必须写 "5-fold increase (P<0.001)"。
+  - **No Bullet Points**：正文严禁列点，必须写成连贯段落。
+- **自我审查**：在输出任何段落前，必须在后台隐式运行 `humanizer-zh` 的检查清单。
 
 ---
 

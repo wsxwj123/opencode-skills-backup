@@ -144,6 +144,30 @@ def update_state(payload_path):
     except:
         pass
 
+def backup_project_state(backup_dir="backups"):
+    """Creates a full project snapshot including all state files and manuscripts."""
+    import datetime
+    
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    snapshot_dir = os.path.join(backup_dir, f"snapshot_{timestamp}")
+    
+    if not os.path.exists(snapshot_dir):
+        os.makedirs(snapshot_dir)
+        
+    # 1. Backup State Files
+    for key, filename in STATE_FILES.items():
+        if os.path.exists(filename):
+            shutil.copy2(filename, snapshot_dir)
+            
+    # 2. Backup Manuscripts
+    manuscript_dir = "manuscripts"
+    if os.path.exists(manuscript_dir):
+        target_manuscript_dir = os.path.join(snapshot_dir, "manuscripts")
+        shutil.copytree(manuscript_dir, target_manuscript_dir)
+        
+    print(f"✅ Full project snapshot created at: {snapshot_dir}")
+    return snapshot_dir
+
 def main():
     parser = argparse.ArgumentParser(description="Manage state files for Article Writing Skill")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -155,12 +179,17 @@ def main():
     update_parser = subparsers.add_parser("update", help="Update state files from a payload")
     update_parser.add_argument("payload_file", help="Path to the JSON file containing updates")
 
+    # Snapshot command
+    subparsers.add_parser("snapshot", help="Create a full project backup")
+
     args = parser.parse_args()
 
     if args.command == "load":
         load_state()
     elif args.command == "update":
         update_state(args.payload_file)
+    elif args.command == "snapshot":
+        backup_project_state()
 
 if __name__ == "__main__":
     main()
