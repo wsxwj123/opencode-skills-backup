@@ -3,7 +3,7 @@ name: docx
 description: "Comprehensive document creation, editing, and analysis with support for tracked changes, comments, formatting preservation, and text extraction. When Claude needs to work with professional documents (.docx files) for: (1) Creating new documents, (2) Modifying or editing content, (3) Working with tracked changes, (4) Adding comments, or any other document tasks"
 license: Proprietary. LICENSE.txt has complete terms
 github_url: https://github.com/anthropics/skills
-github_hash: 69c0b1a0674149f27b61b2635f935524b6add202
+github_hash: 1ed29a03dc852d30fa6ef2ca53a67dc2c2c2c563
 updated_at: 2026-01-27T16:40:07.265900
 ---
 

@@ -3,7 +3,7 @@ name: artifacts-builder
 description: Suite of tools for creating elaborate, multi-component claude.ai HTML artifacts using modern frontend web technologies (React, Tailwind CSS, shadcn/ui). Use for complex artifacts requiring state management, routing, or shadcn/ui components - not for simple single-file HTML/JSX artifacts.
 license: Complete terms in LICENSE.txt
 
-github_hash: 362d35428562ad05d1faa1767abaf39d6e3a8e7a
+github_hash: e762a98bd93f34c22926c7cf6ae7c9bb59ea9d5b
 updated_at: 2026-01-27T17:06:55.683413
 github_url: https://github.com/ComposioHQ/awesome-claude-skills
 ---

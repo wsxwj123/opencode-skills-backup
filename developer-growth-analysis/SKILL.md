@@ -2,7 +2,7 @@
 name: developer-growth-analysis
 description: Analyzes your recent Claude Code chat history to identify coding patterns, development gaps, and areas for improvement, curates relevant learning resources from HackerNews, and automatically sends a personalized growth report to your Slack DMs.
 
-github_hash: 362d35428562ad05d1faa1767abaf39d6e3a8e7a
+github_hash: e762a98bd93f34c22926c7cf6ae7c9bb59ea9d5b
 updated_at: 2026-01-27T17:06:55.679013
 github_url: https://github.com/ComposioHQ/awesome-claude-skills
 ---

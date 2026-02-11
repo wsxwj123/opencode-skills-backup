@@ -3,7 +3,7 @@ name: internal-comms
 description: A set of resources to help me write all kinds of internal communications, using the formats that my company likes to use. Claude should use this skill whenever asked to write some sort of internal communications (status reports, leadership updates, 3P updates, company newsletters, FAQs, incident reports, project updates, etc.).
 license: Complete terms in LICENSE.txt
 github_url: https://github.com/anthropics/skills
-github_hash: 69c0b1a0674149f27b61b2635f935524b6add202
+github_hash: 1ed29a03dc852d30fa6ef2ca53a67dc2c2c2c563
 updated_at: 2026-01-27T16:40:07.268465
 ---
 

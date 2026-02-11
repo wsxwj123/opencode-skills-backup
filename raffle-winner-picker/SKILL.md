@@ -2,7 +2,7 @@
 name: raffle-winner-picker
 description: Picks random winners from lists, spreadsheets, or Google Sheets for giveaways, raffles, and contests. Ensures fair, unbiased selection with transparency.
 
-github_hash: 362d35428562ad05d1faa1767abaf39d6e3a8e7a
+github_hash: e762a98bd93f34c22926c7cf6ae7c9bb59ea9d5b
 updated_at: 2026-01-27T17:06:55.678447
 github_url: https://github.com/ComposioHQ/awesome-claude-skills
 ---

@@ -2,7 +2,7 @@
 name: writing-plans
 description: Use when you have a spec or requirements for a multi-step task, before touching code
 
-github_hash: 469a6d81ebb8b827e284d4afb090c6c622d97747
+github_hash: a98c5dfc9de0df5318f4980d91d24780a566ee60
 updated_at: 2026-01-27T17:06:55.665098
 github_url: https://github.com/obra/superpowers
 ---

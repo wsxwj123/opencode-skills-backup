@@ -3,7 +3,7 @@ name: xlsx
 description: "Comprehensive spreadsheet creation, editing, and analysis with support for formulas, formatting, data analysis, and visualization. When Claude needs to work with spreadsheets (.xlsx, .xlsm, .csv, .tsv, etc) for: (1) Creating new spreadsheets with formulas and formatting, (2) Reading or analyzing data, (3) Modify existing spreadsheets while preserving formulas, (4) Data analysis and visualization in spreadsheets, or (5) Recalculating formulas"
 license: Proprietary. LICENSE.txt has complete terms
 github_url: https://github.com/anthropics/skills
-github_hash: 69c0b1a0674149f27b61b2635f935524b6add202
+github_hash: 1ed29a03dc852d30fa6ef2ca53a67dc2c2c2c563
 updated_at: 2026-01-27T16:40:07.308263
 ---
 

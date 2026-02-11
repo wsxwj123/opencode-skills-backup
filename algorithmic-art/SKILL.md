@@ -3,7 +3,7 @@ name: algorithmic-art
 description: Creating algorithmic art using p5.js with seeded randomness and interactive parameter exploration. Use this when users request creating art using code, generative art, algorithmic art, flow fields, or particle systems. Create original algorithmic art rather than copying existing artists' work to avoid copyright violations.
 license: Complete terms in LICENSE.txt
 github_url: https://github.com/anthropics/skills
-github_hash: 69c0b1a0674149f27b61b2635f935524b6add202
+github_hash: 1ed29a03dc852d30fa6ef2ca53a67dc2c2c2c563
 updated_at: 2026-01-27T16:40:07.215753
 ---
 
