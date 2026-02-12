@@ -1,11 +1,11 @@
-# Article Writing Skill - 快速参考卡片 (v2.12)
+# Article Writing Skill - 快速参考卡片 (v2.15.1)
 
-## 🚀 核心升级 (v2.12)
+## 🚀 核心升级 (v2.15.1)
 
-- 🔥 **Results/Discussion融合**：不再分开写，结果+深度讨论一体化。
-- 📊 **强制仪表盘**：每次回复末尾强制展示字数、数据状态、SI进度。
-- 🧪 **实验逻辑批判**：输入数据时，AI主动找茬（设计缺陷、n值、矛盾）。
-- 📝 **弹性深度**：核心论点强制深度展开，次要点简洁。
+- 🔒 **章节级上下文隔离**：写 `section` 时默认只加载该节上下文，拒绝跨章节正文污染。
+- 🧠 **双层记忆**：全局 `context_memory.md` + 章节 `section_memory/<section>.md`，减少失忆和串章。
+- 📉 **Token Budget Guard**：加载前估算 token，超预算自动降载（tail + compact）。
+- 🔥 **Results/Discussion融合**：结果与机制讨论一体化输出，不割裂。
 
 ---
 
@@ -15,7 +15,7 @@
 1. /init              → 初始化
 2. /preview           → 预审报告
 3. /storyline         → 构建提纲 (融合模式)
-4. /write [section]   → 撰写 (深度分析 + 智能快照)
+4. /write [section]   → 撰写 (默认本章局部上下文)
 ```
 
 ---
@@ -40,7 +40,37 @@
 
 ---
 
-## 🛡️ 写作原则 (v2.12)
+## 🛡️ 写作原则 (v2.15.1)
+
+### 0. 预加载（默认）
+建议在写作前统一走强制入口（全局历史 + 当前章节索引，默认不读正文草稿）：
+```bash
+python scripts/state_manager.py write-cycle --section results_3.1 --token-budget 6000 --tail-lines 80
+```
+若要续写已有章节，再追加：
+```bash
+python scripts/state_manager.py write-cycle --section results_3.1 --include-draft --token-budget 6000 --tail-lines 80
+```
+投稿前建议追加 `--preflight-strict`。
+输出中需检查：
+- `scope` = `section-local`
+- `loaded_files` 仅包含该章节相关文件
+- `budget_report` 显示是否发生自动降载
+- 写完章节后：先预览再落盘
+```bash
+python scripts/state_manager.py sync-literature --dry-run --strict-references
+python scripts/state_manager.py write-cycle --section results_3.1 --finalize --sync-literature --sync-apply --strict-references --summary "..."
+```
+- 默认只改写 `md`；如需改写 Word 再显式加 `--rewrite-docx`
+- 可选：`--reference-style nature`（默认 `vancouver`）
+- 可选：`--similarity-threshold 0.93 --conflict-threshold 0.85`
+- 可选：`--backup-keep 20 --backup-max-days 30`
+- 可选一条链路：
+```bash
+python scripts/state_manager.py write-cycle --section results_3.1
+# ...写作...
+python scripts/state_manager.py write-cycle --section results_3.1 --finalize --sync-literature --sync-apply --strict-references --summary "..."
+```
 
 ### 1. 强制回复结构
 每次回复末尾必须包含：
@@ -63,5 +93,5 @@
 
 ---
 
-**版本**: 2.12.0
-**最后更新**: 2026-01-31
+**版本**: 2.15.1
+**最后更新**: 2026-02-11

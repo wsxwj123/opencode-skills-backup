@@ -132,6 +132,18 @@
 - [x] Introduction超出范围的警告
 - [x] Main Text总计超出范围的警告
 
+### 章节局部上下文（v2.15）
+- [x] `state_manager.py load --section results_3.1` 仅返回 section-local 作用域
+- [x] 输出包含 `loaded_files` 审计列表
+- [x] 给两个章节制造冲突信息后，`--section results_3.1` 不应加载 `results_3.2` 正文
+- [x] `section_memory/<section>.md` 可被独立加载且不污染全局 `context_memory.md`
+
+### Token预算守卫（v2.15）
+- [x] `--token-budget` 生效并输出 `budget_report`
+- [x] 超预算时自动裁剪 `current_section_draft` tail
+- [x] 超预算时自动压缩 literature/figures 字段
+- [x] 若仍超预算，`budget_report.over_budget=true` 且可见降载动作记录
+
 ---
 
 ## 🎯 质量标准验证
@@ -243,6 +255,6 @@ Skill已准备好供用户使用。
 ---
 
 **测试人员**: AI Assistant  
-**测试日期**: 2024-01-27  
-**测试版本**: 1.0.0  
+**测试日期**: 2026-02-11  
+**测试版本**: 2.15.0  
 **测试结果**: ✅ 通过

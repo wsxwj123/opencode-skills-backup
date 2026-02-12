@@ -1,10 +1,14 @@
-# Article Writing Skill (v2.0)
+# Article Writing Skill (v2.15)
 
 ## 简介
 
-这是一个用于撰写Nature级SCI论文的专业skill，专注于广义药物递送系统领域。**v2.0版本**引入了深度融合写作模式、智能快照系统和上下文显式验证。
+这是一个用于撰写Nature级SCI论文的专业skill，专注于广义药物递送系统领域。**v2.15版本**在融合写作基础上进一步加入章节级上下文隔离、双层记忆和Token预算守卫。
 
-## 核心升级 (v2.0)
+## 核心升级 (v2.15)
+
+- 🔒 **章节级上下文隔离**：`/write [section]` 默认只读取当前章节上下文。
+- 🧠 **双层记忆模型**：全局 `context_memory.md` + 章节 `section_memory/<section>.md`。
+- 📉 **Token Budget Guard**：加载阶段自动估算预算并降载，避免爆 token。
 
 - 🔥 **Results & Discussion融合**：不再割裂！在阐述结果的同时立即进行深度讨论（机制、对比、意义），不再单独设立Discussion章节（仅保留Conclusion）。
 - 🧠 **智能快照系统**：AI主动判断是否需要备份（生成内容/关键决策/新文献），而非僵化触发。

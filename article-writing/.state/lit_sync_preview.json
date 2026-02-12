@@ -1,0 +1,12 @@
+{
+  "index_file": "literature_index.json",
+  "total_before": 0,
+  "total_after": 0,
+  "duplicates_removed": 0,
+  "number_changes": 0,
+  "changed_pairs_preview": [],
+  "affected_markdown_files": [],
+  "affected_markdown_files_count": 0,
+  "strict_references_rebuild": true,
+  "rewrite_docx_default": false
+}

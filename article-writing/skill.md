@@ -1,19 +1,22 @@
-# Article Writing Skill - Nature级SCI论文一键生成系统 (v2.14)
+# Article Writing Skill - Nature级SCI论文一键生成系统 (v2.15.1)
 
 ## 🎯 Skill概述
 
 本skill用于撰写符合Nature/Science/Cell发表标准的SCI研究论文（Article类型），专注于广义药物递送系统领域。
 
-**核心升级 (v2.14)**：
+**核心升级 (v2.15.1)**：
+- **章节级上下文隔离**：`/write [section]` 默认只读取当前章节相关上下文，禁止跨章节正文污染。
+- **双层记忆模型**：新增 `section_memory/<section_id>.md` 记录章节局部记忆，全局 `context_memory.md` 仅保留决策与约束。
+- **Token预算守卫**：`state_manager.py` 支持预算估算与自动降载（tail + compact），避免上下文爆炸。
 - **逐条致密回复协议**：严禁简略回答，必须逐条、细致地回应用户所有问题，保持学术严谨性。
 - **图注生成协议**：每小节（Subsection）末尾强制生成 Figure Legends，严格规定统计图必须含 "n=X"，显微图必须含 "scale bar"。
 - **SI 持久化协议**：引入 `si_database.json` 管理 Supplementary Information，防止SI细节在对话中丢失。
 - **摘要补全协议**：针对无摘要论文引入 Google Scholar -> Semantic -> Tavily 的强制补全链，严禁直接丢弃。
 - **状态管理自动化**：引入 `scripts/state_manager.py` 脚本，一键加载/更新所有状态文件（含SI数据）。
-- **输出洁癖协议**：Context Check 信息仅作为内部校验，严禁污染用户回复界面。
+- **输出洁癖协议**：Context Check/进度读取仅用于内部校验；严禁写入正文原子化文件，用户界面默认不展示（除非用户明确要求审计日志）。
 - **引用格式标准化**：强制使用 `[n]` 格式，严禁其他变体。
 - **小节参考文献列表**：每节末尾自动附上引用列表。
-- **全局状态持久化**：每次回复前强制读取所有上下文文件（含进度），回复后自动保存状态。
+- **全局状态持久化**：每次回复前自动读取全局历史与进度文件，并加载当前章节索引（文献/Figure/SI）；回复后自动更新全局进度状态。
 - **原子化文件管理**：强制"一小节一文件"（如 `04_Results_3.1.md`），杜绝大文件覆盖风险。
 
 ---
@@ -87,14 +90,18 @@
 3. **Report**: 告知用户："已创建新文件 [Filename]" 或 "已更新 [Filename] (原文件已备份)"。
 
 ### 4. 上下文显式验证 (Mandatory Context Check)
-**为了解决“健忘”并让用户安心，每次回复的【第一部分】必须是详细的上下文加载报告。**
+**为了解决“健忘”，每次写作前必须执行上下文加载校验；是否向用户展示详细报告取决于审计需求。**
 
 **协议**：
-1. **位置**：必须位于回复的最顶端。
-2. **隔离**：此部分仅用于与用户交互，**严禁**写入生成的 Markdown 稿件文件中。
-3. **命令**：必须优先使用 `Read` 工具直接读取 `writing_progress.json` 和 `context_memory.md` (建议读取最后50行)。仅在涉及复杂状态更新（如快照/合并）时才调用 `scripts/state_manager.py`。
+1. **执行要求**：必须在写作动作开始前完成校验（内部必做）。
+2. **隔离**：此部分仅用于内部校验与必要的用户审计，**严禁**写入生成的 Markdown 稿件文件中。
+3. **展示策略**：默认不在用户回复中展开 Context Check 明细；仅在用户要求“显示加载明细/审计日志”时展示。
+4. **命令**：写作前执行预加载（默认包含全局历史 + 当前章节索引，不含正文草稿）：
+   - `python scripts/state_manager.py preflight --section [section_id]`  (全量轻量校验，不加载重内容)
+   - `python scripts/state_manager.py load --section [section_id] --with-global-history --compact --token-budget 6000 --tail-lines 80`
+   - 若需续写/改写已存在章节正文，再显式追加 `--include-draft`。
 
-**[🚀 Context Loading Dashboard]**
+**[🚀 Context Loading Dashboard] (Audit Mode Example)**
 - `writing_progress.json`: ✅ Loaded
 - `context_memory.md`: ✅ Loaded (Tail)
 *(其他文件仅在需要时按需加载)*
@@ -184,6 +191,29 @@
 3. **Tavily (Final Fallback)**: 若前两者均失败，使用 `tavily_tavily-search` 搜索 "Title abstract"。
 **终止条件**：仅当上述三个步骤均无法获取摘要时，才允许将该文献标记为 "Abstract Missing" 并询问用户手动补充。
 
+### 12. 章节局部上下文与Token预算协议 (Section-Local + Budget Guard) - v2.15新增
+**目标**：在保证连续性的同时，严格控制上下文规模，避免失忆与爆 token。
+
+**默认行为（强制）**：
+1. 执行 `/write [section]` 前，必须优先加载章节局部上下文：
+   - `python scripts/state_manager.py load --section [section_id] --with-global-history --compact --token-budget 6000 --tail-lines 80`
+2. 若用户未明确要求，禁止读取其他章节正文文件。
+3. 输出中必须包含 `loaded_files`，作为“只读当前章节”的审计证据。
+
+**章节白名单（仅允许）**：
+1. `project_config.json`
+2. `storyline.json`（仅当前 section 过滤结果）
+3. `figures_database.json`（仅当前 section 过滤结果）
+4. `literature_index.json`（仅当前 section 过滤结果）
+5. （默认不读）`manuscripts/` 下匹配当前 section 的原子化文件，仅在 `--include-draft` 时加载
+6. `section_memory/[section_id].md`
+
+**预算熔断策略**：
+1. 若估算 token 超出预算，先裁剪当前章节正文到 tail。
+2. 再裁剪章节记忆到 tail。
+3. 再压缩文献与图数据为 compact 字段。
+4. 若仍超预算，输出 `over_budget=true` 并要求进一步压缩输入数据。
+
 ---
 
 ## 📂 项目文件架构
@@ -225,7 +255,8 @@
 - **Target Path**: `manuscripts/{Chapter}_{Subsection}_{Keyword}.md`
 - **Example**: `/write results_3.1` -> `manuscripts/04_Results_3.1_Characterization.md`
 
-**执行流程 (v2.14 Upgrade)**：
+**执行流程 (v2.15 Upgrade)**：
+0. **Scoped Load (Mandatory)**: 先执行章节局部加载命令，确保只读当前章节。
 1. **Pre-Write Check**: 检查数据完整性。
 2. **Drafting (Main)**: 撰写包含 Main Figures 和 References 的初稿。
    - **Citation Format**: 严格使用 `[n]`。
@@ -234,9 +265,10 @@
    - **Content**: 包含整体描述和分图说明 (e.g., "Figure 1. Characterization... (A) TEM image...").
    - **Strict Rules**: 统计图必须声明 "n=X"；显微镜图必须声明 "scale bar = X μm"。
 5. **SI Proactive Proposal**: AI 主动思考并建议 SI 数据。
-5. **User Feedback**: 用户确认。
-6. **Final Integration**: AI 重写该节，插入 SI 标记。
-7. **Safety Write**: 检查文件差异 -> 写入文件 -> 智能快照。
+6. **User Feedback**: 用户确认。
+7. **Final Integration**: AI 重写该节，插入 SI 标记。
+8. **Global Literature Sync**: 写完当前节后，通过脚本执行全局文献去重与编号同步（含正文 `[n]` 自动重写）。
+9. **Safety Write**: 检查文件差异 -> 写入文件 -> 智能快照。
 
 **融合写作策略**：
 1. **数据呈现 (Results)**：描述Figure结果 + 统计数据。
@@ -266,7 +298,7 @@ Storyline阶段逻辑检查 + Final阶段完整报告。
 | `/preview` | 预审报告 | - |
 | `/storyline` | 构建提纲 | 自动规划融合式章节 |
 | `/literature` | 文献检索 | - |
-| `/write` | 撰写章节 | **自我修正 + 智能快照** |
+| `/write` | 撰写章节 | **章节局部读取 + 自我修正 + 智能快照** |
 | `/check` | 质量检查 | - |
 | `/reviewer` | 审稿人模拟 | - |
 | `/snapshot` | 手动快照 | AI也会智能触发 |
@@ -280,7 +312,10 @@ Storyline阶段逻辑检查 + Final阶段完整报告。
 ## 🛡️ 写作禁忌
 1. **严禁割裂**：不要在Results里只罗列数字，然后在Discussion里才解释意思。
 2. **严禁简略**：对于Key Findings，如果只写了一两句话，视为**失败**。
-3. **严禁遗忘**：每次写作前，**必须**执行 `python scripts/state_manager.py load` 以获取最新上下文。
+3. **严禁遗忘**：每次写作前执行“预加载”：
+   - **Preload (Default)**: 先执行 `python scripts/state_manager.py preflight --section [section_id]`，再执行 `python scripts/state_manager.py load --section [section_id] --with-global-history --compact --token-budget 6000 --tail-lines 80`，随后执行 `python scripts/state_manager.py gate-check --section [section_id] --phase prewrite`。
+   - **Draft-on-Demand**: 仅在续写/改写时追加 `--include-draft`。
+   - **规则**：全局历史与进度必须读取；正文草稿默认不读取，避免无稿场景污染上下文。
 
 ---
 
@@ -291,12 +326,12 @@ Storyline阶段逻辑检查 + Final阶段完整报告。
 
 ---
 
-**版本**: 2.14.0
+**版本**: 2.15.1
 **更新**: 
 1. **跨平台重构**: 引入 "Portable Deployment" 协议，`/init` 时强制拷贝脚本到项目目录，彻底解决路径依赖和跨系统兼容问题。
 2. **路径协商**: 强制 AI 在初始化前询问用户保存路径。
-3. **显式上下文加载**: 每次回复前必须展示 `[🚀 Context Loading Dashboard]`。
-4. **细粒度状态同步**: 每次回复后必须展示 `[💾 State Persistence Log]`。
+3. **显式上下文加载**: 写作前执行预加载（全局历史 + section 索引），正文草稿按需加载。
+4. **细粒度状态同步**: 回复后保持状态持久化，正文文件禁止写入进度读取日志。
 
 ---
 
@@ -317,10 +352,22 @@ Storyline阶段逻辑检查 + Final阶段完整报告。
 
 ### 3. 全局状态持久化 (GLOBAL STATE PERSISTENCE)
 **为了防止对话中断导致上下文丢失，必须执行以下操作**：
-- **Read First**: 每次回复前，**必须**确保 `writing_progress.json` 和 `context_memory.md` 已被读取（通过 `Read` 或 `load` 脚本）。**严禁**在无上下文状态下直接回复。
-- **Update Last**: 在每次回复结束前，如果状态（如Memory, Progress）发生变化：
-  1. 将更新内容写入临时文件 `_temp_update.json`。
-  2. 执行 `python scripts/state_manager.py update _temp_update.json`。
+- **Read First (Hard Gate)**: 每次回复前，**必须先执行** `python scripts/state_manager.py write-cycle --section [section_id] --token-budget 6000 --tail-lines 80`（内部强制 preflight + load + gate-check）。**严禁**绕过 `write-cycle` 手工拼接预加载流程。
+- **Draft-on-Demand**: 仅在需要续写或改写已有章节时，才允许追加 `--include-draft` 读取章节正文。
+- **Update Last**: 在每次回复结束后，必须执行脚本级自动同步：
+  1. 先预览：`python scripts/state_manager.py sync-literature --dry-run --strict-references`。
+  2. 再落盘：`python scripts/state_manager.py postwrite --section [section_id] --status updated --summary "[本轮变更摘要]" --sync-literature --sync-apply --strict-references`。
+  3. 如不希望改写正文编号，可追加 `--no-rewrite-manuscripts`（默认会自动重写正文、表格和 `References/参考文献` 章节中的 `[n]`/编号保持一致，并严格重建 References 为连续 1..N）。
+  4. 默认仅改写 `md`；如你显式需要处理 `.docx`，再追加 `--rewrite-docx`。
+  5. 文献同步前会自动备份 `literature_index.json` 以及 `manuscripts/` 中的 `.md/.docx` 到 `backups/literature_sync/` 子目录（默认开启；`--no-backup` 可关闭）。
+  6. 同步后执行完成门禁：`python scripts/state_manager.py gate-check --section [section_id] --phase complete`。未通过则禁止给出“已完成”结论。
+  7. 如本轮为关键里程碑，可追加 `--snapshot`。
+
+- **Single Command (强制入口)**: 写前统一用 `python scripts/state_manager.py write-cycle --section [section_id]`；写后统一用 `python scripts/state_manager.py write-cycle --section [section_id] --finalize --sync-literature --sync-apply --strict-references --summary "[本轮变更摘要]"` 收口。
+- **预检严格度**：研发阶段可用默认 lenient；投稿前建议 `--preflight-strict`。
+- **去重参数**：可按需设置 `--similarity-threshold`（默认 0.93）与 `--conflict-threshold`（默认 0.85），并审查 dry-run 报告中的 `dedup_conflicts`。
+- **参考文献样式**：`--reference-style vancouver|nature`（默认 `vancouver`）。
+- **备份保留**：`--backup-keep`（默认 20）和可选 `--backup-max-days`，避免备份目录无限增长。
 - **Auto-Snapshot**: 如果 `context_memory.md` 发生了实质性变更，**必须**触发 `/snapshot`。
 
 ### 4. 强制交互输出 (MANDATORY INTERACTION)

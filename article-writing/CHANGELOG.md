@@ -1,5 +1,36 @@
 # Changelog - Article Writing Skill
 
+## [2.15.1] - 2026-02-11
+
+### 🔧 同步自动化与文献一致性修复
+
+#### 核心变更
+- **Postwrite Automation (回复后自动同步)**:
+  - `state_manager.py` 新增 `postwrite` 强化参数，支持一条命令同步全局进度与记忆（`writing_progress` + `context_memory`）。
+- **Literature Dedup + Renumber Sync (文献去重与编号同步)**:
+  - 新增 `sync-literature` 命令，按 DOI（优先）+ 标题（兜底）自动去重 `literature_index.json`。
+  - 去重后自动重写 `manuscripts/*.md` 中的 `[n]` 引用编号，避免正文与索引错位。
+- **Global/Section Load De-duplication (加载去重)**:
+  - `global_history` 收敛为核心全局状态，避免与 section 级索引重复加载。
+
+## [2.15.0] - 2026-02-11
+
+### 🧠 记忆与Token控制升级
+
+#### 核心变更
+- **Section-Local Context Protocol (章节级上下文隔离)**:
+  - `/write [section]` 仅允许加载该章节相关上下文，默认拒绝跨章节正文读取。
+  - 新增章节白名单载入理念：仅项目配置、章节提纲、章节图数据、章节文献、当前章节草稿、章节记忆。
+- **Dual Memory Model (双层记忆模型)**:
+  - 引入 `section_memory/<section_id>.md` 作为章节记忆层，与全局 `context_memory.md` 分离。
+  - 明确全局记忆仅保存决策与约束，章节细节沉淀到 section 级文件，降低“串章”风险。
+- **Token Budget Guard (预算熔断器)**:
+  - `state_manager.py` 的加载流程新增 token 预算估算与自动降载机制。
+  - 超预算时按优先级自动裁剪：先压缩正文与章节记忆，再压缩文献/图数据，避免上下文爆炸。
+- **Scoped Loading CLI (作用域加载命令扩展)**:
+  - `load` 命令支持 `--section`、`--token-budget`、`--tail-lines`，用于章节定向加载与预算控制。
+  - 输出中新增 `loaded_files` 与 `budget_report`，可用于验证“只读当前章节”是否生效。
+
 ## [2.14.0] - 2026-01-30
 
 ### 📏 严谨性与完整性升级
