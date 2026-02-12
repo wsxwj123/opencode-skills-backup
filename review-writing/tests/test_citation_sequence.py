@@ -21,6 +21,22 @@ class CitationSequenceTests(unittest.TestCase):
             self.assertEqual(res.returncode, 2)
             self.assertIn("missing", res.stdout.lower())
 
+    def test_reports_reused_ids(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "drafts").mkdir()
+            (root / "drafts" / "a.md").write_text("Text [1] [1] [2].", encoding="utf-8")
+
+            script = "/Users/wsxwj/.codex/skills/review-writing/scripts/check_global_citation_sequence.py"
+            res = subprocess.run(
+                ["python3", script, "--drafts-dir", str(root / "drafts")],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(res.returncode, 0)
+            self.assertIn("Reused citation IDs", res.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

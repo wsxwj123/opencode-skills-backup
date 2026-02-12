@@ -4,6 +4,7 @@ import json
 import os
 import re
 import sys
+import time
 from urllib import error, parse, request
 
 
@@ -83,7 +84,33 @@ def check_pmid_online(pmid, timeout=8):
         return False, "PMID not found"
 
 
-def validate_live(index_entries, timeout=8):
+def _is_transient_error(reason):
+    text = str(reason).lower()
+    transient_tokens = ["urlerror", "timed out", "timeout", "temporary", "429", "500", "502", "503", "504"]
+    return any(tok in text for tok in transient_tokens)
+
+
+def _check_with_retry(identifier, checker, timeout=8, retries=2, backoff=0.6):
+    attempts = 0
+    while True:
+        attempts += 1
+        try:
+            ok, reason = checker(identifier, timeout=timeout)
+        except error.HTTPError as e:
+            ok, reason = False, f"HTTPError {e.code}"
+        except error.URLError as e:
+            ok, reason = False, f"URLError {e.reason}"
+        except Exception as e:  # noqa: BLE001
+            ok, reason = False, f"Error {e}"
+
+        if ok:
+            return True, reason, attempts
+        if attempts > retries or not _is_transient_error(reason):
+            return False, reason, attempts
+        time.sleep(backoff * (2 ** (attempts - 1)))
+
+
+def validate_live(index_entries, timeout=8, retries=2, backoff=0.6):
     checked = 0
     passed = 0
     failures = []
@@ -99,22 +126,27 @@ def validate_live(index_entries, timeout=8):
 
         checked += 1
 
-        try:
-            if doi:
-                ok, reason = check_doi_online(doi, timeout=timeout)
-            else:
-                ok, reason = check_pmid_online(pmid, timeout=timeout)
-        except error.HTTPError as e:
-            ok, reason = False, f"HTTPError {e.code}"
-        except error.URLError as e:
-            ok, reason = False, f"URLError {e.reason}"
-        except Exception as e:  # noqa: BLE001
-            ok, reason = False, f"Error {e}"
+        if doi:
+            ok, reason, attempts = _check_with_retry(
+                doi,
+                check_doi_online,
+                timeout=timeout,
+                retries=retries,
+                backoff=backoff,
+            )
+        else:
+            ok, reason, attempts = _check_with_retry(
+                pmid,
+                check_pmid_online,
+                timeout=timeout,
+                retries=retries,
+                backoff=backoff,
+            )
 
         if ok:
             passed += 1
         else:
-            failures.append((gid, "live_check_failed", reason))
+            failures.append((gid, "live_check_failed", f"{reason} (attempts={attempts})"))
 
     return {
         "checked": checked,
@@ -138,6 +170,8 @@ def main():
     )
     parser.add_argument("--live", action="store_true", help="Run online DOI/PMID validation")
     parser.add_argument("--timeout", type=int, default=8, help="HTTP timeout seconds for live checks")
+    parser.add_argument("--retries", type=int, default=2, help="Retry count for transient live-check failures")
+    parser.add_argument("--retry-backoff", type=float, default=0.6, help="Base backoff seconds for live-check retries")
     parser.add_argument(
         "--live-used-only",
         action="store_true",
@@ -185,7 +219,12 @@ def main():
         target_entries = entries
         if args.live_used_only:
             target_entries = filter_entries_by_used_ids(entries, used_ids)
-        live = validate_live(target_entries, timeout=args.timeout)
+        live = validate_live(
+            target_entries,
+            timeout=args.timeout,
+            retries=max(0, args.retries),
+            backoff=max(0.0, args.retry_backoff),
+        )
         live_failures = live["failed"]
         print("-" * 40)
         print("LIVE DOI/PMID CHECK")

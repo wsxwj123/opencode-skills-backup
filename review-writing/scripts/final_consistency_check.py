@@ -25,10 +25,15 @@ def _parse_storyline_sections(storyline_path):
         return []
     sections = []
     for line in p.read_text(encoding="utf-8").splitlines():
-        if line.startswith("## "):
-            title = line[3:].strip()
-            if title:
-                sections.append(title)
+        m = re.match(r"^(##+)\s+(.*)$", line)
+        if not m:
+            continue
+        title = m.group(2).strip()
+        if title:
+            # Ignore placeholder/template section headers in early drafting.
+            if "[" in title and "]" in title:
+                continue
+            sections.append(title)
     return sections
 
 

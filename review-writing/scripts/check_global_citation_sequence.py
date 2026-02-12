@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import re
+from collections import Counter
 from pathlib import Path
 
 
@@ -29,7 +30,8 @@ def main():
     min_id, max_id = uniq[0], uniq[-1]
     expected = set(range(min_id, max_id + 1))
     missing = sorted(expected - set(uniq))
-    duplicates = sorted({x for x in ids if ids.count(x) > 1})
+    freq = Counter(ids)
+    duplicates = sorted([x for x, c in freq.items() if c > 1])
 
     print("Citation Sequence Report")
     print(f"Range: [{min_id}..{max_id}]  Unique: {len(uniq)}  Total mentions: {len(ids)}")

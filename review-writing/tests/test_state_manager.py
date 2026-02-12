@@ -1,6 +1,7 @@
 import io
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -14,6 +15,39 @@ import state_manager  # noqa: E402
 
 
 class StateManagerTests(unittest.TestCase):
+    def test_minimal_without_section_is_blocked_by_default(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "data").mkdir()
+            (root / "progress.json").write_text("{}", encoding="utf-8")
+            script = "/Users/wsxwj/.codex/skills/review-writing/scripts/state_manager.py"
+            res = subprocess.run(
+                ["python3", script, "load", "--minimal"],
+                cwd=str(root),
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(res.returncode, 2)
+            self.assertIn("--section", res.stdout)
+
+    def test_minimal_without_section_can_be_explicitly_allowed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "data").mkdir()
+            (root / "progress.json").write_text("{}", encoding="utf-8")
+            (root / "data" / "literature_index.json").write_text("[]", encoding="utf-8")
+            (root / "data" / "synthesis_matrix.json").write_text("[]", encoding="utf-8")
+            script = "/Users/wsxwj/.codex/skills/review-writing/scripts/state_manager.py"
+            res = subprocess.run(
+                ["python3", script, "load", "--minimal", "--allow-unscoped-minimal"],
+                cwd=str(root),
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(res.returncode, 0)
+
     def test_update_assigns_id_when_global_id_is_none(self):
         with tempfile.TemporaryDirectory() as tmp:
             cwd = os.getcwd()
@@ -66,6 +100,35 @@ class StateManagerTests(unittest.TestCase):
 
                 self.assertEqual(out["literature_index"], [])
                 self.assertEqual(out["synthesis_matrix"], [])
+            finally:
+                os.chdir(cwd)
+
+    def test_load_section_uses_normalized_section_matching(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cwd = os.getcwd()
+            try:
+                os.chdir(tmp)
+                os.makedirs("data", exist_ok=True)
+                Path("data/literature_index.json").write_text(
+                    json.dumps(
+                        [
+                            {"global_id": 1, "related_sections": ["Results 3.1"], "title": "A"},
+                        ]
+                    ),
+                    encoding="utf-8",
+                )
+                Path("data/synthesis_matrix.json").write_text(
+                    json.dumps([{"global_id": 1, "section_id": "results_3-1"}]),
+                    encoding="utf-8",
+                )
+
+                buf = io.StringIO()
+                with redirect_stdout(buf):
+                    state_manager.load_state(section="results_3.1", fallback_recent=False)
+                out = json.loads(buf.getvalue())
+
+                self.assertEqual(len(out["literature_index"]), 1)
+                self.assertEqual(len(out["synthesis_matrix"]), 1)
             finally:
                 os.chdir(cwd)
 

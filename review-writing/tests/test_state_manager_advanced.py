@@ -88,6 +88,67 @@ class StateManagerAdvancedTests(unittest.TestCase):
             finally:
                 os.chdir(cwd)
 
+    def test_update_merge_matrix_keeps_same_global_id_for_multiple_sections(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cwd = os.getcwd()
+            try:
+                os.chdir(tmp)
+                os.makedirs("data", exist_ok=True)
+                Path("data/synthesis_matrix.json").write_text(
+                    json.dumps(
+                        [
+                            {"global_id": 1, "section_id": "intro", "key_finding": "A"},
+                            {"global_id": 1, "section_id": "methods", "key_finding": "B"},
+                        ]
+                    ),
+                    encoding="utf-8",
+                )
+                payload_path = Path("payload.json")
+                payload_path.write_text(
+                    json.dumps(
+                        {
+                            "synthesis_matrix": [
+                                {"global_id": 1, "section_id": "intro", "limitation": "L1"},
+                            ]
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+
+                state_manager.update_state(str(payload_path), merge=True)
+                out = json.loads(Path("data/synthesis_matrix.json").read_text(encoding="utf-8"))
+                self.assertEqual(len(out), 2)
+                by_section = {r["section_id"]: r for r in out}
+                self.assertEqual(by_section["intro"]["limitation"], "L1")
+                self.assertEqual(by_section["methods"]["key_finding"], "B")
+            finally:
+                os.chdir(cwd)
+
+    def test_load_minimal_matches_chinese_section_draft(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cwd = os.getcwd()
+            try:
+                os.chdir(tmp)
+                os.makedirs("data", exist_ok=True)
+                os.makedirs("drafts", exist_ok=True)
+                Path("data/literature_index.json").write_text(
+                    json.dumps([{"global_id": 1, "related_sections": ["结果讨论"], "title": "A"}]),
+                    encoding="utf-8",
+                )
+                Path("data/synthesis_matrix.json").write_text(
+                    json.dumps([{"global_id": 1, "section_id": "结果讨论"}]),
+                    encoding="utf-8",
+                )
+                Path("drafts/03_结果讨论.md").write_text("中文章节草稿", encoding="utf-8")
+
+                buf = io.StringIO()
+                with redirect_stdout(buf):
+                    state_manager.load_state(section="结果讨论", minimal=True)
+                data = json.loads(buf.getvalue())
+                self.assertEqual(data["section_draft"]["file"], "drafts/03_结果讨论.md")
+            finally:
+                os.chdir(cwd)
+
 
 if __name__ == "__main__":
     unittest.main()

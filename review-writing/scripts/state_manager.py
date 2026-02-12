@@ -4,8 +4,15 @@ import os
 import re
 import shutil
 import sys
+import time
 from datetime import datetime
+from contextlib import contextmanager
 from pathlib import Path
+
+try:
+    import fcntl
+except Exception:  # pragma: no cover
+    fcntl = None
 
 # Define state files map for Review Writing Project
 STATE_FILES = {
@@ -21,7 +28,14 @@ STATE_FILES = {
 
 
 def _normalize_text(text):
-    return re.sub(r"[^a-z0-9]+", "", str(text).lower())
+    return re.sub(r"[^a-z0-9\u4e00-\u9fff]+", "", str(text).lower())
+
+
+def _section_matches(section, section_list):
+    target = _normalize_text(section)
+    if not target or not isinstance(section_list, list):
+        return False
+    return any(_normalize_text(item) == target for item in section_list)
 
 
 def _read_json_file(path):
@@ -86,9 +100,9 @@ def load_state(section=None, fallback_recent=False, minimal=False):
                 related_sections = item.get("related_sections")
                 legacy_sections = item.get("sections")
 
-                if isinstance(related_sections, list) and section in related_sections:
+                if _section_matches(section, related_sections):
                     filtered_lit.append(item)
-                elif isinstance(legacy_sections, list) and section in legacy_sections:
+                elif _section_matches(section, legacy_sections):
                     filtered_lit.append(item)
 
             if fallback_recent and not filtered_lit and lit_data:
@@ -108,8 +122,8 @@ def load_state(section=None, fallback_recent=False, minimal=False):
                     if row.get("global_id") not in relevant_ids:
                         continue
                     row_section = row.get("section_id")
-                    # If section_id exists in row, enforce exact section match.
-                    if row_section is not None and row_section != section:
+                    # If section_id exists in row, enforce section match after normalization.
+                    if row_section is not None and _normalize_text(row_section) != _normalize_text(section):
                         continue
                     filtered_rows.append(row)
                 combined_state["synthesis_matrix"] = filtered_rows
@@ -277,27 +291,61 @@ def _merge_matrix(existing, incoming):
     existing = [x for x in existing if isinstance(x, dict)]
     incoming = [x for x in incoming if isinstance(x, dict)]
 
-    by_id = {}
+    by_key = {}
     no_id = []
 
     for row in existing:
         gid = row.get("global_id")
+        section = row.get("section_id")
         if isinstance(gid, int) and gid > 0:
-            by_id[gid] = row
+            by_key[(gid, section)] = row
         else:
             no_id.append(row)
 
     for row in incoming:
         gid = row.get("global_id")
+        section = row.get("section_id")
         if isinstance(gid, int) and gid > 0:
-            if gid in by_id:
-                by_id[gid].update(row)
+            key = (gid, section)
+            if key in by_key:
+                by_key[key].update(row)
             else:
-                by_id[gid] = row
+                by_key[key] = row
         else:
             no_id.append(row)
 
-    return [by_id[k] for k in sorted(by_id.keys())] + no_id
+    ordered = sorted(by_key.keys(), key=lambda x: (x[1] if x[1] is not None else "", x[0]))
+    return [by_key[k] for k in ordered] + no_id
+
+
+@contextmanager
+def _state_lock(timeout=20):
+    lock_path = Path("logs") / ".state_manager.lock"
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(str(lock_path), os.O_CREAT | os.O_RDWR, 0o644)
+    start = time.time()
+    acquired = False
+    try:
+        while True:
+            try:
+                if fcntl is None:
+                    acquired = True
+                    break
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                acquired = True
+                break
+            except BlockingIOError:
+                if time.time() - start > timeout:
+                    raise TimeoutError(f"state lock timeout after {timeout}s: {lock_path}")
+                time.sleep(0.05)
+        yield
+    finally:
+        if acquired and fcntl is not None:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_UN)
+            except Exception:
+                pass
+        os.close(fd)
 
 
 def update_state(payload_path, merge=True):
@@ -315,62 +363,63 @@ def update_state(payload_path, merge=True):
 
     updated_files = []
 
-    for key, content in payload.items():
-        if key not in STATE_FILES:
-            print(f"Warning: Unknown key '{key}' in payload. Skipping.")
-            continue
+    with _state_lock():
+        for key, content in payload.items():
+            if key not in STATE_FILES:
+                print(f"Warning: Unknown key '{key}' in payload. Skipping.")
+                continue
 
-        filename = STATE_FILES[key]
+            filename = STATE_FILES[key]
 
-        if merge and key == "literature_index" and isinstance(content, list):
-            content = _merge_literature(_load_json_list(filename), content)
-        elif merge and key == "synthesis_matrix" and isinstance(content, list):
-            content = _merge_matrix(_load_json_list(filename), content)
-        elif key == "literature_index" and isinstance(content, list):
-            current_max_id = 0
-            if os.path.exists(filename):
-                try:
-                    existing_data = _read_json_file(filename)
-                    if isinstance(existing_data, list):
-                        for item in existing_data:
-                            gid = item.get("global_id")
-                            if isinstance(gid, int) and gid > current_max_id:
-                                current_max_id = gid
-                except Exception as e:
-                    print(f"Warning reading existing literature index for max_id: {e}")
-
-            for item in content:
-                gid = item.get("global_id")
-                if (
-                    ("global_id" not in item)
-                    or (gid is None)
-                    or (not isinstance(gid, int))
-                    or (gid <= 0)
-                ):
-                    current_max_id += 1
-                    item["global_id"] = current_max_id
-                elif gid > current_max_id:
-                    current_max_id = gid
-
-        try:
-            os.makedirs(os.path.dirname(filename) if os.path.dirname(filename) else ".", exist_ok=True)
-
-            if key == "context_memory":
+            if merge and key == "literature_index" and isinstance(content, list):
+                content = _merge_literature(_load_json_list(filename), content)
+            elif merge and key == "synthesis_matrix" and isinstance(content, list):
+                content = _merge_matrix(_load_json_list(filename), content)
+            elif key == "literature_index" and isinstance(content, list):
+                current_max_id = 0
                 if os.path.exists(filename):
-                    rotate_context_memory_versions()
-                with open(filename, "w", encoding="utf-8") as f:
-                    f.write(str(content))
-            elif filename.endswith(".json"):
-                with open(filename, "w", encoding="utf-8") as f:
-                    json.dump(content, f, indent=2, ensure_ascii=False)
-            else:
-                with open(filename, "w", encoding="utf-8") as f:
-                    f.write(str(content))
+                    try:
+                        existing_data = _read_json_file(filename)
+                        if isinstance(existing_data, list):
+                            for item in existing_data:
+                                gid = item.get("global_id")
+                                if isinstance(gid, int) and gid > current_max_id:
+                                    current_max_id = gid
+                    except Exception as e:
+                        print(f"Warning reading existing literature index for max_id: {e}")
 
-            updated_files.append(filename)
+                for item in content:
+                    gid = item.get("global_id")
+                    if (
+                        ("global_id" not in item)
+                        or (gid is None)
+                        or (not isinstance(gid, int))
+                        or (gid <= 0)
+                    ):
+                        current_max_id += 1
+                        item["global_id"] = current_max_id
+                    elif gid > current_max_id:
+                        current_max_id = gid
 
-        except Exception as e:
-            print(f"Error writing to {filename}: {e}")
+            try:
+                os.makedirs(os.path.dirname(filename) if os.path.dirname(filename) else ".", exist_ok=True)
+
+                if key == "context_memory":
+                    if os.path.exists(filename):
+                        rotate_context_memory_versions()
+                    with open(filename, "w", encoding="utf-8") as f:
+                        f.write(str(content))
+                elif filename.endswith(".json"):
+                    with open(filename, "w", encoding="utf-8") as f:
+                        json.dump(content, f, indent=2, ensure_ascii=False)
+                else:
+                    with open(filename, "w", encoding="utf-8") as f:
+                        f.write(str(content))
+
+                updated_files.append(filename)
+
+            except Exception as e:
+                print(f"Error writing to {filename}: {e}")
 
     print(f"Successfully updated: {', '.join(updated_files)}")
 
@@ -423,6 +472,11 @@ def main():
         action="store_true",
         help="Return only progress, section-filtered literature/matrix, and matching section draft",
     )
+    load_parser.add_argument(
+        "--allow-unscoped-minimal",
+        action="store_true",
+        help="Allow --minimal without --section (disabled by default to prevent oversized context loads).",
+    )
 
     update_parser = subparsers.add_parser("update", help="Update state files from a payload")
     update_parser.add_argument(
@@ -449,6 +503,9 @@ def main():
     args = parser.parse_args()
 
     if args.command == "load":
+        if args.minimal and not args.section and not args.allow_unscoped_minimal:
+            print("[GATE] --minimal requires --section to avoid oversized context loads.")
+            sys.exit(2)
         load_state(section=args.section, fallback_recent=args.fallback_recent, minimal=args.minimal)
     elif args.command == "update":
         if not os.path.exists(args.payload_file):

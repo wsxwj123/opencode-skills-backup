@@ -6,6 +6,8 @@ import unittest
 from pathlib import Path
 
 SCRIPT = "/Users/wsxwj/.codex/skills/article-writing/scripts/state_manager.py"
+MERGE_SCRIPT = "/Users/wsxwj/.codex/skills/article-writing/scripts/merge_manuscript.py"
+EXPORT_BIB_SCRIPT = "/Users/wsxwj/.codex/skills/article-writing/scripts/export_bibtex.py"
 
 
 def run_cmd(args, cwd):
@@ -131,6 +133,162 @@ class StateManagerTests(unittest.TestCase):
         bdir = self.root / "backups" / "literature_sync"
         dirs = [x for x in bdir.glob("lit_sync_*") if x.is_dir()]
         self.assertLessEqual(len(dirs), 2)
+
+    def test_nature_reference_style_rebuild(self):
+        write_json(self.root / "literature_index.json", [
+            {
+                "authors": "Zhang Y, Li X",
+                "title": "Nanoparticle delivery",
+                "journal": "Nat Nanotechnol",
+                "year": "2024",
+                "volume": "19",
+                "pages": "100-110",
+                "doi": "10.1/abc"
+            }
+        ])
+        mdp = self.root / "manuscripts" / "04_Results_3.1_Style.md"
+        mdp.write_text("# References\n1. Old.\n", encoding="utf-8")
+
+        p = run_cmd([
+            "sync-literature", "--apply", "--strict-references", "--reference-style", "nature"
+        ], cwd=self.root)
+        self.assertEqual(p.returncode, 0)
+        out = json.loads(p.stdout)
+        self.assertTrue(out.get("applied"))
+
+        md = mdp.read_text(encoding="utf-8")
+        self.assertIn("Nat Nanotechnol 19, 100-110 (2024)", md)
+
+    def test_conflicts_block_apply_unless_allowed(self):
+        write_json(self.root / "literature_index.json", [
+            {"title": "Targeted nanoparticle delivery for liver cancer"},
+            {"title": "Targeted nanoparticle delivery for liver cancers"},
+        ])
+
+        blocked = run_cmd([
+            "sync-literature", "--apply",
+            "--similarity-threshold", "0.999",
+            "--conflict-threshold", "0.5"
+        ], cwd=self.root)
+        self.assertEqual(blocked.returncode, 0)
+        b = json.loads(blocked.stdout)
+        self.assertIn("error", b)
+        self.assertIn("Dedup conflicts detected", b["error"])
+
+        allowed = run_cmd([
+            "sync-literature", "--apply",
+            "--similarity-threshold", "0.999",
+            "--conflict-threshold", "0.5",
+            "--allow-conflicts"
+        ], cwd=self.root)
+        self.assertEqual(allowed.returncode, 0)
+        a = json.loads(allowed.stdout)
+        self.assertTrue(a.get("applied"))
+
+    def test_load_cache_invalidation_after_source_change(self):
+        write_json(self.root / "storyline.json", {"sections": [{"id": "results_3.1", "title": "old"}]})
+
+        p1 = run_cmd([
+            "write-cycle", "--section", "results_3.1"
+        ], cwd=self.root)
+        self.assertEqual(p1.returncode, 0)
+
+        out1 = run_cmd([
+            "load", "--section", "results_3.1", "--with-global-history", "--compact"
+        ], cwd=self.root)
+        data1 = json.loads(out1.stdout)
+        self.assertIn("old", json.dumps(data1.get("storyline_section", {}), ensure_ascii=False))
+
+        write_json(self.root / "storyline.json", {"sections": [{"id": "results_3.1", "title": "new"}]})
+        out2 = run_cmd([
+            "load", "--section", "results_3.1", "--with-global-history", "--compact"
+        ], cwd=self.root)
+        data2 = json.loads(out2.stdout)
+        self.assertIn("new", json.dumps(data2.get("storyline_section", {}), ensure_ascii=False))
+
+    def test_write_cycle_default_is_strict(self):
+        os.remove(self.root / "reviewer_concerns.json")
+        strict_default = run_cmd([
+            "write-cycle", "--section", "results_3.1"
+        ], cwd=self.root)
+        self.assertNotEqual(strict_default.returncode, 0)
+
+        lenient = run_cmd([
+            "write-cycle", "--section", "results_3.1", "--preflight-lenient"
+        ], cwd=self.root)
+        self.assertEqual(lenient.returncode, 0)
+
+    def test_word_count_excludes_references_by_default(self):
+        md = self.root / "manuscripts" / "04_Results_3.1_Word.md"
+        md.write_text(
+            "# Results\nalpha beta gamma\n\n# References\n1. should not count\n",
+            encoding="utf-8",
+        )
+        p = run_cmd(["word-count"], cwd=self.root)
+        self.assertEqual(p.returncode, 0)
+        out = json.loads(p.stdout)
+        self.assertTrue(out.get("exclude_references"))
+        self.assertEqual(out.get("total"), 5)
+
+    def test_stats_and_snapshot_rollback(self):
+        before = (self.root / "context_memory.md").read_text(encoding="utf-8")
+        snap = run_cmd(["snapshot"], cwd=self.root)
+        self.assertEqual(snap.returncode, 0)
+        (self.root / "context_memory.md").write_text("changed\n", encoding="utf-8")
+
+        rb = run_cmd(["rollback", "--target", "snapshot"], cwd=self.root)
+        self.assertEqual(rb.returncode, 0)
+        rb_out = json.loads(rb.stdout)
+        self.assertTrue(rb_out.get("restored"))
+        self.assertEqual((self.root / "context_memory.md").read_text(encoding="utf-8"), before)
+
+        st = run_cmd(["stats"], cwd=self.root)
+        self.assertEqual(st.returncode, 0)
+        st_out = json.loads(st.stdout)
+        self.assertIn("word_count", st_out)
+        self.assertIn("backups", st_out)
+        self.assertGreaterEqual(st_out["backups"].get("snapshot_count", 0), 1)
+
+    def test_merge_and_export_scripts_cli(self):
+        a = self.root / "manuscripts" / "04_Results_3.1_A.md"
+        b = self.root / "manuscripts" / "05_Discussion_5.1_B.md"
+        a.write_text("# A\nText [1].\n", encoding="utf-8")
+        b.write_text("# B\nText [2].\n", encoding="utf-8")
+
+        p_merge = subprocess.run(
+            [
+                "python3", MERGE_SCRIPT,
+                "--manuscript-dir", "manuscripts",
+                "--skip-docx",
+            ],
+            cwd=self.root,
+            text=True,
+            capture_output=True,
+        )
+        self.assertEqual(p_merge.returncode, 0, msg=p_merge.stdout + p_merge.stderr)
+        merge_out = json.loads(p_merge.stdout)
+        self.assertTrue(merge_out.get("ok"))
+        self.assertEqual(merge_out.get("files_merged_count"), 2)
+
+        write_json(self.root / "literature_index.json", {"references": [
+            {"ref_id": "r1", "title": "T1", "journal": "J", "year": "2024"},
+            {"ref_id": "r2", "title": "T2", "journal": "J", "year": "2025"},
+        ]})
+        p_bib = subprocess.run(
+            [
+                "python3", EXPORT_BIB_SCRIPT,
+                "--index-file", "literature_index.json",
+                "--output-file", "references.bib",
+            ],
+            cwd=self.root,
+            text=True,
+            capture_output=True,
+        )
+        self.assertEqual(p_bib.returncode, 0, msg=p_bib.stdout + p_bib.stderr)
+        bib_out = json.loads(p_bib.stdout)
+        self.assertTrue(bib_out.get("ok"))
+        self.assertEqual(bib_out.get("references_exported_count"), 2)
+        self.assertTrue((self.root / "references.bib").exists())
 
 
 if __name__ == "__main__":

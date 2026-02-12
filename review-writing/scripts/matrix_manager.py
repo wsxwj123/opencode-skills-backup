@@ -2,8 +2,16 @@
 import argparse
 import json
 import re
+import os
+import time
 from difflib import SequenceMatcher
+from contextlib import contextmanager
 from pathlib import Path
+
+try:
+    import fcntl
+except Exception:  # pragma: no cover
+    fcntl = None
 
 
 def load_json(path, default):
@@ -21,6 +29,36 @@ def save_json(path, data):
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+@contextmanager
+def matrix_lock(timeout=20):
+    lock_path = Path("logs") / ".matrix.lock"
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(str(lock_path), os.O_CREAT | os.O_RDWR, 0o644)
+    start = time.time()
+    acquired = False
+    try:
+        while True:
+            try:
+                if fcntl is None:
+                    acquired = True
+                    break
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                acquired = True
+                break
+            except BlockingIOError:
+                if time.time() - start > timeout:
+                    raise TimeoutError(f"matrix lock timeout after {timeout}s: {lock_path}")
+                time.sleep(0.05)
+        yield
+    finally:
+        if acquired and fcntl is not None:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_UN)
+            except Exception:
+                pass
+        os.close(fd)
 
 
 def normalize(text):
@@ -86,32 +124,33 @@ def upsert_rows(existing_rows, new_rows):
 
 
 def cmd_bootstrap(args):
-    index = load_json(args.index, [])
-    if not isinstance(index, list):
-        raise SystemExit("literature_index must be a list")
+    with matrix_lock():
+        index = load_json(args.index, [])
+        if not isinstance(index, list):
+            raise SystemExit("literature_index must be a list")
 
-    existing = load_json(args.matrix, [])
-    existing = existing if isinstance(existing, list) else []
+        existing = load_json(args.matrix, [])
+        existing = existing if isinstance(existing, list) else []
 
-    rows = []
-    for item in index:
-        if not isinstance(item, dict):
-            continue
-        gid = item.get("global_id")
-        if not isinstance(gid, int) or gid <= 0:
-            continue
+        rows = []
+        for item in index:
+            if not isinstance(item, dict):
+                continue
+            gid = item.get("global_id")
+            if not isinstance(gid, int) or gid <= 0:
+                continue
 
-        sections = item.get("related_sections")
-        if args.section:
-            sections = [args.section]
-        elif not isinstance(sections, list) or not sections:
-            sections = ["unassigned"]
+            sections = item.get("related_sections")
+            if args.section:
+                sections = [args.section]
+            elif not isinstance(sections, list) or not sections:
+                sections = ["unassigned"]
 
-        for section in sections:
-            rows.append(default_row(item, section, args.round))
+            for section in sections:
+                rows.append(default_row(item, section, args.round))
 
-    merged = upsert_rows(existing, rows)
-    save_json(args.matrix, merged)
+        merged = upsert_rows(existing, rows)
+        save_json(args.matrix, merged)
     print(f"Bootstrap complete: {len(rows)} candidate rows, {len(merged)} total matrix rows")
 
 
@@ -130,60 +169,64 @@ def cmd_focus(args):
 
 
 def cmd_bind_claims(args):
-    matrix = load_json(args.matrix, [])
-    if not isinstance(matrix, list):
-        raise SystemExit("synthesis_matrix must be a list")
-
     claims = load_json(args.claims, [])
     if not isinstance(claims, list):
         raise SystemExit("claims must be a list")
 
-    updated = 0
-    for row in matrix:
-        if row.get("section_id") != args.section:
-            continue
+    with matrix_lock():
+        matrix = load_json(args.matrix, [])
+        if not isinstance(matrix, list):
+            raise SystemExit("synthesis_matrix must be a list")
 
-        hay = normalize(" ".join([str(row.get("title", "")), str(row.get("abstract", "")), str(row.get("key_finding", ""))]))
-        best = None
-        best_hits = 0
-        best_semantic = 0.0
-        for claim in claims:
-            kws = claim.get("keywords") or []
-            if not isinstance(kws, list):
-                kws = []
-            hits = sum(1 for kw in kws if normalize(kw) and normalize(kw) in hay)
-            sem = semantic_score(row, claim)
-            if hits > best_hits or (hits == best_hits and sem > best_semantic):
-                best_hits = hits
-                best_semantic = sem
-                best = claim
+        updated = 0
+        for row in matrix:
+            if row.get("section_id") != args.section:
+                continue
 
-        if best and (best_hits >= args.min_hits or best_semantic >= args.semantic_threshold):
-            row["claim_id"] = best.get("claim_id")
-            row["evidence_round"] = 2
-            row["semantic_score"] = round(best_semantic, 4)
-            updated += 1
+            hay = normalize(" ".join([str(row.get("title", "")), str(row.get("abstract", "")), str(row.get("key_finding", ""))]))
+            best = None
+            best_hits = 0
+            best_semantic = 0.0
+            for claim in claims:
+                kws = claim.get("keywords") or []
+                if not isinstance(kws, list):
+                    kws = []
+                hits = sum(1 for kw in kws if normalize(kw) and normalize(kw) in hay)
+                sem = semantic_score(row, claim)
+                if hits > best_hits or (hits == best_hits and sem > best_semantic):
+                    best_hits = hits
+                    best_semantic = sem
+                    best = claim
 
-    save_json(args.matrix, matrix)
+            if best and (best_hits >= args.min_hits or best_semantic >= args.semantic_threshold):
+                row["claim_id"] = best.get("claim_id")
+                row["evidence_round"] = 2
+                row["semantic_score"] = round(best_semantic, 4)
+                updated += 1
+
+        save_json(args.matrix, matrix)
     print(f"Bound claims for section={args.section}: {updated} rows updated")
+    if args.fail_on_no_update and updated == 0:
+        raise SystemExit(2)
 
 
 def cmd_mark_round3(args):
-    matrix = load_json(args.matrix, [])
-    if not isinstance(matrix, list):
-        raise SystemExit("synthesis_matrix must be a list")
+    with matrix_lock():
+        matrix = load_json(args.matrix, [])
+        if not isinstance(matrix, list):
+            raise SystemExit("synthesis_matrix must be a list")
 
-    touched = 0
-    for row in matrix:
-        if args.section and row.get("section_id") != args.section:
-            continue
-        if row.get("claim_id") in (None, ""):
-            continue
-        row["updated_in_round3"] = True
-        row["evidence_round"] = 3
-        touched += 1
+        touched = 0
+        for row in matrix:
+            if args.section and row.get("section_id") != args.section:
+                continue
+            if row.get("claim_id") in (None, ""):
+                continue
+            row["updated_in_round3"] = True
+            row["evidence_round"] = 3
+            touched += 1
 
-    save_json(args.matrix, matrix)
+        save_json(args.matrix, matrix)
     print(f"Round3 mark complete: {touched} rows")
 
 
@@ -247,6 +290,11 @@ def build_parser():
         type=float,
         default=0.35,
         help="Fallback semantic score threshold when keyword hits are below --min-hits",
+    )
+    p_bind.add_argument(
+        "--fail-on-no-update",
+        action="store_true",
+        help="Exit with code 2 when no row is bound to any claim",
     )
     p_bind.set_defaults(func=cmd_bind_claims)
 

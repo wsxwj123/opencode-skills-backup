@@ -40,6 +40,7 @@ You must strictly enforce these 8 rules in every interaction:
 
 1.  **State Persistence:**
     -   Start turn: `python scripts/state_manager.py load --section [SectionID] --minimal` for token-safe section work.
+    -   `--minimal` without `--section` is blocked by default. Use `--allow-unscoped-minimal` only when global context is truly required.
     -   Only use full `load` when global context is truly needed.
     -   End turn: `python scripts/state_manager.py update [payload_file]` + `python scripts/state_manager.py snapshot`.
     -   If no payload path is provided, `update` defaults to `state_update_payload.json`.
@@ -88,12 +89,13 @@ You must strictly enforce these 8 rules in every interaction:
 
 **Three-Round Retrieval Model (MANDATORY):**
 1. Round 1 (Global build): finalize search strategy, retrieve 150+ papers, deduplicate, write `data/literature_index.json`, then bootstrap matrix globally using `python scripts/matrix_manager.py bootstrap --round 1` (no section pinning).
-2. Round 2 (Section deep dive): during section drafting, bind section claims to evidence with `python scripts/matrix_manager.py bind-claims --section [SectionID] --claims [claims.json]`.
+2. Round 2 (Section deep dive): before drafting each section, save retrievable search strategy to JSON (queries, date window, filters, databases) and run cycle with `--search-strategy`; then bind section claims with `python scripts/matrix_manager.py bind-claims --section [SectionID] --claims [claims.json]`.
 3. Round 3 (Critical refresh): before finalization, refresh critical claims with newest papers and mark updates using `python scripts/matrix_manager.py mark-round3 --section [SectionID]`.
 4. Gate enforcement: Round 2 is blocked until Round 1 completes; Round 3 is blocked until that section's Round 2 completes.
+5. Quality gate: Round 2 must produce at least one claim binding for the target section; otherwise treat as failure and refine claims/search.
 
 **Strict Flow:**
-1.  **Load State:** `python scripts/state_manager.py load --section [SectionID]`.
+1.  **Load State:** `python scripts/state_manager.py load --section [SectionID] --minimal`.
 2.  **Search:** Execute **Search Logic** (Rule 5). Gather ≥10 relevant papers.
 3.  **Matrix:** Fill `data/synthesis_matrix.json`. Compare methods/results. **Stop** if data is thin.
     -   Use matrix workflow commands: `bootstrap` (R1), `bind-claims` (R2), `mark-round3` (R3), then `audit`.
@@ -128,6 +130,8 @@ You must strictly enforce these 8 rules in every interaction:
 *   `/refactor [File] [Goal]`: Uses `scripts/scope_manager.py` to analyze dependencies before rewriting.
 *   `/cycle [SectionID]`: Runs `python scripts/run_section_cycle.py [SectionID]` to automate section-scoped state load/update/compaction/snapshot/validation.
     -   Includes workflow gates + checkpointing + resume.
+    -   Includes log retention pruning (`--keep-snapshots`, `--keep-checkpoints`) to prevent log bloat.
+    -   For Round 2, `--search-strategy <file.json>` is mandatory and every run appends a reproducible record to `logs/search_manifest.json`.
 
 ## Interaction Guidelines
 - **Anti-Flattery:** Be objective. No "Great idea!".
@@ -144,5 +148,5 @@ You must strictly enforce these 8 rules in every interaction:
 - `scripts/matrix_manager.py`: Manage section-claim evidence matrix across round-1/2/3 retrieval.
 - `scripts/run_section_cycle.py`: One-command automated section workflow with gate checks and checkpoint resume.
 - `scripts/final_consistency_check.py --fail-on-gap`: Final delivery consistency gate (section coverage, claim coverage, citation continuity, round3 freshness).
-- `scripts/validate_citations.py --live --live-used-only --fail-on-orphan`: Validate local consistency + online DOI/PMID checks for cited entries.
+- `scripts/validate_citations.py --live --live-used-only --fail-on-orphan --retries 2 --retry-backoff 0.6`: Validate local consistency + online DOI/PMID checks for cited entries with transient-failure retry.
 - `paper-search` + available web search tools in current runtime: For citations.

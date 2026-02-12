@@ -1,10 +1,10 @@
-# Article Writing Skill - Nature级SCI论文一键生成系统 (v2.15.1)
+# Article Writing Skill - Nature级SCI论文一键生成系统 (v2.15.2)
 
 ## 🎯 Skill概述
 
 本skill用于撰写符合Nature/Science/Cell发表标准的SCI研究论文（Article类型），专注于广义药物递送系统领域。
 
-**核心升级 (v2.15.1)**：
+**核心升级 (v2.15.2)**：
 - **章节级上下文隔离**：`/write [section]` 默认只读取当前章节相关上下文，禁止跨章节正文污染。
 - **双层记忆模型**：新增 `section_memory/<section_id>.md` 记录章节局部记忆，全局 `context_memory.md` 仅保留决策与约束。
 - **Token预算守卫**：`state_manager.py` 支持预算估算与自动降载（tail + compact），避免上下文爆炸。
@@ -96,9 +96,8 @@
 1. **执行要求**：必须在写作动作开始前完成校验（内部必做）。
 2. **隔离**：此部分仅用于内部校验与必要的用户审计，**严禁**写入生成的 Markdown 稿件文件中。
 3. **展示策略**：默认不在用户回复中展开 Context Check 明细；仅在用户要求“显示加载明细/审计日志”时展示。
-4. **命令**：写作前执行预加载（默认包含全局历史 + 当前章节索引，不含正文草稿）：
-   - `python scripts/state_manager.py preflight --section [section_id]`  (全量轻量校验，不加载重内容)
-   - `python scripts/state_manager.py load --section [section_id] --with-global-history --compact --token-budget 6000 --tail-lines 80`
+4. **命令**：写作前统一执行强制入口（默认包含全局历史 + 当前章节索引，不含正文草稿）：
+   - `python scripts/state_manager.py write-cycle --section [section_id] --token-budget 6000 --tail-lines 80`
    - 若需续写/改写已存在章节正文，再显式追加 `--include-draft`。
 
 **[🚀 Context Loading Dashboard] (Audit Mode Example)**
@@ -196,7 +195,7 @@
 
 **默认行为（强制）**：
 1. 执行 `/write [section]` 前，必须优先加载章节局部上下文：
-   - `python scripts/state_manager.py load --section [section_id] --with-global-history --compact --token-budget 6000 --tail-lines 80`
+   - `python scripts/state_manager.py write-cycle --section [section_id] --token-budget 6000 --tail-lines 80`
 2. 若用户未明确要求，禁止读取其他章节正文文件。
 3. 输出中必须包含 `loaded_files`，作为“只读当前章节”的审计证据。
 
@@ -283,9 +282,17 @@ Storyline阶段逻辑检查 + Final阶段完整报告。
 
 ### Phase 7: 版本控制 (`/snapshot`, `/rollback`)
 智能快照 + 手动备份 + 回滚机制。
+- `/snapshot` → `python scripts/state_manager.py snapshot`
+- `/rollback`（默认最近快照）→ `python scripts/state_manager.py rollback --target snapshot`
+- 回滚到最近一次文献同步备份 → `python scripts/state_manager.py rollback --target literature_sync`
 
 ### Phase 8: 最终合并与导出 (`/merge`, `/export_bib`)
 生成Word文档和BibTeX引用文件。
+- `/merge` → `python scripts/merge_manuscript.py --manuscript-dir manuscripts`
+  - 可选：`--skip-docx`（仅生成 Markdown）
+  - 可选：`--patterns "01_Abstract*.md,02_Introduction*.md,04_Results*.md,*.md"`（自定义合并顺序与兜底匹配）
+- `/export_bib` → `python scripts/export_bibtex.py --index-file literature_index.json --output-file references.bib`
+  - 支持 `literature_index.json` 为 list 或 dict（`references/items/entries/data`）
 
 ---
 
@@ -307,13 +314,16 @@ Storyline阶段逻辑检查 + Final阶段完整报告。
 | `/export_bib`| **导出参考文献**| **新增：生成 references.bib** |
 | `/stats` | 进度仪表盘 | - |
 
+`/stats` 脚本入口：`python scripts/state_manager.py stats`  
+`/stats`（按章节看字数）：`python scripts/state_manager.py stats --section [section_id]`
+
 ---
 
 ## 🛡️ 写作禁忌
 1. **严禁割裂**：不要在Results里只罗列数字，然后在Discussion里才解释意思。
 2. **严禁简略**：对于Key Findings，如果只写了一两句话，视为**失败**。
 3. **严禁遗忘**：每次写作前执行“预加载”：
-   - **Preload (Default)**: 先执行 `python scripts/state_manager.py preflight --section [section_id]`，再执行 `python scripts/state_manager.py load --section [section_id] --with-global-history --compact --token-budget 6000 --tail-lines 80`，随后执行 `python scripts/state_manager.py gate-check --section [section_id] --phase prewrite`。
+   - **Preload (Default)**: 执行 `python scripts/state_manager.py write-cycle --section [section_id] --token-budget 6000 --tail-lines 80`（内部已强制 preflight/load/gate-check）。
    - **Draft-on-Demand**: 仅在续写/改写时追加 `--include-draft`。
    - **规则**：全局历史与进度必须读取；正文草稿默认不读取，避免无稿场景污染上下文。
 
@@ -326,7 +336,7 @@ Storyline阶段逻辑检查 + Final阶段完整报告。
 
 ---
 
-**版本**: 2.15.1
+**版本**: 2.15.2
 **更新**: 
 1. **跨平台重构**: 引入 "Portable Deployment" 协议，`/init` 时强制拷贝脚本到项目目录，彻底解决路径依赖和跨系统兼容问题。
 2. **路径协商**: 强制 AI 在初始化前询问用户保存路径。
@@ -356,7 +366,7 @@ Storyline阶段逻辑检查 + Final阶段完整报告。
 - **Draft-on-Demand**: 仅在需要续写或改写已有章节时，才允许追加 `--include-draft` 读取章节正文。
 - **Update Last**: 在每次回复结束后，必须执行脚本级自动同步：
   1. 先预览：`python scripts/state_manager.py sync-literature --dry-run --strict-references`。
-  2. 再落盘：`python scripts/state_manager.py postwrite --section [section_id] --status updated --summary "[本轮变更摘要]" --sync-literature --sync-apply --strict-references`。
+  2. 再落盘：`python scripts/state_manager.py write-cycle --section [section_id] --finalize --sync-literature --sync-apply --strict-references --summary "[本轮变更摘要]"`。
   3. 如不希望改写正文编号，可追加 `--no-rewrite-manuscripts`（默认会自动重写正文、表格和 `References/参考文献` 章节中的 `[n]`/编号保持一致，并严格重建 References 为连续 1..N）。
   4. 默认仅改写 `md`；如你显式需要处理 `.docx`，再追加 `--rewrite-docx`。
   5. 文献同步前会自动备份 `literature_index.json` 以及 `manuscripts/` 中的 `.md/.docx` 到 `backups/literature_sync/` 子目录（默认开启；`--no-backup` 可关闭）。
@@ -364,8 +374,9 @@ Storyline阶段逻辑检查 + Final阶段完整报告。
   7. 如本轮为关键里程碑，可追加 `--snapshot`。
 
 - **Single Command (强制入口)**: 写前统一用 `python scripts/state_manager.py write-cycle --section [section_id]`；写后统一用 `python scripts/state_manager.py write-cycle --section [section_id] --finalize --sync-literature --sync-apply --strict-references --summary "[本轮变更摘要]"` 收口。
-- **预检严格度**：研发阶段可用默认 lenient；投稿前建议 `--preflight-strict`。
+- **预检严格度**：`write-cycle` 默认 strict；仅在调试阶段才允许 `--preflight-lenient`。
 - **去重参数**：可按需设置 `--similarity-threshold`（默认 0.93）与 `--conflict-threshold`（默认 0.85），并审查 dry-run 报告中的 `dedup_conflicts`。
+- **冲突策略**：检测到 `dedup_conflicts` 时默认阻断 apply；仅在人工确认后可加 `--allow-conflicts` 放行。
 - **参考文献样式**：`--reference-style vancouver|nature`（默认 `vancouver`）。
 - **备份保留**：`--backup-keep`（默认 20）和可选 `--backup-max-days`，避免备份目录无限增长。
 - **Auto-Snapshot**: 如果 `context_memory.md` 发生了实质性变更，**必须**触发 `/snapshot`。

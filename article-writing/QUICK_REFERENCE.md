@@ -1,6 +1,6 @@
-# Article Writing Skill - 快速参考卡片 (v2.15.1)
+# Article Writing Skill - 快速参考卡片 (v2.15.2)
 
-## 🚀 核心升级 (v2.15.1)
+## 🚀 核心升级 (v2.15.2)
 
 - 🔒 **章节级上下文隔离**：写 `section` 时默认只加载该节上下文，拒绝跨章节正文污染。
 - 🧠 **双层记忆**：全局 `context_memory.md` + 章节 `section_memory/<section>.md`，减少失忆和串章。
@@ -40,7 +40,7 @@
 
 ---
 
-## 🛡️ 写作原则 (v2.15.1)
+## 🛡️ 写作原则 (v2.15.2)
 
 ### 0. 预加载（默认）
 建议在写作前统一走强制入口（全局历史 + 当前章节索引，默认不读正文草稿）：
@@ -51,7 +51,7 @@ python scripts/state_manager.py write-cycle --section results_3.1 --token-budget
 ```bash
 python scripts/state_manager.py write-cycle --section results_3.1 --include-draft --token-budget 6000 --tail-lines 80
 ```
-投稿前建议追加 `--preflight-strict`。
+默认即 strict；仅调试时追加 `--preflight-lenient`。
 输出中需检查：
 - `scope` = `section-local`
 - `loaded_files` 仅包含该章节相关文件
@@ -61,9 +61,27 @@ python scripts/state_manager.py write-cycle --section results_3.1 --include-draf
 python scripts/state_manager.py sync-literature --dry-run --strict-references
 python scripts/state_manager.py write-cycle --section results_3.1 --finalize --sync-literature --sync-apply --strict-references --summary "..."
 ```
+- 字数统计（默认排除 References）：
+```bash
+python scripts/state_manager.py word-count
+python scripts/state_manager.py word-count --section results_3.1
+```
+- 进度仪表盘与回滚：
+```bash
+python scripts/state_manager.py stats
+python scripts/state_manager.py rollback --target snapshot
+python scripts/state_manager.py rollback --target literature_sync
+```
+- 合并与导出：
+```bash
+python scripts/merge_manuscript.py --manuscript-dir manuscripts
+python scripts/merge_manuscript.py --manuscript-dir manuscripts --skip-docx
+python scripts/export_bibtex.py --index-file literature_index.json --output-file references.bib
+```
 - 默认只改写 `md`；如需改写 Word 再显式加 `--rewrite-docx`
 - 可选：`--reference-style nature`（默认 `vancouver`）
 - 可选：`--similarity-threshold 0.93 --conflict-threshold 0.85`
+- 冲突默认阻断 apply；仅人工确认后可加 `--allow-conflicts`
 - 可选：`--backup-keep 20 --backup-max-days 30`
 - 可选一条链路：
 ```bash
@@ -93,5 +111,5 @@ python scripts/state_manager.py write-cycle --section results_3.1 --finalize --s
 
 ---
 
-**版本**: 2.15.1
+**版本**: 2.15.2
 **最后更新**: 2026-02-11

@@ -1,5 +1,18 @@
 # Changelog - Article Writing Skill
 
+## [2.15.2] - 2026-02-12
+
+### ✅ Reliability Hardening
+- `write-cycle` is now strict-preflight by default; use `--preflight-lenient` only for debugging.
+- `sync-literature --apply` now blocks by default when `dedup_conflicts` is detected.
+- Added explicit override `--allow-conflicts` for manual, reviewed exceptions.
+- Added bounded retention for runtime artifacts:
+  - `.state/reports/` report files are capped.
+  - `.state/load_cache.json` cache entries are capped.
+- Fixed cache invalidation precision by switching file signature to nanosecond mtime.
+- Added regression tests for nature reference style, conflict blocking, cache invalidation, and strict-default write-cycle.
+
+
 ## [2.15.1] - 2026-02-11
 
 ### 🔧 同步自动化与文献一致性修复

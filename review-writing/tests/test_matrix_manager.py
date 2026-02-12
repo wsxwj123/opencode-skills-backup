@@ -221,6 +221,58 @@ class MatrixManagerTests(unittest.TestCase):
             self.assertEqual(matrix[0]["claim_id"], "C9")
             self.assertGreaterEqual(matrix[0].get("semantic_score", 0.0), 0.2)
 
+    def test_bind_claims_fail_on_no_update(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "data").mkdir(parents=True)
+            (root / "data" / "synthesis_matrix.json").write_text(
+                json.dumps(
+                    [
+                        {
+                            "global_id": 1,
+                            "section_id": "results",
+                            "title": "No overlap title",
+                            "abstract": "irrelevant abstract",
+                        }
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (root / "data" / "claims_results.json").write_text(
+                json.dumps(
+                    [
+                        {
+                            "claim_id": "C404",
+                            "text": "Unrelated claim",
+                            "keywords": ["x", "y"],
+                        }
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            script = "/Users/wsxwj/.codex/skills/review-writing/scripts/matrix_manager.py"
+            res = subprocess.run(
+                [
+                    "python3",
+                    script,
+                    "bind-claims",
+                    "--matrix",
+                    str(root / "data" / "synthesis_matrix.json"),
+                    "--section",
+                    "results",
+                    "--claims",
+                    str(root / "data" / "claims_results.json"),
+                    "--min-hits",
+                    "2",
+                    "--semantic-threshold",
+                    "0.95",
+                    "--fail-on-no-update",
+                ],
+                check=False,
+            )
+            self.assertEqual(res.returncode, 2)
+
 
 if __name__ == "__main__":
     unittest.main()

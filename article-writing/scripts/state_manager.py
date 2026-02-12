@@ -44,6 +44,8 @@ DEFAULT_BACKUP_KEEP = 20
 DEFAULT_DEDUP_SIMILARITY = 0.93
 DEFAULT_DEDUP_CONFLICT = 0.85
 DEFAULT_REFERENCE_STYLE = "vancouver"
+DEFAULT_REPORT_KEEP = 40
+DEFAULT_CACHE_KEEP = 200
 
 
 def ensure_state_dir():
@@ -59,7 +61,8 @@ def file_signature(path):
     if not os.path.exists(path):
         return None
     st = os.stat(path)
-    return f"{int(st.st_mtime)}:{st.st_size}"
+    mtime_ns = getattr(st, "st_mtime_ns", int(st.st_mtime * 1_000_000_000))
+    return f"{mtime_ns}:{st.st_size}"
 
 
 def read_load_cache():
@@ -74,6 +77,18 @@ def read_load_cache():
 
 def write_load_cache(cache):
     ensure_state_dir()
+    # Keep cache bounded to avoid unbounded growth.
+    if isinstance(cache, dict) and len(cache) > DEFAULT_CACHE_KEEP:
+        sortable = []
+        for k, v in cache.items():
+            if isinstance(v, dict):
+                ts = v.get("ts")
+            else:
+                ts = None
+            sortable.append((ts or "", k))
+        sortable.sort(reverse=True)
+        keep_keys = {k for _, k in sortable[:DEFAULT_CACHE_KEEP]}
+        cache = {k: v for k, v in cache.items() if k in keep_keys}
     with open(LOAD_CACHE_FILE, "w", encoding="utf-8") as f:
         json.dump(cache, f, ensure_ascii=False)
 
@@ -89,6 +104,17 @@ def write_sync_report(mode, payload):
     path = os.path.join(SYNC_REPORT_DIR, f"lit_sync_{mode}_{ts}.json")
     with open(path, "w", encoding="utf-8") as f:
         json.dump(payload, f, indent=2, ensure_ascii=False)
+    # Keep report directory bounded.
+    files = sorted(
+        glob.glob(os.path.join(SYNC_REPORT_DIR, "lit_sync_*.json")),
+        key=lambda p: os.path.getmtime(p),
+        reverse=True,
+    )
+    for stale in files[DEFAULT_REPORT_KEEP:]:
+        try:
+            os.remove(stale)
+        except Exception:
+            pass
     return path
 
 
@@ -156,11 +182,21 @@ def safe_json_load(path):
         return {}
     return json.loads(raw)
 
-def calculate_word_counts():
-    """Calculates word counts for all markdown files in manuscripts/ directory."""
+def strip_references_markdown(content):
+    """Remove References/参考文献 section from markdown body for word counting."""
+    heading_re = re.compile(r"^\s{0,3}#{1,6}\s*(references|参考文献)\s*$", re.IGNORECASE | re.MULTILINE)
+    match = heading_re.search(content or "")
+    if not match:
+        return content or ""
+    return (content or "")[:match.start()]
+
+
+def calculate_word_counts(exclude_references=True, section=None):
+    """Calculates word counts for markdown files in manuscripts/ directory."""
     word_counts = {
         "total": 0,
-        "sections": {}
+        "sections": {},
+        "exclude_references": bool(exclude_references),
     }
     
     manuscript_dir = "manuscripts"
@@ -168,16 +204,16 @@ def calculate_word_counts():
         return word_counts
         
     files = glob.glob(os.path.join(manuscript_dir, "*.md"))
-    
+
     for file_path in files:
         filename = os.path.basename(file_path)
+        if section and not filename_matches_section(filename, section):
+            continue
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 content = f.read()
-                # Simple word count: split by whitespace
-                # Remove markdown headers/formatting for better accuracy if needed, 
-                # but raw split is usually sufficient for draft estimation
-                # Excluding references list could be an improvement, but keeping it simple for now
+                if exclude_references:
+                    content = strip_references_markdown(content)
                 words = len(content.split())
                 word_counts["sections"][filename] = words
                 word_counts["total"] += words
@@ -467,7 +503,7 @@ def cached_filtered_section_json(path, section, compact=False, data_type=None):
 
     data = read_json_file(path)
     payload = filter_for_section(data, section_terms(section), compact=compact, data_type=data_type)
-    cache[key] = {"sig": sig, "payload": payload}
+    cache[key] = {"sig": sig, "payload": payload, "ts": datetime.now().isoformat(timespec="seconds")}
     write_load_cache(cache)
     return payload
 
@@ -490,7 +526,7 @@ def cached_global_value(path, compact=False, key_name=None):
         if compact and key_name == "context_memory":
             payload = tail_text(payload, lines=80)
 
-    cache[key] = {"sig": sig, "payload": payload}
+    cache[key] = {"sig": sig, "payload": payload, "ts": datetime.now().isoformat(timespec="seconds")}
     write_load_cache(cache)
     return payload
 
@@ -1413,6 +1449,7 @@ def sync_global_literature(
     reference_style=DEFAULT_REFERENCE_STYLE,
     similarity_threshold=DEFAULT_DEDUP_SIMILARITY,
     conflict_threshold=DEFAULT_DEDUP_CONFLICT,
+    allow_conflicts=False,
     backup_keep=DEFAULT_BACKUP_KEEP,
     backup_max_days=None
 ):
@@ -1455,6 +1492,11 @@ def sync_global_literature(
             similarity_threshold=similarity_threshold,
             conflict_threshold=conflict_threshold
         )
+        if result.get("conflicts") and not allow_conflicts:
+            raise RuntimeError(
+                "Dedup conflicts detected; aborting apply. "
+                "Use --allow-conflicts only after reviewing dry-run report."
+            )
         canonical = result["canonical_entries"]
 
         if isinstance(canonical, list):
@@ -1489,6 +1531,7 @@ def sync_global_literature(
             "duplicates_removed": result["duplicate_count"],
             "dedup_conflicts": result.get("conflicts", []),
             "dedup_strategy_counts": result.get("strategy_counts", {}),
+            "allow_conflicts": bool(allow_conflicts),
             "manuscripts": rewrite_report,
             "validation": validation,
             "rolled_back": False,
@@ -1524,6 +1567,7 @@ def postwrite_state(
     reference_style=DEFAULT_REFERENCE_STYLE,
     similarity_threshold=DEFAULT_DEDUP_SIMILARITY,
     conflict_threshold=DEFAULT_DEDUP_CONFLICT,
+    allow_conflicts=False,
     backup_keep=DEFAULT_BACKUP_KEEP,
     backup_max_days=None
 ):
@@ -1602,6 +1646,7 @@ def postwrite_state(
             reference_style=reference_style,
             similarity_threshold=similarity_threshold,
             conflict_threshold=conflict_threshold,
+            allow_conflicts=allow_conflicts,
             backup_keep=backup_keep,
             backup_max_days=backup_max_days
         )
@@ -1668,9 +1713,10 @@ def write_cycle(
     reference_style=DEFAULT_REFERENCE_STYLE,
     similarity_threshold=DEFAULT_DEDUP_SIMILARITY,
     conflict_threshold=DEFAULT_DEDUP_CONFLICT,
+    allow_conflicts=False,
     backup_keep=DEFAULT_BACKUP_KEEP,
     backup_max_days=None,
-    preflight_strict=False
+    preflight_strict=True
 ):
     start_cycle(section)
 
@@ -1706,6 +1752,7 @@ def write_cycle(
             reference_style=reference_style,
             similarity_threshold=similarity_threshold,
             conflict_threshold=conflict_threshold,
+            allow_conflicts=allow_conflicts,
             backup_keep=backup_keep,
             backup_max_days=backup_max_days
         )
@@ -1811,6 +1858,182 @@ def backup_project_state(backup_dir="backups"):
     print(f"✅ Full project snapshot created at: {snapshot_dir}")
     return snapshot_dir
 
+
+def list_snapshot_backups(backup_dir="backups"):
+    root = backup_dir
+    if not os.path.exists(root):
+        return []
+    dirs = [d for d in glob.glob(os.path.join(root, "snapshot_*")) if os.path.isdir(d)]
+    dirs.sort(key=lambda p: os.path.getmtime(p), reverse=True)
+    return dirs
+
+
+def restore_project_snapshot(snapshot_dir):
+    if not snapshot_dir or not os.path.exists(snapshot_dir):
+        return {"restored": False, "reason": "snapshot_not_found", "snapshot_dir": snapshot_dir}
+
+    restored_files = []
+
+    # Restore state files.
+    for _, filename in STATE_FILES.items():
+        src = os.path.join(snapshot_dir, filename)
+        if os.path.exists(src):
+            shutil.copy2(src, filename)
+            restored_files.append(filename)
+
+    # Restore manuscripts.
+    src_manuscripts = os.path.join(snapshot_dir, "manuscripts")
+    if os.path.exists(src_manuscripts):
+        os.makedirs(DEFAULT_MANUSCRIPT_DIR, exist_ok=True)
+        for src in glob.glob(os.path.join(src_manuscripts, "*")):
+            dst = os.path.join(DEFAULT_MANUSCRIPT_DIR, os.path.basename(src))
+            shutil.copy2(src, dst)
+            restored_files.append(dst)
+
+    # Restore section memory.
+    src_memory = os.path.join(snapshot_dir, "section_memory")
+    if os.path.exists(src_memory):
+        os.makedirs("section_memory", exist_ok=True)
+        for src in glob.glob(os.path.join(src_memory, "*")):
+            dst = os.path.join("section_memory", os.path.basename(src))
+            shutil.copy2(src, dst)
+            restored_files.append(dst)
+
+    return {
+        "restored": True,
+        "snapshot_dir": snapshot_dir,
+        "restored_files_count": len(restored_files),
+        "restored_files": restored_files,
+    }
+
+
+def rollback_state(target="snapshot", backup_dir="backups", snapshot_dir=None):
+    """Rollback project state from latest snapshot or literature sync backup."""
+    if target == "snapshot":
+        chosen = snapshot_dir
+        if not chosen:
+            snapshots = list_snapshot_backups(backup_dir=backup_dir)
+            chosen = snapshots[0] if snapshots else None
+        result = restore_project_snapshot(chosen)
+        result["target"] = "snapshot"
+        return result
+
+    if target == "literature_sync":
+        lit_root = os.path.join(backup_dir, "literature_sync")
+        candidates = [d for d in glob.glob(os.path.join(lit_root, "lit_sync_*")) if os.path.isdir(d)]
+        candidates.sort(key=lambda p: os.path.getmtime(p), reverse=True)
+        chosen = snapshot_dir or (candidates[0] if candidates else None)
+        ok = restore_literature_sync_backup(chosen, index_file=STATE_FILES["literature_index"])
+        return {
+            "target": "literature_sync",
+            "restored": bool(ok),
+            "backup_dir": chosen,
+        }
+
+    return {"restored": False, "reason": f"unknown rollback target: {target}"}
+
+
+def word_count(section=None, include_references=False):
+    payload = calculate_word_counts(exclude_references=(not include_references), section=section)
+    if section:
+        payload["section_filter"] = section
+    print(json.dumps(payload, ensure_ascii=False))
+
+
+def count_index_entries(payload):
+    if isinstance(payload, list):
+        return len(payload)
+    if isinstance(payload, dict):
+        for key in ("references", "items", "entries", "data"):
+            value = payload.get(key)
+            if isinstance(value, list):
+                return len(value)
+        return len(payload)
+    return 0
+
+
+def stats(section=None, include_history=False, backup_dir="backups"):
+    """Project dashboard stats for /stats command."""
+    now = datetime.now().isoformat(timespec="seconds")
+
+    wp = {}
+    if os.path.exists(STATE_FILES["writing_progress"]):
+        try:
+            data = read_json_file(STATE_FILES["writing_progress"])
+            if isinstance(data, dict):
+                wp = data
+        except Exception:
+            wp = {}
+
+    gate = read_gate_state()
+
+    lit_count = 0
+    if os.path.exists(STATE_FILES["literature_index"]):
+        try:
+            lit_count = count_index_entries(read_json_file(STATE_FILES["literature_index"]))
+        except Exception:
+            lit_count = 0
+
+    fig_count = 0
+    if os.path.exists(STATE_FILES["figures_database"]):
+        try:
+            fig_count = count_index_entries(read_json_file(STATE_FILES["figures_database"]))
+        except Exception:
+            fig_count = 0
+
+    si_count = 0
+    if os.path.exists(STATE_FILES["si_database"]):
+        try:
+            si_count = count_index_entries(read_json_file(STATE_FILES["si_database"]))
+        except Exception:
+            si_count = 0
+
+    md_files = sorted(glob.glob(os.path.join(DEFAULT_MANUSCRIPT_DIR, "*.md")))
+    docx_files = sorted(glob.glob(os.path.join(DEFAULT_MANUSCRIPT_DIR, "*.docx")))
+    wc = calculate_word_counts(exclude_references=True, section=section)
+
+    snapshots = list_snapshot_backups(backup_dir=backup_dir)
+    lit_sync_dirs = [d for d in glob.glob(os.path.join(backup_dir, "literature_sync", "lit_sync_*")) if os.path.isdir(d)]
+
+    payload = {
+        "timestamp": now,
+        "section_filter": section,
+        "writing_progress": {
+            "last_section": wp.get("last_section"),
+            "last_updated": wp.get("last_updated"),
+            "status": wp.get("status"),
+        },
+        "word_count": wc,
+        "literature_index_count": lit_count,
+        "figures_index_count": fig_count,
+        "si_index_count": si_count,
+        "manuscripts": {
+            "md_files": len(md_files),
+            "docx_files": len(docx_files),
+        },
+        "gate": {
+            "section": gate.get("section"),
+            "prewrite_ready": gate.get("prewrite_ready"),
+            "completion_ready": gate.get("completion_ready"),
+            "preflight_ok": gate.get("preflight_ok"),
+            "last_preflight_origin": gate.get("last_preflight_origin"),
+            "last_load_origin": gate.get("last_load_origin"),
+            "last_postwrite_ts": gate.get("last_postwrite_ts"),
+        },
+        "backups": {
+            "snapshot_count": len(snapshots),
+            "latest_snapshot": snapshots[0] if snapshots else None,
+            "literature_sync_count": len(lit_sync_dirs),
+        },
+    }
+    if include_history:
+        history = wp.get("update_history", [])
+        if not isinstance(history, list):
+            history = []
+        payload["writing_progress"]["recent_history"] = history[-10:]
+
+    print(json.dumps(payload, ensure_ascii=False))
+
 def main():
     parser = argparse.ArgumentParser(description="Manage state files for Article Writing Skill")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -1845,6 +2068,7 @@ def main():
     postwrite_parser.add_argument("--reference-style", choices=["vancouver", "nature"], default=DEFAULT_REFERENCE_STYLE, help="References rebuild style")
     postwrite_parser.add_argument("--similarity-threshold", type=float, default=DEFAULT_DEDUP_SIMILARITY, help="Dedup fuzzy-title similarity threshold")
     postwrite_parser.add_argument("--conflict-threshold", type=float, default=DEFAULT_DEDUP_CONFLICT, help="Dedup conflict warning threshold")
+    postwrite_parser.add_argument("--allow-conflicts", action="store_true", help="Allow apply even when dedup conflicts are detected")
     postwrite_parser.add_argument("--backup-keep", type=int, default=DEFAULT_BACKUP_KEEP, help="How many literature_sync backups to keep")
     postwrite_parser.add_argument("--backup-max-days", type=int, help="Optional backup retention in days")
     postwrite_parser.add_argument("--no-rewrite-manuscripts", action="store_true", help="Do not rewrite manuscript [n] citations when syncing literature")
@@ -1860,6 +2084,7 @@ def main():
     sync_lit_parser.add_argument("--reference-style", choices=["vancouver", "nature"], default=DEFAULT_REFERENCE_STYLE, help="References rebuild style")
     sync_lit_parser.add_argument("--similarity-threshold", type=float, default=DEFAULT_DEDUP_SIMILARITY, help="Dedup fuzzy-title similarity threshold")
     sync_lit_parser.add_argument("--conflict-threshold", type=float, default=DEFAULT_DEDUP_CONFLICT, help="Dedup conflict warning threshold")
+    sync_lit_parser.add_argument("--allow-conflicts", action="store_true", help="Allow apply even when dedup conflicts are detected")
     sync_lit_parser.add_argument("--backup-keep", type=int, default=DEFAULT_BACKUP_KEEP, help="How many literature_sync backups to keep")
     sync_lit_parser.add_argument("--backup-max-days", type=int, help="Optional backup retention in days")
     sync_lit_parser.add_argument("--no-rewrite-manuscripts", action="store_true", help="Do not rewrite manuscript [n] citations")
@@ -1883,10 +2108,12 @@ def main():
     cycle_parser.add_argument("--sync-literature", action="store_true", help="Run postwrite sync-literature when --finalize")
     cycle_parser.add_argument("--sync-apply", action="store_true", help="Apply sync changes when --finalize --sync-literature")
     cycle_parser.add_argument("--strict-references", action="store_true", help="Strictly rebuild References/参考文献")
-    cycle_parser.add_argument("--preflight-strict", action="store_true", help="Run preflight in strict mode")
+    cycle_parser.add_argument("--preflight-strict", action="store_true", help="Run preflight in strict mode (default true)")
+    cycle_parser.add_argument("--preflight-lenient", action="store_true", help="Override default strict preflight")
     cycle_parser.add_argument("--reference-style", choices=["vancouver", "nature"], default=DEFAULT_REFERENCE_STYLE, help="References rebuild style")
     cycle_parser.add_argument("--similarity-threshold", type=float, default=DEFAULT_DEDUP_SIMILARITY, help="Dedup fuzzy-title similarity threshold")
     cycle_parser.add_argument("--conflict-threshold", type=float, default=DEFAULT_DEDUP_CONFLICT, help="Dedup conflict warning threshold")
+    cycle_parser.add_argument("--allow-conflicts", action="store_true", help="Allow apply even when dedup conflicts are detected")
     cycle_parser.add_argument("--backup-keep", type=int, default=DEFAULT_BACKUP_KEEP, help="How many literature_sync backups to keep")
     cycle_parser.add_argument("--backup-max-days", type=int, help="Optional backup retention in days")
     cycle_parser.add_argument("--rewrite-docx", action="store_true", help="Also rewrite docx citation markers")
@@ -1894,6 +2121,23 @@ def main():
 
     # Snapshot command
     subparsers.add_parser("snapshot", help="Create a full project backup")
+
+    # Rollback command
+    rollback_parser = subparsers.add_parser("rollback", help="Rollback from snapshot or literature-sync backup")
+    rollback_parser.add_argument("--target", choices=["snapshot", "literature_sync"], default="snapshot", help="Rollback target")
+    rollback_parser.add_argument("--backup-dir", default="backups", help="Backup root directory")
+    rollback_parser.add_argument("--snapshot-dir", help="Specific backup directory to restore")
+
+    # Word count command
+    word_count_parser = subparsers.add_parser("word-count", help="Count manuscript words")
+    word_count_parser.add_argument("--section", help="Optional section id filter, e.g. 'results_3.1'")
+    word_count_parser.add_argument("--include-references", action="store_true", help="Count references section too")
+
+    # Stats command
+    stats_parser = subparsers.add_parser("stats", help="Show project writing dashboard")
+    stats_parser.add_argument("--section", help="Optional section id filter for word count")
+    stats_parser.add_argument("--include-history", action="store_true", help="Include last 10 history records")
+    stats_parser.add_argument("--backup-dir", default="backups", help="Backup root directory")
 
     args = parser.parse_args()
 
@@ -1928,6 +2172,7 @@ def main():
             reference_style=args.reference_style,
             similarity_threshold=args.similarity_threshold,
             conflict_threshold=args.conflict_threshold,
+            allow_conflicts=args.allow_conflicts,
             backup_keep=max(1, args.backup_keep),
             backup_max_days=args.backup_max_days
         )
@@ -1943,6 +2188,7 @@ def main():
             reference_style=args.reference_style,
             similarity_threshold=args.similarity_threshold,
             conflict_threshold=args.conflict_threshold,
+            allow_conflicts=args.allow_conflicts,
             backup_keep=max(1, args.backup_keep),
             backup_max_days=args.backup_max_days
         )
@@ -1965,14 +2211,26 @@ def main():
             reference_style=args.reference_style,
             similarity_threshold=args.similarity_threshold,
             conflict_threshold=args.conflict_threshold,
+            allow_conflicts=args.allow_conflicts,
             backup_keep=max(1, args.backup_keep),
             backup_max_days=args.backup_max_days,
-            preflight_strict=args.preflight_strict,
+            preflight_strict=(not args.preflight_lenient),
             rewrite_docx=args.rewrite_docx,
             no_backup=args.no_backup
         )
     elif args.command == "snapshot":
         backup_project_state()
+    elif args.command == "rollback":
+        result = rollback_state(
+            target=args.target,
+            backup_dir=args.backup_dir,
+            snapshot_dir=args.snapshot_dir
+        )
+        print(json.dumps(result, ensure_ascii=False))
+    elif args.command == "word-count":
+        word_count(section=args.section, include_references=args.include_references)
+    elif args.command == "stats":
+        stats(section=args.section, include_history=args.include_history, backup_dir=args.backup_dir)
 
 if __name__ == "__main__":
     main()
