@@ -2,7 +2,7 @@
 name: brainstorming
 description: "You MUST use this before any creative work - creating features, building components, adding functionality, or modifying behavior. Explores user intent, requirements and design before implementation."
 
-github_hash: a98c5dfc9de0df5318f4980d91d24780a566ee60
+github_hash: e16d611eee14ac4c3253b4bf4c55a98d905c2e64
 updated_at: 2026-01-27T17:06:55.663346
 github_url: https://github.com/obra/superpowers
 ---

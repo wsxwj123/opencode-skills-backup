@@ -2,7 +2,7 @@
 name: claude-mem
 description: Persistent memory compression system for Claude Code. Automatically captures tool usage, generates semantic summaries, and provides search tools for querying project history across sessions.
 github_url: https://github.com/thedotmack/claude-mem
-github_hash: 79b3a61ac86c1de4e94170be7673aba48f0552eb
+github_hash: 685d54f2cb898153bcfea1da5185046a59ff1731
 version: 9.0.12
 created_at: 2026-02-04T00:00:00Z
 entry_point: scripts/run.sh

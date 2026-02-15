@@ -1,207 +1,101 @@
-# 🚀 Sci2Doc 快速入门指南
+# Sci2Doc Quick Start
 
-> 5 分钟了解如何将 SCI 论文扩写为 50,000 字博士论文
+> 用最短流程完成：初始化 -> 原子化写作 -> 章节自检 -> 全文合并
 
----
-
-## 1️⃣ 安装依赖（首次使用）
+## 1. 安装依赖
 
 ```bash
-# 安装 Python 库
 pip3 install python-docx
-
-# 验证安装
-python3 -c "import docx; print('✅ 依赖已安装')"
+pip3 install docxcompose
 ```
 
----
+说明：第二行用于高保真 docx 合并，可选。
 
-## 2️⃣ 启动技能
+## 2. 初始化项目
 
-在 OpenCode 中输入：
-
-```
-使用 sci2doc 技能
-```
-
-或直接：
-
-```
-sci2doc 新建
-```
-
----
-
-## 3️⃣ 提供信息
-
-系统会询问以下信息：
-
-```
-1. 论文中文题目（≤25字）
-2. 论文英文题目
-3. 作者姓名
-4. 学号
-5. 指导教师姓名
-6. 学科专业（如：药剂学）
-7. 文件保存路径（如：/Users/你的用户名/Documents/thesis/）
-8. SCI 论文文件路径（PDF 或 Word）
-```
-
-**💡 提示**：准备好这些信息可以节省时间。
-
----
-
-## 4️⃣ 自动生成
-
-技能会自动完成：
-
-```
-✅ 分析 SCI 论文（提取核心内容）
-✅ 生成详细大纲（精确到三级标题）
-✅ 逐章生成内容（每章约 10,000 字）
-✅ 自动检查字数（不达标立即扩展）
-✅ 应用格式样式（中南大学标准）
-✅ 合并所有章节（生成完整论文）
-```
-
----
-
-## 5️⃣ 常用命令
-
-| 命令 | 说明 |
-|------|------|
-| `继续` | 断点续写 |
-| `状态` | 查看进度 |
-| `报告` | 质量报告 |
-| `修改第X章` | 重新生成某章 |
-
----
-
-## 📊 预期产出
-
-### 文件结构
-```
-你的保存路径/
-├── 第1章_绪论.docx (10,000字)
-├── 第2章_文献综述.docx (10,000字)
-├── 第3章_材料与方法.docx (10,000字)
-├── 第4章_结果与分析.docx (12,000字)
-├── 第5章_讨论.docx (10,000字)
-├── 第6章_结论与展望.docx (8,000字)
-├── 综述.docx (5,000字)
-└── 完整博士论文.docx (60,000+字)
-```
-
-### 质量标准
-```
-✅ 正文 ≥50,000 字
-✅ 综述 ≥5,000 字
-✅ 参考文献 ≥80 篇
-✅ 格式合规率 ≥95%
-✅ 段落式写作 100%
-```
-
----
-
-## ⏱️ 时间预估
-
-```
-初始化:        30 分钟
-第1-6章:       6-8 小时
-综述+参考:     1-2 小时
-合并+检查:     30 分钟
-─────────────────────────
-总计:          8-12 小时
-```
-
----
-
-## 💡 重要提示
-
-### ✅ 优势
-- **自动扩展**：字数不足自动重写
-- **断点续写**：随时中断，随时恢复
-- **格式自动**：自动应用中南大学标准
-- **质量保证**：三重检查机制
-
-### ⚠️ 注意事项
-- **准备 SCI 论文**：PDF 或 Word 格式
-- **指定保存路径**：建议使用绝对路径
-- **每章确认**：确保内容符合预期
-- **图表手动**：使用占位符，后期替换
-
----
-
-## 🆘 遇到问题？
-
-### 检查清单
 ```bash
-# 1. Python 版本（需 3.8+）
-python3 --version
-
-# 2. 依赖安装
-pip3 show python-docx
-
-# 3. 脚本权限
-ls -l /Users/wsxwj/.config/opencode/skills/sci2doc/scripts/
-
-# 4. 状态文件
-cat project_state.json
+python3 scripts/state_manager.py --project-root "${save_path}" init \
+  --title "论文题目" --author "作者" --major "专业"
 ```
 
-### 常见问题
-| 问题 | 解决方案 |
-|------|----------|
-| 字数不足 | 自动触发扩展重写 |
-| 格式不规范 | 运行 check_quality.py |
-| 断点恢复失败 | 检查 project_state.json |
-| 脚本运行失败 | 检查 python-docx 是否安装 |
+## 3. 确认并设置目标配置
 
----
-
-## 🎯 快速示例
-
-```
-用户：sci2doc 新建
-
-系统：请提供论文信息...
-
-用户：[提供信息]
-
-系统：✅ 分析 SCI 论文中...
-     ✅ 生成大纲...
-     ✅ 开始生成第 1 章...
-
-系统：✅ 第 1 章《绪论》已完成
-     📊 本章字数：10,234 字
-     📊 累计进度：20.5%
-     
-     请确认是否继续？
-
-用户：继续
-
-[重复 6 次，完成所有章节]
-
-系统：🎉 完整论文已生成！
-     📄 文件：完整博士论文.docx
-     📊 正文：52,345 字
-     📊 综述：5,678 字
+```bash
+python3 scripts/state_manager.py --project-root "${save_path}" profile --show
+python3 scripts/state_manager.py --project-root "${save_path}" profile \
+  --body-target 80000 --abstract-min 1500 --abstract-max 2500 \
+  --references-min 80 --min-chapters 5 \
+  --chapter-target 1:12000 --chapter-target 2:17000
 ```
 
----
+## 4. 写前门禁
 
-## 📞 技术支持
+```bash
+python3 scripts/state_manager.py --project-root "${save_path}" \
+  write-cycle --chapter 2 --token-budget 6000 --tail-lines 80 --json-summary
+```
 
-**技能位置**：`/Users/wsxwj/.config/opencode/skills/sci2doc/`
+## 5. 原子化小节
 
-**核心文件**：`SKILL.md`
+目录约定：`${save_path}/atomic_md/第2章/`
 
-**帮助文档**：`README.md`
+命名约定：`2.1_引言.md`、`2.2_实验A_材料方法.md` ...
 
-**验证清单**：`VERIFICATION.md`
+校验编号：
 
----
+```bash
+python3 scripts/atomic_md_workflow.py --project-root "${save_path}" validate --chapter 2
+python3 scripts/atomic_md_workflow.py --project-root "${save_path}" \
+  validate --chapter 2 --enforce-research-structure
+python3 scripts/atomic_md_workflow.py --project-root "${save_path}" validate-experiment-map --chapter 2
+```
 
-**🎓 祝您顺利完成博士论文！**
+## 6. 小结完成即快照
 
-**准备好了吗？输入 `sci2doc 新建` 开始吧！🚀**
+```bash
+python3 scripts/atomic_md_workflow.py --project-root "${save_path}" \
+  section-snapshot --chapter 2 --section 2.3
+```
+
+## 7. 合并章节并自检
+
+```bash
+python3 scripts/atomic_md_workflow.py --project-root "${save_path}" merge --chapter 2 --to-docx
+python3 scripts/atomic_md_workflow.py --project-root "${save_path}" \
+  self-check --docx "${save_path}/02_分章节文档/第2章_自动合并.docx"
+```
+
+提示：
+- 配置了 `chapter_targets` 时，章节自检按章节目标判断。
+- 参考文献下限在全文总检阶段检查，不在章节自检阶段卡住。
+
+## 8. 章节收口
+
+```bash
+python3 scripts/state_manager.py --project-root "${save_path}" \
+  write-cycle --chapter 2 --finalize --summary "第2章完成并通过自检" --snapshot
+```
+
+## 9. 合并全文
+
+```bash
+python3 scripts/atomic_md_workflow.py --project-root "${save_path}" merge-full --to-docx
+```
+
+## 10. 全文总检
+
+```bash
+python3 scripts/state_manager.py --project-root "${save_path}" word-count
+python3 scripts/check_quality.py "${save_path}/03_合并文档/完整博士论文.docx" \
+  --output json --enforce-full-structure
+```
+
+## 硬规则提醒
+
+- 正文 >= 80,000 中文字
+- 各章字数必须先和用户协商后写入 profile
+- 中文摘要 1500-2500
+- 参考文献统一放全书末尾
+- 综述由用户另写，不纳入本技能正文考核
+- 研究章结构固定：引言/材料与方法/结果与讨论/实验结论/小结
+- 一个实验至少一个独立图或表

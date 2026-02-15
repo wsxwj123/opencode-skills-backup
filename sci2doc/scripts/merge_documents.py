@@ -1,205 +1,127 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-博士论文文档合并脚本
-功能：将分章节的docx文件按顺序合并为完整论文
-依赖：pip install python-docx
-版本：v2.0
-作者：AI Assistant
-更新：2026-01-27
+兼容入口：合并博士论文文档。
+
+说明：
+- 该脚本保留旧命令名 `merge_documents.py`，内部统一复用 `merge_chapters.py`。
+- 默认目录采用当前项目布局：
+  - 输入章节：02_分章节文档
+  - 输出文档：03_合并文档/完整博士论文.docx
+  - 前置部分（可选）：01_前置部分/{封面,中文摘要,英文摘要}.docx
 """
 
-import os
+import argparse
 import sys
 from pathlib import Path
 
 try:
+    from merge_chapters import (
+        add_header_footer,
+        generate_toc,
+        merge_docx_files,
+        resolve_merge_order,
+    )
     from docx import Document
-    from docx.oxml.xmlchemy import OxmlElement
-    from docx.oxml.ns import qn
-except ImportError:
-    print("❌ 错误：未安装 python-docx 库")
-    print("请执行：pip3 install python-docx")
+except Exception as e:  # pragma: no cover
+    print(f"❌ 依赖加载失败：{e}")
+    print("请检查 python-docx 是否已安装，并确保 merge_chapters.py 存在")
     sys.exit(1)
 
 
-def add_page_break(doc):
-    """添加分页符"""
-    doc.add_page_break()
+def _resolve(base_root, value):
+    if not value:
+        return None
+    p = Path(value)
+    if p.is_absolute():
+        return str(p)
+    return str((base_root / p).resolve())
 
 
-def merge_documents(file_list, output_file):
-    """
-    合并多个Word文档
-    
-    Args:
-        file_list: 文件路径列表（按合并顺序）
-        output_file: 输出文件路径
-    """
-    print(f"\n开始合并 {len(file_list)} 个文档...\n")
-    
-    # 创建主文档（使用第一个文件作为基础）
-    merged_doc = Document(file_list[0])
-    print(f"✅ 已加载基础文档：{os.path.basename(file_list[0])}")
-    
-    # 遍历其余文档并追加内容
-    for file_path in file_list[1:]:
-        if not os.path.exists(file_path):
-            print(f"⚠️ 文件不存在，跳过：{os.path.basename(file_path)}")
-            continue
-        
-        try:
-            # 读取待合并文档
-            sub_doc = Document(file_path)
-            
-            # 添加分页符
-            add_page_break(merged_doc)
-            
-            # 复制所有段落
-            for para in sub_doc.paragraphs:
-                new_para = merged_doc.add_paragraph(para.text, style=para.style)
-                
-                # 复制段落格式
-                if para.paragraph_format:
-                    new_para.paragraph_format.alignment = para.paragraph_format.alignment
-                    new_para.paragraph_format.left_indent = para.paragraph_format.left_indent
-                    new_para.paragraph_format.right_indent = para.paragraph_format.right_indent
-                    new_para.paragraph_format.first_line_indent = para.paragraph_format.first_line_indent
-                    new_para.paragraph_format.space_before = para.paragraph_format.space_before
-                    new_para.paragraph_format.space_after = para.paragraph_format.space_after
-                    new_para.paragraph_format.line_spacing = para.paragraph_format.line_spacing
-            
-            # 复制所有表格
-            for table in sub_doc.tables:
-                new_table = merged_doc.add_table(rows=len(table.rows), cols=len(table.columns))
-                for i, row in enumerate(table.rows):
-                    for j, cell in enumerate(row.cells):
-                        new_table.rows[i].cells[j].text = cell.text
-            
-            print(f"✅ 已合并：{os.path.basename(file_path)}")
-            
-        except Exception as e:
-            print(f"❌ 合并失败 {os.path.basename(file_path)}：{e}")
-            continue
-    
-    # 保存合并后的文档
-    try:
-        merged_doc.save(output_file)
-        print(f"\n🎉 合并完成！")
-        print(f"   输出文件：{output_file}")
-        print(f"   📊 总计合并 {len(file_list)} 个文档")
-        
-        # 统计文件大小
-        file_size = os.path.getsize(output_file) / 1024 / 1024  # MB
-        print(f"   📦 文件大小：{file_size:.2f} MB")
-        
-        return True
-        
-    except Exception as e:
-        print(f"\n❌ 保存失败：{e}")
-        return False
+def _default_front_matter(project_root):
+    front = project_root / "01_前置部分"
+    cover = front / "封面.docx"
+    abstract = front / "中文摘要.docx"
+    abstract_en = front / "英文摘要.docx"
+    return {
+        "cover": str(cover) if cover.exists() else None,
+        "abstract": str(abstract) if abstract.exists() else None,
+        "abstract_en": str(abstract_en) if abstract_en.exists() else None,
+    }
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="兼容入口：调用 merge_chapters.py 合并文档")
+    parser.add_argument("--project-root", default=".", help="项目根目录")
+    parser.add_argument("--input-dir", help="章节目录，默认 <project_root>/02_分章节文档")
+    parser.add_argument("--output", help="输出路径，默认 <project_root>/03_合并文档/完整博士论文.docx")
+    parser.add_argument("--cover", help="封面文件路径（可选）")
+    parser.add_argument("--abstract", help="中文摘要文件路径（可选）")
+    parser.add_argument("--abstract-en", help="英文摘要文件路径（可选）")
+    parser.add_argument("--title", default="论文标题", help="论文标题（用于页眉）")
+    parser.add_argument("--add-toc", action="store_true", help="合并后生成目录")
+    parser.add_argument("--add-header", action="store_true", help="合并后添加页眉页脚")
+    parser.add_argument("--require-high-fidelity", action="store_true", help="要求使用 docxcompose 高保真合并")
+    return parser.parse_args()
 
 
 def main():
-    """主函数：自动检测并合并所有章节文件"""
-    
-    # 项目根目录（脚本所在目录的上级目录）
-    script_dir = Path(__file__).parent.absolute()
-    project_root = script_dir.parent
-    
-    print("=" * 70)
-    print("博士论文文档合并工具")
-    print("=" * 70)
-    print(f"📁 项目根目录：{project_root}\n")
-    
-    # 定义合并顺序（按论文结构）
-    file_order = [
-        # 前置部分
-        "01_前置部分/封面.docx",
-        "01_前置部分/扉页.docx",
-        "01_前置部分/原创性声明.docx",
-        "01_前置部分/中文摘要.docx",
-        "01_前置部分/英文摘要.docx",
-        "01_前置部分/目录.docx",
-        "01_前置部分/英文缩略词说明.docx",
-        "01_前置部分/符号说明.docx",  # 可选
-        
-        # 正文章节（会自动检测）
-        # ...
-        
-        # 后置部分
-        "03_后置部分/参考文献.docx",
-        "03_后置部分/综述.docx",
-        "03_后置部分/附录.docx",  # 可选
-        "03_后置部分/攻读学位期间成果.docx",
-        "03_后置部分/致谢.docx",
-    ]
-    
-    # 构建完整路径列表
-    full_paths = []
-    
-    # 添加前置部分（跳过不存在的可选文件）
-    print("📋 检查前置部分...")
-    for rel_path in file_order[:8]:
-        full_path = project_root / rel_path
-        if full_path.exists():
-            full_paths.append(str(full_path))
-            print(f"   ✅ {os.path.basename(rel_path)}")
-        elif "符号说明" not in rel_path:
-            print(f"   ⚠️ 缺失：{os.path.basename(rel_path)}")
-    
-    # 自动检测正文章节（按章节编号排序）
-    print("\n📋 检查正文章节...")
-    chapter_dir = project_root / "02_正文章节"
-    if chapter_dir.exists():
-        chapter_files = sorted([f for f in os.listdir(chapter_dir) 
-                               if f.endswith('.docx') and f.startswith('第')])
-        
-        if chapter_files:
-            for chapter_file in chapter_files:
-                full_paths.append(str(chapter_dir / chapter_file))
-                print(f"   📄 {chapter_file}")
-        else:
-            print("   ⚠️ 未找到章节文件")
-    else:
-        print(f"   ❌ 正文章节目录不存在：{chapter_dir}")
+    args = parse_args()
+    project_root = Path(args.project_root).resolve()
+
+    print("⚠️  merge_documents.py 已切换为兼容包装器，请优先使用 merge_chapters.py")
+
+    input_dir = Path(
+        _resolve(project_root, args.input_dir) if args.input_dir else project_root / "02_分章节文档"
+    )
+    output_path = Path(
+        _resolve(project_root, args.output)
+        if args.output
+        else project_root / "03_合并文档" / "完整博士论文.docx"
+    )
+
+    if not input_dir.exists():
+        print(f"❌ 章节目录不存在：{input_dir}")
         sys.exit(1)
-    
-    # 添加后置部分
-    print("\n📋 检查后置部分...")
-    for rel_path in file_order[8:]:
-        full_path = project_root / rel_path
-        if full_path.exists():
-            full_paths.append(str(full_path))
-            print(f"   ✅ {os.path.basename(rel_path)}")
-        elif "附录" not in rel_path:
-            print(f"   ⚠️ 缺失：{os.path.basename(rel_path)}")
-    
-    # 检查是否有足够文件
-    if len(full_paths) < 2:
-        print("\n❌ 至少需要2个文件才能进行合并")
+
+    defaults = _default_front_matter(project_root)
+    cover = _resolve(project_root, args.cover) if args.cover else defaults["cover"]
+    abstract = _resolve(project_root, args.abstract) if args.abstract else defaults["abstract"]
+    abstract_en = _resolve(project_root, args.abstract_en) if args.abstract_en else defaults["abstract_en"]
+
+    file_list = resolve_merge_order(
+        input_dir=str(input_dir),
+        cover=cover,
+        abstract=abstract,
+        abstract_en=abstract_en,
+    )
+
+    if not file_list:
+        print(f"❌ 未找到可合并 docx 文件：{input_dir}")
         sys.exit(1)
-    
-    # 输出文件路径
-    output_file = str(project_root / "完整版_最新.docx")
-    
-    # 执行合并
-    print("\n" + "=" * 70)
-    success = merge_documents(full_paths, output_file)
-    print("=" * 70)
-    
-    if success:
-        print("\n✅ 合并成功！")
-        print(f"\n📄 完整版文档：{output_file}")
-        print("\n后续步骤：")
-        print("1. 用Word打开完整版文档检查格式")
-        print("2. 如有占位标识，替换为实际图片")
-        print("3. 更新目录（右键目录→更新域）")
-        print("4. 检查页眉页脚和页码")
-        print("5. 保存最终版本")
-    else:
-        print("\n❌ 合并失败，请检查错误信息")
+
+    print(f"📁 待合并文件数：{len(file_list)}")
+    result = merge_docx_files(
+        file_list,
+        str(output_path),
+        require_high_fidelity=args.require_high_fidelity,
+    )
+
+    if not result.get("success"):
+        print(f"❌ 合并失败：{result.get('error')}")
         sys.exit(1)
+
+    if args.add_toc or args.add_header:
+        doc = Document(str(output_path))
+        if args.add_toc:
+            generate_toc(doc)
+        if args.add_header:
+            add_header_footer(doc, args.title)
+        doc.save(str(output_path))
+
+    print("✅ 合并完成")
+    print(f"📄 输出文件：{output_path}")
+    print(f"🔧 合并引擎：{result.get('merge_engine', 'unknown')}")
 
 
 if __name__ == "__main__":

@@ -24,6 +24,11 @@ import os
 import re
 import json
 
+try:
+    from docxcompose.composer import Composer
+except ImportError:
+    Composer = None
+
 
 def add_page_break(doc):
     """在文档中添加分页符"""
@@ -38,7 +43,19 @@ def extract_chapter_number(filename):
     return 999  # 未识别的放到最后
 
 
-def merge_docx_files(file_list, output_path):
+def heading_level(style_name):
+    if not style_name:
+        return None
+    m = re.match(r"^(?:Heading|标题)\s*(\d+)$", style_name, flags=re.IGNORECASE)
+    if not m:
+        return None
+    try:
+        return int(m.group(1))
+    except ValueError:
+        return None
+
+
+def merge_docx_files(file_list, output_path, require_high_fidelity=False):
     """
     合并多个 docx 文件
     
@@ -58,7 +75,42 @@ def merge_docx_files(file_list, output_path):
     # 按章节号排序
     file_list_sorted = sorted(file_list, key=lambda x: extract_chapter_number(os.path.basename(x)))
     
-    # 创建主文档（基于第一个文件）
+    # 优先使用高保真合并（docxcompose）
+    if require_high_fidelity and Composer is None:
+        return {
+            "success": False,
+            "error": "high-fidelity merge requires docxcompose; install with 'pip3 install docxcompose'",
+        }
+
+    if Composer is not None:
+        try:
+            master_doc = Document(file_list_sorted[0])
+            composer = Composer(master_doc)
+            for file_path in file_list_sorted[1:]:
+                composer.append(Document(file_path))
+                print(f"✅ 已合并：{os.path.basename(file_path)}")
+
+            output_dir = os.path.dirname(output_path)
+            if output_dir and not os.path.exists(output_dir):
+                os.makedirs(output_dir, exist_ok=True)
+
+            composer.save(output_path)
+            return {
+                "success": True,
+                "output_path": output_path,
+                "merged_files": len(file_list_sorted),
+                "file_list": [os.path.basename(f) for f in file_list_sorted],
+                "merge_engine": "docxcompose",
+            }
+        except Exception as e:
+            if require_high_fidelity:
+                return {
+                    "success": False,
+                    "error": f"high-fidelity merge failed: {str(e)}",
+                }
+            print(f"⚠️  docxcompose 合并失败，将回退简化合并：{str(e)}")
+
+    # 创建主文档（回退：简化复制）
     try:
         master_doc = Document(file_list_sorted[0])
     except Exception as e:
@@ -80,7 +132,10 @@ def merge_docx_files(file_list, output_path):
             for para in chapter_doc.paragraphs:
                 # 创建新段落
                 new_para = master_doc.add_paragraph()
-                new_para.style = para.style
+                try:
+                    new_para.style = para.style.name
+                except Exception:
+                    pass
                 new_para.alignment = para.alignment
                 
                 # 复制段落格式
@@ -131,7 +186,8 @@ def merge_docx_files(file_list, output_path):
             'success': True,
             'output_path': output_path,
             'merged_files': len(file_list_sorted),
-            'file_list': [os.path.basename(f) for f in file_list_sorted]
+            'file_list': [os.path.basename(f) for f in file_list_sorted],
+            'merge_engine': 'fallback'
         }
     except Exception as e:
         return {
@@ -152,8 +208,8 @@ def generate_toc(doc):
     
     # 扫描所有标题
     for para in doc.paragraphs:
-        if para.style.name.startswith('Heading'):
-            level = int(para.style.name.split()[-1])
+        level = heading_level(getattr(para.style, "name", ""))
+        if level is not None:
             toc_entries.append({
                 'text': para.text,
                 'level': level
@@ -216,6 +272,37 @@ def add_header_footer(doc, thesis_title):
     print("✅ 页眉页脚已添加")
 
 
+def resolve_merge_order(input_dir, cover=None, abstract=None, abstract_en=None):
+    """
+    组装最终合并文件顺序：
+    1) 可选前置文件（cover/abstract/abstract_en）
+    2) input_dir 下章节文件（按第X章排序）
+    """
+    ordered = []
+    seen = set()
+    for p in [cover, abstract, abstract_en]:
+        if not p:
+            continue
+        full = p if os.path.isabs(p) else os.path.join(input_dir, p)
+        if os.path.exists(full):
+            if full not in seen:
+                ordered.append(full)
+                seen.add(full)
+        else:
+            print(f"⚠️  前置文件不存在，已跳过：{full}")
+
+    chapters = []
+    for filename in os.listdir(input_dir):
+        if filename.endswith(".docx") and not filename.startswith("~"):
+            chapters.append(os.path.join(input_dir, filename))
+    chapters = sorted(chapters, key=lambda x: extract_chapter_number(os.path.basename(x)))
+    for p in chapters:
+        if p not in seen:
+            ordered.append(p)
+            seen.add(p)
+    return ordered
+
+
 def main():
     """命令行入口"""
     import argparse
@@ -226,6 +313,10 @@ def main():
     parser.add_argument('--title', default='论文标题', help='论文标题（用于页眉）')
     parser.add_argument('--add-toc', action='store_true', help='生成目录')
     parser.add_argument('--add-header', action='store_true', help='添加页眉页脚')
+    parser.add_argument('--cover', help='封面文件（可选，支持绝对路径或相对 input-dir）')
+    parser.add_argument('--abstract', help='中文摘要文件（可选，支持绝对路径或相对 input-dir）')
+    parser.add_argument('--abstract-en', help='英文摘要文件（可选，支持绝对路径或相对 input-dir）')
+    parser.add_argument('--require-high-fidelity', action='store_true', help='要求使用 docxcompose 高保真合并；不可回退')
     
     args = parser.parse_args()
     
@@ -234,11 +325,12 @@ def main():
         print(f"❌ 目录不存在：{args.input_dir}")
         sys.exit(1)
     
-    file_list = []
-    for filename in os.listdir(args.input_dir):
-        if filename.endswith('.docx') and not filename.startswith('~'):
-            file_path = os.path.join(args.input_dir, filename)
-            file_list.append(file_path)
+    file_list = resolve_merge_order(
+        input_dir=args.input_dir,
+        cover=args.cover,
+        abstract=args.abstract,
+        abstract_en=args.abstract_en,
+    )
     
     if not file_list:
         print(f"❌ 目录中没有找到 docx 文件：{args.input_dir}")
@@ -248,7 +340,11 @@ def main():
     print(f"🔄 开始合并...")
     
     # 执行合并
-    result = merge_docx_files(file_list, args.output)
+    result = merge_docx_files(
+        file_list,
+        args.output,
+        require_high_fidelity=args.require_high_fidelity,
+    )
     
     if not result['success']:
         print(f"❌ 合并失败：{result['error']}")

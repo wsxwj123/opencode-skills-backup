@@ -2,7 +2,7 @@
 name: langsmith-fetch
 description: Debug LangChain and LangGraph agents by fetching execution traces from LangSmith Studio. Use when debugging agent behavior, investigating errors, analyzing tool calls, checking memory operations, or examining agent performance. Automatically fetches recent traces and analyzes execution patterns. Requires langsmith-fetch CLI installed.
 
-github_hash: e762a98bd93f34c22926c7cf6ae7c9bb59ea9d5b
+github_hash: 99e2a29515451cce8ed324b551a78864a70c27d4
 updated_at: 2026-01-27T17:06:55.677947
 github_url: https://github.com/ComposioHQ/awesome-claude-skills
 ---

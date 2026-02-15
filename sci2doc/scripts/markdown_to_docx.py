@@ -60,23 +60,37 @@ def parse_markdown_line(line):
         return ('paragraph', line.strip(), 0)
 
 
+def set_run_font(run, latin, east_asia, size_pt, bold=None):
+    """
+    同时设置拉丁字体和东亚字体，避免 Word 回退到意外字体。
+    """
+    run.font.name = latin
+    rpr = run._element.get_or_add_rPr()
+    rfonts = rpr.get_or_add_rFonts()
+    rfonts.set(qn('w:eastAsia'), east_asia)
+    run.font.size = Pt(size_pt)
+    if bold is not None:
+        run.font.bold = bold
+
+
 def apply_csu_heading1_style(paragraph):
     """应用一级标题样式"""
+    paragraph.style = "Heading 1"
     paragraph.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
     paragraph.paragraph_format.space_before = Pt(18)
     paragraph.paragraph_format.space_after = Pt(12)
     paragraph.paragraph_format.line_spacing_rule = WD_LINE_SPACING.EXACTLY
     paragraph.paragraph_format.line_spacing = Pt(20)
+    paragraph.paragraph_format.first_line_indent = Cm(0)
     
     for run in paragraph.runs:
-        run.font.name = 'SimHei'
-        run.font.size = Pt(16)
-        run.font.bold = True
+        set_run_font(run, latin='Times New Roman', east_asia='SimHei', size_pt=16, bold=True)
         run.font.color.rgb = RGBColor(0, 0, 0)
 
 
 def apply_csu_heading2_style(paragraph):
     """应用二级标题样式"""
+    paragraph.style = "Heading 2"
     paragraph.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.LEFT
     paragraph.paragraph_format.space_before = Pt(10)
     paragraph.paragraph_format.space_after = Pt(8)
@@ -85,13 +99,12 @@ def apply_csu_heading2_style(paragraph):
     paragraph.paragraph_format.first_line_indent = Cm(0)
     
     for run in paragraph.runs:
-        run.font.name = 'SimSun'
-        run.font.size = Pt(14)
-        run.font.bold = False
+        set_run_font(run, latin='Times New Roman', east_asia='SimSun', size_pt=14, bold=False)
 
 
 def apply_csu_heading3_style(paragraph):
     """应用三级标题样式"""
+    paragraph.style = "Heading 3"
     paragraph.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.LEFT
     paragraph.paragraph_format.space_before = Pt(10)
     paragraph.paragraph_format.space_after = Pt(8)
@@ -100,13 +113,12 @@ def apply_csu_heading3_style(paragraph):
     paragraph.paragraph_format.first_line_indent = Cm(0)
     
     for run in paragraph.runs:
-        run.font.name = 'SimSun'
-        run.font.size = Pt(12)
-        run.font.bold = False
+        set_run_font(run, latin='Times New Roman', east_asia='SimSun', size_pt=12, bold=False)
 
 
 def apply_csu_normal_style(paragraph):
     """应用正文样式"""
+    paragraph.style = "Normal"
     paragraph.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.LEFT
     paragraph.paragraph_format.line_spacing_rule = WD_LINE_SPACING.EXACTLY
     paragraph.paragraph_format.line_spacing = Pt(20)
@@ -115,8 +127,7 @@ def apply_csu_normal_style(paragraph):
     paragraph.paragraph_format.space_after = Pt(0)
     
     for run in paragraph.runs:
-        run.font.name = 'Times New Roman'
-        run.font.size = Pt(12)
+        set_run_font(run, latin='Times New Roman', east_asia='SimSun', size_pt=12, bold=False)
 
 
 def apply_csu_caption_style(paragraph):
@@ -127,8 +138,7 @@ def apply_csu_caption_style(paragraph):
     paragraph.paragraph_format.space_after = Pt(12)
     
     for run in paragraph.runs:
-        run.font.name = 'KaiTi'
-        run.font.size = Pt(10.5)
+        set_run_font(run, latin='Times New Roman', east_asia='KaiTi', size_pt=10.5, bold=False)
 
 
 def markdown_to_docx(md_content, output_path, chapter_num=None):
@@ -163,15 +173,15 @@ def markdown_to_docx(md_content, output_path, chapter_num=None):
                 continue  # 跳过空行，不添加到文档
             
             elif line_type == 'heading1':
-                para = doc.add_paragraph(content)
+                para = doc.add_heading(content, level=1)
                 apply_csu_heading1_style(para)
             
             elif line_type == 'heading2':
-                para = doc.add_paragraph(content)
+                para = doc.add_heading(content, level=2)
                 apply_csu_heading2_style(para)
             
             elif line_type == 'heading3':
-                para = doc.add_paragraph(content)
+                para = doc.add_heading(content, level=3)
                 apply_csu_heading3_style(para)
             
             elif line_type == 'figure' or line_type == 'table':

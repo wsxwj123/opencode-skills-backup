@@ -2,7 +2,7 @@
 name: tailored-resume-generator
 description: Analyzes job descriptions and generates tailored resumes that highlight relevant experience, skills, and achievements to maximize interview chances
 
-github_hash: e762a98bd93f34c22926c7cf6ae7c9bb59ea9d5b
+github_hash: 99e2a29515451cce8ed324b551a78864a70c27d4
 updated_at: 2026-01-27T17:06:55.677168
 github_url: https://github.com/ComposioHQ/awesome-claude-skills
 ---

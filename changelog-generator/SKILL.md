@@ -2,7 +2,7 @@
 name: changelog-generator
 description: Automatically creates user-facing changelogs from git commits by analyzing commit history, categorizing changes, and transforming technical commits into clear, customer-friendly release notes. Turns hours of manual changelog writing into minutes of automated generation.
 
-github_hash: e762a98bd93f34c22926c7cf6ae7c9bb59ea9d5b
+github_hash: 99e2a29515451cce8ed324b551a78864a70c27d4
 updated_at: 2026-01-27T17:06:55.683804
 github_url: https://github.com/ComposioHQ/awesome-claude-skills
 ---

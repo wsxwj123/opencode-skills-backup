@@ -1,217 +1,170 @@
-# Sci2Doc 技能使用指南
+# Sci2Doc 使用说明
 
-## 快速启动
+## 目标与边界
 
-### 1. 环境准备
+- 正文目标：不少于 80,000 中文字符
+- 各章字数：不硬编码，必须按项目材料与用户协商确定
+- 中文摘要：1500-2500 字
+- 结构：独立绪论章 + 多个研究章 + 独立总结章（总章节数 >= 5）
+- 参考文献：全书末尾统一
+- 综述：用户另行撰写，不纳入本技能正文考核
 
-确保已安装必要的 Python 库：
+## 核心脚本
 
-```bash
-pip3 install python-docx
-```
+- `scripts/state_manager.py`
+  - 防失忆、防爆 token、写作门禁、快照/回滚
+- `scripts/atomic_md_workflow.py`
+  - 原子化小节 markdown、编号校验、章节/全文合并、自检、节级快照
+- `scripts/count_words_docx.py`
+  - 字数统计（读取 `thesis_profile.json`）
+- `scripts/check_quality.py`
+  - 质量检查（读取 `thesis_profile.json`）
+- `scripts/merge_chapters.py`
+  - docx 合并（可高保真）
 
-### 2. 启动技能
+## 统一配置
 
-在 OpenCode 中加载技能：
+所有目标参数以 `thesis_profile.json` 为准（`init` 自动生成）。
 
-```
-使用 sci2doc 技能
-```
-
-### 3. 常用命令
-
-| 命令 | 功能 | 示例 |
-|------|------|------|
-| `sci2doc 新建` | 创建新项目 | 开始新的论文生成 |
-| `sci2doc 继续` | 恢复写作 | 断点续写 |
-| `sci2doc 状态` | 查看进度 | 显示当前完成情况 |
-| `sci2doc 报告` | 生成质量报告 | 检查论文质量 |
-| `sci2doc 修改第X章` | 重新生成某章 | 修改第2章 |
-| `sci2doc 帮助` | 显示完整命令列表 | 查看所有命令 |
-
-## 工作流程
-
-### 阶段 1：初始化（约 30 分钟）
-
-1. **信息收集**：提供论文基本信息
-2. **文献分析**：上传 SCI 论文 PDF/Word
-3. **大纲生成**：AI 生成详细章节大纲
-4. **用户确认**：审核并确认大纲
-
-### 阶段 2：逐章生成（约 6-8 小时）
-
-1. **章节写作**：每章约 10,000-12,000 字
-2. **字数核对**：自动统计并确保达标
-3. **用户确认**：每章完成后确认
-4. **进度保存**：实时保存状态
-
-### 阶段 3：后置处理（约 1-2 小时）
-
-1. **生成综述**：独立综述章节（≥5,000字）
-2. **整理参考文献**：≥80 篇
-3. **合并文档**：生成完整论文
-4. **质量检查**：自动质量报告
-
-## 特色功能
-
-### 1. 断点续写
-
-技能会自动保存进度到 `project_state.json`，即使中断也可以随时恢复：
-
-```json
-{
-  "progress": {
-    "status": "writing",
-    "current_chapter_index": 3,
-    "completed_files": ["第1章_绪论.docx", "第2章_文献综述.docx"]
-  }
-}
-```
-
-### 2. 双重持久化
-
-- **OpenCode 知识图谱**：存储项目上下文
-- **本地 JSON 文件**：存储详细状态
-
-### 3. 智能扩展
-
-当字数不足时，AI 会自动：
-- 增加机制深度讨论
-- 补充文献对比分析
-- 添加局限性分析
-- 扩展未来展望
-
-### 4. 格式自动化
-
-- 自动应用中南大学样式
-- 自动生成目录
-- 自动添加页眉页脚
-- 自动检查格式规范
-
-## 脚本工具
-
-所有脚本位于 `scripts/` 目录，可独立运行：
-
-### 1. setup_styles.py
-
-初始化样式模板：
+查看配置：
 
 ```bash
-python3 scripts/setup_styles.py output.docx
+python3 scripts/state_manager.py --project-root "${save_path}" profile --show
 ```
 
-### 2. count_words_docx.py
-
-统计字数：
+更新配置：
 
 ```bash
-python3 scripts/count_words_docx.py thesis.docx --output json
+python3 scripts/state_manager.py --project-root "${save_path}" profile \
+  --body-target 80000 --abstract-min 1500 --abstract-max 2500 \
+  --references-min 80 --min-chapters 5 \
+  --chapter-target 1:12000 --chapter-target 2:17000 --chapter-target 3:17000
 ```
 
-### 3. merge_chapters.py
+## 端到端流程
 
-合并章节：
+### 1. 初始化
+
+```bash
+python3 scripts/state_manager.py --project-root "${save_path}" init \
+  --title "论文中文题目" --author "作者姓名" --major "学科"
+```
+
+### 2. 写前门禁
+
+```bash
+python3 scripts/state_manager.py --project-root "${save_path}" \
+  write-cycle --chapter 2 --token-budget 6000 --tail-lines 80 --json-summary
+```
+
+### 3. 原子化写作
+
+在 `${save_path}/atomic_md/第2章/` 下维护小节文件：
+- `2.1_引言.md`
+- `2.2_实验A_材料方法.md`
+- `2.3_实验A_结果讨论.md`
+
+编号校验：
+
+```bash
+python3 scripts/atomic_md_workflow.py --project-root "${save_path}" validate --chapter 2
+python3 scripts/atomic_md_workflow.py --project-root "${save_path}" \
+  validate --chapter 2 --enforce-research-structure
+python3 scripts/atomic_md_workflow.py --project-root "${save_path}" validate-experiment-map --chapter 2
+```
+
+实验映射标记约定：`[实验] EXP-2-1`、`[对应实验] EXP-2-1`、`[图] 图2-1` / `[表] 表2-1`。
+
+### 4. 小结即快照
+
+```bash
+python3 scripts/atomic_md_workflow.py --project-root "${save_path}" \
+  section-snapshot --chapter 2 --section 2.3
+```
+
+### 5. 章节合并与自检
+
+```bash
+python3 scripts/atomic_md_workflow.py --project-root "${save_path}" merge --chapter 2 --to-docx
+python3 scripts/atomic_md_workflow.py --project-root "${save_path}" \
+  self-check --docx "${save_path}/02_分章节文档/第2章_自动合并.docx"
+```
+
+说明：
+- 若已配置 `chapter_targets`，章节自检优先使用该章节目标字数。
+- 章节自检不强制“全文参考文献下限”；参考文献下限在全文总检时执行。
+
+### 6. 章节收口
+
+```bash
+python3 scripts/state_manager.py --project-root "${save_path}" \
+  write-cycle --chapter 2 --finalize --summary "第2章完成并自检通过" --snapshot
+```
+
+### 7. 全文合并
+
+优先 md 全文合并：
+
+```bash
+python3 scripts/atomic_md_workflow.py --project-root "${save_path}" merge-full --to-docx
+```
+
+可选 docx 高保真合并：
 
 ```bash
 python3 scripts/merge_chapters.py \
-    --input-dir ./02_分章节文档 \
-    --output ./完整论文.docx \
-    --title "论文标题" \
-    --add-toc \
-    --add-header
+  --input-dir "${save_path}/02_分章节文档" \
+  --output "${save_path}/03_合并文档/完整博士论文.docx" \
+  --require-high-fidelity
 ```
 
-### 4. check_quality.py
-
-质量检查：
+### 8. 全文总检
 
 ```bash
-python3 scripts/check_quality.py thesis.docx
+python3 scripts/state_manager.py --project-root "${save_path}" word-count
+python3 scripts/check_quality.py "${save_path}/03_合并文档/完整博士论文.docx" \
+  --output json --enforce-full-structure
 ```
 
-## 文件结构
+全文门禁包含：
+- 章节数不少于 `thesis_profile.targets.min_chapters`（默认 5）
+- 第一章应为绪论/引言
+- 最后一章应为总结/结论/展望类章节
+- 参考文献位置校验：仅一个参考文献章节，且其后不再出现“第X章”正文标题
 
-项目生成后的文件夹结构：
+## 研究章节写作规范
 
-```
-/用户指定路径/
-├── project_state.json          # 项目状态文件
-├── 01_文献分析/
-│   └── analysis_report.txt     # SCI 论文分析报告
-├── 02_分章节文档/
-│   ├── 第1章_绪论.docx
-│   ├── 第2章_文献综述.docx
-│   ├── 第3章_材料与方法.docx
-│   ├── 第4章_结果与分析.docx
-│   ├── 第5章_讨论.docx
-│   └── 第6章_结论与展望.docx
-├── 03_合并文档/
-│   └── 完整博士论文.docx
-├── 04_图表文件/
-│   ├── 图1-1_说明.json
-│   ├── 图1-2_说明.json
-│   └── ...
-└── 05_参考文献/
-    └── references.txt
-```
+第2章到第N-1章统一结构：
 
-## 常见问题
+1. 引言
+2. 材料与方法
+3. 结果与讨论
+4. 实验结论
+5. 小结
 
-### Q1: 如何确保字数达标？
+强制规则：
+- 结果与讨论必须和方法实验一一对应
+- 一个实验至少对应一个独立图或表
+- 禁止“先堆全部结果，后统一讨论”的 SCI 论文式结构
 
-A: 技能会自动检查字数，如果不足会进行扩展重写。您也可以手动要求扩展：
+## 反机械化写作要求
 
-```
-请扩展第3章第2节，增加机制讨论
-```
+章节提交前必须做一次 `humanizer-zh` 风格校正：
+- 减少模板化连接词堆叠
+- 去掉空泛拔高表达
+- 证据先行、结论后置
+- 降低段落机械重复
 
-### Q2: 如何处理图表？
+## 回滚
 
-A: 技能使用占位符方案：
-1. 在正文中插入 `[图 X-Y：标题]`
-2. 在 `04_图表文件/` 生成说明文件
-3. 您根据说明制作图表
-4. 在 Word 中替换占位符
+普通回滚：
 
-### Q3: 如何修改已生成的章节？
-
-A: 使用修改命令：
-
-```
-sci2doc 修改第2章
+```bash
+python3 scripts/state_manager.py --project-root "${save_path}" rollback --target snapshot
 ```
 
-然后根据提示选择修改方式（增加字数、调整结构、重新生成等）。
+严格镜像回滚：
 
-### Q4: 断点续写会丢失上下文吗？
-
-A: 不会。技能使用双重持久化：
-- OpenCode 知识图谱存储项目上下文
-- 本地 JSON 文件存储详细状态
-
-### Q5: 综述是否计入正文字数？
-
-A: **不计入**。中南大学要求：
-- 正文（第一章至结论）≥50,000 字
-- 综述（独立章节）≥5,000 字
-
-技能会严格区分统计。
-
-## 技术支持
-
-如遇到问题，请检查：
-
-1. **Python 环境**：`python3 --version`（需 3.8+）
-2. **依赖库**：`pip3 show python-docx`
-3. **脚本权限**：`ls -l scripts/`
-4. **状态文件**：`cat project_state.json`
-
-## 版本信息
-
-- **版本**：2.0
-- **更新日期**：2024-03-15
-- **兼容性**：macOS, OpenCode MCP
-
----
-
-**祝您顺利完成博士论文！🎓**
+```bash
+python3 scripts/state_manager.py --project-root "${save_path}" rollback --target snapshot --strict-mirror
+```
