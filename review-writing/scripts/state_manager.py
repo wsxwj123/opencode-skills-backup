@@ -54,6 +54,307 @@ def _load_json_list(path):
         return []
 
 
+def _extract_storyline_sections(storyline_path):
+    p = Path(storyline_path)
+    if not p.exists():
+        return []
+    sections = []
+    for line in p.read_text(encoding="utf-8").splitlines():
+        m = re.match(r"^(##+)\s+(.*)$", line)
+        if not m:
+            continue
+        title = m.group(2).strip()
+        if title:
+            sections.append(title)
+    return sections
+
+
+def _coerce_section_id(item):
+    if isinstance(item, str):
+        return item
+    if isinstance(item, dict):
+        for key in ("section_id", "id", "name", "title"):
+            value = item.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+    return None
+
+
+def _load_storyline_json_sections(path):
+    if not path.exists() or path.suffix.lower() != ".json":
+        return []
+    try:
+        data = _read_json_file(path)
+    except Exception:
+        return []
+
+    sections = data.get("sections") if isinstance(data, dict) else None
+    if not isinstance(sections, list):
+        return []
+
+    out = []
+    for section in sections:
+        sid = _coerce_section_id(section)
+        if sid:
+            out.append(sid)
+    return out
+
+
+def _load_section_order(storyline_path):
+    direct = Path(storyline_path)
+    candidates = [direct]
+    if direct.suffix.lower() == ".md":
+        candidates.append(direct.with_suffix(".json"))
+    elif direct.suffix.lower() == ".json":
+        candidates.append(direct.with_suffix(".md"))
+
+    for candidate in candidates:
+        if candidate.suffix.lower() == ".json":
+            sections = _load_storyline_json_sections(candidate)
+        else:
+            sections = _extract_storyline_sections(str(candidate))
+        if sections:
+            return sections
+    return []
+
+
+def _is_present(value):
+    return value not in (None, "", [])
+
+
+def _resolve_matrix_sources(matrix_path, storyline_path):
+    explicit = Path(matrix_path) if matrix_path else None
+    candidates = []
+    if explicit is not None:
+        candidates.append(explicit)
+    else:
+        candidates.extend(
+            [
+                Path("data/synthesis_matrix.json"),
+                Path("data/literature_matrix.json"),
+            ]
+        )
+
+    writable_path = None
+    matrix_rows = None
+    matrix_source = None
+
+    for candidate in candidates:
+        if not candidate.exists():
+            continue
+        try:
+            payload = _read_json_file(candidate)
+        except Exception:
+            continue
+        if isinstance(payload, list):
+            matrix_rows = payload
+            matrix_source = str(candidate)
+            if explicit is not None:
+                writable_path = candidate
+            else:
+                # Use synthesis_matrix.json as the canonical writable source.
+                writable_path = Path("data/synthesis_matrix.json")
+            break
+
+    storyline_json = None
+    p = Path(storyline_path)
+    if p.suffix.lower() == ".json":
+        storyline_json = p
+    else:
+        alt = p.with_suffix(".json")
+        if alt.exists():
+            storyline_json = alt
+
+    if storyline_json is not None and storyline_json.exists():
+        try:
+            payload = _read_json_file(storyline_json)
+        except Exception:
+            payload = None
+        if isinstance(payload, dict):
+            for key in ("literature_matrix", "synthesis_matrix", "matrix"):
+                embedded = payload.get(key)
+                if isinstance(embedded, list):
+                    if matrix_rows is None:
+                        matrix_rows = embedded
+                        matrix_source = f"{storyline_json}#{key}"
+                    break
+
+    return matrix_rows, writable_path, matrix_source
+
+
+def _merge_canonical_item(target, source):
+    for key, value in source.items():
+        if key == "global_id":
+            continue
+        if key not in target or not _is_present(target.get(key)):
+            target[key] = value
+            continue
+        if key in ("related_sections", "sections") and isinstance(target.get(key), list) and isinstance(value, list):
+            merged = []
+            seen = set()
+            for item in target[key] + value:
+                marker = _normalize_text(item)
+                if not marker or marker in seen:
+                    continue
+                seen.add(marker)
+                merged.append(item)
+            target[key] = merged
+
+
+def _build_canonical_records(index_rows):
+    canonical = []
+    by_identity = {}
+    old_to_canonical = {}
+    next_virtual_id = 10**9
+
+    for pos, item in enumerate(index_rows):
+        if not isinstance(item, dict):
+            continue
+
+        gid = item.get("global_id")
+        old_gid = gid if isinstance(gid, int) and gid > 0 else None
+        if old_gid is None:
+            old_gid = next_virtual_id + pos
+
+        identity = _paper_identity(item) or f"__row__{old_gid}"
+        if identity in by_identity:
+            idx = by_identity[identity]
+            _merge_canonical_item(canonical[idx], item)
+            old_to_canonical[old_gid] = idx
+            continue
+
+        new_item = dict(item)
+        canonical.append(new_item)
+        idx = len(canonical) - 1
+        by_identity[identity] = idx
+        old_to_canonical[old_gid] = idx
+
+    return canonical, old_to_canonical
+
+
+def _split_citation_items(body):
+    return [token.strip() for token in re.split(r"\s*[,;]\s*", body.strip()) if token.strip()]
+
+
+def _expand_citation_token(token):
+    if re.fullmatch(r"\d+", token):
+        return [int(token)]
+    m = re.fullmatch(r"(\d+)\s*[-–]\s*(\d+)", token)
+    if not m:
+        return None
+    start = int(m.group(1))
+    end = int(m.group(2))
+    step = 1 if start <= end else -1
+    return list(range(start, end + step, step))
+
+
+def _compress_citation_numbers(numbers):
+    if not numbers:
+        return ""
+    ordered = sorted(set(numbers))
+    spans = []
+    s = ordered[0]
+    e = ordered[0]
+    for num in ordered[1:]:
+        if num == e + 1:
+            e = num
+            continue
+        spans.append((s, e))
+        s = num
+        e = num
+    spans.append((s, e))
+
+    parts = []
+    for start, end in spans:
+        if start == end:
+            parts.append(str(start))
+        else:
+            parts.append(f"{start}-{end}")
+    return ",".join(parts)
+
+
+def _remap_citation_brackets(text, old_to_new, strict, unresolved):
+    pattern = re.compile(r"\[((?:\s*\d+(?:\s*[-–]\s*\d+)?\s*)(?:[,;]\s*\d+(?:\s*[-–]\s*\d+)?\s*)*)\]")
+    changed = 0
+
+    def repl(match):
+        nonlocal changed
+        body = match.group(1)
+        tokens = _split_citation_items(body)
+        nums = []
+        for token in tokens:
+            expanded = _expand_citation_token(token)
+            if expanded is None:
+                return match.group(0)
+            nums.extend(expanded)
+
+        mapped = []
+        for number in nums:
+            if number not in old_to_new:
+                unresolved.add(number)
+                if strict:
+                    return match.group(0)
+                mapped.append(number)
+            else:
+                mapped.append(old_to_new[number])
+
+        normalized = _compress_citation_numbers(mapped)
+        replacement = f"[{normalized}]"
+        if replacement != match.group(0):
+            changed += 1
+        return replacement
+
+    return pattern.sub(repl, text), changed
+
+
+def _remap_reference_section(text, old_to_new, strict, unresolved):
+    lines = text.splitlines(keepends=True)
+    in_refs = False
+    changed = 0
+    head_re = re.compile(r"^\s*##\s+references\b", re.IGNORECASE)
+    next_head_re = re.compile(r"^\s*##\s+")
+    ref_num_re = re.compile(r"^(\s*)(\d+)([.)])(\s+.*)$")
+
+    out = []
+    for line in lines:
+        if head_re.match(line):
+            in_refs = True
+            out.append(line)
+            continue
+        if in_refs and next_head_re.match(line):
+            in_refs = False
+
+        if in_refs:
+            m = ref_num_re.match(line)
+            if m:
+                old = int(m.group(2))
+                if old not in old_to_new:
+                    unresolved.add(old)
+                    if strict:
+                        out.append(line)
+                        continue
+                    new_num = old
+                else:
+                    new_num = old_to_new[old]
+                new_line = f"{m.group(1)}{new_num}{m.group(3)}{m.group(4)}"
+                if new_line != line:
+                    changed += 1
+                out.append(new_line)
+                continue
+
+        out.append(line)
+
+    return "".join(out), changed
+
+
+def _atomic_write_text(path, text):
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f".{path.name}.tmp")
+    tmp.write_text(text, encoding="utf-8")
+    os.replace(tmp, path)
+
+
 def _find_section_draft(section):
     if not section:
         return None
@@ -88,6 +389,15 @@ def load_state(section=None, fallback_recent=False, minimal=False):
                 combined_state[key] = f"<Error loading {filename}: {e}>"
         else:
             combined_state[key] = None
+
+    # Backward compatibility: if canonical synthesis matrix is missing, use legacy literature_matrix.
+    if combined_state.get("synthesis_matrix") is None and os.path.exists("data/literature_matrix.json"):
+        try:
+            legacy = _read_json_file("data/literature_matrix.json")
+            if isinstance(legacy, list):
+                combined_state["synthesis_matrix"] = legacy
+        except Exception:
+            pass
 
     if section:
         lit_data = combined_state.get("literature_index")
@@ -318,6 +628,161 @@ def _merge_matrix(existing, incoming):
     return [by_key[k] for k in ordered] + no_id
 
 
+def reindex_literature_by_section(
+    storyline_path="storyline.md",
+    index_path="data/literature_index.json",
+    matrix_path=None,
+    drafts_dir="drafts",
+    sync_apply=False,
+):
+    if not os.path.exists(index_path):
+        raise SystemExit(f"Error: Index file not found: {index_path}")
+
+    sections = _load_section_order(storyline_path)
+    section_rank = {_normalize_text(name): i for i, name in enumerate(sections)}
+
+    with _state_lock():
+        index_rows = _read_json_file(index_path)
+        if not isinstance(index_rows, list):
+            raise SystemExit("literature_index must be a list")
+
+        canonical_rows, old_to_canonical = _build_canonical_records(index_rows)
+        matrix_rows, writable_matrix_path, matrix_source = _resolve_matrix_sources(matrix_path, storyline_path)
+
+        if sync_apply and matrix_rows is None:
+            print("[GATE] --sync-apply requires a matrix source (data/literature_matrix.json or data/synthesis_matrix.json).")
+            raise SystemExit(2)
+        if sync_apply and writable_matrix_path is None:
+            print("[GATE] --sync-apply requires a writable matrix file path.")
+            raise SystemExit(2)
+
+        ordered_canonical = []
+        seen_canonical = set()
+        section_first_seen = {}
+        mapping_failures = []
+        remapped_rows = 0
+        remapped_matrix = None
+
+        matrix_order_ids = []
+        if isinstance(matrix_rows, list):
+            remapped_matrix = []
+            for idx, row in enumerate(matrix_rows):
+                if not isinstance(row, dict):
+                    remapped_matrix.append(row)
+                    continue
+                new_row = dict(row)
+                remapped_matrix.append(new_row)
+
+                section_id = str(new_row.get("section_id", "unassigned"))
+                section_key = _normalize_text(section_id)
+                if section_key not in section_first_seen:
+                    section_first_seen[section_key] = len(section_first_seen)
+
+                gid = new_row.get("global_id")
+                if not (isinstance(gid, int) and gid > 0):
+                    continue
+                if gid not in old_to_canonical:
+                    mapping_failures.append({"source": "matrix", "global_id": gid, "row_index": idx, "section_id": section_id})
+                    continue
+
+                canonical_idx = old_to_canonical[gid]
+                if canonical_idx not in seen_canonical:
+                    seen_canonical.add(canonical_idx)
+                    ordered_canonical.append(
+                        (
+                            section_rank.get(section_key, len(section_rank) + section_first_seen[section_key]),
+                            idx,
+                            canonical_idx,
+                        )
+                    )
+
+            ordered_canonical.sort(key=lambda x: (x[0], x[1]))
+            matrix_order_ids = [x[2] for x in ordered_canonical]
+        else:
+            matrix_order_ids = []
+
+        fallback_order = []
+        for idx, item in enumerate(canonical_rows):
+            if idx in seen_canonical:
+                continue
+            related = item.get("related_sections")
+            related = related if isinstance(related, list) else []
+            hits = []
+            for sec in related:
+                sec_key = _normalize_text(sec)
+                if sec_key in section_rank:
+                    hits.append(section_rank[sec_key])
+            fallback_rank = min(hits) if hits else len(section_rank) + idx
+            fallback_order.append((fallback_rank, idx))
+
+        fallback_order.sort(key=lambda x: (x[0], x[1]))
+        final_canonical_order = matrix_order_ids + [idx for _, idx in fallback_order]
+
+        canonical_to_new = {cid: i for i, cid in enumerate(final_canonical_order, start=1)}
+        old_to_new = {}
+        for old_gid, cid in old_to_canonical.items():
+            if old_gid >= 10**9:
+                continue
+            old_to_new[old_gid] = canonical_to_new[cid]
+
+        if remapped_matrix is not None:
+            for row in remapped_matrix:
+                if not isinstance(row, dict):
+                    continue
+                gid = row.get("global_id")
+                if isinstance(gid, int) and gid > 0 and gid in old_to_new:
+                    new_gid = old_to_new[gid]
+                    if new_gid != gid:
+                        remapped_rows += 1
+                    row["global_id"] = new_gid
+
+        reindexed = []
+        for cid in final_canonical_order:
+            entry = dict(canonical_rows[cid])
+            entry["global_id"] = canonical_to_new[cid]
+            reindexed.append(entry)
+
+        draft_updates = {}
+        unresolved_ids = set()
+        remapped_citations = 0
+        remapped_ref_lines = 0
+        ddir = Path(drafts_dir)
+        if ddir.exists():
+            for md in sorted(ddir.glob("**/*.md")):
+                try:
+                    text = md.read_text(encoding="utf-8")
+                except Exception:
+                    continue
+                text1, changed_c = _remap_citation_brackets(text, old_to_new, sync_apply, unresolved_ids)
+                text2, changed_r = _remap_reference_section(text1, old_to_new, sync_apply, unresolved_ids)
+                if text2 != text:
+                    draft_updates[md] = text2
+                remapped_citations += changed_c
+                remapped_ref_lines += changed_r
+
+        if mapping_failures and sync_apply:
+            print(f"[GATE] --sync-apply blocked: {len(mapping_failures)} matrix rows reference unknown global_id.")
+            raise SystemExit(2)
+        if unresolved_ids and sync_apply:
+            unresolved_text = ", ".join(str(x) for x in sorted(unresolved_ids)[:20])
+            print(f"[GATE] --sync-apply blocked: unresolved citation IDs in drafts: {unresolved_text}")
+            raise SystemExit(2)
+
+        _atomic_write_text(index_path, json.dumps(reindexed, indent=2, ensure_ascii=False))
+        if writable_matrix_path is not None and remapped_matrix is not None:
+            _atomic_write_text(writable_matrix_path, json.dumps(remapped_matrix, indent=2, ensure_ascii=False))
+        for md, content in draft_updates.items():
+            _atomic_write_text(md, content)
+
+    dedup_count = len(index_rows) - len(reindexed)
+    matrix_label = matrix_source if matrix_source else "none"
+    print(
+        f"Reindex complete: index={len(reindexed)} (dedup_removed={dedup_count}), "
+        f"matrix_source={matrix_label}, matrix_rows_remapped={remapped_rows}, "
+        f"draft_citation_groups_remapped={remapped_citations}, references_lines_remapped={remapped_ref_lines}"
+    )
+
+
 @contextmanager
 def _state_lock(timeout=20):
     lock_path = Path("logs") / ".state_manager.lock"
@@ -500,6 +965,24 @@ def main():
         help="Optional snapshot output path (default: logs/snapshots/state_snapshot_<timestamp>.json)",
     )
 
+    reindex_parser = subparsers.add_parser(
+        "reindex",
+        help="Canonical-deduplicate and reindex literature by section/matrix order, then remap matrix+draft citations",
+    )
+    reindex_parser.add_argument("--storyline", default="storyline.md", help="Storyline markdown path")
+    reindex_parser.add_argument("--index", default="data/literature_index.json", help="Literature index path")
+    reindex_parser.add_argument(
+        "--matrix",
+        default=None,
+        help="Optional matrix path (auto-detects data/synthesis_matrix.json then legacy data/literature_matrix.json)",
+    )
+    reindex_parser.add_argument("--drafts-dir", default="drafts", help="Draft directory for citation remap")
+    reindex_parser.add_argument(
+        "--sync-apply",
+        action="store_true",
+        help="Hard gate mode: block on missing matrix or unresolved mappings (exit 2).",
+    )
+
     args = parser.parse_args()
 
     if args.command == "load":
@@ -519,6 +1002,14 @@ def main():
         compact_memory()
     elif args.command == "snapshot":
         snapshot_state(output_path=args.out)
+    elif args.command == "reindex":
+        reindex_literature_by_section(
+            storyline_path=args.storyline,
+            index_path=args.index,
+            matrix_path=args.matrix,
+            drafts_dir=args.drafts_dir,
+            sync_apply=args.sync_apply,
+        )
 
 
 if __name__ == "__main__":

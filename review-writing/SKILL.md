@@ -45,6 +45,7 @@ You must strictly enforce these 8 rules in every interaction:
     -   End turn: `python scripts/state_manager.py update [payload_file]` + `python scripts/state_manager.py snapshot`.
     -   If no payload path is provided, `update` defaults to `state_update_payload.json`.
     -   `update` defaults to merge mode (history-preserving upsert). Use `--replace` only for intentional full replacement.
+    -   After literature updates, run `python scripts/state_manager.py reindex --sync-apply` so index IDs, matrix IDs, and draft citation numbers stay aligned with hard gating.
     -   For failure recovery, resume interrupted section cycles using `python scripts/run_section_cycle.py [SectionID] --round [1|2|3] --resume`.
 
 2.  **Step-by-Step Stop:**
@@ -54,7 +55,7 @@ You must strictly enforce these 8 rules in every interaction:
     -   Wait for "Continue".
 
 3.  **Section-Scoped Context:**
-    -   Always tag literature to sections: `python scripts/tag_literature_sections.py`.
+    -   Always tag literature to sections: `python scripts/tag_literature_sections.py` (supports `storyline.md` / `storyline.json` and optional `data/section_overrides.json` manual overrides).
     -   For section writing, load only matching literature and matrix via `load --section ... --minimal`.
 
 4.  **Human Supervision:**
@@ -88,8 +89,9 @@ You must strictly enforce these 8 rules in every interaction:
 **Goal:** SYSTEMATICALLY write one section at a time.
 
 **Three-Round Retrieval Model (MANDATORY):**
-1. Round 1 (Global build): finalize search strategy, retrieve 150+ papers, deduplicate, write `data/literature_index.json`, then bootstrap matrix globally using `python scripts/matrix_manager.py bootstrap --round 1` (no section pinning).
+1. Round 1 (Global build): finalize search strategy, retrieve 150+ papers, deduplicate, write `data/literature_index.json`, then **must** run section assignment + section-order renumbering (`python scripts/tag_literature_sections.py` then `python scripts/state_manager.py reindex`) before matrix bootstrap (`python scripts/matrix_manager.py bootstrap --round 1`).
 2. Round 2 (Section deep dive): before drafting each section, save retrievable search strategy to JSON (queries, date window, filters, databases) and run cycle with `--search-strategy`; then bind section claims with `python scripts/matrix_manager.py bind-claims --section [SectionID] --claims [claims.json]`.
+   - Every round-2 run appends strategy + pre/post index digest hashes into `logs/search_manifest.json` for full reproducibility.
 3. Round 3 (Critical refresh): before finalization, refresh critical claims with newest papers and mark updates using `python scripts/matrix_manager.py mark-round3 --section [SectionID]`.
 4. Gate enforcement: Round 2 is blocked until Round 1 completes; Round 3 is blocked until that section's Round 2 completes.
 5. Quality gate: Round 2 must produce at least one claim binding for the target section; otherwise treat as failure and refine claims/search.
@@ -99,6 +101,8 @@ You must strictly enforce these 8 rules in every interaction:
 2.  **Search:** Execute **Search Logic** (Rule 5). Gather ≥10 relevant papers.
 3.  **Matrix:** Fill `data/synthesis_matrix.json`. Compare methods/results. **Stop** if data is thin.
     -   Use matrix workflow commands: `bootstrap` (R1), `bind-claims` (R2), `mark-round3` (R3), then `audit`.
+    -   Every cycle must sync IDs via `state_manager.py reindex --sync-apply` to prevent draft citation IDs drifting from index/matrix.
+    -   R1 prerequisite: index must be section-tagged and reindexed by storyline order so early sections keep earlier citation IDs.
 4.  **Figure:** Define the visual anchor. Update `figures/figure_index.md`. Text must support this figure.
 5.  **Draft:** Write the section in `drafts/section_X.md`.
     -   Use **Paragraphs Only** (Rule 6).
@@ -132,6 +136,7 @@ You must strictly enforce these 8 rules in every interaction:
     -   Includes workflow gates + checkpointing + resume.
     -   Includes log retention pruning (`--keep-snapshots`, `--keep-checkpoints`) to prevent log bloat.
     -   For Round 2, `--search-strategy <file.json>` is mandatory and every run appends a reproducible record to `logs/search_manifest.json`.
+    -   For Round 1, cycle automatically runs section tagging + index reindexing before matrix bootstrap.
 
 ## Interaction Guidelines
 - **Anti-Flattery:** Be objective. No "Great idea!".
@@ -142,8 +147,11 @@ You must strictly enforce these 8 rules in every interaction:
 ## Tools
 - `scripts/setup_review_project.py`: Run FIRST.
 - `scripts/state_manager.py`: Run EVERY TURN (prefer `load --section ... --minimal`, merge-update by default).
+- `scripts/state_manager.py reindex --sync-apply`: Canonical-deduplicate + matrix/section-order reindex, then hard-gated remap of matrix IDs and draft citations.
+- Canonical matrix source is `data/synthesis_matrix.json` (legacy `data/literature_matrix.json` is compatibility-only and should be migrated away).
 - `scripts/scope_manager.py`: Run for `/refactor`.
 - `scripts/tag_literature_sections.py`: Auto-maintain `related_sections` for section-scoped loading.
+- `scripts/preflight_review_project.py`: Preflight checks (structure, matrix split-brain, lock files, writability) before long runs.
 - `scripts/check_global_citation_sequence.py`: Enforce global `[1..n]` citation continuity across drafts.
 - `scripts/matrix_manager.py`: Manage section-claim evidence matrix across round-1/2/3 retrieval.
 - `scripts/run_section_cycle.py`: One-command automated section workflow with gate checks and checkpoint resume.

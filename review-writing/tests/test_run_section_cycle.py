@@ -1,6 +1,8 @@
 import io
 import json
+import os
 import sys
+import tempfile
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
@@ -13,6 +15,29 @@ import run_section_cycle  # noqa: E402
 
 
 class RunSectionCycleTests(unittest.TestCase):
+    def test_index_digest_is_stable_for_duplicate_identifiers(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cwd = os.getcwd()
+            try:
+                os.chdir(tmp)
+                Path("data").mkdir()
+                Path("data/literature_index.json").write_text(
+                    json.dumps(
+                        [
+                            {"global_id": 1, "doi": "10.1/a"},
+                            {"global_id": 2, "doi": "10.1/a"},
+                            {"global_id": 3, "title": "Hello World"},
+                        ]
+                    ),
+                    encoding="utf-8",
+                )
+                digest = run_section_cycle._index_digest("data/literature_index.json")
+                self.assertEqual(digest["entry_count"], 3)
+                self.assertEqual(digest["identifier_count"], 2)
+                self.assertIsNotNone(digest["identifier_sha256"])
+            finally:
+                os.chdir(cwd)
+
     def test_round1_bootstrap_is_global_and_summary_payload_flag(self):
         calls = []
 
@@ -41,6 +66,11 @@ class RunSectionCycleTests(unittest.TestCase):
 
         bootstrap_cmd = [c for c in calls if c[:3] == ["python3", "scripts/matrix_manager.py", "bootstrap"]][0]
         self.assertNotIn("--section", bootstrap_cmd)
+        tag_cmd = [c for c in calls if c[:3] == ["python3", "scripts/tag_literature_sections.py"]]
+        self.assertEqual(len(tag_cmd), 1)
+        reindex_cmd = [c for c in calls if c[:3] == ["python3", "scripts/state_manager.py", "reindex"]]
+        self.assertGreaterEqual(len(reindex_cmd), 1)
+        self.assertTrue(any("--sync-apply" in c for c in reindex_cmd))
 
         summary_line = out.split("Cycle Summary:")[-1].strip()
         summary = json.loads(summary_line)
@@ -83,6 +113,8 @@ class RunSectionCycleTests(unittest.TestCase):
 
         audit_cmd = [c for c in calls if c[:3] == ["python3", "scripts/matrix_manager.py", "audit"]][0]
         self.assertIn("--fail-on-gap", audit_cmd)
+        reindex_cmd = [c for c in calls if c[:3] == ["python3", "scripts/state_manager.py", "reindex"]][0]
+        self.assertIn("--sync-apply", reindex_cmd)
 
     def test_round2_blocked_when_round1_not_completed(self):
         argv = [

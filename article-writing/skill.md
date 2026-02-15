@@ -1,10 +1,10 @@
-# Article Writing Skill - Nature级SCI论文一键生成系统 (v2.15.2)
+# Article Writing Skill - Nature级SCI论文一键生成系统 (v2.15.3)
 
 ## 🎯 Skill概述
 
 本skill用于撰写符合Nature/Science/Cell发表标准的SCI研究论文（Article类型），专注于广义药物递送系统领域。
 
-**核心升级 (v2.15.2)**：
+**核心升级 (v2.15.3)**：
 - **章节级上下文隔离**：`/write [section]` 默认只读取当前章节相关上下文，禁止跨章节正文污染。
 - **双层记忆模型**：新增 `section_memory/<section_id>.md` 记录章节局部记忆，全局 `context_memory.md` 仅保留决策与约束。
 - **Token预算守卫**：`state_manager.py` 支持预算估算与自动降载（tail + compact），避免上下文爆炸。
@@ -17,6 +17,11 @@
 - **引用格式标准化**：强制使用 `[n]` 格式，严禁其他变体。
 - **小节参考文献列表**：每节末尾自动附上引用列表。
 - **全局状态持久化**：每次回复前自动读取全局历史与进度文件，并加载当前章节索引（文献/Figure/SI）；回复后自动更新全局进度状态。
+- **核心历史含 Figure 索引**：全局核心加载包含 `figures_database.json`（压缩快照），保证 Figure 进度不会丢失。
+- **单次写作事务日志**：`write-cycle` 与 `sync-literature` 自动写入 `.state/transactions/`，用于审计每轮加载、门禁与同步结果。
+- **并发锁机制**：`postwrite` 与 `sync-literature --apply` 默认加锁，防止并发写入导致索引错乱。
+- **强 Schema 校验**：`preflight(strict)` 与文献同步流程会校验 `literature/figure/SI/storyline/matrix` 结构，不通过即阻断。
+- **合并前一致性预检**：`merge_manuscript.py` 默认在合并前校验引文编号范围，不一致则阻断并返回预检报告。
 - **原子化文件管理**：强制"一小节一文件"（如 `04_Results_3.1.md`），杜绝大文件覆盖风险。
 
 ---
@@ -32,6 +37,13 @@
     -   *原因*：Semantic Scholar 覆盖广、更新快；arXiv/bioRxiv 获取最新预印本。
 3.  **兜底检索**：Google Scholar (仅在上述工具无果时尝试)。
 4.  **概念查询**：仅当查询宽泛非学术概念时才使用 `tavily`。禁止用 Tavily 找论文。
+
+**文献真实性硬约束 (Zero-Fabrication Policy)**：
+1. **零容忍**：严禁编造虚拟文献；严禁把不同文献的标题/作者/期刊/年份/DOI 交叉拼接成“新文献”。
+2. **来源强制**：写入 `literature_index.json` 的每条文献必须来自 MCP 检索原始结果（`paper-search`/`arxiv`/Google Scholar/Semantic 回退链），并保留可追溯来源信息（至少包含 `source_provider` + `source_id`，如 PMID/DOI/arXiv ID/S2 ID 之一）。
+3. **入库前核对**：入库前必须核对“标题-作者-DOI/ID”来自同一条原始记录；任一关键字段冲突则判定为无效条目，禁止入库。
+4. **不确定处理**：无法完成同源核验的条目必须标记为 `unverified`，且**禁止在正文使用 `[n]` 引用**，只能向用户请求补充或重新检索。
+5. **补全边界**：摘要补全协议仅允许补全 `abstract` 字段，禁止改写已核验文献的核心元数据（标题/作者/期刊/年份/DOI）。
 
 **语言风格 (Anti-AI Protocol)**：
 - **核心原则**：严格遵循 `humanizer-zh` Skill 的去 AI 化标准。
@@ -245,6 +257,20 @@
 
 ### Phase 3: 文献检索 (`/literature`)
 分阶段检索（Phase 1核心，Phase 2写作时实时补充）。
+**执行红线**：本阶段必须遵守“文献真实性硬约束”，任何未通过同源核验的条目不得进入 `literature_index.json`，也不得在正文中引用。
+**首轮检索后强制分配与重编号（Mandatory）**：
+1. **首轮完成即分配**：第一轮文献检索完成后，必须将每条已核验文献分配到目标小节（`section_id`），禁止保持“未分配”状态进入写作阶段。
+2. **矩阵落地**：在用户确认后，必须将“小节-文献”映射写入文献矩阵（建议存入 `storyline.json` 的矩阵字段，或独立 `literature_matrix.json`），作为后续正文撰写唯一依据。
+   - **小节粒度硬要求**：矩阵中的 `section_id` 必须与 `storyline.sections[].id` 一一对应到“小节级”（如 `results_3.1`, `results_3.2`）；禁止只写到大章级（如仅 `results`）。
+3. **先重排后写作**：在开始任何小节正文前，必须按“小节顺序 + 小节内引用优先级”对 `literature_index.json` 重新编号为连续 `1..N`，不得沿用“检索时间顺序编号”。
+4. **分节引用约束**：撰写某小节时，只允许引用该小节矩阵内文献；后续新检索到的文献若理论上应归属前文小节，必须先触发全局重编号与正文同步，再继续写作。
+5. **一致性收口**：每轮写作收口仍必须执行 `write-cycle --finalize --sync-literature --sync-apply`，确保正文 `[n]`、各小节参考列表与全局索引三者一致。
+**后续增量检索同流程（Mandatory）**：
+1. **全程一致**：第二轮及后续每一轮新增文献，必须重复执行“分配到小节 → 更新矩阵 → 全局重编号 → 同步落盘”，严禁仅追加到索引末尾后直接写正文。
+2. **实时更新触发**：只要发生以下任一动作，必须立即更新 `literature_index.json` 与文献矩阵并执行同步：新增文献、文献重分配到其他小节、删除文献、合并去重、修改核心元数据（标题/作者/DOI/年份）。
+3. **写作前一致性检查**：开始任一小节写作前，必须确认“正文引用号、`literature_index.json`、文献矩阵”三者一致；任一不一致必须先同步修复，禁止继续生成正文。
+4. **冲突优先级**：当“新检索文献应出现在前文小节”与“当前小节写作”冲突时，优先执行全局重编号与全稿引用同步，再恢复写作。
+5. **脚本硬门禁**：`sync-literature --apply` 与 `write-cycle --finalize --sync-literature --sync-apply` 默认强制执行“矩阵重编号校验”；缺失矩阵或分配不完整将直接阻断落盘（仅调试可用 `--no-require-matrix-reindex` 临时放行）。
 
 ### Phase 4: 逐节撰写 (融合模式 + 原子化文件 + SI循环)
 
@@ -336,7 +362,7 @@ Storyline阶段逻辑检查 + Final阶段完整报告。
 
 ---
 
-**版本**: 2.15.2
+**版本**: 2.15.3
 **更新**: 
 1. **跨平台重构**: 引入 "Portable Deployment" 协议，`/init` 时强制拷贝脚本到项目目录，彻底解决路径依赖和跨系统兼容问题。
 2. **路径协商**: 强制 AI 在初始化前询问用户保存路径。
@@ -358,11 +384,13 @@ Storyline阶段逻辑检查 + Final阶段完整报告。
 ### 2. 引用格式强制 (STRICT CITATION FORMAT)
 - **规则**：正文中引用文献必须使用 **`[n]`** 格式（如 `[1]`, `[1,3]`）。
 - **禁止**：严禁使用 `[Ref 1]`, `[Author, 2023]`, `(1)` 等其他变体。
+- **编号来源**：编号必须来源于“分节文献矩阵 + 重排后的全局索引”；严禁按“检索先后顺序”直接引用。
 - **列表**：每个撰写的小节末尾必须附上该节的 **References List** (Vancouver style)。
 
 ### 3. 全局状态持久化 (GLOBAL STATE PERSISTENCE)
 **为了防止对话中断导致上下文丢失，必须执行以下操作**：
 - **Read First (Hard Gate)**: 每次回复前，**必须先执行** `python scripts/state_manager.py write-cycle --section [section_id] --token-budget 6000 --tail-lines 80`（内部强制 preflight + load + gate-check）。**严禁**绕过 `write-cycle` 手工拼接预加载流程。
+- **核心历史内容**：`write-cycle` 的全局核心历史默认包含 `project_config/writing_progress/context_memory/figures_database/version_history`（其中 `figures_database` 为压缩快照），并叠加当前小节过滤索引。
 - **Draft-on-Demand**: 仅在需要续写或改写已有章节时，才允许追加 `--include-draft` 读取章节正文。
 - **Update Last**: 在每次回复结束后，必须执行脚本级自动同步：
   1. 先预览：`python scripts/state_manager.py sync-literature --dry-run --strict-references`。
@@ -372,6 +400,7 @@ Storyline阶段逻辑检查 + Final阶段完整报告。
   5. 文献同步前会自动备份 `literature_index.json` 以及 `manuscripts/` 中的 `.md/.docx` 到 `backups/literature_sync/` 子目录（默认开启；`--no-backup` 可关闭）。
   6. 同步后执行完成门禁：`python scripts/state_manager.py gate-check --section [section_id] --phase complete`。未通过则禁止给出“已完成”结论。
   7. 如本轮为关键里程碑，可追加 `--snapshot`。
+- **文献索引实时性**：凡发生文献新增/重分配/去重/删除/核心元数据修改，必须在当轮完成 `sync-literature --dry-run` + `write-cycle --finalize --sync-literature --sync-apply`，确保编号不漂移。
 
 - **Single Command (强制入口)**: 写前统一用 `python scripts/state_manager.py write-cycle --section [section_id]`；写后统一用 `python scripts/state_manager.py write-cycle --section [section_id] --finalize --sync-literature --sync-apply --strict-references --summary "[本轮变更摘要]"` 收口。
 - **预检严格度**：`write-cycle` 默认 strict；仅在调试阶段才允许 `--preflight-lenient`。

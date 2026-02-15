@@ -2,7 +2,8 @@ import json
 import argparse
 import sys
 import os
-import re
+
+from citation_utils import extract_citation_ids
 
 def scan_used_ids(root_dir):
     """
@@ -10,8 +11,6 @@ def scan_used_ids(root_dir):
     Returns a set of used IDs (strings).
     """
     used_ids = set()
-    pattern = re.compile(r'\[(\d+)\]')
-    
     if not os.path.exists(root_dir):
         print(f"Warning: Drafts directory not found at {root_dir}. Assuming no citations used.")
         return used_ids
@@ -23,8 +22,7 @@ def scan_used_ids(root_dir):
                 try:
                     with open(filepath, 'r', encoding='utf-8') as f:
                         content = f.read()
-                        matches = pattern.findall(content)
-                        used_ids.update(matches)
+                        used_ids.update(str(x) for x in extract_citation_ids(content))
                 except Exception as e:
                     print(f"Warning: Could not read {filepath}: {e}")
     return used_ids

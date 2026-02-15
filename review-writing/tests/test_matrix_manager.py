@@ -273,6 +273,41 @@ class MatrixManagerTests(unittest.TestCase):
             )
             self.assertEqual(res.returncode, 2)
 
+    def test_bootstrap_reads_legacy_matrix_and_writes_canonical(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "data").mkdir(parents=True)
+            (root / "data" / "literature_index.json").write_text(
+                json.dumps([{"global_id": 1, "title": "A", "related_sections": ["intro"]}]),
+                encoding="utf-8",
+            )
+            (root / "data" / "literature_matrix.json").write_text(
+                json.dumps([{"global_id": 9, "section_id": "legacy"}]),
+                encoding="utf-8",
+            )
+
+            script = "/Users/wsxwj/.codex/skills/review-writing/scripts/matrix_manager.py"
+            subprocess.run(
+                [
+                    "python3",
+                    script,
+                    "bootstrap",
+                    "--index",
+                    str(root / "data" / "literature_index.json"),
+                    "--matrix",
+                    str(root / "data" / "synthesis_matrix.json"),
+                    "--round",
+                    "1",
+                ],
+                check=True,
+            )
+
+            self.assertTrue((root / "data" / "synthesis_matrix.json").exists())
+            matrix = json.loads((root / "data" / "synthesis_matrix.json").read_text(encoding="utf-8"))
+            keys = {(r.get("global_id"), r.get("section_id")) for r in matrix}
+            self.assertIn((9, "legacy"), keys)
+            self.assertIn((1, "intro"), keys)
+
 
 if __name__ == "__main__":
     unittest.main()

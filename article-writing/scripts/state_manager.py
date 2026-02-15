@@ -32,6 +32,7 @@ GLOBAL_HISTORY_KEYS = (
     "project_config",
     "writing_progress",
     "context_memory",
+    "figures_database",
     "version_history",
 )
 
@@ -40,12 +41,15 @@ GATE_STATE_DIR = ".state"
 GATE_STATE_FILE = os.path.join(GATE_STATE_DIR, "write_gate.json")
 LOAD_CACHE_FILE = os.path.join(GATE_STATE_DIR, "load_cache.json")
 SYNC_REPORT_DIR = os.path.join(GATE_STATE_DIR, "reports")
+TRANSACTION_DIR = os.path.join(GATE_STATE_DIR, "transactions")
+LOCK_DIR = os.path.join(GATE_STATE_DIR, "locks")
 DEFAULT_BACKUP_KEEP = 20
 DEFAULT_DEDUP_SIMILARITY = 0.93
 DEFAULT_DEDUP_CONFLICT = 0.85
 DEFAULT_REFERENCE_STYLE = "vancouver"
 DEFAULT_REPORT_KEEP = 40
 DEFAULT_CACHE_KEEP = 200
+DEFAULT_LITERATURE_MATRIX_FILE = "literature_matrix.json"
 
 
 def ensure_state_dir():
@@ -55,6 +59,130 @@ def ensure_state_dir():
 def ensure_report_dir():
     ensure_state_dir()
     os.makedirs(SYNC_REPORT_DIR, exist_ok=True)
+
+
+def ensure_transaction_dir():
+    ensure_state_dir()
+    os.makedirs(TRANSACTION_DIR, exist_ok=True)
+
+
+def ensure_lock_dir():
+    ensure_state_dir()
+    os.makedirs(LOCK_DIR, exist_ok=True)
+
+
+def process_alive(pid):
+    if not isinstance(pid, int) or pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except Exception:
+        return False
+    return True
+
+
+def read_lock_payload(path):
+    if not os.path.exists(path):
+        return {}
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+class FileLock:
+    def __init__(self, name):
+        safe_name = re.sub(r"[^a-zA-Z0-9_.-]+", "_", str(name))
+        self.name = safe_name
+        self.path = os.path.join(LOCK_DIR, f"{safe_name}.lock")
+        self.acquired = False
+
+    def acquire(self):
+        ensure_lock_dir()
+        payload = {
+            "name": self.name,
+            "pid": os.getpid(),
+            "created_at": datetime.now().isoformat(timespec="seconds")
+        }
+        lock_text = json.dumps(payload, ensure_ascii=False)
+        attempts = 0
+        while attempts < 2:
+            attempts += 1
+            try:
+                fd = os.open(self.path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+                with os.fdopen(fd, "w", encoding="utf-8") as f:
+                    f.write(lock_text)
+                self.acquired = True
+                return
+            except FileExistsError:
+                existing = read_lock_payload(self.path)
+                existing_pid = existing.get("pid")
+                if isinstance(existing_pid, int) and not process_alive(existing_pid):
+                    try:
+                        os.remove(self.path)
+                        continue
+                    except Exception:
+                        pass
+                raise RuntimeError(
+                    f"lock '{self.name}' is held by pid={existing_pid} "
+                    f"since {existing.get('created_at')}"
+                )
+
+    def release(self):
+        if not self.acquired:
+            return
+        try:
+            if os.path.exists(self.path):
+                os.remove(self.path)
+        finally:
+            self.acquired = False
+
+    def __enter__(self):
+        self.acquire()
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        self.release()
+        return False
+
+
+def write_transaction_log(kind, payload):
+    ensure_transaction_dir()
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    pid = os.getpid()
+    path = os.path.join(TRANSACTION_DIR, f"{kind}_{ts}_{pid}.json")
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2, ensure_ascii=False)
+    files = sorted(
+        glob.glob(os.path.join(TRANSACTION_DIR, f"{kind}_*.json")),
+        key=lambda p: os.path.getmtime(p),
+        reverse=True,
+    )
+    for stale in files[DEFAULT_REPORT_KEEP:]:
+        try:
+            os.remove(stale)
+        except Exception:
+            pass
+    return path
+
+
+def summarize_bundle_for_log(bundle):
+    if not isinstance(bundle, dict):
+        return {}
+    return {
+        "scope": bundle.get("scope"),
+        "section": bundle.get("section"),
+        "loaded_files_count": len(bundle.get("loaded_files", []) or []),
+        "loaded_files": list(bundle.get("loaded_files", []) or []),
+        "budget_report": bundle.get("budget_report"),
+        "word_count_total": ((bundle.get("live_word_counts") or {}).get("total")),
+    }
 
 
 def file_signature(path):
@@ -440,6 +568,516 @@ def format_reference_entry(entry, number, style=DEFAULT_REFERENCE_STYLE):
         body += "."
     return f"{number}. {body}" if body else f"{number}."
 
+
+def load_storyline_section_order(storyline_file):
+    if not storyline_file or not os.path.exists(storyline_file):
+        return []
+    try:
+        payload = read_json_file(storyline_file)
+    except Exception:
+        return []
+    if not isinstance(payload, dict):
+        return []
+    sections = payload.get("sections")
+    out = []
+    if isinstance(sections, list):
+        for item in sections:
+            if not isinstance(item, dict):
+                continue
+            sid = item.get("id") or item.get("section_id") or item.get("section")
+            if sid:
+                out.append(sanitize_section_id(str(sid)))
+    return out
+
+
+def parse_literature_matrix(payload):
+    """Best-effort parser for section->references matrix payload."""
+    matrix = OrderedDict()
+    reserved = {
+        "sections", "items", "matrix", "section_map", "section_matrix",
+        "literature_matrix", "citation_matrix", "reference_matrix",
+        "section_literature_map", "meta", "metadata", "version"
+    }
+
+    def add(section_id, refs):
+        if not section_id:
+            return
+        sid = sanitize_section_id(str(section_id))
+        if sid not in matrix:
+            matrix[sid] = []
+        if isinstance(refs, list):
+            matrix[sid].extend(refs)
+        elif refs is not None:
+            matrix[sid].append(refs)
+
+    def walk(node):
+        if isinstance(node, list):
+            for item in node:
+                if isinstance(item, dict):
+                    sid = item.get("section_id") or item.get("section") or item.get("id")
+                    refs = (
+                        item.get("references") or item.get("refs") or item.get("literature")
+                        or item.get("citations") or item.get("items") or item.get("ref_ids")
+                    )
+                    if sid is not None and refs is not None:
+                        add(sid, refs)
+                    else:
+                        walk(item)
+            return
+
+        if not isinstance(node, dict):
+            return
+
+        for key in (
+            "matrix", "section_map", "section_matrix",
+            "literature_matrix", "citation_matrix", "reference_matrix",
+            "section_literature_map", "items"
+        ):
+            if key in node:
+                walk(node.get(key))
+
+        sections = node.get("sections")
+        if isinstance(sections, dict):
+            for sid, refs in sections.items():
+                add(sid, refs)
+        elif isinstance(sections, list):
+            walk(sections)
+
+        for k, v in node.items():
+            lk = str(k).strip().lower()
+            if lk in reserved:
+                continue
+            if isinstance(v, list):
+                add(k, v)
+
+    walk(payload)
+    return dict(matrix)
+
+
+def load_literature_matrix(matrix_file=DEFAULT_LITERATURE_MATRIX_FILE, storyline_file=STATE_FILES["storyline"]):
+    combined = OrderedDict()
+    sources = {"matrix_file": False, "storyline_embedded": False}
+
+    if matrix_file and os.path.exists(matrix_file):
+        try:
+            payload = read_json_file(matrix_file)
+            parsed = parse_literature_matrix(payload)
+            for sid, refs in parsed.items():
+                combined[sid] = list(refs)
+            sources["matrix_file"] = bool(parsed)
+        except Exception:
+            sources["matrix_file"] = False
+
+    if storyline_file and os.path.exists(storyline_file):
+        try:
+            payload = read_json_file(storyline_file)
+            parsed = parse_literature_matrix(payload)
+            for sid, refs in parsed.items():
+                if sid not in combined:
+                    combined[sid] = []
+                combined[sid].extend(refs)
+            sources["storyline_embedded"] = bool(parsed)
+        except Exception:
+            sources["storyline_embedded"] = False
+
+    return dict(combined), sources
+
+
+def as_index_list(payload):
+    if isinstance(payload, list):
+        return payload
+    if isinstance(payload, dict):
+        for key in ("references", "items", "entries", "data", "figures", "records", "si", "supplementary"):
+            value = payload.get(key)
+            if isinstance(value, list):
+                return value
+    return None
+
+
+def validate_index_schema(name, path, required_any_keys):
+    check = {
+        "name": name,
+        "file": path,
+        "exists": os.path.exists(path),
+        "ok": True,
+        "count": 0,
+        "errors": [],
+    }
+    if not check["exists"]:
+        check["ok"] = False
+        check["errors"].append("missing file")
+        return check
+    try:
+        payload = read_json_file(path)
+    except Exception as e:
+        check["ok"] = False
+        check["errors"].append(f"invalid json: {e}")
+        return check
+
+    items = as_index_list(payload)
+    if items is None:
+        check["ok"] = False
+        check["errors"].append("must be a list or dict containing a list field")
+        return check
+
+    check["count"] = len(items)
+    for idx, entry in enumerate(items, start=1):
+        if not isinstance(entry, dict):
+            check["ok"] = False
+            check["errors"].append(f"item[{idx}] is not an object")
+            if len(check["errors"]) >= 20:
+                break
+            continue
+        if required_any_keys:
+            found = False
+            for k in required_any_keys:
+                val = entry.get(k)
+                if isinstance(val, str):
+                    if val.strip():
+                        found = True
+                        break
+                elif val is not None:
+                    found = True
+                    break
+            if not found:
+                check["ok"] = False
+                check["errors"].append(f"item[{idx}] missing required identity fields: any of {required_any_keys}")
+                if len(check["errors"]) >= 20:
+                    break
+    return check
+
+
+def validate_storyline_schema(storyline_file=STATE_FILES["storyline"]):
+    check = {
+        "name": "storyline",
+        "file": storyline_file,
+        "exists": os.path.exists(storyline_file),
+        "ok": True,
+        "section_count": 0,
+        "errors": [],
+    }
+    if not check["exists"]:
+        check["ok"] = False
+        check["errors"].append("missing file")
+        return check
+    try:
+        payload = read_json_file(storyline_file)
+    except Exception as e:
+        check["ok"] = False
+        check["errors"].append(f"invalid json: {e}")
+        return check
+
+    sections = []
+    if isinstance(payload, dict):
+        sections = payload.get("sections", [])
+    if not isinstance(sections, list):
+        check["ok"] = False
+        check["errors"].append("sections must be a list")
+        return check
+
+    seen = set()
+    for idx, sec in enumerate(sections, start=1):
+        if not isinstance(sec, dict):
+            check["ok"] = False
+            check["errors"].append(f"sections[{idx}] is not an object")
+            continue
+        sid = str(sec.get("id") or "").strip()
+        if not sid:
+            check["ok"] = False
+            check["errors"].append(f"sections[{idx}] missing id")
+            continue
+        if sid in seen:
+            check["ok"] = False
+            check["errors"].append(f"duplicate section id: {sid}")
+            continue
+        seen.add(sid)
+    check["section_count"] = len(seen)
+    return check
+
+
+def validate_matrix_schema(
+    matrix_file=DEFAULT_LITERATURE_MATRIX_FILE,
+    storyline_file=STATE_FILES["storyline"],
+    require_matrix_reindex=True,
+):
+    check = {
+        "name": "literature_matrix",
+        "matrix_file": matrix_file,
+        "storyline_file": storyline_file,
+        "ok": True,
+        "errors": [],
+        "warnings": [],
+        "sections_in_matrix": 0,
+    }
+    matrix_map, sources = load_literature_matrix(matrix_file=matrix_file, storyline_file=storyline_file)
+    check["sources"] = sources
+    check["sections_in_matrix"] = len(matrix_map)
+    if require_matrix_reindex and not matrix_map:
+        check["ok"] = False
+        check["errors"].append("matrix is required but no section-literature mapping was found")
+        return check
+
+    section_order = load_storyline_section_order(storyline_file)
+    section_set = set(section_order)
+    unknown = [sid for sid in matrix_map.keys() if section_set and sid not in section_set]
+    if unknown:
+        check["ok"] = False
+        check["errors"].append(f"unknown section ids: {unknown[:10]}")
+
+    bad_rows = []
+    for sid, refs in matrix_map.items():
+        if not isinstance(refs, list):
+            bad_rows.append({"section_id": sid, "reason": "refs must be a list"})
+            continue
+        if not refs:
+            check["warnings"].append(f"section '{sid}' has empty references list")
+        for raw in refs:
+            tokens = expand_matrix_ref_tokens(raw)
+            if not tokens:
+                bad_rows.append({"section_id": sid, "reason": f"invalid ref token: {raw}"})
+    if bad_rows:
+        check["ok"] = False
+        check["errors"].append(f"invalid matrix rows: {bad_rows[:10]}")
+    return check
+
+
+def validate_state_schemas(
+    require_matrix_reindex=True,
+    matrix_file=DEFAULT_LITERATURE_MATRIX_FILE,
+    storyline_file=STATE_FILES["storyline"],
+):
+    literature = validate_index_schema(
+        "literature_index",
+        STATE_FILES["literature_index"],
+        required_any_keys=("title", "citation", "doi", "ref_id", "source_id", "citation_key"),
+    )
+    figures = validate_index_schema(
+        "figures_database",
+        STATE_FILES["figures_database"],
+        required_any_keys=("figure_id", "id", "title", "caption", "section_id"),
+    )
+    si = validate_index_schema(
+        "si_database",
+        STATE_FILES["si_database"],
+        required_any_keys=("si_id", "id", "title", "caption", "content", "section_id"),
+    )
+    storyline = validate_storyline_schema(storyline_file=storyline_file)
+    matrix = validate_matrix_schema(
+        matrix_file=matrix_file,
+        storyline_file=storyline_file,
+        require_matrix_reindex=require_matrix_reindex,
+    )
+
+    checks = [literature, figures, si, storyline, matrix]
+    errors = []
+    warnings = []
+    for check in checks:
+        if not check.get("ok", True):
+            errors.append({"name": check.get("name"), "errors": check.get("errors", [])})
+        ws = check.get("warnings", [])
+        if ws:
+            warnings.extend([{"name": check.get("name"), "warning": w} for w in ws])
+
+    return {
+        "ok": len(errors) == 0,
+        "checks": checks,
+        "errors": errors,
+        "warnings": warnings,
+    }
+
+
+def build_canonical_lookup_maps(canonical_entries):
+    by_ref_id = {}
+    by_source_id = {}
+    by_citation_key = {}
+    by_doi = {}
+    by_title = {}
+    for idx, entry in enumerate(canonical_entries, start=1):
+        if not isinstance(entry, dict):
+            continue
+        ref_id = str(entry.get("ref_id") or "").strip().lower()
+        source_id = str(entry.get("source_id") or "").strip().lower()
+        citation_key = str(entry.get("citation_key") or "").strip().lower()
+        doi = normalize_doi(entry.get("doi"))
+        title = normalize_title(entry.get("title"))
+        if ref_id:
+            by_ref_id.setdefault(ref_id, idx)
+        if source_id:
+            by_source_id.setdefault(source_id, idx)
+        if citation_key:
+            by_citation_key.setdefault(citation_key, idx)
+        if doi:
+            by_doi.setdefault(doi, idx)
+        if title:
+            by_title.setdefault(title, idx)
+    return {
+        "ref_id": by_ref_id,
+        "source_id": by_source_id,
+        "citation_key": by_citation_key,
+        "doi": by_doi,
+        "title": by_title,
+    }
+
+
+def expand_matrix_ref_tokens(raw):
+    if raw is None:
+        return []
+    if isinstance(raw, int):
+        return [raw]
+    if isinstance(raw, str):
+        s = raw.strip()
+        m = re.match(r"^\[(.+)\]$", s)
+        payload = m.group(1) if m else s
+        nums = expand_citation_numbers(payload)
+        if nums:
+            return nums
+        return [s]
+    if isinstance(raw, dict):
+        out = []
+        for key in ("number", "citation_number", "index"):
+            val = raw.get(key)
+            if isinstance(val, int):
+                out.append(val)
+        if out:
+            return out
+        return [raw]
+    return [raw]
+
+
+def resolve_matrix_token_to_canonical(token, old_to_new, lookup_maps):
+    if isinstance(token, int):
+        return old_to_new.get(token)
+
+    if isinstance(token, dict):
+        for key in ("ref_id", "source_id", "citation_key"):
+            val = str(token.get(key) or "").strip().lower()
+            if val and val in lookup_maps[key]:
+                return lookup_maps[key][val]
+        doi = normalize_doi(token.get("doi"))
+        if doi and doi in lookup_maps["doi"]:
+            return lookup_maps["doi"][doi]
+        title = normalize_title(token.get("title"))
+        if title and title in lookup_maps["title"]:
+            return lookup_maps["title"][title]
+        return None
+
+    if isinstance(token, str):
+        s = token.strip()
+        if not s:
+            return None
+        if s.isdigit():
+            return old_to_new.get(int(s))
+        low = s.lower()
+        if low in lookup_maps["ref_id"]:
+            return lookup_maps["ref_id"][low]
+        if low in lookup_maps["source_id"]:
+            return lookup_maps["source_id"][low]
+        if low in lookup_maps["citation_key"]:
+            return lookup_maps["citation_key"][low]
+        doi = normalize_doi(s)
+        if doi in lookup_maps["doi"]:
+            return lookup_maps["doi"][doi]
+        title = normalize_title(s)
+        if title in lookup_maps["title"]:
+            return lookup_maps["title"][title]
+    return None
+
+
+def apply_matrix_reindex(
+    dedup_result,
+    matrix_file=DEFAULT_LITERATURE_MATRIX_FILE,
+    storyline_file=STATE_FILES["storyline"],
+    require_matrix_reindex=True
+):
+    canonical = dedup_result.get("canonical_entries", [])
+    old_to_new = dedup_result.get("old_to_new", {})
+    if not isinstance(canonical, list) or not isinstance(old_to_new, dict):
+        return dedup_result, {"applied": False, "reason": "invalid_dedup_result"}
+
+    matrix_map, sources = load_literature_matrix(matrix_file=matrix_file, storyline_file=storyline_file)
+    section_order = load_storyline_section_order(storyline_file)
+    section_keys = list(matrix_map.keys())
+    unknown_sections = []
+    if section_order:
+        order_set = set(section_order)
+        unknown_sections = [s for s in section_keys if s not in order_set]
+    if section_order:
+        ordered_sections = [s for s in section_order if s in matrix_map]
+        ordered_sections.extend([s for s in section_keys if s not in ordered_sections])
+    else:
+        ordered_sections = section_keys
+
+    if require_matrix_reindex and len(canonical) > 0 and not ordered_sections:
+        raise RuntimeError(
+            f"Matrix reindex required but no section-literature matrix found "
+            f"(expected {matrix_file} or embedded matrix in {storyline_file})."
+        )
+    if require_matrix_reindex and unknown_sections:
+        raise RuntimeError(
+            f"Matrix reindex unknown section ids (not found in storyline sections): {unknown_sections[:10]}"
+        )
+
+    lookup_maps = build_canonical_lookup_maps(canonical)
+    ordered_canonical = []
+    seen = set()
+    unresolved = []
+
+    for sid in ordered_sections:
+        refs = matrix_map.get(sid, [])
+        for raw in refs:
+            for token in expand_matrix_ref_tokens(raw):
+                cidx = resolve_matrix_token_to_canonical(token, old_to_new, lookup_maps)
+                if cidx is None:
+                    unresolved.append({"section_id": sid, "token": token})
+                    continue
+                if cidx not in seen:
+                    seen.add(cidx)
+                    ordered_canonical.append(cidx)
+
+    all_canonical = list(range(1, len(canonical) + 1))
+    unmatched = [idx for idx in all_canonical if idx not in seen]
+
+    if require_matrix_reindex and len(canonical) > 0:
+        if unresolved:
+            sample = unresolved[:5]
+            raise RuntimeError(f"Matrix reindex unresolved references: {sample}")
+        if unmatched:
+            raise RuntimeError(f"Matrix reindex missing section assignment for canonical refs: {unmatched[:10]}")
+
+    if not ordered_canonical:
+        ordered_canonical = all_canonical
+    elif unmatched:
+        ordered_canonical.extend(unmatched)
+
+    canonical_to_new = {old_idx: new_idx for new_idx, old_idx in enumerate(ordered_canonical, start=1)}
+    reordered = [canonical[old_idx - 1] for old_idx in ordered_canonical]
+    for i, entry in enumerate(reordered, start=1):
+        if isinstance(entry, dict):
+            entry["citation_number"] = i
+
+    remapped_old_to_new = {}
+    for old_num, canonical_idx in old_to_new.items():
+        try:
+            old_key = int(old_num)
+            can_key = int(canonical_idx)
+        except Exception:
+            continue
+        remapped_old_to_new[old_key] = canonical_to_new.get(can_key, can_key)
+
+    updated = dict(dedup_result)
+    updated["canonical_entries"] = reordered
+    updated["old_to_new"] = remapped_old_to_new
+    report = {
+        "applied": True,
+        "matrix_sources": sources,
+        "ordered_sections": ordered_sections,
+        "unknown_sections": unknown_sections,
+        "unresolved_count": len(unresolved),
+        "unmatched_count": len(unmatched),
+        "total_canonical": len(canonical),
+    }
+    return updated, report
+
 def summarize_dict_hits(data, terms, max_hits=40):
     hits = []
 
@@ -520,6 +1158,10 @@ def cached_global_value(path, compact=False, key_name=None):
 
     if path.endswith(".json"):
         payload = read_json_file(path)
+        if compact and key_name == "figures_database" and isinstance(payload, list):
+            payload = [compact_figure_item(x) for x in payload[:30]]
+        if compact and key_name == "version_history" and isinstance(payload, list):
+            payload = payload[-30:]
     else:
         with open(path, "r", encoding="utf-8") as f:
             payload = f.read()
@@ -771,7 +1413,7 @@ def load_state(
                 with_global_history=bool(with_global_history)
             )
         print(json.dumps(scoped_bundle, indent=2, ensure_ascii=False))
-        return
+        return scoped_bundle
 
     combined_state = {}
     
@@ -827,8 +1469,16 @@ def load_state(
         combined_state["live_word_counts"] = calculate_word_counts()
             
     print(json.dumps(combined_state, indent=2, ensure_ascii=False))
+    return combined_state
 
-def preflight_validate_state(section=None, strict=False, origin="manual"):
+def preflight_validate_state(
+    section=None,
+    strict=False,
+    origin="manual",
+    matrix_file=DEFAULT_LITERATURE_MATRIX_FILE,
+    storyline_file=STATE_FILES["storyline"],
+    require_matrix_reindex=True,
+):
     """Lightweight full-state validation without loading heavy content into context."""
     checks = []
     warnings = []
@@ -894,12 +1544,24 @@ def preflight_validate_state(section=None, strict=False, origin="manual"):
             "matched_manuscript_files": len(find_section_manuscripts(section))
         }
 
+    schema_report = validate_state_schemas(
+        require_matrix_reindex=require_matrix_reindex,
+        matrix_file=matrix_file,
+        storyline_file=storyline_file,
+    )
+    if not schema_report.get("ok", False):
+        if strict:
+            ok = False
+        else:
+            warnings.append("schema_validation_failed_in_lenient_mode")
+
     result = {
         "mode": "strict" if strict else "lenient",
         "ok": ok,
         "warnings": warnings,
         "checks": checks,
-        "section_check": section_check
+        "section_check": section_check,
+        "schema": schema_report,
     }
     if section:
         update_gate_state(
@@ -911,6 +1573,7 @@ def preflight_validate_state(section=None, strict=False, origin="manual"):
             completion_ready=False
         )
     print(json.dumps(result, ensure_ascii=False))
+    return result
 
 def rotate_context_memory_versions():
     """Handles versioning for context_memory.md (v-1, v-2)."""
@@ -1393,12 +2056,21 @@ def build_literature_sync_preview(
     index_file="literature_index.json",
     manuscript_dir=DEFAULT_MANUSCRIPT_DIR,
     similarity_threshold=DEFAULT_DEDUP_SIMILARITY,
-    conflict_threshold=DEFAULT_DEDUP_CONFLICT
+    conflict_threshold=DEFAULT_DEDUP_CONFLICT,
+    matrix_file=DEFAULT_LITERATURE_MATRIX_FILE,
+    storyline_file=STATE_FILES["storyline"],
+    require_matrix_reindex=True
 ):
     result = dedup_literature_index(
         index_file=index_file,
         similarity_threshold=similarity_threshold,
         conflict_threshold=conflict_threshold
+    )
+    result, matrix_report = apply_matrix_reindex(
+        result,
+        matrix_file=matrix_file,
+        storyline_file=storyline_file,
+        require_matrix_reindex=require_matrix_reindex
     )
     old_to_new = result.get("old_to_new", {})
     changed_pairs = [
@@ -1431,6 +2103,7 @@ def build_literature_sync_preview(
         "changed_pairs_preview": changed_pairs[:30],
         "dedup_conflicts": result.get("conflicts", []),
         "dedup_strategy_counts": result.get("strategy_counts", {}),
+        "matrix_reindex": matrix_report,
         "affected_markdown_files": md_preview,
         "affected_markdown_files_count": len(md_preview),
         "strict_references_rebuild": True,
@@ -1451,7 +2124,10 @@ def sync_global_literature(
     conflict_threshold=DEFAULT_DEDUP_CONFLICT,
     allow_conflicts=False,
     backup_keep=DEFAULT_BACKUP_KEEP,
-    backup_max_days=None
+    backup_max_days=None,
+    matrix_file=DEFAULT_LITERATURE_MATRIX_FILE,
+    storyline_file=STATE_FILES["storyline"],
+    require_matrix_reindex=True
 ):
     """Deduplicate literature index + remap citations.
 
@@ -1460,11 +2136,54 @@ def sync_global_literature(
     - apply_changes=True writes files.
     - if both False, defaults to preview-only.
     """
-    preview = build_literature_sync_preview(
-        index_file=index_file,
-        similarity_threshold=similarity_threshold,
-        conflict_threshold=conflict_threshold
+    mode = "dry-run" if (dry_run or not apply_changes) else "apply"
+    schema = validate_state_schemas(
+        require_matrix_reindex=require_matrix_reindex,
+        matrix_file=matrix_file,
+        storyline_file=storyline_file,
     )
+    if not schema.get("ok", False):
+        out = {
+            "mode": mode,
+            "applied": False,
+            "error": "schema_validation_failed",
+            "schema": schema,
+        }
+        out["report_file"] = write_sync_report("error", out)
+        out["transaction_log"] = write_transaction_log("sync_literature", {
+            "command": "sync-literature",
+            "mode": mode,
+            "ok": False,
+            "error": out["error"],
+            "schema_error_count": len(schema.get("errors", [])),
+            "ts": datetime.now().isoformat(timespec="seconds"),
+        })
+        return out
+
+    try:
+        preview = build_literature_sync_preview(
+            index_file=index_file,
+            similarity_threshold=similarity_threshold,
+            conflict_threshold=conflict_threshold,
+            matrix_file=matrix_file,
+            storyline_file=storyline_file,
+            require_matrix_reindex=require_matrix_reindex
+        )
+    except Exception as e:
+        out = {
+            "mode": mode,
+            "applied": False,
+            "error": f"matrix_reindex_gate_failed: {e}"
+        }
+        out["report_file"] = write_sync_report("error", out)
+        out["transaction_log"] = write_transaction_log("sync_literature", {
+            "command": "sync-literature",
+            "mode": mode,
+            "ok": False,
+            "error": out["error"],
+            "ts": datetime.now().isoformat(timespec="seconds"),
+        })
+        return out
     ensure_state_dir()
     with open(os.path.join(GATE_STATE_DIR, "lit_sync_preview.json"), "w", encoding="utf-8") as f:
         json.dump(preview, f, indent=2, ensure_ascii=False)
@@ -1476,81 +2195,123 @@ def sync_global_literature(
             "applied": False
         }
         out["report_file"] = write_sync_report("dry_run", out)
+        out["transaction_log"] = write_transaction_log("sync_literature", {
+            "command": "sync-literature",
+            "mode": "dry-run",
+            "ok": True,
+            "applied": False,
+            "duplicates_removed_preview": preview.get("duplicates_removed"),
+            "number_changes_preview": preview.get("number_changes"),
+            "ts": datetime.now().isoformat(timespec="seconds"),
+        })
         return out
 
     backup_dir = None
-    if backup_first:
-        backup_dir = backup_literature_sync_assets(
-            index_file=index_file,
-            backup_keep=backup_keep,
-            backup_max_days=backup_max_days
-        )
-
     try:
-        result = dedup_literature_index(
-            index_file=index_file,
-            similarity_threshold=similarity_threshold,
-            conflict_threshold=conflict_threshold
-        )
-        if result.get("conflicts") and not allow_conflicts:
-            raise RuntimeError(
-                "Dedup conflicts detected; aborting apply. "
-                "Use --allow-conflicts only after reviewing dry-run report."
+        with FileLock("literature_sync_apply"):
+            if backup_first:
+                backup_dir = backup_literature_sync_assets(
+                    index_file=index_file,
+                    backup_keep=backup_keep,
+                    backup_max_days=backup_max_days
+                )
+
+            result = dedup_literature_index(
+                index_file=index_file,
+                similarity_threshold=similarity_threshold,
+                conflict_threshold=conflict_threshold
             )
-        canonical = result["canonical_entries"]
-
-        if isinstance(canonical, list):
-            with open(index_file, "w", encoding="utf-8") as f:
-                json.dump(canonical, f, indent=2, ensure_ascii=False)
-
-        rewrite_report = {"files_changed": 0, "files_scanned": 0}
-        if rewrite_manuscripts and isinstance(result["old_to_new"], dict):
-            if strict_references:
-                rewrite_report = rewrite_manuscript_citations_strict(
-                    result["old_to_new"],
-                    result.get("canonical_entries", []),
-                    rewrite_docx=rewrite_docx,
-                    reference_style=reference_style
+            result, matrix_report = apply_matrix_reindex(
+                result,
+                matrix_file=matrix_file,
+                storyline_file=storyline_file,
+                require_matrix_reindex=require_matrix_reindex
+            )
+            if result.get("conflicts") and not allow_conflicts:
+                raise RuntimeError(
+                    "Dedup conflicts detected; aborting apply. "
+                    "Use --allow-conflicts only after reviewing dry-run report."
                 )
-            else:
-                rewrite_report = rewrite_manuscript_citations(
-                    result["old_to_new"],
-                    rewrite_docx=rewrite_docx
-                )
+            canonical = result["canonical_entries"]
 
-        validation = validate_number_integrity(index_file=index_file)
-        if not validation.get("ok", False):
-            raise RuntimeError(f"Citation validation failed: out_of_range={validation.get('out_of_range')}")
+            if isinstance(canonical, list):
+                with open(index_file, "w", encoding="utf-8") as f:
+                    json.dump(canonical, f, indent=2, ensure_ascii=False)
 
-        summary = {
-            "mode": "apply",
-            "index_file": index_file,
-            "backup_dir": backup_dir,
-            "total_before": result["total_before"],
-            "total_after": result["total_after"],
-            "duplicates_removed": result["duplicate_count"],
-            "dedup_conflicts": result.get("conflicts", []),
-            "dedup_strategy_counts": result.get("strategy_counts", {}),
-            "allow_conflicts": bool(allow_conflicts),
-            "manuscripts": rewrite_report,
-            "validation": validation,
-            "rolled_back": False,
-            "applied": True,
-            "strict_references_rebuild": strict_references
-        }
-        summary["report_file"] = write_sync_report("apply", summary)
-        return summary
+            rewrite_report = {"files_changed": 0, "files_scanned": 0}
+            if rewrite_manuscripts and isinstance(result["old_to_new"], dict):
+                if strict_references:
+                    rewrite_report = rewrite_manuscript_citations_strict(
+                        result["old_to_new"],
+                        result.get("canonical_entries", []),
+                        rewrite_docx=rewrite_docx,
+                        reference_style=reference_style
+                    )
+                else:
+                    rewrite_report = rewrite_manuscript_citations(
+                        result["old_to_new"],
+                        rewrite_docx=rewrite_docx
+                    )
+
+            validation = validate_number_integrity(index_file=index_file)
+            if not validation.get("ok", False):
+                raise RuntimeError(f"Citation validation failed: out_of_range={validation.get('out_of_range')}")
+
+            summary = {
+                "mode": "apply",
+                "index_file": index_file,
+                "backup_dir": backup_dir,
+                "total_before": result["total_before"],
+                "total_after": result["total_after"],
+                "duplicates_removed": result["duplicate_count"],
+                "dedup_conflicts": result.get("conflicts", []),
+                "dedup_strategy_counts": result.get("strategy_counts", {}),
+                "matrix_reindex": matrix_report,
+                "allow_conflicts": bool(allow_conflicts),
+                "manuscripts": rewrite_report,
+                "validation": validation,
+                "rolled_back": False,
+                "applied": True,
+                "strict_references_rebuild": strict_references
+            }
+            summary["report_file"] = write_sync_report("apply", summary)
+            summary["transaction_log"] = write_transaction_log("sync_literature", {
+                "command": "sync-literature",
+                "mode": "apply",
+                "ok": True,
+                "applied": True,
+                "backup_dir": backup_dir,
+                "duplicates_removed": summary.get("duplicates_removed"),
+                "number_changes": ((preview or {}).get("number_changes")),
+                "files_changed": (rewrite_report or {}).get("files_changed"),
+                "strict_references_rebuild": bool(strict_references),
+                "ts": datetime.now().isoformat(timespec="seconds"),
+            })
+            return summary
     except Exception as e:
         restored = False
         if backup_dir:
             restored = restore_literature_sync_backup(backup_dir, index_file=index_file)
+        err = str(e)
+        error_type = "lock_acquire_failed" if "lock '" in err else "sync_apply_failed"
         out = {
             "index_file": index_file,
             "backup_dir": backup_dir,
-            "error": str(e),
+            "error": err,
+            "error_type": error_type,
             "rolled_back": restored
         }
         out["report_file"] = write_sync_report("error", out)
+        out["transaction_log"] = write_transaction_log("sync_literature", {
+            "command": "sync-literature",
+            "mode": "apply",
+            "ok": False,
+            "applied": False,
+            "error": err,
+            "error_type": error_type,
+            "rolled_back": restored,
+            "ts": datetime.now().isoformat(timespec="seconds"),
+        })
         return out
 
 def postwrite_state(
@@ -1569,116 +2330,130 @@ def postwrite_state(
     conflict_threshold=DEFAULT_DEDUP_CONFLICT,
     allow_conflicts=False,
     backup_keep=DEFAULT_BACKUP_KEEP,
-    backup_max_days=None
+    backup_max_days=None,
+    matrix_file=DEFAULT_LITERATURE_MATRIX_FILE,
+    storyline_file=STATE_FILES["storyline"],
+    require_matrix_reindex=True
 ):
     """Auto-sync global progress after each writing turn."""
     ok, reason = validate_gate(section, "prewrite")
     if not ok:
-        print(json.dumps({
+        payload = {
             "error": "prewrite_gate_failed",
             "reason": reason,
             "hint": "Run write-cycle --section <id> before postwrite"
-        }, ensure_ascii=False))
+        }
+        print(json.dumps(payload, ensure_ascii=False))
         sys.exit(2)
 
-    timestamp = datetime.now().isoformat(timespec="seconds")
-    updated_files = []
+    try:
+        with FileLock("state_update"):
+            timestamp = datetime.now().isoformat(timespec="seconds")
+            updated_files = []
 
-    # 1) Update global writing progress
-    progress_file = STATE_FILES["writing_progress"]
-    progress_data = {}
-    if os.path.exists(progress_file):
-        try:
-            current = read_json_file(progress_file)
-            if isinstance(current, dict):
-                progress_data = current
-        except Exception:
+            # 1) Update global writing progress
+            progress_file = STATE_FILES["writing_progress"]
             progress_data = {}
+            if os.path.exists(progress_file):
+                try:
+                    current = read_json_file(progress_file)
+                    if isinstance(current, dict):
+                        progress_data = current
+                except Exception:
+                    progress_data = {}
 
-    progress_data["last_section"] = section
-    progress_data["last_updated"] = timestamp
-    progress_data["status"] = status
-    if summary:
-        progress_data["last_summary"] = summary
+            progress_data["last_section"] = section
+            progress_data["last_updated"] = timestamp
+            progress_data["status"] = status
+            if summary:
+                progress_data["last_summary"] = summary
 
-    history = progress_data.get("update_history", [])
-    if not isinstance(history, list):
-        history = []
-    history.append({
-        "ts": timestamp,
-        "section": section,
-        "status": status,
-        "summary": summary[:200]
-    })
-    progress_data["update_history"] = history[-50:]
+            history = progress_data.get("update_history", [])
+            if not isinstance(history, list):
+                history = []
+            history.append({
+                "ts": timestamp,
+                "section": section,
+                "status": status,
+                "summary": summary[:200]
+            })
+            progress_data["update_history"] = history[-50:]
 
-    with open(progress_file, "w", encoding="utf-8") as f:
-        json.dump(progress_data, f, indent=2, ensure_ascii=False)
-    updated_files.append(progress_file)
+            with open(progress_file, "w", encoding="utf-8") as f:
+                json.dump(progress_data, f, indent=2, ensure_ascii=False)
+            updated_files.append(progress_file)
 
-    # 2) Update global context memory with version rotation
-    context_file = STATE_FILES["context_memory"]
-    existing = ""
-    if os.path.exists(context_file):
-        with open(context_file, "r", encoding="utf-8") as f:
-            existing = f.read().rstrip()
-        rotate_context_memory_versions()
+            # 2) Update global context memory with version rotation
+            context_file = STATE_FILES["context_memory"]
+            existing = ""
+            if os.path.exists(context_file):
+                with open(context_file, "r", encoding="utf-8") as f:
+                    existing = f.read().rstrip()
+                rotate_context_memory_versions()
 
-    note = f"[{timestamp}] section={section}; status={status}"
-    if summary:
-        note += f"; summary={summary}"
+            note = f"[{timestamp}] section={section}; status={status}"
+            if summary:
+                note += f"; summary={summary}"
 
-    new_content = f"{existing}\n{note}".strip() + "\n"
-    with open(context_file, "w", encoding="utf-8") as f:
-        f.write(new_content)
-    updated_files.append(context_file)
+            new_content = f"{existing}\n{note}".strip() + "\n"
+            with open(context_file, "w", encoding="utf-8") as f:
+                f.write(new_content)
+            updated_files.append(context_file)
 
-    literature_report = None
-    if sync_literature:
-        literature_report = sync_global_literature(
-            index_file=STATE_FILES["literature_index"],
-            rewrite_manuscripts=rewrite_manuscripts,
-            backup_first=backup_first,
-            rewrite_docx=rewrite_docx,
-            dry_run=not sync_apply,
-            apply_changes=sync_apply,
-            strict_references=strict_references,
-            reference_style=reference_style,
-            similarity_threshold=similarity_threshold,
-            conflict_threshold=conflict_threshold,
-            allow_conflicts=allow_conflicts,
-            backup_keep=backup_keep,
-            backup_max_days=backup_max_days
-        )
+            literature_report = None
+            if sync_literature:
+                literature_report = sync_global_literature(
+                    index_file=STATE_FILES["literature_index"],
+                    rewrite_manuscripts=rewrite_manuscripts,
+                    backup_first=backup_first,
+                    rewrite_docx=rewrite_docx,
+                    dry_run=not sync_apply,
+                    apply_changes=sync_apply,
+                    strict_references=strict_references,
+                    reference_style=reference_style,
+                    similarity_threshold=similarity_threshold,
+                    conflict_threshold=conflict_threshold,
+                    allow_conflicts=allow_conflicts,
+                    backup_keep=backup_keep,
+                    backup_max_days=backup_max_days,
+                    matrix_file=matrix_file,
+                    storyline_file=storyline_file,
+                    require_matrix_reindex=require_matrix_reindex
+                )
 
-    completion_ready = bool(
-        sync_literature
-        and sync_apply
-        and isinstance(literature_report, dict)
-        and literature_report.get("applied", False)
-        and not literature_report.get("error")
-    )
-    update_gate_state(
-        section=section,
-        last_postwrite_ts=timestamp,
-        postwrite_sync_literature=bool(sync_literature),
-        postwrite_sync_apply=bool(sync_apply),
-        completion_ready=completion_ready
-    )
+            completion_ready = bool(
+                sync_literature
+                and sync_apply
+                and isinstance(literature_report, dict)
+                and literature_report.get("applied", False)
+                and not literature_report.get("error")
+            )
+            update_gate_state(
+                section=section,
+                last_postwrite_ts=timestamp,
+                postwrite_sync_literature=bool(sync_literature),
+                postwrite_sync_apply=bool(sync_apply),
+                completion_ready=completion_ready
+            )
 
-    if create_snapshot:
-        backup_project_state()
+            if create_snapshot:
+                backup_project_state()
 
-    result = {
-        "updated_files": updated_files,
-        "literature_sync": literature_report,
-        "gate": {
-            "section": section,
-            "completion_ready": completion_ready,
-            "requires": "postwrite --sync-literature --sync-apply"
-        }
-    }
-    print(json.dumps(result, ensure_ascii=False))
+            result = {
+                "updated_files": updated_files,
+                "literature_sync": literature_report,
+                "gate": {
+                    "section": section,
+                    "completion_ready": completion_ready,
+                    "requires": "postwrite --sync-literature --sync-apply"
+                }
+            }
+            print(json.dumps(result, ensure_ascii=False))
+            return result
+    except RuntimeError as e:
+        payload = {"error": "lock_acquire_failed", "reason": str(e), "lock": "state_update"}
+        print(json.dumps(payload, ensure_ascii=False))
+        sys.exit(2)
 
 
 def gate_check(section, phase):
@@ -1694,6 +2469,7 @@ def gate_check(section, phase):
     print(json.dumps(payload, ensure_ascii=False))
     if not ok:
         sys.exit(2)
+    return payload
 
 
 def write_cycle(
@@ -1716,46 +2492,111 @@ def write_cycle(
     allow_conflicts=False,
     backup_keep=DEFAULT_BACKUP_KEEP,
     backup_max_days=None,
-    preflight_strict=True
+    preflight_strict=True,
+    matrix_file=DEFAULT_LITERATURE_MATRIX_FILE,
+    storyline_file=STATE_FILES["storyline"],
+    require_matrix_reindex=True
 ):
-    start_cycle(section)
+    tx = {
+        "command": "write-cycle",
+        "section": section,
+        "started_at": datetime.now().isoformat(timespec="seconds"),
+        "params": {
+            "compact": bool(compact),
+            "token_budget": token_budget,
+            "tail_lines": tail_lines,
+            "include_draft": bool(include_draft),
+            "finalize": bool(finalize),
+            "sync_literature": bool(sync_literature),
+            "sync_apply": bool(sync_apply),
+            "strict_references": bool(strict_references),
+            "preflight_strict": bool(preflight_strict),
+            "matrix_file": matrix_file,
+            "storyline_file": storyline_file,
+            "require_matrix_reindex": bool(require_matrix_reindex),
+        },
+        "ok": False,
+    }
+    try:
+        start_cycle(section)
 
-    # 1) hard gate preflight
-    preflight_validate_state(section=section, strict=preflight_strict, origin="write-cycle")
-
-    # 2) scoped load (global history + section indexes)
-    load_state(
-        compact=compact,
-        section=section,
-        token_budget=token_budget,
-        tail_lines=tail_lines,
-        with_global_history=True,
-        include_draft=include_draft,
-        origin="write-cycle"
-    )
-
-    gate_check(section=section, phase="prewrite")
-
-    # 3) Optional finalize step after writing content externally
-    if finalize:
-        postwrite_state(
+        # 1) hard gate preflight
+        preflight = preflight_validate_state(
             section=section,
-            status=status,
-            summary=summary,
-            create_snapshot=False,
-            sync_literature=sync_literature,
-            rewrite_manuscripts=True,
-            backup_first=not no_backup,
-            rewrite_docx=rewrite_docx,
-            sync_apply=sync_apply,
-            strict_references=strict_references,
-            reference_style=reference_style,
-            similarity_threshold=similarity_threshold,
-            conflict_threshold=conflict_threshold,
-            allow_conflicts=allow_conflicts,
-            backup_keep=backup_keep,
-            backup_max_days=backup_max_days
+            strict=preflight_strict,
+            origin="write-cycle",
+            matrix_file=matrix_file,
+            storyline_file=storyline_file,
+            require_matrix_reindex=require_matrix_reindex,
         )
+        tx["preflight"] = {
+            "ok": bool((preflight or {}).get("ok")),
+            "mode": (preflight or {}).get("mode"),
+            "schema_ok": bool(((preflight or {}).get("schema") or {}).get("ok")),
+            "schema_error_count": len((((preflight or {}).get("schema") or {}).get("errors") or [])),
+        }
+
+        # 2) scoped load (global history + section indexes)
+        loaded = load_state(
+            compact=compact,
+            section=section,
+            token_budget=token_budget,
+            tail_lines=tail_lines,
+            with_global_history=True,
+            include_draft=include_draft,
+            origin="write-cycle"
+        )
+        tx["load"] = summarize_bundle_for_log(loaded)
+
+        prewrite_gate = gate_check(section=section, phase="prewrite")
+        tx["prewrite_gate"] = {
+            "ok": bool((prewrite_gate or {}).get("ok")),
+            "reason": (prewrite_gate or {}).get("reason"),
+        }
+
+        # 3) Optional finalize step after writing content externally
+        if finalize:
+            post = postwrite_state(
+                section=section,
+                status=status,
+                summary=summary,
+                create_snapshot=False,
+                sync_literature=sync_literature,
+                rewrite_manuscripts=True,
+                backup_first=not no_backup,
+                rewrite_docx=rewrite_docx,
+                sync_apply=sync_apply,
+                strict_references=strict_references,
+                reference_style=reference_style,
+                similarity_threshold=similarity_threshold,
+                conflict_threshold=conflict_threshold,
+                allow_conflicts=allow_conflicts,
+                backup_keep=backup_keep,
+                backup_max_days=backup_max_days,
+                matrix_file=matrix_file,
+                storyline_file=storyline_file,
+                require_matrix_reindex=require_matrix_reindex
+            )
+            tx["postwrite"] = {
+                "updated_files_count": len((post or {}).get("updated_files", []) or []),
+                "completion_ready": ((post or {}).get("gate") or {}).get("completion_ready"),
+                "literature_sync_applied": ((post or {}).get("literature_sync") or {}).get("applied"),
+                "literature_sync_error": ((post or {}).get("literature_sync") or {}).get("error"),
+            }
+
+        tx["ok"] = True
+    except SystemExit as e:
+        tx["ok"] = False
+        tx["error"] = f"SystemExit:{e.code}"
+        raise
+    except Exception as e:
+        tx["ok"] = False
+        tx["error"] = str(e)
+        raise
+    finally:
+        tx["finished_at"] = datetime.now().isoformat(timespec="seconds")
+        tx_path = write_transaction_log("write_cycle", tx)
+        update_gate_state(last_write_cycle_log=tx_path)
 
 def update_state(payload_path):
     """Updates state files based on a JSON payload file."""
@@ -2019,6 +2860,7 @@ def stats(section=None, include_history=False, backup_dir="backups"):
             "last_preflight_origin": gate.get("last_preflight_origin"),
             "last_load_origin": gate.get("last_load_origin"),
             "last_postwrite_ts": gate.get("last_postwrite_ts"),
+            "last_write_cycle_log": gate.get("last_write_cycle_log"),
         },
         "backups": {
             "snapshot_count": len(snapshots),
@@ -2052,6 +2894,9 @@ def main():
     preflight_parser = subparsers.add_parser("preflight", help="Lightweight validation of all state/history files")
     preflight_parser.add_argument("--section", help="Optional section id for section-local sanity check")
     preflight_parser.add_argument("--strict", action="store_true", help="Strict mode: missing required files fails preflight")
+    preflight_parser.add_argument("--matrix-file", default=DEFAULT_LITERATURE_MATRIX_FILE, help="Section-literature matrix file path")
+    preflight_parser.add_argument("--storyline-file", default=STATE_FILES["storyline"], help="Storyline JSON used for schema checks")
+    preflight_parser.add_argument("--no-require-matrix-reindex", action="store_true", help="Do not require matrix mapping during schema check")
 
     # Update command
     update_parser = subparsers.add_parser("update", help="Update state files from a payload")
@@ -2071,6 +2916,9 @@ def main():
     postwrite_parser.add_argument("--allow-conflicts", action="store_true", help="Allow apply even when dedup conflicts are detected")
     postwrite_parser.add_argument("--backup-keep", type=int, default=DEFAULT_BACKUP_KEEP, help="How many literature_sync backups to keep")
     postwrite_parser.add_argument("--backup-max-days", type=int, help="Optional backup retention in days")
+    postwrite_parser.add_argument("--matrix-file", default=DEFAULT_LITERATURE_MATRIX_FILE, help="Section-literature matrix file path")
+    postwrite_parser.add_argument("--storyline-file", default=STATE_FILES["storyline"], help="Storyline JSON used for section ordering")
+    postwrite_parser.add_argument("--no-require-matrix-reindex", action="store_true", help="Allow sync apply without strict matrix reindex gate")
     postwrite_parser.add_argument("--no-rewrite-manuscripts", action="store_true", help="Do not rewrite manuscript [n] citations when syncing literature")
     postwrite_parser.add_argument("--rewrite-docx", action="store_true", help="Also rewrite docx citation markers (md-only by default)")
     postwrite_parser.add_argument("--no-backup", action="store_true", help="Skip literature sync backup (not recommended)")
@@ -2087,6 +2935,9 @@ def main():
     sync_lit_parser.add_argument("--allow-conflicts", action="store_true", help="Allow apply even when dedup conflicts are detected")
     sync_lit_parser.add_argument("--backup-keep", type=int, default=DEFAULT_BACKUP_KEEP, help="How many literature_sync backups to keep")
     sync_lit_parser.add_argument("--backup-max-days", type=int, help="Optional backup retention in days")
+    sync_lit_parser.add_argument("--matrix-file", default=DEFAULT_LITERATURE_MATRIX_FILE, help="Section-literature matrix file path")
+    sync_lit_parser.add_argument("--storyline-file", default=STATE_FILES["storyline"], help="Storyline JSON used for section ordering")
+    sync_lit_parser.add_argument("--no-require-matrix-reindex", action="store_true", help="Allow sync apply without strict matrix reindex gate")
     sync_lit_parser.add_argument("--no-rewrite-manuscripts", action="store_true", help="Do not rewrite manuscript [n] citations")
     sync_lit_parser.add_argument("--rewrite-docx", action="store_true", help="Also rewrite docx citation markers (md-only by default)")
     sync_lit_parser.add_argument("--no-backup", action="store_true", help="Skip pre-sync backup (not recommended)")
@@ -2116,6 +2967,9 @@ def main():
     cycle_parser.add_argument("--allow-conflicts", action="store_true", help="Allow apply even when dedup conflicts are detected")
     cycle_parser.add_argument("--backup-keep", type=int, default=DEFAULT_BACKUP_KEEP, help="How many literature_sync backups to keep")
     cycle_parser.add_argument("--backup-max-days", type=int, help="Optional backup retention in days")
+    cycle_parser.add_argument("--matrix-file", default=DEFAULT_LITERATURE_MATRIX_FILE, help="Section-literature matrix file path")
+    cycle_parser.add_argument("--storyline-file", default=STATE_FILES["storyline"], help="Storyline JSON used for section ordering")
+    cycle_parser.add_argument("--no-require-matrix-reindex", action="store_true", help="Allow finalize sync-apply without strict matrix reindex gate")
     cycle_parser.add_argument("--rewrite-docx", action="store_true", help="Also rewrite docx citation markers")
     cycle_parser.add_argument("--no-backup", action="store_true", help="Skip pre-sync backup")
 
@@ -2154,7 +3008,14 @@ def main():
             origin="manual"
         )
     elif args.command == "preflight":
-        preflight_validate_state(section=args.section, strict=args.strict, origin="manual")
+        preflight_validate_state(
+            section=args.section,
+            strict=args.strict,
+            origin="manual",
+            matrix_file=args.matrix_file,
+            storyline_file=args.storyline_file,
+            require_matrix_reindex=(not args.no_require_matrix_reindex)
+        )
     elif args.command == "update":
         update_state(args.payload_file)
     elif args.command == "postwrite":
@@ -2174,7 +3035,10 @@ def main():
             conflict_threshold=args.conflict_threshold,
             allow_conflicts=args.allow_conflicts,
             backup_keep=max(1, args.backup_keep),
-            backup_max_days=args.backup_max_days
+            backup_max_days=args.backup_max_days,
+            matrix_file=args.matrix_file,
+            storyline_file=args.storyline_file,
+            require_matrix_reindex=(not args.no_require_matrix_reindex)
         )
     elif args.command == "sync-literature":
         report = sync_global_literature(
@@ -2190,7 +3054,10 @@ def main():
             conflict_threshold=args.conflict_threshold,
             allow_conflicts=args.allow_conflicts,
             backup_keep=max(1, args.backup_keep),
-            backup_max_days=args.backup_max_days
+            backup_max_days=args.backup_max_days,
+            matrix_file=args.matrix_file,
+            storyline_file=args.storyline_file,
+            require_matrix_reindex=(not args.no_require_matrix_reindex)
         )
         print(json.dumps(report, ensure_ascii=False))
     elif args.command == "gate-check":
@@ -2216,7 +3083,10 @@ def main():
             backup_max_days=args.backup_max_days,
             preflight_strict=(not args.preflight_lenient),
             rewrite_docx=args.rewrite_docx,
-            no_backup=args.no_backup
+            no_backup=args.no_backup,
+            matrix_file=args.matrix_file,
+            storyline_file=args.storyline_file,
+            require_matrix_reindex=(not args.no_require_matrix_reindex)
         )
     elif args.command == "snapshot":
         backup_project_state()

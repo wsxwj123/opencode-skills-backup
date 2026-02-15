@@ -31,6 +31,18 @@ def save_json(path, data):
     p.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
+def resolve_matrix_paths(matrix_path):
+    read_path = Path(matrix_path)
+    write_path = read_path
+
+    # Canonical source is synthesis_matrix.json; auto-fallback from legacy literature_matrix.json.
+    if read_path.name == "synthesis_matrix.json" and not read_path.exists():
+        legacy = read_path.with_name("literature_matrix.json")
+        if legacy.exists():
+            read_path = legacy
+    return read_path, write_path
+
+
 @contextmanager
 def matrix_lock(timeout=20):
     lock_path = Path("logs") / ".matrix.lock"
@@ -129,7 +141,8 @@ def cmd_bootstrap(args):
         if not isinstance(index, list):
             raise SystemExit("literature_index must be a list")
 
-        existing = load_json(args.matrix, [])
+        matrix_read, matrix_write = resolve_matrix_paths(args.matrix)
+        existing = load_json(matrix_read, [])
         existing = existing if isinstance(existing, list) else []
 
         rows = []
@@ -150,12 +163,13 @@ def cmd_bootstrap(args):
                 rows.append(default_row(item, section, args.round))
 
         merged = upsert_rows(existing, rows)
-        save_json(args.matrix, merged)
+        save_json(matrix_write, merged)
     print(f"Bootstrap complete: {len(rows)} candidate rows, {len(merged)} total matrix rows")
 
 
 def cmd_focus(args):
-    matrix = load_json(args.matrix, [])
+    matrix_read, _ = resolve_matrix_paths(args.matrix)
+    matrix = load_json(matrix_read, [])
     if not isinstance(matrix, list):
         raise SystemExit("synthesis_matrix must be a list")
 
@@ -174,7 +188,8 @@ def cmd_bind_claims(args):
         raise SystemExit("claims must be a list")
 
     with matrix_lock():
-        matrix = load_json(args.matrix, [])
+        matrix_read, matrix_write = resolve_matrix_paths(args.matrix)
+        matrix = load_json(matrix_read, [])
         if not isinstance(matrix, list):
             raise SystemExit("synthesis_matrix must be a list")
 
@@ -204,7 +219,7 @@ def cmd_bind_claims(args):
                 row["semantic_score"] = round(best_semantic, 4)
                 updated += 1
 
-        save_json(args.matrix, matrix)
+        save_json(matrix_write, matrix)
     print(f"Bound claims for section={args.section}: {updated} rows updated")
     if args.fail_on_no_update and updated == 0:
         raise SystemExit(2)
@@ -212,7 +227,8 @@ def cmd_bind_claims(args):
 
 def cmd_mark_round3(args):
     with matrix_lock():
-        matrix = load_json(args.matrix, [])
+        matrix_read, matrix_write = resolve_matrix_paths(args.matrix)
+        matrix = load_json(matrix_read, [])
         if not isinstance(matrix, list):
             raise SystemExit("synthesis_matrix must be a list")
 
@@ -226,12 +242,13 @@ def cmd_mark_round3(args):
             row["evidence_round"] = 3
             touched += 1
 
-        save_json(args.matrix, matrix)
+        save_json(matrix_write, matrix)
     print(f"Round3 mark complete: {touched} rows")
 
 
 def cmd_audit(args):
-    matrix = load_json(args.matrix, [])
+    matrix_read, _ = resolve_matrix_paths(args.matrix)
+    matrix = load_json(matrix_read, [])
     if not isinstance(matrix, list):
         raise SystemExit("synthesis_matrix must be a list")
 

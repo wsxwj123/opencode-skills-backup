@@ -1,4 +1,5 @@
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from urllib import error
@@ -56,6 +57,13 @@ class ValidateCitationsUnitTests(unittest.TestCase):
         self.assertFalse(ok)
         self.assertEqual(reason, "DOI mismatch")
         self.assertEqual(attempts, 1)
+
+    def test_scan_drafts_parses_ranges_and_composite_citations(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "a.md").write_text("Refs [1-3] and [5,7-8;10].", encoding="utf-8")
+            used = validate_citations.scan_drafts(str(root))
+        self.assertEqual(used, {"1", "2", "3", "5", "7", "8", "10"})
 
 
 if __name__ == "__main__":

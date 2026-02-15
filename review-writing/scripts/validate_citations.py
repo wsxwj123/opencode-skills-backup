@@ -2,15 +2,15 @@
 import argparse
 import json
 import os
-import re
 import sys
 import time
 from urllib import error, parse, request
 
+from citation_utils import extract_citation_ids
+
 
 def scan_drafts(root_dir):
     used_ids = set()
-    pattern = re.compile(r"\[(\d+)\]")
 
     for dirpath, _, filenames in os.walk(root_dir):
         for filename in filenames:
@@ -18,7 +18,7 @@ def scan_drafts(root_dir):
                 filepath = os.path.join(dirpath, filename)
                 with open(filepath, "r", encoding="utf-8") as f:
                     content = f.read()
-                    used_ids.update(pattern.findall(content))
+                    used_ids.update(str(x) for x in extract_citation_ids(content))
     return used_ids
 
 

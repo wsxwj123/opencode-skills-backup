@@ -4,6 +4,8 @@ import json
 import re
 from pathlib import Path
 
+from citation_utils import extract_citation_ids
+
 
 def _read_json(path, default):
     p = Path(path)
@@ -23,6 +25,26 @@ def _parse_storyline_sections(storyline_path):
     p = Path(storyline_path)
     if not p.exists():
         return []
+    if p.suffix.lower() == ".json":
+        payload = _read_json(p, {})
+        raw_sections = payload.get("sections", []) if isinstance(payload, dict) else []
+        out = []
+        for item in raw_sections:
+            if isinstance(item, str):
+                title = item.strip()
+            elif isinstance(item, dict):
+                title = (
+                    item.get("section_id")
+                    or item.get("title")
+                    or item.get("name")
+                    or item.get("id")
+                )
+                title = str(title).strip() if title else ""
+            else:
+                title = ""
+            if title:
+                out.append(title)
+        return out
     sections = []
     for line in p.read_text(encoding="utf-8").splitlines():
         m = re.match(r"^(##+)\s+(.*)$", line)
@@ -78,11 +100,10 @@ def _check_round3_freshness(matrix_path):
 
 
 def _collect_citations(drafts_dir):
-    pat = re.compile(r"\[(\d+)\]")
     ids = []
     for f in _draft_files(drafts_dir):
         text = f.read_text(encoding="utf-8")
-        ids.extend(int(x) for x in pat.findall(text))
+        ids.extend(extract_citation_ids(text))
     return ids
 
 

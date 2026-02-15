@@ -76,8 +76,58 @@ def _load_strategy_payload(path):
     return data
 
 
+def _normalize_identifier(text):
+    return "".join(ch for ch in str(text).lower().strip() if ch.isalnum())
+
+
+def _index_digest(index_path="data/literature_index.json"):
+    p = Path(index_path)
+    if not p.exists():
+        return {"exists": False, "entry_count": 0, "identifier_count": 0, "identifier_sha256": None}
+    try:
+        payload = json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        return {"exists": True, "entry_count": 0, "identifier_count": 0, "identifier_sha256": None, "invalid_json": True}
+    if not isinstance(payload, list):
+        return {"exists": True, "entry_count": 0, "identifier_count": 0, "identifier_sha256": None, "invalid_type": True}
+
+    identifiers = []
+    max_gid = 0
+    for item in payload:
+        if not isinstance(item, dict):
+            continue
+        gid = item.get("global_id")
+        if isinstance(gid, int) and gid > max_gid:
+            max_gid = gid
+
+        doi = str(item.get("doi", "")).strip().lower()
+        pmid = str(item.get("pmid", "")).strip()
+        title = _normalize_identifier(item.get("title", ""))
+        if doi:
+            identifiers.append(f"doi:{doi}")
+        elif pmid:
+            identifiers.append(f"pmid:{pmid}")
+        elif title:
+            identifiers.append(f"title:{title}")
+
+    identifiers = sorted(set(identifiers))
+    h = hashlib.sha256("\n".join(identifiers).encode("utf-8")).hexdigest() if identifiers else None
+    return {
+        "exists": True,
+        "entry_count": len(payload),
+        "identifier_count": len(identifiers),
+        "identifier_sha256": h,
+        "max_global_id": max_gid,
+    }
+
+
 def _record_search_manifest(section, round_id, strategy_file, claims_file, resume):
+    pre_digest = _index_digest()
+    entry_id = hashlib.sha256(
+        f"{section}|{round_id}|{strategy_file}|{datetime.now(timezone.utc).isoformat()}".encode("utf-8")
+    ).hexdigest()[:16]
     entry = {
+        "entry_id": entry_id,
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "workflow_version": WORKFLOW_VERSION,
         "section": section,
@@ -87,6 +137,7 @@ def _record_search_manifest(section, round_id, strategy_file, claims_file, resum
         "strategy_file": strategy_file,
         "strategy_sha256": _sha256_file(strategy_file),
         "strategy": _load_strategy_payload(strategy_file),
+        "pre_index_digest": pre_digest,
     }
     if claims_file and os.path.exists(claims_file):
         entry["claims_file"] = claims_file
@@ -98,6 +149,33 @@ def _record_search_manifest(section, round_id, strategy_file, claims_file, resum
             manifest = []
         manifest.append(entry)
         _save_json(_manifest_path(), manifest)
+    return entry_id
+
+
+def _update_search_manifest_postrun(entry_id):
+    post_digest = _index_digest()
+    with _workflow_lock():
+        manifest = _load_json(_manifest_path(), [])
+        if not isinstance(manifest, list):
+            return
+        updated = False
+        for item in reversed(manifest):
+            if not isinstance(item, dict):
+                continue
+            if item.get("entry_id") != entry_id:
+                continue
+            item["post_index_digest"] = post_digest
+            pre = item.get("pre_index_digest", {})
+            if isinstance(pre, dict):
+                item["index_delta"] = {
+                    "entry_count": post_digest.get("entry_count", 0) - pre.get("entry_count", 0),
+                    "identifier_count": post_digest.get("identifier_count", 0) - pre.get("identifier_count", 0),
+                }
+            item["completed_at"] = datetime.now(timezone.utc).isoformat()
+            updated = True
+            break
+        if updated:
+            _save_json(_manifest_path(), manifest)
 
 
 @contextmanager
@@ -248,13 +326,16 @@ def main():
     completed_steps, resume_msg = _load_resume_steps(section, args.round, args.resume)
     if resume_msg:
         print(resume_msg)
+    manifest_entry_id = None
     if args.search_strategy:
-        _record_search_manifest(section, args.round, args.search_strategy, args.claims, args.resume)
+        manifest_entry_id = _record_search_manifest(section, args.round, args.search_strategy, args.claims, args.resume)
 
     steps = [
         ("load_state", ["python3", "scripts/state_manager.py", "load", "--section", section, "--minimal"]),
     ]
     if args.round == 1:
+        steps.append(("tag_literature_sections", ["python3", "scripts/tag_literature_sections.py"]))
+        steps.append(("reindex_literature_by_section", ["python3", "scripts/state_manager.py", "reindex"]))
         steps.append(("matrix_round1_bootstrap", ["python3", "scripts/matrix_manager.py", "bootstrap", "--round", "1"]))
     elif args.round == 2 and args.claims:
         steps.append(
@@ -281,6 +362,7 @@ def main():
     steps.append(("matrix_audit", audit_cmd))
     if payload_exists_before:
         steps.append(("state_update", ["python3", "scripts/state_manager.py", "update", args.payload]))
+    steps.append(("reindex_sync_ids", ["python3", "scripts/state_manager.py", "reindex", "--sync-apply"]))
     steps.append(("state_compact", ["python3", "scripts/state_manager.py", "compact"]))
     steps.append(("state_snapshot", ["python3", "scripts/state_manager.py", "snapshot"]))
 
@@ -309,6 +391,8 @@ def main():
         raise
 
     _mark_gate_completed(args.round, section)
+    if manifest_entry_id:
+        _update_search_manifest_postrun(manifest_entry_id)
     pruned = _prune_log_files(args.keep_snapshots, args.keep_checkpoints)
 
     summary = {

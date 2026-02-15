@@ -1,18 +1,16 @@
 #!/usr/bin/env python3
 import argparse
-import re
 from collections import Counter
 from pathlib import Path
 
-
-CITATION_PATTERN = re.compile(r"\[(\d+)\]")
+from citation_utils import extract_citation_ids
 
 
 def collect_ids(drafts_dir):
     ids = []
     for md in sorted(Path(drafts_dir).glob("**/*.md")):
         text = md.read_text(encoding="utf-8")
-        ids.extend(int(x) for x in CITATION_PATTERN.findall(text))
+        ids.extend(extract_citation_ids(text))
     return ids
 
 

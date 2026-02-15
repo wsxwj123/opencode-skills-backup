@@ -19,6 +19,47 @@ DEFAULT_PATTERNS = [
 ]
 
 
+def expand_citation_numbers(raw):
+    out = []
+    for part in re.split(r"[;,]", str(raw)):
+        item = part.strip()
+        if not item:
+            continue
+        m = re.match(r"^(\d+)\s*-\s*(\d+)$", item)
+        if m:
+            a = int(m.group(1))
+            b = int(m.group(2))
+            if a <= b:
+                out.extend(range(a, b + 1))
+            else:
+                out.extend(range(b, a + 1))
+            continue
+        if item.isdigit():
+            out.append(int(item))
+    # stable unique
+    seen = set()
+    uniq = []
+    for n in out:
+        if n not in seen:
+            seen.add(n)
+            uniq.append(n)
+    return uniq
+
+
+def collect_citation_numbers(text):
+    numbers = []
+    pattern = re.compile(r"\[(\d+(?:\s*[-,;]\s*\d+)*)\]")
+    for m in pattern.finditer(text or ""):
+        numbers.extend(expand_citation_numbers(m.group(1)))
+    seen = set()
+    uniq = []
+    for n in numbers:
+        if n not in seen:
+            seen.add(n)
+            uniq.append(n)
+    return uniq
+
+
 def natural_key(text):
     return [int(tok) if tok.isdigit() else tok.lower() for tok in re.split(r"(\d+)", text)]
 
@@ -140,6 +181,47 @@ def merge_markdown_files(files, relocate_references=False):
     return merged, local_refs
 
 
+def validate_merge_precheck(files, index_file):
+    report = {
+        "ok": True,
+        "index_file": index_file,
+        "references_count": 0,
+        "citations_used": [],
+        "out_of_range": [],
+        "warnings": [],
+        "errors": [],
+    }
+    refs = load_references(index_file) if index_file else []
+    report["references_count"] = len(refs)
+    if len(refs) == 0:
+        report["warnings"].append("literature_index is missing or empty; citation range check skipped")
+        return report
+
+    used = []
+    for path in files:
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                text = f.read()
+            used.extend(collect_citation_numbers(text))
+        except Exception as e:
+            report["warnings"].append(f"failed reading {path}: {e}")
+    seen = set()
+    uniq = []
+    for n in used:
+        if n not in seen:
+            seen.add(n)
+            uniq.append(n)
+    uniq.sort()
+    report["citations_used"] = uniq
+    report["out_of_range"] = [n for n in uniq if n < 1 or n > len(refs)]
+    if report["out_of_range"]:
+        report["ok"] = False
+        report["errors"].append(
+            f"citation numbers out of range: {report['out_of_range'][:20]}, references_count={len(refs)}"
+        )
+    return report
+
+
 def convert_docx(output_md, output_docx, reference_doc=None):
     pandoc_bin = shutil.which("pandoc")
     if not pandoc_bin:
@@ -164,7 +246,16 @@ def convert_docx(output_md, output_docx, reference_doc=None):
         }
 
 
-def run_merge(manuscript_dir, output_md, output_docx, patterns, generate_docx, reference_doc=None, allow_empty=False):
+def run_merge(
+    manuscript_dir,
+    output_md,
+    output_docx,
+    patterns,
+    generate_docx,
+    reference_doc=None,
+    allow_empty=False,
+    skip_precheck=False,
+):
     if not os.path.isdir(manuscript_dir):
         return {"ok": False, "error": f"manuscript_dir not found: {manuscript_dir}"}
 
@@ -172,8 +263,26 @@ def run_merge(manuscript_dir, output_md, output_docx, patterns, generate_docx, r
     if not files and not allow_empty:
         return {"ok": False, "error": "no manuscript markdown files matched patterns", "patterns": patterns}
 
+    index_file = os.path.join(os.path.dirname(output_md) or ".", "literature_index.json")
+    if not os.path.exists(index_file):
+        index_file = "literature_index.json"
+
+    precheck = validate_merge_precheck(files, index_file=index_file) if not skip_precheck else {
+        "ok": True,
+        "skipped": True,
+        "reason": "skip_precheck",
+    }
+    if not precheck.get("ok", False):
+        return {
+            "ok": False,
+            "error": "merge_precheck_failed",
+            "precheck": precheck,
+            "files_merged_count": len(files),
+            "files_merged": files,
+        }
+
     merged, local_refs = merge_markdown_files(files, relocate_references=True)
-    global_refs = load_references(os.path.join(os.path.dirname(output_md) or ".", "literature_index.json"))
+    global_refs = load_references(index_file)
     if not global_refs:
         global_refs = load_references("literature_index.json")
 
@@ -201,6 +310,7 @@ def run_merge(manuscript_dir, output_md, output_docx, patterns, generate_docx, r
         "output_md": output_md,
         "files_merged_count": len(files),
         "files_merged": files,
+        "precheck": precheck,
         "references_relocated": True,
         "references_count": len(reference_lines),
         "docx": {"attempted": False, "ok": False},
@@ -219,6 +329,7 @@ def parse_args():
     parser.add_argument("--output-docx", default=None, help="Output docx path")
     parser.add_argument("--patterns", default=",".join(DEFAULT_PATTERNS), help="Comma-separated glob patterns")
     parser.add_argument("--skip-docx", action="store_true", help="Skip docx conversion")
+    parser.add_argument("--skip-precheck", action="store_true", help="Skip merge consistency precheck")
     parser.add_argument("--reference-doc", help="Optional pandoc reference docx template")
     parser.add_argument("--allow-empty", action="store_true", help="Allow producing an empty merged file")
     return parser.parse_args()
@@ -237,6 +348,7 @@ def main():
         generate_docx=(not args.skip_docx),
         reference_doc=args.reference_doc,
         allow_empty=args.allow_empty,
+        skip_precheck=args.skip_precheck,
     )
     print(json.dumps(report, ensure_ascii=False))
     if not report.get("ok", False):

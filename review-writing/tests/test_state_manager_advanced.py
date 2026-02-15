@@ -149,6 +149,200 @@ class StateManagerAdvancedTests(unittest.TestCase):
             finally:
                 os.chdir(cwd)
 
+    def test_reindex_by_section_reorders_and_remaps_matrix(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cwd = os.getcwd()
+            try:
+                os.chdir(tmp)
+                os.makedirs("data", exist_ok=True)
+                Path("storyline.md").write_text(
+                    "# Outline\n\n## Intro\n## Methods\n",
+                    encoding="utf-8",
+                )
+                Path("data/literature_index.json").write_text(
+                    json.dumps(
+                        [
+                            {"global_id": 1, "title": "M1", "related_sections": ["Methods"]},
+                            {"global_id": 2, "title": "I1", "related_sections": ["Intro"]},
+                            {"global_id": 3, "title": "U1"},
+                        ]
+                    ),
+                    encoding="utf-8",
+                )
+                Path("data/synthesis_matrix.json").write_text(
+                    json.dumps(
+                        [
+                            {"global_id": 1, "section_id": "Methods"},
+                            {"global_id": 2, "section_id": "Intro"},
+                            {"global_id": 3, "section_id": "unassigned"},
+                        ]
+                    ),
+                    encoding="utf-8",
+                )
+
+                state_manager.reindex_literature_by_section(
+                    storyline_path="storyline.md",
+                    index_path="data/literature_index.json",
+                    matrix_path="data/synthesis_matrix.json",
+                )
+
+                idx = json.loads(Path("data/literature_index.json").read_text(encoding="utf-8"))
+                self.assertEqual([x["title"] for x in idx], ["I1", "M1", "U1"])
+                self.assertEqual([x["global_id"] for x in idx], [1, 2, 3])
+
+                matrix = json.loads(Path("data/synthesis_matrix.json").read_text(encoding="utf-8"))
+                by_section = {r["section_id"]: r["global_id"] for r in matrix}
+                self.assertEqual(by_section["Intro"], 1)
+                self.assertEqual(by_section["Methods"], 2)
+            finally:
+                os.chdir(cwd)
+
+    def test_reindex_by_section_remaps_draft_citations(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cwd = os.getcwd()
+            try:
+                os.chdir(tmp)
+                os.makedirs("data", exist_ok=True)
+                os.makedirs("drafts", exist_ok=True)
+                Path("storyline.md").write_text("# Outline\n\n## Intro\n## Methods\n", encoding="utf-8")
+                Path("data/literature_index.json").write_text(
+                    json.dumps(
+                        [
+                            {"global_id": 1, "title": "M1", "related_sections": ["Methods"]},
+                            {"global_id": 2, "title": "I1", "related_sections": ["Intro"]},
+                        ]
+                    ),
+                    encoding="utf-8",
+                )
+                Path("data/synthesis_matrix.json").write_text(
+                    json.dumps([{"global_id": 1, "section_id": "Methods"}, {"global_id": 2, "section_id": "Intro"}]),
+                    encoding="utf-8",
+                )
+                Path("drafts/01_intro.md").write_text("Intro uses [2]. Methods later [1].", encoding="utf-8")
+
+                state_manager.reindex_literature_by_section(
+                    storyline_path="storyline.md",
+                    index_path="data/literature_index.json",
+                    matrix_path="data/synthesis_matrix.json",
+                )
+
+                text = Path("drafts/01_intro.md").read_text(encoding="utf-8")
+                self.assertEqual(text, "Intro uses [1]. Methods later [2].")
+            finally:
+                os.chdir(cwd)
+
+    def test_reindex_by_section_dedup_uses_matrix_order_and_rewrites_ranges(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cwd = os.getcwd()
+            try:
+                os.chdir(tmp)
+                os.makedirs("data", exist_ok=True)
+                os.makedirs("drafts", exist_ok=True)
+                Path("storyline.json").write_text(
+                    json.dumps({"sections": [{"section_id": "Intro"}, {"section_id": "Methods"}]}),
+                    encoding="utf-8",
+                )
+                Path("data/literature_index.json").write_text(
+                    json.dumps(
+                        [
+                            {"global_id": 1, "title": "Dup A", "doi": "10.1/dup", "related_sections": ["Methods"]},
+                            {"global_id": 2, "title": "Unique B", "doi": "10.1/b", "related_sections": ["Intro"]},
+                            {"global_id": 3, "title": "Dup A newer", "doi": "10.1/dup", "related_sections": ["Intro"]},
+                        ]
+                    ),
+                    encoding="utf-8",
+                )
+                Path("data/literature_matrix.json").write_text(
+                    json.dumps(
+                        [
+                            {"global_id": 3, "section_id": "Intro"},
+                            {"global_id": 2, "section_id": "Intro"},
+                            {"global_id": 1, "section_id": "Methods"},
+                        ]
+                    ),
+                    encoding="utf-8",
+                )
+                Path("drafts/01_intro.md").write_text("Citations [3-2,1].", encoding="utf-8")
+
+                state_manager.reindex_literature_by_section(
+                    storyline_path="storyline.json",
+                    index_path="data/literature_index.json",
+                    matrix_path="data/literature_matrix.json",
+                    sync_apply=True,
+                )
+
+                idx = json.loads(Path("data/literature_index.json").read_text(encoding="utf-8"))
+                self.assertEqual(len(idx), 2)
+                self.assertEqual([x["global_id"] for x in idx], [1, 2])
+                self.assertEqual(idx[0]["doi"], "10.1/dup")
+                self.assertEqual(idx[1]["doi"], "10.1/b")
+
+                matrix = json.loads(Path("data/literature_matrix.json").read_text(encoding="utf-8"))
+                self.assertEqual([x["global_id"] for x in matrix], [1, 2, 1])
+
+                text = Path("drafts/01_intro.md").read_text(encoding="utf-8")
+                self.assertEqual(text, "Citations [1-2].")
+            finally:
+                os.chdir(cwd)
+
+    def test_reindex_sync_apply_blocks_when_matrix_has_unknown_id(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cwd = os.getcwd()
+            try:
+                os.chdir(tmp)
+                os.makedirs("data", exist_ok=True)
+                Path("storyline.md").write_text("# Outline\n\n## Intro\n", encoding="utf-8")
+                index_path = Path("data/literature_index.json")
+                original_index = [{"global_id": 1, "title": "A", "related_sections": ["Intro"]}]
+                index_path.write_text(json.dumps(original_index), encoding="utf-8")
+                Path("data/synthesis_matrix.json").write_text(
+                    json.dumps([{"global_id": 99, "section_id": "Intro"}]),
+                    encoding="utf-8",
+                )
+
+                with self.assertRaises(SystemExit) as cm:
+                    state_manager.reindex_literature_by_section(
+                        storyline_path="storyline.md",
+                        index_path="data/literature_index.json",
+                        matrix_path="data/synthesis_matrix.json",
+                        sync_apply=True,
+                    )
+                self.assertEqual(cm.exception.code, 2)
+
+                idx_after = json.loads(index_path.read_text(encoding="utf-8"))
+                self.assertEqual(idx_after, original_index)
+            finally:
+                os.chdir(cwd)
+
+    def test_reindex_migrates_legacy_matrix_to_canonical_synthesis(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cwd = os.getcwd()
+            try:
+                os.chdir(tmp)
+                os.makedirs("data", exist_ok=True)
+                Path("storyline.md").write_text("# Outline\n\n## Intro\n", encoding="utf-8")
+                Path("data/literature_index.json").write_text(
+                    json.dumps([{"global_id": 1, "title": "A", "related_sections": ["Intro"]}]),
+                    encoding="utf-8",
+                )
+                Path("data/literature_matrix.json").write_text(
+                    json.dumps([{"global_id": 1, "section_id": "Intro"}]),
+                    encoding="utf-8",
+                )
+
+                state_manager.reindex_literature_by_section(
+                    storyline_path="storyline.md",
+                    index_path="data/literature_index.json",
+                    matrix_path=None,
+                    sync_apply=True,
+                )
+
+                self.assertTrue(Path("data/synthesis_matrix.json").exists())
+                matrix = json.loads(Path("data/synthesis_matrix.json").read_text(encoding="utf-8"))
+                self.assertEqual(matrix, [{"global_id": 1, "section_id": "Intro"}])
+            finally:
+                os.chdir(cwd)
+
 
 if __name__ == "__main__":
     unittest.main()

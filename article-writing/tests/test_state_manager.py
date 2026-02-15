@@ -25,6 +25,9 @@ def write_json(path, data):
 
 
 class StateManagerTests(unittest.TestCase):
+    def write_matrix(self, refs):
+        write_json(self.root / "literature_matrix.json", {"sections": {"results_3.1": refs}})
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
@@ -40,6 +43,7 @@ class StateManagerTests(unittest.TestCase):
         write_json(self.root / "reviewer_concerns.json", {})
         write_json(self.root / "version_history.json", [])
         write_json(self.root / "si_database.json", [])
+        self.write_matrix([])
         (self.root / "section_memory" / "results_3.1.md").write_text("mem\n", encoding="utf-8")
 
     def tearDown(self):
@@ -67,6 +71,7 @@ class StateManagerTests(unittest.TestCase):
             {"title": "A duplicate", "doi": "10.1/x"},
             {"title": "C", "doi": "10.1/z"},
         ])
+        self.write_matrix([1, 2, 3, 4])
         (self.root / "manuscripts" / "04_Results_3.1_Test.md").write_text(
             "# Results\n"
             "Main text [1-4].\n\n"
@@ -103,6 +108,7 @@ class StateManagerTests(unittest.TestCase):
             {"title": "A", "doi": "10.1/x"},
             {"title": "B", "doi": "10.1/y"},
         ])
+        self.write_matrix([1, 2])
         bad_md = self.root / "manuscripts" / "04_Results_3.1_Bad.md"
         bad_md.write_text("Text with broken cite [9].\n", encoding="utf-8")
         before_index = (self.root / "literature_index.json").read_text(encoding="utf-8")
@@ -122,6 +128,7 @@ class StateManagerTests(unittest.TestCase):
             {"title": "A", "doi": "10.1/x"},
             {"title": "A dup", "doi": "10.1/x"},
         ])
+        self.write_matrix([1, 2])
         (self.root / "manuscripts" / "04_Results_3.1_Test.md").write_text("Cite [1].\n", encoding="utf-8")
 
         for _ in range(4):
@@ -146,6 +153,7 @@ class StateManagerTests(unittest.TestCase):
                 "doi": "10.1/abc"
             }
         ])
+        self.write_matrix([1])
         mdp = self.root / "manuscripts" / "04_Results_3.1_Style.md"
         mdp.write_text("# References\n1. Old.\n", encoding="utf-8")
 
@@ -164,6 +172,7 @@ class StateManagerTests(unittest.TestCase):
             {"title": "Targeted nanoparticle delivery for liver cancer"},
             {"title": "Targeted nanoparticle delivery for liver cancers"},
         ])
+        self.write_matrix([1, 2])
 
         blocked = run_cmd([
             "sync-literature", "--apply",
@@ -289,6 +298,54 @@ class StateManagerTests(unittest.TestCase):
         self.assertTrue(bib_out.get("ok"))
         self.assertEqual(bib_out.get("references_exported_count"), 2)
         self.assertTrue((self.root / "references.bib").exists())
+
+    def test_merge_precheck_blocks_out_of_range_citations(self):
+        write_json(self.root / "literature_index.json", [
+            {"ref_id": "r1", "title": "T1", "journal": "J", "year": "2024"},
+        ])
+        bad = self.root / "manuscripts" / "04_Results_3.1_BadMerge.md"
+        bad.write_text("# A\nText [2].\n", encoding="utf-8")
+
+        p_merge = subprocess.run(
+            [
+                "python3", MERGE_SCRIPT,
+                "--manuscript-dir", "manuscripts",
+                "--skip-docx",
+            ],
+            cwd=self.root,
+            text=True,
+            capture_output=True,
+        )
+        self.assertNotEqual(p_merge.returncode, 0, msg=p_merge.stdout + p_merge.stderr)
+        out = json.loads(p_merge.stdout)
+        self.assertEqual(out.get("error"), "merge_precheck_failed")
+        self.assertIn("out of range", json.dumps(out.get("precheck", {}), ensure_ascii=False))
+
+    def test_matrix_reindex_gate_blocks_apply_when_missing(self):
+        write_json(self.root / "literature_index.json", [
+            {"title": "A", "doi": "10.1/x"},
+            {"title": "B", "doi": "10.1/y"},
+        ])
+        os.remove(self.root / "literature_matrix.json")
+        p = run_cmd(["sync-literature", "--apply", "--strict-references"], cwd=self.root)
+        self.assertEqual(p.returncode, 0)
+        out = json.loads(p.stdout)
+        self.assertIn("error", out)
+        self.assertEqual(out.get("error"), "schema_validation_failed")
+        self.assertIn("matrix", json.dumps(out.get("schema", {}), ensure_ascii=False).lower())
+
+    def test_matrix_reindex_gate_blocks_unknown_section_ids(self):
+        write_json(self.root / "storyline.json", {"sections": [{"id": "results_3.1", "title": "x"}]})
+        write_json(self.root / "literature_index.json", [
+            {"title": "A", "doi": "10.1/x"},
+        ])
+        write_json(self.root / "literature_matrix.json", {"sections": {"results": [1]}})
+        p = run_cmd(["sync-literature", "--apply", "--strict-references"], cwd=self.root)
+        self.assertEqual(p.returncode, 0)
+        out = json.loads(p.stdout)
+        self.assertIn("error", out)
+        self.assertEqual(out.get("error"), "schema_validation_failed")
+        self.assertIn("unknown section ids", json.dumps(out.get("schema", {}), ensure_ascii=False).lower())
 
 
 if __name__ == "__main__":
