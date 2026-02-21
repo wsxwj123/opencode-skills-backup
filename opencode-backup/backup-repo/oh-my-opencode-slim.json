@@ -1,0 +1,45 @@
+{
+  "preset": "my_dream_team",
+  "presets": {
+    "my_dream_team": {
+      "orchestrator": {
+        "model": "方舟api/claude-opus-4-6-thinking",
+        "skills": ["*", "chinese-reply"],
+        "mcps": ["filesystem", "memory", "desktop-commander", "websearch", "fetch", "paper search"]
+      },
+      "oracle": {
+        "model": "方舟api/claude-opus-4-6",
+        "variant": "high",
+        "skills": ["chinese-reply"],
+        "mcps": ["arxiv", "paper-search", "tavily"]
+      },
+      "librarian": {
+        "model": "maoshu-gemini/gemini-3-pro-preview",
+        "variant": "low",
+        "skills": ["chinese-reply"],
+        "mcps": ["paper-search", "websearch", "tavily", "fetch", "arxiv", "pandoc", "markdownify", "claude-document"]
+      },
+      "explorer": {
+        "model": "maoshu-gemini/gemini-3-pro-preview-thinking",
+        "variant": "low",
+        "skills": ["chinese-reply"],
+        "mcps": ["filesystem", "office-editor", "word-mcp", "file-to-pdf"]
+      },
+      "designer": {
+        "model": "方舟api/claude-opus-4-6-thinking",
+        "variant": "medium",
+        "skills": ["agent-browser", "chinese-reply"],
+        "mcps": ["playwright", "drawio", "ppt-mcp"]
+      },
+      "fixer": {
+        "model": "maoshu-openai/gpt-5.3-codex-high",
+        "variant": "low",
+        "skills": ["chinese-reply"],
+        "mcps": ["filesystem", "grep_app"]
+      }
+    }
+  },
+  "tmux": {
+    "enabled": false
+  }
+}

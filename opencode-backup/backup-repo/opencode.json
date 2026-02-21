@@ -1,0 +1,194 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "方舟AI/claude-opus-4-6-thinking",
+  "plugin": [
+    "oh-my-opencode-slim",
+    "./plugins/superpowers.js",
+    "./plugins/chinese-settings.js",
+    "./plugins/memory-system.js"
+  ],
+  "mcp": {
+    "memory": {
+      "type": "local",
+      "command": ["npx", "-y", "@modelcontextprotocol/server-memory"],
+      "enabled": true
+    },
+    "claude-mem": {
+      "type": "local",
+      "command": ["/Users/wsxwj/.config/opencode/skills/claude-mem/scripts/run.sh"],
+      "enabled": true
+    },
+    "desktop-commander": {
+      "type": "local",
+      "command": ["npx", "-y", "@wonderwhy-er/desktop-commander"],
+      "enabled": true
+    },
+    "quickchart": {
+      "type": "local",
+      "command": ["node", "/Users/wsxwj/Documents/Cline/MCP/quickchart-mcp-server/build/index.js", "--stdio"],
+      "enabled": false
+    },
+    "drawio": {
+      "type": "local",
+      "command": ["node", "/Users/wsxwj/Documents/Cline/MCP/drawio-mcp-server/drawio-mcp-server/build/index.js", "--stdio"],
+      "enabled": false
+    },
+    "file-to-pdf": {
+      "type": "local",
+      "command": ["/Users/wsxwj/Documents/Cline/MCP/file-to-pdf/file-converter-mcp/venv/bin/python", "/Users/wsxwj/Documents/Cline/MCP/file-to-pdf/file-converter-mcp/file_converter_server.py", "--stdio"],
+      "enabled": true
+    },
+    "office-editor": {
+      "type": "local",
+      "command": ["/Users/wsxwj/Documents/Cline/MCP/ms-edit-mcp/office-editor-mcp-main/.venv/bin/python", "/Users/wsxwj/Documents/Cline/MCP/ms-edit-mcp/office-editor-mcp-main/general_server.py", "--stdio"],
+      "enabled": true
+    },
+    "ppt-mcp": {
+      "type": "local",
+      "command": ["/Users/wsxwj/Documents/Cline/MCP/ppt-mcp/.venv/bin/python", "/Users/wsxwj/Documents/Cline/MCP/ppt-mcp/ppt_mcp_server.py", "--stdio"],
+      "enabled": true
+    },
+    "word-mcp": {
+      "type": "local",
+      "command": ["/Users/wsxwj/Documents/Cline/MCP/word-mcp/Office-Word-MCP-Server/.venv/bin/python", "/Users/wsxwj/Documents/Cline/MCP/word-mcp/Office-Word-MCP-Server/word_mcp_server.py", "--stdio"],
+      "enabled": true
+    },
+    "claude-document": {
+      "type": "local",
+      "command": ["/Users/wsxwj/Documents/Cline/MCP/document/.venv/bin/python", "-m", "claude_document_mcp.server", "--stdio"],
+      "enabled": true
+    },
+    "playwright": {
+      "type": "local",
+      "command": ["npx", "-y", "@executeautomation/playwright-mcp-server"],
+      "enabled": true
+    },
+    "reddit": {
+      "type": "local",
+      "command": ["/Users/wsxwj/Documents/Cline/MCP/mcp-server-reddit/mcp_reddit_venv/bin/python", "-m", "mcp_server_reddit"],
+      "enabled": false
+    },
+    "paper-search": {
+      "type": "local",
+      "command": ["uv", "run", "--directory", "/Users/wsxwj/Documents/Cline/MCP/paper-search-mcp/paper-search-mcp", "-m", "paper_search_mcp.server"],
+      "enabled": true
+    },
+    "arxiv": {
+      "type": "local",
+      "command": ["uv", "tool", "run", "arxiv-mcp-server", "--storage-path", "/Users/wsxwj/Downloads/reference"],
+      "enabled": true
+    },
+    "markdownify": {
+      "type": "local",
+      "command": ["node", "/Users/wsxwj/Documents/Cline/MCP/markdownify/dist/index.js"],
+      "enabled": true
+    },
+    "pandoc": {
+      "type": "local",
+      "command": ["uvx", "mcp-pandoc"],
+      "enabled": true
+    },
+    "tavily": {
+      "type": "local",
+      "command": ["npx", "-y", "tavily-mcp@0.1.4"],
+      "environment": {
+        "TAVILY_API_KEY": "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"
+      },
+      "enabled": true
+    },
+    "fetch": {
+      "type": "local",
+      "command": ["uvx", "mcp-server-fetch", "--ignore-robots-txt"],
+      "enabled": true
+    },
+    "filesystem": {
+      "type": "local",
+      "command": ["npx", "-y", "@modelcontextprotocol/server-filesystem", "/Users/wsxwj/Desktop", "/Users/wsxwj"],
+      "enabled": false
+    }
+  },
+  "provider": {
+    "maoshu-gemini": {
+      "npm": "@ai-sdk/google",
+      "name": "MaoShu-gemini",
+      "options": {
+        "baseURL": "https://ai.ll9e.cn/v1beta",
+        "apiKey": "sk-fh0NjS80Wrzrwdw3ruxbsvaWgbShhiz8RujScsFNGS5IY7k9"
+      },
+      "models": {
+        "gemini-3-pro-preview-thinking": { "name": "gemini-3-pro-preview-thinking", "limit": { "context": 2000000, "output": 8192 } },
+        "gemini-2.5-pro": { "name": "gemini-2.5-pro", "limit": { "context": 2000000, "output": 8192 } },
+        "gemini-2.5-pro-thinking": { "name": "gemini-2.5-pro-thinking", "limit": { "context": 2000000, "output": 8192 } },
+        "gemini-3-flash-preview": { "name": "gemini-3-flash-preview", "limit": { "context": 1000000, "output": 8192 } },
+        "gemini-3-pro-preview": { "name": "gemini-3-pro-preview", "limit": { "context": 2000000, "output": 8192 } }
+      }
+    },
+    "maoshu-openai": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "MaoShu-openai",
+      "options": {
+        "baseURL": "https://ai.ll9e.cn/v1",
+        "apiKey": "sk-5kiP196VX8D2ouX6tXNZ6x2PGYGRAr6TcUiGBCzXTWYafhUC"
+      },
+      "models": {
+        "gpt-5.3-codex-high": { "name": "gpt-5.3-codex-high", "limit": { "context": 256000, "output": 8192 } },
+        "gpt-5.3-codex": { "name": "gpt-5.3-codex", "limit": { "context": 256000, "output": 8192 } }
+      }
+    },
+    "mmw": {
+      "npm": "@ai-sdk/anthropic",
+      "name": "MMW",
+      "options": {
+        "baseURL": "https://api.mmw.ink",
+        "apiKey": "sk-2g0sLaI33hQeX3mo7D8izzzrUIcaUzNIylkAC6LvL6GpJY8E"
+      },
+      "models": {
+        "claude-opus-4-1-20250805": { "name": "claude-opus-4-1-20250805", "limit": { "context": 200000, "output": 8192 } },
+        "claude-opus-4-1-20250805-thinking": { "name": "claude-opus-4-1-20250805-thinking", "limit": { "context": 200000, "output": 8192 } },
+        "claude-opus-4-5-20251101": { "name": "claude-opus-4-5-20251101", "limit": { "context": 200000, "output": 8192 } },
+        "claude-opus-4-5-20251101-thinking": { "name": "claude-opus-4-5-20251101-thinking", "limit": { "context": 200000, "output": 8192 } },
+        "claude-sonnet-4-5-20250929": { "name": "claude-sonnet-4-5-20250929", "limit": { "context": 200000, "output": 8192 } },
+        "claude-sonnet-4-5-20250929-thinking": { "name": "claude-sonnet-4-5-20250929-thinking", "limit": { "context": 200000, "output": 8192 } },
+        "[ed]gemini-3-pro-preview": { "name": "[ed]gemini-3-pro-preview", "limit": { "context": 2000000, "output": 8192 } }
+      }
+    },
+    "gem-ai": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Gem AI",
+      "options": {
+        "baseURL": "https://api.gemai.cc/v1",
+        "apiKey": "sk-p87SixVVq1z0lIccKR3SKOGMMJCgPPpKGQr8bAd9cvIsLWi9"
+      },
+      "models": {
+        "[满血F]gemini-3-pro-preview-thinking": { "name": "[满血F]gemini-3-pro-preview-thinking 0.04", "limit": { "context": 2000000, "output": 8192 } },
+        "[满血F]gemini-3-pro-preview-maxthinking": { "name": "[满血F]gemini-3-pro-preview-maxthinking 0.04", "limit": { "context": 2000000, "output": 8192 } },
+        "[满血F]gemini-3-pro-preview": { "name": "[满血F]gemini-3-pro-preview 0.04", "limit": { "context": 2000000, "output": 8192 } }
+      }
+    },
+    "云雾ai": {
+      "npm": "@ai-sdk/google",
+      "name": "云雾 gemini",
+      "options": {
+        "baseURL": "https://yunwu.ai/v1beta",
+        "apiKey": "sk-kcSJJHA42ggpkg6hWdnFGex8AEnVNDvzf56B4cLqZgg5J32j"
+      },
+      "models": {
+        "gemini-3-pro-preview": { "name": "gemini-3-pro-preview", "limit": { "context": 2000000, "output": 8192 } },
+        "gemini-3-pro-preview-thinking": { "name": "gemini-3-pro-preview-thinking", "limit": { "context": 2000000, "output": 8192 } }
+      }
+    },
+    "方舟api": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "方舟AI",
+      "options": {
+        "baseURL": "https://www.yxaiapp.com/v1",
+        "apiKey": "sk-KSGp6rxMQPNt9PnoZ9PIM5zPnwT3cZ11xY5XyY8qLq0fWriI"
+      },
+      "models": {
+        "gemini-3-pro-preview": { "name": "gemini-3-pro-preview 0.03", "limit": { "context": 2000000, "output": 8192 } },
+        "claude-opus-4-6": { "name": "claude-opus-4-6 0.03", "limit": { "context": 200000, "output": 8192 } },
+        "claude-opus-4-6-thinking": { "name": "claude-opus-4-6-thinking 0.03", "limit": { "context": 200000, "output": 8192 } }
+      }
+    }
+  }
+}

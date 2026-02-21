@@ -1,0 +1,57 @@
+{
+  "_comment": "Agent Team 3.0 配置 - 定义团队结构和协作规则",
+  "team": {
+    "name": "AI Dev Team",
+    "version": "3.0",
+    "lead": {
+      "role": "lead-cto",
+      "prompt_file": "agents/lead-cto.md",
+      "responsibilities": ["任务规划", "任务分派", "Code Review", "冲突协调", "进度管理"]
+    },
+    "specialists": [
+      {
+        "id": "backend-integrator",
+        "role": "后端专家",
+        "prompt_file": "agents/backend-integrator.md",
+        "focus": ["python", "fastapi", "database", "api", "auth"],
+        "file_patterns": ["*.py", "requirements.txt", "alembic/**", "migrations/**"],
+        "max_concurrent_tasks": 2
+      },
+      {
+        "id": "frontend-polisher",
+        "role": "前端专家",
+        "prompt_file": "agents/frontend-polisher.md",
+        "focus": ["react", "nextjs", "typescript", "css", "ui"],
+        "file_patterns": ["*.tsx", "*.jsx", "*.ts", "*.css", "*.html"],
+        "max_concurrent_tasks": 2
+      },
+      {
+        "id": "qa-engineer",
+        "role": "测试专家",
+        "prompt_file": "agents/qa-engineer.md",
+        "focus": ["testing", "e2e", "playwright", "jest", "pytest"],
+        "file_patterns": ["*.test.*", "*.spec.*", "tests/**", "e2e/**"],
+        "max_concurrent_tasks": 1
+      }
+    ]
+  },
+  "workflow": {
+    "parallel_allowed": true,
+    "max_parallel_agents": 3,
+    "task_assignment_rules": {
+      "backend": "backend-integrator",
+      "frontend": "frontend-polisher",
+      "testing": "qa-engineer",
+      "fullstack": "lead-cto分拆后分派",
+      "setup": "backend-integrator"
+    },
+    "escalation": {
+      "max_retries_before_escalate": 3,
+      "escalate_to": "lead-cto"
+    },
+    "dependencies": {
+      "qa-engineer": ["backend-integrator", "frontend-polisher"],
+      "_comment": "测试必须在对应功能完成后才能开始"
+    }
+  }
+}
