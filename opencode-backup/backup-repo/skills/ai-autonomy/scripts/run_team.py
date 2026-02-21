@@ -122,13 +122,13 @@ def run_agent(agent_id: str, task: dict, provider: dict) -> dict:
 """
 
     cfg = load_json(PROVIDERS_FILE)
-    cli_cfg = cfg.get("claude_code_overrides", {})
-    cli_path = cli_cfg.get("cli_path", "claude")
-    skip_perms = cli_cfg.get("dangerously_skip_permissions", False)
+    cli_cfg = cfg.get("opencode_overrides", {})
+    cli_path = cli_cfg.get("cli_path", "opencode")
 
-    cmd = [cli_path, "-p", prompt, "--output-format", "text"]
-    if skip_perms:
-        cmd.append("--dangerously-skip-permissions")
+    cmd = [cli_path, "run", prompt, "--dir", str(ROOT)]
+    opencode_model = provider.get("opencode_model")
+    if opencode_model:
+        cmd.extend(["--model", opencode_model])
 
     env = os.environ.copy()
     api_key = os.environ.get(provider.get("api_key_env", ""), "")

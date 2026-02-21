@@ -54,6 +54,17 @@ def save_json(path: Path, data: dict):
 
 
 def append_progress(message: str):
+    """追加进度日志，超过 50KB 自动轮转归档"""
+    # 轮转检查
+    if PROGRESS_FILE.exists() and PROGRESS_FILE.stat().st_size > 50 * 1024:
+        archive = PROGRESS_FILE.with_suffix(
+            f".{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+        )
+        PROGRESS_FILE.rename(archive)
+        with open(PROGRESS_FILE, "w", encoding="utf-8") as f:
+            f.write(f"[轮转] 旧日志已归档到 {archive.name}\n")
+        print(f"📦 [progress] 日志已轮转 → {archive.name}")
+
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     with open(PROGRESS_FILE, "a", encoding="utf-8") as f:
         f.write(f"\n[{timestamp}] {message}")
@@ -106,7 +117,7 @@ def build_prompt(task: dict) -> str:
 {criteria}
 
 ## 执行要求
-1. 先运行 `source init.sh` 确认环境
+1. 先运行 `python3 init.py` 确认环境
 2. 读取 feature_list.json 和 progress.txt 了解上下文
 3. 实现上述任务，逐条满足验收标准
 4. 完成后更新 feature_list.json（status→done, passes→true）
@@ -117,24 +128,25 @@ def build_prompt(task: dict) -> str:
 """
 
 
-def run_with_claude_code(prompt: str, provider: dict) -> bool:
-    """通过 Claude Code CLI 执行任务"""
+def run_with_opencode(prompt: str, provider: dict) -> bool:
+    """通过 OpenCode CLI 执行任务"""
     cfg = load_json(PROVIDERS_FILE)
-    cli_cfg = cfg.get("claude_code_overrides", {})
-    cli_path = cli_cfg.get("cli_path", "claude")
-    skip_perms = cli_cfg.get("dangerously_skip_permissions", False)
+    cli_cfg = cfg.get("opencode_overrides", {})
+    cli_path = cli_cfg.get("cli_path", "opencode")
 
-    cmd = [cli_path, "-p", prompt, "--output-format", "text"]
-    if skip_perms:
-        cmd.append("--dangerously-skip-permissions")
+    # opencode run <message> --dir <project_root> --model <provider/model>
+    cmd = [cli_path, "run", prompt, "--dir", str(ROOT)]
 
-    # 设置环境变量让 Claude Code 使用指定模型
+    # 使用 opencode_model（provider/model 格式）
+    opencode_model = provider.get("opencode_model")
+    if opencode_model:
+        cmd.extend(["--model", opencode_model])
+
+    # 设置环境变量
     env = os.environ.copy()
     api_key = os.environ.get(provider["api_key_env"], "")
     if api_key:
         env["ANTHROPIC_API_KEY"] = api_key
-
-    # 如果是 OpenAI 兼容接口，设置对应环境变量
     if provider["type"] == "openai_compatible":
         env["OPENAI_API_BASE"] = provider["base_url"]
         env["OPENAI_API_KEY"] = api_key
@@ -148,19 +160,19 @@ def run_with_claude_code(prompt: str, provider: dict) -> bool:
             capture_output=True,
             text=True
         )
-        print(f"📝 AI 输出:\n{result.stdout[-500:]}")  # 只显示最后500字符
+        print(f"📝 AI 输出:\n{result.stdout[-500:]}")
         return result.returncode == 0
     except subprocess.TimeoutExpired:
         print(f"⏰ 任务超时（{TASK_TIMEOUT}s）")
         return False
     except FileNotFoundError:
         print(f"❌ 未找到 CLI: {cli_path}")
-        print("   请确认已安装 Claude Code CLI 或修改 config/providers.json 中的 cli_path")
+        print("   请确认已安装 OpenCode: npm i -g opencode")
         return False
 
 
 def run_with_api(prompt: str, provider: dict) -> bool:
-    """直接通过 API 调用模型（不依赖 Claude Code CLI）"""
+    """直接通过 API 调用模型（不依赖 OpenCode CLI）"""
     try:
         import httpx
     except ImportError:
@@ -204,12 +216,12 @@ def run_with_api(prompt: str, provider: dict) -> bool:
 def execute_task(task: dict, provider: dict) -> bool:
     """执行单个任务"""
     cfg = load_json(PROVIDERS_FILE)
-    use_cli = cfg.get("claude_code_overrides", {}).get("use_claude_code_cli", True)
+    use_cli = cfg.get("opencode_overrides", {}).get("cli_path", "opencode") != ""
 
     prompt = build_prompt(task)
 
     if use_cli:
-        return run_with_claude_code(prompt, provider)
+        return run_with_opencode(prompt, provider)
     else:
         return run_with_api(prompt, provider)
 

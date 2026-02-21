@@ -9,6 +9,7 @@
       "base_url": "https://api.deepseek.com/v1",
       "api_key_env": "DEEPSEEK_API_KEY",
       "model": "deepseek-chat",
+      "opencode_model": "deepseek/deepseek-chat",
       "alt_models": ["deepseek-reasoner"],
       "max_tokens": 8192,
       "temperature": 0.7
@@ -19,6 +20,7 @@
       "base_url": "https://ai.ll9e.cn/v1",
       "api_key_env": "MAOSHU_API_KEY",
       "model": "gpt-5.2",
+      "opencode_model": "openai/gpt-5.2",
       "alt_models": ["gpt-5.1", "gpt-5", "gpt-5.3-codex", "gpt-5.1-codex", "gpt-5-codex"],
       "max_tokens": 8192,
       "temperature": 0.7
@@ -28,7 +30,8 @@
       "type": "openai_compatible",
       "base_url": "https://www.yxaiapp.com/v1",
       "api_key_env": "FANGZHOU_API_KEY",
-      "model": "claude-sonnet-4-6",
+      "model": "claude-opus-4-6-thinking",
+      "opencode_model": "anthropic/claude-opus-4-6-thinking",
       "alt_models": [
         "claude-opus-4-6", "claude-opus-4-6-thinking",
         "claude-opus-4-5", "claude-opus-4-5-thinking",
@@ -43,10 +46,9 @@
     }
   },
 
-  "claude_code_overrides": {
-    "_comment": "当使用 Claude Code CLI 时的额外配置",
-    "use_claude_code_cli": true,
-    "cli_path": "claude",
-    "dangerously_skip_permissions": true
+  "opencode_overrides": {
+    "_comment": "OpenCode CLI 配置，脚本循环模式使用 opencode run",
+    "cli_path": "opencode",
+    "model": null
   }
 }

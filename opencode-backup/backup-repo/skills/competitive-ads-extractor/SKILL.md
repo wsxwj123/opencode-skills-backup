@@ -2,7 +2,7 @@
 name: competitive-ads-extractor
 description: Extracts and analyzes competitors' ads from ad libraries (Facebook, LinkedIn, etc.) to understand what messaging, problems, and creative approaches are working. Helps inspire and improve your own ad campaigns.
 
-github_hash: 99e2a29515451cce8ed324b551a78864a70c27d4
+github_hash: 27904475d1270d8395acf07691966267d5abda2d
 updated_at: 2026-01-27T17:06:55.684233
 github_url: https://github.com/ComposioHQ/awesome-claude-skills
 ---

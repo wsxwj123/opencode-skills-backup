@@ -2,7 +2,7 @@
 name: lead-research-assistant
 description: Identifies high-quality leads for your product or service by analyzing your business, searching for target companies, and providing actionable contact strategies. Perfect for sales, business development, and marketing professionals.
 
-github_hash: 99e2a29515451cce8ed324b551a78864a70c27d4
+github_hash: 27904475d1270d8395acf07691966267d5abda2d
 updated_at: 2026-01-27T17:06:55.685930
 github_url: https://github.com/ComposioHQ/awesome-claude-skills
 ---
