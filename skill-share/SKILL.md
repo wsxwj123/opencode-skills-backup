@@ -3,7 +3,7 @@ name: skill-share
 description: A skill that creates new Claude skills and automatically shares them on Slack using Rube for seamless team collaboration and skill discovery.
 license: Complete terms in LICENSE.txt
 
-github_hash: 99e2a29515451cce8ed324b551a78864a70c27d4
+github_hash: 27904475d1270d8395acf07691966267d5abda2d
 updated_at: 2026-01-27T17:06:55.679402
 github_url: https://github.com/ComposioHQ/awesome-claude-skills
 ---

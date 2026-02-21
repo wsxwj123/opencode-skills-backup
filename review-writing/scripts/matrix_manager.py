@@ -77,6 +77,15 @@ def normalize(text):
     return re.sub(r"[^a-z0-9\u4e00-\u9fff]+", " ", str(text).lower()).strip()
 
 
+def section_id_matches(row_section_id, query_section):
+    """前缀匹配: '2.1' 匹配 '2.1 模式菌底盘 (Model Organisms)'"""
+    rs = str(row_section_id).strip()
+    qs = str(query_section).strip()
+    if not qs:
+        return False
+    return rs == qs or rs.startswith(qs + " ")
+
+
 def _tokens(text):
     return [t for t in normalize(text).split() if t]
 
@@ -173,7 +182,7 @@ def cmd_focus(args):
     if not isinstance(matrix, list):
         raise SystemExit("synthesis_matrix must be a list")
 
-    subset = [r for r in matrix if r.get("section_id") == args.section]
+    subset = [r for r in matrix if section_id_matches(r.get("section_id", ""), args.section)]
     payload = {
         "section": args.section,
         "count": len(subset),
@@ -195,7 +204,7 @@ def cmd_bind_claims(args):
 
         updated = 0
         for row in matrix:
-            if row.get("section_id") != args.section:
+            if not section_id_matches(row.get("section_id", ""), args.section):
                 continue
 
             hay = normalize(" ".join([str(row.get("title", "")), str(row.get("abstract", "")), str(row.get("key_finding", ""))]))
@@ -234,7 +243,7 @@ def cmd_mark_round3(args):
 
         touched = 0
         for row in matrix:
-            if args.section and row.get("section_id") != args.section:
+            if args.section and not section_id_matches(row.get("section_id", ""), args.section):
                 continue
             if row.get("claim_id") in (None, ""):
                 continue
@@ -254,7 +263,7 @@ def cmd_audit(args):
 
     rows = matrix
     if args.section:
-        rows = [r for r in rows if r.get("section_id") == args.section]
+        rows = [r for r in rows if section_id_matches(r.get("section_id", ""), args.section)]
 
     missing_claim = [r for r in rows if not r.get("claim_id")]
     missing_key = [

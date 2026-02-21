@@ -157,7 +157,7 @@ You must strictly enforce these 8 rules in every interaction:
 ## Tools
 - `scripts/setup_review_project.py`: Run FIRST.
 - `scripts/state_manager.py`: Run EVERY TURN (prefer `load --section ... --minimal`, merge-update by default).
-- `scripts/state_manager.py reindex --sync-apply`: Canonical-deduplicate + matrix/section-order reindex, then hard-gated remap of matrix IDs and draft citations.
+- `scripts/state_manager.py reindex --sync-apply`: 5-layer canonical-deduplicate (DOI → PMID → metadata key → exact title → fuzzy title) with conflict detection, metadata merge, matrix/section-order reindex, then hard-gated remap of matrix IDs and draft citations. Optional: `--similarity-threshold` (default 0.93), `--conflict-threshold` (default 0.85), `--allow-conflicts`.
 - Canonical matrix source is `data/synthesis_matrix.json` (legacy `data/literature_matrix.json` is compatibility-only and should be migrated away).
 - `scripts/scope_manager.py`: Run for `/refactor`.
 - `scripts/tag_literature_sections.py`: Auto-maintain `related_sections` for section-scoped loading.

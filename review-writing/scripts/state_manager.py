@@ -1,4 +1,5 @@
 import argparse
+import difflib
 import json
 import os
 import re
@@ -32,10 +33,21 @@ def _normalize_text(text):
 
 
 def _section_matches(section, section_list):
-    target = _normalize_text(section)
-    if not target or not isinstance(section_list, list):
+    target_raw = str(section).strip()
+    target_norm = _normalize_text(section)
+    if not target_raw or not isinstance(section_list, list):
         return False
-    return any(_normalize_text(item) == target for item in section_list)
+    for item in section_list:
+        if not isinstance(item, str):
+            continue
+        item_s = item.strip()
+        # 1. 精确前缀匹配（"2.1" 匹配 "2.1 Title"，但不匹配 "2.10 ..."）
+        if item_s.startswith(target_raw + " ") or item_s == target_raw:
+            return True
+        # 2. 归一化全等匹配（向后兼容）
+        if _normalize_text(item_s) == target_norm:
+            return True
+    return False
 
 
 def _read_json_file(path):
@@ -122,6 +134,52 @@ def _is_present(value):
     return value not in (None, "", [])
 
 
+DEFAULT_DEDUP_SIMILARITY = 0.93
+DEFAULT_DEDUP_CONFLICT = 0.85
+
+
+def normalize_doi(doi):
+    if not doi:
+        return ""
+    return re.sub(r"\s+", "", str(doi).strip().lower())
+
+
+def normalize_title(title):
+    if not title:
+        return ""
+    text = str(title).strip().lower()
+    text = re.sub(r"[^a-z0-9\u4e00-\u9fff]+", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def normalize_author(author):
+    if not author:
+        return ""
+    text = str(author).strip().lower()
+    text = re.sub(r"[^a-z0-9\u4e00-\u9fff]+", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def normalize_journal(journal):
+    if not journal:
+        return ""
+    text = str(journal).strip().lower()
+    text = re.sub(r"[^a-z0-9\u4e00-\u9fff]+", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def normalize_pmid(pmid):
+    if not pmid:
+        return ""
+    return str(pmid).strip()
+
+
+def title_similarity(a, b):
+    if not a or not b:
+        return 0.0
+    return difflib.SequenceMatcher(None, a, b).ratio()
+
+
 def _resolve_matrix_sources(matrix_path, storyline_path):
     explicit = Path(matrix_path) if matrix_path else None
     candidates = []
@@ -184,7 +242,7 @@ def _resolve_matrix_sources(matrix_path, storyline_path):
 
 def _merge_canonical_item(target, source):
     for key, value in source.items():
-        if key == "global_id":
+        if key in ("global_id", "citation_number"):
             continue
         if key not in target or not _is_present(target.get(key)):
             target[key] = value
@@ -201,11 +259,29 @@ def _merge_canonical_item(target, source):
             target[key] = merged
 
 
-def _build_canonical_records(index_rows):
+def _build_canonical_records(
+    index_rows,
+    similarity_threshold=DEFAULT_DEDUP_SIMILARITY,
+    conflict_threshold=DEFAULT_DEDUP_CONFLICT,
+):
     canonical = []
-    by_identity = {}
     old_to_canonical = {}
     next_virtual_id = 10**9
+
+    seen_doi = {}
+    seen_pmid = {}
+    seen_meta = {}
+    seen_title = {}
+    canonical_title_by_idx = {}
+    duplicates = 0
+    conflicts = []
+    strategy_counts = {
+        "doi": 0,
+        "pmid": 0,
+        "meta": 0,
+        "exact_title": 0,
+        "fuzzy_title": 0,
+    }
 
     for pos, item in enumerate(index_rows):
         if not isinstance(item, dict):
@@ -216,20 +292,73 @@ def _build_canonical_records(index_rows):
         if old_gid is None:
             old_gid = next_virtual_id + pos
 
-        identity = _paper_identity(item) or f"__row__{old_gid}"
-        if identity in by_identity:
-            idx = by_identity[identity]
-            _merge_canonical_item(canonical[idx], item)
-            old_to_canonical[old_gid] = idx
+        doi_key = normalize_doi(item.get("doi"))
+        pmid_key = normalize_pmid(item.get("pmid"))
+        title_key = normalize_title(item.get("title"))
+        author_key = normalize_author(item.get("authors") or item.get("author"))
+        year_key = str(item.get("year") or "").strip()
+        journal_key = normalize_journal(item.get("journal"))
+        meta_key = f"{author_key}|{year_key}|{journal_key}" if (author_key and year_key and journal_key) else ""
+
+        canonical_idx = None
+        if doi_key and doi_key in seen_doi:
+            canonical_idx = seen_doi[doi_key]
+            strategy_counts["doi"] += 1
+        elif pmid_key and pmid_key in seen_pmid:
+            canonical_idx = seen_pmid[pmid_key]
+            strategy_counts["pmid"] += 1
+        elif meta_key and meta_key in seen_meta:
+            canonical_idx = seen_meta[meta_key]
+            strategy_counts["meta"] += 1
+        elif title_key and title_key in seen_title:
+            canonical_idx = seen_title[title_key]
+            strategy_counts["exact_title"] += 1
+        elif title_key:
+            best_idx = None
+            best_score = 0.0
+            for cidx, ctitle in canonical_title_by_idx.items():
+                score = title_similarity(title_key, ctitle)
+                if score > best_score:
+                    best_score = score
+                    best_idx = cidx
+            if best_idx is not None and best_score >= similarity_threshold:
+                canonical_idx = best_idx
+                strategy_counts["fuzzy_title"] += 1
+            elif best_idx is not None and best_score >= conflict_threshold:
+                conflicts.append({
+                    "old_gid": old_gid,
+                    "candidate_idx": best_idx,
+                    "similarity": round(best_score, 4),
+                    "title": item.get("title", ""),
+                })
+
+        if canonical_idx is not None:
+            _merge_canonical_item(canonical[canonical_idx], item)
+            old_to_canonical[old_gid] = canonical_idx
+            duplicates += 1
             continue
 
         new_item = dict(item)
         canonical.append(new_item)
         idx = len(canonical) - 1
-        by_identity[identity] = idx
         old_to_canonical[old_gid] = idx
+        if doi_key:
+            seen_doi[doi_key] = idx
+        if pmid_key:
+            seen_pmid[pmid_key] = idx
+        if title_key:
+            seen_title[title_key] = idx
+            canonical_title_by_idx[idx] = title_key
+        if meta_key:
+            seen_meta[meta_key] = idx
 
-    return canonical, old_to_canonical
+    return canonical, old_to_canonical, {
+        "duplicate_count": duplicates,
+        "conflicts": conflicts,
+        "strategy_counts": strategy_counts,
+        "total_before": len(index_rows),
+        "total_after": len(canonical),
+    }
 
 
 def _split_citation_items(body):
@@ -634,6 +763,9 @@ def reindex_literature_by_section(
     matrix_path=None,
     drafts_dir="drafts",
     sync_apply=False,
+    similarity_threshold=DEFAULT_DEDUP_SIMILARITY,
+    conflict_threshold=DEFAULT_DEDUP_CONFLICT,
+    allow_conflicts=False,
 ):
     if not os.path.exists(index_path):
         raise SystemExit(f"Error: Index file not found: {index_path}")
@@ -646,8 +778,18 @@ def reindex_literature_by_section(
         if not isinstance(index_rows, list):
             raise SystemExit("literature_index must be a list")
 
-        canonical_rows, old_to_canonical = _build_canonical_records(index_rows)
+        canonical_rows, old_to_canonical, dedup_stats = _build_canonical_records(
+            index_rows,
+            similarity_threshold=similarity_threshold,
+            conflict_threshold=conflict_threshold,
+        )
         matrix_rows, writable_matrix_path, matrix_source = _resolve_matrix_sources(matrix_path, storyline_path)
+
+        if dedup_stats["conflicts"] and sync_apply and not allow_conflicts:
+            for c in dedup_stats["conflicts"]:
+                print(f"  [CONFLICT] gid={c['old_gid']} ~{c['similarity']} vs idx={c['candidate_idx']}: {c['title']}")
+            print(f"[GATE] --sync-apply blocked: {len(dedup_stats['conflicts'])} dedup conflicts. Use --allow-conflicts to override.")
+            raise SystemExit(2)
 
         if sync_apply and matrix_rows is None:
             print("[GATE] --sync-apply requires a matrix source (data/literature_matrix.json or data/synthesis_matrix.json).")
@@ -774,10 +916,11 @@ def reindex_literature_by_section(
         for md, content in draft_updates.items():
             _atomic_write_text(md, content)
 
-    dedup_count = len(index_rows) - len(reindexed)
+    dedup_count = dedup_stats["duplicate_count"]
     matrix_label = matrix_source if matrix_source else "none"
+    strategy_info = ", ".join(f"{k}={v}" for k, v in dedup_stats["strategy_counts"].items() if v > 0)
     print(
-        f"Reindex complete: index={len(reindexed)} (dedup_removed={dedup_count}), "
+        f"Reindex complete: index={len(reindexed)} (dedup_removed={dedup_count}{', ' + strategy_info if strategy_info else ''}), "
         f"matrix_source={matrix_label}, matrix_rows_remapped={remapped_rows}, "
         f"draft_citation_groups_remapped={remapped_citations}, references_lines_remapped={remapped_ref_lines}"
     )
@@ -982,6 +1125,23 @@ def main():
         action="store_true",
         help="Hard gate mode: block on missing matrix or unresolved mappings (exit 2).",
     )
+    reindex_parser.add_argument(
+        "--similarity-threshold",
+        type=float,
+        default=DEFAULT_DEDUP_SIMILARITY,
+        help=f"Fuzzy title match threshold (default: {DEFAULT_DEDUP_SIMILARITY})",
+    )
+    reindex_parser.add_argument(
+        "--conflict-threshold",
+        type=float,
+        default=DEFAULT_DEDUP_CONFLICT,
+        help=f"Conflict detection threshold (default: {DEFAULT_DEDUP_CONFLICT})",
+    )
+    reindex_parser.add_argument(
+        "--allow-conflicts",
+        action="store_true",
+        help="Allow apply even when dedup conflicts are detected",
+    )
 
     args = parser.parse_args()
 
@@ -1009,6 +1169,9 @@ def main():
             matrix_path=args.matrix,
             drafts_dir=args.drafts_dir,
             sync_apply=args.sync_apply,
+            similarity_threshold=args.similarity_threshold,
+            conflict_threshold=args.conflict_threshold,
+            allow_conflicts=args.allow_conflicts,
         )
 
 

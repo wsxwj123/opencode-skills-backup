@@ -2,7 +2,7 @@
 name: file-organizer
 description: Intelligently organizes your files and folders across your computer by understanding context, finding duplicates, suggesting better structures, and automating cleanup tasks. Reduces cognitive load and keeps your digital workspace tidy without manual effort.
 
-github_hash: 99e2a29515451cce8ed324b551a78864a70c27d4
+github_hash: 27904475d1270d8395acf07691966267d5abda2d
 updated_at: 2026-01-27T17:06:55.684567
 github_url: https://github.com/ComposioHQ/awesome-claude-skills
 ---

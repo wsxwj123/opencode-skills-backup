@@ -3,7 +3,7 @@ name: agent-browser
 description: Browser automation CLI for AI agents - Fast Rust CLI with Node.js fallback for web automation
 # EXTENDED METADATA (MANDATORY)
 github_url: https://github.com/vercel-labs/agent-browser
-github_hash: 9cbb363190bb39c0f5b4149327d0371cd3fb17ec
+github_hash: fca9d7ab5dbfc5ad5e55f45f2bd9104c90921982
 version: 0.1.0
 created_at: 2026-01-31T00:00:00Z
 entry_point: n/a

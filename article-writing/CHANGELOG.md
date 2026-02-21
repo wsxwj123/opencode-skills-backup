@@ -21,7 +21,7 @@
 - **Postwrite Automation (回复后自动同步)**:
   - `state_manager.py` 新增 `postwrite` 强化参数，支持一条命令同步全局进度与记忆（`writing_progress` + `context_memory`）。
 - **Literature Dedup + Renumber Sync (文献去重与编号同步)**:
-  - 新增 `sync-literature` 命令，按 DOI（优先）+ 标题（兜底）自动去重 `literature_index.json`。
+  - 新增 `sync-literature` 命令，按 DOI → PMID → 元数据键 → 精确标题 → 模糊标题 五层策略自动去重 `literature_index.json`，重复项元数据合并而非丢弃。
   - 去重后自动重写 `manuscripts/*.md` 中的 `[n]` 引用编号，避免正文与索引错位。
 - **Global/Section Load De-duplication (加载去重)**:
   - `global_history` 收敛为核心全局状态，避免与 section 级索引重复加载。

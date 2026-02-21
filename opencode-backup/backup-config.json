@@ -1,7 +1,7 @@
 {
   "repo_url": "https://github.com/wsxwj123/opencode-backup-macmini.git",
-  "last_backup": null,
-  "backup_count": 0,
+  "last_backup": "2026-02-22T00:23:34.117615",
+  "backup_count": 1,
   "backup_items": {
     "config_files": [
       "opencode.json",
@@ -33,6 +33,7 @@
       "node_modules",
       ".DS_Store",
       ".git",
+      "backup-repo",
       "*.pyc",
       "__pycache__",
       "*.log",

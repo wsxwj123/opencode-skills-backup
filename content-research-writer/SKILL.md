@@ -2,7 +2,7 @@
 name: content-research-writer
 description: Assists in writing high-quality content by conducting research, adding citations, improving hooks, iterating on outlines, and providing real-time feedback on each section. Transforms your writing process from solo effort to collaborative partnership.
 
-github_hash: 99e2a29515451cce8ed324b551a78864a70c27d4
+github_hash: 27904475d1270d8395acf07691966267d5abda2d
 updated_at: 2026-01-27T17:06:55.676440
 github_url: https://github.com/ComposioHQ/awesome-claude-skills
 ---

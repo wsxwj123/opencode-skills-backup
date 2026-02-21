@@ -465,6 +465,37 @@ def title_similarity(a, b):
         return 0.0
     return difflib.SequenceMatcher(None, a, b).ratio()
 
+
+def normalize_pmid(pmid):
+    if not pmid:
+        return ""
+    return str(pmid).strip()
+
+
+def _is_present(value):
+    return value not in (None, "", [])
+
+
+def _merge_canonical_item(target, source):
+    """Merge metadata from a duplicate entry into the canonical record."""
+    for key, value in source.items():
+        if key in ("citation_number", "global_id"):
+            continue
+        if key not in target or not _is_present(target.get(key)):
+            target[key] = value
+            continue
+        if key in ("related_sections", "sections") and isinstance(target.get(key), list) and isinstance(value, list):
+            merged = []
+            seen = set()
+            for item in target[key] + value:
+                marker = normalize_title(str(item))
+                if not marker or marker in seen:
+                    continue
+                seen.add(marker)
+                merged.append(item)
+            target[key] = merged
+
+
 def expand_citation_numbers(text):
     numbers = []
     for part in text.split(","):
@@ -1616,6 +1647,7 @@ def dedup_literature_index(
         }
 
     seen_doi = {}
+    seen_pmid = {}
     seen_title = {}
     seen_meta = {}
     canonical_title_by_idx = {}
@@ -1625,6 +1657,7 @@ def dedup_literature_index(
     conflicts = []
     strategy_counts = {
         "doi": 0,
+        "pmid": 0,
         "meta": 0,
         "exact_title": 0,
         "fuzzy_title": 0
@@ -1634,6 +1667,7 @@ def dedup_literature_index(
         if not isinstance(entry, dict):
             entry = {"title": str(entry)}
         doi_key = normalize_doi(entry.get("doi"))
+        pmid_key = normalize_pmid(entry.get("pmid"))
         title_key = normalize_title(entry.get("title"))
         author_key = normalize_author(entry.get("authors") or entry.get("author"))
         year_key = str(entry.get("year") or "").strip()
@@ -1644,6 +1678,9 @@ def dedup_literature_index(
         if doi_key and doi_key in seen_doi:
             canonical_idx = seen_doi[doi_key]
             strategy_counts["doi"] += 1
+        elif pmid_key and pmid_key in seen_pmid:
+            canonical_idx = seen_pmid[pmid_key]
+            strategy_counts["pmid"] += 1
         elif meta_key and meta_key in seen_meta:
             canonical_idx = seen_meta[meta_key]
             strategy_counts["meta"] += 1
@@ -1670,6 +1707,7 @@ def dedup_literature_index(
                 })
 
         if canonical_idx is not None:
+            _merge_canonical_item(canonical[canonical_idx - 1], entry)
             old_to_new[i] = canonical_idx
             duplicates += 1
             continue
@@ -1679,6 +1717,8 @@ def dedup_literature_index(
         old_to_new[i] = new_idx
         if doi_key:
             seen_doi[doi_key] = new_idx
+        if pmid_key:
+            seen_pmid[pmid_key] = new_idx
         if title_key:
             seen_title[title_key] = new_idx
             canonical_title_by_idx[new_idx] = title_key

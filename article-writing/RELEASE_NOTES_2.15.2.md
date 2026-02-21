@@ -38,7 +38,7 @@ python scripts/state_manager.py write-cycle --section results_3.1 --finalize --s
 ## New Reliability Hardening
 - hard-gate enforcement for prewrite/complete phases
 - strict references rebuild to continuous `1..N`
-- dedup strategy: DOI -> metadata key -> exact title -> fuzzy title
+- dedup strategy: DOI -> PMID -> metadata key -> exact title -> fuzzy title (duplicates merged, not discarded)
 - runtime artifact retention (reports/cache/backups bounded)
 - cache invalidation uses nanosecond mtime signature
 
