@@ -14,7 +14,7 @@
         "mcps": ["arxiv", "paper-search", "tavily"]
       },
       "librarian": {
-        "model": "maoshu-gemini/gemini-3-pro-preview",
+        "model": "maoshu-gemini/gemini-3.1-pro-preview",
         "variant": "low",
         "skills": ["chinese-reply"],
         "mcps": ["paper-search", "websearch", "tavily", "fetch", "arxiv", "pandoc", "markdownify", "claude-document"]

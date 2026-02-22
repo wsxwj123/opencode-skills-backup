@@ -17,22 +17,9 @@ from docx import Document
 from docx.shared import Pt, Cm, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
 from docx.oxml.ns import qn
-from docx.oxml import OxmlElement
 import re
 import sys
 import os
-
-try:
-    from abbreviation_registry import load_registry, get_all as get_all_abbreviations
-except Exception:  # pragma: no cover
-    _script_dir = os.path.dirname(os.path.abspath(__file__))
-    if _script_dir not in sys.path:
-        sys.path.insert(0, _script_dir)
-    try:
-        from abbreviation_registry import load_registry, get_all as get_all_abbreviations
-    except ImportError:
-        load_registry = None
-        get_all_abbreviations = None
 
 
 def parse_markdown_line(line):
@@ -154,197 +141,7 @@ def apply_csu_caption_style(paragraph):
         set_run_font(run, latin='Times New Roman', east_asia='KaiTi', size_pt=10.5, bold=False)
 
 
-# ---------------------------------------------------------------------------
-# 三线表工具
-# ---------------------------------------------------------------------------
-
-
-def _set_cell_border(cell, **kwargs):
-    """
-    设置单元格边框。
-
-    kwargs 示例: top={"sz": 12, "val": "single", "color": "000000"}
-    sz 单位为 1/8 pt，所以 12 = 1.5pt, 4 = 0.5pt
-    """
-    tc = cell._tc
-    tcPr = tc.get_or_add_tcPr()
-    tcBorders = OxmlElement('w:tcBorders')
-    for edge, attrs in kwargs.items():
-        element = OxmlElement(f'w:{edge}')
-        for attr_name, attr_val in attrs.items():
-            element.set(qn(f'w:{attr_name}'), str(attr_val))
-        tcBorders.append(element)
-    tcPr.append(tcBorders)
-
-
-def _no_border():
-    return {"sz": "0", "val": "none", "color": "auto"}
-
-
-def _thick_border():
-    return {"sz": "12", "val": "single", "color": "000000"}  # 1.5pt
-
-
-def _thin_border():
-    return {"sz": "4", "val": "single", "color": "000000"}   # 0.5pt
-
-
-def is_table_row(line):
-    """检测是否为 Markdown 表格行: | col1 | col2 |"""
-    stripped = line.strip()
-    return stripped.startswith('|') and stripped.endswith('|') and stripped.count('|') >= 3
-
-
-def is_table_separator(line):
-    """检测是否为 Markdown 表格分隔行: |---|---|"""
-    stripped = line.strip()
-    if not (stripped.startswith('|') and stripped.endswith('|')):
-        return False
-    inner = stripped[1:-1]
-    cells = inner.split('|')
-    return all(re.match(r'^[\s\-:]+$', c) for c in cells)
-
-
-def parse_table_rows(lines):
-    """
-    从连续的 Markdown 表格行中提取表头和数据行。
-
-    Returns:
-        tuple: (headers: list[str], rows: list[list[str]])
-    """
-    headers = []
-    rows = []
-    for i, line in enumerate(lines):
-        stripped = line.strip()
-        cells = [c.strip() for c in stripped.strip('|').split('|')]
-        if i == 0:
-            headers = cells
-        elif is_table_separator(line):
-            continue
-        else:
-            rows.append(cells)
-    return headers, rows
-
-
-def create_three_line_table(doc, headers, rows, caption=None):
-    """
-    创建三线表格式的 Word 表格。
-
-    - 顶线: 1.5pt
-    - 表头下线: 0.5pt
-    - 底线: 1.5pt
-    - 无竖线
-
-    Args:
-        doc: Document 对象
-        headers: 表头列表
-        rows: 数据行列表
-        caption: 表格标题（可选，置于表格上方）
-    """
-    # 添加标题（如果有）
-    if caption:
-        cap_para = doc.add_paragraph(caption)
-        cap_para.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        cap_para.paragraph_format.space_before = Pt(6)
-        cap_para.paragraph_format.space_after = Pt(3)
-        cap_para.paragraph_format.first_line_indent = Cm(0)
-        for run in cap_para.runs:
-            set_run_font(run, latin='Times New Roman', east_asia='KaiTi', size_pt=10.5, bold=False)
-
-    num_cols = len(headers)
-    num_rows = 1 + len(rows)
-    table = doc.add_table(rows=num_rows, cols=num_cols)
-    table.alignment = WD_ALIGN_PARAGRAPH.CENTER
-
-    # 填充表头
-    for j, header_text in enumerate(headers):
-        cell = table.rows[0].cells[j]
-        cell.text = header_text
-        for paragraph in cell.paragraphs:
-            paragraph.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            for run in paragraph.runs:
-                set_run_font(run, latin='Times New Roman', east_asia='SimSun', size_pt=10.5, bold=True)
-
-    # 填充数据行
-    for i, row_data in enumerate(rows):
-        for j, cell_text in enumerate(row_data):
-            if j < num_cols:
-                cell = table.rows[i + 1].cells[j]
-                cell.text = cell_text
-                for paragraph in cell.paragraphs:
-                    paragraph.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                    for run in paragraph.runs:
-                        set_run_font(run, latin='Times New Roman', east_asia='SimSun', size_pt=10.5, bold=False)
-
-    # 应用三线表边框
-    no = _no_border()
-    thick = _thick_border()
-    thin = _thin_border()
-
-    for i, row in enumerate(table.rows):
-        for j, cell in enumerate(row.cells):
-            if i == 0:
-                # 表头行：顶线粗，底线细，无竖线
-                _set_cell_border(cell, top=thick, bottom=thin, left=no, right=no)
-            elif i == num_rows - 1:
-                # 最后一行：底线粗，无竖线
-                _set_cell_border(cell, top=no, bottom=thick, left=no, right=no)
-            else:
-                # 中间行：无边框
-                _set_cell_border(cell, top=no, bottom=no, left=no, right=no)
-
-    return table
-
-
-# ---------------------------------------------------------------------------
-# 缩略语对照表页
-# ---------------------------------------------------------------------------
-
-
-def create_abbreviation_table_page(doc, project_root):
-    """
-    在文档中插入缩略语对照表页（三线表格式）。
-
-    Args:
-        doc: Document 对象
-        project_root: 项目根目录（用于读取注册表）
-
-    Returns:
-        bool: 是否成功插入（无缩略语时返回 False）
-    """
-    if get_all_abbreviations is None:
-        return False
-
-    try:
-        items = get_all_abbreviations(project_root)
-    except Exception:
-        return False
-
-    if not items:
-        return False
-
-    # 标题
-    heading = doc.add_heading("主要缩略语对照表", level=1)
-    apply_csu_heading1_style(heading)
-
-    # 构建表格数据
-    headers = ["缩略语", "英文全称", "中文全称"]
-    rows = []
-    for abbr, info in items:
-        full_en = info.get("full_en", "") or ""
-        full_cn = info.get("full_cn", "") or ""
-        rows.append([abbr, full_en, full_cn])
-
-    create_three_line_table(doc, headers, rows)
-
-    # 分页符
-    doc.add_page_break()
-
-    return True
-
-
-def markdown_to_docx(md_content, output_path, chapter_num=None, project_root=None,
-                     include_abbreviation_table=False):
+def markdown_to_docx(md_content, output_path, chapter_num=None):
     """
     将 Markdown 内容转换为 Word 文档
     
@@ -352,8 +149,6 @@ def markdown_to_docx(md_content, output_path, chapter_num=None, project_root=Non
         md_content: Markdown 文本内容
         output_path: 输出文件路径
         chapter_num: 章节号（可选）
-        project_root: 项目根目录（可选，用于缩略语表）
-        include_abbreviation_table: 是否在文档开头插入缩略语对照表
     
     Returns:
         bool: 转换是否成功
@@ -368,37 +163,10 @@ def markdown_to_docx(md_content, output_path, chapter_num=None, project_root=Non
         section.bottom_margin = Cm(2.54)
         section.left_margin = Cm(3.17)
         section.right_margin = Cm(3.17)
-
-        # 插入缩略语对照表（如果需要）
-        if include_abbreviation_table and project_root:
-            create_abbreviation_table_page(doc, project_root)
         
-        # 逐行解析，支持表格累积
+        # 逐行解析
         lines = md_content.split('\n')
-        table_buffer = []       # 累积连续的表格行
-        table_caption = None    # 表格标题（表 X-X）
-
-        def flush_table():
-            """将累积的表格行渲染为三线表"""
-            nonlocal table_buffer, table_caption
-            if not table_buffer:
-                return
-            headers, rows = parse_table_rows(table_buffer)
-            if headers:
-                create_three_line_table(doc, headers, rows, caption=table_caption)
-            table_buffer = []
-            table_caption = None
-
         for line in lines:
-            # 检测是否为表格行
-            if is_table_row(line) or (table_buffer and is_table_separator(line)):
-                table_buffer.append(line)
-                continue
-
-            # 非表格行：先刷新之前累积的表格
-            if table_buffer:
-                flush_table()
-
             line_type, content, level = parse_markdown_line(line)
             
             if line_type == 'empty':
@@ -416,23 +184,14 @@ def markdown_to_docx(md_content, output_path, chapter_num=None, project_root=Non
                 para = doc.add_heading(content, level=3)
                 apply_csu_heading3_style(para)
             
-            elif line_type == 'figure':
+            elif line_type == 'figure' or line_type == 'table':
                 para = doc.add_paragraph(content)
                 apply_csu_caption_style(para)
-            
-            elif line_type == 'table':
-                # 表格占位符 [表 X-X：标题] — 可能是后续 Markdown 表格的标题
-                table_caption = content.strip('[]')
-                # 不立即渲染，等待后续表格行
             
             elif line_type == 'paragraph':
                 if content:  # 只添加非空段落
                     para = doc.add_paragraph(content)
                     apply_csu_normal_style(para)
-
-        # 文件末尾：刷新残留的表格
-        if table_buffer:
-            flush_table()
         
         # 保存文档
         output_dir = os.path.dirname(output_path)
@@ -448,16 +207,13 @@ def markdown_to_docx(md_content, output_path, chapter_num=None, project_root=Non
         return False
 
 
-def convert_markdown_file(md_file_path, output_path=None, project_root=None,
-                          include_abbreviation_table=False):
+def convert_markdown_file(md_file_path, output_path=None):
     """
     转换 Markdown 文件
     
     Args:
         md_file_path: Markdown 文件路径
         output_path: 输出文件路径（可选）
-        project_root: 项目根目录（可选，用于缩略语表）
-        include_abbreviation_table: 是否插入缩略语对照表
     """
     if not os.path.exists(md_file_path):
         print(f"❌ 文件不存在：{md_file_path}")
@@ -478,11 +234,7 @@ def convert_markdown_file(md_file_path, output_path=None, project_root=None,
         chapter_num = int(match.group(1))
     
     # 执行转换
-    return markdown_to_docx(
-        md_content, output_path, chapter_num=chapter_num,
-        project_root=project_root,
-        include_abbreviation_table=include_abbreviation_table,
-    )
+    return markdown_to_docx(md_content, output_path, chapter_num)
 
 
 def main():
@@ -493,18 +245,11 @@ def main():
     parser.add_argument('input', help='输入 Markdown 文件路径')
     parser.add_argument('-o', '--output', help='输出 Word 文件路径（可选）')
     parser.add_argument('-c', '--chapter', type=int, help='章节号（可选）')
-    parser.add_argument('--project-root', help='项目根目录（用于缩略语表）')
-    parser.add_argument('--abbreviation-table', action='store_true',
-                        help='在文档开头插入缩略语对照表')
     
     args = parser.parse_args()
     
     # 执行转换
-    success = convert_markdown_file(
-        args.input, args.output,
-        project_root=args.project_root,
-        include_abbreviation_table=args.abbreviation_table,
-    )
+    success = convert_markdown_file(args.input, args.output)
     
     if success:
         print("\n📋 样式说明：")

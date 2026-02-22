@@ -34,21 +34,6 @@ except Exception:  # pragma: no cover
         sys.path.insert(0, script_dir)
     from thesis_profile import load_profile, save_profile, parse_chapter_target_spec
 
-def _get_abbr_process():
-    """Lazy import to avoid circular dependency with abbreviation_registry."""
-    try:
-        from abbreviation_registry import process_section_markdown
-        return process_section_markdown
-    except Exception:  # pragma: no cover
-        _sd = os.path.dirname(os.path.abspath(__file__))
-        if _sd not in sys.path:
-            sys.path.insert(0, _sd)
-        try:
-            from abbreviation_registry import process_section_markdown
-            return process_section_markdown
-        except ImportError:
-            return None
-
 try:
     import fcntl
 except ImportError:  # pragma: no cover
@@ -72,7 +57,6 @@ OPTIONAL_STATE_FILES = {
     "history_log": "history_log.json",
     "literature_index": "literature_index.json",
     "figures_index": "figures_index.json",
-    "abbreviation_registry": "abbreviation_registry.json",
 }
 
 RESTORE_MANAGED_FILES = tuple(
@@ -85,6 +69,85 @@ RESTORE_MANAGED_DIRS = (".state", "02_分章节文档", "03_合并文档", "04_�
 GATE_STATE_DIR = ".state"
 GATE_STATE_FILE = os.path.join(GATE_STATE_DIR, "write_gate.json")
 LOAD_CACHE_FILE = os.path.join(GATE_STATE_DIR, "load_cache.json")
+
+
+# ---------------------------------------------------------------------------
+# Lazy-loaded abbreviation processing (avoids circular import)
+# ---------------------------------------------------------------------------
+
+def _get_abbr_process():
+    """Lazily import abbreviation_registry to avoid circular dependency."""
+    try:
+        from abbreviation_registry import process_section_markdown
+        return process_section_markdown
+    except ImportError:
+        _sd = os.path.dirname(os.path.abspath(__file__))
+        if _sd not in sys.path:
+            sys.path.insert(0, _sd)
+        try:
+            from abbreviation_registry import process_section_markdown
+            return process_section_markdown
+        except ImportError:
+            return None
+
+
+def _postwrite_abbreviation_process(project_root, chapter):
+    """
+    Post-write hook: extract, register, and strip redundant abbreviation
+    expansions from all markdown files in the given chapter directory.
+
+    Returns a report dict or None if abbreviation_registry is unavailable.
+    """
+    process_fn = _get_abbr_process()
+    if process_fn is None:
+        return None
+
+    # Find chapter directory (support both layouts)
+    chapter_str = str(int(chapter)) if str(chapter).isdigit() else str(chapter)
+    candidates = [
+        os.path.join(project_root, "atomic_md", f"第{chapter_str}章"),
+        os.path.join(project_root, "02_分章节文档", f"第{chapter_str}章"),
+    ]
+    chapter_dir = None
+    for c in candidates:
+        if os.path.isdir(c):
+            chapter_dir = c
+            break
+
+    if chapter_dir is None:
+        return {"skipped": True, "reason": "chapter_dir_not_found"}
+
+    report = {"processed_files": [], "new_abbreviations": 0, "stripped_count": 0}
+    md_files = sorted(glob.glob(os.path.join(chapter_dir, "*.md")))
+    for md_path in md_files:
+        basename = os.path.basename(md_path)
+        # Extract section number from filename like "2.1_引言.md"
+        sec_match = re.match(r"(\d+\.\d+)", basename)
+        section = sec_match.group(1) if sec_match else basename
+
+        try:
+            with open(md_path, "r", encoding="utf-8") as f:
+                md_content = f.read()
+
+            cleaned, result = process_fn(
+                project_root=project_root,
+                md_content=md_content,
+                chapter=chapter_str,
+                section=section,
+            )
+
+            # Write back only if content changed
+            if cleaned != md_content:
+                with open(md_path, "w", encoding="utf-8") as f:
+                    f.write(cleaned)
+
+            report["processed_files"].append(basename)
+            report["new_abbreviations"] += result.get("registered_count", 0)
+            report["stripped_count"] += result.get("stripped_count", 0)
+        except Exception:
+            pass  # Non-fatal: abbreviation processing should not block postwrite
+
+    return report
 
 
 class StateFileError(Exception):
@@ -785,76 +848,6 @@ def append_history_log(project_root, item):
     update_json_locked(path, [], mutate)
 
 
-def _postwrite_abbreviation_process(project_root, chapter):
-    """
-    在 postwrite 阶段自动处理当前章节的所有 markdown 文件：
-    提取缩略语 → 注册 → 剥离冗余展开 → 原地覆写。
-
-    Returns:
-        dict: 处理报告，包含处理的文件数和缩略语统计
-    """
-    if _get_abbr_process() is None:
-        return None
-
-    chapter_str = str(chapter)
-    chapter_dir = resolve_path(project_root, os.path.join("02_分章节文档", f"第{chapter_str}章"))
-    if not os.path.isdir(chapter_dir):
-        # 尝试其他命名模式
-        alt_patterns = [
-            os.path.join("02_分章节文档", f"ch{chapter_str}"),
-            os.path.join("02_分章节文档", f"chapter{chapter_str}"),
-        ]
-        chapter_dir = None
-        for pat in alt_patterns:
-            candidate = resolve_path(project_root, pat)
-            if os.path.isdir(candidate):
-                chapter_dir = candidate
-                break
-        if chapter_dir is None:
-            return {"files_processed": 0, "note": "chapter directory not found"}
-
-    md_files = sorted(glob.glob(os.path.join(chapter_dir, "**", "*.md"), recursive=True))
-    if not md_files:
-        return {"files_processed": 0, "note": "no markdown files found"}
-
-    total_extracted = 0
-    total_registered = 0
-    total_stripped = 0
-    file_reports = []
-
-    for md_path in md_files:
-        try:
-            with open(md_path, "r", encoding="utf-8") as f:
-                content = f.read()
-
-            # 从文件名推断 section 号
-            basename = os.path.basename(md_path)
-            sec_match = re.search(r'(\d+\.\d+)', basename)
-            section = sec_match.group(1) if sec_match else ""
-
-            cleaned, report = _get_abbr_process()(project_root, content, chapter_str, section)
-
-            # 原地覆写（仅当内容有变化时）
-            if cleaned != content:
-                with open(md_path, "w", encoding="utf-8") as f:
-                    f.write(cleaned)
-
-            total_extracted += report.get("extracted_count", 0)
-            total_registered += report.get("registration", {}).get("registered_count", 0)
-            total_stripped += report.get("stripping", {}).get("stripped_count", 0)
-            file_reports.append({"file": basename, "report": report})
-        except Exception as e:
-            file_reports.append({"file": os.path.basename(md_path), "error": str(e)})
-
-    return {
-        "files_processed": len(md_files),
-        "total_extracted": total_extracted,
-        "total_registered": total_registered,
-        "total_stripped": total_stripped,
-        "file_reports": file_reports,
-    }
-
-
 def postwrite_state(project_root, chapter, status="updated", summary="", create_snapshot=False):
     ok, reason = validate_gate(project_root, chapter, "prewrite")
     if not ok:
@@ -872,11 +865,6 @@ def postwrite_state(project_root, chapter, status="updated", summary="", create_
 
     ts = now_ts()
     updated_files = []
-
-    # --- Abbreviation registry: process chapter markdown files ---
-    abbr_report = None
-    if _get_abbr_process() is not None:
-        abbr_report = _postwrite_abbreviation_process(project_root, chapter)
 
     # Update project_state progress
     state_path = resolve_path(project_root, "project_state.json")
@@ -943,6 +931,9 @@ def postwrite_state(project_root, chapter, status="updated", summary="", create_
     snapshot_dir = None
     if create_snapshot:
         snapshot_dir = backup_project_state(project_root)
+
+    # Abbreviation processing (lazy-loaded, non-fatal)
+    abbr_report = _postwrite_abbreviation_process(project_root, chapter)
 
     print(
         json.dumps(

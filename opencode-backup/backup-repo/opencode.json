@@ -117,7 +117,7 @@
       },
       "models": {
         "gemini-3-pro-preview-thinking": { "name": "gemini-3-pro-preview-thinking", "limit": { "context": 2000000, "output": 8192 } },
-        "gemini-2.5-pro": { "name": "gemini-2.5-pro", "limit": { "context": 2000000, "output": 8192 } },
+        "gemini-3.1-pro-preview": { "name": "gemini-3.1-pro-preview", "limit": { "context": 2000000, "output": 8192 } },
         "gemini-2.5-pro-thinking": { "name": "gemini-2.5-pro-thinking", "limit": { "context": 2000000, "output": 8192 } },
         "gemini-3-flash-preview": { "name": "gemini-3-flash-preview", "limit": { "context": 1000000, "output": 8192 } },
         "gemini-3-pro-preview": { "name": "gemini-3-pro-preview", "limit": { "context": 2000000, "output": 8192 } }

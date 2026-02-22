@@ -30,19 +30,6 @@ except Exception:  # pragma: no cover
         sys.path.insert(0, script_dir)
     from thesis_profile import load_profile
 
-try:
-    from abbreviation_registry import load_registry, extract_abbreviations, validate_cross_references
-except Exception:  # pragma: no cover
-    _script_dir = os.path.dirname(os.path.abspath(__file__))
-    if _script_dir not in sys.path:
-        sys.path.insert(0, _script_dir)
-    try:
-        from abbreviation_registry import load_registry, extract_abbreviations, validate_cross_references
-    except ImportError:
-        load_registry = None
-        extract_abbreviations = None
-        validate_cross_references = None
-
 
 def normalize_text(value):
     return re.sub(r"\s+", "", (value or "").lower())
@@ -408,6 +395,115 @@ def check_reference_position(doc):
     return issues
 
 
+# ---------------------------------------------------------------------------
+# 正文内联引用格式检测
+# ---------------------------------------------------------------------------
+
+# 合法引用格式：[6] [6,7] [6-8] [6,7,9] [6-8,10] 等
+_VALID_CITATION_RE = re.compile(
+    r'\[(\d+(?:\s*[-–]\s*\d+)?(?:\s*,\s*\d+(?:\s*[-–]\s*\d+)?)*)\]'
+)
+
+# 宽松匹配：任何 [ 数字... ] 形态（用于发现格式错误的引用）
+_LOOSE_CITATION_RE = re.compile(
+    r'\[[\d,\-–\s]+\]'
+)
+
+# 不合法的常见错误模式
+_BAD_CITATION_PATTERNS = [
+    # 缺少逗号：[6 7]
+    (re.compile(r'\[\d+\s+\d+\]'), '引用编号之间缺少逗号，应为 [X,Y] 格式'),
+    # 中文逗号：[6，7]
+    (re.compile(r'\[\d+\s*，\s*\d+'), '引用中使用了中文逗号，应使用英文逗号'),
+    # 中文括号：（6）或【6】
+    (re.compile(r'[（【]\d+(?:\s*[,，\-–]\s*\d+)*[）】]'), '引用使用了中文括号，应使用英文方括号 [X]'),
+    # 上标格式残留：^[6] 或 <sup>[6]</sup>
+    (re.compile(r'\^\[\d+'), '引用不应使用 markdown 上标语法'),
+]
+
+
+def check_inline_citations(doc):
+    """
+    检测正文中内联引用格式是否规范。
+
+    合法格式：[6] [6,7] [6-8] [6,7,9-11]
+    检测问题：
+    - 格式错误的引用（中文逗号、缺逗号、中文括号等）
+    - 引用编号不连续或逆序（如 [8,3]）
+    - 引用编号超出参考文献范围（需配合 ref_count 使用）
+    """
+    issues = []
+    in_references = False
+    in_abstract = False
+    para_idx = 0
+
+    for para in doc.paragraphs:
+        text = para.text.strip()
+        if not text:
+            continue
+
+        lvl = heading_level(getattr(para.style, "name", ""))
+        if lvl is not None:
+            cls = classify_heading(text)
+            if cls == "references":
+                in_references = True
+            elif in_references:
+                in_references = False
+            in_abstract = "摘要" in text or "abstract" in text.lower()
+            continue
+
+        # 跳过参考文献区域和摘要
+        if in_references or in_abstract:
+            continue
+
+        para_idx += 1
+
+        # 1) 检测错误格式
+        for bad_re, msg in _BAD_CITATION_PATTERNS:
+            for m in bad_re.finditer(text):
+                snippet = text[max(0, m.start() - 10):m.end() + 10]
+                issues.append({
+                    'level': 'error',
+                    'category': '引用格式',
+                    'message': f'{msg}：...{snippet}...',
+                    'suggestion': '正文引用应使用英文方括号+英文逗号，如 [1,2] [3-5]'
+                })
+
+        # 2) 检测合法引用中的编号问题
+        for m in _VALID_CITATION_RE.finditer(text):
+            inner = m.group(1)
+            # 解析所有编号
+            nums = []
+            for part in re.split(r'\s*,\s*', inner):
+                range_match = re.match(r'(\d+)\s*[-–]\s*(\d+)', part)
+                if range_match:
+                    start, end = int(range_match.group(1)), int(range_match.group(2))
+                    if start >= end:
+                        issues.append({
+                            'level': 'error',
+                            'category': '引用格式',
+                            'message': f'引用范围逆序：[{inner}]，起始编号应小于结束编号',
+                            'suggestion': f'应为 [{end}-{start}] 或拆分为独立编号'
+                        })
+                    nums.extend(range(start, end + 1))
+                else:
+                    nums.append(int(part.strip()))
+
+            # 检查是否非递增（允许相等，不允许逆序）
+            if len(nums) >= 2:
+                for i in range(1, len(nums)):
+                    if nums[i] < nums[i - 1]:
+                        issues.append({
+                            'level': 'warning',
+                            'category': '引用格式',
+                            'message': f'引用编号未按升序排列：[{inner}]',
+                            'suggestion': '多引用应按编号升序排列，如 [3,5,7] 而非 [7,3,5]'
+                        })
+                        break
+
+    return issues
+
+
 def check_full_thesis_structure(doc, min_chapters=5):
     """
     全文结构门禁：
@@ -466,108 +562,6 @@ def check_full_thesis_structure(doc, min_chapters=5):
                 'message': '研究章节数量不足',
                 'suggestion': '应保留“独立绪论章 + 多个研究章 + 独立总结章”组织形式'
             })
-
-    return issues
-
-
-def check_abbreviation_consistency(doc, project_root=None):
-    """
-    检查缩略语一致性：
-    1. 同一缩略语是否在多个章节重复展开
-    2. 正文中出现的缩略语是否都在注册表中
-    """
-    issues = []
-
-    if load_registry is None or extract_abbreviations is None:
-        return issues
-
-    # 收集全文文本，按章节分组
-    chapter_texts = {}
-    current_chapter = "0"
-    current_text_lines = []
-
-    for para in doc.paragraphs:
-        text = para.text.strip()
-        if not text:
-            continue
-        lvl = heading_level(getattr(para.style, "name", ""))
-        if lvl is not None and is_chapter_heading_text(text):
-            if current_text_lines:
-                chapter_texts[current_chapter] = "\n".join(current_text_lines)
-            m = re.search(r'[一二三四五六七八九十百千万零〇0-9]+', text)
-            current_chapter = m.group(0) if m else current_chapter
-            current_text_lines = []
-            continue
-        current_text_lines.append(text)
-
-    if current_text_lines:
-        chapter_texts[current_chapter] = "\n".join(current_text_lines)
-
-    # 提取每章中出现的缩略语展开
-    abbr_first_seen = {}  # abbr -> first chapter
-    for ch_key in sorted(chapter_texts.keys(), key=lambda x: str(x)):
-        ch_text = chapter_texts[ch_key]
-        extracted = extract_abbreviations(ch_text)
-        for item in extracted:
-            abbr = item["abbr"]
-            if abbr not in abbr_first_seen:
-                abbr_first_seen[abbr] = ch_key
-            else:
-                if abbr_first_seen[abbr] != ch_key:
-                    issues.append({
-                        'level': 'warning',
-                        'category': '缩略语',
-                        'message': f'缩略语 {abbr} 在第{ch_key}章重复展开（首次出现于第{abbr_first_seen[abbr]}章）',
-                        'suggestion': f'第{ch_key}章中应直接使用 {abbr}，无需再次展开全称',
-                    })
-
-    # 如果有注册表，检查正文中的大写缩写是否都已注册
-    if project_root:
-        try:
-            registry = load_registry(project_root)
-        except Exception:
-            registry = {}
-        if registry:
-            full_text = "\n".join(chapter_texts.values())
-            # 匹配独立的大写缩写词（2-15字符）
-            standalone_abbrs = set(re.findall(r'\b([A-Z][A-Za-z0-9\-]{1,14})\b', full_text))
-            # 过滤常见非缩略语词
-            common_words = {
-                "The", "In", "On", "At", "For", "And", "But", "Or", "Not", "No",
-                "Yes", "OK", "DNA", "RNA", "pH", "UV", "IR", "NMR", "MS", "GC",
-                "HPLC", "SEM", "TEM", "XRD", "XPS", "BET", "DLS", "TGA", "DSC",
-                "IC50", "EC50", "LD50", "ED50",
-            }
-            for abbr in standalone_abbrs:
-                if len(abbr) < 2:
-                    continue
-                if abbr in common_words:
-                    continue
-                if abbr not in registry and abbr.upper() not in {k.upper() for k in registry}:
-                    # 只报告出现3次以上的未注册缩写
-                    count = len(re.findall(r'\b' + re.escape(abbr) + r'\b', full_text))
-                    if count >= 3:
-                        issues.append({
-                            'level': 'info',
-                            'category': '缩略语',
-                            'message': f'缩写 {abbr} 出现 {count} 次但未在缩略语注册表中',
-                            'suggestion': f'如为专业缩略语，建议注册到 abbreviation_registry.json',
-                        })
-
-    # 交叉引用验证：注册表中的 first_chapter/first_section 是否与 markdown 文件一致
-    if project_root and validate_cross_references is not None:
-        try:
-            xref_result = validate_cross_references(project_root)
-            for detail in xref_result.get("details", []):
-                if detail.get("status") == "invalid":
-                    issues.append({
-                        'level': 'warning',
-                        'category': '缩略语交叉引用',
-                        'message': f'缩略语 {detail["abbr"]} 交叉引用失败：{detail.get("reason", "unknown")}',
-                        'suggestion': '请检查注册表中 first_chapter/first_section 是否正确，或对应 markdown 文件是否包含该缩略语展开',
-                    })
-        except Exception:
-            pass
 
     return issues
 
@@ -670,6 +664,12 @@ def generate_quality_report(
     reference_position_issues = check_reference_position(doc)
     all_issues.extend(reference_position_issues)
 
+    # 5.2 正文内联引用格式检测
+    if verbose:
+        print("🔍 检查正文引用格式...")
+    citation_issues = check_inline_citations(doc)
+    all_issues.extend(citation_issues)
+
     # 5.2 全文结构门禁（仅在全文检查时启用）
     if enforce_full_structure:
         if verbose:
@@ -682,13 +682,6 @@ def generate_quality_report(
         print("🔍 检查段落格式...")
     format_issues = check_paragraph_formatting(doc)
     all_issues.extend(format_issues)
-
-    # 7. 检查缩略语一致性
-    if verbose:
-        print("🔍 检查缩略语一致性...")
-    abbr_project_root = infer_project_root_for_profile(docx_path)
-    abbr_issues = check_abbreviation_consistency(doc, project_root=abbr_project_root)
-    all_issues.extend(abbr_issues)
     
     # 计算总分（简化评分）
     error_count = len([i for i in all_issues if i['level'] == 'error'])
