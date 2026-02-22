@@ -15,7 +15,6 @@
 """
 
 from docx import Document
-from docx.oxml.ns import qn
 import argparse
 import sys
 import os
@@ -304,93 +303,6 @@ def check_bullet_points(doc):
     return issues
 
 
-def check_table_format(doc):
-    """检查表格是否符合三线表规范"""
-    issues = []
-    
-    for idx, table in enumerate(doc.tables):
-        table_label = f'表格 {idx + 1}'
-        tbl = table._tbl
-        
-        # 检查表格是否有行
-        if len(table.rows) == 0:
-            issues.append({
-                'level': 'warning',
-                'category': '三线表',
-                'location': table_label,
-                'message': f'{table_label} 为空表格',
-                'suggestion': '请检查表格内容是否完整'
-            })
-            continue
-        
-        # 检查竖线：遍历所有单元格，检查左右边框
-        has_vertical = False
-        for row in table.rows:
-            for cell in row.cells:
-                tc = cell._tc
-                tcPr = tc.find(qn('w:tcPr'))
-                if tcPr is not None:
-                    tcBorders = tcPr.find(qn('w:tcBorders'))
-                    if tcBorders is not None:
-                        for side in ['left', 'right', 'insideV']:
-                            border_el = tcBorders.find(qn(f'w:{side}'))
-                            if border_el is not None:
-                                val = border_el.get(qn('w:val'))
-                                if val and val not in ('none', 'nil'):
-                                    has_vertical = True
-                                    break
-                if has_vertical:
-                    break
-            if has_vertical:
-                break
-        
-        # 也检查表级别边框
-        if not has_vertical:
-            tblPr = tbl.find(qn('w:tblPr'))
-            if tblPr is not None:
-                tblBorders = tblPr.find(qn('w:tblBorders'))
-                if tblBorders is not None:
-                    for side in ['left', 'right', 'insideV']:
-                        border_el = tblBorders.find(qn(f'w:{side}'))
-                        if border_el is not None:
-                            val = border_el.get(qn('w:val'))
-                            if val and val not in ('none', 'nil'):
-                                has_vertical = True
-                                break
-        
-        if has_vertical:
-            issues.append({
-                'level': 'error',
-                'category': '三线表',
-                'location': table_label,
-                'message': f'{table_label} 存在竖线边框',
-                'suggestion': '三线表不应有竖线，请移除所有垂直边框'
-            })
-        
-        # 检查是否有过多横线（insideH 应为 none）
-        has_inside_h = False
-        tblPr = tbl.find(qn('w:tblPr'))
-        if tblPr is not None:
-            tblBorders = tblPr.find(qn('w:tblBorders'))
-            if tblBorders is not None:
-                insideH = tblBorders.find(qn('w:insideH'))
-                if insideH is not None:
-                    val = insideH.get(qn('w:val'))
-                    if val and val not in ('none', 'nil'):
-                        has_inside_h = True
-        
-        if has_inside_h:
-            issues.append({
-                'level': 'warning',
-                'category': '三线表',
-                'location': table_label,
-                'message': f'{table_label} 存在多余的内部横线',
-                'suggestion': '三线表只应有顶线、表头分隔线和底线三条横线'
-            })
-    
-    return issues
-
-
 def check_reference_count(doc, min_reference_count=80):
     """检查参考文献数量"""
     issues = []
@@ -632,12 +544,6 @@ def generate_quality_report(
         print("🔍 检查列表项...")
     bullet_issues = check_bullet_points(doc)
     all_issues.extend(bullet_issues)
-    
-    # 4.5 检查三线表格式
-    if verbose:
-        print("🔍 检查三线表格式...")
-    table_format_issues = check_table_format(doc)
-    all_issues.extend(table_format_issues)
     
     # 5. 检查参考文献
     if verbose:

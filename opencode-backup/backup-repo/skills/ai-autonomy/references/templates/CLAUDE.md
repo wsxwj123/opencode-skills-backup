@@ -29,35 +29,6 @@
 - **失败时回滚**：如果改坏了东西，`git checkout .` 回滚，记录原因，继续下一个任务。
 - **保持上下文干净**：每个任务独立，完成后清理临时文件。
 
-## 跨平台开发规范
-
-> 目标平台定义在 `feature_list.json` 的 `target_platforms` 字段。
-> 开始任务前先检查该字段，按目标平台约束编写代码。
-
-### 文件路径
-- 始终使用 `pathlib.Path` 或 `os.path.join()`，禁止硬编码 `/` 或 `\`
-- 禁止使用 `~` 展开路径，用 `Path.home()` 代替
-- 注意 Windows 路径长度限制（260 字符），避免过深嵌套
-
-### 系统命令
-- 禁止直接调用 `open`（Mac）、`start`（Win）等平台特定命令
-- 需要打开文件/URL 时用 `import webbrowser` 或 `subprocess` + 平台判断
-- Shell 脚本必须同时提供 `.sh` 和 `.ps1`/`.bat` 版本，或用 Python 统一
-
-### 换行符与编码
-- 文本文件统一 UTF-8 编码
-- 注意 `\r\n`（Win）vs `\n`（Mac）差异，读写文件时显式指定 `newline`
-- `.gitattributes` 中配置 `* text=auto eol=lf`
-
-### 依赖与环境
-- 避免仅限 macOS 的依赖（如 `pyobjc`），如需平台特定功能用条件导入
-- Node.js 项目注意 `node_modules` 中的原生模块跨平台兼容性
-- 环境变量用 `os.environ.get()` 读取，不要假设 shell 类型
-
-### 测试
-- 路径相关的测试用 `os.sep` 或 `pathlib` 构造期望值，不要硬编码分隔符
-- 如有 CI，确保 macOS 和 Windows 矩阵都跑
-
 ## 文件说明
 
 | 文件 | 用途 |

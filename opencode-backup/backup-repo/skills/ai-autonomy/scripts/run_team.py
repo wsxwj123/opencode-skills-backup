@@ -126,9 +126,9 @@ def run_agent(agent_id: str, task: dict, provider: dict) -> dict:
     cli_path = cli_cfg.get("cli_path", "opencode")
 
     cmd = [cli_path, "run", prompt, "--dir", str(ROOT)]
-    opencode_model = provider.get("opencode_model")
-    if opencode_model:
-        cmd.extend(["--model", opencode_model])
+    model_override = cli_cfg.get("model")
+    if model_override:
+        cmd.extend(["--model", model_override])
 
     env = os.environ.copy()
     api_key = os.environ.get(provider.get("api_key_env", ""), "")

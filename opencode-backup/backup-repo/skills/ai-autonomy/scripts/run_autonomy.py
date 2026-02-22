@@ -54,17 +54,6 @@ def save_json(path: Path, data: dict):
 
 
 def append_progress(message: str):
-    """追加进度日志，超过 50KB 自动轮转归档"""
-    # 轮转检查
-    if PROGRESS_FILE.exists() and PROGRESS_FILE.stat().st_size > 50 * 1024:
-        archive = PROGRESS_FILE.with_suffix(
-            f".{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
-        )
-        PROGRESS_FILE.rename(archive)
-        with open(PROGRESS_FILE, "w", encoding="utf-8") as f:
-            f.write(f"[轮转] 旧日志已归档到 {archive.name}\n")
-        print(f"📦 [progress] 日志已轮转 → {archive.name}")
-
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     with open(PROGRESS_FILE, "a", encoding="utf-8") as f:
         f.write(f"\n[{timestamp}] {message}")
@@ -117,7 +106,7 @@ def build_prompt(task: dict) -> str:
 {criteria}
 
 ## 执行要求
-1. 先运行 `python3 init.py` 确认环境
+1. 先运行 `source init.sh` 确认环境
 2. 读取 feature_list.json 和 progress.txt 了解上下文
 3. 实现上述任务，逐条满足验收标准
 4. 完成后更新 feature_list.json（status→done, passes→true）
@@ -137,10 +126,10 @@ def run_with_opencode(prompt: str, provider: dict) -> bool:
     # opencode run <message> --dir <project_root> --model <provider/model>
     cmd = [cli_path, "run", prompt, "--dir", str(ROOT)]
 
-    # 使用 opencode_model（provider/model 格式）
-    opencode_model = provider.get("opencode_model")
-    if opencode_model:
-        cmd.extend(["--model", opencode_model])
+    # 如果配置了模型，通过 --model 指定
+    model_override = cli_cfg.get("model")
+    if model_override:
+        cmd.extend(["--model", model_override])
 
     # 设置环境变量
     env = os.environ.copy()

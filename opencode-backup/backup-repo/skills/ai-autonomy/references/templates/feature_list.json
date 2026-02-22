@@ -2,7 +2,6 @@
   "_comment": "AI 自治开发工单系统 - AI 每次启动时读取此文件获取任务",
   "project_name": "your-project-name",
   "version": "1.0.0",
-  "target_platforms": ["macos", "windows"],
   "features": [
     {
       "id": "F-001",

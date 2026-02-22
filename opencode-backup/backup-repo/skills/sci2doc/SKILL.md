@@ -37,12 +37,6 @@ The workflow is built around:
 11. Each subsection summary completion requires immediate snapshot.
 12. Humanization is required before finalizing chapter text; use humanizer-zh principles to reduce mechanical AI style.
 13. Do not invent experimental data.
-14. All tables must use three-line table format (三线表):
-    - Top border: 1.5pt thick line
-    - Header separator: 0.5pt thin line
-    - Bottom border: 1.5pt thick line
-    - No vertical borders, no extra horizontal lines
-    - Tables must be real Word table objects (not markdown text art) for copy-paste portability
 
 ## Single Source of Truth
 
@@ -192,36 +186,6 @@ Rules:
 - `[对应实验] EXP-2-1` in results/discussion
 - `[图] 图2-1` or `[表] 表2-1` linked to current experiment
 
-## Table Contract
-
-All tables in the thesis must follow the three-line table (三线表) academic standard.
-
-Markdown writing convention for tables:
-
-1. Table caption line comes first: `表 2-1：实验材料与试剂`
-2. Followed by standard Markdown table syntax:
-
-```markdown
-表 2-1：实验材料与试剂
-
-| 试剂名称 | 规格 | 生产厂家 |
-| --- | --- | --- |
-| 氯化钠 | AR级 | 国药集团 |
-| 无水乙醇 | AR级 | 天津富宇 |
-```
-
-3. The `markdown_to_docx.py` converter will automatically:
-   - Detect the table caption and place it above the table (五号楷体居中)
-   - Parse the Markdown table into a real Word table object
-   - Apply three-line table borders (1.5pt top, 0.5pt header separator, 1.5pt bottom, no vertical lines)
-   - Set header row bold SimHei, body rows SimSun/Times New Roman
-
-Rules:
-- Every table must have a caption line in `表 X-X：标题` format
-- Caption must appear on the line immediately before the table
-- Table header row is mandatory
-- Do not use ASCII art or Unicode box-drawing characters for tables
-
 ## Outline Contract
 
 The thesis outline must include:
@@ -306,5 +270,3 @@ Typical project tree:
 - [ ] Subsection summary snapshots created
 - [ ] Humanization pass completed before finalize
 - [ ] Snapshot/rollback available and tested
-- [ ] All tables use three-line format (三线表) with correct borders
-- [ ] Table captions placed above tables in 五号楷体居中 style
