@@ -37,6 +37,18 @@ The workflow is built around:
 11. Each subsection summary completion requires immediate snapshot.
 12. Humanization is required before finalizing chapter text; use humanizer-zh principles to reduce mechanical AI style.
 13. Do not invent experimental data.
+14. Abbreviation consistency is mandatory:
+    - First occurrence of any abbreviation must expand as: `中文全称（English Full Name, ABBR）`
+    - All subsequent occurrences use bare abbreviation only, no re-expansion.
+    - Use `abbreviation_registry.py` to register, track, and auto-strip redundant expansions.
+    - A formal abbreviation table page (three-line format, alphabetically sorted) must be generated in front matter.
+15. Three-line table format is mandatory for all tables:
+    - Top border: 1.5pt solid
+    - Header-body separator: 0.5pt solid
+    - Bottom border: 1.5pt solid
+    - No vertical lines, no other horizontal lines
+    - Use Markdown `| col1 | col2 |` syntax in atomic `.md` files; `markdown_to_docx.py` auto-converts to Word three-line tables.
+    - Table captions use five-point KaiTi (楷体小五号), centered above the table.
 
 ## Single Source of Truth
 
@@ -216,6 +228,109 @@ Before finalizing each chapter:
 3. Re-check quality
 4. Finalize snapshot + gate completion
 
+## Table Contract
+
+All data tables in the thesis must use three-line (三线表) format.
+
+### Markdown Syntax in Atomic `.md` Files
+
+Write tables using standard Markdown pipe syntax:
+
+```markdown
+表 2-1：主要实验试剂
+
+| 试剂名称 | 规格 | 生产厂家 |
+|---|---|---|
+| 胎牛血清 | 500 mL | Gibco |
+| DMEM培养基 | 高糖型 | HyClone |
+```
+
+Rules:
+- Caption line (`表 X-X：标题`) must appear directly above the table.
+- Separator row (`|---|---|---|`) is required between header and data rows.
+- No empty rows between caption and table header.
+- `markdown_to_docx.py` automatically converts this to a Word three-line table with correct borders.
+
+### Applicable Sections
+
+Three-line tables are mandatory in (but not limited to):
+- 实验试剂与耗材
+- 实验仪器与设备
+- 实验分组设计
+- 数据统计结果
+- Any section presenting structured data
+
+### Quality Check
+
+```bash
+python3 scripts/check_quality.py "${save_path}/03_合并文档/完整博士论文.docx" \
+  --output json --enforce-full-structure
+```
+
+The quality checker validates: no vertical lines, correct border weights (1.5pt top/bottom, 0.5pt header line).
+
+## Abbreviation Contract
+
+All abbreviations must be tracked via `abbreviation_registry.json` to ensure consistency across chapters.
+
+### First Occurrence Rule
+
+The first time an abbreviation appears in the thesis body, it must be expanded as:
+
+```
+中文全称（English Full Name, ABBR）
+```
+
+Example:
+```
+聚合酶链式反应（Polymerase Chain Reaction, PCR）
+```
+
+All subsequent occurrences use bare `PCR` only. Never re-expand.
+
+### Workflow
+
+1. **During writing**: When writing each subsection `.md`, include the full expansion on first use.
+2. **After postwrite**: `state_manager.py postwrite` automatically:
+   - Extracts abbreviations from all chapter markdown files
+   - Registers new ones with chapter/section metadata
+   - Strips redundant expansions in non-first-occurrence chapters
+3. **Before final merge**: Run `abbreviation_registry.py validate` to confirm cross-references.
+4. **Front matter**: Generate the abbreviation table page with `abbreviation_registry.py table` or pass `--abbreviation-table` to `markdown_to_docx.py`.
+
+### CLI Quick Reference
+
+```bash
+# List all registered abbreviations
+python3 scripts/abbreviation_registry.py --project-root "${save_path}" list
+
+# Register manually
+python3 scripts/abbreviation_registry.py --project-root "${save_path}" register \
+  --abbr PCR --full-cn "聚合酶链式反应" --full-en "Polymerase Chain Reaction" \
+  --chapter 2 --section 2.1
+
+# Delete an incorrect entry
+python3 scripts/abbreviation_registry.py --project-root "${save_path}" unregister --abbr PCR
+
+# Update an existing entry
+python3 scripts/abbreviation_registry.py --project-root "${save_path}" update \
+  --abbr PCR --full-cn "新的中文全称"
+
+# Extract from a markdown file (with auto-register)
+python3 scripts/abbreviation_registry.py --project-root "${save_path}" extract \
+  --file path/to/section.md --chapter 2 --section 2.1 --auto-register
+
+# One-shot: extract + register + strip redundant expansions
+python3 scripts/abbreviation_registry.py --project-root "${save_path}" process \
+  --file path/to/section.md --chapter 3 --section 3.1 --in-place
+
+# Generate abbreviation table markdown
+python3 scripts/abbreviation_registry.py --project-root "${save_path}" table
+
+# Cross-reference validation
+python3 scripts/abbreviation_registry.py --project-root "${save_path}" validate
+```
+
 ## File Layout
 
 Typical project tree:
@@ -229,6 +344,7 @@ Typical project tree:
 ├── chapter_index.json
 ├── literature_index.json
 ├── figures_index.json
+├── abbreviation_registry.json
 ├── atomic_md/
 │   └── 第2章/
 │       ├── 2.1_引言.md
@@ -270,3 +386,7 @@ Typical project tree:
 - [ ] Subsection summary snapshots created
 - [ ] Humanization pass completed before finalize
 - [ ] Snapshot/rollback available and tested
+- [ ] All tables use three-line format (1.5pt top/bottom, 0.5pt header, no vertical lines)
+- [ ] Abbreviation registry populated and cross-reference validation passed
+- [ ] No redundant abbreviation expansions in non-first-occurrence chapters
+- [ ] Abbreviation table page generated in front matter

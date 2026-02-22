@@ -71,6 +71,85 @@ GATE_STATE_FILE = os.path.join(GATE_STATE_DIR, "write_gate.json")
 LOAD_CACHE_FILE = os.path.join(GATE_STATE_DIR, "load_cache.json")
 
 
+# ---------------------------------------------------------------------------
+# Lazy-loaded abbreviation processing (avoids circular import)
+# ---------------------------------------------------------------------------
+
+def _get_abbr_process():
+    """Lazily import abbreviation_registry to avoid circular dependency."""
+    try:
+        from abbreviation_registry import process_section_markdown
+        return process_section_markdown
+    except ImportError:
+        _sd = os.path.dirname(os.path.abspath(__file__))
+        if _sd not in sys.path:
+            sys.path.insert(0, _sd)
+        try:
+            from abbreviation_registry import process_section_markdown
+            return process_section_markdown
+        except ImportError:
+            return None
+
+
+def _postwrite_abbreviation_process(project_root, chapter):
+    """
+    Post-write hook: extract, register, and strip redundant abbreviation
+    expansions from all markdown files in the given chapter directory.
+
+    Returns a report dict or None if abbreviation_registry is unavailable.
+    """
+    process_fn = _get_abbr_process()
+    if process_fn is None:
+        return None
+
+    # Find chapter directory (support both layouts)
+    chapter_str = str(int(chapter)) if str(chapter).isdigit() else str(chapter)
+    candidates = [
+        os.path.join(project_root, "atomic_md", f"第{chapter_str}章"),
+        os.path.join(project_root, "02_分章节文档", f"第{chapter_str}章"),
+    ]
+    chapter_dir = None
+    for c in candidates:
+        if os.path.isdir(c):
+            chapter_dir = c
+            break
+
+    if chapter_dir is None:
+        return {"skipped": True, "reason": "chapter_dir_not_found"}
+
+    report = {"processed_files": [], "new_abbreviations": 0, "stripped_count": 0}
+    md_files = sorted(glob.glob(os.path.join(chapter_dir, "*.md")))
+    for md_path in md_files:
+        basename = os.path.basename(md_path)
+        # Extract section number from filename like "2.1_引言.md"
+        sec_match = re.match(r"(\d+\.\d+)", basename)
+        section = sec_match.group(1) if sec_match else basename
+
+        try:
+            with open(md_path, "r", encoding="utf-8") as f:
+                md_content = f.read()
+
+            cleaned, result = process_fn(
+                project_root=project_root,
+                md_content=md_content,
+                chapter=chapter_str,
+                section=section,
+            )
+
+            # Write back only if content changed
+            if cleaned != md_content:
+                with open(md_path, "w", encoding="utf-8") as f:
+                    f.write(cleaned)
+
+            report["processed_files"].append(basename)
+            report["new_abbreviations"] += result.get("registered_count", 0)
+            report["stripped_count"] += result.get("stripped_count", 0)
+        except Exception:
+            pass  # Non-fatal: abbreviation processing should not block postwrite
+
+    return report
+
+
 class StateFileError(Exception):
     def __init__(self, path, reason, detail):
         super().__init__(f"{reason}: {path}")
@@ -853,6 +932,9 @@ def postwrite_state(project_root, chapter, status="updated", summary="", create_
     if create_snapshot:
         snapshot_dir = backup_project_state(project_root)
 
+    # Abbreviation processing (lazy-loaded, non-fatal)
+    abbr_report = _postwrite_abbreviation_process(project_root, chapter)
+
     print(
         json.dumps(
             {
@@ -862,6 +944,7 @@ def postwrite_state(project_root, chapter, status="updated", summary="", create_
                     "chapter": str(chapter),
                     "completion_ready": True,
                 },
+                "abbreviation_processing": abbr_report,
             },
             ensure_ascii=False,
         )
