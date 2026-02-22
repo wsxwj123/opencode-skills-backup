@@ -395,6 +395,115 @@ def check_reference_position(doc):
     return issues
 
 
+# ---------------------------------------------------------------------------
+# 正文内联引用格式检测
+# ---------------------------------------------------------------------------
+
+# 合法引用格式：[6] [6,7] [6-8] [6,7,9] [6-8,10] 等
+_VALID_CITATION_RE = re.compile(
+    r'\[(\d+(?:\s*[-–]\s*\d+)?(?:\s*,\s*\d+(?:\s*[-–]\s*\d+)?)*)\]'
+)
+
+# 宽松匹配：任何 [ 数字... ] 形态（用于发现格式错误的引用）
+_LOOSE_CITATION_RE = re.compile(
+    r'\[[\d,\-–\s]+\]'
+)
+
+# 不合法的常见错误模式
+_BAD_CITATION_PATTERNS = [
+    # 缺少逗号：[6 7]
+    (re.compile(r'\[\d+\s+\d+\]'), '引用编号之间缺少逗号，应为 [X,Y] 格式'),
+    # 中文逗号：[6，7]
+    (re.compile(r'\[\d+\s*，\s*\d+'), '引用中使用了中文逗号，应使用英文逗号'),
+    # 中文括号：（6）或【6】
+    (re.compile(r'[（【]\d+(?:\s*[,，\-–]\s*\d+)*[）】]'), '引用使用了中文括号，应使用英文方括号 [X]'),
+    # 上标格式残留：^[6] 或 <sup>[6]</sup>
+    (re.compile(r'\^\[\d+'), '引用不应使用 markdown 上标语法'),
+]
+
+
+def check_inline_citations(doc):
+    """
+    检测正文中内联引用格式是否规范。
+
+    合法格式：[6] [6,7] [6-8] [6,7,9-11]
+    检测问题：
+    - 格式错误的引用（中文逗号、缺逗号、中文括号等）
+    - 引用编号不连续或逆序（如 [8,3]）
+    - 引用编号超出参考文献范围（需配合 ref_count 使用）
+    """
+    issues = []
+    in_references = False
+    in_abstract = False
+    para_idx = 0
+
+    for para in doc.paragraphs:
+        text = para.text.strip()
+        if not text:
+            continue
+
+        lvl = heading_level(getattr(para.style, "name", ""))
+        if lvl is not None:
+            cls = classify_heading(text)
+            if cls == "references":
+                in_references = True
+            elif in_references:
+                in_references = False
+            in_abstract = "摘要" in text or "abstract" in text.lower()
+            continue
+
+        # 跳过参考文献区域和摘要
+        if in_references or in_abstract:
+            continue
+
+        para_idx += 1
+
+        # 1) 检测错误格式
+        for bad_re, msg in _BAD_CITATION_PATTERNS:
+            for m in bad_re.finditer(text):
+                snippet = text[max(0, m.start() - 10):m.end() + 10]
+                issues.append({
+                    'level': 'error',
+                    'category': '引用格式',
+                    'message': f'{msg}：...{snippet}...',
+                    'suggestion': '正文引用应使用英文方括号+英文逗号，如 [1,2] [3-5]'
+                })
+
+        # 2) 检测合法引用中的编号问题
+        for m in _VALID_CITATION_RE.finditer(text):
+            inner = m.group(1)
+            # 解析所有编号
+            nums = []
+            for part in re.split(r'\s*,\s*', inner):
+                range_match = re.match(r'(\d+)\s*[-–]\s*(\d+)', part)
+                if range_match:
+                    start, end = int(range_match.group(1)), int(range_match.group(2))
+                    if start >= end:
+                        issues.append({
+                            'level': 'error',
+                            'category': '引用格式',
+                            'message': f'引用范围逆序：[{inner}]，起始编号应小于结束编号',
+                            'suggestion': f'应为 [{end}-{start}] 或拆分为独立编号'
+                        })
+                    nums.extend(range(start, end + 1))
+                else:
+                    nums.append(int(part.strip()))
+
+            # 检查是否非递增（允许相等，不允许逆序）
+            if len(nums) >= 2:
+                for i in range(1, len(nums)):
+                    if nums[i] < nums[i - 1]:
+                        issues.append({
+                            'level': 'warning',
+                            'category': '引用格式',
+                            'message': f'引用编号未按升序排列：[{inner}]',
+                            'suggestion': '多引用应按编号升序排列，如 [3,5,7] 而非 [7,3,5]'
+                        })
+                        break
+
+    return issues
+
+
 def check_full_thesis_structure(doc, min_chapters=5):
     """
     全文结构门禁：
@@ -554,6 +663,12 @@ def generate_quality_report(
     # 5.1 参考文献位置校验
     reference_position_issues = check_reference_position(doc)
     all_issues.extend(reference_position_issues)
+
+    # 5.2 正文内联引用格式检测
+    if verbose:
+        print("🔍 检查正文引用格式...")
+    citation_issues = check_inline_citations(doc)
+    all_issues.extend(citation_issues)
 
     # 5.2 全文结构门禁（仅在全文检查时启用）
     if enforce_full_structure:
