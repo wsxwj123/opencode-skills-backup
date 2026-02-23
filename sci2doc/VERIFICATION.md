@@ -10,6 +10,15 @@ Validation should be executed against current scripts and profile-driven rules:
 - `scripts/atomic_md_workflow.py`
 - `scripts/count_words_docx.py`
 - `scripts/check_quality.py`
+- `scripts/abbreviation_registry.py`
+- `scripts/shared_utils.py`
+
+Test suites (170 tests total):
+
+- `tests/test_sci2doc_scripts.py` (48 tests)
+- `scripts/test_abbreviation_registry.py` (57 tests)
+- `scripts/test_checkers.py` (24 tests)
+- `scripts/test_count_words.py` (41 tests)
 
 And current documentation:
 

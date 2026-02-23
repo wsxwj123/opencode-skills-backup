@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Word 文档字数统计工具
+文档字数统计工具
 
-功能：
-1. 统计中文字符数（不含标点，覆盖 CJK 基本区 + 扩展 A + 兼容区）
-2. 统计英文单词数
-3. 统计表格内文字与标题文字
-4. 区分综述与正文
-5. 排除参考文献、目录等部分
-6. 生成 JSON 格式报告
+支持三种输入类型：
+- .docx  — Word 文档（含表格、标题样式识别）
+- .md    — 单个 Markdown 文件（自动去除格式标记）
+- 目录   — 原子化 atomic_md 目录（聚合所有小节 .md 文件）
+
+统一入口 count_words(path) 自动检测类型。
 
 作者：Sci2Doc Team
 """
@@ -18,6 +17,7 @@ from docx import Document
 from docx.table import Table as DocxTable
 from docx.text.paragraph import Paragraph as DocxParagraph
 import argparse
+import re
 import sys
 import json
 import os
@@ -78,6 +78,379 @@ def count_words_in_text(text):
         'chinese_chars': chinese_chars,
         'english_words': english_words
     }
+
+
+# ---------------------------------------------------------------------------
+# Markdown 支持
+# ---------------------------------------------------------------------------
+
+# 原子化小节文件名正则（与 atomic_md_workflow.py 保持一致）
+SECTION_FILE_RE = re.compile(r"^(?P<num>\d+(?:\.\d+)*)_(?P<title>.+)\.md$")
+
+
+def strip_markdown_syntax(text):
+    """
+    去除 Markdown 格式标记，保留纯文本内容。
+
+    处理：标题 #、粗体/斜体、行内代码、链接/图片、HTML 标签、
+    表格分隔行、引用 >、列表标记、水平线、脚注标记。
+    """
+    lines = text.split("\n")
+    cleaned = []
+    for line in lines:
+        s = line.strip()
+        # 跳过表格分隔行 |---|---|
+        if re.match(r"^\|?[\s:]*-{3,}[\s:]*(\|[\s:]*-{3,}[\s:]*)*\|?$", s):
+            continue
+        # 跳过水平线
+        if re.match(r"^[-*_]{3,}\s*$", s):
+            continue
+        # 去除标题 #
+        s = re.sub(r"^#{1,6}\s+", "", s)
+        # 去除引用 >
+        s = re.sub(r"^>\s*", "", s)
+        # 去除无序列表标记
+        s = re.sub(r"^[\-\*\+]\s+", "", s)
+        # 去除有序列表标记
+        s = re.sub(r"^\d+\.\s+", "", s)
+        # 去除图片 ![alt](url)
+        s = re.sub(r"!\[([^\]]*)\]\([^)]*\)", r"\1", s)
+        # 去除链接 [text](url)
+        s = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", s)
+        # 去除行内代码
+        s = re.sub(r"`([^`]*)`", r"\1", s)
+        # 去除粗体/斜体标记
+        s = re.sub(r"\*{1,3}([^*]+)\*{1,3}", r"\1", s)
+        s = re.sub(r"_{1,3}([^_]+)_{1,3}", r"\1", s)
+        # 去除删除线
+        s = re.sub(r"~~([^~]+)~~", r"\1", s)
+        # 去除 HTML 标签
+        s = re.sub(r"<[^>]+>", "", s)
+        # 去除脚注引用 [^1]
+        s = re.sub(r"\[\^\w+\]", "", s)
+        # 去除表格管道符
+        s = s.replace("|", " ")
+        cleaned.append(s)
+    return "\n".join(cleaned)
+
+
+def count_words_in_md(
+    md_path,
+    exclude_references=True,
+    body_target_chars=80000,
+    review_target_chars=0,
+    review_in_scope=False,
+):
+    """
+    统计单个 Markdown 文件字数。
+
+    通过 # 标题识别章节类型，复用 classify_heading 分类逻辑。
+
+    Args:
+        md_path: .md 文件路径
+        exclude_references: 是否排除参考文献
+        body_target_chars: 正文目标字数
+        review_target_chars: 综述目标字数
+        review_in_scope: 是否将综述纳入考核目标
+
+    Returns:
+        dict: 与 count_words_in_docx 相同 schema 的统计结果
+    """
+    try:
+        with open(md_path, "r", encoding="utf-8") as f:
+            raw = f.read()
+    except Exception as e:
+        return {"success": False, "error": f"无法读取文件：{e}"}
+
+    body_chinese_chars = 0
+    body_english_words = 0
+    review_chinese_chars = 0
+    review_english_words = 0
+
+    current_section_type = "body"
+    current_section_title = "正文"
+    section_stats = []
+    current_section = {
+        "title": current_section_title,
+        "type": current_section_type,
+        "chinese_chars": 0,
+        "english_words": 0,
+    }
+
+    def flush_section():
+        if current_section["chinese_chars"] > 0 or current_section["english_words"] > 0:
+            section_stats.append(current_section.copy())
+
+    def accumulate(counts):
+        nonlocal body_chinese_chars, body_english_words
+        nonlocal review_chinese_chars, review_english_words
+        current_section["chinese_chars"] += counts["chinese_chars"]
+        current_section["english_words"] += counts["english_words"]
+        if current_section_type == "review":
+            review_chinese_chars += counts["chinese_chars"]
+            review_english_words += counts["english_words"]
+        elif current_section_type == "references" and exclude_references:
+            pass
+        elif current_section_type in {"toc", "abstract", "acknowledgement", "appendix"}:
+            pass
+        else:
+            body_chinese_chars += counts["chinese_chars"]
+            body_english_words += counts["english_words"]
+
+    heading_re = re.compile(r"^(#{1,6})\s+(.+)$")
+
+    for line in raw.split("\n"):
+        stripped = line.strip()
+        if not stripped:
+            continue
+        m = heading_re.match(stripped)
+        if m:
+            flush_section()
+            title_text = m.group(2).strip()
+            current_section_type = classify_heading(title_text)
+            current_section_title = title_text
+            current_section = {
+                "title": current_section_title,
+                "type": current_section_type,
+                "chinese_chars": 0,
+                "english_words": 0,
+            }
+            accumulate(count_words_in_text(title_text))
+            continue
+        # 跳过表格分隔行
+        if re.match(r"^\|?[\s:]*-{3,}[\s:]*(\|[\s:]*-{3,}[\s:]*)*\|?$", stripped):
+            continue
+        # 跳过水平线
+        if re.match(r"^[-*_]{3,}\s*$", stripped):
+            continue
+        # 普通行：去除 md 语法后统计
+        clean = strip_markdown_syntax(stripped)
+        if clean.strip():
+            accumulate(count_words_in_text(clean))
+
+    flush_section()
+
+    body_total = body_chinese_chars + body_english_words
+    review_total = review_chinese_chars + review_english_words
+    grand_total = body_total + review_total
+    body_target_chars = max(1, int(body_target_chars or 80000))
+    review_target_chars = max(0, int(review_target_chars or 0))
+    body_rate = round(body_chinese_chars / body_target_chars, 4)
+    review_rate = (
+        round(review_chinese_chars / review_target_chars, 4)
+        if review_target_chars > 0 and review_chinese_chars > 0
+        else None
+    )
+
+    return {
+        "schema_version": "2.2",
+        "success": True,
+        "source_type": "markdown",
+        "file_path": md_path,
+        "file_name": os.path.basename(md_path),
+        "body_text": {
+            "chinese_chars": body_chinese_chars,
+            "english_words": body_english_words,
+            "total_count": body_total,
+        },
+        "review": {
+            "chinese_chars": review_chinese_chars,
+            "english_words": review_english_words,
+            "total_count": review_total,
+        },
+        "total": {
+            "chinese_chars": body_chinese_chars + review_chinese_chars,
+            "english_words": body_english_words + review_english_words,
+            "total_count": grand_total,
+        },
+        "sections": section_stats,
+        "targets": {
+            "body_target": body_target_chars,
+            "review_target": review_target_chars,
+            "review_in_scope": bool(review_in_scope),
+            "body_completion_rate": body_rate,
+            "review_completion_rate": review_rate,
+        },
+        "chinese_chars": body_chinese_chars,
+        "english_words": body_english_words,
+        "total_chars": body_total,
+        "completion_rate": body_rate,
+        "is_review": False,
+    }
+
+
+def count_words_in_atomic_dir(
+    dir_path,
+    exclude_references=True,
+    body_target_chars=80000,
+    review_target_chars=0,
+    review_in_scope=False,
+):
+    """
+    统计原子化 atomic_md 目录下所有小节 .md 文件的字数。
+
+    支持两种目录结构：
+    - 单章目录：atomic_md/第N章/  （直接含 *.md 文件）
+    - 多章根目录：atomic_md/      （含多个 第N章/ 子目录）
+
+    Args:
+        dir_path: 目录路径
+        exclude_references: 是否排除参考文献
+        body_target_chars: 正文目标字数
+        review_target_chars: 综述目标字数
+        review_in_scope: 是否将综述纳入考核目标
+
+    Returns:
+        dict: 聚合统计结果，含 per_file 明细
+    """
+    dir_path = os.path.abspath(dir_path)
+    if not os.path.isdir(dir_path):
+        return {"success": False, "error": f"目录不存在：{dir_path}"}
+
+    # 收集所有符合命名规范的 .md 文件
+    md_files = []
+    entries = sorted(os.listdir(dir_path))
+
+    # 检测是否为多章根目录（含 第N章 子目录）
+    chapter_dirs = [e for e in entries if os.path.isdir(os.path.join(dir_path, e)) and re.match(r"^第.+章$", e)]
+    if chapter_dirs:
+        for cd in sorted(chapter_dirs):
+            cd_path = os.path.join(dir_path, cd)
+            for fname in sorted(os.listdir(cd_path)):
+                if SECTION_FILE_RE.match(fname):
+                    md_files.append(os.path.join(cd_path, fname))
+    else:
+        # 单章目录
+        for fname in entries:
+            if SECTION_FILE_RE.match(fname):
+                md_files.append(os.path.join(dir_path, fname))
+
+    if not md_files:
+        return {"success": False, "error": f"目录中未找到符合命名规范的 .md 文件：{dir_path}"}
+
+    # 聚合统计
+    body_chinese_chars = 0
+    body_english_words = 0
+    review_chinese_chars = 0
+    review_english_words = 0
+    all_sections = []
+    per_file = []
+
+    for fpath in md_files:
+        r = count_words_in_md(
+            fpath,
+            exclude_references=exclude_references,
+            body_target_chars=0,  # 单文件不需要目标
+            review_target_chars=0,
+            review_in_scope=review_in_scope,
+        )
+        if not r.get("success"):
+            per_file.append({"file": fpath, "error": r.get("error")})
+            continue
+        body_chinese_chars += r["body_text"]["chinese_chars"]
+        body_english_words += r["body_text"]["english_words"]
+        review_chinese_chars += r["review"]["chinese_chars"]
+        review_english_words += r["review"]["english_words"]
+        all_sections.extend(r.get("sections", []))
+        per_file.append({
+            "file": os.path.relpath(fpath, dir_path),
+            "chinese_chars": r["total"]["chinese_chars"],
+            "english_words": r["total"]["english_words"],
+            "total_count": r["total"]["total_count"],
+        })
+
+    body_total = body_chinese_chars + body_english_words
+    review_total = review_chinese_chars + review_english_words
+    grand_total = body_total + review_total
+    body_target_chars = max(1, int(body_target_chars or 80000))
+    review_target_chars = max(0, int(review_target_chars or 0))
+    body_rate = round(body_chinese_chars / body_target_chars, 4)
+    review_rate = (
+        round(review_chinese_chars / review_target_chars, 4)
+        if review_target_chars > 0 and review_chinese_chars > 0
+        else None
+    )
+
+    return {
+        "schema_version": "2.2",
+        "success": True,
+        "source_type": "atomic_dir",
+        "file_path": dir_path,
+        "file_name": os.path.basename(dir_path),
+        "file_count": len(md_files),
+        "body_text": {
+            "chinese_chars": body_chinese_chars,
+            "english_words": body_english_words,
+            "total_count": body_total,
+        },
+        "review": {
+            "chinese_chars": review_chinese_chars,
+            "english_words": review_english_words,
+            "total_count": review_total,
+        },
+        "total": {
+            "chinese_chars": body_chinese_chars + review_chinese_chars,
+            "english_words": body_english_words + review_english_words,
+            "total_count": grand_total,
+        },
+        "sections": all_sections,
+        "per_file": per_file,
+        "targets": {
+            "body_target": body_target_chars,
+            "review_target": review_target_chars,
+            "review_in_scope": bool(review_in_scope),
+            "body_completion_rate": body_rate,
+            "review_completion_rate": review_rate,
+        },
+        "chinese_chars": body_chinese_chars,
+        "english_words": body_english_words,
+        "total_chars": body_total,
+        "completion_rate": body_rate,
+        "is_review": False,
+    }
+
+
+def count_words(
+    path,
+    exclude_references=True,
+    body_target_chars=80000,
+    review_target_chars=0,
+    review_in_scope=False,
+):
+    """
+    统一入口：自动检测路径类型并调用对应统计函数。
+
+    - .docx 文件 → count_words_in_docx()
+    - .md 文件   → count_words_in_md()
+    - 目录       → count_words_in_atomic_dir()
+
+    Args:
+        path: 文件或目录路径
+        exclude_references: 是否排除参考文献
+        body_target_chars: 正文目标字数
+        review_target_chars: 综述目标字数
+        review_in_scope: 是否将综述纳入考核目标
+
+    Returns:
+        dict: 统计结果（schema 统一）
+    """
+    path = os.path.abspath(path)
+    kwargs = dict(
+        exclude_references=exclude_references,
+        body_target_chars=body_target_chars,
+        review_target_chars=review_target_chars,
+        review_in_scope=review_in_scope,
+    )
+
+    if os.path.isdir(path):
+        return count_words_in_atomic_dir(path, **kwargs)
+    elif path.lower().endswith(".md"):
+        return count_words_in_md(path, **kwargs)
+    elif path.lower().endswith(".docx"):
+        return count_words_in_docx(path, **kwargs)
+    else:
+        return {"success": False, "error": f"不支持的文件类型：{path}（支持 .docx / .md / 目录）"}
+
 
 
 def count_words_in_docx(
@@ -214,6 +587,7 @@ def count_words_in_docx(
     result = {
         "schema_version": "2.2",
         "success": True,
+        "source_type": "docx",
         "file_path": docx_path,
         "file_name": os.path.basename(docx_path),
         "body_text": {
@@ -255,11 +629,16 @@ def format_report(result):
     if not result.get('success'):
         return f"❌ 统计失败：{result.get('error')}"
     
+    source_type = result.get("source_type", "docx")
+    type_label = {"docx": "Word 文档", "markdown": "Markdown 文件", "atomic_dir": "原子化目录"}.get(source_type, "文档")
+
     lines = []
     lines.append("=" * 60)
-    lines.append(f"📊 Word 文档字数统计报告")
+    lines.append(f"📊 {type_label}字数统计报告")
     lines.append("=" * 60)
-    lines.append(f"📄 文件：{result['file_name']}")
+    lines.append(f"📄 路径：{result.get('file_path', result.get('file_name', ''))}")
+    if source_type == "atomic_dir":
+        lines.append(f"   文件数：{result.get('file_count', '?')}")
     lines.append("")
     
     # 正文统计
@@ -306,6 +685,16 @@ def format_report(result):
             lines.append(f"   {i}. {section['title']}{type_tag}")
             lines.append(f"      中文：{section['chinese_chars']:,}  "
                         f"英文：{section['english_words']:,}")
+        lines.append("")
+
+    # 原子化目录：各文件明细
+    if result.get('per_file'):
+        lines.append("📁 文件明细：")
+        for pf in result['per_file']:
+            if "error" in pf:
+                lines.append(f"   ❌ {pf['file']}：{pf['error']}")
+            else:
+                lines.append(f"   {pf['file']}  →  {pf.get('total_count', 0):,}")
     
     lines.append("=" * 60)
     
@@ -314,30 +703,30 @@ def format_report(result):
 
 def main():
     """命令行入口"""
-    parser = argparse.ArgumentParser(description="Word 文档字数统计工具")
-    parser.add_argument("docx_path", help="待统计的 docx 文件路径")
+    parser = argparse.ArgumentParser(description="文档字数统计工具（支持 .docx / .md / 原子化目录）")
+    parser.add_argument("path", help="待统计的文件或目录路径（.docx / .md / atomic_md 目录）")
     parser.add_argument("--output", choices=["json", "text"], default="text", help="输出格式")
     parser.add_argument("--profile", help="thesis_profile.json 路径（可选）")
     parser.add_argument("--body-target", type=int, help="覆盖正文目标字数")
     parser.add_argument("--review-target", type=int, help="覆盖综述目标字数")
     parser.add_argument("--review-in-scope", action="store_true", help="将综述纳入考核目标")
     args = parser.parse_args()
-    docx_path = args.docx_path
+    target_path = args.path
     output_format = args.output
     
-    if not os.path.exists(docx_path):
+    if not os.path.exists(target_path):
         if output_format == 'json':
             print(json.dumps({
                 "success": False,
                 "error": "file_not_found",
-                "file_path": docx_path,
-                "message": f"文件不存在：{docx_path}",
+                "file_path": target_path,
+                "message": f"路径不存在：{target_path}",
             }, ensure_ascii=False, indent=2))
         else:
-            print(f"❌ 文件不存在：{docx_path}")
+            print(f"❌ 路径不存在：{target_path}")
         sys.exit(1)
     
-    profile_project_root = infer_project_root_for_profile(docx_path)
+    profile_project_root = infer_project_root_for_profile(target_path)
     try:
         profile, _ = load_profile(profile_project_root, args.profile)
     except Exception as e:
@@ -356,9 +745,9 @@ def main():
     default_review_target = int(targets.get("review_target_chars", 0) or 0)
     review_target = int(args.review_target if args.review_target is not None else default_review_target)
 
-    # 执行统计
-    result = count_words_in_docx(
-        docx_path,
+    # 统一入口：自动检测路径类型
+    result = count_words(
+        target_path,
         exclude_references=True,
         body_target_chars=body_target,
         review_target_chars=review_target,

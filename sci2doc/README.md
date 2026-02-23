@@ -16,7 +16,7 @@
 - `scripts/atomic_md_workflow.py`
   - 原子化小节 markdown、编号校验、章节/全文合并、自检、节级快照
 - `scripts/count_words_docx.py`
-  - 字数统计（读取 `thesis_profile.json`）
+  - 字数统计（支持 .docx / .md / atomic_md 目录，自动检测路径类型）
 - `scripts/check_quality.py`
   - 质量检查（读取 `thesis_profile.json`）
 - `scripts/merge_chapters.py`
@@ -121,7 +121,13 @@ python3 scripts/merge_chapters.py \
 ### 8. 全文总检
 
 ```bash
+# 字数统计（支持 .docx / .md / atomic_md 目录，自动检测路径类型）
 python3 scripts/state_manager.py --project-root "${save_path}" word-count
+# 或直接指定路径：
+python3 scripts/count_words_docx.py "${save_path}/03_合并文档/完整博士论文.docx"
+python3 scripts/count_words_docx.py "${save_path}/atomic_md"
+python3 scripts/count_words_docx.py "${save_path}/atomic_md/第2章/2.1_引言.md"
+
 python3 scripts/check_quality.py "${save_path}/03_合并文档/完整博士论文.docx" \
   --output json --enforce-full-structure
 ```
