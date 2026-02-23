@@ -504,6 +504,143 @@ def check_inline_citations(doc):
     return issues
 
 
+# ---------------------------------------------------------------------------
+# 写作风格检测
+# ---------------------------------------------------------------------------
+
+_STYLE_CHECKS = [
+    # (compiled_regex, level, category, message, suggestion)
+    (
+        re.compile(r'——'),
+        'error', '标点规范',
+        '使用了破折号（——）',
+        '用逗号、句号或重组句子代替破折号'
+    ),
+    (
+        # 正文中的问号（排除引用他人原话的情况）
+        re.compile(r'[？?]'),
+        'warning', '陈述规范',
+        '正文中出现问句',
+        '正文应全部使用陈述句，不使用疑问句或反问句'
+    ),
+    (
+        # 比喻词
+        re.compile(r'如同|好比|仿佛|犹如|像[^素片].*?一样|恰似|宛如|宛若|好像(?!素)'),
+        'error', '修辞规范',
+        '使用了比喻修辞',
+        '删除比喻表达，直接陈述事实'
+    ),
+    (
+        # 常见比喻名词（...的桥梁/基石/钥匙/引擎/灯塔）
+        re.compile(r'的(?:桥梁|基石|钥匙|引擎|灯塔|摇篮|沃土|温床|催化剂|助推器|风向标)'),
+        'error', '修辞规范',
+        '使用了比喻性名词',
+        '用准确的功能描述替代比喻性名词'
+    ),
+    (
+        # 主观夸大形容词
+        re.compile(r'令人(?:惊讶|震惊|瞩目|振奋|鼓舞)|远超预期|出人意料|前所未有|史无前例|无与伦比|举世瞩目'),
+        'warning', '客观性',
+        '使用了主观色彩过强的表述',
+        '用客观数据和事实描述结果，让读者自行判断'
+    ),
+    (
+        # 过度书面化/生僻词
+        re.compile(r'鉴于此|有鉴于此|兹|窃以为|殊为|诚然|毋庸置疑|不言而喻|众所周知'),
+        'warning', '语言通俗性',
+        '使用了过度书面化或套话表述',
+        '用平实语言替代，如"因此""可以确认"等'
+    ),
+]
+
+# 排比检测：连续3个以上句子以相同模式开头
+_PARALLELISM_MIN_COUNT = 3
+
+
+def check_writing_style(doc):
+    """
+    检测写作风格违规：
+    - 破折号（——）
+    - 问句（正文应全部陈述）
+    - 比喻修辞（如同、犹如、像...一样、...的桥梁等）
+    - 主观夸大表述
+    - 过度书面化/生僻词
+    - 排比句式
+    """
+    issues = []
+    in_references = False
+    in_abstract = False
+
+    body_sentences = []  # 收集正文句子用于排比检测
+
+    for para in doc.paragraphs:
+        text = para.text.strip()
+        if not text:
+            continue
+
+        lvl = heading_level(getattr(para.style, "name", ""))
+        if lvl is not None:
+            cls = classify_heading(text)
+            if cls == "references":
+                in_references = True
+            elif in_references:
+                in_references = False
+            in_abstract = "摘要" in text or "abstract" in text.lower()
+            continue
+
+        # 跳过参考文献和摘要
+        if in_references or in_abstract:
+            continue
+
+        # 逐条规则检测
+        for pattern, level, category, message, suggestion in _STYLE_CHECKS:
+            for m in pattern.finditer(text):
+                start = max(0, m.start() - 8)
+                end = min(len(text), m.end() + 8)
+                snippet = text[start:end]
+                issues.append({
+                    'level': level,
+                    'category': category,
+                    'message': f'{message}：...{snippet}...',
+                    'suggestion': suggestion,
+                })
+
+        # 收集句子用于排比检测（按句号/分号切分）
+        sentences = re.split(r'[。；;]', text)
+        for s in sentences:
+            s = s.strip()
+            if len(s) >= 6:
+                body_sentences.append(s)
+
+    # 排比检测：连续句子以相同前缀开头
+    if len(body_sentences) >= _PARALLELISM_MIN_COUNT:
+        i = 0
+        while i < len(body_sentences):
+            # 取前4个字作为模式
+            prefix = body_sentences[i][:4]
+            if not prefix:
+                i += 1
+                continue
+            run = 1
+            j = i + 1
+            while j < len(body_sentences) and body_sentences[j][:4] == prefix:
+                run += 1
+                j += 1
+            if run >= _PARALLELISM_MIN_COUNT:
+                examples = '；'.join(body_sentences[i:i+3])
+                issues.append({
+                    'level': 'warning',
+                    'category': '修辞规范',
+                    'message': f'疑似排比句式（连续{run}句以"{prefix}"开头）：{examples}...',
+                    'suggestion': '避免重复句式结构，改用多样化的表达方式',
+                })
+                i = j
+            else:
+                i += 1
+
+    return issues
+
+
 def check_full_thesis_structure(doc, min_chapters=5):
     """
     全文结构门禁：
@@ -670,7 +807,13 @@ def generate_quality_report(
     citation_issues = check_inline_citations(doc)
     all_issues.extend(citation_issues)
 
-    # 5.2 全文结构门禁（仅在全文检查时启用）
+    # 5.3 写作风格检测
+    if verbose:
+        print("🔍 检查写作风格...")
+    style_issues = check_writing_style(doc)
+    all_issues.extend(style_issues)
+
+    # 5.4 全文结构门禁（仅在全文检查时启用）
     if enforce_full_structure:
         if verbose:
             print("🔍 检查全文结构门禁...")

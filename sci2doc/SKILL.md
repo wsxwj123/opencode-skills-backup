@@ -49,6 +49,15 @@ The workflow is built around:
     - No vertical lines, no other horizontal lines
     - Use Markdown `| col1 | col2 |` syntax in atomic `.md` files; `markdown_to_docx.py` auto-converts to Word three-line tables.
     - Table captions use five-point KaiTi (楷体小五号), centered above the table.
+16. Writing style constraints are mandatory:
+    - No em dashes (——). Use commas, periods, or restructure the sentence instead.
+    - Statements only, no rhetorical or direct questions in body text. Every sentence must be declarative.
+    - Result descriptions must be objective, fair, and neutral. No subjective adjectives (e.g. 令人惊讶的、显著优于、远超预期). State data and let readers judge.
+    - Result discussions must be correct, precise, and provide extended analysis (e.g. compare with prior work, explain mechanisms, note limitations).
+    - Language must be plain and accessible. Avoid overly formal/literary phrasing, archaic words, and jargon without explanation.
+    - No metaphors of any kind (e.g. 如同、好比、仿佛、犹如、像...一样、...的桥梁、...的基石).
+    - No parallelism/排比 constructions (e.g. repeating sentence patterns for rhetorical effect).
+    - Use `check_quality.py` `check_writing_style()` to auto-detect violations.
 
 ## Single Source of Truth
 
