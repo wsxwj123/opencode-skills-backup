@@ -1004,7 +1004,6 @@ def word_count(project_root, docx=None, sync_project_state=True):
     review_in_scope = bool(targets.get("review_in_scope", False))
     result = module.count_words_in_docx(
         target,
-        exclude_review=(not review_in_scope),
         exclude_references=True,
         body_target_chars=body_target,
         review_target_chars=review_target,

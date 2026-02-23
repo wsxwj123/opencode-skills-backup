@@ -1,22 +1,23 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Word 文档字数统计工具（中南大学博士论文专用）
+Word 文档字数统计工具
 
 功能：
-1. 统计中文字符数（不含标点）
+1. 统计中文字符数（不含标点，覆盖 CJK 基本区 + 扩展 A + 兼容区）
 2. 统计英文单词数
-3. 区分综述与正文
-4. 排除参考文献、目录等部分
-5. 生成 JSON 格式报告
+3. 统计表格内文字与标题文字
+4. 区分综述与正文
+5. 排除参考文献、目录等部分
+6. 生成 JSON 格式报告
 
 作者：Sci2Doc Team
-日期：2024-03-15
 """
 
 from docx import Document
+from docx.table import Table as DocxTable
+from docx.text.paragraph import Paragraph as DocxParagraph
 import argparse
-import re
 import sys
 import json
 import os
@@ -30,17 +31,22 @@ except Exception:  # pragma: no cover
     from thesis_profile import load_profile
 
 try:
-    from shared_utils import normalize_text, heading_level, classify_heading, infer_project_root_for_profile
+    from shared_utils import heading_level, classify_heading, infer_project_root_for_profile
 except ImportError:  # pragma: no cover
     script_dir = os.path.dirname(os.path.abspath(__file__))
     if script_dir not in sys.path:
         sys.path.insert(0, script_dir)
-    from shared_utils import normalize_text, heading_level, classify_heading, infer_project_root_for_profile
+    from shared_utils import heading_level, classify_heading, infer_project_root_for_profile
 
 
 def is_chinese_char(char):
-    """判断是否为中文字符"""
-    return '\u4e00' <= char <= '\u9fff'
+    """判断是否为中文字符（CJK 基本区 + 扩展 A + 兼容区）"""
+    cp = ord(char)
+    return (
+        0x4E00 <= cp <= 0x9FFF       # CJK 基本区
+        or 0x3400 <= cp <= 0x4DBF    # CJK 扩展 A
+        or 0xF900 <= cp <= 0xFAFF    # CJK 兼容汉字
+    )
 
 
 def is_english_char(char):
@@ -76,7 +82,6 @@ def count_words_in_text(text):
 
 def count_words_in_docx(
     docx_path,
-    exclude_review=True,
     exclude_references=True,
     body_target_chars=80000,
     review_target_chars=0,
@@ -87,8 +92,10 @@ def count_words_in_docx(
     
     Args:
         docx_path: docx 文件路径
-        exclude_review: 是否排除综述章节
         exclude_references: 是否排除参考文献
+        body_target_chars: 正文目标字数（用于计算完成率）
+        review_target_chars: 综述目标字数
+        review_in_scope: 是否将综述纳入考核目标
     
     Returns:
         dict: 详细统计结果
@@ -101,9 +108,9 @@ def count_words_in_docx(
             'error': f'无法打开文件：{str(e)}'
         }
     
-    # 初始化计数器
-    total_chinese_chars = 0
-    total_english_words = 0
+    # 初始化计数器 — body 和 review 始终独立统计
+    body_chinese_chars = 0
+    body_english_words = 0
     review_chinese_chars = 0
     review_english_words = 0
 
@@ -122,10 +129,31 @@ def count_words_in_docx(
         if current_section["chinese_chars"] > 0 or current_section["english_words"] > 0:
             section_stats.append(current_section.copy())
 
-    for para in doc.paragraphs:
+    def accumulate(counts):
+        """将 counts 累加到全局计数器（根据当前章节类型决定归入 body 还是 review）。"""
+        nonlocal body_chinese_chars, body_english_words
+        nonlocal review_chinese_chars, review_english_words
+
+        current_section["chinese_chars"] += counts["chinese_chars"]
+        current_section["english_words"] += counts["english_words"]
+
+        if current_section_type == "review":
+            review_chinese_chars += counts["chinese_chars"]
+            review_english_words += counts["english_words"]
+        elif current_section_type == "references" and exclude_references:
+            pass
+        elif current_section_type in {"toc", "abstract", "acknowledgement", "appendix"}:
+            pass
+        else:
+            body_chinese_chars += counts["chinese_chars"]
+            body_english_words += counts["english_words"]
+
+    def _process_paragraph(para):
+        """处理单个段落，识别标题并切换章节状态。"""
+        nonlocal current_section_type, current_section_title, current_section
         text = para.text.strip()
         if not text:
-            continue
+            return
 
         lvl = heading_level(getattr(para.style, "name", ""))
         if lvl is not None:
@@ -138,37 +166,45 @@ def count_words_in_docx(
                 "chinese_chars": 0,
                 "english_words": 0,
             }
-            continue
+            # 标题文字也计入当前章节
+            accumulate(count_words_in_text(text))
+            return
 
-        counts = count_words_in_text(text)
-        current_section["chinese_chars"] += counts["chinese_chars"]
-        current_section["english_words"] += counts["english_words"]
+        accumulate(count_words_in_text(text))
 
-        if current_section_type == "review":
-            if not exclude_review:
-                total_chinese_chars += counts["chinese_chars"]
-                total_english_words += counts["english_words"]
-            review_chinese_chars += counts["chinese_chars"]
-            review_english_words += counts["english_words"]
-            continue
+    def _process_table(table):
+        """统计表格内所有单元格文字。"""
+        seen_cells = set()  # 合并单元格按 XML 元素去重
+        for row in table.rows:
+            for cell in row.cells:
+                tc_id = id(cell._tc)
+                if tc_id in seen_cells:
+                    continue
+                seen_cells.add(tc_id)
+                cell_text = cell.text.strip()
+                if not cell_text:
+                    continue
+                accumulate(count_words_in_text(cell_text))
 
-        if current_section_type == "references" and exclude_references:
-            continue
-        if current_section_type in {"toc", "abstract", "acknowledgement", "appendix"}:
-            continue
-
-        total_chinese_chars += counts["chinese_chars"]
-        total_english_words += counts["english_words"]
+    # 按文档顺序遍历 body 子元素（段落与表格交替出现）
+    body = doc.element.body
+    W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+    for child in body:
+        tag = child.tag
+        if tag == f"{{{W_NS}}}p":
+            _process_paragraph(DocxParagraph(child, doc))
+        elif tag == f"{{{W_NS}}}tbl":
+            _process_table(DocxTable(child, doc))
 
     flush_section()
     
-    # 生成报告
-    body_total = total_chinese_chars + total_english_words
+    # 生成报告 — body 和 review 始终独立，grand_total 为两者之和
+    body_total = body_chinese_chars + body_english_words
     review_total = review_chinese_chars + review_english_words
     grand_total = body_total + review_total
     body_target_chars = max(1, int(body_target_chars or 80000))
     review_target_chars = max(0, int(review_target_chars or 0))
-    body_rate = round(total_chinese_chars / body_target_chars, 4)
+    body_rate = round(body_chinese_chars / body_target_chars, 4)
     review_rate = (
         round(review_chinese_chars / review_target_chars, 4)
         if review_target_chars > 0 and review_chinese_chars > 0
@@ -176,13 +212,13 @@ def count_words_in_docx(
     )
 
     result = {
-        "schema_version": "2.1",
+        "schema_version": "2.2",
         "success": True,
         "file_path": docx_path,
         "file_name": os.path.basename(docx_path),
         "body_text": {
-            "chinese_chars": total_chinese_chars,
-            "english_words": total_english_words,
+            "chinese_chars": body_chinese_chars,
+            "english_words": body_english_words,
             "total_count": body_total,
         },
         "review": {
@@ -191,8 +227,8 @@ def count_words_in_docx(
             "total_count": review_total,
         },
         "total": {
-            "chinese_chars": total_chinese_chars + review_chinese_chars,
-            "english_words": total_english_words + review_english_words,
+            "chinese_chars": body_chinese_chars + review_chinese_chars,
+            "english_words": body_english_words + review_english_words,
             "total_count": grand_total,
         },
         "sections": section_stats,
@@ -204,8 +240,8 @@ def count_words_in_docx(
             "review_completion_rate": review_rate,
         },
         # Legacy compatibility fields for existing SKILL.md pseudo-code.
-        "chinese_chars": total_chinese_chars,
-        "english_words": total_english_words,
+        "chinese_chars": body_chinese_chars,
+        "english_words": body_english_words,
         "total_chars": body_total,
         "completion_rate": body_rate,
         "is_review": False,
@@ -323,7 +359,6 @@ def main():
     # 执行统计
     result = count_words_in_docx(
         docx_path,
-        exclude_review=(not review_in_scope),
         exclude_references=True,
         body_target_chars=body_target,
         review_target_chars=review_target,

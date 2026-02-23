@@ -337,7 +337,7 @@ class Sci2DocScriptsTests(unittest.TestCase):
             self.assertEqual(proc.returncode, 0, msg=proc.stdout + proc.stderr)
             payload = json.loads(proc.stdout)
             self.assertGreater(payload["body_text"]["chinese_chars"], 0)
-            self.assertEqual(payload["schema_version"], "2.1")
+            self.assertEqual(payload["schema_version"], "2.2")
             self.assertEqual(payload["targets"]["body_target"], 80000)
 
     def test_count_words_recognizes_review_heading_with_chapter_prefix(self):

@@ -463,7 +463,6 @@ def self_check(project_root, docx_path, profile_path=None, chapter=None):
 
     wc = count_words_in_docx(
         str(path),
-        exclude_review=(not review_in_scope),
         exclude_references=True,
         body_target_chars=body_target,
         review_target_chars=review_target,
