@@ -8,9 +8,9 @@ The build assumptions in older versions are no longer authoritative.
 
 Use these files as single source of truth:
 
-- `/Users/wsxwj/.codex/skills/sci2doc/SKILL.md`
-- `/Users/wsxwj/.codex/skills/sci2doc/README.md`
-- `/Users/wsxwj/.codex/skills/sci2doc/QUICK_START.md`
+- `/Users/wsxwj/.config/opencode/skills/sci2doc/SKILL.md`
+- `/Users/wsxwj/.config/opencode/skills/sci2doc/README.md`
+- `/Users/wsxwj/.config/opencode/skills/sci2doc/QUICK_START.md`
 
 ## Current Baseline
 

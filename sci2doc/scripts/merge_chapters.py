@@ -22,7 +22,6 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 import sys
 import os
 import re
-import json
 
 try:
     from docxcompose.composer import Composer
@@ -43,16 +42,13 @@ def extract_chapter_number(filename):
     return 999  # 未识别的放到最后
 
 
-def heading_level(style_name):
-    if not style_name:
-        return None
-    m = re.match(r"^(?:Heading|标题)\s*(\d+)$", style_name, flags=re.IGNORECASE)
-    if not m:
-        return None
-    try:
-        return int(m.group(1))
-    except ValueError:
-        return None
+try:
+    from shared_utils import heading_level
+except ImportError:  # pragma: no cover
+    _script_dir = os.path.dirname(os.path.abspath(__file__))
+    if _script_dir not in sys.path:
+        sys.path.insert(0, _script_dir)
+    from shared_utils import heading_level
 
 
 def merge_docx_files(file_list, output_path, require_high_fidelity=False):
@@ -232,20 +228,21 @@ def generate_toc(doc):
     print("✅ 目录已生成（页码需要在 Word 中手动更新字段）")
 
 
-def add_header_footer(doc, thesis_title):
+def add_header_footer(doc, thesis_title, university_name="中南大学"):
     """
     添加页眉页脚
     
     Args:
         doc: Document 对象
         thesis_title: 论文标题
+        university_name: 大学名称（默认：中南大学）
     """
     section = doc.sections[0]
     
     # 页眉
     header = section.header
     header_para = header.paragraphs[0]
-    header_para.text = f"中南大学博士学位论文                                {thesis_title}"
+    header_para.text = f"{university_name}博士学位论文                                {thesis_title}"
     header_para.style = doc.styles['Header']
     
     # 页脚（页码）

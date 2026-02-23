@@ -142,8 +142,10 @@ def _postwrite_abbreviation_process(project_root, chapter):
                     f.write(cleaned)
 
             report["processed_files"].append(basename)
-            report["new_abbreviations"] += result.get("registered_count", 0)
-            report["stripped_count"] += result.get("stripped_count", 0)
+            reg = result.get("registration", {})
+            strip = result.get("stripping", {})
+            report["new_abbreviations"] += reg.get("registered_count", 0)
+            report["stripped_count"] += strip.get("stripped_count", 0)
         except Exception:
             pass  # Non-fatal: abbreviation processing should not block postwrite
 

@@ -48,7 +48,7 @@ The workflow is built around:
     - Bottom border: 1.5pt solid
     - No vertical lines, no other horizontal lines
     - Use Markdown `| col1 | col2 |` syntax in atomic `.md` files; `markdown_to_docx.py` auto-converts to Word three-line tables.
-    - Table captions use five-point KaiTi (楷体小五号), centered above the table.
+    - Table captions use five-point KaiTi (楷体五号, 10.5pt), centered above the table.
 16. Writing style constraints are mandatory:
     - No em dashes (——). Use commas, periods, or restructure the sentence instead.
     - Statements only, no rhetorical or direct questions in body text. Every sentence must be declarative.
@@ -305,7 +305,7 @@ All subsequent occurrences use bare `PCR` only. Never re-expand.
    - Registers new ones with chapter/section metadata
    - Strips redundant expansions in non-first-occurrence chapters
 3. **Before final merge**: Run `abbreviation_registry.py validate` to confirm cross-references.
-4. **Front matter**: Generate the abbreviation table page with `abbreviation_registry.py table` or pass `--abbreviation-table` to `markdown_to_docx.py`.
+4. **Front matter**: Generate the abbreviation table page with `abbreviation_registry.py table`.
 
 ### CLI Quick Reference
 

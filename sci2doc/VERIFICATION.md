@@ -13,9 +13,9 @@ Validation should be executed against current scripts and profile-driven rules:
 
 And current documentation:
 
-- `/Users/wsxwj/.codex/skills/sci2doc/SKILL.md`
-- `/Users/wsxwj/.codex/skills/sci2doc/README.md`
-- `/Users/wsxwj/.codex/skills/sci2doc/QUICK_START.md`
+- `/Users/wsxwj/.config/opencode/skills/sci2doc/SKILL.md`
+- `/Users/wsxwj/.config/opencode/skills/sci2doc/README.md`
+- `/Users/wsxwj/.config/opencode/skills/sci2doc/QUICK_START.md`
 
 ## Baseline Targets
 

@@ -29,6 +29,14 @@ except Exception:  # pragma: no cover
         sys.path.insert(0, script_dir)
     from thesis_profile import load_profile
 
+try:
+    from shared_utils import normalize_text, heading_level, classify_heading, infer_project_root_for_profile
+except ImportError:  # pragma: no cover
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    if script_dir not in sys.path:
+        sys.path.insert(0, script_dir)
+    from shared_utils import normalize_text, heading_level, classify_heading, infer_project_root_for_profile
+
 
 def is_chinese_char(char):
     """判断是否为中文字符"""
@@ -64,70 +72,6 @@ def count_words_in_text(text):
         'chinese_chars': chinese_chars,
         'english_words': english_words
     }
-
-
-def normalize_text(value):
-    """标准化标题文本用于匹配。"""
-    return re.sub(r"\s+", "", (value or "").lower())
-
-
-def classify_heading(text):
-    """
-    根据标题文本分类章节类型。
-
-    Returns:
-        str: body | review | references | toc | abstract | acknowledgement | appendix
-    """
-    t = normalize_text(text)
-    if not t:
-        return "body"
-
-    chapter_prefix_cn = r"(第[一二三四五六七八九十百千万0-9]+章)?"
-    chapter_prefix_en = r"(chapter[0-9ivxlcdm]+)?"
-    patterns = {
-        "review": [
-            rf"^{chapter_prefix_cn}综述$",
-            rf"^{chapter_prefix_cn}文献综述$",
-            rf"^{chapter_prefix_en}literaturereview$",
-        ],
-        "references": [
-            rf"^{chapter_prefix_cn}参考文献$",
-            rf"^{chapter_prefix_en}references$",
-        ],
-        "toc": [r"^目录$", r"tableofcontents", r"^contents$"],
-        "abstract": [
-            rf"^{chapter_prefix_cn}(中文|英文)?摘要$",
-            rf"^{chapter_prefix_en}abstract$",
-        ],
-        "acknowledgement": [
-            rf"^{chapter_prefix_cn}致谢$",
-            rf"^{chapter_prefix_en}acknowledg(e)?ment$",
-        ],
-        "appendix": [
-            rf"^{chapter_prefix_cn}附录$",
-            rf"^{chapter_prefix_en}appendix$",
-        ],
-    }
-    for section_type, regex_list in patterns.items():
-        for regex in regex_list:
-            if re.search(regex, t):
-                return section_type
-    return "body"
-
-
-def heading_level(style_name):
-    """
-    解析 Heading 样式级别；非标题返回 None。
-    """
-    if not style_name:
-        return None
-    m = re.match(r"^(?:Heading|标题)\s*(\d+)$", style_name, flags=re.IGNORECASE)
-    if not m:
-        return None
-    try:
-        return int(m.group(1))
-    except ValueError:
-        return None
 
 
 def count_words_in_docx(
@@ -330,23 +274,6 @@ def format_report(result):
     lines.append("=" * 60)
     
     return "\n".join(lines)
-
-
-def infer_project_root_for_profile(docx_path):
-    """
-    从 docx 路径向上查找 thesis_profile.json，找到后返回其所在目录。
-    找不到时返回 docx 所在目录，保持向后兼容。
-    """
-    current = os.path.abspath(os.path.dirname(docx_path))
-    while True:
-        candidate = os.path.join(current, "thesis_profile.json")
-        if os.path.exists(candidate):
-            return current
-        parent = os.path.dirname(current)
-        if parent == current:
-            break
-        current = parent
-    return os.path.abspath(os.path.dirname(docx_path))
 
 
 def main():
