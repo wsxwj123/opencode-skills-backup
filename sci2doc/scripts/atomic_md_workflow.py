@@ -623,7 +623,7 @@ def parse_args():
     vm.add_argument("--chapter-dir", help="自定义章节原子文件目录")
 
     s = sub.add_parser("self-check", help="章节完成后立即自检（字数+质量）")
-    s.add_argument("--docx", dest="target", help="待检查的 .md 文件或目录路径")
+    s.add_argument("--docx", dest="target", help="(deprecated alias for --target) .md 文件或目录路径")
     s.add_argument("--target", dest="target", help="待检查的 .md 文件或目录路径")
     s.add_argument("--profile", help="thesis_profile.json 路径（可选）")
     s.add_argument("--chapter", help="章节号（可选，不提供时从文件名推断）")

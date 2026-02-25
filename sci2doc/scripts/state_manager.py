@@ -146,8 +146,8 @@ def _postwrite_abbreviation_process(project_root, chapter):
             strip = result.get("stripping", {})
             report["new_abbreviations"] += reg.get("registered_count", 0)
             report["stripped_count"] += strip.get("stripped_count", 0)
-        except Exception:
-            pass  # Non-fatal: abbreviation processing should not block postwrite
+        except Exception as exc:
+            report.setdefault("errors", []).append(f"{basename}: {exc}")
 
     return report
 
@@ -953,21 +953,6 @@ def postwrite_state(project_root, chapter, status="updated", summary="", create_
     )
 
 
-def detect_default_docx(project_root):
-    state_path = resolve_path(project_root, "project_state.json")
-    state = safe_json_load(state_path, default={})
-    save_path = (
-        state.get("project_info", {}).get("save_path")
-        if isinstance(state, dict)
-        else None
-    )
-    if not save_path:
-        return None
-    candidate = os.path.join(save_path, "03_合并文档", "完整博士论文.docx")
-    if os.path.exists(candidate):
-        return candidate
-    return None
-
 
 def load_count_words_module(project_root):
     script_path = resolve_path(project_root, "scripts/count_words.py")
@@ -983,15 +968,15 @@ def load_count_words_module(project_root):
     return module
 
 
-def word_count(project_root, docx=None, sync_project_state=True):
-    target = docx
+def word_count(project_root, docx=None, target=None, sync_project_state=True):
+    target = target or docx
     if target is None:
         # 优先使用 atomic_md 目录
         atomic_dir = resolve_path(project_root, "atomic_md")
         if os.path.isdir(atomic_dir):
             target = atomic_dir
         else:
-            print(json.dumps({"success": False, "error": "no target found; pass --docx explicitly or ensure atomic_md/ exists"}, ensure_ascii=False))
+            print(json.dumps({"success": False, "error": "no target found; pass --target explicitly or ensure atomic_md/ exists"}, ensure_ascii=False))
             sys.exit(2)
     if not os.path.isabs(target):
         target = resolve_path(project_root, target)
@@ -1669,8 +1654,9 @@ def parse_args():
     init_p.add_argument("--source-paper", default="")
     init_p.add_argument("--copy-local-scripts", action="store_true")
 
-    wc_p = subparsers.add_parser("word-count", help="Count words from docx / md / atomic_md dir")
-    wc_p.add_argument("--docx", help="target path: .docx / .md file or atomic_md directory; default auto-detect")
+    wc_p = subparsers.add_parser("word-count", help="Count words from .md file or atomic_md directory")
+    wc_p.add_argument("--docx", dest="target_path", help="(deprecated alias for --target)")
+    wc_p.add_argument("--target", dest="target_path", help="target path: .md file or atomic_md directory; default auto-detect")
     wc_p.add_argument("--no-sync", action="store_true", help="Do not sync count result into project_state.json")
 
     stats_p = subparsers.add_parser("stats", help="Project dashboard")
@@ -1767,7 +1753,7 @@ def main():
                 json_summary=args.json_summary,
             )
         elif args.command == "word-count":
-            word_count(project_root=project_root, docx=args.docx, sync_project_state=(not args.no_sync))
+            word_count(project_root=project_root, target=args.target_path, sync_project_state=(not args.no_sync))
         elif args.command == "stats":
             stats(project_root=project_root, chapter=args.chapter, backup_dir=args.backup_dir)
         elif args.command == "snapshot":

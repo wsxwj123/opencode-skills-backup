@@ -14,7 +14,7 @@ Markdown 转 Word 工具（应用中南大学样式）
 """
 
 from docx import Document
-from docx.shared import Pt, Cm, RGBColor, Emu
+from docx.shared import Pt, Cm, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
 from docx.oxml.ns import qn, nsdecls
 from docx.oxml import parse_xml
