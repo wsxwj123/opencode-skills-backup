@@ -442,6 +442,24 @@ class TestCrossReferenceValidation(TempProjectMixin, unittest.TestCase):
         self.assertEqual(result["valid_count"], 1)
         self.assertEqual(result["invalid_count"], 0)
 
+    def test_valid_cross_reference_with_prefix(self):
+        """测试带前缀的引用格式：(Full Name, ABBR)"""
+        self._setup_chapter_md("2", "2.1", "全文...（Tumor Microenvironment, TME）...")
+        register(self.project_root, "TME", full_cn="肿瘤微环境", full_en="Tumor Microenvironment",
+                 chapter="2", section="2.1")
+        result = validate_cross_references(self.project_root)
+        self.assertEqual(result["valid_count"], 1)
+        self.assertEqual(result["invalid_count"], 0)
+
+    def test_valid_cross_reference_cn_prefix(self):
+        """测试带中文前缀的引用格式：(肿瘤微环境，TME)"""
+        self._setup_chapter_md("2", "2.1", "全文...（肿瘤微环境，TME）...")
+        register(self.project_root, "TME", full_cn="肿瘤微环境", full_en="Tumor Microenvironment",
+                 chapter="2", section="2.1")
+        result = validate_cross_references(self.project_root)
+        self.assertEqual(result["valid_count"], 1)
+        self.assertEqual(result["invalid_count"], 0)
+
     def test_invalid_cross_reference_no_expansion(self):
         self._setup_chapter_md("2", "2.1", "本章使用PCR进行检测")
         register(self.project_root, "PCR", full_cn="聚合酶链式反应",

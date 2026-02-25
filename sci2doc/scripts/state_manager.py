@@ -64,7 +64,7 @@ RESTORE_MANAGED_FILES = tuple(
     + list(OPTIONAL_STATE_FILES.values())
     + ["context_memory_v-1.md", "context_memory_v-2.md"]
 )
-RESTORE_MANAGED_DIRS = (".state", "02_分章节文档", "03_合并文档", "04_图表文件", "chapter_memory")
+RESTORE_MANAGED_DIRS = (".state", "02_分章节文档", "02_分章节文档_md", "03_合并文档", "03_合并文档_md", "04_图表文件")
 
 GATE_STATE_DIR = ".state"
 GATE_STATE_FILE = os.path.join(GATE_STATE_DIR, "write_gate.json")
@@ -74,6 +74,80 @@ LOAD_CACHE_FILE = os.path.join(GATE_STATE_DIR, "load_cache.json")
 # ---------------------------------------------------------------------------
 # Lazy-loaded abbreviation processing (avoids circular import)
 # ---------------------------------------------------------------------------
+
+import re as _re
+
+# Keywords that signal experimental design facts worth preserving in digests
+_EXPERIMENT_KEYWORDS = _re.compile(
+    r"(分[为成]|分组|对照组|实验组|处理组|模型组|给药|浓度|剂量|"
+    r"孵育|培养|转染|感染|处理\s*\d|mg/kg|μg/mL|nmol|μmol|"
+    r"Western|PCR|ELISA|流式|免疫组化|HE染色|TUNEL|CCK-?8|MTT)",
+    _re.IGNORECASE,
+)
+
+
+def _extract_section_digest(md_path):
+    """
+    Extract a lightweight digest from a markdown section file.
+
+    Returns a dict with:
+      - file: basename
+      - headings: all markdown headings
+      - table_captions: lines matching '表 X-X：...'
+      - key_facts: lines containing experimental design keywords
+      - word_count: approximate character count (for progress tracking)
+
+    Total output per section: ~5-15 lines, never full content.
+    Returns None if file is empty or unreadable.
+    """
+    try:
+        with open(md_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+    except (OSError, UnicodeDecodeError):
+        return None
+
+    if not lines:
+        return None
+
+    headings = []
+    table_captions = []
+    key_facts = []
+
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            continue
+        # Markdown headings
+        if stripped.startswith("#"):
+            headings.append(stripped)
+        # Table captions: 表 2-1：xxx or 表2-1 xxx
+        elif stripped.startswith("表") and any(c.isdigit() for c in stripped[:8]):
+            table_captions.append(stripped)
+        # Lines with experimental design keywords (keep first 80 chars)
+        elif _EXPERIMENT_KEYWORDS.search(stripped):
+            key_facts.append(stripped[:80])
+
+    # Deduplicate key_facts, keep max 10 to stay lightweight
+    seen = set()
+    unique_facts = []
+    for fact in key_facts:
+        if fact not in seen:
+            seen.add(fact)
+            unique_facts.append(fact)
+            if len(unique_facts) >= 10:
+                break
+
+    # Approximate word count (Chinese chars)
+    total_chars = sum(len(l.strip()) for l in lines if l.strip() and not l.strip().startswith("#"))
+
+    return {
+        "file": os.path.basename(md_path),
+        "headings": headings,
+        "table_captions": table_captions,
+        "key_facts": unique_facts,
+        "char_count": total_chars,
+    }
+
 
 def _get_abbr_process():
     """Lazily import abbreviation_registry to avoid circular dependency."""
@@ -794,6 +868,24 @@ def load_state(
         else:
             bundle["history_log"] = []
 
+    # ── Lightweight section digests for cross-section consistency ───────
+    # Instead of loading full md content (which would blow the token budget),
+    # extract only structural markers: headings, table captions, and key
+    # experimental terms. This gives the AI enough context to avoid
+    # contradicting earlier subsections (e.g. wrong reagents, wrong grouping).
+    chapter_md_dir = resolve_path(project_root, f"atomic_md/第{chapter}章")
+    if os.path.isdir(chapter_md_dir):
+        digests = []
+        md_files = sorted(glob.glob(os.path.join(chapter_md_dir, "*.md")))
+        for md_path in md_files:
+            digest = _extract_section_digest(md_path)
+            if digest:
+                digests.append(digest)
+                bundle["loaded_files"].append(md_path)
+        bundle["chapter_section_digests"] = digests
+    else:
+        bundle["chapter_section_digests"] = []
+
     if include_draft:
         docs = find_chapter_doc_files(project_root, chapter)
         previews = []
@@ -1090,7 +1182,7 @@ def backup_project_state(project_root, backup_dir="backups"):
         shutil.copytree(state_dir, resolve_path(snapshot_dir, ".state"))
 
     # Backup chapter docs dirs (if exists)
-    for folder in ("02_分章节文档", "03_合并文档", "04_图表文件", "chapter_memory"):
+    for folder in ("02_分章节文档", "02_分章节文档_md", "03_合并文档", "03_合并文档_md", "04_图表文件"):
         src = resolve_path(project_root, folder)
         if os.path.exists(src):
             shutil.copytree(src, resolve_path(snapshot_dir, folder))
@@ -1253,14 +1345,16 @@ def init_project(
         effective_root = resolve_path(project_root, save_path)
     effective_root = os.path.abspath(effective_root)
 
-    # Core folders
+    # Core folders — only directories actually used by the workflow.
+    # Removed dead dirs: 01_文献分析, 05_参考文献, chapter_memory
+    # Added missing dirs: 02_分章节文档_md, 03_合并文档_md (used by atomic_md_workflow merge)
     folders = [
-        "01_文献分析",
+        "atomic_md",
         "02_分章节文档",
+        "02_分章节文档_md",
         "03_合并文档",
+        "03_合并文档_md",
         "04_图表文件",
-        "05_参考文献",
-        "chapter_memory",
         ".state",
     ]
     for folder in folders:
@@ -1350,6 +1444,15 @@ def init_project(
                 "ok": True,
                 "project_root": effective_root,
                 "save_path": effective_root,
+                "initialized_dirs": [
+                    "atomic_md",
+                    "02_分章节文档",
+                    "02_分章节文档_md",
+                    "03_合并文档",
+                    "03_合并文档_md",
+                    "04_图表文件",
+                    ".state",
+                ],
                 "initialized_files": [
                     "project_state.json",
                     "thesis_profile.json",

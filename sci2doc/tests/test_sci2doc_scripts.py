@@ -1,5 +1,7 @@
 import json
+import os
 import subprocess
+import sys
 import tempfile
 import unittest
 from concurrent.futures import ThreadPoolExecutor
@@ -1199,6 +1201,59 @@ class TestMethodsTableCheck(unittest.TestCase):
             payload = extract_json_from_stdout(proc.stdout)
             self.assertIn("table_warnings", payload)
             self.assertTrue(len(payload["table_warnings"]) >= 1)
+
+
+class TestTitleMatchingExclusionLogic(unittest.TestCase):
+    """测试结果与讨论小节的排除法匹配逻辑"""
+
+    def _match(self, title, required):
+        script_dir = os.path.join(ROOT, "scripts")
+        if script_dir not in sys.path:
+            sys.path.insert(0, script_dir)
+        from atomic_md_workflow import title_matches_required_section
+        return title_matches_required_section(title, required)
+
+    # --- 结果与讨论：具体研究标题应匹配 ---
+    def test_specific_research_title_matches_results(self):
+        self.assertTrue(self._match("TME对肿瘤细胞增殖的影响", "结果与讨论"))
+
+    def test_specific_nanoparticle_title_matches_results(self):
+        self.assertTrue(self._match("纳米颗粒的体外释放特性", "结果与讨论"))
+
+    def test_specific_signaling_title_matches_results(self):
+        self.assertTrue(self._match("PI3K/AKT信号通路的激活", "结果与讨论"))
+
+    def test_explicit_results_discussion_still_matches(self):
+        self.assertTrue(self._match("结果与讨论", "结果与讨论"))
+
+    def test_explicit_results_discussion_variant(self):
+        self.assertTrue(self._match("结果讨论", "结果与讨论"))
+
+    # --- 非结果与讨论小节不应匹配 ---
+    def test_intro_does_not_match_results(self):
+        self.assertFalse(self._match("引言", "结果与讨论"))
+
+    def test_methods_does_not_match_results(self):
+        self.assertFalse(self._match("材料与方法", "结果与讨论"))
+
+    def test_conclusion_does_not_match_results(self):
+        self.assertFalse(self._match("实验结论", "结果与讨论"))
+
+    def test_summary_does_not_match_results(self):
+        self.assertFalse(self._match("小结", "结果与讨论"))
+
+    def test_overview_does_not_match_results(self):
+        self.assertFalse(self._match("概述", "结果与讨论"))
+
+    # --- 其他 required_name 仍用包含法 ---
+    def test_intro_matches_intro(self):
+        self.assertTrue(self._match("引言", "引言"))
+
+    def test_methods_matches_methods(self):
+        self.assertTrue(self._match("材料与方法", "材料与方法"))
+
+    def test_specific_title_does_not_match_methods(self):
+        self.assertFalse(self._match("TME对肿瘤细胞增殖的影响", "材料与方法"))
 
 
 if __name__ == "__main__":

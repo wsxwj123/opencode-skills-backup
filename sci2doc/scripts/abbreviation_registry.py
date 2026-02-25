@@ -620,9 +620,10 @@ def validate_cross_references(project_root):
         full_cn = info.get("full_cn", "").strip()
         full_en = info.get("full_en", "").strip()
         escaped_abbr = re.escape(abbr)
-        # 匹配 "全称（ABBR）" 或 "Full Name (ABBR)" 模式
+        # 匹配 "（ABBR）" 或 "（全称，ABBR）"
+        # 允许左括号后跟任意非右括号字符，以逗号结尾，再接缩略语
         search_pattern = re.compile(
-            r'[（(]' + escaped_abbr + r'[）)]'
+            r'[（(](?:[^）)]*?[,，]\s*)?' + escaped_abbr + r'[）)]'
         )
 
         for md_file in target_files:

@@ -16,12 +16,11 @@ Validation should be executed against current scripts and profile-driven rules:
 - `scripts/merge_chapters.py`
 - `scripts/merge_documents.py`
 - `scripts/thesis_profile.py`
-- `scripts/setup_styles.py`
 
-Test suites (177 tests total):
+Test suites (192 tests total):
 
-- `tests/test_sci2doc_scripts.py` (55 tests)
-- `scripts/test_abbreviation_registry.py` (57 tests)
+- `tests/test_sci2doc_scripts.py` (68 tests)
+- `scripts/test_abbreviation_registry.py` (59 tests)
 - `scripts/test_checkers.py` (24 tests)
 - `scripts/test_count_words.py` (41 tests)
 

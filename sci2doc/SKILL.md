@@ -69,6 +69,85 @@ Default profile is created by `state_manager.py init` and can be updated with:
 
 All scripts should follow this profile to avoid rule conflicts.
 
+## Project Directory Structure
+
+After `init`, the project root contains exactly these directories and files. **Do NOT create any directories outside this list.**
+
+```
+${save_path}/
+├── atomic_md/              # 原子化 markdown（唯一写作源）
+│   ├── 第1章/
+│   │   ├── 1.1_引言.md
+│   │   └── ...
+│   ├── 第2章/
+│   └── 缩略词表.md
+├── 02_分章节文档/           # 单章 docx 输出（merge --to-docx）
+├── 02_分章节文档_md/        # 单章 md 合并中间产物
+├── 03_合并文档/             # 全文 docx 输出（merge-full --to-docx）
+├── 03_合并文档_md/          # 全文 md 合并中间产物
+├── 04_图表文件/             # 图表描述文件（AI/用户手动放置）
+├── .state/                 # gate-check 状态
+├── backups/                # 快照备份（自动创建）
+├── snapshots/              # section-snapshot（自动创建）
+├── project_state.json      # 项目状态
+├── thesis_profile.json     # 论文配置
+├── context_memory.md       # 运行时上下文记忆
+├── chapter_index.json      # 章节结构索引
+├── literature_index.json   # 文献引用索引
+├── figures_index.json      # 图表引用索引
+├── history_log.json        # 操作历史
+└── abbreviation_registry.json  # 缩写注册表（自动生成）
+```
+
+### Anti-Drift Rule (Mandatory)
+
+AI **must not** create directories outside the above list. Specifically:
+- ❌ `01_文献分析/` — removed, never used by any script
+- ❌ `05_参考文献/` — removed, never used by any script
+- ❌ `chapter_memory/` — removed, never used by any script
+- ❌ `chapters/` — not a project directory
+- ❌ `output/` — not a project directory; use `02_分章节文档/` for chapter docx
+- ❌ `front_matter/` — not a project directory; front matter goes in `atomic_md/`
+
+If the AI needs to store any new artifact, it must go into one of the existing directories above. Creating ad-hoc directories is a workflow violation.
+
+## Prewrite Memory Loading (Critical)
+
+When `write-cycle` runs, `load_state` automatically loads:
+
+1. `project_state.json` — project metadata, progress, and **outline** (大纲)
+2. `chapter_index.json` — chapter structure with section titles (filtered to current chapter)
+3. `literature_index.json` — references (filtered to current chapter)
+4. `figures_index.json` — figures/tables (filtered to current chapter)
+5. `context_memory.md` — timestamped operation summaries
+6. `history_log.json` — recent operation events
+7. **`chapter_section_digests`** — lightweight digests extracted from existing `atomic_md/第N章/*.md` files
+
+Item 7 is the cross-section consistency mechanism. It does NOT load full markdown content (that would blow the token budget). Instead, it extracts only:
+- Headings (section structure)
+- Table captions (表 X-X：...)
+- Key experimental facts (grouping, reagents, concentrations, methods — max 10 per section, 80 chars each)
+- Character count (progress tracking)
+
+This gives the AI enough context to avoid contradicting earlier subsections (e.g. wrong experimental design, wrong reagent lists) without consuming significant tokens.
+
+### AI Responsibility: Update chapter_index.json
+
+After writing each subsection, the AI **must** update `chapter_index.json` with key facts from that section. This is the primary structured memory that persists across sessions. The digest mechanism is a safety net, not a replacement.
+
+Example entry:
+```json
+{
+  "chapter": "2",
+  "section": "2.1",
+  "title": "实验材料与试剂",
+  "key_facts": ["PMG浓度梯度: 0, 5, 10, 20 μg/mL", "细胞系: HepG2, LO2", "Western blot检测蛋白表达"],
+  "tables": ["表 2-1：主要试剂及来源", "表 2-2：主要仪器设备"]
+}
+```
+
+**Rule**: Never skip `write-cycle` before writing a new subsection. It is the only mechanism that loads cross-section memory.
+
 ## Required Workflow
 
 ### 1) Initialize Project

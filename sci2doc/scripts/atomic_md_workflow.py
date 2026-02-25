@@ -153,13 +153,40 @@ def normalize_title_text(text):
     return re.sub(r"\s+", "", (text or ""))
 
 
+_INTRO_KEYWORDS = ("引言", "前言", "概述", "背景")
+_CONCLUSION_KEYWORDS = ("实验结论", "小结", "结论", "总结")
+_METHOD_KEYWORDS_FULL = ("材料与方法", "研究对象与方法", "实验方法", "方法学")
+
+
+def _is_non_results_title(normalized_text):
+    """判断标题是否属于非结果与讨论类小节（引言/方法/结论/小结）。"""
+    t = normalized_text
+    if not t:
+        return True
+    for kw in _INTRO_KEYWORDS:
+        if kw in t:
+            return True
+    for kw in _METHOD_KEYWORDS_FULL:
+        if kw in t:
+            return True
+    # 单独的"方法"需排除"方法学"已匹配的情况，且避免误伤含"方法"的结果小节
+    # 仅当标题以"方法"结尾或"方法"前紧跟"与/和"时才算方法小节
+    if re.search(r"(?:与|和)方法|方法$", t):
+        return True
+    for kw in _CONCLUSION_KEYWORDS:
+        if kw in t:
+            return True
+    return False
+
+
 def title_matches_required_section(title, required_name):
     t = normalize_title_text(title)
     r = normalize_title_text(required_name)
     if not t or not r:
         return False
     if r == "结果与讨论":
-        return ("结果与讨论" in t) or ("结果讨论" in t) or ("结果" in t and "讨论" in t)
+        # 排除法：不属于引言/方法/结论/小结的小节，即为结果与讨论
+        return not _is_non_results_title(t)
     return r in t
 
 
@@ -384,7 +411,8 @@ def validate_experiment_map(project_root, chapter, chapter_dir=None):
         t = normalize_title(text)
         if not t:
             return False
-        return ("结果与讨论" in t) or ("结果讨论" in t) or ("结果" in t and "讨论" in t)
+        # 排除法：不属于引言/方法/结论/小结的小节，即为结果与讨论
+        return not _is_non_results_title(t)
 
     for sf in files:
         text = sf.path.read_text(encoding="utf-8")
