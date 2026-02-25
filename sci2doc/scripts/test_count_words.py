@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-count_words_docx.py 的单元测试：
+count_words.py 的单元测试：
 - strip_markdown_syntax
 - count_words_in_text
 - count_words_in_md
@@ -20,7 +20,7 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 if script_dir not in sys.path:
     sys.path.insert(0, script_dir)
 
-from count_words_docx import (
+from count_words import (
     strip_markdown_syntax,
     count_words_in_text,
     count_words_in_md,
@@ -354,12 +354,11 @@ class TestCountWordsUnified(unittest.TestCase):
         self.assertFalse(r["success"])
         self.assertIn("不支持", r["error"])
 
-    def test_docx_extension_detected(self):
-        # 不创建真实 docx，只验证路径检测逻辑
+    def test_docx_rejected(self):
+        # docx 不再支持，应返回"不支持的文件类型"
         r = count_words("/nonexistent/file.docx")
         self.assertFalse(r["success"])
-        # 应该是 docx 打开失败，而非"不支持的文件类型"
-        self.assertNotIn("不支持", r.get("error", ""))
+        self.assertIn("不支持", r.get("error", ""))
 
 
 if __name__ == "__main__":

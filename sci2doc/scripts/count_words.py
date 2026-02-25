@@ -1,21 +1,18 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-文档字数统计工具
+Markdown 字数统计工具
 
-支持三种输入类型：
-- .docx  — Word 文档（含表格、标题样式识别）
-- .md    — 单个 Markdown 文件（自动去除格式标记）
-- 目录   — 原子化 atomic_md 目录（聚合所有小节 .md 文件）
+支持三种粒度（AI 自行决定调用哪种）：
+- 单个 .md 文件  — count_words_in_md()
+- 章节目录       — count_words_in_atomic_dir()  (atomic_md/第N章/)
+- 整篇论文目录   — count_words_in_atomic_dir()  (atomic_md/)
 
-统一入口 count_words(path) 自动检测类型。
+统一入口 count_words(path) 自动检测路径类型。
 
 作者：Sci2Doc Team
 """
 
-from docx import Document
-from docx.table import Table as DocxTable
-from docx.text.paragraph import Paragraph as DocxParagraph
 import argparse
 import re
 import sys
@@ -31,12 +28,12 @@ except Exception:  # pragma: no cover
     from thesis_profile import load_profile
 
 try:
-    from shared_utils import heading_level, classify_heading, infer_project_root_for_profile
+    from shared_utils import classify_heading, infer_project_root_for_profile
 except ImportError:  # pragma: no cover
     script_dir = os.path.dirname(os.path.abspath(__file__))
     if script_dir not in sys.path:
         sys.path.insert(0, script_dir)
-    from shared_utils import heading_level, classify_heading, infer_project_root_for_profile
+    from shared_utils import classify_heading, infer_project_root_for_profile
 
 
 def is_chinese_char(char):
@@ -57,23 +54,17 @@ def is_english_char(char):
 def count_words_in_text(text):
     """
     统计文本中的中文字符数和英文单词数
-    
+
     Args:
         text: 待统计文本
-    
+
     Returns:
         dict: {'chinese_chars': int, 'english_words': int}
     """
-    # 统计中文字符
     chinese_chars = sum(1 for char in text if is_chinese_char(char))
-    
-    # 统计英文单词
-    # 移除中文字符和标点，只保留英文和空格
-    english_text = ''.join(char if is_english_char(char) or char.isspace() else ' ' 
+    english_text = ''.join(char if is_english_char(char) or char.isspace() else ' '
                            for char in text)
-    # 分割并计数非空单词
     english_words = len([word for word in english_text.split() if word])
-    
     return {
         'chinese_chars': chinese_chars,
         'english_words': english_words
@@ -154,7 +145,7 @@ def count_words_in_md(
         review_in_scope: 是否将综述纳入考核目标
 
     Returns:
-        dict: 与 count_words_in_docx 相同 schema 的统计结果
+        dict: 统计结果
     """
     try:
         with open(md_path, "r", encoding="utf-8") as f:
@@ -243,7 +234,7 @@ def count_words_in_md(
     )
 
     return {
-        "schema_version": "2.2",
+        "schema_version": "3.0",
         "success": True,
         "source_type": "markdown",
         "file_path": md_path,
@@ -307,11 +298,9 @@ def count_words_in_atomic_dir(
     if not os.path.isdir(dir_path):
         return {"success": False, "error": f"目录不存在：{dir_path}"}
 
-    # 收集所有符合命名规范的 .md 文件
     md_files = []
     entries = sorted(os.listdir(dir_path))
 
-    # 检测是否为多章根目录（含 第N章 子目录）
     chapter_dirs = [e for e in entries if os.path.isdir(os.path.join(dir_path, e)) and re.match(r"^第.+章$", e)]
     if chapter_dirs:
         for cd in sorted(chapter_dirs):
@@ -320,7 +309,6 @@ def count_words_in_atomic_dir(
                 if SECTION_FILE_RE.match(fname):
                     md_files.append(os.path.join(cd_path, fname))
     else:
-        # 单章目录
         for fname in entries:
             if SECTION_FILE_RE.match(fname):
                 md_files.append(os.path.join(dir_path, fname))
@@ -328,7 +316,6 @@ def count_words_in_atomic_dir(
     if not md_files:
         return {"success": False, "error": f"目录中未找到符合命名规范的 .md 文件：{dir_path}"}
 
-    # 聚合统计
     body_chinese_chars = 0
     body_english_words = 0
     review_chinese_chars = 0
@@ -340,7 +327,7 @@ def count_words_in_atomic_dir(
         r = count_words_in_md(
             fpath,
             exclude_references=exclude_references,
-            body_target_chars=0,  # 单文件不需要目标
+            body_target_chars=0,
             review_target_chars=0,
             review_in_scope=review_in_scope,
         )
@@ -372,7 +359,7 @@ def count_words_in_atomic_dir(
     )
 
     return {
-        "schema_version": "2.2",
+        "schema_version": "3.0",
         "success": True,
         "source_type": "atomic_dir",
         "file_path": dir_path,
@@ -420,12 +407,16 @@ def count_words(
     """
     统一入口：自动检测路径类型并调用对应统计函数。
 
-    - .docx 文件 → count_words_in_docx()
     - .md 文件   → count_words_in_md()
     - 目录       → count_words_in_atomic_dir()
 
+    AI 可根据需要灵活调用：
+    - 单个原子化文件：count_words("atomic_md/第2章/2.1_引言.md")
+    - 某章目录：count_words("atomic_md/第2章")
+    - 整篇论文：count_words("atomic_md")
+
     Args:
-        path: 文件或目录路径
+        path: .md 文件或目录路径
         exclude_references: 是否排除参考文献
         body_target_chars: 正文目标字数
         review_target_chars: 综述目标字数
@@ -446,191 +437,17 @@ def count_words(
         return count_words_in_atomic_dir(path, **kwargs)
     elif path.lower().endswith(".md"):
         return count_words_in_md(path, **kwargs)
-    elif path.lower().endswith(".docx"):
-        return count_words_in_docx(path, **kwargs)
     else:
-        return {"success": False, "error": f"不支持的文件类型：{path}（支持 .docx / .md / 目录）"}
-
-
-
-def count_words_in_docx(
-    docx_path,
-    exclude_references=True,
-    body_target_chars=80000,
-    review_target_chars=0,
-    review_in_scope=False,
-):
-    """
-    统计 Word 文档字数
-    
-    Args:
-        docx_path: docx 文件路径
-        exclude_references: 是否排除参考文献
-        body_target_chars: 正文目标字数（用于计算完成率）
-        review_target_chars: 综述目标字数
-        review_in_scope: 是否将综述纳入考核目标
-    
-    Returns:
-        dict: 详细统计结果
-    """
-    try:
-        doc = Document(docx_path)
-    except Exception as e:
-        return {
-            'success': False,
-            'error': f'无法打开文件：{str(e)}'
-        }
-    
-    # 初始化计数器 — body 和 review 始终独立统计
-    body_chinese_chars = 0
-    body_english_words = 0
-    review_chinese_chars = 0
-    review_english_words = 0
-
-    # 当前章节状态（基于标题切换，避免“排除状态卡住”）
-    current_section_type = "body"
-    current_section_title = "正文"
-    section_stats = []
-    current_section = {
-        "title": current_section_title,
-        "type": current_section_type,
-        "chinese_chars": 0,
-        "english_words": 0,
-    }
-
-    def flush_section():
-        if current_section["chinese_chars"] > 0 or current_section["english_words"] > 0:
-            section_stats.append(current_section.copy())
-
-    def accumulate(counts):
-        """将 counts 累加到全局计数器（根据当前章节类型决定归入 body 还是 review）。"""
-        nonlocal body_chinese_chars, body_english_words
-        nonlocal review_chinese_chars, review_english_words
-
-        current_section["chinese_chars"] += counts["chinese_chars"]
-        current_section["english_words"] += counts["english_words"]
-
-        if current_section_type == "review":
-            review_chinese_chars += counts["chinese_chars"]
-            review_english_words += counts["english_words"]
-        elif current_section_type == "references" and exclude_references:
-            pass
-        elif current_section_type in {"toc", "abstract", "acknowledgement", "appendix"}:
-            pass
-        else:
-            body_chinese_chars += counts["chinese_chars"]
-            body_english_words += counts["english_words"]
-
-    def _process_paragraph(para):
-        """处理单个段落，识别标题并切换章节状态。"""
-        nonlocal current_section_type, current_section_title, current_section
-        text = para.text.strip()
-        if not text:
-            return
-
-        lvl = heading_level(getattr(para.style, "name", ""))
-        if lvl is not None:
-            flush_section()
-            current_section_type = classify_heading(text)
-            current_section_title = text
-            current_section = {
-                "title": current_section_title,
-                "type": current_section_type,
-                "chinese_chars": 0,
-                "english_words": 0,
-            }
-            # 标题文字也计入当前章节
-            accumulate(count_words_in_text(text))
-            return
-
-        accumulate(count_words_in_text(text))
-
-    def _process_table(table):
-        """统计表格内所有单元格文字。"""
-        seen_cells = set()  # 合并单元格按 XML 元素去重
-        for row in table.rows:
-            for cell in row.cells:
-                tc_id = id(cell._tc)
-                if tc_id in seen_cells:
-                    continue
-                seen_cells.add(tc_id)
-                cell_text = cell.text.strip()
-                if not cell_text:
-                    continue
-                accumulate(count_words_in_text(cell_text))
-
-    # 按文档顺序遍历 body 子元素（段落与表格交替出现）
-    body = doc.element.body
-    W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
-    for child in body:
-        tag = child.tag
-        if tag == f"{{{W_NS}}}p":
-            _process_paragraph(DocxParagraph(child, doc))
-        elif tag == f"{{{W_NS}}}tbl":
-            _process_table(DocxTable(child, doc))
-
-    flush_section()
-    
-    # 生成报告 — body 和 review 始终独立，grand_total 为两者之和
-    body_total = body_chinese_chars + body_english_words
-    review_total = review_chinese_chars + review_english_words
-    grand_total = body_total + review_total
-    body_target_chars = max(1, int(body_target_chars or 80000))
-    review_target_chars = max(0, int(review_target_chars or 0))
-    body_rate = round(body_chinese_chars / body_target_chars, 4)
-    review_rate = (
-        round(review_chinese_chars / review_target_chars, 4)
-        if review_target_chars > 0 and review_chinese_chars > 0
-        else None
-    )
-
-    result = {
-        "schema_version": "2.2",
-        "success": True,
-        "source_type": "docx",
-        "file_path": docx_path,
-        "file_name": os.path.basename(docx_path),
-        "body_text": {
-            "chinese_chars": body_chinese_chars,
-            "english_words": body_english_words,
-            "total_count": body_total,
-        },
-        "review": {
-            "chinese_chars": review_chinese_chars,
-            "english_words": review_english_words,
-            "total_count": review_total,
-        },
-        "total": {
-            "chinese_chars": body_chinese_chars + review_chinese_chars,
-            "english_words": body_english_words + review_english_words,
-            "total_count": grand_total,
-        },
-        "sections": section_stats,
-        "targets": {
-            "body_target": body_target_chars,
-            "review_target": review_target_chars,
-            "review_in_scope": bool(review_in_scope),
-            "body_completion_rate": body_rate,
-            "review_completion_rate": review_rate,
-        },
-        # Legacy compatibility fields for existing SKILL.md pseudo-code.
-        "chinese_chars": body_chinese_chars,
-        "english_words": body_english_words,
-        "total_chars": body_total,
-        "completion_rate": body_rate,
-        "is_review": False,
-    }
-    
-    return result
+        return {"success": False, "error": f"不支持的文件类型：{path}（支持 .md 文件或目录）"}
 
 
 def format_report(result):
     """格式化统计报告为可读文本"""
     if not result.get('success'):
         return f"❌ 统计失败：{result.get('error')}"
-    
-    source_type = result.get("source_type", "docx")
-    type_label = {"docx": "Word 文档", "markdown": "Markdown 文件", "atomic_dir": "原子化目录"}.get(source_type, "文档")
+
+    source_type = result.get("source_type", "markdown")
+    type_label = {"markdown": "Markdown 文件", "atomic_dir": "原子化目录"}.get(source_type, "文档")
 
     lines = []
     lines.append("=" * 60)
@@ -640,7 +457,7 @@ def format_report(result):
     if source_type == "atomic_dir":
         lines.append(f"   文件数：{result.get('file_count', '?')}")
     lines.append("")
-    
+
     # 正文统计
     body = result['body_text']
     lines.append("📝 正文统计：")
@@ -651,7 +468,7 @@ def format_report(result):
     lines.append(f"   完成率：{result['targets']['body_completion_rate']*100:.1f}% "
                 f"（目标 {body_target:,} 字）")
     lines.append("")
-    
+
     # 综述统计
     review = result['review']
     review_target = result.get("targets", {}).get("review_target", 0)
@@ -667,7 +484,7 @@ def format_report(result):
         else:
             lines.append("   说明：综述不纳入当前正文考核范围")
         lines.append("")
-    
+
     # 总计
     total = result['total']
     lines.append("📊 总计：")
@@ -675,7 +492,7 @@ def format_report(result):
     lines.append(f"   英文单词：{total['english_words']:,} 词")
     lines.append(f"   合计：{total['total_count']:,}")
     lines.append("")
-    
+
     # 章节详情
     if result.get('sections'):
         lines.append("📑 章节详情：")
@@ -695,16 +512,16 @@ def format_report(result):
                 lines.append(f"   ❌ {pf['file']}：{pf['error']}")
             else:
                 lines.append(f"   {pf['file']}  →  {pf.get('total_count', 0):,}")
-    
+
     lines.append("=" * 60)
-    
+
     return "\n".join(lines)
 
 
 def main():
     """命令行入口"""
-    parser = argparse.ArgumentParser(description="文档字数统计工具（支持 .docx / .md / 原子化目录）")
-    parser.add_argument("path", help="待统计的文件或目录路径（.docx / .md / atomic_md 目录）")
+    parser = argparse.ArgumentParser(description="Markdown 字数统计工具（支持 .md 文件 / 原子化目录）")
+    parser.add_argument("path", help="待统计的 .md 文件或目录路径")
     parser.add_argument("--output", choices=["json", "text"], default="text", help="输出格式")
     parser.add_argument("--profile", help="thesis_profile.json 路径（可选）")
     parser.add_argument("--body-target", type=int, help="覆盖正文目标字数")
@@ -713,7 +530,7 @@ def main():
     args = parser.parse_args()
     target_path = args.path
     output_format = args.output
-    
+
     if not os.path.exists(target_path):
         if output_format == 'json':
             print(json.dumps({
@@ -725,7 +542,7 @@ def main():
         else:
             print(f"❌ 路径不存在：{target_path}")
         sys.exit(1)
-    
+
     profile_project_root = infer_project_root_for_profile(target_path)
     try:
         profile, _ = load_profile(profile_project_root, args.profile)
@@ -745,7 +562,6 @@ def main():
     default_review_target = int(targets.get("review_target_chars", 0) or 0)
     review_target = int(args.review_target if args.review_target is not None else default_review_target)
 
-    # 统一入口：自动检测路径类型
     result = count_words(
         target_path,
         exclude_references=True,
@@ -753,18 +569,13 @@ def main():
         review_target_chars=review_target,
         review_in_scope=review_in_scope,
     )
-    
-    # 输出结果
+
     if output_format == 'json':
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:
         print(format_report(result))
-    
-    # 返回退出码（用于脚本判断）
-    if result.get('success'):
-        sys.exit(0)
-    else:
-        sys.exit(1)
+
+    sys.exit(0 if result.get('success') else 1)
 
 
 if __name__ == '__main__':

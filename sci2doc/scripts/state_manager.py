@@ -970,14 +970,14 @@ def detect_default_docx(project_root):
 
 
 def load_count_words_module(project_root):
-    script_path = resolve_path(project_root, "scripts/count_words_docx.py")
+    script_path = resolve_path(project_root, "scripts/count_words.py")
     if not os.path.exists(script_path):
-        script_path = os.path.join(os.path.dirname(__file__), "count_words_docx.py")
+        script_path = os.path.join(os.path.dirname(__file__), "count_words.py")
     import importlib.util
 
-    spec = importlib.util.spec_from_file_location("sci2doc_count_words_docx", script_path)
+    spec = importlib.util.spec_from_file_location("sci2doc_count_words", script_path)
     if spec is None or spec.loader is None:
-        raise RuntimeError("failed to load count_words_docx module")
+        raise RuntimeError("failed to load count_words module")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -986,9 +986,7 @@ def load_count_words_module(project_root):
 def word_count(project_root, docx=None, sync_project_state=True):
     target = docx
     if target is None:
-        target = detect_default_docx(project_root)
-    if target is None:
-        # 尝试 atomic_md 目录作为 fallback
+        # 优先使用 atomic_md 目录
         atomic_dir = resolve_path(project_root, "atomic_md")
         if os.path.isdir(atomic_dir):
             target = atomic_dir

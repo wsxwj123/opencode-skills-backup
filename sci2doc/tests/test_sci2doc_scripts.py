@@ -11,7 +11,7 @@ from docx.enum.style import WD_STYLE_TYPE
 
 
 ROOT = "/Users/wsxwj/.config/opencode/skills/sci2doc"
-COUNT_SCRIPT = f"{ROOT}/scripts/count_words_docx.py"
+COUNT_SCRIPT = f"{ROOT}/scripts/count_words.py"
 MD_SCRIPT = f"{ROOT}/scripts/markdown_to_docx.py"
 ATOMIC_MD_SCRIPT = f"{ROOT}/scripts/atomic_md_workflow.py"
 MERGE_SCRIPT = f"{ROOT}/scripts/merge_chapters.py"
@@ -325,30 +325,26 @@ class Sci2DocScriptsTests(unittest.TestCase):
 
     def test_count_words_handles_abstract_then_body(self):
         with tempfile.TemporaryDirectory() as td:
-            p = Path(td) / "test.docx"
-            d = Document()
-            d.add_heading("中文摘要", level=1)
-            d.add_paragraph("这里是摘要内容")
-            d.add_heading("第一章 绪论", level=1)
-            d.add_paragraph("这里是正文内容")
-            d.save(p)
+            p = Path(td) / "test.md"
+            p.write_text(
+                "# 中文摘要\n\n这里是摘要内容\n\n# 第一章 绪论\n\n这里是正文内容\n",
+                encoding="utf-8",
+            )
 
             proc = run_py(COUNT_SCRIPT, [str(p), "--output", "json"])
             self.assertEqual(proc.returncode, 0, msg=proc.stdout + proc.stderr)
             payload = json.loads(proc.stdout)
             self.assertGreater(payload["body_text"]["chinese_chars"], 0)
-            self.assertEqual(payload["schema_version"], "2.2")
+            self.assertEqual(payload["schema_version"], "3.0")
             self.assertEqual(payload["targets"]["body_target"], 80000)
 
     def test_count_words_recognizes_review_heading_with_chapter_prefix(self):
         with tempfile.TemporaryDirectory() as td:
-            p = Path(td) / "review.docx"
-            d = Document()
-            d.add_heading("第二章 文献综述", level=1)
-            d.add_paragraph("这是综述内容")
-            d.add_heading("第三章 研究方法", level=1)
-            d.add_paragraph("这是正文内容")
-            d.save(p)
+            p = Path(td) / "review.md"
+            p.write_text(
+                "# 第二章 文献综述\n\n这是综述内容\n\n# 第三章 研究方法\n\n这是正文内容\n",
+                encoding="utf-8",
+            )
 
             proc = run_py(COUNT_SCRIPT, [str(p), "--output", "json"])
             self.assertEqual(proc.returncode, 0, msg=proc.stdout + proc.stderr)
@@ -357,17 +353,13 @@ class Sci2DocScriptsTests(unittest.TestCase):
             self.assertGreater(payload["body_text"]["chinese_chars"], 0)
 
     def test_count_words_recognizes_chinese_heading_style_name(self):
+        """md 模式下中文标题也能被识别为综述章节。"""
         with tempfile.TemporaryDirectory() as td:
-            p = Path(td) / "review_cn_style.docx"
-            d = Document()
-            h1 = d.styles.add_style("标题 1", WD_STYLE_TYPE.PARAGRAPH)
-            p1 = d.add_paragraph("第二章 文献综述")
-            p1.style = h1
-            d.add_paragraph("这是综述内容")
-            p2 = d.add_paragraph("第三章 研究方法")
-            p2.style = h1
-            d.add_paragraph("这是正文内容")
-            d.save(p)
+            p = Path(td) / "review_cn_style.md"
+            p.write_text(
+                "# 第二章 文献综述\n\n这是综述内容\n\n# 第三章 研究方法\n\n这是正文内容\n",
+                encoding="utf-8",
+            )
 
             proc = run_py(COUNT_SCRIPT, [str(p), "--output", "json"])
             self.assertEqual(proc.returncode, 0, msg=proc.stdout + proc.stderr)
@@ -382,13 +374,10 @@ class Sci2DocScriptsTests(unittest.TestCase):
                 json.dumps({"targets": {"body_target_chars": 86000}}, ensure_ascii=False, indent=2),
                 encoding="utf-8",
             )
-            out_dir = root / "03_合并文档"
+            out_dir = root / "atomic_md"
             out_dir.mkdir(parents=True, exist_ok=True)
-            p = out_dir / "完整博士论文.docx"
-            d = Document()
-            d.add_heading("第一章 绪论", level=1)
-            d.add_paragraph("这里是正文")
-            d.save(str(p))
+            p = out_dir / "全文.md"
+            p.write_text("# 第一章 绪论\n\n这里是正文\n", encoding="utf-8")
 
             proc = run_py(COUNT_SCRIPT, [str(p), "--output", "json"])
             self.assertEqual(proc.returncode, 0, msg=proc.stdout + proc.stderr)
@@ -841,27 +830,10 @@ class Sci2DocScriptsTests(unittest.TestCase):
     def test_state_word_count_syncs_into_project_state(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
-            merged_dir = root / "03_合并文档"
-            merged_dir.mkdir(parents=True, exist_ok=True)
-
-            (root / "project_state.json").write_text(
-                json.dumps(
-                    {
-                        "project_info": {"save_path": str(root)},
-                        "progress": {"status": "writing"},
-                        "stats": {},
-                    },
-                    ensure_ascii=False,
-                    indent=2,
-                ),
-                encoding="utf-8",
-            )
-
-            docx_path = merged_dir / "完整博士论文.docx"
-            d = Document()
-            d.add_heading("第一章 绪论", level=1)
-            d.add_paragraph("这里是正文内容")
-            d.save(str(docx_path))
+            atomic_dir = root / "atomic_md"
+            atomic_dir.mkdir(parents=True, exist_ok=True)
+            md_path = atomic_dir / "1.1_绪论.md"
+            md_path.write_text("# 第一章 绪论\n\n这里是正文内容\n", encoding="utf-8")
 
             proc = run_py(STATE_SCRIPT, ["--project-root", str(root), "word-count"])
             self.assertEqual(proc.returncode, 0, msg=proc.stdout + proc.stderr)
@@ -944,15 +916,12 @@ class Sci2DocScriptsTests(unittest.TestCase):
             profile["targets"]["references_min_count"] = 120
             profile_path.write_text(json.dumps(profile, ensure_ascii=False, indent=2), encoding="utf-8")
 
-            docx_path = root / "第2章_测试.docx"
-            d = Document()
-            d.add_heading("第二章 方法", level=1)
-            d.add_paragraph("这是章节正文内容。")
-            d.save(str(docx_path))
+            md_path = root / "第2章_测试.md"
+            md_path.write_text("# 第二章 方法\n\n这是章节正文内容。\n", encoding="utf-8")
 
             proc = run_py(
                 ATOMIC_MD_SCRIPT,
-                ["--project-root", str(root), "self-check", "--docx", str(docx_path)],
+                ["--project-root", str(root), "self-check", "--target", str(md_path)],
             )
             self.assertIn(proc.returncode, (0, 1), msg=proc.stdout + proc.stderr)
             payload = json.loads(proc.stdout)
@@ -960,10 +929,7 @@ class Sci2DocScriptsTests(unittest.TestCase):
                 payload["word_count"].get("targets", {}).get("body_target"),
                 86000,
             )
-            self.assertEqual(
-                payload["quality_check"].get("targets", {}).get("references_min_count"),
-                0,
-            )
+            self.assertTrue(payload["checks"].get("quality_skipped"))
             self.assertEqual(payload.get("effective_body_target"), 86000)
 
     def test_atomic_md_self_check_uses_chapter_target_and_can_pass(self):
@@ -981,22 +947,19 @@ class Sci2DocScriptsTests(unittest.TestCase):
             profile.setdefault("chapter_targets", {})["2"] = 10
             profile_path.write_text(json.dumps(profile, ensure_ascii=False, indent=2), encoding="utf-8")
 
-            docx_path = root / "第2章_测试.docx"
-            d = Document()
-            d.add_heading("第二章 方法", level=1)
-            d.add_paragraph("这是章节正文内容，超过十个字。")
-            d.save(str(docx_path))
+            md_path = root / "第2章_测试.md"
+            md_path.write_text("# 第二章 方法\n\n这是章节正文内容，超过十个字。\n", encoding="utf-8")
 
             proc = run_py(
                 ATOMIC_MD_SCRIPT,
-                ["--project-root", str(root), "self-check", "--docx", str(docx_path)],
+                ["--project-root", str(root), "self-check", "--target", str(md_path)],
             )
             self.assertEqual(proc.returncode, 0, msg=proc.stdout + proc.stderr)
             payload = json.loads(proc.stdout)
             self.assertTrue(payload.get("ok"))
             self.assertEqual(payload.get("effective_body_target"), 10)
             self.assertTrue(payload.get("checks", {}).get("word_passed"))
-            self.assertEqual(payload["quality_check"].get("targets", {}).get("references_min_count"), 0)
+            self.assertTrue(payload["checks"].get("quality_skipped"))
 
     def test_state_reports_structured_error_for_invalid_json(self):
         with tempfile.TemporaryDirectory() as td:
@@ -1020,13 +983,10 @@ class Sci2DocScriptsTests(unittest.TestCase):
             )
             self.assertEqual(init_proc.returncode, 0, msg=init_proc.stdout + init_proc.stderr)
 
-            merged_dir = root / "03_合并文档"
-            merged_dir.mkdir(parents=True, exist_ok=True)
-            docx_path = merged_dir / "完整博士论文.docx"
-            d = Document()
-            d.add_heading("第一章 绪论", level=1)
-            d.add_paragraph("这里是并发字数统计正文内容")
-            d.save(str(docx_path))
+            atomic_dir = root / "atomic_md"
+            atomic_dir.mkdir(parents=True, exist_ok=True)
+            md_path = atomic_dir / "1.1_绪论.md"
+            md_path.write_text("# 第一章 绪论\n\n这里是并发字数统计正文内容\n", encoding="utf-8")
 
             calls = 6
             with ThreadPoolExecutor(max_workers=calls) as pool:
@@ -1138,6 +1098,107 @@ class Sci2DocScriptsTests(unittest.TestCase):
             payload = extract_json_from_stdout(rollback_proc.stdout)
             self.assertTrue(payload.get("strict_mirror"))
             self.assertFalse(extra.exists())
+
+
+class TestMethodsTableCheck(unittest.TestCase):
+    """测试 check_methods_sections_have_tables 函数"""
+
+    def _make_section_file(self, tmp, filename, content):
+        """创建一个模拟的 section file 对象"""
+        import sys, os
+        script_dir = os.path.join(ROOT, "scripts")
+        if script_dir not in sys.path:
+            sys.path.insert(0, script_dir)
+        from atomic_md_workflow import SectionFile
+        p = Path(tmp) / filename
+        p.write_text(content, encoding="utf-8")
+        # 解析编号
+        parts = filename.split("_", 1)
+        number_text = parts[0]
+        title = parts[1].replace(".md", "") if len(parts) > 1 else ""
+        number = tuple(int(x) for x in number_text.split("."))
+        return SectionFile(path=p, number=number, number_text=number_text, title=title)
+
+    def _get_checker(self):
+        import sys, os
+        script_dir = os.path.join(ROOT, "scripts")
+        if script_dir not in sys.path:
+            sys.path.insert(0, script_dir)
+        from atomic_md_workflow import check_methods_sections_have_tables
+        return check_methods_sections_have_tables
+
+    def test_reagent_section_with_table_no_warning(self):
+        check = self._get_checker()
+        with tempfile.TemporaryDirectory() as tmp:
+            sf = self._make_section_file(tmp, "2.2_实验试剂与耗材.md",
+                "## 2.2 实验试剂与耗材\n\n表 2-1：主要试剂\n\n"
+                "| 试剂名称 | 规格 | 厂家 |\n|---|---|---|\n| FBS | 500mL | Gibco |\n")
+            warnings = check([sf])
+            self.assertEqual(warnings, [])
+
+    def test_reagent_section_without_table_warns(self):
+        check = self._get_checker()
+        with tempfile.TemporaryDirectory() as tmp:
+            sf = self._make_section_file(tmp, "2.2_实验试剂与耗材.md",
+                "## 2.2 实验试剂与耗材\n\n本实验使用了FBS和DMEM培养基。\n")
+            warnings = check([sf])
+            self.assertEqual(len(warnings), 1)
+            self.assertIn("试剂", warnings[0])
+            self.assertIn("管道表格", warnings[0])
+
+    def test_instrument_section_without_table_warns(self):
+        check = self._get_checker()
+        with tempfile.TemporaryDirectory() as tmp:
+            sf = self._make_section_file(tmp, "2.3_实验仪器与设备.md",
+                "## 2.3 实验仪器与设备\n\n使用了流式细胞仪。\n")
+            warnings = check([sf])
+            self.assertEqual(len(warnings), 1)
+            self.assertIn("仪器", warnings[0])
+
+    def test_grouping_section_without_table_warns(self):
+        check = self._get_checker()
+        with tempfile.TemporaryDirectory() as tmp:
+            sf = self._make_section_file(tmp, "2.4_实验分组设计.md",
+                "## 2.4 实验分组设计\n\n分为对照组和实验组。\n")
+            warnings = check([sf])
+            self.assertEqual(len(warnings), 1)
+            self.assertIn("分组", warnings[0])
+
+    def test_unrelated_section_no_warning(self):
+        check = self._get_checker()
+        with tempfile.TemporaryDirectory() as tmp:
+            sf = self._make_section_file(tmp, "2.1_引言.md",
+                "## 2.1 引言\n\n本章介绍研究背景。\n")
+            warnings = check([sf])
+            self.assertEqual(warnings, [])
+
+    def test_mixed_sections(self):
+        check = self._get_checker()
+        with tempfile.TemporaryDirectory() as tmp:
+            sf1 = self._make_section_file(tmp, "2.2_实验试剂与耗材.md",
+                "## 2.2 实验试剂与耗材\n\n| 名称 | 规格 |\n|---|---|\n| FBS | 500mL |\n")
+            sf2 = self._make_section_file(tmp, "2.3_主要仪器.md",
+                "## 2.3 主要仪器\n\n使用了PCR仪。\n")
+            sf3 = self._make_section_file(tmp, "2.1_引言.md",
+                "## 2.1 引言\n\n背景介绍。\n")
+            warnings = check([sf1, sf2, sf3])
+            self.assertEqual(len(warnings), 1)
+            self.assertIn("2.3_主要仪器.md", warnings[0])
+
+    def test_validate_includes_table_warnings(self):
+        """validate 命令输出应包含 table_warnings 字段"""
+        with tempfile.TemporaryDirectory() as tmp:
+            proj = Path(tmp)
+            ch_dir = proj / "atomic_md" / "第2章"
+            ch_dir.mkdir(parents=True)
+            (ch_dir / "2.1_引言.md").write_text("## 2.1 引言\n\n背景。\n", encoding="utf-8")
+            (ch_dir / "2.2_实验试剂.md").write_text("## 2.2 实验试剂\n\n无表格。\n", encoding="utf-8")
+            proc = run_py(ATOMIC_MD_SCRIPT, [
+                "--project-root", str(proj), "validate", "--chapter", "2"
+            ])
+            payload = extract_json_from_stdout(proc.stdout)
+            self.assertIn("table_warnings", payload)
+            self.assertTrue(len(payload["table_warnings"]) >= 1)
 
 
 if __name__ == "__main__":

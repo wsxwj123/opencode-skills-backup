@@ -109,6 +109,8 @@ Filename pattern:
 - `{section_number}_{section_title}.md`
 - Example: `2.1_研究对象.md`
 
+**Table reminder**: Any subsection presenting structured data (reagents, instruments, grouping, statistical results, etc.) **must** include a Markdown pipe table. See [Table Contract](#table-contract) for syntax. Do NOT describe tabular data in prose — use a table.
+
 Validate numbering:
 
 ```bash
@@ -177,12 +179,11 @@ python3 scripts/merge_chapters.py \
 ### 9) Full Thesis Checks
 
 ```bash
-# 字数统计（支持 .docx / .md / atomic_md 目录，自动检测路径类型）
+# 字数统计（支持 .md / atomic_md 目录，自动检测路径类型）
 python3 scripts/state_manager.py --project-root "${save_path}" word-count
 # 或直接指定路径：
-python3 scripts/count_words_docx.py "${save_path}/03_合并文档/完整博士论文.docx"
-python3 scripts/count_words_docx.py "${save_path}/atomic_md"
-python3 scripts/count_words_docx.py "${save_path}/atomic_md/第2章/2.1_引言.md"
+python3 scripts/count_words.py "${save_path}/atomic_md"
+python3 scripts/count_words.py "${save_path}/atomic_md/第2章/2.1_引言.md"
 
 python3 scripts/check_quality.py "${save_path}/03_合并文档/完整博士论文.docx" \
   --output json --enforce-full-structure
@@ -208,6 +209,8 @@ For each research chapter (Chapter 2 to Chapter N-1), keep this order:
 Rules:
 - Results & Discussion is coupled with each method experiment.
 - Do not place all results first and discuss later in a separate bulk section.
+- **材料与方法 must contain tables** for at least: 实验试剂与耗材, 实验仪器与设备, 实验分组设计. Use Markdown pipe syntax (`| col | col |`). Never describe these as prose paragraphs.
+- **结果与讨论 must contain tables** when presenting quantitative/statistical data (e.g. 各组指标比较). Use Markdown pipe syntax.
 - Marker convention in subsection markdown:
 - `[实验] EXP-2-1` in methods
 - `[对应实验] EXP-2-1` in results/discussion
@@ -269,11 +272,13 @@ Rules:
 ### Applicable Sections
 
 Three-line tables are mandatory in (but not limited to):
-- 实验试剂与耗材
-- 实验仪器与设备
-- 实验分组设计
-- 数据统计结果
+- 实验试剂与耗材 — columns: 试剂名称, 规格/货号, 生产厂家
+- 实验仪器与设备 — columns: 仪器名称, 型号, 生产厂家
+- 实验分组设计 — columns: 组别, 处理方式, 样本数
+- 数据统计结果 — columns vary by experiment
 - Any section presenting structured data
+
+**Writing rule**: If a subsection contains 3+ items sharing the same attributes (name+spec+source, group+treatment+n, etc.), it MUST be written as a Markdown pipe table, never as a prose list or paragraph.
 
 ### Quality Check
 

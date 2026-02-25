@@ -85,11 +85,10 @@ python3 scripts/atomic_md_workflow.py --project-root "${save_path}" merge-full -
 ## 10. 全文总检
 
 ```bash
-# 字数统计（支持 .docx / .md / atomic_md 目录，自动检测路径类型）
+# 字数统计（支持 .md / atomic_md 目录，自动检测路径类型）
 python3 scripts/state_manager.py --project-root "${save_path}" word-count
 # 或直接指定路径：
-python3 scripts/count_words_docx.py "${save_path}/03_合并文档/完整博士论文.docx"
-python3 scripts/count_words_docx.py "${save_path}/atomic_md"
+python3 scripts/count_words.py "${save_path}/atomic_md"
 
 python3 scripts/check_quality.py "${save_path}/03_合并文档/完整博士论文.docx" \
   --output json --enforce-full-structure
