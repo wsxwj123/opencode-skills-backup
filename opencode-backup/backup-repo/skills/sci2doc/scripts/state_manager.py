@@ -142,8 +142,10 @@ def _postwrite_abbreviation_process(project_root, chapter):
                     f.write(cleaned)
 
             report["processed_files"].append(basename)
-            report["new_abbreviations"] += result.get("registered_count", 0)
-            report["stripped_count"] += result.get("stripped_count", 0)
+            reg = result.get("registration", {})
+            strip = result.get("stripping", {})
+            report["new_abbreviations"] += reg.get("registered_count", 0)
+            report["stripped_count"] += strip.get("stripped_count", 0)
         except Exception:
             pass  # Non-fatal: abbreviation processing should not block postwrite
 
@@ -968,14 +970,14 @@ def detect_default_docx(project_root):
 
 
 def load_count_words_module(project_root):
-    script_path = resolve_path(project_root, "scripts/count_words_docx.py")
+    script_path = resolve_path(project_root, "scripts/count_words.py")
     if not os.path.exists(script_path):
-        script_path = os.path.join(os.path.dirname(__file__), "count_words_docx.py")
+        script_path = os.path.join(os.path.dirname(__file__), "count_words.py")
     import importlib.util
 
-    spec = importlib.util.spec_from_file_location("sci2doc_count_words_docx", script_path)
+    spec = importlib.util.spec_from_file_location("sci2doc_count_words", script_path)
     if spec is None or spec.loader is None:
-        raise RuntimeError("failed to load count_words_docx module")
+        raise RuntimeError("failed to load count_words module")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -984,14 +986,17 @@ def load_count_words_module(project_root):
 def word_count(project_root, docx=None, sync_project_state=True):
     target = docx
     if target is None:
-        target = detect_default_docx(project_root)
-    if target is None:
-        print(json.dumps({"success": False, "error": "no docx target found; pass --docx explicitly"}, ensure_ascii=False))
-        sys.exit(2)
+        # 优先使用 atomic_md 目录
+        atomic_dir = resolve_path(project_root, "atomic_md")
+        if os.path.isdir(atomic_dir):
+            target = atomic_dir
+        else:
+            print(json.dumps({"success": False, "error": "no target found; pass --docx explicitly or ensure atomic_md/ exists"}, ensure_ascii=False))
+            sys.exit(2)
     if not os.path.isabs(target):
         target = resolve_path(project_root, target)
     if not os.path.exists(target):
-        print(json.dumps({"success": False, "error": f"docx not found: {target}"}, ensure_ascii=False))
+        print(json.dumps({"success": False, "error": f"path not found: {target}"}, ensure_ascii=False))
         sys.exit(2)
 
     module = load_count_words_module(project_root)
@@ -1000,9 +1005,8 @@ def word_count(project_root, docx=None, sync_project_state=True):
     body_target = int(targets.get("body_target_chars", 80000))
     review_target = int(targets.get("review_target_chars", 0))
     review_in_scope = bool(targets.get("review_in_scope", False))
-    result = module.count_words_in_docx(
+    result = module.count_words(
         target,
-        exclude_review=(not review_in_scope),
         exclude_references=True,
         body_target_chars=body_target,
         review_target_chars=review_target,
@@ -1665,8 +1669,8 @@ def parse_args():
     init_p.add_argument("--source-paper", default="")
     init_p.add_argument("--copy-local-scripts", action="store_true")
 
-    wc_p = subparsers.add_parser("word-count", help="Count words from merged docx")
-    wc_p.add_argument("--docx", help="docx path; default auto-detect from project_state.save_path")
+    wc_p = subparsers.add_parser("word-count", help="Count words from docx / md / atomic_md dir")
+    wc_p.add_argument("--docx", help="target path: .docx / .md file or atomic_md directory; default auto-detect")
     wc_p.add_argument("--no-sync", action="store_true", help="Do not sync count result into project_state.json")
 
     stats_p = subparsers.add_parser("stats", help="Project dashboard")

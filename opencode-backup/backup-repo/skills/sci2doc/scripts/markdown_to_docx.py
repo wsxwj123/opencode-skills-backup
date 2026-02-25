@@ -14,12 +14,117 @@ Markdown 转 Word 工具（应用中南大学样式）
 """
 
 from docx import Document
-from docx.shared import Pt, Cm, RGBColor
+from docx.shared import Pt, Cm, RGBColor, Emu
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
-from docx.oxml.ns import qn
+from docx.oxml.ns import qn, nsdecls
+from docx.oxml import parse_xml
 import re
 import sys
 import os
+
+
+# ---------------------------------------------------------------------------
+# 三线表边框工具
+# ---------------------------------------------------------------------------
+
+def _set_cell_border(cell, **kwargs):
+    """
+    设置单元格边框。
+    kwargs 示例: top={"sz": 12, "val": "single", "color": "000000"}
+    """
+    tc = cell._tc
+    tcPr = tc.get_or_add_tcPr()
+    tcBorders = tcPr.find(qn('w:tcBorders'))
+    if tcBorders is None:
+        tcBorders = parse_xml(f'<w:tcBorders {nsdecls("w")}></w:tcBorders>')
+        tcPr.append(tcBorders)
+    for edge, attrs in kwargs.items():
+        element = tcBorders.find(qn(f'w:{edge}'))
+        if element is None:
+            element = parse_xml(
+                f'<w:{edge} {nsdecls("w")} w:val="{attrs["val"]}" '
+                f'w:sz="{attrs["sz"]}" w:space="0" w:color="{attrs["color"]}"/>'
+            )
+            tcBorders.append(element)
+        else:
+            element.set(qn('w:val'), attrs['val'])
+            element.set(qn('w:sz'), str(attrs['sz']))
+            element.set(qn('w:color'), attrs['color'])
+
+
+def _clear_cell_border(cell, edge):
+    """清除单元格某条边框"""
+    _set_cell_border(cell, **{edge: {"sz": 0, "val": "none", "color": "FFFFFF"}})
+
+
+def apply_three_line_table_borders(table, header_rows=1):
+    """
+    对 Word 表格应用三线表边框：
+    - 顶部边框 1.5pt (sz=12, 单位为 1/8 pt)
+    - 表头与表体分隔线 0.5pt (sz=4)
+    - 底部边框 1.5pt (sz=12)
+    - 无竖线，无其他横线
+    """
+    THICK = {"sz": 12, "val": "single", "color": "000000"}  # 1.5pt
+    THIN = {"sz": 4, "val": "single", "color": "000000"}    # 0.5pt
+    NONE = {"sz": 0, "val": "none", "color": "FFFFFF"}
+
+    num_rows = len(table.rows)
+    for r_idx, row in enumerate(table.rows):
+        for cell in row.cells:
+            borders = {}
+            # 竖线全部清除
+            borders['left'] = NONE
+            borders['right'] = NONE
+
+            # 顶部边框：第一行顶部 1.5pt
+            if r_idx == 0:
+                borders['top'] = THICK
+            else:
+                borders['top'] = NONE
+
+            # 表头分隔线：header_rows-1 行的底部 0.5pt
+            if r_idx == header_rows - 1:
+                borders['bottom'] = THIN
+            # 底部边框：最后一行底部 1.5pt
+            elif r_idx == num_rows - 1:
+                borders['bottom'] = THICK
+            else:
+                borders['bottom'] = NONE
+
+            _set_cell_border(cell, **borders)
+
+
+# ---------------------------------------------------------------------------
+# Markdown 管道表格解析
+# ---------------------------------------------------------------------------
+
+_PIPE_TABLE_RE = re.compile(r'^\|(.+)\|$')
+_SEPARATOR_RE = re.compile(r'^[\|\s\-:]+$')
+
+
+def _unescape_pipe(text):
+    """还原转义的管道符 \\| → |"""
+    return text.replace('\\|', '|')
+
+
+def _parse_pipe_row(line):
+    """解析管道表格行，返回单元格文本列表。支持 \\| 转义。"""
+    stripped = line.strip()
+    m = _PIPE_TABLE_RE.match(stripped)
+    if not m:
+        return None
+    inner = m.group(1)
+    # 先将转义管道替换为占位符，分割后再还原
+    placeholder = '\x00PIPE\x00'
+    inner = inner.replace('\\|', placeholder)
+    cells = [c.strip().replace(placeholder, '|') for c in inner.split('|')]
+    return cells
+
+
+def _is_separator_row(line):
+    """判断是否为分隔行（如 |---|---|）"""
+    return bool(_SEPARATOR_RE.match(line.strip()))
 
 
 def parse_markdown_line(line):
@@ -164,13 +269,57 @@ def markdown_to_docx(md_content, output_path, chapter_num=None):
         section.left_margin = Cm(3.17)
         section.right_margin = Cm(3.17)
         
-        # 逐行解析
+        # 逐行解析，支持管道表格块
         lines = md_content.split('\n')
-        for line in lines:
+        i = 0
+        while i < len(lines):
+            line = lines[i]
             line_type, content, level = parse_markdown_line(line)
             
+            # 检测管道表格起始
+            if _parse_pipe_row(line) is not None:
+                # 收集连续的管道表格行
+                table_lines = []
+                while i < len(lines) and (_parse_pipe_row(lines[i]) is not None or _is_separator_row(lines[i])):
+                    table_lines.append(lines[i])
+                    i += 1
+                
+                # 解析表头和数据行（跳过分隔行）
+                data_rows = []
+                for tl in table_lines:
+                    if _is_separator_row(tl):
+                        continue
+                    cells = _parse_pipe_row(tl)
+                    if cells:
+                        data_rows.append(cells)
+                
+                if data_rows:
+                    # 统一列数
+                    max_cols = max(len(r) for r in data_rows)
+                    for r in data_rows:
+                        while len(r) < max_cols:
+                            r.append('')
+                    
+                    # 创建 Word 表格
+                    table = doc.add_table(rows=len(data_rows), cols=max_cols)
+                    for r_idx, row_data in enumerate(data_rows):
+                        for c_idx, cell_text in enumerate(row_data):
+                            cell = table.cell(r_idx, c_idx)
+                            cell.text = cell_text
+                            # 设置单元格字体
+                            for paragraph in cell.paragraphs:
+                                paragraph.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                                for run in paragraph.runs:
+                                    set_run_font(run, 'Times New Roman', 'SimSun', 10.5,
+                                                 bold=(r_idx == 0))
+                    
+                    # 应用三线表边框
+                    apply_three_line_table_borders(table, header_rows=1)
+                continue
+            
             if line_type == 'empty':
-                continue  # 跳过空行，不添加到文档
+                i += 1
+                continue
             
             elif line_type == 'heading1':
                 para = doc.add_heading(content, level=1)
@@ -189,9 +338,11 @@ def markdown_to_docx(md_content, output_path, chapter_num=None):
                 apply_csu_caption_style(para)
             
             elif line_type == 'paragraph':
-                if content:  # 只添加非空段落
+                if content:
                     para = doc.add_paragraph(content)
                     apply_csu_normal_style(para)
+            
+            i += 1
         
         # 保存文档
         output_dir = os.path.dirname(output_path)

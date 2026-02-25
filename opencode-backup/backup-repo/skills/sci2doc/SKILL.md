@@ -48,7 +48,16 @@ The workflow is built around:
     - Bottom border: 1.5pt solid
     - No vertical lines, no other horizontal lines
     - Use Markdown `| col1 | col2 |` syntax in atomic `.md` files; `markdown_to_docx.py` auto-converts to Word three-line tables.
-    - Table captions use five-point KaiTi (楷体小五号), centered above the table.
+    - Table captions use five-point KaiTi (楷体五号, 10.5pt), centered above the table.
+16. Writing style constraints are mandatory:
+    - No em dashes (——). Use commas, periods, or restructure the sentence instead.
+    - Statements only, no rhetorical or direct questions in body text. Every sentence must be declarative.
+    - Result descriptions must be objective, fair, and neutral. No subjective adjectives (e.g. 令人惊讶的、显著优于、远超预期). State data and let readers judge.
+    - Result discussions must be correct, precise, and provide extended analysis (e.g. compare with prior work, explain mechanisms, note limitations).
+    - Language must be plain and accessible. Avoid overly formal/literary phrasing, archaic words, and jargon without explanation.
+    - No metaphors of any kind (e.g. 如同、好比、仿佛、犹如、像...一样、...的桥梁、...的基石).
+    - No parallelism/排比 constructions (e.g. repeating sentence patterns for rhetorical effect).
+    - Use `check_quality.py` `check_writing_style()` to auto-detect violations.
 
 ## Single Source of Truth
 
@@ -99,6 +108,8 @@ Store subsection files under:
 Filename pattern:
 - `{section_number}_{section_title}.md`
 - Example: `2.1_研究对象.md`
+
+**Table reminder**: Any subsection presenting structured data (reagents, instruments, grouping, statistical results, etc.) **must** include a Markdown pipe table. See [Table Contract](#table-contract) for syntax. Do NOT describe tabular data in prose — use a table.
 
 Validate numbering:
 
@@ -168,7 +179,12 @@ python3 scripts/merge_chapters.py \
 ### 9) Full Thesis Checks
 
 ```bash
+# 字数统计（支持 .md / atomic_md 目录，自动检测路径类型）
 python3 scripts/state_manager.py --project-root "${save_path}" word-count
+# 或直接指定路径：
+python3 scripts/count_words.py "${save_path}/atomic_md"
+python3 scripts/count_words.py "${save_path}/atomic_md/第2章/2.1_引言.md"
+
 python3 scripts/check_quality.py "${save_path}/03_合并文档/完整博士论文.docx" \
   --output json --enforce-full-structure
 ```
@@ -193,6 +209,8 @@ For each research chapter (Chapter 2 to Chapter N-1), keep this order:
 Rules:
 - Results & Discussion is coupled with each method experiment.
 - Do not place all results first and discuss later in a separate bulk section.
+- **材料与方法 must contain tables** for at least: 实验试剂与耗材, 实验仪器与设备, 实验分组设计. Use Markdown pipe syntax (`| col | col |`). Never describe these as prose paragraphs.
+- **结果与讨论 must contain tables** when presenting quantitative/statistical data (e.g. 各组指标比较). Use Markdown pipe syntax.
 - Marker convention in subsection markdown:
 - `[实验] EXP-2-1` in methods
 - `[对应实验] EXP-2-1` in results/discussion
@@ -254,11 +272,13 @@ Rules:
 ### Applicable Sections
 
 Three-line tables are mandatory in (but not limited to):
-- 实验试剂与耗材
-- 实验仪器与设备
-- 实验分组设计
-- 数据统计结果
+- 实验试剂与耗材 — columns: 试剂名称, 规格/货号, 生产厂家
+- 实验仪器与设备 — columns: 仪器名称, 型号, 生产厂家
+- 实验分组设计 — columns: 组别, 处理方式, 样本数
+- 数据统计结果 — columns vary by experiment
 - Any section presenting structured data
+
+**Writing rule**: If a subsection contains 3+ items sharing the same attributes (name+spec+source, group+treatment+n, etc.), it MUST be written as a Markdown pipe table, never as a prose list or paragraph.
 
 ### Quality Check
 
@@ -296,7 +316,7 @@ All subsequent occurrences use bare `PCR` only. Never re-expand.
    - Registers new ones with chapter/section metadata
    - Strips redundant expansions in non-first-occurrence chapters
 3. **Before final merge**: Run `abbreviation_registry.py validate` to confirm cross-references.
-4. **Front matter**: Generate the abbreviation table page with `abbreviation_registry.py table` or pass `--abbreviation-table` to `markdown_to_docx.py`.
+4. **Front matter**: Generate the abbreviation table page with `abbreviation_registry.py table`.
 
 ### CLI Quick Reference
 

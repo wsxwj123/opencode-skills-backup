@@ -5,7 +5,8 @@
     "oh-my-opencode-slim",
     "./plugins/superpowers.js",
     "./plugins/chinese-settings.js",
-    "./plugins/memory-system.js"
+    "./plugins/memory-system.js",
+    "@0xsero/opencode-queue"
   ],
   "mcp": {
     "memory": {

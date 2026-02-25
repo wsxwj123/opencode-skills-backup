@@ -112,6 +112,43 @@ def check_first_heading_matches_filename(section_file):
     return [f"{section_file.path.name}: 未找到二级标题（格式示例：## {section_file.number_text} 小节标题）"]
 
 
+# 方法章节表格存在性检查
+_PIPE_TABLE_LINE_RE = re.compile(r"^\|.+\|$")
+_METHODS_TABLE_KEYWORDS = ["试剂", "耗材", "仪器", "设备", "分组"]
+
+
+def check_methods_sections_have_tables(section_files):
+    """检查材料与方法相关小节是否包含 Markdown 管道表格。
+
+    对文件名或标题中包含关键词（试剂/耗材/仪器/设备/分组）的小节，
+    要求至少存在一个 Markdown 管道表格（``| col | col |``）。
+    返回警告列表（不阻断，但会在报告中显示）。
+    """
+    warnings = []
+    for sf in section_files:
+        name_lower = sf.path.name.lower()
+        title_lower = (sf.title or "").lower()
+        combined = name_lower + title_lower
+        matched_kw = [kw for kw in _METHODS_TABLE_KEYWORDS if kw in combined]
+        if not matched_kw:
+            continue
+        try:
+            text = sf.path.read_text(encoding="utf-8")
+        except Exception:
+            continue
+        has_table = any(
+            _PIPE_TABLE_LINE_RE.match(line.strip())
+            for line in text.splitlines()
+            if not re.match(r"^\|[-:\s|]+\|$", line.strip())  # skip separator rows
+        )
+        if not has_table:
+            warnings.append(
+                f"{sf.path.name}: 含关键词「{'、'.join(matched_kw)}」但未发现 Markdown 管道表格，"
+                f"材料与方法相关小节应使用三线表呈现结构化数据"
+            )
+    return warnings
+
+
 def normalize_title_text(text):
     return re.sub(r"\s+", "", (text or ""))
 
@@ -170,6 +207,9 @@ def validate(
     if enforce_research_structure:
         errors.extend(validate_research_chapter_sections(project_root, files, profile_path=profile_path))
 
+    # 检查方法小节是否包含表格（警告级别，不阻断）
+    table_warnings = check_methods_sections_have_tables(files)
+
     payload = {
         "ok": len(errors) == 0,
         "chapter": str(chapter),
@@ -177,6 +217,7 @@ def validate(
         "file_count": len(files),
         "files": [f.path.name for f in files],
         "errors": errors,
+        "table_warnings": table_warnings,
     }
     print(json.dumps(payload, ensure_ascii=False))
     return 0 if not errors else 2
@@ -422,34 +463,32 @@ def infer_chapter_from_path(docx_path):
     return None
 
 
-def self_check(project_root, docx_path, profile_path=None, chapter=None):
-    path = Path(docx_path)
+def self_check(project_root, target_path, profile_path=None, chapter=None):
+    path = Path(target_path)
     if not path.exists():
-        print(json.dumps({"ok": False, "error": "docx_not_found", "docx_path": str(path)}, ensure_ascii=False))
+        print(json.dumps({"ok": False, "error": "path_not_found", "path": str(path)}, ensure_ascii=False))
         return 2
 
     try:
-        from count_words_docx import count_words_in_docx
-        from check_quality import generate_quality_report
+        from count_words import count_words
     except Exception:
         script_dir = Path(__file__).resolve().parent
         sys.path.insert(0, str(script_dir))
-        from count_words_docx import count_words_in_docx
-        from check_quality import generate_quality_report
+        from count_words import count_words
 
     try:
         profile, _ = load_profile(project_root, profile_path)
     except Exception as e:
         print(
             json.dumps(
-                {"ok": False, "error": "profile_load_failed", "docx_path": str(path), "detail": str(e)},
+                {"ok": False, "error": "profile_load_failed", "path": str(path), "detail": str(e)},
                 ensure_ascii=False,
             )
         )
         return 2
     targets = profile.get("targets", {}) if isinstance(profile, dict) else {}
     chapter_targets = profile.get("chapter_targets", {}) if isinstance(profile, dict) else {}
-    chapter_id = str(chapter) if chapter is not None else infer_chapter_from_path(docx_path)
+    chapter_id = str(chapter) if chapter is not None else infer_chapter_from_path(target_path)
     body_target = int(targets.get("body_target_chars", 80000))
     if isinstance(chapter_targets, dict) and chapter_id and chapter_id in chapter_targets:
         body_target = int(chapter_targets.get(chapter_id))
@@ -458,27 +497,37 @@ def self_check(project_root, docx_path, profile_path=None, chapter=None):
     references_min_count = int(targets.get("references_min_count", 80))
     min_chapters = int(targets.get("min_chapters", 5))
     if chapter_id:
-        # 章节自检阶段不要求达到“全文参考文献下限”。
+        # 章节自检阶段不要求达到"全文参考文献下限"。
         references_min_count = 0
 
-    wc = count_words_in_docx(
+    wc = count_words(
         str(path),
-        exclude_review=(not review_in_scope),
         exclude_references=True,
         body_target_chars=body_target,
         review_target_chars=review_target,
         review_in_scope=review_in_scope,
     )
-    qr = generate_quality_report(
-        str(path),
-        verbose=False,
-        body_target_chars=body_target,
-        review_target_chars=review_target,
-        review_in_scope=review_in_scope,
-        references_min_count=references_min_count,
-        min_chapters=min_chapters,
-        enforce_full_structure=False,
-    )
+
+    # 质量报告仅在 docx 文件时运行（md 模式下跳过）
+    qr = {"success": True, "overall_score": 100, "issue_summary": {"error": 0}}
+    is_docx = str(path).lower().endswith(".docx")
+    if is_docx:
+        try:
+            from check_quality import generate_quality_report
+        except Exception:
+            script_dir = Path(__file__).resolve().parent
+            sys.path.insert(0, str(script_dir))
+            from check_quality import generate_quality_report
+        qr = generate_quality_report(
+            str(path),
+            verbose=False,
+            body_target_chars=body_target,
+            review_target_chars=review_target,
+            review_in_scope=review_in_scope,
+            references_min_count=references_min_count,
+            min_chapters=min_chapters,
+            enforce_full_structure=False,
+        )
 
     body_completion_rate = float(wc.get("targets", {}).get("body_completion_rate", 0.0) or 0.0)
     word_passed = bool(wc.get("success")) and body_completion_rate >= 1.0
@@ -488,18 +537,31 @@ def self_check(project_root, docx_path, profile_path=None, chapter=None):
         and int(qr.get("issue_summary", {}).get("error", 0) or 0) == 0
     )
 
+    # md 模式下也检查方法小节是否包含表格
+    table_warnings = []
+    if chapter_id:
+        try:
+            cdir = default_chapter_dir(project_root, int(chapter_id))
+            if cdir.exists():
+                files = discover_section_files(cdir)
+                table_warnings = check_methods_sections_have_tables(files)
+        except Exception:
+            pass
+
     payload = {
         "ok": word_passed and quality_passed,
-        "docx_path": str(path),
+        "path": str(path),
         "chapter": chapter_id,
         "effective_body_target": body_target,
         "checks": {
             "word_passed": word_passed,
             "quality_passed": quality_passed,
+            "quality_skipped": not is_docx,
             "body_completion_rate": body_completion_rate,
             "overall_score": qr.get("overall_score"),
             "error_count": qr.get("issue_summary", {}).get("error"),
         },
+        "table_warnings": table_warnings,
         "word_count": wc,
         "quality_check": qr,
     }
@@ -561,7 +623,8 @@ def parse_args():
     vm.add_argument("--chapter-dir", help="自定义章节原子文件目录")
 
     s = sub.add_parser("self-check", help="章节完成后立即自检（字数+质量）")
-    s.add_argument("--docx", required=True, help="章节 docx 路径")
+    s.add_argument("--docx", dest="target", help="待检查的 .md 文件或目录路径")
+    s.add_argument("--target", dest="target", help="待检查的 .md 文件或目录路径")
     s.add_argument("--profile", help="thesis_profile.json 路径（可选）")
     s.add_argument("--chapter", help="章节号（可选，不提供时从文件名推断）")
 
@@ -612,7 +675,11 @@ def main():
         )
         sys.exit(code)
     if args.command == "self-check":
-        sys.exit(self_check(root, args.docx, args.profile, args.chapter))
+        target = args.target
+        if not target:
+            print(json.dumps({"ok": False, "error": "missing --target or --docx"}, ensure_ascii=False))
+            sys.exit(2)
+        sys.exit(self_check(root, target, args.profile, args.chapter))
     if args.command == "section-snapshot":
         sys.exit(section_snapshot(root, args.chapter, args.section))
 

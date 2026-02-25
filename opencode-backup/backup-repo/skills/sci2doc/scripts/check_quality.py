@@ -15,6 +15,7 @@
 """
 
 from docx import Document
+from docx.oxml.ns import qn
 import argparse
 import sys
 import os
@@ -30,58 +31,13 @@ except Exception:  # pragma: no cover
         sys.path.insert(0, script_dir)
     from thesis_profile import load_profile
 
-
-def normalize_text(value):
-    return re.sub(r"\s+", "", (value or "").lower())
-
-
-def heading_level(style_name):
-    if not style_name:
-        return None
-    m = re.match(r"^(?:Heading|标题)\s*(\d+)$", style_name, flags=re.IGNORECASE)
-    if not m:
-        return None
-    try:
-        return int(m.group(1))
-    except ValueError:
-        return None
-
-
-def classify_heading(text):
-    t = normalize_text(text)
-    if not t:
-        return "body"
-    chapter_prefix_cn = r"(第[一二三四五六七八九十百千万0-9]+章)?"
-    chapter_prefix_en = r"(chapter[0-9ivxlcdm]+)?"
-    patterns = {
-        "review": [
-            rf"^{chapter_prefix_cn}综述$",
-            rf"^{chapter_prefix_cn}文献综述$",
-            rf"^{chapter_prefix_en}literaturereview$",
-        ],
-        "references": [
-            rf"^{chapter_prefix_cn}参考文献$",
-            rf"^{chapter_prefix_en}references$",
-        ],
-        "toc": [r"^目录$", r"tableofcontents", r"^contents$"],
-        "abstract": [
-            rf"^{chapter_prefix_cn}(中文|英文)?摘要$",
-            rf"^{chapter_prefix_en}abstract$",
-        ],
-        "acknowledgement": [
-            rf"^{chapter_prefix_cn}致谢$",
-            rf"^{chapter_prefix_en}acknowledg(e)?ment$",
-        ],
-        "appendix": [
-            rf"^{chapter_prefix_cn}附录$",
-            rf"^{chapter_prefix_en}appendix$",
-        ],
-    }
-    for section_type, regex_list in patterns.items():
-        for regex in regex_list:
-            if re.search(regex, t):
-                return section_type
-    return "body"
+try:
+    from shared_utils import normalize_text, heading_level, classify_heading, infer_project_root_for_profile
+except ImportError:  # pragma: no cover
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    if script_dir not in sys.path:
+        sys.path.insert(0, script_dir)
+    from shared_utils import normalize_text, heading_level, classify_heading, infer_project_root_for_profile
 
 
 def line_spacing_pt(paragraph):
@@ -504,6 +460,143 @@ def check_inline_citations(doc):
     return issues
 
 
+# ---------------------------------------------------------------------------
+# 写作风格检测
+# ---------------------------------------------------------------------------
+
+_STYLE_CHECKS = [
+    # (compiled_regex, level, category, message, suggestion)
+    (
+        re.compile(r'——'),
+        'error', '标点规范',
+        '使用了破折号（——）',
+        '用逗号、句号或重组句子代替破折号'
+    ),
+    (
+        # 正文中的问号（排除引用他人原话的情况）
+        re.compile(r'[？?]'),
+        'warning', '陈述规范',
+        '正文中出现问句',
+        '正文应全部使用陈述句，不使用疑问句或反问句'
+    ),
+    (
+        # 比喻词
+        re.compile(r'如同|好比|仿佛|犹如|像[^素片].*?一样|恰似|宛如|宛若|好像(?!素)'),
+        'error', '修辞规范',
+        '使用了比喻修辞',
+        '删除比喻表达，直接陈述事实'
+    ),
+    (
+        # 常见比喻名词（...的桥梁/基石/钥匙/引擎/灯塔）
+        re.compile(r'的(?:桥梁|基石|钥匙|引擎|灯塔|摇篮|沃土|温床|催化剂|助推器|风向标)'),
+        'error', '修辞规范',
+        '使用了比喻性名词',
+        '用准确的功能描述替代比喻性名词'
+    ),
+    (
+        # 主观夸大形容词
+        re.compile(r'令人(?:惊讶|震惊|瞩目|振奋|鼓舞)|远超预期|出人意料|前所未有|史无前例|无与伦比|举世瞩目'),
+        'warning', '客观性',
+        '使用了主观色彩过强的表述',
+        '用客观数据和事实描述结果，让读者自行判断'
+    ),
+    (
+        # 过度书面化/生僻词
+        re.compile(r'鉴于此|有鉴于此|兹|窃以为|殊为|诚然|毋庸置疑|不言而喻|众所周知'),
+        'warning', '语言通俗性',
+        '使用了过度书面化或套话表述',
+        '用平实语言替代，如"因此""可以确认"等'
+    ),
+]
+
+# 排比检测：连续3个以上句子以相同模式开头
+_PARALLELISM_MIN_COUNT = 3
+
+
+def check_writing_style(doc):
+    """
+    检测写作风格违规：
+    - 破折号（——）
+    - 问句（正文应全部陈述）
+    - 比喻修辞（如同、犹如、像...一样、...的桥梁等）
+    - 主观夸大表述
+    - 过度书面化/生僻词
+    - 排比句式
+    """
+    issues = []
+    in_references = False
+    in_abstract = False
+
+    body_sentences = []  # 收集正文句子用于排比检测
+
+    for para in doc.paragraphs:
+        text = para.text.strip()
+        if not text:
+            continue
+
+        lvl = heading_level(getattr(para.style, "name", ""))
+        if lvl is not None:
+            cls = classify_heading(text)
+            if cls == "references":
+                in_references = True
+            elif in_references:
+                in_references = False
+            in_abstract = "摘要" in text or "abstract" in text.lower()
+            continue
+
+        # 跳过参考文献和摘要
+        if in_references or in_abstract:
+            continue
+
+        # 逐条规则检测
+        for pattern, level, category, message, suggestion in _STYLE_CHECKS:
+            for m in pattern.finditer(text):
+                start = max(0, m.start() - 8)
+                end = min(len(text), m.end() + 8)
+                snippet = text[start:end]
+                issues.append({
+                    'level': level,
+                    'category': category,
+                    'message': f'{message}：...{snippet}...',
+                    'suggestion': suggestion,
+                })
+
+        # 收集句子用于排比检测（按句号/分号切分）
+        sentences = re.split(r'[。；;]', text)
+        for s in sentences:
+            s = s.strip()
+            if len(s) >= 6:
+                body_sentences.append(s)
+
+    # 排比检测：连续句子以相同前缀开头
+    if len(body_sentences) >= _PARALLELISM_MIN_COUNT:
+        i = 0
+        while i < len(body_sentences):
+            # 取前4个字作为模式
+            prefix = body_sentences[i][:4]
+            if not prefix:
+                i += 1
+                continue
+            run = 1
+            j = i + 1
+            while j < len(body_sentences) and body_sentences[j][:4] == prefix:
+                run += 1
+                j += 1
+            if run >= _PARALLELISM_MIN_COUNT:
+                examples = '；'.join(body_sentences[i:i+3])
+                issues.append({
+                    'level': 'warning',
+                    'category': '修辞规范',
+                    'message': f'疑似排比句式（连续{run}句以"{prefix}"开头）：{examples}...',
+                    'suggestion': '避免重复句式结构，改用多样化的表达方式',
+                })
+                i = j
+            else:
+                i += 1
+
+    return issues
+
+
 def check_full_thesis_structure(doc, min_chapters=5):
     """
     全文结构门禁：
@@ -561,6 +654,124 @@ def check_full_thesis_structure(doc, min_chapters=5):
                 'category': '结构',
                 'message': '研究章节数量不足',
                 'suggestion': '应保留“独立绪论章 + 多个研究章 + 独立总结章”组织形式'
+            })
+
+    return issues
+
+
+# ---------------------------------------------------------------------------
+# 三线表格式检测
+# ---------------------------------------------------------------------------
+
+def _get_cell_border(cell, edge):
+    """
+    获取单元格某条边框的属性。
+    返回 dict: {"val": str, "sz": int} 或 None（无边框定义）。
+    """
+    tc = cell._tc
+    tcPr = tc.find(qn('w:tcPr'))
+    if tcPr is None:
+        return None
+    tcBorders = tcPr.find(qn('w:tcBorders'))
+    if tcBorders is None:
+        return None
+    el = tcBorders.find(qn(f'w:{edge}'))
+    if el is None:
+        return None
+    val = el.get(qn('w:val'))
+    sz_str = el.get(qn('w:sz'))
+    sz = int(sz_str) if sz_str else 0
+    return {"val": val, "sz": sz}
+
+
+def check_table_format(doc):
+    """
+    检查 Word 文档中的表格是否符合三线表规范：
+    - 顶部边框 1.5pt (sz=12)
+    - 底部边框 1.5pt (sz=12)
+    - 表头分隔线 0.5pt (sz=4)
+    - 无竖线
+    """
+    issues = []
+
+    for t_idx, table in enumerate(doc.tables):
+        num_rows = len(table.rows)
+        if num_rows < 2:
+            continue  # 单行表格跳过
+
+        table_label = f'表格 {t_idx + 1}'
+
+        # 检查第一行顶部边框
+        for cell in table.rows[0].cells:
+            border = _get_cell_border(cell, 'top')
+            if border is None or border['val'] == 'none':
+                issues.append({
+                    'level': 'error',
+                    'category': '三线表',
+                    'message': f'{table_label}：首行缺少顶部边框',
+                    'suggestion': '三线表首行顶部应有 1.5pt 实线边框'
+                })
+                break
+            elif border['sz'] < 10:  # 允许 10-14 范围（约 1.25-1.75pt）
+                issues.append({
+                    'level': 'warning',
+                    'category': '三线表',
+                    'message': f'{table_label}：首行顶部边框过细（{border["sz"]/8:.1f}pt）',
+                    'suggestion': '三线表顶部边框应为 1.5pt'
+                })
+                break
+
+        # 检查最后一行底部边框
+        for cell in table.rows[-1].cells:
+            border = _get_cell_border(cell, 'bottom')
+            if border is None or border['val'] == 'none':
+                issues.append({
+                    'level': 'error',
+                    'category': '三线表',
+                    'message': f'{table_label}：末行缺少底部边框',
+                    'suggestion': '三线表末行底部应有 1.5pt 实线边框'
+                })
+                break
+            elif border['sz'] < 10:
+                issues.append({
+                    'level': 'warning',
+                    'category': '三线表',
+                    'message': f'{table_label}：末行底部边框过细（{border["sz"]/8:.1f}pt）',
+                    'suggestion': '三线表底部边框应为 1.5pt'
+                })
+                break
+
+        # 检查表头分隔线（第一行底部）
+        for cell in table.rows[0].cells:
+            border = _get_cell_border(cell, 'bottom')
+            if border is None or border['val'] == 'none':
+                issues.append({
+                    'level': 'error',
+                    'category': '三线表',
+                    'message': f'{table_label}：缺少表头分隔线',
+                    'suggestion': '三线表表头与表体之间应有 0.5pt 分隔线'
+                })
+                break
+
+        # 检查竖线（不应存在）
+        has_vertical = False
+        for row in table.rows:
+            for cell in row.cells:
+                for edge in ('left', 'right'):
+                    border = _get_cell_border(cell, edge)
+                    if border and border['val'] not in ('none', 'nil', None) and border['sz'] > 0:
+                        has_vertical = True
+                        break
+                if has_vertical:
+                    break
+            if has_vertical:
+                break
+        if has_vertical:
+            issues.append({
+                'level': 'error',
+                'category': '三线表',
+                'message': f'{table_label}：存在竖线',
+                'suggestion': '三线表不应有竖线，请移除所有垂直边框'
             })
 
     return issues
@@ -670,7 +881,13 @@ def generate_quality_report(
     citation_issues = check_inline_citations(doc)
     all_issues.extend(citation_issues)
 
-    # 5.2 全文结构门禁（仅在全文检查时启用）
+    # 5.3 写作风格检测
+    if verbose:
+        print("🔍 检查写作风格...")
+    style_issues = check_writing_style(doc)
+    all_issues.extend(style_issues)
+
+    # 5.4 全文结构门禁（仅在全文检查时启用）
     if enforce_full_structure:
         if verbose:
             print("🔍 检查全文结构门禁...")
@@ -682,6 +899,35 @@ def generate_quality_report(
         print("🔍 检查段落格式...")
     format_issues = check_paragraph_formatting(doc)
     all_issues.extend(format_issues)
+
+    # 7. 检查三线表格式
+    if verbose:
+        print("🔍 检查三线表格式...")
+    table_issues = check_table_format(doc)
+    all_issues.extend(table_issues)
+
+    # 8. 检查缩略语一致性（如果 abbreviation_registry 可用）
+    try:
+        from abbreviation_registry import validate_cross_references
+        if verbose:
+            print("🔍 检查缩略语一致性...")
+        # 尝试从 docx_path 推断项目目录
+        project_dir = os.path.dirname(os.path.abspath(docx_path))
+        registry_path = os.path.join(project_dir, 'abbreviation_registry.json')
+        if os.path.exists(registry_path):
+            abbr_result = validate_cross_references(project_dir)
+            if abbr_result.get("invalid_count", 0) > 0:
+                for detail in abbr_result.get("details", []):
+                    all_issues.append({
+                        'level': 'warning',
+                        'category': '缩略语',
+                        'message': detail if isinstance(detail, str) else str(detail),
+                        'suggestion': '请检查缩略语注册表与正文的一致性'
+                    })
+    except ImportError:
+        pass  # abbreviation_registry 不可用时静默跳过
+    except Exception:
+        pass  # 非致命：缩略语检查不应阻断质量报告
     
     # 计算总分（简化评分）
     error_count = len([i for i in all_issues if i['level'] == 'error'])
@@ -847,23 +1093,6 @@ def format_report_text(report):
     lines.append("=" * 70)
     
     return "\n".join(lines)
-
-
-def infer_project_root_for_profile(docx_path):
-    """
-    从 docx 路径向上查找 thesis_profile.json，找到后返回其所在目录。
-    找不到时返回 docx 所在目录，保持向后兼容。
-    """
-    current = os.path.abspath(os.path.dirname(docx_path))
-    while True:
-        candidate = os.path.join(current, "thesis_profile.json")
-        if os.path.exists(candidate):
-            return current
-        parent = os.path.dirname(current)
-        if parent == current:
-            break
-        current = parent
-    return os.path.abspath(os.path.dirname(docx_path))
 
 
 def main():
