@@ -4,9 +4,9 @@ This completion report is archived and not normative.
 
 ## Current Normative Documents
 
-- `/Users/wsxwj/.config/opencode/skills/sci2doc/SKILL.md`
-- `/Users/wsxwj/.config/opencode/skills/sci2doc/README.md`
-- `/Users/wsxwj/.config/opencode/skills/sci2doc/QUICK_START.md`
+- `SKILL.md`
+- `README.md`
+- `QUICK_START.md`
 
 ## Current Skill Contract Summary
 

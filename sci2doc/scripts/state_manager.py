@@ -111,6 +111,7 @@ def _extract_section_digest(md_path):
 
     headings = []
     table_captions = []
+    figure_captions = []
     key_facts = []
 
     for line in lines:
@@ -123,6 +124,9 @@ def _extract_section_digest(md_path):
         # Table captions: 表 2-1：xxx or 表2-1 xxx
         elif stripped.startswith("表") and any(c.isdigit() for c in stripped[:8]):
             table_captions.append(stripped)
+        # Figure captions: 图 2-1：xxx or 图2-1 xxx
+        elif stripped.startswith("图") and any(c.isdigit() for c in stripped[:8]):
+            figure_captions.append(stripped)
         # Lines with experimental design keywords (keep first 80 chars)
         elif _EXPERIMENT_KEYWORDS.search(stripped):
             key_facts.append(stripped[:80])
@@ -144,6 +148,7 @@ def _extract_section_digest(md_path):
         "file": os.path.basename(md_path),
         "headings": headings,
         "table_captions": table_captions,
+        "figure_captions": figure_captions,
         "key_facts": unique_facts,
         "char_count": total_chars,
     }
@@ -848,6 +853,13 @@ def load_state(
         bundle["loaded_files"].append(resolve_path(project_root, "figures_index.json"))
     else:
         bundle["figures_index"] = None
+
+    figure_map = read_json_cached(project_root, "figure_map.json", cache_hint=f"figure_map:{chapter}")
+    if figure_map is not None:
+        bundle["figure_map"] = filter_for_chapter(figure_map, chapter)
+        bundle["loaded_files"].append(resolve_path(project_root, "figure_map.json"))
+    else:
+        bundle["figure_map"] = None
 
     if with_global_history:
         context_path = resolve_path(project_root, "context_memory.md")

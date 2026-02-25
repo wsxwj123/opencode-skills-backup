@@ -87,7 +87,7 @@ python3 scripts/atomic_md_workflow.py --project-root "${save_path}" \
 ```bash
 python3 scripts/atomic_md_workflow.py --project-root "${save_path}" merge --chapter 2 --to-docx
 python3 scripts/atomic_md_workflow.py --project-root "${save_path}" \
-  self-check --docx "${save_path}/02_分章节文档/第2章_自动合并.docx"
+  self-check --target "${save_path}/02_分章节文档/第2章_自动合并.docx"
 ```
 
 说明：
@@ -199,6 +199,33 @@ python3 scripts/abbreviation_registry.py validate \
 ```
 
 规则：每个缩略语首次出现时写全称（缩略语），后续章节仅用缩略语。
+
+## 图编号管理
+
+SCI 原图与中文论文图编号的映射管理。
+
+编号规则：
+- 格式：`图{章}-{序号}`，如 `图2-1`、`图3-6`
+- 子图字母转数字：A→1, B→2, ..., Z→26
+- 章节优先：第N章第M个图 = 图N-M（不沿用 SCI 原编号）
+
+```bash
+# 注册映射
+python3 scripts/figure_registry.py --project-root "${save_path}" register \
+  --chapter 2 --seq 1 --source "Figure 1A" --title "PMG对HepG2细胞形态的影响"
+
+# 列出映射
+python3 scripts/figure_registry.py --project-root "${save_path}" list --chapter 2
+
+# 验证连续性
+python3 scripts/figure_registry.py --project-root "${save_path}" validate
+
+# 与 atomic_md 交叉验证
+python3 scripts/figure_registry.py --project-root "${save_path}" cross-validate --chapter 2
+
+# 导出映射表
+python3 scripts/figure_registry.py --project-root "${save_path}" export --format markdown
+```
 
 ## 引用格式检测
 

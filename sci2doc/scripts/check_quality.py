@@ -224,6 +224,62 @@ def check_figure_numbering(doc):
     return issues
 
 
+def check_figure_map_consistency(doc, project_root=None):
+    """
+    交叉验证 figure_map.json 与 docx 中的图编号。
+
+    检查：
+    1. docx 中引用的图编号是否都在 figure_map 中注册
+    2. figure_map 中注册的图编号是否都在 docx 中被引用
+    """
+    issues = []
+    if project_root is None:
+        return issues
+
+    figure_map_path = os.path.join(os.path.abspath(project_root), 'figure_map.json')
+    if not os.path.exists(figure_map_path):
+        return issues
+
+    try:
+        with open(figure_map_path, 'r', encoding='utf-8') as f:
+            figure_map = json.load(f)
+        if not isinstance(figure_map, dict):
+            return issues
+    except (json.JSONDecodeError, OSError):
+        return issues
+
+    registered_ids = set(figure_map.keys())
+
+    # 收集 docx 中所有图编号
+    figure_pattern = re.compile(r'图\s*(\d+)\s*-\s*(\d+)')
+    doc_figure_ids = set()
+    for para in doc.paragraphs:
+        for m in figure_pattern.finditer(para.text):
+            cn_id = f"图{m.group(1)}-{m.group(2)}"
+            doc_figure_ids.add(cn_id)
+
+    unregistered = sorted(doc_figure_ids - registered_ids)
+    unreferenced = sorted(registered_ids - doc_figure_ids)
+
+    for cn_id in unregistered:
+        issues.append({
+            'level': 'warning',
+            'category': '图编号映射',
+            'message': f'文档中引用了 {cn_id}，但未在 figure_map.json 中注册',
+            'suggestion': f'运行 figure_registry.py register 注册该图映射'
+        })
+
+    for cn_id in unreferenced:
+        issues.append({
+            'level': 'info',
+            'category': '图编号映射',
+            'message': f'{cn_id} 已注册但未在文档中引用',
+            'suggestion': '确认该图是否已从文档中移除'
+        })
+
+    return issues
+
+
 def check_bullet_points(doc):
     """检查是否有列表项（应全部为段落）"""
     issues = []
@@ -905,6 +961,13 @@ def generate_quality_report(
         print("🔍 检查三线表格式...")
     table_issues = check_table_format(doc)
     all_issues.extend(table_issues)
+
+    # 7.1 检查图编号映射一致性（如果 figure_map.json 存在）
+    if verbose:
+        print("🔍 检查图编号映射...")
+    figure_map_project_root = os.path.dirname(os.path.abspath(docx_path))
+    figure_map_issues = check_figure_map_consistency(doc, project_root=figure_map_project_root)
+    all_issues.extend(figure_map_issues)
 
     # 8. 检查缩略语一致性（如果 abbreviation_registry 可用）
     try:

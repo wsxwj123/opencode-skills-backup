@@ -62,7 +62,7 @@ python3 scripts/atomic_md_workflow.py --project-root "${save_path}" \
 ```bash
 python3 scripts/atomic_md_workflow.py --project-root "${save_path}" merge --chapter 2 --to-docx
 python3 scripts/atomic_md_workflow.py --project-root "${save_path}" \
-  self-check --docx "${save_path}/02_分章节文档/第2章_自动合并.docx"
+  self-check --target "${save_path}/02_分章节文档/第2章_自动合并.docx"
 ```
 
 提示：

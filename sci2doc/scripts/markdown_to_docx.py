@@ -52,11 +52,6 @@ def _set_cell_border(cell, **kwargs):
             element.set(qn('w:color'), attrs['color'])
 
 
-def _clear_cell_border(cell, edge):
-    """清除单元格某条边框"""
-    _set_cell_border(cell, **{edge: {"sz": 0, "val": "none", "color": "FFFFFF"}})
-
-
 def apply_three_line_table_borders(table, header_rows=1):
     """
     对 Word 表格应用三线表边框：
@@ -101,11 +96,6 @@ def apply_three_line_table_borders(table, header_rows=1):
 
 _PIPE_TABLE_RE = re.compile(r'^\|(.+)\|$')
 _SEPARATOR_RE = re.compile(r'^[\|\s\-:]+$')
-
-
-def _unescape_pipe(text):
-    """还原转义的管道符 \\| → |"""
-    return text.replace('\\|', '|')
 
 
 def _parse_pipe_row(line):
