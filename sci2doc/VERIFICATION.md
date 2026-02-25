@@ -12,6 +12,11 @@ Validation should be executed against current scripts and profile-driven rules:
 - `scripts/check_quality.py`
 - `scripts/abbreviation_registry.py`
 - `scripts/shared_utils.py`
+- `scripts/markdown_to_docx.py`
+- `scripts/merge_chapters.py`
+- `scripts/merge_documents.py`
+- `scripts/thesis_profile.py`
+- `scripts/setup_styles.py`
 
 Test suites (177 tests total):
 
@@ -22,9 +27,9 @@ Test suites (177 tests total):
 
 And current documentation:
 
-- `/Users/wsxwj/.config/opencode/skills/sci2doc/SKILL.md`
-- `/Users/wsxwj/.config/opencode/skills/sci2doc/README.md`
-- `/Users/wsxwj/.config/opencode/skills/sci2doc/QUICK_START.md`
+- `SKILL.md`
+- `README.md`
+- `QUICK_START.md`
 
 ## Baseline Targets
 

@@ -10,7 +10,7 @@ from docx.shared import Pt, Cm
 from docx.enum.style import WD_STYLE_TYPE
 
 
-ROOT = "/Users/wsxwj/.config/opencode/skills/sci2doc"
+ROOT = str(Path(__file__).resolve().parent.parent)
 COUNT_SCRIPT = f"{ROOT}/scripts/count_words.py"
 MD_SCRIPT = f"{ROOT}/scripts/markdown_to_docx.py"
 ATOMIC_MD_SCRIPT = f"{ROOT}/scripts/atomic_md_workflow.py"
