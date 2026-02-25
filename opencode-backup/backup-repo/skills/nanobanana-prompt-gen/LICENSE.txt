@@ -1,2 +1,0 @@
-This skill is licensed under the Apache License 2.0.
-See the full license text in the OpenCode skills repository or at http://www.apache.org/licenses/LICENSE-2.0
