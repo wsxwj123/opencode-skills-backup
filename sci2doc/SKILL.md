@@ -38,6 +38,7 @@ The workflow is built around:
 12. Humanization is required before finalizing chapter text; use humanizer-zh principles to reduce mechanical AI style.
 13. Do not invent experimental data.
 14. Abbreviation consistency is mandatory:
+<<<<<<< Updated upstream
     - First occurrence of any abbreviation must expand as: `中文全称（English Full Name, ABBR）`
     - All subsequent occurrences use bare abbreviation only, no re-expansion.
     - Use `abbreviation_registry.py` to register, track, and auto-strip redundant expansions.
@@ -58,6 +59,12 @@ The workflow is built around:
     - No metaphors of any kind (e.g. 如同、好比、仿佛、犹如、像...一样、...的桥梁、...的基石).
     - No parallelism/排比 constructions (e.g. repeating sentence patterns for rhetorical effect).
     - Use `check_quality.py` `check_writing_style()` to auto-detect violations.
+=======
+    - First occurrence of any abbreviation must include full expansion: `中文全称（English Full Name, ABBR）`
+    - All subsequent occurrences use the abbreviation only, no re-expansion.
+    - `abbreviation_registry.py` tracks first-occurrence positions and auto-strips redundant expansions.
+    - A formal abbreviation table page is generated before the main thesis body.
+>>>>>>> Stashed changes
 
 ## Single Source of Truth
 
@@ -312,6 +319,32 @@ The thesis outline must include:
 - Acknowledgements
 - Achievements during doctoral period (papers/patents/awards)
 
+## Abbreviation Contract
+
+Rules:
+- Before writing any new section, query the abbreviation registry to check which abbreviations are already known.
+- When introducing a new abbreviation for the first time, use the full pattern: `中文全称（English Full Name, ABBR）`
+- After the first occurrence is registered, all subsequent uses must be the bare abbreviation only.
+- After AI generates a section markdown, run `abbreviation_registry.py process` to extract, register, and strip redundant expansions before saving.
+- The abbreviation table page is auto-generated from the registry during full-thesis Word conversion.
+
+CLI quick reference:
+
+```bash
+# Query before writing
+python3 scripts/abbreviation_registry.py --project-root "${save_path}" list
+
+# Process after writing a section (extract + register + strip)
+python3 scripts/abbreviation_registry.py --project-root "${save_path}" \
+  process --file "${md_file}" --chapter 2 --section 2.1 --in-place
+
+# Generate abbreviation table markdown
+python3 scripts/abbreviation_registry.py --project-root "${save_path}" table
+
+# Validate cross-references (registry entries vs actual markdown files)
+python3 scripts/abbreviation_registry.py --project-root "${save_path}" validate
+```
+
 ## Humanization Contract
 
 Before finalizing each chapter:
@@ -529,6 +562,7 @@ Typical project tree:
 <project_root>/
 ├── thesis_profile.json
 ├── project_state.json
+├── abbreviation_registry.json
 ├── context_memory.md
 ├── history_log.json
 ├── chapter_index.json
@@ -577,9 +611,14 @@ Typical project tree:
 - [ ] Subsection summary snapshots created
 - [ ] Humanization pass completed before finalize
 - [ ] Snapshot/rollback available and tested
+<<<<<<< Updated upstream
 - [ ] All tables use three-line format (1.5pt top/bottom, 0.5pt header, no vertical lines)
 - [ ] Abbreviation registry populated and cross-reference validation passed
 - [ ] No redundant abbreviation expansions in non-first-occurrence chapters
 - [ ] Abbreviation table page generated in front matter
 - [ ] Figure numbering registry populated and validated
 - [ ] Figure cross-validation passed (all `[图]` markers registered)
+=======
+- [ ] Abbreviation registry populated and no redundant expansions in non-first-occurrence sections
+- [ ] Abbreviation table page generated in front matter with all registered abbreviations
+>>>>>>> Stashed changes

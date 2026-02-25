@@ -32,12 +32,79 @@ except Exception:  # pragma: no cover
     from thesis_profile import load_profile
 
 try:
+<<<<<<< Updated upstream
     from shared_utils import normalize_text, heading_level, classify_heading, infer_project_root_for_profile
 except ImportError:  # pragma: no cover
     script_dir = os.path.dirname(os.path.abspath(__file__))
     if script_dir not in sys.path:
         sys.path.insert(0, script_dir)
     from shared_utils import normalize_text, heading_level, classify_heading, infer_project_root_for_profile
+=======
+    from abbreviation_registry import load_registry, extract_abbreviations, validate_cross_references
+except Exception:  # pragma: no cover
+    _script_dir = os.path.dirname(os.path.abspath(__file__))
+    if _script_dir not in sys.path:
+        sys.path.insert(0, _script_dir)
+    try:
+        from abbreviation_registry import load_registry, extract_abbreviations, validate_cross_references
+    except ImportError:
+        load_registry = None
+        extract_abbreviations = None
+        validate_cross_references = None
+
+
+def normalize_text(value):
+    return re.sub(r"\s+", "", (value or "").lower())
+
+
+def heading_level(style_name):
+    if not style_name:
+        return None
+    m = re.match(r"^(?:Heading|标题)\s*(\d+)$", style_name, flags=re.IGNORECASE)
+    if not m:
+        return None
+    try:
+        return int(m.group(1))
+    except ValueError:
+        return None
+
+
+def classify_heading(text):
+    t = normalize_text(text)
+    if not t:
+        return "body"
+    chapter_prefix_cn = r"(第[一二三四五六七八九十百千万0-9]+章)?"
+    chapter_prefix_en = r"(chapter[0-9ivxlcdm]+)?"
+    patterns = {
+        "review": [
+            rf"^{chapter_prefix_cn}综述$",
+            rf"^{chapter_prefix_cn}文献综述$",
+            rf"^{chapter_prefix_en}literaturereview$",
+        ],
+        "references": [
+            rf"^{chapter_prefix_cn}参考文献$",
+            rf"^{chapter_prefix_en}references$",
+        ],
+        "toc": [r"^目录$", r"tableofcontents", r"^contents$"],
+        "abstract": [
+            rf"^{chapter_prefix_cn}(中文|英文)?摘要$",
+            rf"^{chapter_prefix_en}abstract$",
+        ],
+        "acknowledgement": [
+            rf"^{chapter_prefix_cn}致谢$",
+            rf"^{chapter_prefix_en}acknowledg(e)?ment$",
+        ],
+        "appendix": [
+            rf"^{chapter_prefix_cn}附录$",
+            rf"^{chapter_prefix_en}appendix$",
+        ],
+    }
+    for section_type, regex_list in patterns.items():
+        for regex in regex_list:
+            if re.search(regex, t):
+                return section_type
+    return "body"
+>>>>>>> Stashed changes
 
 
 def line_spacing_pt(paragraph):
@@ -715,6 +782,7 @@ def check_full_thesis_structure(doc, min_chapters=5):
     return issues
 
 
+<<<<<<< Updated upstream
 # ---------------------------------------------------------------------------
 # 三线表格式检测
 # ---------------------------------------------------------------------------
@@ -829,6 +897,106 @@ def check_table_format(doc):
                 'message': f'{table_label}：存在竖线',
                 'suggestion': '三线表不应有竖线，请移除所有垂直边框'
             })
+=======
+def check_abbreviation_consistency(doc, project_root=None):
+    """
+    检查缩略语一致性：
+    1. 同一缩略语是否在多个章节重复展开
+    2. 正文中出现的缩略语是否都在注册表中
+    """
+    issues = []
+
+    if load_registry is None or extract_abbreviations is None:
+        return issues
+
+    # 收集全文文本，按章节分组
+    chapter_texts = {}
+    current_chapter = "0"
+    current_text_lines = []
+
+    for para in doc.paragraphs:
+        text = para.text.strip()
+        if not text:
+            continue
+        lvl = heading_level(getattr(para.style, "name", ""))
+        if lvl is not None and is_chapter_heading_text(text):
+            if current_text_lines:
+                chapter_texts[current_chapter] = "\n".join(current_text_lines)
+            m = re.search(r'[一二三四五六七八九十百千万零〇0-9]+', text)
+            current_chapter = m.group(0) if m else current_chapter
+            current_text_lines = []
+            continue
+        current_text_lines.append(text)
+
+    if current_text_lines:
+        chapter_texts[current_chapter] = "\n".join(current_text_lines)
+
+    # 提取每章中出现的缩略语展开
+    abbr_first_seen = {}  # abbr -> first chapter
+    for ch_key in sorted(chapter_texts.keys(), key=lambda x: str(x)):
+        ch_text = chapter_texts[ch_key]
+        extracted = extract_abbreviations(ch_text)
+        for item in extracted:
+            abbr = item["abbr"]
+            if abbr not in abbr_first_seen:
+                abbr_first_seen[abbr] = ch_key
+            else:
+                if abbr_first_seen[abbr] != ch_key:
+                    issues.append({
+                        'level': 'warning',
+                        'category': '缩略语',
+                        'message': f'缩略语 {abbr} 在第{ch_key}章重复展开（首次出现于第{abbr_first_seen[abbr]}章）',
+                        'suggestion': f'第{ch_key}章中应直接使用 {abbr}，无需再次展开全称',
+                    })
+
+    # 如果有注册表，检查正文中的大写缩写是否都已注册
+    if project_root:
+        try:
+            registry = load_registry(project_root)
+        except Exception:
+            registry = {}
+        if registry:
+            full_text = "\n".join(chapter_texts.values())
+            # 匹配独立的大写缩写词（2-15字符）
+            standalone_abbrs = set(re.findall(r'\b([A-Z][A-Za-z0-9\-]{1,14})\b', full_text))
+            # 过滤常见非缩略语词
+            common_words = {
+                "The", "In", "On", "At", "For", "And", "But", "Or", "Not", "No",
+                "Yes", "OK", "DNA", "RNA", "pH", "UV", "IR", "NMR", "MS", "GC",
+                "HPLC", "SEM", "TEM", "XRD", "XPS", "BET", "DLS", "TGA", "DSC",
+                "IC50", "EC50", "LD50", "ED50",
+            }
+            for abbr in standalone_abbrs:
+                if len(abbr) < 2:
+                    continue
+                if abbr in common_words:
+                    continue
+                if abbr not in registry and abbr.upper() not in {k.upper() for k in registry}:
+                    # 只报告出现3次以上的未注册缩写
+                    count = len(re.findall(r'\b' + re.escape(abbr) + r'\b', full_text))
+                    if count >= 3:
+                        issues.append({
+                            'level': 'info',
+                            'category': '缩略语',
+                            'message': f'缩写 {abbr} 出现 {count} 次但未在缩略语注册表中',
+                            'suggestion': f'如为专业缩略语，建议注册到 abbreviation_registry.json',
+                        })
+
+    # 交叉引用验证：注册表中的 first_chapter/first_section 是否与 markdown 文件一致
+    if project_root and validate_cross_references is not None:
+        try:
+            xref_result = validate_cross_references(project_root)
+            for detail in xref_result.get("details", []):
+                if detail.get("status") == "invalid":
+                    issues.append({
+                        'level': 'warning',
+                        'category': '缩略语交叉引用',
+                        'message': f'缩略语 {detail["abbr"]} 交叉引用失败：{detail.get("reason", "unknown")}',
+                        'suggestion': '请检查注册表中 first_chapter/first_section 是否正确，或对应 markdown 文件是否包含该缩略语展开',
+                    })
+        except Exception:
+            pass
+>>>>>>> Stashed changes
 
     return issues
 
@@ -956,6 +1124,7 @@ def generate_quality_report(
     format_issues = check_paragraph_formatting(doc)
     all_issues.extend(format_issues)
 
+<<<<<<< Updated upstream
     # 7. 检查三线表格式
     if verbose:
         print("🔍 检查三线表格式...")
@@ -991,6 +1160,14 @@ def generate_quality_report(
         pass  # abbreviation_registry 不可用时静默跳过
     except Exception:
         pass  # 非致命：缩略语检查不应阻断质量报告
+=======
+    # 7. 检查缩略语一致性
+    if verbose:
+        print("🔍 检查缩略语一致性...")
+    abbr_project_root = infer_project_root_for_profile(docx_path)
+    abbr_issues = check_abbreviation_consistency(doc, project_root=abbr_project_root)
+    all_issues.extend(abbr_issues)
+>>>>>>> Stashed changes
     
     # 计算总分（简化评分）
     error_count = len([i for i in all_issues if i['level'] == 'error'])
