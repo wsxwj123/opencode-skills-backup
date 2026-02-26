@@ -235,8 +235,16 @@ description: Use when simulating a high-bar academic peer review for manuscripts
 
 三、外部基准与技术合规审计检查点
 
-必须优先使用专门的学术搜索 MCP 工具（如 paper-search_search_pubmed, paper-search_search_arxiv, paper-search_search_semantic 等）进行新颖性、文献全面性和标准核查。
-**【强烈禁止】在文献检索环节首选通用搜索引擎（如 Tavily 或 Exa），除非专用学术 MCP 均无法获取结果方可作为备用手段。**
+<TOOL_USAGE_RULES>
+**绝对指令：执行新颖性、文献全面性和标准核查时，必须调用专门的学术搜索 MCP 工具！**
+强制使用以下工具：
+- `paper-search_search_pubmed` (用于医学、生物学)
+- `paper-search_search_arxiv` (用于预印本、计算机科学、物理等)
+- `paper-search_search_semantic` (用于综合性学术文献)
+
+**【红线禁令】禁止在文献检索环节调用 `tavily_tavily-search`、`websearch_web_search_exa` 或任何通用网络搜索引擎。只要是查文献，只能用 `paper-search_*` 系列工具。这是强制约束，不可变通。**
+</TOOL_USAGE_RULES>
+
 如无任何可用工具支持,则基于语言特征和文本分析进行人工判断:
 
 1. 目标标准核查
@@ -285,7 +293,7 @@ description: Use when simulating a high-bar academic peer review for manuscripts
 
 第二步：外部基准先行核查
 
-必须首先执行以下外部基准核查,优先调用专门的学术搜索 MCP 工具（如 paper-search_search_pubmed 等）进行分析和验证，严禁首选通用搜索引擎（如 Tavily）。如无可用学术工具支持则基于人工判断:
+必须首先执行以下外部基准核查, **强烈要求：只允许调用专门的学术搜索 MCP 工具（如 paper-search_search_pubmed / paper-search_search_arxiv / paper-search_search_semantic 等）进行分析和验证，绝对禁止使用通用搜索引擎（如 tavily_tavily-search 或 websearch_web_search_exa）。** 如无可用学术工具支持则基于人工判断:
 
 1. 目标标准核查
 搜索目标期刊或会议的最新发表范围和近期论文,确保评估标准准确。
