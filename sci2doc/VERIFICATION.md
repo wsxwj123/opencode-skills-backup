@@ -1,6 +1,6 @@
 # VERIFICATION
 
-Last verified: 2026-02-25 | 281 tests | 0 failures
+Last verified: 2026-02-25 | 309 tests | 0 failures
 
 ## Scripts Inventory
 
@@ -18,7 +18,7 @@ Last verified: 2026-02-25 | 281 tests | 0 failures
 | `scripts/thesis_profile.py` | Profile management | 110+ |
 | `scripts/shared_utils.py` | Shared utilities | 95+ |
 
-## Test Suites (281 tests total)
+## Test Suites (309 tests total)
 
 | Test File | Tests | Coverage |
 |-----------|-------|----------|
@@ -29,9 +29,11 @@ Last verified: 2026-02-25 | 281 tests | 0 failures
 | `scripts/test_figure_registry.py` | 38 | Figure: letter conv/parse/CRUD/validate/cross-validate/export |
 | `tests/test_markdown_to_docx.py` | 27 | MD→Docx: parse/separator/borders/fonts |
 | `tests/test_merge_chapters.py` | 18 | Merge: extract/merge/TOC/header-footer/resolve order |
-| **Total** | **262** | |
+| `scripts/test_check_quality_md.py` | 15 | MD Quality: structure, style, citation, numbering |
+| `scripts/test_check_quality_word.py` | 13 | Word Format: layout, fonts, styles, spacing |
+| **Total** | **290** | |
 
-Note: `tests/test_sci2doc_scripts.py` contains 55 tests across 3 test classes (main 48 + TestMethodsTableCheck 7 + TestTitleMatchingExclusionLogic 12 = 67 test methods; pytest collects as shown above). Actual pytest collected count: **281**.
+Note: `tests/test_sci2doc_scripts.py` contains 55 tests across 3 test classes (main 48 + TestMethodsTableCheck 7 + TestTitleMatchingExclusionLogic 12 = 67 test methods; pytest collects as shown above). Actual pytest collected count: **309**.
 
 ## Documentation
 

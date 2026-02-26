@@ -143,10 +143,46 @@ def load_figure_map(project_root):
 
 
 def save_figure_map(project_root, figure_map):
-    """保存 figure_map.json。"""
+    """保存 figure_map.json（原子写入 + 文件锁）。"""
     path = _figure_map_path(project_root)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(figure_map, f, ensure_ascii=False, indent=2)
+    directory = os.path.dirname(path) or "."
+    os.makedirs(directory, exist_ok=True)
+
+    lock_file = path + ".lock"
+    import tempfile
+
+    # Acquire simple file lock (cross-platform)
+    fd_lock = None
+    try:
+        try:
+            import fcntl
+            fd_lock = open(lock_file, "a+")
+            fcntl.flock(fd_lock.fileno(), fcntl.LOCK_EX)
+        except ImportError:
+            pass  # No fcntl on Windows; skip locking
+
+        # Atomic write via temp file + rename
+        fd, tmp_path = tempfile.mkstemp(prefix=".tmp_figmap_", suffix=".json", dir=directory)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(figure_map, f, ensure_ascii=False, indent=2)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_path, path)
+        finally:
+            if os.path.exists(tmp_path):
+                try:
+                    os.remove(tmp_path)
+                except OSError:
+                    pass
+    finally:
+        if fd_lock is not None:
+            try:
+                import fcntl
+                fcntl.flock(fd_lock.fileno(), fcntl.LOCK_UN)
+            except (ImportError, OSError):
+                pass
+            fd_lock.close()
 
 
 def register_figure(project_root, chapter, seq, source_figure, title="", overwrite=False):

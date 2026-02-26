@@ -67,6 +67,20 @@ def classify_heading(text):
             rf"^{chapter_prefix_cn}附录$",
             rf"^{chapter_prefix_en}appendix$",
         ],
+        "achievements": [
+            rf"^{chapter_prefix_cn}攻读(博士|硕士)?(学位)?期间(取得的|的)?(研究)?成果$",
+            rf"^{chapter_prefix_cn}攻读期间成果$",
+        ],
+        "declaration": [
+            rf"^{chapter_prefix_cn}独创性声明$",
+            rf"^{chapter_prefix_cn}学位论文原创性声明$",
+        ],
+        "abbreviation_table": [
+            rf"^{chapter_prefix_cn}缩略语表$",
+            rf"^{chapter_prefix_cn}缩略词表$",
+            rf"^{chapter_prefix_cn}(主要)?符号(与)?缩略语表$",
+            r"^abbreviations?$",
+        ],
     }
     for section_type, regex_list in patterns.items():
         for regex in regex_list:

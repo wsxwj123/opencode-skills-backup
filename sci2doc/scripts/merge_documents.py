@@ -8,7 +8,7 @@
 - 默认目录采用当前项目布局：
   - 输入章节：02_分章节文档
   - 输出文档：03_合并文档/完整博士论文.docx
-  - 前置部分（可选）：01_前置部分/{封面,中文摘要,英文摘要}.docx
+  - 前置部分（可选）：atomic_md/ 中的封面、摘要等前置 markdown
 """
 
 import argparse
@@ -45,14 +45,23 @@ def _resolve(base_root, value):
 
 
 def _default_front_matter(project_root):
+    """Check atomic_md for front matter markdown files, fallback to legacy 01_前置部分."""
+    # Primary: atomic_md front matter
+    atomic = project_root / "atomic_md"
+    cover_md = atomic / "封面.md"
+    abstract_md = atomic / "中文摘要.md"
+    abstract_en_md = atomic / "英文摘要.md"
+
+    # Legacy fallback: 01_前置部分 (no longer created by init, but tolerate existing projects)
     front = project_root / "01_前置部分"
-    cover = front / "封面.docx"
-    abstract = front / "中文摘要.docx"
-    abstract_en = front / "英文摘要.docx"
+    cover_docx = front / "封面.docx"
+    abstract_docx = front / "中文摘要.docx"
+    abstract_en_docx = front / "英文摘要.docx"
+
     return {
-        "cover": str(cover) if cover.exists() else None,
-        "abstract": str(abstract) if abstract.exists() else None,
-        "abstract_en": str(abstract_en) if abstract_en.exists() else None,
+        "cover": str(cover_md) if cover_md.exists() else (str(cover_docx) if cover_docx.exists() else None),
+        "abstract": str(abstract_md) if abstract_md.exists() else (str(abstract_docx) if abstract_docx.exists() else None),
+        "abstract_en": str(abstract_en_md) if abstract_en_md.exists() else (str(abstract_en_docx) if abstract_en_docx.exists() else None),
     }
 
 

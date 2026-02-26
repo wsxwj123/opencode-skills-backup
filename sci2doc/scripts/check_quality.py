@@ -16,6 +16,8 @@
 
 from docx import Document
 from docx.oxml.ns import qn
+from docx.shared import Cm
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 import argparse
 import sys
 import os
@@ -32,14 +34,14 @@ except Exception:  # pragma: no cover
     from thesis_profile import load_profile
 
 try:
-<<<<<<< Updated upstream
     from shared_utils import normalize_text, heading_level, classify_heading, infer_project_root_for_profile
 except ImportError:  # pragma: no cover
     script_dir = os.path.dirname(os.path.abspath(__file__))
     if script_dir not in sys.path:
         sys.path.insert(0, script_dir)
     from shared_utils import normalize_text, heading_level, classify_heading, infer_project_root_for_profile
-=======
+
+try:
     from abbreviation_registry import load_registry, extract_abbreviations, validate_cross_references
 except Exception:  # pragma: no cover
     _script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -51,60 +53,6 @@ except Exception:  # pragma: no cover
         load_registry = None
         extract_abbreviations = None
         validate_cross_references = None
-
-
-def normalize_text(value):
-    return re.sub(r"\s+", "", (value or "").lower())
-
-
-def heading_level(style_name):
-    if not style_name:
-        return None
-    m = re.match(r"^(?:Heading|标题)\s*(\d+)$", style_name, flags=re.IGNORECASE)
-    if not m:
-        return None
-    try:
-        return int(m.group(1))
-    except ValueError:
-        return None
-
-
-def classify_heading(text):
-    t = normalize_text(text)
-    if not t:
-        return "body"
-    chapter_prefix_cn = r"(第[一二三四五六七八九十百千万0-9]+章)?"
-    chapter_prefix_en = r"(chapter[0-9ivxlcdm]+)?"
-    patterns = {
-        "review": [
-            rf"^{chapter_prefix_cn}综述$",
-            rf"^{chapter_prefix_cn}文献综述$",
-            rf"^{chapter_prefix_en}literaturereview$",
-        ],
-        "references": [
-            rf"^{chapter_prefix_cn}参考文献$",
-            rf"^{chapter_prefix_en}references$",
-        ],
-        "toc": [r"^目录$", r"tableofcontents", r"^contents$"],
-        "abstract": [
-            rf"^{chapter_prefix_cn}(中文|英文)?摘要$",
-            rf"^{chapter_prefix_en}abstract$",
-        ],
-        "acknowledgement": [
-            rf"^{chapter_prefix_cn}致谢$",
-            rf"^{chapter_prefix_en}acknowledg(e)?ment$",
-        ],
-        "appendix": [
-            rf"^{chapter_prefix_cn}附录$",
-            rf"^{chapter_prefix_en}appendix$",
-        ],
-    }
-    for section_type, regex_list in patterns.items():
-        for regex in regex_list:
-            if re.search(regex, t):
-                return section_type
-    return "body"
->>>>>>> Stashed changes
 
 
 def line_spacing_pt(paragraph):
@@ -141,7 +89,7 @@ def check_word_count(doc, body_target_chars=80000, review_target_chars=0, review
         chars = sum(1 for char in text if '\u4e00' <= char <= '\u9fff')
         if current_section_type == "review":
             review_chinese += chars
-        elif current_section_type in {"references", "toc", "abstract", "acknowledgement", "appendix"}:
+        elif current_section_type in {"references", "toc", "abstract", "acknowledgement", "appendix", "achievements", "declaration", "abbreviation_table"}:
             continue
         else:
             total_chinese += chars
@@ -782,7 +730,132 @@ def check_full_thesis_structure(doc, min_chapters=5):
     return issues
 
 
-<<<<<<< Updated upstream
+def check_section_order(doc):
+    """
+    全文结构顺序校验：验证各部分出现顺序是否符合规范。
+
+    期望顺序（允许缺省，但不允许乱序）：
+    封面 → 独创性声明 → 摘要 → 英文摘要 → 目录 → 缩略语表 →
+    正文(第1章..第N章) → 参考文献 → 致谢 → 攻读期间成果 → 附录
+    """
+    issues = []
+
+    # 定义有序标签
+    _ORDERED_LABELS = [
+        ('封面', ['封面', '题名']),
+        ('独创性声明', ['独创性', '授权']),
+        ('中文摘要', ['摘要']),
+        ('英文摘要', ['abstract']),
+        ('目录', ['目录']),
+        ('缩略语表', ['缩略', '符号']),
+        ('正文', []),          # 特殊：匹配 "第X章"
+        ('参考文献', ['参考文献']),
+        ('致谢', ['致谢']),
+        ('攻读期间成果', ['攻读', '成果']),
+        ('附录', ['附录']),
+    ]
+
+    def _match_label(text):
+        t = text.strip().lower()
+        if re.search(r'第\d+章', t):
+            return '正文'
+        for label, keywords in _ORDERED_LABELS:
+            for kw in keywords:
+                if kw in t:
+                    return label
+        return None
+
+    # 收集 H1 标题的标签序列（去重连续相同标签）
+    seen_labels = []
+    for para in doc.paragraphs:
+        lvl = heading_level(getattr(para.style, 'name', ''))
+        if lvl != 1:
+            continue
+        label = _match_label(para.text)
+        if label is None:
+            continue
+        if not seen_labels or seen_labels[-1] != label:
+            seen_labels.append(label)
+
+    # 检查顺序：seen_labels 应该是 _ORDERED_LABELS 标签的子序列
+    label_order = [lbl for lbl, _ in _ORDERED_LABELS]
+    expected_idx = 0
+    for actual_label in seen_labels:
+        # 在 label_order 中向前查找
+        found = False
+        for i in range(expected_idx, len(label_order)):
+            if label_order[i] == actual_label:
+                expected_idx = i + 1
+                found = True
+                break
+        if not found:
+            issues.append({
+                'level': 'error',
+                'category': '结构顺序',
+                'message': f'"{actual_label}" 出现位置不符合规范顺序',
+                'suggestion': f'期望顺序：封面→独创性声明→摘要→英文摘要→目录→缩略语表→正文→参考文献→致谢→成果→附录'
+            })
+
+    return issues
+
+
+def check_page_breaks_between_chapters(doc):
+    """
+    检查章节之间是否存在分页符或分节符。
+
+    扫描所有 Heading 1 段落，检查其前一个段落是否包含分页符
+    （w:br type="page"）或分节符（w:sectPr type="nextPage"）。
+    跳过文档第一个 H1（无需前置分页）。
+    """
+    issues = []
+
+    h1_paras = []
+    for para in doc.paragraphs:
+        lvl = heading_level(getattr(para.style, 'name', ''))
+        if lvl == 1:
+            h1_paras.append(para)
+
+    for idx, para in enumerate(h1_paras):
+        if idx == 0:
+            continue  # 第一个 H1 不需要前置分页
+
+        p_elem = para._element
+        prev = p_elem.getprevious()
+
+        has_break = False
+
+        if prev is not None:
+            # 检查前一段落是否有分页符 <w:br w:type="page"/>
+            for br in prev.iter(qn('w:br')):
+                if br.get(qn('w:type')) == 'page':
+                    has_break = True
+                    break
+
+            # 检查前一段落是否有分节符 <w:sectPr>
+            if not has_break:
+                pPr = prev.find(qn('w:pPr'))
+                if pPr is not None and pPr.find(qn('w:sectPr')) is not None:
+                    has_break = True
+
+        # 也检查 H1 段落自身是否设置了 pageBreakBefore
+        if not has_break:
+            pPr = p_elem.find(qn('w:pPr'))
+            if pPr is not None:
+                pgBB = pPr.find(qn('w:pageBreakBefore'))
+                if pgBB is not None and pgBB.get(qn('w:val'), 'true') != 'false':
+                    has_break = True
+
+        if not has_break:
+            issues.append({
+                'level': 'warning',
+                'category': '分页',
+                'message': f'章节标题 "{para.text.strip()}" 前缺少分页符或分节符',
+                'suggestion': '每章应从新页开始，请在章标题前插入分页符'
+            })
+
+    return issues
+
+
 # ---------------------------------------------------------------------------
 # 三线表格式检测
 # ---------------------------------------------------------------------------
@@ -865,7 +938,7 @@ def check_table_format(doc):
                 })
                 break
 
-        # 检查表头分隔线（第一行底部）
+        # 检查表头分隔线（第一行底部，应为 0.75pt / sz=6）
         for cell in table.rows[0].cells:
             border = _get_cell_border(cell, 'bottom')
             if border is None or border['val'] == 'none':
@@ -873,7 +946,15 @@ def check_table_format(doc):
                     'level': 'error',
                     'category': '三线表',
                     'message': f'{table_label}：缺少表头分隔线',
-                    'suggestion': '三线表表头与表体之间应有 0.5pt 分隔线'
+                    'suggestion': '三线表表头与表体之间应有 0.75pt 分隔线'
+                })
+                break
+            elif border['sz'] > 8:  # 允许 sz 2-8（0.25-1.0pt），超过则过粗
+                issues.append({
+                    'level': 'warning',
+                    'category': '三线表',
+                    'message': f'{table_label}：表头分隔线过粗（{border["sz"]/8:.2f}pt，应为 0.75pt/sz=6）',
+                    'suggestion': '三线表表头分隔线应为 0.75pt（sz=6）'
                 })
                 break
 
@@ -897,7 +978,10 @@ def check_table_format(doc):
                 'message': f'{table_label}：存在竖线',
                 'suggestion': '三线表不应有竖线，请移除所有垂直边框'
             })
-=======
+
+    return issues
+
+
 def check_abbreviation_consistency(doc, project_root=None):
     """
     检查缩略语一致性：
@@ -996,7 +1080,6 @@ def check_abbreviation_consistency(doc, project_root=None):
                     })
         except Exception:
             pass
->>>>>>> Stashed changes
 
     return issues
 
@@ -1039,6 +1122,878 @@ def check_paragraph_formatting(doc):
     return issues
 
 
+def _get_east_asian_font(run):
+    """从 run 的 XML 中提取东亚字体名称。"""
+    rPr = run._element.find(qn('w:rPr'))
+    if rPr is None:
+        return None
+    rFonts = rPr.find(qn('w:rFonts'))
+    if rFonts is None:
+        return None
+    return rFonts.get(qn('w:eastAsia'))
+
+
+def check_word_format_compliance(doc):
+    """
+    全面检查 Word 文档格式是否符合中南大学博士论文规范。
+    检查页面布局、字体、字号、行距、缩进、段前段后间距等。
+    """
+    issues = []
+    EMU_PER_CM = 360000
+
+    # ── 1. 页面布局检查 ──
+    expected_page = {
+        'width_cm': 21.0, 'height_cm': 29.7,
+        'top_cm': 2.54, 'bottom_cm': 2.54,
+        'left_cm': 3.17, 'right_cm': 3.17,
+    }
+    page_tol = 0.2
+    margin_tol = 0.1
+
+    for idx, section in enumerate(doc.sections):
+        sec_label = f'第 {idx + 1} 节'
+
+        if hasattr(section, 'page_width') and section.page_width is not None:
+            w_cm = section.page_width / EMU_PER_CM
+            if abs(w_cm - expected_page['width_cm']) > page_tol:
+                issues.append({
+                    'level': 'error', 'category': '页面布局',
+                    'message': f'{sec_label}纸张宽度不符：{w_cm:.2f}cm（应为 21.0cm）',
+                    'suggestion': '请将纸张大小设置为 A4（21.0×29.7cm）'
+                })
+                break
+
+        if hasattr(section, 'page_height') and section.page_height is not None:
+            h_cm = section.page_height / EMU_PER_CM
+            if abs(h_cm - expected_page['height_cm']) > page_tol:
+                issues.append({
+                    'level': 'error', 'category': '页面布局',
+                    'message': f'{sec_label}纸张高度不符：{h_cm:.2f}cm（应为 29.7cm）',
+                    'suggestion': '请将纸张大小设置为 A4（21.0×29.7cm）'
+                })
+                break
+
+        margin_checks = [
+            ('top_margin', 'top_cm', '上边距'),
+            ('bottom_margin', 'bottom_cm', '下边距'),
+            ('left_margin', 'left_cm', '左边距'),
+            ('right_margin', 'right_cm', '右边距'),
+        ]
+        for attr, key, label in margin_checks:
+            if hasattr(section, attr) and getattr(section, attr) is not None:
+                val_cm = getattr(section, attr) / EMU_PER_CM
+                if abs(val_cm - expected_page[key]) > margin_tol:
+                    issues.append({
+                        'level': 'error', 'category': '页面布局',
+                        'message': f'{sec_label}{label}不符：{val_cm:.2f}cm（应为 {expected_page[key]}cm）',
+                        'suggestion': f'请将{label}设置为 {expected_page[key]}cm'
+                    })
+        # 只报告第一个违规节
+        if any(i['category'] == '页面布局' for i in issues):
+            break
+
+    # ── 2. 样式规范定义 ──
+    style_specs = {
+        'heading1': {
+            'match': lambda s: s and ('Heading 1' in s or '标题 1' in s),
+            'label': '一级标题',
+            'font_size_pt': 16.0, 'bold': True,
+            'alignment': 1,  # CENTER
+            'line_spacing_pt': 20.0,
+            'space_before_pt': 18.0, 'space_after_pt': 12.0,
+        },
+        'heading2': {
+            'match': lambda s: s and ('Heading 2' in s or '标题 2' in s),
+            'label': '二级标题',
+            'font_size_pt': 14.0, 'bold': False,
+            'alignment': 0,  # LEFT
+            'line_spacing_pt': 20.0,
+            'space_before_pt': 10.0, 'space_after_pt': 8.0,
+        },
+        'heading3': {
+            'match': lambda s: s and ('Heading 3' in s or '标题 3' in s),
+            'label': '三级标题',
+            'font_size_pt': 12.0, 'bold': False,
+            'alignment': 0,
+            'line_spacing_pt': 20.0,
+            'space_before_pt': 10.0, 'space_after_pt': 8.0,
+        },
+        'normal': {
+            'match': lambda s: s and (s == 'Normal' or s == '正文'),
+            'label': '正文',
+            'font_size_pt': 12.0, 'bold': None,
+            'alignment': 3,  # JUSTIFY (两端对齐)
+            'line_spacing_pt': 20.0,
+            'space_before_pt': None, 'space_after_pt': None,
+            'first_indent_emu_min': 210000, 'first_indent_emu_max': 280000,
+            'indent_tol': 30000,
+        },
+    }
+
+    FONT_SIZE_TOL = 0.5
+    SPACING_TOL = 1.0
+
+    # 收集每种样式前 5 个段落
+    style_samples = {k: [] for k in style_specs}
+    for para in doc.paragraphs:
+        style_name = para.style.name if para.style else None
+        for key, spec in style_specs.items():
+            if spec['match'](style_name) and len(style_samples[key]) < 5:
+                style_samples[key].append(para)
+
+    # 记录每个类别已报告的违规类型，避免重复
+    reported = set()
+
+    def _report(key, check_name, level, message, suggestion):
+        tag = f'{key}:{check_name}'
+        if tag not in reported:
+            reported.add(tag)
+            issues.append({
+                'level': level, 'category': '格式规范',
+                'message': message, 'suggestion': suggestion,
+            })
+
+    # ── 3. 逐样式检查 ──
+    for key, spec in style_specs.items():
+        label = spec['label']
+        for para in style_samples[key]:
+            # 字号检查
+            if para.runs and spec['font_size_pt'] is not None:
+                run = para.runs[0]
+                if run.font.size is not None and hasattr(run.font.size, 'pt'):
+                    actual = run.font.size.pt
+                    if abs(actual - spec['font_size_pt']) > FONT_SIZE_TOL:
+                        _report(key, 'font_size', 'error',
+                                f'{label}字号不符：{actual}pt（应为 {spec["font_size_pt"]}pt）',
+                                f'请将{label}字号设置为 {spec["font_size_pt"]}pt')
+
+            # 加粗检查
+            if para.runs and spec['bold'] is not None:
+                run = para.runs[0]
+                actual_bold = run.font.bold
+                if actual_bold is not None and actual_bold != spec['bold']:
+                    expected_str = '加粗' if spec['bold'] else '常规（非加粗）'
+                    _report(key, 'bold', 'error',
+                            f'{label}加粗属性不符（应为{expected_str}）',
+                            f'请将{label}设置为{expected_str}')
+
+            # 对齐方式检查
+            if spec['alignment'] is not None:
+                actual_align = para.paragraph_format.alignment
+                if actual_align is not None:
+                    align_val = actual_align if isinstance(actual_align, int) else actual_align.value if hasattr(actual_align, 'value') else None
+                    if align_val is not None and align_val != spec['alignment']:
+                        align_names = {0: '左对齐', 1: '居中', 2: '右对齐', 3: '两端对齐'}
+                        expected_name = align_names.get(spec['alignment'], str(spec['alignment']))
+                        _report(key, 'alignment', 'error',
+                                f'{label}对齐方式不符（应为{expected_name}）',
+                                f'请将{label}对齐方式设置为{expected_name}')
+
+            # 行距检查
+            if spec['line_spacing_pt'] is not None:
+                actual_ls = line_spacing_pt(para)
+                if actual_ls is not None and abs(actual_ls - spec['line_spacing_pt']) > SPACING_TOL:
+                    _report(key, 'line_spacing', 'warning',
+                            f'{label}行距不符：{actual_ls:.1f}pt（应为 {spec["line_spacing_pt"]}pt）',
+                            f'请将{label}行距设置为固定值 {spec["line_spacing_pt"]}pt')
+
+            # 段前间距检查
+            if spec.get('space_before_pt') is not None:
+                sb = para.paragraph_format.space_before
+                if sb is not None and hasattr(sb, 'pt'):
+                    actual_sb = sb.pt
+                    if abs(actual_sb - spec['space_before_pt']) > SPACING_TOL:
+                        _report(key, 'space_before', 'warning',
+                                f'{label}段前间距不符：{actual_sb:.1f}pt（应为 {spec["space_before_pt"]}pt）',
+                                f'请将{label}段前间距设置为 {spec["space_before_pt"]}pt')
+
+            # 段后间距检查
+            if spec.get('space_after_pt') is not None:
+                sa = para.paragraph_format.space_after
+                if sa is not None and hasattr(sa, 'pt'):
+                    actual_sa = sa.pt
+                    if abs(actual_sa - spec['space_after_pt']) > SPACING_TOL:
+                        _report(key, 'space_after', 'warning',
+                                f'{label}段后间距不符：{actual_sa:.1f}pt（应为 {spec["space_after_pt"]}pt）',
+                                f'请将{label}段后间距设置为 {spec["space_after_pt"]}pt')
+
+            # 首行缩进检查（仅正文）
+            if spec.get('first_indent_emu_min') is not None:
+                fi = para.paragraph_format.first_line_indent
+                if fi is not None:
+                    fi_val = int(fi)
+                    emu_min = spec['first_indent_emu_min'] - spec.get('indent_tol', 0)
+                    emu_max = spec['first_indent_emu_max'] + spec.get('indent_tol', 0)
+                    if fi_val < emu_min or fi_val > emu_max:
+                        fi_cm = fi_val / EMU_PER_CM
+                        _report(key, 'first_indent', 'warning',
+                                f'{label}首行缩进不符：{fi_cm:.2f}cm（应约为 0.74cm）',
+                                '请将正文首行缩进设置为 2 字符（约 0.74cm）')
+
+            # 字体名称检查（标题段落）
+            if key.startswith('heading') and para.runs:
+                run = para.runs[0]
+                # 西文字体
+                if run.font.name is not None and run.font.name != 'Times New Roman':
+                    _report(key, 'font_latin', 'info',
+                            f'{label}西文字体不符：{run.font.name}（应为 Times New Roman）',
+                            f'请将{label}西文字体设置为 Times New Roman')
+                # 东亚字体：H1 用黑体，H2/H3 用宋体
+                ea_font = _get_east_asian_font(run)
+                if ea_font is not None:
+                    if key == 'heading1':
+                        if '黑体' not in ea_font and 'SimHei' not in ea_font:
+                            _report(key, 'font_ea', 'info',
+                                    f'{label}中文字体不符：{ea_font}（应为黑体）',
+                                    f'请将{label}中文字体设置为黑体')
+                    else:
+                        if '宋体' not in ea_font and 'SimSun' not in ea_font:
+                            _report(key, 'font_ea', 'info',
+                                    f'{label}中文字体不符：{ea_font}（应为宋体）',
+                                    f'请将{label}中文字体设置为宋体')
+
+            # 正文字体名称检查
+            if key == 'normal' and para.runs:
+                run = para.runs[0]
+                # 西文字体应为 Times New Roman
+                if run.font.name is not None and run.font.name != 'Times New Roman':
+                    _report(key, 'font_latin', 'error',
+                            f'{label}西文字体不符：{run.font.name}（应为 Times New Roman）',
+                            f'请将{label}西文字体设置为 Times New Roman')
+                # 中文字体应为宋体
+                ea_font = _get_east_asian_font(run)
+                if ea_font is not None and '宋体' not in ea_font and 'SimSun' not in ea_font:
+                    _report(key, 'font_ea', 'error',
+                            f'{label}中文字体不符：{ea_font}（应为宋体）',
+                            f'请将{label}中文字体设置为宋体')
+
+    return issues
+
+
+# ---------------------------------------------------------------------------
+# Markdown 文件质量检测
+# ---------------------------------------------------------------------------
+
+def check_markdown_quality(md_path):
+    """
+    对单个 Markdown 文件进行质量检测。
+    返回 (issues_list, stats_dict)。
+    """
+    issues = []
+    stats = {
+        'chinese_chars': 0,
+        'heading_count': 0,
+        'citation_count': 0,
+        'figure_count': 0,
+        'table_count': 0,
+    }
+
+    if not os.path.isfile(md_path):
+        return issues, stats
+
+    with open(md_path, 'r', encoding='utf-8') as f:
+        lines = f.readlines()
+
+    full_text = ''.join(lines)
+
+    # ---- 1) 中文字数统计 ----
+    stats['chinese_chars'] = len(re.findall(r'[\u4e00-\u9fff]', full_text))
+
+    # ---- 辅助：代码块状态追踪 ----
+    in_code_block = False
+    heading_levels_seen = []  # (行号, 级别)
+
+    fig_re = re.compile(r'图\s*(\d+)-(\d+)')
+    tbl_re = re.compile(r'表\s*(\d+)-(\d+)')
+    list_re = re.compile(r'^(\s*)([-*•]|\d+\.)\s+')
+
+    fig_refs = []  # (chapter, seq)
+    tbl_refs = []  # (chapter, seq)
+
+    for line_no, raw_line in enumerate(lines, start=1):
+        line = raw_line.rstrip('\n')
+
+        # 代码块切换
+        if line.lstrip().startswith('```'):
+            in_code_block = not in_code_block
+            continue
+
+        if in_code_block:
+            continue
+
+        # ---- 2) 标题层级检查 ----
+        heading_match = re.match(r'^(#{1,9})\s+', line)
+        if heading_match:
+            level = len(heading_match.group(1))
+            stats['heading_count'] += 1
+            heading_levels_seen.append((line_no, level))
+
+            if level > 3:
+                issues.append({
+                    'level': 'error',
+                    'category': '标题层级',
+                    'message': f'第 {line_no} 行：使用了 {level} 级标题（最多允许 3 级）',
+                    'suggestion': '论文 Markdown 仅使用 #、##、### 三级标题',
+                })
+            continue  # 标题行不做后续检查
+
+        # ---- 3) 引用格式检查 ----
+        # 检测错误格式
+        for bad_re, msg in _BAD_CITATION_PATTERNS:
+            for m in bad_re.finditer(line):
+                snippet = line[max(0, m.start() - 10):m.end() + 10]
+                issues.append({
+                    'level': 'error',
+                    'category': '引用格式',
+                    'message': f'第 {line_no} 行：{msg}：...{snippet}...',
+                    'suggestion': '正文引用应使用英文方括号+英文逗号，如 [1,2] [3-5]',
+                })
+
+        # 检测合法引用中的编号顺序
+        for m in _VALID_CITATION_RE.finditer(line):
+            stats['citation_count'] += 1
+            inner = m.group(1)
+            nums = []
+            for part in re.split(r'\s*,\s*', inner):
+                range_match = re.match(r'(\d+)\s*[-–]\s*(\d+)', part)
+                if range_match:
+                    nums.extend(range(int(range_match.group(1)), int(range_match.group(2)) + 1))
+                else:
+                    nums.append(int(part.strip()))
+            if len(nums) >= 2:
+                for i in range(1, len(nums)):
+                    if nums[i] < nums[i - 1]:
+                        issues.append({
+                            'level': 'warning',
+                            'category': '引用格式',
+                            'message': f'第 {line_no} 行：引用编号未按升序排列：[{inner}]',
+                            'suggestion': '多引用应按编号升序排列，如 [3,5,7] 而非 [7,3,5]',
+                        })
+                        break
+
+        # ---- 4) 写作风格检查（跳过引用块） ----
+        if not line.lstrip().startswith('>'):
+            for pattern, level, category, message, suggestion in _STYLE_CHECKS:
+                for m in pattern.finditer(line):
+                    start = max(0, m.start() - 8)
+                    end = min(len(line), m.end() + 8)
+                    snippet = line[start:end]
+                    issues.append({
+                        'level': level,
+                        'category': category,
+                        'message': f'第 {line_no} 行：{message}：...{snippet}...',
+                        'suggestion': suggestion,
+                    })
+
+        # ---- 5) 图表编号收集 ----
+        for m in fig_re.finditer(line):
+            fig_refs.append((int(m.group(1)), int(m.group(2))))
+        for m in tbl_re.finditer(line):
+            tbl_refs.append((int(m.group(1)), int(m.group(2))))
+
+        # ---- 6) 列表项检测 ----
+        if list_re.match(line):
+            issues.append({
+                'level': 'warning',
+                'category': '列表项',
+                'message': f'第 {line_no} 行：检测到列表项格式',
+                'suggestion': '学位论文应使用段落叙述，避免使用列表项',
+            })
+
+        # ---- 7) Pipe 表格语法检查 ----
+        # 检测非标准表格写法（如 HTML <table> 或缩进式表格）
+        if '<table' in line.lower() or '<tr' in line.lower():
+            issues.append({
+                'level': 'error',
+                'category': '表格语法',
+                'message': f'第 {line_no} 行：检测到 HTML 表格标签',
+                'suggestion': '请使用 Markdown pipe 表格语法（| 列1 | 列2 |）',
+            })
+
+        # ---- 8) 图表题注格式检查 ----
+        # 正确格式：「表 2-1：标题」或「图 3-2：标题」（中文冒号，章-序号）
+        caption_line_re = re.match(r'^(图|表)\s*(\d+[-\u2013]\d+)\s*([：:])(.*)$', line)
+        if caption_line_re:
+            colon_char = caption_line_re.group(3)
+            if colon_char == ':':
+                issues.append({
+                    'level': 'warning',
+                    'category': '题注格式',
+                    'message': f'第 {line_no} 行：题注使用了英文冒号',
+                    'suggestion': '图表题注应使用中文冒号（：），如「表 2-1：实验结果」',
+                })
+            caption_text = caption_line_re.group(4).strip()
+            if not caption_text:
+                issues.append({
+                    'level': 'error',
+                    'category': '题注格式',
+                    'message': f'第 {line_no} 行：题注缺少标题文字',
+                    'suggestion': '图表题注冒号后应有描述性标题文字',
+                })
+
+        # ---- 9) [图]/[实验] 占位标记检查 ----
+        placeholder_re = re.findall(r'\[(图[^]]*)\]|\[(实验[^]]*)\]', line)
+        for match_groups in placeholder_re:
+            marker = match_groups[0] or match_groups[1]
+            issues.append({
+                'level': 'info',
+                'category': '占位标记',
+                'message': f'第 {line_no} 行：检测到占位标记 [{marker}]',
+                'suggestion': '请确认占位标记已替换为实际内容或正确的图表引用',
+            })
+
+    # ---- 2-续) 标题层级跳跃检查 ----
+    for idx in range(1, len(heading_levels_seen)):
+        prev_line, prev_lvl = heading_levels_seen[idx - 1]
+        cur_line, cur_lvl = heading_levels_seen[idx]
+        if cur_lvl > prev_lvl + 1:
+            issues.append({
+                'level': 'warning',
+                'category': '标题层级',
+                'message': f'第 {cur_line} 行：标题层级从 {prev_lvl} 级跳到 {cur_lvl} 级',
+                'suggestion': '标题层级不应跳跃，如 # 后应先用 ## 再用 ###',
+            })
+
+    # ---- 5-续) 图表编号连续性检查 ----
+    stats['figure_count'] = len(fig_refs)
+    stats['table_count'] = len(tbl_refs)
+
+    def _check_numbering(refs, label):
+        """按章分组检查编号是否从 1 开始且连续"""
+        by_chapter = {}
+        for chap, seq in refs:
+            by_chapter.setdefault(chap, []).append(seq)
+        for chap, seqs in sorted(by_chapter.items()):
+            seqs_sorted = sorted(seqs)
+            expected = list(range(1, len(seqs_sorted) + 1))
+            if seqs_sorted != expected:
+                issues.append({
+                    'level': 'warning',
+                    'category': '图表编号',
+                    'message': f'第 {chap} 章{label}编号不连续：实际为 {seqs_sorted}，期望为 {expected}',
+                    'suggestion': f'{label}编号应从 1 开始且连续递增',
+                })
+
+    _check_numbering(fig_refs, '图')
+    _check_numbering(tbl_refs, '表')
+
+    # ---- 10) 题名长度检查（≤25 字） ----
+    for line_no, raw_line in enumerate(lines, start=1):
+        h1_match = re.match(r'^#\s+(.+)', raw_line.rstrip('\n'))
+        if h1_match:
+            title_text = h1_match.group(1).strip()
+            # 只计中文字符 + 英文单词（每个单词算 1 字）
+            cn_count = len(re.findall(r'[\u4e00-\u9fff]', title_text))
+            if cn_count > 25:
+                issues.append({
+                    'level': 'warning',
+                    'category': '题名长度',
+                    'message': f'第 {line_no} 行：一级标题中文字数为 {cn_count}（超过 25 字上限）',
+                    'suggestion': '中南大学规定论文题名一般不超过 25 个汉字',
+                })
+            break  # 只检查首个 H1
+
+    # ---- 11) 关键词分隔符检查 ----
+    for line_no, raw_line in enumerate(lines, start=1):
+        line = raw_line.rstrip('\n')
+        # 中文关键词行
+        cn_kw_match = re.match(r'^关键词[：:]\s*(.+)', line)
+        if cn_kw_match:
+            kw_text = cn_kw_match.group(1)
+            if ';' in kw_text or ',' in kw_text or '、' in kw_text:
+                issues.append({
+                    'level': 'warning',
+                    'category': '关键词格式',
+                    'message': f'第 {line_no} 行：中文关键词应使用全角分号（；）分隔',
+                    'suggestion': '中文关键词之间用全角分号"；"分隔，如"机器学习；深度学习；神经网络"',
+                })
+        # 英文关键词行
+        en_kw_match = re.match(r'^[Kk]eywords?[：:]\s*(.+)', line)
+        if en_kw_match:
+            kw_text = en_kw_match.group(1)
+            if '；' in kw_text or '，' in kw_text or '、' in kw_text:
+                issues.append({
+                    'level': 'warning',
+                    'category': '关键词格式',
+                    'message': f'第 {line_no} 行：英文关键词应使用半角分号（;）分隔',
+                    'suggestion': '英文关键词之间用半角分号";"分隔，如"machine learning; deep learning"',
+                })
+
+    return issues, stats
+
+
+def check_caption_style(doc):
+    """
+    检查图表题注格式是否符合规范：
+    - 字体：楷体 (KaiTi)
+    - 字号：10.5pt（五号）
+    - 对齐：居中
+    - 行距：单倍行距
+    - 段后间距：12pt
+    """
+    issues = []
+    reported = set()
+    FONT_SIZE_TOL = 0.5
+    SPACING_TOL = 1.0
+
+    caption_re = re.compile(r'^(图|表)\s*\d')
+
+    for i, para in enumerate(doc.paragraphs):
+        text = para.text.strip()
+        if not text:
+            continue
+        if not caption_re.match(text):
+            continue
+
+        cap_type = '图题注' if text.startswith('图') else '表题注'
+
+        # 字号检查
+        if para.runs:
+            run = para.runs[0]
+            if run.font.size is not None and hasattr(run.font.size, 'pt'):
+                actual = run.font.size.pt
+                if abs(actual - 10.5) > FONT_SIZE_TOL:
+                    tag = f'caption_font_size'
+                    if tag not in reported:
+                        reported.add(tag)
+                        issues.append({
+                            'level': 'error', 'category': '题注格式',
+                            'message': f'{cap_type}字号不符：{actual}pt（应为 10.5pt/五号）',
+                            'suggestion': '图表题注字号应设置为 10.5pt（五号）'
+                        })
+
+            # 字体检查（楷体）
+            ea_font = _get_east_asian_font(run)
+            if ea_font is not None:
+                tag = f'caption_font_ea'
+                if tag not in reported and '楷体' not in ea_font and 'KaiTi' not in ea_font:
+                    reported.add(tag)
+                    issues.append({
+                        'level': 'error', 'category': '题注格式',
+                        'message': f'{cap_type}中文字体不符：{ea_font}（应为楷体）',
+                        'suggestion': '图表题注中文字体应设置为楷体'
+                    })
+
+        # 对齐检查（居中）
+        actual_align = para.paragraph_format.alignment
+        if actual_align is not None:
+            align_val = actual_align if isinstance(actual_align, int) else actual_align.value if hasattr(actual_align, 'value') else None
+            if align_val is not None and align_val != 1:  # 1 = CENTER
+                tag = f'caption_alignment'
+                if tag not in reported:
+                    reported.add(tag)
+                    issues.append({
+                        'level': 'error', 'category': '题注格式',
+                        'message': f'{cap_type}对齐方式不符（应为居中）',
+                        'suggestion': '图表题注应设置为居中对齐'
+                    })
+
+        # 段前/段后间距检查（图题注：段前0/段后12pt；表题注：段前12pt/段后0）
+        is_figure = text.startswith('图')
+        sb = para.paragraph_format.space_before
+        sa = para.paragraph_format.space_after
+        if is_figure:
+            # 图题注：段前0，段后12pt（段后1行）
+            if sa is not None and hasattr(sa, 'pt'):
+                actual_sa = sa.pt
+                if abs(actual_sa - 12.0) > SPACING_TOL:
+                    tag = f'caption_fig_space_after'
+                    if tag not in reported:
+                        reported.add(tag)
+                        issues.append({
+                            'level': 'warning', 'category': '题注格式',
+                            'message': f'图题注段后间距不符：{actual_sa:.1f}pt（应为 12pt/段后1行）',
+                            'suggestion': '图题注段后间距应设置为 12pt（段后1行）'
+                        })
+            if sb is not None and hasattr(sb, 'pt'):
+                actual_sb = sb.pt
+                if actual_sb > SPACING_TOL:
+                    tag = f'caption_fig_space_before'
+                    if tag not in reported:
+                        reported.add(tag)
+                        issues.append({
+                            'level': 'warning', 'category': '题注格式',
+                            'message': f'图题注段前间距不符：{actual_sb:.1f}pt（应为 0pt）',
+                            'suggestion': '图题注段前间距应设置为 0pt'
+                        })
+        else:
+            # 表题注：段前12pt（段前1行），段后0
+            if sb is not None and hasattr(sb, 'pt'):
+                actual_sb = sb.pt
+                if abs(actual_sb - 12.0) > SPACING_TOL:
+                    tag = f'caption_tbl_space_before'
+                    if tag not in reported:
+                        reported.add(tag)
+                        issues.append({
+                            'level': 'warning', 'category': '题注格式',
+                            'message': f'表题注段前间距不符：{actual_sb:.1f}pt（应为 12pt/段前1行）',
+                            'suggestion': '表题注段前间距应设置为 12pt（段前1行）'
+                        })
+            if sa is not None and hasattr(sa, 'pt'):
+                actual_sa = sa.pt
+                if actual_sa > SPACING_TOL:
+                    tag = f'caption_tbl_space_after'
+                    if tag not in reported:
+                        reported.add(tag)
+                        issues.append({
+                            'level': 'warning', 'category': '题注格式',
+                            'message': f'表题注段后间距不符：{actual_sa:.1f}pt（应为 0pt）',
+                            'suggestion': '表题注段后间距应设置为 0pt'
+                        })
+
+        # 行距检查（单倍行距 ≈ 12pt for 10.5pt font, or linespacing rule SINGLE）
+        pf = para.paragraph_format
+        if pf.line_spacing_rule is not None:
+            rule_val = pf.line_spacing_rule if isinstance(pf.line_spacing_rule, int) else pf.line_spacing_rule.value if hasattr(pf.line_spacing_rule, 'value') else None
+            # WD_LINE_SPACING.SINGLE = 0, EXACTLY = 4, AT_LEAST = 3, MULTIPLE = 5
+            if rule_val is not None and rule_val not in (0, None):
+                # 如果不是单倍行距，检查是否为固定值且接近单倍
+                actual_ls = line_spacing_pt(para)
+                if actual_ls is not None and actual_ls > 15.0:
+                    tag = f'caption_line_spacing'
+                    if tag not in reported:
+                        reported.add(tag)
+                        issues.append({
+                            'level': 'warning', 'category': '题注格式',
+                            'message': f'{cap_type}行距不符：{actual_ls:.1f}pt（应为单倍行距）',
+                            'suggestion': '图表题注行距应设置为单倍行距'
+                        })
+
+    return issues
+
+
+def check_table_cell_format(doc):
+    """
+    检查表格单元格格式：
+    - 字体：宋体 (SimSun) 10.5pt（五号）
+    - 表头行加粗
+    - 单元格居中对齐
+    """
+    issues = []
+    reported = set()
+    FONT_SIZE_TOL = 0.5
+
+    for t_idx, table in enumerate(doc.tables):
+        num_rows = len(table.rows)
+        if num_rows < 2:
+            continue
+
+        table_label = f'表格 {t_idx + 1}'
+
+        for r_idx, row in enumerate(table.rows):
+            is_header = (r_idx == 0)
+            for c_idx, cell in enumerate(row.cells):
+                for para in cell.paragraphs:
+                    if not para.text.strip():
+                        continue
+
+                    # 居中对齐检查
+                    actual_align = para.paragraph_format.alignment
+                    if actual_align is not None:
+                        align_val = actual_align if isinstance(actual_align, int) else actual_align.value if hasattr(actual_align, 'value') else None
+                        if align_val is not None and align_val != 1:  # CENTER
+                            tag = f'tbl_cell_align_{t_idx}'
+                            if tag not in reported:
+                                reported.add(tag)
+                                issues.append({
+                                    'level': 'warning', 'category': '表格单元格',
+                                    'message': f'{table_label}：单元格未居中对齐',
+                                    'suggestion': '三线表单元格内容应居中对齐'
+                                })
+
+                    for run in para.runs:
+                        # 字号检查
+                        if run.font.size is not None and hasattr(run.font.size, 'pt'):
+                            actual = run.font.size.pt
+                            if abs(actual - 10.5) > FONT_SIZE_TOL:
+                                tag = f'tbl_cell_fontsize_{t_idx}'
+                                if tag not in reported:
+                                    reported.add(tag)
+                                    issues.append({
+                                        'level': 'warning', 'category': '表格单元格',
+                                        'message': f'{table_label}：单元格字号不符 {actual}pt（应为 10.5pt）',
+                                        'suggestion': '表格单元格字号应设置为 10.5pt（五号）'
+                                    })
+
+                        # 中文字体检查
+                        ea_font = _get_east_asian_font(run)
+                        if ea_font is not None and '宋体' not in ea_font and 'SimSun' not in ea_font:
+                            tag = f'tbl_cell_fontea_{t_idx}'
+                            if tag not in reported:
+                                reported.add(tag)
+                                issues.append({
+                                    'level': 'warning', 'category': '表格单元格',
+                                    'message': f'{table_label}：单元格中文字体不符 {ea_font}（应为宋体）',
+                                    'suggestion': '表格单元格中文字体应设置为宋体'
+                                })
+
+                        # 表头加粗检查
+                        if is_header:
+                            if run.font.bold is not None and not run.font.bold:
+                                tag = f'tbl_header_bold_{t_idx}'
+                                if tag not in reported:
+                                    reported.add(tag)
+                                    issues.append({
+                                        'level': 'warning', 'category': '表格单元格',
+                                        'message': f'{table_label}：表头行未加粗',
+                                        'suggestion': '三线表表头行文字应加粗'
+                                    })
+                        break  # 只检查第一个 run
+                    break  # 只检查第一个段落
+
+    return issues
+
+
+def check_run_level_font_pairing(doc):
+    """
+    检查正文 run 级别的双字体配对完整性：
+    每个 run 应同时设置东亚字体（宋体）和西文字体（Times New Roman）。
+    仅抽样检查前 20 个正文段落。
+    """
+    issues = []
+    sample_count = 0
+    max_samples = 20
+    missing_ea = 0
+    missing_latin = 0
+
+    for para in doc.paragraphs:
+        if not para.text.strip():
+            continue
+        style_name = para.style.name if para.style else None
+        if style_name not in ('Normal', '正文'):
+            continue
+
+        sample_count += 1
+        if sample_count > max_samples:
+            break
+
+        for run in para.runs:
+            if not run.text.strip():
+                continue
+            # 检查西文字体
+            if run.font.name is None:
+                missing_latin += 1
+            # 检查东亚字体
+            ea_font = _get_east_asian_font(run)
+            if ea_font is None:
+                missing_ea += 1
+
+    if missing_ea > 3:
+        issues.append({
+            'level': 'warning', 'category': '字体配对',
+            'message': f'正文中 {missing_ea} 个 run 缺少东亚字体定义（抽样 {max_samples} 段）',
+            'suggestion': '每个 run 应同时设置东亚字体（宋体）和西文字体（Times New Roman）'
+        })
+    if missing_latin > 3:
+        issues.append({
+            'level': 'warning', 'category': '字体配对',
+            'message': f'正文中 {missing_latin} 个 run 缺少西文字体定义（抽样 {max_samples} 段）',
+            'suggestion': '每个 run 应同时设置东亚字体（宋体）和西文字体（Times New Roman）'
+        })
+
+    return issues
+
+
+def check_header_footer(doc):
+    """
+    检查页眉页脚格式是否符合中南大学规范：
+    - 页眉：宋体五号(10.5pt)，左侧"中南大学博士学位论文"，距顶端1.5cm
+    - 页脚：TNR 小五号(9pt)，居中页码，距底端1.75cm
+    """
+    issues = []
+    FONT_SIZE_TOL = 0.5
+    DISTANCE_TOL = Cm(0.2)
+
+    for sec_idx, section in enumerate(doc.sections):
+        sec_label = f'第 {sec_idx + 1} 节'
+
+        # ---- 页眉检查 ----
+        header = section.header
+        if header and not header.is_linked_to_previous:
+            h_paras = [p for p in header.paragraphs if p.text.strip()]
+            if not h_paras:
+                issues.append({
+                    'level': 'warning', 'category': '页眉格式',
+                    'message': f'{sec_label}：页眉为空',
+                    'suggestion': '页眉应包含"中南大学博士学位论文"（左）和章名（右）',
+                })
+            else:
+                h_text = h_paras[0].text.strip()
+                if '中南大学博士学位论文' not in h_text:
+                    issues.append({
+                        'level': 'warning', 'category': '页眉格式',
+                        'message': f'{sec_label}：页眉缺少"中南大学博士学位论文"',
+                        'suggestion': '页眉左侧应为"中南大学博士学位论文"',
+                    })
+                # 字号检查
+                for run in h_paras[0].runs:
+                    if run.font.size is not None:
+                        actual_pt = run.font.size.pt
+                        if abs(actual_pt - 10.5) > FONT_SIZE_TOL:
+                            issues.append({
+                                'level': 'warning', 'category': '页眉格式',
+                                'message': f'{sec_label}：页眉字号为 {actual_pt}pt，应为 10.5pt（五号）',
+                                'suggestion': '页眉字号应为宋体五号（10.5pt）',
+                            })
+                        break
+
+        # 页眉距顶端
+        if section.header_distance is not None:
+            expected = Cm(1.5)
+            if abs(section.header_distance - expected) > DISTANCE_TOL:
+                actual_cm = section.header_distance / Cm(1)
+                issues.append({
+                    'level': 'warning', 'category': '页眉格式',
+                    'message': f'{sec_label}：页眉距顶端 {actual_cm:.2f}cm，应为 1.5cm',
+                    'suggestion': '页眉距顶端应设置为 1.5cm',
+                })
+
+        # ---- 页脚检查 ----
+        footer = section.footer
+        if footer and not footer.is_linked_to_previous:
+            f_paras = [p for p in footer.paragraphs if p.text.strip() or
+                       any(el.tag.endswith('fldChar') for el in p._element.iter())]
+            if not f_paras:
+                issues.append({
+                    'level': 'warning', 'category': '页脚格式',
+                    'message': f'{sec_label}：页脚为空（缺少页码）',
+                    'suggestion': '页脚应包含居中页码',
+                })
+            else:
+                # 居中检查
+                p = f_paras[0]
+                if p.alignment not in (WD_ALIGN_PARAGRAPH.CENTER, None):
+                    issues.append({
+                        'level': 'warning', 'category': '页脚格式',
+                        'message': f'{sec_label}：页脚未居中对齐',
+                        'suggestion': '页码应居中对齐',
+                    })
+                # 字号检查
+                for run in p.runs:
+                    if run.font.size is not None:
+                        actual_pt = run.font.size.pt
+                        if abs(actual_pt - 9) > FONT_SIZE_TOL:
+                            issues.append({
+                                'level': 'warning', 'category': '页脚格式',
+                                'message': f'{sec_label}：页脚字号为 {actual_pt}pt，应为 9pt（小五号）',
+                                'suggestion': '页码字号应为 TNR 小五号（9pt）',
+                            })
+                        break
+
+        # 页脚距底端
+        if section.footer_distance is not None:
+            expected = Cm(1.75)
+            if abs(section.footer_distance - expected) > DISTANCE_TOL:
+                actual_cm = section.footer_distance / Cm(1)
+                issues.append({
+                    'level': 'warning', 'category': '页脚格式',
+                    'message': f'{sec_label}：页脚距底端 {actual_cm:.2f}cm，应为 1.75cm',
+                    'suggestion': '页脚距底端应设置为 1.75cm',
+                })
+
+    return issues
+
+
 def generate_quality_report(
     docx_path,
     verbose=True,
@@ -1048,6 +2003,7 @@ def generate_quality_report(
     references_min_count=80,
     min_chapters=5,
     enforce_full_structure=False,
+    md_path=None,
 ):
     """生成完整质量报告"""
     try:
@@ -1117,6 +2073,20 @@ def generate_quality_report(
             print("🔍 检查全文结构门禁...")
         structure_issues = check_full_thesis_structure(doc, min_chapters=min_chapters)
         all_issues.extend(structure_issues)
+
+    # 5.5 全文结构顺序校验（仅在全文检查时启用）
+    if enforce_full_structure:
+        if verbose:
+            print("🔍 检查全文结构顺序...")
+        order_issues = check_section_order(doc)
+        all_issues.extend(order_issues)
+
+    # 5.6 章间分页符校验（仅在全文检查时启用）
+    if enforce_full_structure:
+        if verbose:
+            print("🔍 检查章间分页符...")
+        page_break_issues = check_page_breaks_between_chapters(doc)
+        all_issues.extend(page_break_issues)
     
     # 6. 检查段落格式
     if verbose:
@@ -1124,7 +2094,6 @@ def generate_quality_report(
     format_issues = check_paragraph_formatting(doc)
     all_issues.extend(format_issues)
 
-<<<<<<< Updated upstream
     # 7. 检查三线表格式
     if verbose:
         print("🔍 检查三线表格式...")
@@ -1134,40 +2103,54 @@ def generate_quality_report(
     # 7.1 检查图编号映射一致性（如果 figure_map.json 存在）
     if verbose:
         print("🔍 检查图编号映射...")
-    figure_map_project_root = os.path.dirname(os.path.abspath(docx_path))
+    figure_map_project_root = infer_project_root_for_profile(docx_path)
     figure_map_issues = check_figure_map_consistency(doc, project_root=figure_map_project_root)
     all_issues.extend(figure_map_issues)
 
-    # 8. 检查缩略语一致性（如果 abbreviation_registry 可用）
-    try:
-        from abbreviation_registry import validate_cross_references
-        if verbose:
-            print("🔍 检查缩略语一致性...")
-        # 尝试从 docx_path 推断项目目录
-        project_dir = os.path.dirname(os.path.abspath(docx_path))
-        registry_path = os.path.join(project_dir, 'abbreviation_registry.json')
-        if os.path.exists(registry_path):
-            abbr_result = validate_cross_references(project_dir)
-            if abbr_result.get("invalid_count", 0) > 0:
-                for detail in abbr_result.get("details", []):
-                    all_issues.append({
-                        'level': 'warning',
-                        'category': '缩略语',
-                        'message': detail if isinstance(detail, str) else str(detail),
-                        'suggestion': '请检查缩略语注册表与正文的一致性'
-                    })
-    except ImportError:
-        pass  # abbreviation_registry 不可用时静默跳过
-    except Exception:
-        pass  # 非致命：缩略语检查不应阻断质量报告
-=======
-    # 7. 检查缩略语一致性
+    # 8. 检查缩略语一致性
     if verbose:
         print("🔍 检查缩略语一致性...")
     abbr_project_root = infer_project_root_for_profile(docx_path)
     abbr_issues = check_abbreviation_consistency(doc, project_root=abbr_project_root)
     all_issues.extend(abbr_issues)
->>>>>>> Stashed changes
+
+    # 9. Word 格式合规检查（页面布局、字体、字号、行距等）
+    if verbose:
+        print("🔍 检查 Word 格式合规...")
+    word_format_issues = check_word_format_compliance(doc)
+    all_issues.extend(word_format_issues)
+
+    # 9.1 题注格式检查（楷体/10.5pt/居中/单倍行距/段后12pt）
+    if verbose:
+        print("🔍 检查题注格式...")
+    caption_issues = check_caption_style(doc)
+    all_issues.extend(caption_issues)
+
+    # 9.2 表格单元格格式检查（宋体10.5pt/表头加粗/居中）
+    if verbose:
+        print("🔍 检查表格单元格格式...")
+    cell_issues = check_table_cell_format(doc)
+    all_issues.extend(cell_issues)
+
+    # 9.3 Run 级别双字体配对完整性检查
+    if verbose:
+        print("🔍 检查字体配对完整性...")
+    pairing_issues = check_run_level_font_pairing(doc)
+    all_issues.extend(pairing_issues)
+
+    # 9.4 页眉页脚格式检查
+    if verbose:
+        print("🔍 检查页眉页脚格式...")
+    hf_issues = check_header_footer(doc)
+    all_issues.extend(hf_issues)
+
+    # 10. Markdown 质量检查（如果提供了 md_path）
+    md_stats = None
+    if md_path:
+        if verbose:
+            print("🔍 检查 Markdown 质量...")
+        md_issues, md_stats = check_markdown_quality(md_path)
+        all_issues.extend(md_issues)
     
     # 计算总分（简化评分）
     error_count = len([i for i in all_issues if i['level'] == 'error'])
@@ -1188,7 +2171,8 @@ def generate_quality_report(
             'reference_count': ref_count,
             'reference_target_count': int(references_min_count),
             'total_paragraphs': len(doc.paragraphs),
-            'total_tables': len(doc.tables)
+            'total_tables': len(doc.tables),
+            'markdown': md_stats,
         },
         'issue_summary': {
             'total': len(all_issues),
@@ -1347,6 +2331,7 @@ def main():
     parser.add_argument("--references-min", type=int, help="覆盖最少参考文献数量")
     parser.add_argument("--min-chapters", type=int, help="覆盖最少章节数（全文结构门禁）")
     parser.add_argument("--enforce-full-structure", action="store_true", help="启用全文结构门禁（章数/首章绪论/末章总结）")
+    parser.add_argument("--md", dest="md_path", help="同时检查对应的 Markdown 源文件")
     args = parser.parse_args()
     docx_path = args.docx_path
     output_format = args.output
@@ -1402,6 +2387,7 @@ def main():
         references_min_count=references_min_count,
         min_chapters=min_chapters,
         enforce_full_structure=enforce_full_structure,
+        md_path=args.md_path,
     )
     
     if not report.get('success'):

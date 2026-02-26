@@ -182,7 +182,7 @@ def count_words_in_md(
             review_english_words += counts["english_words"]
         elif current_section_type == "references" and exclude_references:
             pass
-        elif current_section_type in {"toc", "abstract", "acknowledgement", "appendix"}:
+        elif current_section_type in {"toc", "abstract", "acknowledgement", "appendix", "achievements", "declaration", "abbreviation_table"}:
             pass
         else:
             body_chinese_chars += counts["chinese_chars"]
@@ -437,8 +437,33 @@ def count_words(
         return count_words_in_atomic_dir(path, **kwargs)
     elif path.lower().endswith(".md"):
         return count_words_in_md(path, **kwargs)
+    elif path.lower().endswith(".docx"):
+        # Extract text from .docx via python-docx, write to temp .md, then count
+        try:
+            from docx import Document as DocxDocument
+        except ImportError:
+            return {"success": False, "error": "python-docx 未安装，无法统计 .docx 文件"}
+        try:
+            doc = DocxDocument(path)
+            md_lines = []
+            for para in doc.paragraphs:
+                md_lines.append(para.text)
+            md_text = "\n".join(md_lines)
+        except Exception as e:
+            return {"success": False, "error": f"读取 .docx 失败：{e}"}
+        import tempfile
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False, encoding="utf-8") as tmp:
+            tmp.write(md_text)
+            tmp_path = tmp.name
+        try:
+            result = count_words_in_md(tmp_path, **kwargs)
+            result["file_path"] = path
+            result["file_name"] = os.path.basename(path)
+            return result
+        finally:
+            os.unlink(tmp_path)
     else:
-        return {"success": False, "error": f"不支持的文件类型：{path}（支持 .md 文件或目录）"}
+        return {"success": False, "error": f"不支持的文件类型：{path}（支持 .md / .docx 文件或目录）"}
 
 
 def format_report(result):

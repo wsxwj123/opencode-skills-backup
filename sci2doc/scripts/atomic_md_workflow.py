@@ -317,6 +317,64 @@ def extract_chapter_no(name):
     return int(m.group(1))
 
 
+# ---------------------------------------------------------------------------
+# 全文合并排序：前置部分 → 正文章节 → 后置部分
+# ---------------------------------------------------------------------------
+
+_FRONT_MATTER_ORDER = [
+    ("封面", 1),
+    ("题名", 2),
+    ("独创性", 3),
+    ("授权", 4),
+    ("中文摘要", 5),
+    ("摘要", 6),       # 如果没有"中文摘要"则匹配"摘要"
+    ("英文摘要", 7),
+    ("abstract", 8),
+    ("目录", 9),
+    ("缩略", 10),
+    ("符号", 11),
+]
+
+_BACK_MATTER_ORDER = [
+    ("参考文献", 1),
+    ("致谢", 2),
+    ("攻读", 3),
+    ("成果", 4),
+    ("附录", 5),
+]
+
+
+def _full_merge_sort_key(path):
+    """为全文合并生成排序键: (大类, 子序号, 文件名)。
+
+    大类:
+      0 = 前置部分 (封面/摘要/目录等)
+      1 = 正文章节 (第X章)
+      2 = 后置部分 (参考文献/致谢等)
+      3 = 未识别
+    """
+    name = path.name if hasattr(path, "name") else os.path.basename(str(path))
+    name_lower = name.lower().replace(" ", "")
+
+    # 正文章节
+    m = re.search(r"第(\d+)章", name)
+    if m:
+        return (1, int(m.group(1)), name)
+
+    # 前置部分
+    for keyword, order in _FRONT_MATTER_ORDER:
+        if keyword in name_lower:
+            return (0, order, name)
+
+    # 后置部分
+    for keyword, order in _BACK_MATTER_ORDER:
+        if keyword in name_lower:
+            return (2, order, name)
+
+    # 未识别 → 放在正文章节之后、后置部分之前
+    return (1, 10**6, name)
+
+
 def merge_full(project_root, input_dir=None, output_md=None, to_docx=False, docx_output=None):
     source_dir = Path(input_dir) if input_dir else Path(project_root) / "02_分章节文档_md"
     if not source_dir.exists():
@@ -324,7 +382,7 @@ def merge_full(project_root, input_dir=None, output_md=None, to_docx=False, docx
         return 2
 
     chapter_files = [p for p in source_dir.glob("*.md") if p.is_file()]
-    chapter_files = sorted(chapter_files, key=lambda p: (extract_chapter_no(p.name), p.name))
+    chapter_files = sorted(chapter_files, key=_full_merge_sort_key)
     if not chapter_files:
         print(json.dumps({"ok": False, "error": "no_chapter_md_files", "input_dir": str(source_dir)}, ensure_ascii=False))
         return 2

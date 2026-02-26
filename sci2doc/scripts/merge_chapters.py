@@ -42,6 +42,63 @@ def extract_chapter_number(filename):
     return 999  # 未识别的放到最后
 
 
+# ---------------------------------------------------------------------------
+# 全文合并排序：前置部分 → 正文章节 → 后置部分
+# ---------------------------------------------------------------------------
+
+_FRONT_MATTER_ORDER = [
+    ("封面", 1),
+    ("题名", 2),
+    ("独创性", 3),
+    ("授权", 4),
+    ("中文摘要", 5),
+    ("摘要", 6),
+    ("英文摘要", 7),
+    ("abstract", 8),
+    ("目录", 9),
+    ("缩略", 10),
+    ("符号", 11),
+]
+
+_BACK_MATTER_ORDER = [
+    ("参考文献", 1),
+    ("致谢", 2),
+    ("攻读", 3),
+    ("成果", 4),
+    ("附录", 5),
+]
+
+
+def _docx_merge_sort_key(filepath):
+    """为 docx 全文合并生成排序键: (大类, 子序号, 文件名)。
+
+    大类:
+      0 = 前置部分 (封面/摘要/目录等)
+      1 = 正文章节 (第X章)
+      2 = 后置部分 (参考文献/致谢等)
+      3 = 未识别
+    """
+    name = os.path.basename(filepath).lower().replace(" ", "")
+
+    # 正文章节
+    m = re.search(r"第(\d+)章", name)
+    if m:
+        return (1, int(m.group(1)), name)
+
+    # 前置部分
+    for keyword, order in _FRONT_MATTER_ORDER:
+        if keyword in name:
+            return (0, order, name)
+
+    # 后置部分
+    for keyword, order in _BACK_MATTER_ORDER:
+        if keyword in name:
+            return (2, order, name)
+
+    # 未识别 → 放在正文章节之后、后置部分之前
+    return (1, 10**6, name)
+
+
 try:
     from shared_utils import heading_level
 except ImportError:  # pragma: no cover
@@ -68,8 +125,8 @@ def merge_docx_files(file_list, output_path, require_high_fidelity=False):
             'error': '文件列表为空'
         }
     
-    # 按章节号排序
-    file_list_sorted = sorted(file_list, key=lambda x: extract_chapter_number(os.path.basename(x)))
+    # 按章节号排序（支持前置/后置部分智能排序）
+    file_list_sorted = sorted(file_list, key=_docx_merge_sort_key)
     
     # 优先使用高保真合并（docxcompose）
     if require_high_fidelity and Composer is None:
@@ -196,13 +253,18 @@ def generate_toc(doc):
     """
     生成目录（简化版）
     注意：完整的 Word 目录需要 VBA 或 COM 自动化
-    
+
+    格式：
+    - 标题"目  录"：三号黑体加粗居中
+    - 章标题：小四号黑体
+    - 节标题：小四号宋体
+    - 1.5 倍行距
+
     Args:
         doc: Document 对象
     """
     toc_entries = []
-    
-    # 扫描所有标题
+
     for para in doc.paragraphs:
         level = heading_level(getattr(para.style, "name", ""))
         if level is not None:
@@ -210,63 +272,221 @@ def generate_toc(doc):
                 'text': para.text,
                 'level': level
             })
-    
-    # 在文档开头插入目录
-    toc_para = doc.paragraphs[0].insert_paragraph_before()
-    toc_para.add_run('目  录').bold = True
-    toc_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    toc_para.paragraph_format.space_after = Pt(24)
-    
+
+    # 在文档开头插入目录标题
+    toc_title = doc.paragraphs[0].insert_paragraph_before()
+    run_title = toc_title.add_run('目  录')
+    run_title.bold = True
+    run_title.font.name = 'SimHei'
+    run_title._element.rPr.rFonts.set(qn('w:eastAsia'), 'SimHei')
+    run_title.font.size = Pt(16)  # 三号
+    toc_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    toc_title.paragraph_format.space_after = Pt(12)
+    from docx.enum.text import WD_LINE_SPACING
+    toc_title.paragraph_format.line_spacing_rule = WD_LINE_SPACING.ONE_POINT_FIVE
+
     for entry in toc_entries:
         toc_line = doc.paragraphs[1].insert_paragraph_before()
-        indent = (entry['level'] - 1) * 0.74  # 每级缩进 0.74cm
+        indent = (entry['level'] - 1) * 0.74
         toc_line.paragraph_format.left_indent = Cm(indent)
-        toc_line.add_run(entry['text'])
-        toc_line.add_run('.' * 30)  # 占位符
-        toc_line.add_run('[页码待更新]')
-    
+        toc_line.paragraph_format.line_spacing_rule = WD_LINE_SPACING.ONE_POINT_FIVE
+
+        run = toc_line.add_run(entry['text'])
+        run.font.size = Pt(12)  # 小四号
+        if entry['level'] == 1:
+            run.font.name = 'SimHei'
+            run._element.rPr.rFonts.set(qn('w:eastAsia'), 'SimHei')
+        else:
+            run.font.name = 'SimSun'
+            run._element.rPr.rFonts.set(qn('w:eastAsia'), 'SimSun')
+        run.font.name = 'Times New Roman'  # 西文字体
+
     print("✅ 目录已生成（页码需要在 Word 中手动更新字段）")
+
+
+def _set_run_font(run, latin='Times New Roman', east_asia='SimSun', size_pt=10.5, bold=None):
+    """设置 run 的中西文字体、字号、加粗。"""
+    run.font.name = latin
+    run._element.rPr.rFonts.set(qn('w:eastAsia'), east_asia)
+    run.font.size = Pt(size_pt)
+    if bold is not None:
+        run.bold = bold
+
+
+def _add_page_field(run):
+    """向 run 中插入 PAGE 域代码。"""
+    fldChar1 = OxmlElement('w:fldChar')
+    fldChar1.set(qn('w:fldCharType'), 'begin')
+    instrText = OxmlElement('w:instrText')
+    instrText.set(qn('xml:space'), 'preserve')
+    instrText.text = " PAGE "
+    fldChar2 = OxmlElement('w:fldChar')
+    fldChar2.set(qn('w:fldCharType'), 'end')
+    run._r.append(fldChar1)
+    run._r.append(instrText)
+    run._r.append(fldChar2)
+
+
+def _set_page_number_format(section, fmt='decimal', start_at=None):
+    """设置节的页码格式。fmt: 'lowerRoman' | 'decimal'"""
+    sectPr = section._sectPr
+    pgNumType = sectPr.find(qn('w:pgNumType'))
+    if pgNumType is None:
+        pgNumType = OxmlElement('w:pgNumType')
+        sectPr.append(pgNumType)
+    pgNumType.set(qn('w:fmt'), fmt)
+    if start_at is not None:
+        pgNumType.set(qn('w:start'), str(start_at))
+    elif qn('w:start') in pgNumType.attrib:
+        del pgNumType.attrib[qn('w:start')]
+
+
+def _insert_section_break_before(paragraph):
+    """在段落前插入分节符（下一页）。
+
+    实现方式：在前一个段落的 pPr 中添加 <w:sectPr><w:type val="nextPage"/></w:sectPr>。
+    如果该段落是文档第一个段落，则不插入。
+    """
+    p_elem = paragraph._element
+    prev = p_elem.getprevious()
+    if prev is None:
+        return
+    # prev 可能是 <w:p> 或 <w:tbl>，只处理 <w:p>
+    if prev.tag != qn('w:p'):
+        return
+    pPr = prev.find(qn('w:pPr'))
+    if pPr is None:
+        pPr = OxmlElement('w:pPr')
+        prev.insert(0, pPr)
+    sectPr = OxmlElement('w:sectPr')
+    sectType = OxmlElement('w:type')
+    sectType.set(qn('w:val'), 'nextPage')
+    sectPr.append(sectType)
+    pPr.append(sectPr)
+
+
+def _classify_para_zone(para_text):
+    """判断段落属于前置/正文/后置。返回 'front'/'body'/'back'/None。"""
+    text = para_text.strip()
+    if re.search(r'第\d+章', text):
+        return 'body'
+    front_kw = ['封面', '题名', '独创性', '授权', '摘要', 'abstract', '目录', '缩略', '符号']
+    for kw in front_kw:
+        if kw in text.lower():
+            return 'front'
+    back_kw = ['参考文献', '致谢', '攻读', '成果', '附录']
+    for kw in back_kw:
+        if kw in text:
+            return 'back'
+    return None
 
 
 def add_header_footer(doc, thesis_title, university_name="中南大学"):
     """
-    添加页眉页脚
-    
+    添加页眉页脚（中南大学 2022 规范），按章节分节。
+
+    流程：
+    1. 扫描所有 Heading 1 段落，在其前方插入分节符
+    2. 为每个 section 设置独立页眉（左：大学名+博士学位论文，右：章名）
+    3. 前置部分页码用 lowerRoman，正文起用 decimal（从 1 开始）
+
     Args:
         doc: Document 对象
-        thesis_title: 论文标题
+        thesis_title: 论文标题（前置部分页眉右侧备用）
         university_name: 大学名称（默认：中南大学）
     """
-    section = doc.sections[0]
-    
-    # 页眉
-    header = section.header
-    header_para = header.paragraphs[0]
-    header_para.text = f"{university_name}博士学位论文                                {thesis_title}"
-    header_para.style = doc.styles['Header']
-    
-    # 页脚（页码）
-    footer = section.footer
-    footer_para = footer.paragraphs[0]
-    footer_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    
-    # 添加页码字段
-    run = footer_para.add_run()
-    fldChar1 = OxmlElement('w:fldChar')
-    fldChar1.set(qn('w:fldCharType'), 'begin')
-    
-    instrText = OxmlElement('w:instrText')
-    instrText.set(qn('xml:space'), 'preserve')
-    instrText.text = "PAGE"
-    
-    fldChar2 = OxmlElement('w:fldChar')
-    fldChar2.set(qn('w:fldCharType'), 'end')
-    
-    run._r.append(fldChar1)
-    run._r.append(instrText)
-    run._r.append(fldChar2)
-    
-    print("✅ 页眉页脚已添加")
+    from docx.enum.text import WD_TAB_ALIGNMENT
+    from shared_utils import heading_level
+
+    # ---- 第一步：收集 H1 段落及其章名 ----
+    h1_paragraphs = []
+    for para in doc.paragraphs:
+        lvl = heading_level(getattr(para.style, 'name', ''))
+        if lvl == 1:
+            h1_paragraphs.append(para)
+
+    # ---- 第二步：在每个 H1 前插入分节符（跳过第一个 H1） ----
+    for para in h1_paragraphs[1:]:
+        _insert_section_break_before(para)
+
+    # ---- 第三步：建立 section → 章名 / 区域 映射 ----
+    # 重新遍历，因为插入分节符后 sections 数量变了
+    section_info = []  # [(chapter_name, zone)]
+    current_name = thesis_title or ''
+    current_zone = 'front'
+    h1_idx = 0
+
+    for para in doc.paragraphs:
+        lvl = heading_level(getattr(para.style, 'name', ''))
+        if lvl == 1:
+            zone = _classify_para_zone(para.text)
+            if zone:
+                current_zone = zone
+            current_name = para.text.strip()
+            if h1_idx > 0:
+                section_info.append((current_name, current_zone))
+            else:
+                section_info.append((current_name, current_zone))
+            h1_idx += 1
+
+    # 如果没有 H1，整个文档算一个 section
+    if not section_info:
+        section_info.append((thesis_title or '', 'front'))
+
+    # 补齐：sections 可能比 section_info 多（文档原有 section）
+    while len(section_info) < len(doc.sections):
+        section_info.append((thesis_title or '', 'front'))
+
+    # ---- 第四步：逐 section 设置页眉页脚和页码格式 ----
+    left_text = f'{university_name}博士学位论文'
+    body_started = False
+
+    for i, section in enumerate(doc.sections):
+        if i < len(section_info):
+            chapter_name, zone = section_info[i]
+        else:
+            chapter_name, zone = thesis_title or '', 'body'
+
+        # ---- 页眉 ----
+        section.header_distance = Cm(1.5)
+        header = section.header
+        header.is_linked_to_previous = False
+        header_para = header.paragraphs[0]
+        header_para.clear()
+
+        text_width = section.page_width - section.left_margin - section.right_margin
+        header_para.paragraph_format.tab_stops.add_tab_stop(text_width, WD_TAB_ALIGNMENT.RIGHT)
+
+        right_text = chapter_name if zone == 'body' else (thesis_title or '')
+        run_h = header_para.add_run(f'{left_text}\t{right_text}')
+        _set_run_font(run_h, latin='Times New Roman', east_asia='SimSun', size_pt=10.5)
+
+        # ---- 页脚 ----
+        section.footer_distance = Cm(1.75)
+        footer = section.footer
+        footer.is_linked_to_previous = False
+        footer_para = footer.paragraphs[0]
+        footer_para.clear()
+        footer_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+        run_f = footer_para.add_run()
+        _add_page_field(run_f)
+        _set_run_font(run_f, latin='Times New Roman', east_asia='SimSun', size_pt=9)
+
+        # ---- 页码格式 ----
+        if zone == 'body' and not body_started:
+            _set_page_number_format(section, fmt='decimal', start_at=1)
+            body_started = True
+        elif zone == 'front':
+            if i == 0:
+                _set_page_number_format(section, fmt='lowerRoman', start_at=1)
+            else:
+                _set_page_number_format(section, fmt='lowerRoman')
+        else:
+            # body 后续章节 / back matter：续前页码
+            _set_page_number_format(section, fmt='decimal')
+
+    print(f"✅ 页眉页脚已添加（{len(doc.sections)} 个分节，正文从第 1 页起用阿拉伯数字）")
 
 
 def resolve_merge_order(input_dir, cover=None, abstract=None, abstract_en=None):
@@ -292,7 +512,7 @@ def resolve_merge_order(input_dir, cover=None, abstract=None, abstract_en=None):
     for filename in os.listdir(input_dir):
         if filename.endswith(".docx") and not filename.startswith("~"):
             chapters.append(os.path.join(input_dir, filename))
-    chapters = sorted(chapters, key=lambda x: extract_chapter_number(os.path.basename(x)))
+    chapters = sorted(chapters, key=_docx_merge_sort_key)
     for p in chapters:
         if p not in seen:
             ordered.append(p)
