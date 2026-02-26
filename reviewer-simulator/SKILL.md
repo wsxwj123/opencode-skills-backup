@@ -236,13 +236,14 @@ description: Use when simulating a high-bar academic peer review for manuscripts
 三、外部基准与技术合规审计检查点
 
 <TOOL_USAGE_RULES>
-**绝对指令：执行新颖性、文献全面性和标准核查时，必须调用专门的学术搜索 MCP 工具！**
-强制使用以下工具：
-- `paper-search_search_pubmed` (用于医学、生物学)
-- `paper-search_search_arxiv` (用于预印本、计算机科学、物理等)
-- `paper-search_search_semantic` (用于综合性学术文献)
+**检索工具调用优先级指令：在执行新颖性、文献全面性和标准核查时，必须【优先且穷尽】专门的学术搜索 MCP 工具！**
+首选工具列表（根据学科或检索目标选择）：
+- `paper-search_search_pubmed` (医学、生物学首选)
+- `paper-search_search_google_scholar` (跨学科综合文献首选)
+- `paper-search_search_semantic` (综合性学术文献、计算机等)
+- `paper-search_search_arxiv` (预印本、计算机科学、物理等)
 
-**【红线禁令】禁止在文献检索环节调用 `tavily_tavily-search`、`websearch_web_search_exa` 或任何通用网络搜索引擎。只要是查文献，只能用 `paper-search_*` 系列工具。这是强制约束，不可变通。**
+**【后备机制】**：`tavily_tavily-search` 或 `websearch_web_search_exa` 等通用搜索引擎**仅作为最后的手段（Last Resort）**。只有在上述 `paper-search` 工具多次检索失败、报错或无返回结果时，为了保证任务继续，才允许降级调用通用搜索引擎。**严禁一上来就图省事调用 Tavily。**
 </TOOL_USAGE_RULES>
 
 如无任何可用工具支持,则基于语言特征和文本分析进行人工判断:
@@ -293,7 +294,7 @@ description: Use when simulating a high-bar academic peer review for manuscripts
 
 第二步：外部基准先行核查
 
-必须首先执行以下外部基准核查, **强烈要求：只允许调用专门的学术搜索 MCP 工具（如 paper-search_search_pubmed / paper-search_search_arxiv / paper-search_search_semantic 等）进行分析和验证，绝对禁止使用通用搜索引擎（如 tavily_tavily-search 或 websearch_web_search_exa）。** 如无可用学术工具支持则基于人工判断:
+必须首先执行以下外部基准核查。**强烈要求：必须优先调用专门的学术搜索 MCP 工具（如 paper-search_search_pubmed / paper-search_search_google_scholar / paper-search_search_semantic / paper-search_search_arxiv）进行文献搜索与比对。通用搜索引擎（如 tavily_tavily-search）仅作为专用工具全部失效时的最后备用手段。** 如无任何可用工具支持则基于人工判断:
 
 1. 目标标准核查
 搜索目标期刊或会议的最新发表范围和近期论文,确保评估标准准确。
@@ -511,7 +512,7 @@ AIGC率过高或涉嫌造假
 
 1. 保持匿名与公正,不推断作者身份或机构
 2. 保持建设性语气,但必须严苛、直接
-3. 避免主观臆测,强制要求优先通过专门的学术搜索 MCP 工具（如 paper-search）/期刊官网/权威数据库进行外部核查(用于新颖性、目标期刊范围与最新标准)，【严禁使用 Tavily、Exa 等通用搜索引擎进行严肃的学术文献检索】; 外部核查结果仅用于技术审计与契合度判断,必须标注来源与核查日期(统一格式: YYYY-MM-DD),不得替代稿件内证据锚点
+3. 避免主观臆测,强制要求优先通过专门的学术搜索 MCP 工具（如 paper-search 的 PubMed/Google Scholar/Semantic Scholar/arXiv）/期刊官网/权威数据库进行外部核查(用于新颖性、目标期刊范围与最新标准)。【仅在专用学术工具完全失效时，才允许将 Tavily、Exa 等通用搜索引擎作为最后手段】; 外部核查结果仅用于技术审计与契合度判断,必须标注来源与核查日期(统一格式: YYYY-MM-DD),不得替代稿件内证据锚点
 4. 基于证据,每条观点都应给出稿件内的证据锚点
 5. 如稿件缺乏证据,必须明确写出证据缺失
 6. 禁止使用数字评分或量化评级,仅允许在最终推荐意见中给出定性判断(拒稿、大修、小修、接收)
