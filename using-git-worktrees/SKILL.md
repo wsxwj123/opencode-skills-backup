@@ -1,10 +1,8 @@
 ---
+github_url: https://github.com/obra/superpowers
+github_hash: e4a2375cb705ca5800f0833528ce36a3faf9017a
 name: using-git-worktrees
 description: Use when starting feature work that needs isolation from current workspace or before executing implementation plans - creates isolated git worktrees with smart directory selection and safety verification
-
-github_hash: a0b9ecce2b25aa7d703138f17650540c2e8b2cde
-updated_at: 2026-01-27T17:06:55.655786
-github_url: https://github.com/obra/superpowers
 ---
 
 # Using Git Worktrees
@@ -214,8 +212,9 @@ Ready to implement auth feature
 
 **Called by:**
 - **brainstorming** (Phase 4) - REQUIRED when design is approved and implementation follows
+- **subagent-driven-development** - REQUIRED before executing any tasks
+- **executing-plans** - REQUIRED before executing any tasks
 - Any skill needing isolated workspace
 
 **Pairs with:**
 - **finishing-a-development-branch** - REQUIRED for cleanup after work complete
-- **executing-plans** or **subagent-driven-development** - Work happens in this worktree

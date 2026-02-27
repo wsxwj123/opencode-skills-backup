@@ -1,10 +1,8 @@
 ---
+github_url: https://github.com/obra/superpowers
+github_hash: e4a2375cb705ca5800f0833528ce36a3faf9017a
 name: subagent-driven-development
 description: Use when executing implementation plans with independent tasks in the current session
-
-github_hash: a0b9ecce2b25aa7d703138f17650540c2e8b2cde
-updated_at: 2026-01-27T17:06:55.670559
-github_url: https://github.com/obra/superpowers
 ---
 
 # Subagent-Driven Development
@@ -203,6 +201,7 @@ Done!
 ## Red Flags
 
 **Never:**
+- Start implementation on main/master branch without explicit user consent
 - Skip reviews (spec compliance OR code quality)
 - Proceed with unfixed issues
 - Dispatch multiple implementation subagents in parallel (conflicts)
@@ -233,6 +232,7 @@ Done!
 ## Integration
 
 **Required workflow skills:**
+- **superpowers:using-git-worktrees** - REQUIRED: Set up isolated workspace before starting
 - **superpowers:writing-plans** - Creates the plan this skill executes
 - **superpowers:requesting-code-review** - Code review template for reviewer subagents
 - **superpowers:finishing-a-development-branch** - Complete development after all tasks

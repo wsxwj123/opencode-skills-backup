@@ -1,11 +1,9 @@
 ---
-name: planning-with-files
-description: Implements Manus-style file-based planning for complex tasks. Creates task_plan.md, findings.md, and progress.md. Use when starting complex multi-step tasks, research projects, or any task requiring >5 tool calls. Now with automatic session recovery after /clear.
 github_url: https://github.com/OthmanAdi/planning-with-files
-github_hash: 6a9effe7d740b09c383ae8220c2576fcfb3eafcc
-version: 2.14.0
-created_at: 2026-02-06T12:00:00Z
-entry_point: SKILL.md
+github_hash: d4b699ccf1c577d30fe0ae53a87db7bbb98d8731
+name: planning-with-files
+version: "2.10.0"
+description: Implements Manus-style file-based planning for complex tasks. Creates task_plan.md, findings.md, and progress.md. Use when starting complex multi-step tasks, research projects, or any task requiring >5 tool calls. Now with automatic session recovery after /clear.
 user-invocable: true
 allowed-tools:
   - Read
@@ -31,7 +29,7 @@ hooks:
     - hooks:
         - type: command
           command: |
-            SCRIPT_DIR="${CLAUDE_PLUGIN_ROOT:-$HOME/.config/opencode/skills/planning-with-files}/scripts"
+            SCRIPT_DIR="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/planning-with-files}/scripts"
 
             IS_WINDOWS=0
             if [ "${OS-}" = "Windows_NT" ]; then
@@ -67,12 +65,12 @@ Work like Manus: Use persistent markdown files as your "working memory on disk."
 
 ```bash
 # Linux/macOS
-$(command -v python3 || command -v python) ${CLAUDE_PLUGIN_ROOT:-$HOME/.config/opencode/skills/planning-with-files}/scripts/session-catchup.py "$(pwd)"
+$(command -v python3 || command -v python) ${CLAUDE_PLUGIN_ROOT}/scripts/session-catchup.py "$(pwd)"
 ```
 
 ```powershell
 # Windows PowerShell
-& (Get-Command python -ErrorAction SilentlyContinue).Source "$env:USERPROFILE\.config\opencode\skills\planning-with-files\scripts\session-catchup.py" (Get-Location)
+& (Get-Command python -ErrorAction SilentlyContinue).Source "$env:USERPROFILE\.claude\skills\planning-with-files\scripts\session-catchup.py" (Get-Location)
 ```
 
 If catchup report shows unsynced context:
@@ -83,21 +81,21 @@ If catchup report shows unsynced context:
 
 ## Important: Where Files Go
 
-- **Templates** are in `${CLAUDE_PLUGIN_ROOT:-$HOME/.config/opencode/skills/planning-with-files}/templates/`
+- **Templates** are in `${CLAUDE_PLUGIN_ROOT}/templates/`
 - **Your planning files** go in **your project directory**
 
 | Location | What Goes There |
 |----------|-----------------|
-| Skill directory | Templates, scripts, reference docs |
+| Skill directory (`${CLAUDE_PLUGIN_ROOT}/`) | Templates, scripts, reference docs |
 | Your project directory | `task_plan.md`, `findings.md`, `progress.md` |
 
 ## Quick Start
 
 Before ANY complex task:
 
-1. **Create `task_plan.md`** — Use templates as reference
-2. **Create `findings.md`** — Use templates as reference
-3. **Create `progress.md`** — Use templates as reference
+1. **Create `task_plan.md`** — Use [templates/task_plan.md](templates/task_plan.md) as reference
+2. **Create `findings.md`** — Use [templates/findings.md](templates/findings.md) as reference
+3. **Create `progress.md`** — Use [templates/progress.md](templates/progress.md) as reference
 4. **Re-read plan before decisions** — Refreshes goals in attention window
 5. **Update after each phase** — Mark complete, log errors
 
@@ -217,3 +215,36 @@ If you can answer these, your context management is solid:
 - Simple questions
 - Single-file edits
 - Quick lookups
+
+## Templates
+
+Copy these templates to start:
+
+- [templates/task_plan.md](templates/task_plan.md) — Phase tracking
+- [templates/findings.md](templates/findings.md) — Research storage
+- [templates/progress.md](templates/progress.md) — Session logging
+
+## Scripts
+
+Helper scripts for automation:
+
+- `scripts/init-session.sh` — Initialize all planning files
+- `scripts/check-complete.sh` — Verify all phases complete
+- `scripts/session-catchup.py` — Recover context from previous session (v2.2.0)
+
+## Advanced Topics
+
+- **Manus Principles:** See [reference.md](reference.md)
+- **Real Examples:** See [examples.md](examples.md)
+
+## Anti-Patterns
+
+| Don't | Do Instead |
+|-------|------------|
+| Use TodoWrite for persistence | Create task_plan.md file |
+| State goals once and forget | Re-read plan before decisions |
+| Hide errors and retry silently | Log errors to plan file |
+| Stuff everything in context | Store large content in files |
+| Start executing immediately | Create plan file FIRST |
+| Repeat failed actions | Track attempts, mutate approach |
+| Create files in skill directory | Create files in your project |

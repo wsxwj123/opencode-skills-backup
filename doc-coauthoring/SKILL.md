@@ -1,9 +1,8 @@
 ---
+github_url: https://github.com/anthropics/skills
+github_hash: 3d59511518591fa82e6cfcf0438d68dd5dad3e76
 name: doc-coauthoring
 description: Guide users through a structured workflow for co-authoring documentation. Use when user wants to write documentation, proposals, technical specs, decision docs, or similar structured content. This workflow helps users efficiently transfer context, refine content through iteration, and verify the doc works for readers. Trigger when user mentions writing docs, creating proposals, drafting specs, or similar documentation tasks.
-github_url: https://github.com/anthropics/skills
-github_hash: 1ed29a03dc852d30fa6ef2ca53a67dc2c2c2c563
-updated_at: 2026-01-27T16:40:07.249937
 ---
 
 # Doc Co-Authoring Workflow

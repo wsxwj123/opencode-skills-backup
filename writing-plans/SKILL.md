@@ -1,10 +1,8 @@
 ---
+github_url: https://github.com/obra/superpowers
+github_hash: e4a2375cb705ca5800f0833528ce36a3faf9017a
 name: writing-plans
 description: Use when you have a spec or requirements for a multi-step task, before touching code
-
-github_hash: a0b9ecce2b25aa7d703138f17650540c2e8b2cde
-updated_at: 2026-01-27T17:06:55.665098
-github_url: https://github.com/obra/superpowers
 ---
 
 # Writing Plans
@@ -50,7 +48,7 @@ Assume they are a skilled developer, but know almost nothing about our toolset o
 
 ## Task Structure
 
-```markdown
+````markdown
 ### Task N: [Component Name]
 
 **Files:**
@@ -89,7 +87,7 @@ Expected: PASS
 git add tests/path/test.py src/path/file.py
 git commit -m "feat: add specific feature"
 ```
-```
+````
 
 ## Remember
 - Exact file paths always

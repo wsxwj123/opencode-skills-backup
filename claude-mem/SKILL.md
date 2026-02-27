@@ -15,7 +15,7 @@ tools:
     description: "Fetch full details for filtered IDs. Params: ids (array, required), orderBy, limit, project. ALWAYS batch multiple IDs. Returns complete details (~500-1000 tokens/result)."
   - name: __IMPORTANT
     description: "Workflow documentation. Always follow 3-layer pattern: 1) search (get index), 2) timeline (get context), 3) get_observations (fetch details). 10x token savings."
-github_hash: e4e735d3ffe0cf40bfbc6b666747568636070f10
+github_hash: b43ad00f8bdbce2bbc424bb01ca9bcc18cb81f3c
 ---
 
 # Claude-Mem: Persistent Memory System

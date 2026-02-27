@@ -44,6 +44,9 @@
 3. **入库前核对**：入库前必须核对“标题-作者-DOI/ID”来自同一条原始记录；任一关键字段冲突则判定为无效条目，禁止入库。
 4. **不确定处理**：无法完成同源核验的条目必须标记为 `unverified`，且**禁止在正文使用 `[n]` 引用**，只能向用户请求补充或重新检索。
 5. **补全边界**：摘要补全协议仅允许补全 `abstract` 字段，禁止改写已核验文献的核心元数据（标题/作者/期刊/年份/DOI）。
+6. **强制核验门禁**：任何正文写作前与交付前，必须执行：
+   - `python scripts/citation_guard.py --index literature_index.json --mcp-cache mcp_literature_cache.json --mcp-ttl-days 30 --manual-review manual_review_queue.json --log verification_run_log.json --report citation_guard_report.json`
+   - 若返回非零或报告 `ok=false`，立即阻断写作；未通过核验条目禁止进入正文与参考文献列表。
 
 **语言风格 (Anti-AI Protocol)**：
 - **核心原则**：严格遵循 `humanizer-zh` Skill 的去 AI 化标准。
@@ -268,6 +271,7 @@
 ### Phase 3: 文献检索 (`/literature`)
 分阶段检索（Phase 1核心，Phase 2写作时实时补充）。
 **执行红线**：本阶段必须遵守“文献真实性硬约束”，任何未通过同源核验的条目不得进入 `literature_index.json`，也不得在正文中引用。
+**新增硬门禁**：完成本阶段后必须运行 `citation_guard.py`，仅当 `citation_guard_report.json` 为 `ok=true` 才能进入 `/write`。
 **首轮检索后强制分配与重编号（Mandatory）**：
 1. **首轮完成即分配**：第一轮文献检索完成后，必须将每条已核验文献分配到目标小节（`section_id`），禁止保持“未分配”状态进入写作阶段。
 2. **矩阵落地**：在用户确认后，必须将“小节-文献”映射写入文献矩阵（建议存入 `storyline.json` 的矩阵字段，或独立 `literature_matrix.json`），作为后续正文撰写唯一依据。

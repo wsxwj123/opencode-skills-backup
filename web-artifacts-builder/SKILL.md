@@ -1,10 +1,9 @@
 ---
+github_url: https://github.com/anthropics/skills
+github_hash: 3d59511518591fa82e6cfcf0438d68dd5dad3e76
 name: web-artifacts-builder
 description: Suite of tools for creating elaborate, multi-component claude.ai HTML artifacts using modern frontend web technologies (React, Tailwind CSS, shadcn/ui). Use for complex artifacts requiring state management, routing, or shadcn/ui components - not for simple single-file HTML/JSX artifacts.
 license: Complete terms in LICENSE.txt
-github_url: https://github.com/anthropics/skills
-github_hash: 1ed29a03dc852d30fa6ef2ca53a67dc2c2c2c563
-updated_at: 2026-01-27T16:40:07.305893
 ---
 
 # Web Artifacts Builder

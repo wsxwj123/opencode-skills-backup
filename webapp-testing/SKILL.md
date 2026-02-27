@@ -1,10 +1,9 @@
 ---
+github_url: https://github.com/anthropics/skills
+github_hash: 3d59511518591fa82e6cfcf0438d68dd5dad3e76
 name: webapp-testing
 description: Toolkit for interacting with and testing local web applications using Playwright. Supports verifying frontend functionality, debugging UI behavior, capturing browser screenshots, and viewing browser logs.
 license: Complete terms in LICENSE.txt
-github_url: https://github.com/anthropics/skills
-github_hash: 1ed29a03dc852d30fa6ef2ca53a67dc2c2c2c563
-updated_at: 2026-01-27T16:40:07.307425
 ---
 
 # Web Application Testing

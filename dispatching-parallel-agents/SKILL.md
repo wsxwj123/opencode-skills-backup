@@ -1,10 +1,8 @@
 ---
+github_url: https://github.com/obra/superpowers
+github_hash: e4a2375cb705ca5800f0833528ce36a3faf9017a
 name: dispatching-parallel-agents
 description: Use when facing 2+ independent tasks that can be worked on without shared state or sequential dependencies
-
-github_hash: a0b9ecce2b25aa7d703138f17650540c2e8b2cde
-updated_at: 2026-01-27T17:06:55.661930
-github_url: https://github.com/obra/superpowers
 ---
 
 # Dispatching Parallel Agents

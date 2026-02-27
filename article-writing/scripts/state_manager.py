@@ -9,6 +9,7 @@ import zipfile
 import tempfile
 import hashlib
 import difflib
+import subprocess
 from collections import OrderedDict
 from datetime import datetime
 
@@ -3033,6 +3034,17 @@ def main():
     stats_parser.add_argument("--include-history", action="store_true", help="Include last 10 history records")
     stats_parser.add_argument("--backup-dir", default="backups", help="Backup root directory")
 
+    # Citation guard command
+    guard_parser = subparsers.add_parser("citation-guard", help="Run unified anti-hallucination citation guard")
+    guard_parser.add_argument("--index", default=STATE_FILES["literature_index"], help="Literature index path")
+    guard_parser.add_argument("--mcp-cache", default="mcp_literature_cache.json", help="MCP cache path")
+    guard_parser.add_argument("--offline", action="store_true", help="Disable online verification")
+    guard_parser.add_argument("--mcp-ttl-days", type=int, default=30)
+    guard_parser.add_argument("--manual-review", default="manual_review_queue.json")
+    guard_parser.add_argument("--log", default="verification_run_log.json")
+    guard_parser.add_argument("--report", default="citation_guard_report.json")
+    guard_parser.add_argument("--write-back", action="store_true", help="Write verification fields back to index")
+
     args = parser.parse_args()
 
     if args.command == "load":
@@ -3141,6 +3153,30 @@ def main():
         word_count(section=args.section, include_references=args.include_references)
     elif args.command == "stats":
         stats(section=args.section, include_history=args.include_history, backup_dir=args.backup_dir)
+    elif args.command == "citation-guard":
+        script = os.path.join(os.path.dirname(__file__), "citation_guard.py")
+        cmd = [
+            sys.executable,
+            script,
+            "--index",
+            args.index,
+            "--mcp-cache",
+            args.mcp_cache,
+            "--mcp-ttl-days",
+            str(args.mcp_ttl_days),
+            "--manual-review",
+            args.manual_review,
+            "--log",
+            args.log,
+            "--report",
+            args.report,
+        ]
+        if args.offline:
+            cmd.append("--offline")
+        if args.write_back:
+            cmd.append("--write-back")
+        proc = subprocess.run(cmd, check=False)
+        sys.exit(proc.returncode)
 
 if __name__ == "__main__":
     main()

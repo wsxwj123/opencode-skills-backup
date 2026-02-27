@@ -1,10 +1,9 @@
 ---
+github_url: https://github.com/anthropics/skills
+github_hash: 3d59511518591fa82e6cfcf0438d68dd5dad3e76
 name: canvas-design
 description: Create beautiful visual art in .png and .pdf documents using design philosophy. You should use this skill when the user asks to create a poster, piece of art, design, or other static piece. Create original visual designs, never copying existing artists' work to avoid copyright violations.
 license: Complete terms in LICENSE.txt
-github_url: https://github.com/anthropics/skills
-github_hash: 1ed29a03dc852d30fa6ef2ca53a67dc2c2c2c563
-updated_at: 2026-01-27T16:40:07.247567
 ---
 
 These are instructions for creating design philosophies - aesthetic movements that are then EXPRESSED VISUALLY. Output only .md files, .pdf files, and .png files.

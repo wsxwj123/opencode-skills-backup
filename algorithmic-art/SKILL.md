@@ -1,10 +1,9 @@
 ---
+github_url: https://github.com/anthropics/skills
+github_hash: 3d59511518591fa82e6cfcf0438d68dd5dad3e76
 name: algorithmic-art
 description: Creating algorithmic art using p5.js with seeded randomness and interactive parameter exploration. Use this when users request creating art using code, generative art, algorithmic art, flow fields, or particle systems. Create original algorithmic art rather than copying existing artists' work to avoid copyright violations.
 license: Complete terms in LICENSE.txt
-github_url: https://github.com/anthropics/skills
-github_hash: 1ed29a03dc852d30fa6ef2ca53a67dc2c2c2c563
-updated_at: 2026-01-27T16:40:07.215753
 ---
 
 Algorithmic philosophies are computational aesthetic movements that are then expressed through code. Output .md files (philosophy), .html files (interactive viewer), and .js files (generative algorithms).

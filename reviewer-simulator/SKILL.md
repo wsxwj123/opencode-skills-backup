@@ -246,6 +246,16 @@ description: Use when simulating a high-bar academic peer review for manuscripts
 **【后备机制】**：`tavily_tavily-search` 或 `websearch_web_search_exa` 等通用搜索引擎**仅作为最后的手段（Last Resort）**。只有在上述 `paper-search` 工具多次检索失败、报错或无返回结果时，为了保证任务继续，才允许降级调用通用搜索引擎。**严禁一上来就图省事调用 Tavily。**
 </TOOL_USAGE_RULES>
 
+<CITATION_GUARD_RULE>
+任何写入评审报告正文的外部文献结论，必须先通过统一核验脚本：
+`python scripts/citation_guard.py --index data/literature_index.json --mcp-cache data/mcp_literature_cache.json --mcp-ttl-days 30 --manual-review data/manual_review_queue.json --log data/verification_run_log.json --report data/citation_guard_report.json`
+
+硬门禁：
+1. 仅当 `citation_guard_report.json` 中 `ok=true` 才允许把该文献作为证据写入评审报告。
+2. 若 `ok=false` 或命令失败，必须改写为“待核验”并禁止下结论。
+3. 报告中不得出现任何无法追溯来源（`source_provider` + `source_id`）的文献陈述。
+</CITATION_GUARD_RULE>
+
 如无任何可用工具支持,则基于语言特征和文本分析进行人工判断:
 
 1. 目标标准核查

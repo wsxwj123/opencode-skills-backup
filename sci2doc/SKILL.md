@@ -37,6 +37,7 @@ The workflow is built around:
 11. Each subsection summary completion requires immediate snapshot.
 12. Humanization is required before finalizing chapter text; use humanizer-zh principles to reduce mechanical AI style.
 13. Do not invent experimental data.
+13.1 Do not invent references; citation hallucination is forbidden.
 14. Abbreviation consistency is mandatory:
     - First occurrence of any abbreviation must expand as: `中文全称（English Full Name, ABBR）`
     - All subsequent occurrences use bare abbreviation only, no re-expansion.
@@ -66,6 +67,17 @@ The workflow is built around:
     - `**text**` and `__text__` Markdown bold markers must be stripped during Word conversion; body text should not contain bold formatting.
     - Single `*` used for statistical significance (e.g. `*p<0.05`, `*P<0.01`) must be preserved as-is.
     - `strip_bold_markers()` in `markdown_to_docx.py` handles this automatically.
+
+## Citation Zero-Hallucination Gate (Mandatory)
+
+Before writing any chapter section and before final full-thesis merge, run:
+
+`python3 scripts/citation_guard.py --index "${save_path}/literature_index.json" --mcp-cache "${save_path}/mcp_literature_cache.json" --mcp-ttl-days 30 --manual-review "${save_path}/manual_review_queue.json" --log "${save_path}/verification_run_log.json" --report "${save_path}/citation_guard_report.json"`
+
+Rules:
+- If guard exits non-zero or report `ok=false`, stop writing and resolve the queue first.
+- Unverified references must not be cited in chapter markdown.
+- Every cited entry must carry traceability fields (`source_provider` + `source_id`) and DOI/PMID whenever available.
 
 ## Single Source of Truth
 

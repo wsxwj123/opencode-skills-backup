@@ -50,6 +50,25 @@ def validate_local(used_ids, index_entries):
     return orphans, unused
 
 
+def validate_traceability(index_entries):
+    failures = []
+    for item in index_entries:
+        gid = item.get("global_id")
+        title = str(item.get("title") or "").strip()
+        src_provider = str(item.get("source_provider") or "").strip()
+        src_id = str(item.get("source_id") or "").strip()
+        doi = str(item.get("doi") or "").strip()
+        pmid = str(item.get("pmid") or "").strip()
+
+        if not title:
+            failures.append((gid, "title_missing", "title is empty"))
+        if not (doi or pmid):
+            failures.append((gid, "identifier_missing", "missing DOI/PMID"))
+        if not (src_provider and src_id):
+            failures.append((gid, "source_trace_missing", "missing source_provider/source_id"))
+    return failures
+
+
 def check_doi_online(doi, timeout=8):
     url = "https://api.crossref.org/works/" + parse.quote(doi)
     req = request.Request(url, headers={"User-Agent": "review-writing-validator/1.0"})
@@ -179,6 +198,7 @@ def main():
     )
     parser.add_argument("--fail-on-orphan", action="store_true", help="Exit non-zero if orphan citations exist")
     parser.add_argument("--fail-on-live", action="store_true", help="Exit non-zero if live checks fail")
+    parser.add_argument("--fail-on-trace", action="store_true", help="Exit non-zero if source traceability checks fail")
     args = parser.parse_args()
 
     if not os.path.exists(args.drafts_dir):
@@ -214,6 +234,16 @@ def main():
     else:
         print("[OK] No unused index entries")
 
+    trace_failures = validate_traceability(entries)
+    if trace_failures:
+        print("-" * 40)
+        print("TRACEABILITY CHECK")
+        print("-" * 40)
+        for gid, code, reason in trace_failures:
+            print(f"[TRACE-FAIL] global_id={gid} code={code} reason={reason}")
+    else:
+        print("[OK] Traceability checks passed")
+
     live_failures = 0
     if args.live:
         target_entries = entries
@@ -235,7 +265,11 @@ def main():
         for gid, code, reason in live["failures"]:
             print(f"[LIVE-FAIL] global_id={gid} code={code} reason={reason}")
 
-    should_fail = (args.fail_on_orphan and bool(orphans)) or (args.fail_on_live and live_failures > 0)
+    should_fail = (
+        (args.fail_on_orphan and bool(orphans))
+        or (args.fail_on_live and live_failures > 0)
+        or (args.fail_on_trace and bool(trace_failures))
+    )
     if should_fail:
         sys.exit(2)
 

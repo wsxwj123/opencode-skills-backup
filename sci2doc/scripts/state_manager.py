@@ -23,6 +23,7 @@ import shutil
 import sys
 import tempfile
 import time
+import subprocess
 from contextlib import contextmanager, redirect_stdout
 from datetime import datetime
 
@@ -1791,6 +1792,16 @@ def parse_args():
     stats_p.add_argument("--chapter", help="Optional chapter filter marker")
     stats_p.add_argument("--backup-dir", default="backups")
 
+    guard_p = subparsers.add_parser("citation-guard", help="Run unified anti-hallucination citation guard")
+    guard_p.add_argument("--index", default="literature_index.json", help="Literature index path")
+    guard_p.add_argument("--mcp-cache", default="mcp_literature_cache.json", help="MCP cache path")
+    guard_p.add_argument("--offline", action="store_true", help="Disable online verification")
+    guard_p.add_argument("--mcp-ttl-days", type=int, default=30)
+    guard_p.add_argument("--manual-review", default="manual_review_queue.json")
+    guard_p.add_argument("--log", default="verification_run_log.json")
+    guard_p.add_argument("--report", default="citation_guard_report.json")
+    guard_p.add_argument("--write-back", action="store_true", help="Write verification fields back to index")
+
     subparsers.add_parser("snapshot", help="Create full snapshot")
 
     rollback_p = subparsers.add_parser("rollback", help="Rollback from latest snapshot")
@@ -1884,6 +1895,30 @@ def main():
             word_count(project_root=project_root, target=args.target_path, sync_project_state=(not args.no_sync))
         elif args.command == "stats":
             stats(project_root=project_root, chapter=args.chapter, backup_dir=args.backup_dir)
+        elif args.command == "citation-guard":
+            script = os.path.join(os.path.dirname(__file__), "citation_guard.py")
+            cmd = [
+                sys.executable,
+                script,
+                "--index",
+                resolve_path(project_root, args.index),
+                "--mcp-cache",
+                resolve_path(project_root, args.mcp_cache),
+                "--mcp-ttl-days",
+                str(args.mcp_ttl_days),
+                "--manual-review",
+                resolve_path(project_root, args.manual_review),
+                "--log",
+                resolve_path(project_root, args.log),
+                "--report",
+                resolve_path(project_root, args.report),
+            ]
+            if args.offline:
+                cmd.append("--offline")
+            if args.write_back:
+                cmd.append("--write-back")
+            proc = subprocess.run(cmd, check=False)
+            sys.exit(proc.returncode)
         elif args.command == "snapshot":
             payload = {"snapshot_dir": backup_project_state(project_root)}
             print(json.dumps(payload, ensure_ascii=False))

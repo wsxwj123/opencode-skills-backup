@@ -1,10 +1,8 @@
 ---
+github_url: https://github.com/obra/superpowers
+github_hash: e4a2375cb705ca5800f0833528ce36a3faf9017a
 name: test-driven-development
 description: Use when implementing any feature or bugfix, before writing implementation code
-
-github_hash: a0b9ecce2b25aa7d703138f17650540c2e8b2cde
-updated_at: 2026-01-27T17:06:55.657483
-github_url: https://github.com/obra/superpowers
 ---
 
 # Test-Driven Development (TDD)
