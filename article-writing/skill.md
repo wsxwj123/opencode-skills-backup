@@ -47,6 +47,8 @@
 6. **强制核验门禁**：任何正文写作前与交付前，必须执行：
    - `python scripts/citation_guard.py --index literature_index.json --mcp-cache mcp_literature_cache.json --mcp-ttl-days 30 --manual-review manual_review_queue.json --log verification_run_log.json --report citation_guard_report.json`
    - 若返回非零或报告 `ok=false`，立即阻断写作；未通过核验条目禁止进入正文与参考文献列表。
+   - 默认不改变原有检索顺序与流程（PubMed/Semantic/arXiv/Google 回退链）；仅增加核验门禁。
+   - 最终交付前建议追加 `--require-mcp` 强制 MCP 证据轨通过。
 
 **语言风格 (Anti-AI Protocol)**：
 - **核心原则**：严格遵循 `humanizer-zh` Skill 的去 AI 化标准。

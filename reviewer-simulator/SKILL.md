@@ -254,6 +254,7 @@ description: Use when simulating a high-bar academic peer review for manuscripts
 1. 仅当 `citation_guard_report.json` 中 `ok=true` 才允许把该文献作为证据写入评审报告。
 2. 若 `ok=false` 或命令失败，必须改写为“待核验”并禁止下结论。
 3. 报告中不得出现任何无法追溯来源（`source_provider` + `source_id`）的文献陈述。
+4. 该门禁只负责证据核验，不改变原有“paper-search 优先、通用搜索兜底”的检索顺序。
 </CITATION_GUARD_RULE>
 
 如无任何可用工具支持,则基于语言特征和文本分析进行人工判断:

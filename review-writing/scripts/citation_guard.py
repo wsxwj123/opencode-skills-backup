@@ -199,6 +199,7 @@ def validate_entry(
     *,
     online_check: bool,
     mcp_index: dict[str, dict[str, Any]],
+    require_mcp: bool,
     mcp_ttl_days: int,
     now_utc: datetime,
 ) -> dict[str, Any]:
@@ -280,10 +281,13 @@ def validate_entry(
         failure_reasons.append("retracted")
     if not has_traceability:
         failure_reasons.append("source_trace_missing")
-    if not mcp_ok:
-        failure_reasons.append("mcp_unresolved")
-    elif not mcp_fresh:
-        failure_reasons.append(mcp_fresh_reason or "mcp_stale")
+    if require_mcp:
+        if not mcp_ok:
+            failure_reasons.append("mcp_unresolved")
+        elif not mcp_fresh:
+            failure_reasons.append(mcp_fresh_reason or "mcp_stale")
+    elif mcp_ok and (not mcp_fresh):
+        failure_reasons.append("mcp_stale_warning")
     if online_check and not (crossref or pubmed):
         failure_reasons.append("source_unreachable")
 
@@ -304,8 +308,9 @@ def validate_entry(
         score -= 8
     score += 10 if id_cross_match else -12
     score += 8 if has_traceability else -15
-    score += 8 if mcp_ok else -10
-    score += 6 if mcp_fresh else -8
+    score += (8 if mcp_ok else (-10 if require_mcp else 0))
+    if mcp_ok:
+        score += 6 if mcp_fresh else -8
     score += (8 if (crossref or pubmed) else -8) if online_check else 4
     if retracted:
         score -= 60
@@ -336,6 +341,7 @@ def validate_entry(
                 "crossref": bool(crossref),
                 "online_check": online_check,
                 "mcp_ttl_days": mcp_ttl_days,
+                "require_mcp": require_mcp,
             },
         },
     }
@@ -347,6 +353,7 @@ def main() -> int:
     p.add_argument("--mcp-cache", default="", help="Path to MCP cache JSON")
     p.add_argument("--offline", action="store_true", help="Disable online check")
     p.add_argument("--mcp-ttl-days", type=int, default=30)
+    p.add_argument("--require-mcp", action="store_true", help="Require MCP evidence; unresolved/stale MCP is blocking")
     p.add_argument("--manual-review", default="data/manual_review_queue.json")
     p.add_argument("--log", default="data/verification_run_log.json")
     p.add_argument("--report", default="data/citation_guard_report.json")
@@ -367,6 +374,7 @@ def main() -> int:
             dict(e),
             online_check=not args.offline,
             mcp_index=mcp_index,
+            require_mcp=args.require_mcp,
             mcp_ttl_days=max(0, int(args.mcp_ttl_days)),
             now_utc=now_utc,
         )
@@ -409,6 +417,7 @@ def main() -> int:
         "duration_ms": duration_ms,
         "checked_at": now_utc.isoformat(),
         "online_check": not args.offline,
+        "require_mcp": bool(args.require_mcp),
         "mcp_ttl_days": max(0, int(args.mcp_ttl_days)),
     }
 

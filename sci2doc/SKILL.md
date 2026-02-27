@@ -78,6 +78,8 @@ Rules:
 - If guard exits non-zero or report `ok=false`, stop writing and resolve the queue first.
 - Unverified references must not be cited in chapter markdown.
 - Every cited entry must carry traceability fields (`source_provider` + `source_id`) and DOI/PMID whenever available.
+- This guard does not change existing chapter writing workflow; it only validates reference correctness.
+- For final delivery strict mode, run with `--require-mcp`.
 
 ## Single Source of Truth
 
