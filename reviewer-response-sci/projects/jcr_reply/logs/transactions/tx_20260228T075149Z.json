@@ -1,0 +1,65 @@
+{
+  "timestamp_utc": "2026-02-28T07:51:49.033941+00:00",
+  "project_root": "/Users/wsxwj/Desktop/opencode file/reviewer-response-sci/projects/jcr_reply",
+  "output_html": "/Users/wsxwj/Desktop/opencode file/reviewer-response-sci/projects/jcr_reply/reviewer_response_full_catalog.html",
+  "title": "JCR Reviewer Response Package",
+  "require_links": true,
+  "fail_on_conflict": true,
+  "steps": [
+    {
+      "step": "build",
+      "cmd": [
+        "/Users/wsxwj/.pyenv/versions/3.10.11/bin/python3",
+        "/Users/wsxwj/Desktop/opencode file/reviewer-response-sci/scripts/build_full_package.py",
+        "--comments",
+        "/Users/wsxwj/Library/CloudStorage/OneDrive-个人/old files/xwj/研究生/博士课题/贺君/Exos递送抗体/投稿/JCR/Comments.docx",
+        "--manuscript",
+        "/Users/wsxwj/Library/CloudStorage/OneDrive-个人/old files/xwj/研究生/博士课题/贺君/Exos递送抗体/投稿/JCR/manuscript.docx",
+        "--project-root",
+        "/Users/wsxwj/Desktop/opencode file/reviewer-response-sci/projects/jcr_reply",
+        "--output-html",
+        "/Users/wsxwj/Desktop/opencode file/reviewer-response-sci/projects/jcr_reply/reviewer_response_full_catalog.html",
+        "--title",
+        "JCR Reviewer Response Package",
+        "--si",
+        "/Users/wsxwj/Library/CloudStorage/OneDrive-个人/old files/xwj/研究生/博士课题/贺君/Exos递送抗体/投稿/JCR/SI.docx"
+      ],
+      "duration_sec": 0.192,
+      "status": "pass"
+    },
+    {
+      "step": "strict_gate",
+      "cmd": [
+        "/Users/wsxwj/.pyenv/versions/3.10.11/bin/python3",
+        "/Users/wsxwj/Desktop/opencode file/reviewer-response-sci/scripts/strict_gate.py",
+        "--project-root",
+        "/Users/wsxwj/Desktop/opencode file/reviewer-response-sci/projects/jcr_reply",
+        "--require-links"
+      ],
+      "duration_sec": 0.028,
+      "status": "pass"
+    },
+    {
+      "step": "consistency",
+      "cmd": [
+        "/Users/wsxwj/.pyenv/versions/3.10.11/bin/python3",
+        "/Users/wsxwj/Desktop/opencode file/reviewer-response-sci/scripts/consistency_check.py",
+        "--project-root",
+        "/Users/wsxwj/Desktop/opencode file/reviewer-response-sci/projects/jcr_reply",
+        "--fail-on-conflict"
+      ],
+      "duration_sec": 0.026,
+      "status": "pass"
+    },
+    {
+      "step": "html_gate",
+      "cmd": [
+        "/Users/wsxwj/.pyenv/versions/3.10.11/bin/python3",
+        "/Users/wsxwj/Desktop/opencode file/reviewer-response-sci/scripts/html_format_check.py",
+        "/Users/wsxwj/Desktop/opencode file/reviewer-response-sci/projects/jcr_reply/reviewer_response_full_catalog.html"
+      ],
+      "duration_sec": 0.022,
+      "status": "pass"
+    }
+  ]
+}

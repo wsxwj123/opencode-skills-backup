@@ -1,0 +1,14 @@
+{
+  "unit_id": "m-0084",
+  "order": 84,
+  "paragraph_index": 110,
+  "text": "Figure 3. The anti-Prdx1 antibody demonstrates significant therapeutic effects in SAP. (A) The serum Prdx1 was detected by ELISA in normal, AP and caerulein-induced SAP mouse model (n=5). (B) Primary acinar cells were isolated from PcKO and Flox mice and co-cultured with BMDMs. Following caerulein induction for 6 hours, the relative mRNA expression levels of Tnf-α, Il-1β, and Il-6 in macrophages from each group were measured (n=3). (C) BMDMs were directly treated with the anti-Prdx1 antibody, or primary acinar cells from Flox mice were pretreated with the antibody and then co-cultured with BMDMs. Following caerulein induction for 6 hours, the relative mRNA expression levels of Tnf-α, Il-1β, and Il-6 in macrophages from each group were measured (n=3). (D) A heatmap based on transcriptomic analysis displays the differential expression of TLR family members (TLR1-9, TLR11-13) in macrophages co-cultured with or without acinar cells. Each group included three biological replicates. (E) The mRNA expression level of Tlr3 in BMDMs was measured after treatment with different acinar cells (n = 3). Acinar cells were divided into two groups, with acini 2 at twice the concentration of acini 1. (F) Macrophages were treated with rPrdx1 (recombination Prdx1 protein isolated from E. coli), and Tlr3 was blocked using siRNA. Immunofluorescence staining and statistical analysis demonstrated the effect of Tlr3 blockade on the rPrdx1-induced nuclear translocation of NF-κB (n = 3). Scale bar, 50 μm. (G) Tlr3 expression in macrophages was knocked down using siRNA, and representative immunofluorescence images combined with statistical analysis illustrated the changes in CD80 and CD206 expression levels (n = 3). Scale bar, 50 μm. (H) A schematic diagram illustrating the construction of the mouse SAP model treated with Prdx1 antibody. (I) Representative H&E-stained images of the pancreas and lung tissues, together with statistical analysis of tissue injury, demonstrated the therapeutic efficacy of Prdx1 antibodies in SAP mice (n = 7). Scale bar, 50 μm. (J-K) Representative immunofluorescence staining images and statistical analyses of Ly6G, CD68, iNOS, and CD206 in pancreatic tissue reveal that the Prdx1 antibody effectively inhibits neutrophil and macrophage infiltration and suppresses M1 macrophage polarization in SAP (n = 7). Scale bar, 50 μm. Data = Mean ± SD. Statistical analysis was performed by GraphPad Prism (9.5.0). One-way ANOVA using the Tukey’s multiple-comparison test was applied for comparison among three groups. Cae, caerulein; ctrl, control; amy, amylase; *P<0.05; **P<0.01; ***P<0.001.",
+  "heading_context": "3.2 Extracellular Prdx1 significantly promoted macrophage-mediated inflammation in SAP through a TLR3-dependent pathways",
+  "anchors": [
+    "Figure 3"
+  ],
+  "tags": {
+    "has_figure_ref": true,
+    "length": 2621
+  }
+}

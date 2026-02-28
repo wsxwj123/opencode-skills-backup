@@ -1,0 +1,12 @@
+{
+  "unit_id": "m-0016",
+  "order": 16,
+  "paragraph_index": 20,
+  "text": "In summary, this study leverages the powerful inherent capabilities of EVs and sophisticated genetic engineering to construct a novel \"killing two birds with one stone\" therapeutic platform for combating acute pancreatitis. By transfecting specific cells with specially designed plasmids, we engineered these cells to secrete EVs containing the Z domain, enabling the precise conjugation of anti-Prdx1 antibody to the surface, while simultaneously encapsulating the therapeutic small molecule quercetin within their lumen. Our comprehensive research demonstrates that these engineered EVs possess elastase-responsive properties, ensuring targeted delivery and functional regulation within the pathological pancreatic microenvironment. This groundbreaking approach simultaneously achieves dual therapeutic effects: on the one hand, the timely extracellular release of anti-Prdx 1 antibody effectively inhibits macrophage-mediated inflammation by neutralizing extracellular Prdx1; on the other hand, the subsequent intracellular delivery of quercetin powerfully ameliorates acinar cell damage by enhancing intracellular antioxidant defenses. This innovative, multi-mechanism strategy not only achieved breakthroughs in solving the specific problem of SAP, but more importantly, it created a versatile and adaptable general tool that lays the foundation for developing precise and personalized treatments for various complex diseases in the future.",
+  "heading_context": "",
+  "anchors": [],
+  "tags": {
+    "has_figure_ref": false,
+    "length": 1445
+  }
+}

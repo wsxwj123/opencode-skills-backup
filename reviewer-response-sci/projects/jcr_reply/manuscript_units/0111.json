@@ -1,0 +1,14 @@
+{
+  "unit_id": "m-0111",
+  "order": 111,
+  "paragraph_index": 149,
+  "text": "Figure 9. Mechanisms exploration of Ab-Fc-EL-EV@Que against SAP. Mechanisms exploration of Ab-Fc-EL-EV@Que against SAP in mice. (A) Representative fluorescence images and statistical analysis from DCFH staining reveal the levels of ROS in pancreatic cells after treatment (n = 5). Scale bar, 50 μm. (B-C) Representative immunofluorescence images and corresponding statistical analysis of CD68 co-stained with cleaved caspase 1 and with NF-κB are presented (n = 9). Scale bar, 50 μm. (D) Representative scatter plots illustrating the percentage distribution of cell subsets based on CD4 and CD8a, CD11b and Ly6C, CD11b and F4/80, and CD11b and Ly6G markers in blood samples. (F) Statistical analysis was performed on CD4+ and CD8a+ T cells, Ly6Ghigh and Ly6Glow monocytes, F4/80+ macrophages, and Ly6G+ neutrophil cells in the blood samples of each group (n = 3). Data = Mean ± SD. Statistical analysis was performed by GraphPad Prism (9.5.0). One-way ANOVA using the Tukey’s multiple-comparison test was applied for comparison among three groups. Nc, negative control; ctrl, control; casp1, caspase 1; n.s, no statistical significance; *P<0.05; **P<0.01; ***P<0.001.",
+  "heading_context": "3.8 Regulatory mechanism exploration of Ab-Fc-EL-EV@Que against SAP",
+  "anchors": [
+    "Figure 9"
+  ],
+  "tags": {
+    "has_figure_ref": true,
+    "length": 1166
+  }
+}

@@ -1,0 +1,93 @@
+{
+  "unit_id": "u-007",
+  "order": 7,
+  "reviewer": "Reviewer #1",
+  "section": "major",
+  "comment_number": "7",
+  "title": "Reviewer #1 | MAJOR | Comment 7",
+  "source": {
+    "comments_docx": "/Users/wsxwj/Library/CloudStorage/OneDrive-个人/old files/xwj/研究生/博士课题/贺君/Exos递送抗体/投稿/JCR/Comments.docx",
+    "manuscript_docx": "/Users/wsxwj/Library/CloudStorage/OneDrive-个人/old files/xwj/研究生/博士课题/贺君/Exos递送抗体/投稿/JCR/manuscript.docx",
+    "si_docx": "/Users/wsxwj/Library/CloudStorage/OneDrive-个人/old files/xwj/研究生/博士课题/贺君/Exos递送抗体/投稿/JCR/SI.docx"
+  },
+  "links": {
+    "anchors": [
+      "Fig6C",
+      "Fig6F",
+      "Prdx1"
+    ],
+    "manuscript_unit_ids": [
+      "m-0007",
+      "m-0008",
+      "m-0011",
+      "m-0012",
+      "m-0013",
+      "m-0014",
+      "m-0015",
+      "m-0016"
+    ],
+    "si_unit_ids": [
+      "s-0007",
+      "s-0008",
+      "s-0009"
+    ]
+  },
+  "content": {
+    "reviewer_comment_zh": "无",
+    "reviewer_comment_en": "The therapeutic strategy relies on high extracellular Prdx1 for targeting and high elastase for antibody release, both hallmarks of SAP. However, since Prdx1 release and elevated elastase occur in other inflammatory conditions. Moreover, it can be observed from Fig6C and Fig6F that Ab-Fc-EL-EV@Que has high accumulation in the liver and spleen. Could the authors explain whether the system could be inadvertently activated at non-pancreatic inflammatory sites, leading to the unintended release of the anti-Prdx1 antibody in non-target tissues? It is strongly recommended to provide liver and kidney function markers(AST, ALT, BUN,Cr), H&E staining of major organs (e.g., heart, liver, spleen, lung, kidney), serum and pancreas levels of key pro-inflammatory cytokines (e.g., IL-1β, IL-6, TNF-α) in the SAP model mice from different treatment groups to further confirm safety and effectiveness.",
+    "reviewer_intent_zh": "审稿人核心关切：The therapeutic strategy relies on high extracellular Prdx1 for targeting and high elastase for antibody release, both hallmarks of SAP. However, since Prdx1 release and elevated elastase occur in other inflammatory cond...",
+    "reviewer_intent_en": "Interpretation: The reviewer is requesting a clear, evidence-aligned clarification and a concrete manuscript-level correction for this specific point.",
+    "response_en": "We appreciate this constructive recommendation. We have incorporated the requested clarification and updated the corresponding section in the revised manuscript.",
+    "response_zh": "中文对应：感谢审稿人意见。我们已针对该问题完成对应修订，并确保结论与证据保持一致。",
+    "revision_location_en": "Paragraph index: 10",
+    "original_excerpt_en": "ABSTRACT: Severe acute pancreatitis (SAP) is a lethal inflammatory disease driven by a severe disordered redox state, in which Peroxiredoxin 1 (Prdx1) acts as a key but paradoxical regulator. Prdx1 is a protective intracellular antioxidant, however, it acts as a pro-inflammatory DAMP extracellularly. To address this, we developed a “plug and play” therapeutic platform. Considering the microenvironment in SAP, we first engineered HEK-293T cells to overexpress a CD63-Z domain fusion protein, yielding extracellular vesicles (EVs) capable of high-affinity binding to the Fc region of various antibodies. We then armed these EVs with an anti-Prdx1 antibody via the elastase-responsive linker and co-loaded them with quercetin (Ab-Fc-EL-EV@Que). After active pancreas targeting, locally concentrated elastase triggered antibody release from the Ab-Fc-EL-EV@Que to neutralize extracellular Prdx1, which have been confirmed to activate TLR/NF-κB pathway in macrophages, thereby suppressing cascade inflammation. Subsequently, the antibody-detached EVs were internalized by acinar cells, delivering Que to promote intracellular Prdx1 acetylation, enhance antioxidant capacity, and ultimately protect acinar cells from ferroptosis and apoptosis. This work not only offers a potent, multi-mechanism modality for SAP by resolving the Prdx1 paradox but also establishes a highly adaptable \"plug-and-play\" platform for tailored therapies against other complex diseases.",
+    "revised_excerpt_en": "Not provided by user",
+    "revised_excerpt_zh": "无",
+    "modification_actions": [
+      {
+        "action": "添加",
+        "reason": "审稿人要求补充缺失信息或证据。"
+      }
+    ],
+    "notes_core_zh": [
+      "围绕该条审稿意见的核心科学关切进行实质修订，确保结论与证据链一致。"
+    ],
+    "notes_support_zh": [
+      "同步优化图号引用、术语表达与段落衔接，提升可读性和可核查性。"
+    ],
+    "evidence": {
+      "text": [
+        "Not provided by user"
+      ],
+      "image_change_required": true,
+      "images": [
+        {
+          "src": "",
+          "alt": "Image placeholder",
+          "caption": "请替换为修订后图片（如有）"
+        }
+      ],
+      "table": {
+        "columns": [
+          "Item",
+          "Before",
+          "After",
+          "Evidence"
+        ],
+        "rows": [
+          [
+            "Key correction",
+            "Not provided by user",
+            "Not provided by user",
+            "Not provided by user"
+          ]
+        ]
+      }
+    }
+  },
+  "status": {
+    "response_state": "draft",
+    "excerpt_state": "needs_manual_revision",
+    "notes_state": "draft"
+  }
+}

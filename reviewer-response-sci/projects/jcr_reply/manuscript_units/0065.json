@@ -1,0 +1,12 @@
+{
+  "unit_id": "m-0065",
+  "order": 65,
+  "paragraph_index": 84,
+  "text": "The prepared Ab-Fc-EL-EV and Ab-Fc-EL-EV@Que will undergo comprehensive physicochemical characterization. Their size distribution, polydispersity index (PDI), and zeta potential will be determined by Dynamic Light Scattering (DLS). Transmission Electron Microscopy (TEM) will be used to observe the morphological characteristics of the EVs. Nanoparticle Tracking Analysis (NTA) will be employed to determine the concentration and size of the EVs. Furthermore, the expression and presence of CD63, Z-domain, mCherry, and the conjugated antibody on the EVs will be verified by Western Blot analysis. The encapsulation efficiency and drug loading content of Quercetin will be quantitatively analyzed using High-Performance Liquid Chromatography (HPLC) or UV-Visible spectrophotometry (UV-Vis).",
+  "heading_context": "2.16 Preparation and characterization of Ab-Fc-EL-EV@Que To prepare Ab-Fc-EL-EV, the isolated Fc-EL-EVs were co-incubated with either the Fc-engineered anti-Prdx1 antibody or control IgG-GFP. Leveraging the specific high-affinity binding of the Z-domain on the surface of Fc-EL-EVs to the Fc fragment, the antibodies were stably conjugated onto the surface of the EVs. After sufficient incubation and washing to remove unbound free antibodies, functionalized Fc-EL-EVs with conjugated antibodies, designated as Ab-Fc-EL-EV, were obtained. Finally, to achieve drug loading, the prepared Ab-Fc-EL-EVs were co-incubated with Quercetin. By optimizing the incubation conditions, Quercetin was efficiently encapsulated into the internal space of the Ab-Fc-EL-EVs. After centrifugation and washing to remove free Quercetin, the engineered EVs loaded with Quercetin, designated as Ab-Fc-EL-EV@Que, were finally obtained.",
+  "anchors": [],
+  "tags": {
+    "has_figure_ref": false,
+    "length": 790
+  }
+}

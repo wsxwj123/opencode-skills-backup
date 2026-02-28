@@ -1,0 +1,18 @@
+{
+  "unit_id": "m-0106",
+  "order": 106,
+  "paragraph_index": 141,
+  "text": "Next, we utilized caerulein-induced SAP mice model to simulate clinic situations. The schematic was illustrated in Figure 8A. Due to the rapid onset and manifestation of symptoms of SAP, different formulations including Que, Fc-EV, Anti-Prdx1 Ab, FC-EV@Que, Ab-Fc-EV@Que, Ab-Fc-EL-EV@Que were administrated during the modeling process. We used multiple methods to assess the severity of SAP from different levels. First, as shown in Figure 8B and 8C, the plasma amylase and lipase levels of mice received Ab-Fc-EL-EV@Que treatment significantly reduced when compared to the rest groups. And less pathological injury, infiltration of inflammatory cell in the pancreas and lung tissues was observed in Ab-Fc-EL-EV@Que group according to H&E staining images in Figure 8D. Further, TUNEL staining was conducted to determine cell death in pancreatic tissues while immunofluorescence staining of macrophages and neutrophils were performed to evaluate SAP-associated the infiltration of main inflammatory cells (Figure 8E to 8G). As expected, anti-Prdx1 antibody was released at extracellular space in SAP microenvironment with numerous elastase existence, resulting in the best attenuated efficacy against inflammatory cells infiltration. The Ab-Fc-EL-EV@Que in SAP mice models exhibited therapeutic trends consistent with those observed in vitro co-culture system. Besides, specific macrophage phenotypes were investigated, and the images demonstrated an evident M2 macrophage infiltration rather than M1 macrophages after our Ab-Fc-EL-EV@Que intervention (Figure 8H). Among all results describe above, we found that either Que or Prdx1 alone could partially alleviate the severity of SAP, but their effects were limited due to the low drug or antibody concentration in pancreatic tissues after distributed across mice body. Crucially, our engineered EV-based formulations exhibited progressively enhanced therapeutic effects. The incorporation of an antibody (Ab-Fc-EV@Que) significantly boosted efficacy of Fc-EV@Que, suggesting improved pancreatic targeting and cellular uptake. Besides, it was noteworthy that Ab-Fc-EL-EV@Que always exhibited better efficacy than Ab-Fc-EV@Que, indicating our strategy to add EL-responsive linker was correct and effect and maximizing the therapeutic benefits of EVs loaded with Que and anti-Prdx1 antibodies.",
+  "heading_context": "3.7 In vivo therapeutic efficacy evaluation of Ab-Fc-EL-EV@Que against SAP",
+  "anchors": [
+    "Figure 8A",
+    "Figure 8B",
+    "Figure 8D",
+    "Figure 8E",
+    "Figure 8H"
+  ],
+  "tags": {
+    "has_figure_ref": true,
+    "length": 2341
+  }
+}

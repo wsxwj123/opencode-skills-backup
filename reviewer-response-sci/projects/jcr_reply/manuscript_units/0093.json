@@ -1,0 +1,21 @@
+{
+  "unit_id": "m-0093",
+  "order": 93,
+  "paragraph_index": 122,
+  "text": "As shown in Figure 5A, the particle size of Fc-EL-EV was around 156 ± 2.7 nm, a little smaller than Ab-Fc-EL-EV@Que group, approximately around 162 ± 1.1 nm (Figure 5B). Meanwhile, ctrl-EVs from normal 293T cells were also prepared and characterized in Figure S4. The morphology of all EVs was observed by TEM, revealing similar sphere shapes. The encapsulation efficiency (EE%) and drug-loading efficiency (DL%) were determined by HPLC which demonstrated an EE% of 85.77 ± 3.64% and a DL% of 7.05 ± 0.82% (Figure 5C). Then western blot assay was applied to confirm the expression of characteristic protein, CD63 and CD9 on EVs. As depicted in Figure 5D, different EVs all expressed these biomarkers, but Fc-EV and Fc-EL-EVs exhibited a higher expression level of CD63 compared with control group due to the engineered strategy. This result also implied that the Z domain that integrated with CD63 were highly expressed, providing more binding sites for antibodies. Also, flow cytometry was performed to further validate the existence of CD63-Z domain fusion construct on EVs. The quantitative analysis revealed a significant higher expression level of CD63 on Fc-EL-EV than control group (Figure 5E). Subsequently, different concentration of GFP-labeled IgG was utilized to confirm the effectiveness of Z domain on Fc-EL-EVs. The flow cytometry results demonstrated that the positive cluster increased when the antibody concentration raised, indicating a concentration-dependent manner (Figure 5F). Most importantly, to verify the EL-responsive feature, Fc-EL-EV was treated with different concentration of EL after GFP-labeled antibody bond. According to our theory, the link between antibodies and Fc fragments on EVs’ surface would break upon EL existence. And the statistical analysis indeed suggested that with the increase of EL concentration, less signals of GFP were detected due to the loss of antibodies (Figure 5G).",
+  "heading_context": "3.4 Construction of Fc-EL-EV and development of Fc-EL-EV@Que",
+  "anchors": [
+    "Figure 5A",
+    "Figure 5B",
+    "Figure S4",
+    "Figure 5C",
+    "Figure 5D",
+    "Figure 5E",
+    "Figure 5F",
+    "Figure 5G"
+  ],
+  "tags": {
+    "has_figure_ref": true,
+    "length": 1927
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "unit_id": "m-0048",
+  "order": 48,
+  "paragraph_index": 60,
+  "text": "Lipid peroxidation was quantified using the MDA Assay Kit (Beyotime, S0131S) following the manufacturer's protocol. Briefly, cell lysates were combined with freshly prepared MDA detection reagent, vortexed, and incubated at 100°C for 15 min. After natural cooling to ambient temperature, centrifugation at 1,000 × g for 10 min was performed to pellet debris. Supernatant absorbance at 532 nm was recorded using a microplate reader, with MDA concentrations normalized to total protein content.",
+  "heading_context": "2.8 Lipid peroxidation analysis",
+  "anchors": [
+    "S0131S"
+  ],
+  "tags": {
+    "has_figure_ref": true,
+    "length": 492
+  }
+}

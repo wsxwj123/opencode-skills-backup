@@ -1,0 +1,19 @@
+{
+  "unit_id": "m-0086",
+  "order": 86,
+  "paragraph_index": 113,
+  "text": "As described above, a dual-targeting drug delivery strategy was required regarding the contradiction of Prdx1 functions in SAP, which meant to promote intracellular Prdx1 expression and neutralize extracellular Prdx1. Through literature review and pharmacological screening, we identified quercetin (Que)—a natural flavonoid—as a potent regulator of intracellular Prdx1, exhibiting robust antioxidant and anti-inflammatory properties. As shown in Figure 4A, Que exhibited a protective effect on MPC-38 cells exposed to taurocholate acid (TAC). Interestingly, the efficacy of Que nearly disappeared in Prdx1-knockdown cells (Figure 4B), which indicated the Prdx1-dependent manner of Que efficacy. And flow cytometry and BODIPY 581/591 staining were performed to further verified that the lack of Prdx1 could significantly weaken the effects of Que (Figure 4C-D). Further, after Que intervention, the expression level of Prdx1 was investigated in MPC-38 cells. The results revealed that no significant differences were observed in RNA or protein level of Prdx1 (Figure S3A and S3B), though the concentration of Que rised. Meanwhile, the expression of potential regulatory factors of Prdx1 such as HIF-1α, NRF2 and SP1 did not change evidently (Figure S3C). All evidence proved Que may act through regulating post-translation modification level of Prdx1 rather than its expression.",
+  "heading_context": "3.3 Quercetin restored Prdx1-mediated antioxidant function in SAP, while extracellular vesicle (EV)-encapsulated quercetin exhibited superior efficacy",
+  "anchors": [
+    "Figure 4A",
+    "Figure 4B",
+    "Figure 4C",
+    "Figure S3A",
+    "S3B",
+    "Figure S3C"
+  ],
+  "tags": {
+    "has_figure_ref": true,
+    "length": 1378
+  }
+}

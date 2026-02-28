@@ -1,0 +1,12 @@
+{
+  "unit_id": "m-0037",
+  "order": 37,
+  "paragraph_index": 46,
+  "text": "After determining cell concentration via hemocytometer, aliquots containing 1×106 cells were prepared in sterile microcentrifuge tubes for immunophenotyping. An antibody cocktail (viability staining, CD11b, CD8a, Ly6G, F4/80, Ly6C and CD4) was added, all obtained from BD Pharmingen. Antibody incubation proceeded for 45 minutes under protected light conditions at ambient temperature (25±2°C). Post-staining processing included two PBS washes (1000 ×g, 5 min), cellular fixation with 4% paraformaldehyde for 15 min, and final resuspension in 300 μL flow cytometry staining buffer. Flow cytometric analysis was performed within 24 hours using a BD LSRFortessa system (BD Biosciences) with FACSDiva acquisition software. Compensation and population gating were executed in FlowJo v11 (Tree Star) employing a four-step analytical strategy.",
+  "heading_context": "2.4 Immunohistochemistry (IHC) and Immunofluorescence",
+  "anchors": [],
+  "tags": {
+    "has_figure_ref": false,
+    "length": 837
+  }
+}

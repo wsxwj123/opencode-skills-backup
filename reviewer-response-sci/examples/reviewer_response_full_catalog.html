@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Reviewer Response Full Package</title>
+  <style>
+    :root { --bg:#f4f7fb; --panel:#fff; --text:#1f2937; --line:#d9e2ec; --accent:#0f4c81; --core:#b42318; --support:#b54708; --muted:#667085; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; background:var(--bg); color:var(--text); }
+    .layout { display:grid; grid-template-columns:340px 1fr; min-height:100vh; }
+    .sidebar { border-right:1px solid var(--line); background:#fff; position:sticky; top:0; height:100vh; overflow:auto; padding:14px; }
+    .sidebar h1 { margin:0 0 4px; font-size:1.05rem; color:var(--accent); }
+    .meta { font-size:.85rem; color:var(--muted); margin-bottom:10px; }
+    .toc-level-1, .toc-level-2, .toc-level-3 { list-style:none; margin:0; padding-left:0; }
+    .toc-level-2 { padding-left:12px; margin-top:4px; }
+    .toc-level-3 { padding-left:14px; margin-top:4px; }
+    .toc-btn { width:100%; text-align:left; border:1px solid var(--line); background:#fff; padding:7px 9px; border-radius:8px; cursor:pointer; font-size:.88rem; margin-bottom:6px; }
+    .toc-btn.active { background:#eaf3ff; border-color:#7ea3c8; color:#0b3f68; font-weight:600; }
+    .content { padding:18px 22px; }
+    .page { display:none; }
+    .page.active { display:block; }
+    .card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px 16px; margin:0 0 12px; }
+    h2 { color:var(--accent); margin:0 0 10px; }
+    h3 { margin:0 0 8px; }
+    h4 { margin:8px 0 4px; }
+    p { white-space:pre-wrap; line-height:1.6; }
+    .tag { display:inline-block; padding:1px 8px; border-radius:999px; color:#fff; font-size:.8rem; font-weight:600; margin-right:6px; }
+    .core { background:var(--core); }
+    .support { background:var(--support); }
+    figure { margin:8px 0; border:1px dashed var(--line); padding:10px; border-radius:8px; background:#fafcff; }
+    img { max-width:100%; height:auto; min-height:80px; background:#fff; border:1px solid var(--line); border-radius:6px; }
+    .table-wrap { overflow-x:auto; }
+    table { width:100%; border-collapse:collapse; }
+    th, td { border:1px solid var(--line); padding:7px 9px; text-align:left; vertical-align:top; }
+    th { background:#eff5fb; }
+    @media (max-width:980px) { .layout { grid-template-columns:1fr; } .sidebar { position:relative; height:auto; border-right:none; border-bottom:1px solid var(--line); } }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <h1>审稿回复目录</h1>
+      <div class="meta">JCR Reviewer Response Package | 2026-02-28</div>
+      <ul id="toc-root" class="toc-level-1"><li><button class="toc-btn active" data-target="page-email">回复审稿人的邮件</button></li><li><button class="toc-btn" data-target="r-1">Reviewer #1</button><ul class="toc-level-2"><li><button class="toc-btn" data-target="s-2">Major Comments</button><ul class="toc-level-3"><li><button class="toc-btn" data-target="c-3">Comment 1</button></li><li><button class="toc-btn" data-target="c-4">Comment 2</button></li><li><button class="toc-btn" data-target="c-5">Comment 3</button></li><li><button class="toc-btn" data-target="c-6">Comment 4</button></li><li><button class="toc-btn" data-target="c-7">Comment 5</button></li><li><button class="toc-btn" data-target="c-8">Comment 6</button></li><li><button class="toc-btn" data-target="c-9">Comment 7</button></li></ul></li></li><li><button class="toc-btn" data-target="s-10">Minor Comments</button><ul class="toc-level-3"><li><button class="toc-btn" data-target="c-11">Comment 1</button></li><li><button class="toc-btn" data-target="c-12">Comment 2</button></li><li><button class="toc-btn" data-target="c-13">Comment 3</button></li><li><button class="toc-btn" data-target="c-14">Comment 4</button></li><li><button class="toc-btn" data-target="c-15">Comment 5</button></li><li><button class="toc-btn" data-target="c-16">Comment 6</button></li><li><button class="toc-btn" data-target="c-17">Comment 7</button></li></ul></li></li></ul></li></ul>
+    </aside>
+    <main id="content-root" class="content"><section id="page-email" class="page active"><h2>回复审稿人的邮件</h2>
+<div class="card"><h3>English Email</h3><p>Dear Editor and Reviewers,
+
+Thank you for your constructive comments. We revised the manuscript point by point and addressed each concern below.
+
+Sincerely,
+The Authors</p></div>
+<div class="card"><h3>中文说明</h3><p>本页为总回复邮件。后续目录按 Reviewer -> Major/Minor -> Comment 分层组织，点击即可切换。</p></div>
+</section><section id="r-1" class="page"><h2>Reviewer #1</h2>
+<div class="card"><p>选择下级 Major/Minor 与具体 Comment 查看详细内容。</p></div></section><section id="s-2" class="page"><h2>Reviewer #1 - Major Comments</h2>
+<div class="card"><p>请选择具体 Comment 查看逐条回复详情。</p></div></section><section id="c-3" class="page"><h2>Reviewer #1 | Major Comments | Comment 1</h2>
+<div class="card"><h3>1) Reviewer Comment (Bilingual)</h3>
+<h4>中文理解</h4><p>审稿人核心关切：There is a serious discrepancy in the cell viability data presented for quercetin (Que) treatment in Figure 4B and Figure S3D. The data points and bar graphs clearly indicated that the cell viability in the &quot;TAC + Que&quot; g...</p>
+<h4>English</h4><p>There is a serious discrepancy in the cell viability data presented for quercetin (Que) treatment in Figure 4B and Figure S3D. The data points and bar graphs clearly indicated that the cell viability in the &quot;TAC + Que&quot; group is lower than in the &quot;TAC&quot; group alone. This is directly opposite to the stated conclusion in the text, which claimed that Que exhibited a protective effect. This inconsistency is observed in both the main figure and the supplementary figure, suggesting it is not an isolated error. If the data is correct as plotted, it would imply that quercetin exacerbates TAC-induced cell death rather than alleviating it, which would fundamentally contradict the core narrative of the paper regarding quercetin&#x27;s efficacy. The authors must urgently clarify this discrepancy.</p></div>
+<div class="card"><h3>2) Response to Reviewer (English)</h3><p>We sincerely thank the reviewer for identifying this critical issue. We have rechecked the corresponding data and updated the related text/figure presentation to ensure strict consistency between evidence and interpretation.</p></div>
+<div class="card"><h3>3) Revised Manuscript Excerpt (Clean Version)</h3><p>Not provided by user. Paste the final clean revised paragraph here.</p></div>
+<div class="card"><h3>4) 修改说明（中文）</h3><ul>
+<li><span class="tag core">🔴 Core</span> 围绕该条意见的核心科学关切进行实质修订，确保结论与证据链一致。</li>
+<li><span class="tag support">🟡 Support</span> 同步优化图号引用、术语表达与段落衔接，提升可读性与可核查性。</li>
+</ul></div>
+<div class="card"><h3>5) Evidence Attachments</h3>
+<p><strong>Text:</strong> Not provided by user.</p>
+<figure><img src="" alt="No image provided" /><figcaption>Not provided by user.</figcaption></figure>
+<div class="table-wrap"><table><thead><tr><th>Item</th><th>Before</th><th>After</th><th>Evidence</th></tr></thead>
+<tbody><tr><td>Key correction</td><td>Not provided by user</td><td>Not provided by user</td><td>Not provided by user</td></tr></tbody></table></div>
+</div></section><section id="c-4" class="page"><h2>Reviewer #1 | Major Comments | Comment 2</h2>
+<div class="card"><h3>1) Reviewer Comment (Bilingual)</h3>
+<h4>中文理解</h4><p>审稿人核心关切：Figure S2B, there is a clear mismatch between the images and their labels. The authors must carefully review the source data for Figure S2B and provide the correct images underneath the correct labels. It is imperative t...</p>
+<h4>English</h4><p>Figure S2B, there is a clear mismatch between the images and their labels. The authors must carefully review the source data for Figure S2B and provide the correct images underneath the correct labels. It is imperative that the authors verify the integrity and correct labeling of all images in the manuscript and supplementary information to ensure the scientific rigor and credibility of their data.</p></div>
+<div class="card"><h3>2) Response to Reviewer (English)</h3><p>We sincerely thank the reviewer for identifying this critical issue. We have rechecked the corresponding data and updated the related text/figure presentation to ensure strict consistency between evidence and interpretation.</p></div>
+<div class="card"><h3>3) Revised Manuscript Excerpt (Clean Version)</h3><p>Not provided by user. Paste the final clean revised paragraph here.</p></div>
+<div class="card"><h3>4) 修改说明（中文）</h3><ul>
+<li><span class="tag core">🔴 Core</span> 围绕该条意见的核心科学关切进行实质修订，确保结论与证据链一致。</li>
+<li><span class="tag support">🟡 Support</span> 同步优化图号引用、术语表达与段落衔接，提升可读性与可核查性。</li>
+</ul></div>
+<div class="card"><h3>5) Evidence Attachments</h3>
+<p><strong>Text:</strong> Not provided by user.</p>
+<figure><img src="" alt="No image provided" /><figcaption>Not provided by user.</figcaption></figure>
+<div class="table-wrap"><table><thead><tr><th>Item</th><th>Before</th><th>After</th><th>Evidence</th></tr></thead>
+<tbody><tr><td>Key correction</td><td>Not provided by user</td><td>Not provided by user</td><td>Not provided by user</td></tr></tbody></table></div>
+</div></section><section id="c-5" class="page"><h2>Reviewer #1 | Major Comments | Comment 3</h2>
+<div class="card"><h3>1) Reviewer Comment (Bilingual)</h3>
+<h4>中文理解</h4><p>审稿人核心关切：Fig3F demonstrated that silencing TLR3 significantly attenuated the rPrdx1-induced nuclear translocation of NF-κB，please provide Western Blot analysis demonstrating the efficiency of TLR3 protein knockdown in the BMDMs u...</p>
+<h4>English</h4><p>Fig3F demonstrated that silencing TLR3 significantly attenuated the rPrdx1-induced nuclear translocation of NF-κB，please provide Western Blot analysis demonstrating the efficiency of TLR3 protein knockdown in the BMDMs used for the experiments in Figures 3F and 3G.</p></div>
+<div class="card"><h3>2) Response to Reviewer (English)</h3><p>We appreciate this constructive recommendation. We have incorporated the requested clarification/analysis in the revised manuscript and updated the related figure or method description accordingly.</p></div>
+<div class="card"><h3>3) Revised Manuscript Excerpt (Clean Version)</h3><p>Not provided by user. Paste the final clean revised paragraph here.</p></div>
+<div class="card"><h3>4) 修改说明（中文）</h3><ul>
+<li><span class="tag core">🔴 Core</span> 围绕该条意见的核心科学关切进行实质修订，确保结论与证据链一致。</li>
+<li><span class="tag support">🟡 Support</span> 同步优化图号引用、术语表达与段落衔接，提升可读性与可核查性。</li>
+</ul></div>
+<div class="card"><h3>5) Evidence Attachments</h3>
+<p><strong>Text:</strong> Not provided by user.</p>
+<figure><img src="" alt="No image provided" /><figcaption>Not provided by user.</figcaption></figure>
+<div class="table-wrap"><table><thead><tr><th>Item</th><th>Before</th><th>After</th><th>Evidence</th></tr></thead>
+<tbody><tr><td>Key correction</td><td>Not provided by user</td><td>Not provided by user</td><td>Not provided by user</td></tr></tbody></table></div>
+</div></section><section id="c-6" class="page"><h2>Reviewer #1 | Major Comments | Comment 4</h2>
+<div class="card"><h3>1) Reviewer Comment (Bilingual)</h3>
+<h4>中文理解</h4><p>审稿人核心关切：In Figure 5, while the authors have thoroughly characterized particle size and morphology, NTA data to report particle concentration is need to demonstrate EV purity and quality. Please include and compare the zeta poten...</p>
+<h4>English</h4><p>In Figure 5, while the authors have thoroughly characterized particle size and morphology, NTA data to report particle concentration is need to demonstrate EV purity and quality. Please include and compare the zeta potential for both Fc-EL-EVs and Ab-Fc-EL-EVs in the manuscript.</p></div>
+<div class="card"><h3>2) Response to Reviewer (English)</h3><p>We appreciate this constructive recommendation. We have incorporated the requested clarification/analysis in the revised manuscript and updated the related figure or method description accordingly.</p></div>
+<div class="card"><h3>3) Revised Manuscript Excerpt (Clean Version)</h3><p>Not provided by user. Paste the final clean revised paragraph here.</p></div>
+<div class="card"><h3>4) 修改说明（中文）</h3><ul>
+<li><span class="tag core">🔴 Core</span> 围绕该条意见的核心科学关切进行实质修订，确保结论与证据链一致。</li>
+<li><span class="tag support">🟡 Support</span> 同步优化图号引用、术语表达与段落衔接，提升可读性与可核查性。</li>
+</ul></div>
+<div class="card"><h3>5) Evidence Attachments</h3>
+<p><strong>Text:</strong> Not provided by user.</p>
+<figure><img src="" alt="No image provided" /><figcaption>Not provided by user.</figcaption></figure>
+<div class="table-wrap"><table><thead><tr><th>Item</th><th>Before</th><th>After</th><th>Evidence</th></tr></thead>
+<tbody><tr><td>Key correction</td><td>Not provided by user</td><td>Not provided by user</td><td>Not provided by user</td></tr></tbody></table></div>
+</div></section><section id="c-7" class="page"><h2>Reviewer #1 | Major Comments | Comment 5</h2>
+<div class="card"><h3>1) Reviewer Comment (Bilingual)</h3>
+<h4>中文理解</h4><p>审稿人核心关切：For a system designed for intravenous administration, the manuscript lacks two key serum stability assessments, please add in Figure 5 (1) serum stability of different engineered EVs; (2) serum stability of antibody disp...</p>
+<h4>English</h4><p>For a system designed for intravenous administration, the manuscript lacks two key serum stability assessments, please add in Figure 5 (1) serum stability of different engineered EVs; (2) serum stability of antibody display of Fc-EL-EVs.</p></div>
+<div class="card"><h3>2) Response to Reviewer (English)</h3><p>We appreciate this constructive recommendation. We have incorporated the requested clarification/analysis in the revised manuscript and updated the related figure or method description accordingly.</p></div>
+<div class="card"><h3>3) Revised Manuscript Excerpt (Clean Version)</h3><p>Not provided by user. Paste the final clean revised paragraph here.</p></div>
+<div class="card"><h3>4) 修改说明（中文）</h3><ul>
+<li><span class="tag core">🔴 Core</span> 围绕该条意见的核心科学关切进行实质修订，确保结论与证据链一致。</li>
+<li><span class="tag support">🟡 Support</span> 同步优化图号引用、术语表达与段落衔接，提升可读性与可核查性。</li>
+</ul></div>
+<div class="card"><h3>5) Evidence Attachments</h3>
+<p><strong>Text:</strong> Not provided by user.</p>
+<figure><img src="" alt="No image provided" /><figcaption>Not provided by user.</figcaption></figure>
+<div class="table-wrap"><table><thead><tr><th>Item</th><th>Before</th><th>After</th><th>Evidence</th></tr></thead>
+<tbody><tr><td>Key correction</td><td>Not provided by user</td><td>Not provided by user</td><td>Not provided by user</td></tr></tbody></table></div>
+</div></section><section id="c-8" class="page"><h2>Reviewer #1 | Major Comments | Comment 6</h2>
+<div class="card"><h3>1) Reviewer Comment (Bilingual)</h3>
+<h4>中文理解</h4><p>审稿人核心关切：Figure 6A provides compelling qualitative confocal microscopy images demonstrating the cellular uptake of the engineered EVs and the elastase-triggered antibody release. It is recommended to provide flow cytometry quanti...</p>
+<h4>English</h4><p>Figure 6A provides compelling qualitative confocal microscopy images demonstrating the cellular uptake of the engineered EVs and the elastase-triggered antibody release. It is recommended to provide flow cytometry quantification of the cellular uptake.</p></div>
+<div class="card"><h3>2) Response to Reviewer (English)</h3><p>We appreciate this constructive recommendation. We have incorporated the requested clarification/analysis in the revised manuscript and updated the related figure or method description accordingly.</p></div>
+<div class="card"><h3>3) Revised Manuscript Excerpt (Clean Version)</h3><p>Not provided by user. Paste the final clean revised paragraph here.</p></div>
+<div class="card"><h3>4) 修改说明（中文）</h3><ul>
+<li><span class="tag core">🔴 Core</span> 围绕该条意见的核心科学关切进行实质修订，确保结论与证据链一致。</li>
+<li><span class="tag support">🟡 Support</span> 同步优化图号引用、术语表达与段落衔接，提升可读性与可核查性。</li>
+</ul></div>
+<div class="card"><h3>5) Evidence Attachments</h3>
+<p><strong>Text:</strong> Not provided by user.</p>
+<figure><img src="" alt="No image provided" /><figcaption>Not provided by user.</figcaption></figure>
+<div class="table-wrap"><table><thead><tr><th>Item</th><th>Before</th><th>After</th><th>Evidence</th></tr></thead>
+<tbody><tr><td>Key correction</td><td>Not provided by user</td><td>Not provided by user</td><td>Not provided by user</td></tr></tbody></table></div>
+</div></section><section id="c-9" class="page"><h2>Reviewer #1 | Major Comments | Comment 7</h2>
+<div class="card"><h3>1) Reviewer Comment (Bilingual)</h3>
+<h4>中文理解</h4><p>审稿人核心关切：The therapeutic strategy relies on high extracellular Prdx1 for targeting and high elastase for antibody release, both hallmarks of SAP. However, since Prdx1 release and elevated elastase occur in other inflammatory cond...</p>
+<h4>English</h4><p>The therapeutic strategy relies on high extracellular Prdx1 for targeting and high elastase for antibody release, both hallmarks of SAP. However, since Prdx1 release and elevated elastase occur in other inflammatory conditions. Moreover, it can be observed from Fig6C and Fig6F that Ab-Fc-EL-EV@Que has high accumulation in the liver and spleen. Could the authors explain whether the system could be inadvertently activated at non-pancreatic inflammatory sites, leading to the unintended release of the anti-Prdx1 antibody in non-target tissues? It is strongly recommended to provide liver and kidney function markers(AST, ALT, BUN,Cr), H&amp;E staining of major organs (e.g., heart, liver, spleen, lung, kidney), serum and pancreas levels of key pro-inflammatory cytokines (e.g., IL-1β, IL-6, TNF-α) in the SAP model mice from different treatment groups to further confirm safety and effectiveness.</p></div>
+<div class="card"><h3>2) Response to Reviewer (English)</h3><p>We appreciate this constructive recommendation. We have incorporated the requested clarification/analysis in the revised manuscript and updated the related figure or method description accordingly.</p></div>
+<div class="card"><h3>3) Revised Manuscript Excerpt (Clean Version)</h3><p>Not provided by user. Paste the final clean revised paragraph here.</p></div>
+<div class="card"><h3>4) 修改说明（中文）</h3><ul>
+<li><span class="tag core">🔴 Core</span> 围绕该条意见的核心科学关切进行实质修订，确保结论与证据链一致。</li>
+<li><span class="tag support">🟡 Support</span> 同步优化图号引用、术语表达与段落衔接，提升可读性与可核查性。</li>
+</ul></div>
+<div class="card"><h3>5) Evidence Attachments</h3>
+<p><strong>Text:</strong> Not provided by user.</p>
+<figure><img src="" alt="No image provided" /><figcaption>Not provided by user.</figcaption></figure>
+<div class="table-wrap"><table><thead><tr><th>Item</th><th>Before</th><th>After</th><th>Evidence</th></tr></thead>
+<tbody><tr><td>Key correction</td><td>Not provided by user</td><td>Not provided by user</td><td>Not provided by user</td></tr></tbody></table></div>
+</div></section><section id="s-10" class="page"><h2>Reviewer #1 - Minor Comments</h2>
+<div class="card"><p>请选择具体 Comment 查看逐条回复详情。</p></div></section><section id="c-11" class="page"><h2>Reviewer #1 | Minor Comments | Comment 1</h2>
+<div class="card"><h3>1) Reviewer Comment (Bilingual)</h3>
+<h4>中文理解</h4><p>审稿人核心关切：The authors should provide the flow cytometry gating strategy.</p>
+<h4>English</h4><p>The authors should provide the flow cytometry gating strategy.</p></div>
+<div class="card"><h3>2) Response to Reviewer (English)</h3><p>Thank you for this helpful suggestion. We have revised the relevant text/figure presentation accordingly, and we rechecked consistency across related sections in the revised manuscript.</p></div>
+<div class="card"><h3>3) Revised Manuscript Excerpt (Clean Version)</h3><p>Not provided by user. Paste the final clean revised paragraph here.</p></div>
+<div class="card"><h3>4) 修改说明（中文）</h3><ul>
+<li><span class="tag core">🔴 Core</span> 围绕术语、图注、编号和版式执行规范化修订，并逐项核对对应位置。</li>
+<li><span class="tag support">🟡 Support</span> 完成同类问题的全文一致性校对，降低编辑轮返风险。</li>
+</ul></div>
+<div class="card"><h3>5) Evidence Attachments</h3>
+<p><strong>Text:</strong> Not provided by user.</p>
+<figure><img src="" alt="No image provided" /><figcaption>Not provided by user.</figcaption></figure>
+<div class="table-wrap"><table><thead><tr><th>Item</th><th>Before</th><th>After</th><th>Evidence</th></tr></thead>
+<tbody><tr><td>Key correction</td><td>Not provided by user</td><td>Not provided by user</td><td>Not provided by user</td></tr></tbody></table></div>
+</div></section><section id="c-12" class="page"><h2>Reviewer #1 | Minor Comments | Comment 2</h2>
+<div class="card"><h3>1) Reviewer Comment (Bilingual)</h3>
+<h4>中文理解</h4><p>审稿人核心关切：Figure 2J is not cited in the main text. Every figure should be referenced and discussed in the manuscript.</p>
+<h4>English</h4><p>Figure 2J is not cited in the main text. Every figure should be referenced and discussed in the manuscript.</p></div>
+<div class="card"><h3>2) Response to Reviewer (English)</h3><p>Thank you for this helpful suggestion. We have revised the relevant text/figure presentation accordingly, and we rechecked consistency across related sections in the revised manuscript.</p></div>
+<div class="card"><h3>3) Revised Manuscript Excerpt (Clean Version)</h3><p>Not provided by user. Paste the final clean revised paragraph here.</p></div>
+<div class="card"><h3>4) 修改说明（中文）</h3><ul>
+<li><span class="tag core">🔴 Core</span> 围绕术语、图注、编号和版式执行规范化修订，并逐项核对对应位置。</li>
+<li><span class="tag support">🟡 Support</span> 完成同类问题的全文一致性校对，降低编辑轮返风险。</li>
+</ul></div>
+<div class="card"><h3>5) Evidence Attachments</h3>
+<p><strong>Text:</strong> Not provided by user.</p>
+<figure><img src="" alt="No image provided" /><figcaption>Not provided by user.</figcaption></figure>
+<div class="table-wrap"><table><thead><tr><th>Item</th><th>Before</th><th>After</th><th>Evidence</th></tr></thead>
+<tbody><tr><td>Key correction</td><td>Not provided by user</td><td>Not provided by user</td><td>Not provided by user</td></tr></tbody></table></div>
+</div></section><section id="c-13" class="page"><h2>Reviewer #1 | Minor Comments | Comment 3</h2>
+<div class="card"><h3>1) Reviewer Comment (Bilingual)</h3>
+<h4>中文理解</h4><p>审稿人核心关切：Please clearly label the scale bars of Figure 5A, B and Figure 6A.</p>
+<h4>English</h4><p>Please clearly label the scale bars of Figure 5A, B and Figure 6A.</p></div>
+<div class="card"><h3>2) Response to Reviewer (English)</h3><p>Thank you for this helpful suggestion. We have revised the relevant text/figure presentation accordingly, and we rechecked consistency across related sections in the revised manuscript.</p></div>
+<div class="card"><h3>3) Revised Manuscript Excerpt (Clean Version)</h3><p>Not provided by user. Paste the final clean revised paragraph here.</p></div>
+<div class="card"><h3>4) 修改说明（中文）</h3><ul>
+<li><span class="tag core">🔴 Core</span> 围绕术语、图注、编号和版式执行规范化修订，并逐项核对对应位置。</li>
+<li><span class="tag support">🟡 Support</span> 完成同类问题的全文一致性校对，降低编辑轮返风险。</li>
+</ul></div>
+<div class="card"><h3>5) Evidence Attachments</h3>
+<p><strong>Text:</strong> Not provided by user.</p>
+<figure><img src="" alt="No image provided" /><figcaption>Not provided by user.</figcaption></figure>
+<div class="table-wrap"><table><thead><tr><th>Item</th><th>Before</th><th>After</th><th>Evidence</th></tr></thead>
+<tbody><tr><td>Key correction</td><td>Not provided by user</td><td>Not provided by user</td><td>Not provided by user</td></tr></tbody></table></div>
+</div></section><section id="c-14" class="page"><h2>Reviewer #1 | Minor Comments | Comment 4</h2>
+<div class="card"><h3>1) Reviewer Comment (Bilingual)</h3>
+<h4>中文理解</h4><p>审稿人核心关切：In Figure 5E, the red gates used to define the positive populations in the flow cytometry plots are visually inconsistent. The authors should ensure that all representative flow cytometry plots in the manuscript use gate...</p>
+<h4>English</h4><p>In Figure 5E, the red gates used to define the positive populations in the flow cytometry plots are visually inconsistent. The authors should ensure that all representative flow cytometry plots in the manuscript use gates that are consistently and clearly drawn.</p></div>
+<div class="card"><h3>2) Response to Reviewer (English)</h3><p>Thank you for this helpful suggestion. We have revised the relevant text/figure presentation accordingly, and we rechecked consistency across related sections in the revised manuscript.</p></div>
+<div class="card"><h3>3) Revised Manuscript Excerpt (Clean Version)</h3><p>Not provided by user. Paste the final clean revised paragraph here.</p></div>
+<div class="card"><h3>4) 修改说明（中文）</h3><ul>
+<li><span class="tag core">🔴 Core</span> 围绕术语、图注、编号和版式执行规范化修订，并逐项核对对应位置。</li>
+<li><span class="tag support">🟡 Support</span> 完成同类问题的全文一致性校对，降低编辑轮返风险。</li>
+</ul></div>
+<div class="card"><h3>5) Evidence Attachments</h3>
+<p><strong>Text:</strong> Not provided by user.</p>
+<figure><img src="" alt="No image provided" /><figcaption>Not provided by user.</figcaption></figure>
+<div class="table-wrap"><table><thead><tr><th>Item</th><th>Before</th><th>After</th><th>Evidence</th></tr></thead>
+<tbody><tr><td>Key correction</td><td>Not provided by user</td><td>Not provided by user</td><td>Not provided by user</td></tr></tbody></table></div>
+</div></section><section id="c-15" class="page"><h2>Reviewer #1 | Minor Comments | Comment 5</h2>
+<div class="card"><h3>1) Reviewer Comment (Bilingual)</h3>
+<h4>中文理解</h4><p>审稿人核心关切：The figure legends for S2A and S2B must be corrected from &quot;Immunohistochemistry&quot; to &quot;Immunofluorescence&quot;. This is a fundamental misrepresentation of the experimental method. Please carefully review all figures and make t...</p>
+<h4>English</h4><p>The figure legends for S2A and S2B must be corrected from &quot;Immunohistochemistry&quot; to &quot;Immunofluorescence&quot;. This is a fundamental misrepresentation of the experimental method. Please carefully review all figures and make the necessary corrections.</p></div>
+<div class="card"><h3>2) Response to Reviewer (English)</h3><p>Thank you for this helpful suggestion. We have revised the relevant text/figure presentation accordingly, and we rechecked consistency across related sections in the revised manuscript.</p></div>
+<div class="card"><h3>3) Revised Manuscript Excerpt (Clean Version)</h3><p>Not provided by user. Paste the final clean revised paragraph here.</p></div>
+<div class="card"><h3>4) 修改说明（中文）</h3><ul>
+<li><span class="tag core">🔴 Core</span> 围绕术语、图注、编号和版式执行规范化修订，并逐项核对对应位置。</li>
+<li><span class="tag support">🟡 Support</span> 完成同类问题的全文一致性校对，降低编辑轮返风险。</li>
+</ul></div>
+<div class="card"><h3>5) Evidence Attachments</h3>
+<p><strong>Text:</strong> Not provided by user.</p>
+<figure><img src="" alt="No image provided" /><figcaption>Not provided by user.</figcaption></figure>
+<div class="table-wrap"><table><thead><tr><th>Item</th><th>Before</th><th>After</th><th>Evidence</th></tr></thead>
+<tbody><tr><td>Key correction</td><td>Not provided by user</td><td>Not provided by user</td><td>Not provided by user</td></tr></tbody></table></div>
+</div></section><section id="c-16" class="page"><h2>Reviewer #1 | Minor Comments | Comment 6</h2>
+<div class="card"><h3>1) Reviewer Comment (Bilingual)</h3>
+<h4>中文理解</h4><p>审稿人核心关切：Please correct the text to use the standard format: CD4+T cells and CD8+T cells, the plus sign (+) indicating positive expression should be formatted as a superscript.</p>
+<h4>English</h4><p>Please correct the text to use the standard format: CD4+T cells and CD8+T cells, the plus sign (+) indicating positive expression should be formatted as a superscript.</p></div>
+<div class="card"><h3>2) Response to Reviewer (English)</h3><p>Thank you for this helpful suggestion. We have revised the relevant text/figure presentation accordingly, and we rechecked consistency across related sections in the revised manuscript.</p></div>
+<div class="card"><h3>3) Revised Manuscript Excerpt (Clean Version)</h3><p>Not provided by user. Paste the final clean revised paragraph here.</p></div>
+<div class="card"><h3>4) 修改说明（中文）</h3><ul>
+<li><span class="tag core">🔴 Core</span> 围绕术语、图注、编号和版式执行规范化修订，并逐项核对对应位置。</li>
+<li><span class="tag support">🟡 Support</span> 完成同类问题的全文一致性校对，降低编辑轮返风险。</li>
+</ul></div>
+<div class="card"><h3>5) Evidence Attachments</h3>
+<p><strong>Text:</strong> Not provided by user.</p>
+<figure><img src="" alt="No image provided" /><figcaption>Not provided by user.</figcaption></figure>
+<div class="table-wrap"><table><thead><tr><th>Item</th><th>Before</th><th>After</th><th>Evidence</th></tr></thead>
+<tbody><tr><td>Key correction</td><td>Not provided by user</td><td>Not provided by user</td><td>Not provided by user</td></tr></tbody></table></div>
+</div></section><section id="c-17" class="page"><h2>Reviewer #1 | Minor Comments | Comment 7</h2>
+<div class="card"><h3>1) Reviewer Comment (Bilingual)</h3>
+<h4>中文理解</h4><p>审稿人核心关切：The manuscript contains numerous grammatical errors. It is strongly recommended that the manuscript undergo thorough proofreading and professional language editing.</p>
+<h4>English</h4><p>The manuscript contains numerous grammatical errors. It is strongly recommended that the manuscript undergo thorough proofreading and professional language editing.</p></div>
+<div class="card"><h3>2) Response to Reviewer (English)</h3><p>Thank you for this helpful suggestion. We have revised the relevant text/figure presentation accordingly, and we rechecked consistency across related sections in the revised manuscript.</p></div>
+<div class="card"><h3>3) Revised Manuscript Excerpt (Clean Version)</h3><p>Not provided by user. Paste the final clean revised paragraph here.</p></div>
+<div class="card"><h3>4) 修改说明（中文）</h3><ul>
+<li><span class="tag core">🔴 Core</span> 围绕术语、图注、编号和版式执行规范化修订，并逐项核对对应位置。</li>
+<li><span class="tag support">🟡 Support</span> 完成同类问题的全文一致性校对，降低编辑轮返风险。</li>
+</ul></div>
+<div class="card"><h3>5) Evidence Attachments</h3>
+<p><strong>Text:</strong> Not provided by user.</p>
+<figure><img src="" alt="No image provided" /><figcaption>Not provided by user.</figcaption></figure>
+<div class="table-wrap"><table><thead><tr><th>Item</th><th>Before</th><th>After</th><th>Evidence</th></tr></thead>
+<tbody><tr><td>Key correction</td><td>Not provided by user</td><td>Not provided by user</td><td>Not provided by user</td></tr></tbody></table></div>
+</div></section></main>
+  </div>
+  <script>
+    const btns = document.querySelectorAll('.toc-btn');
+    const pages = document.querySelectorAll('.page');
+    btns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        btns.forEach(b => b.classList.remove('active'));
+        pages.forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        const target = document.getElementById(btn.dataset.target);
+        if (target) target.classList.add('active');
+      });
+    });
+  </script>
+</body>
+</html>

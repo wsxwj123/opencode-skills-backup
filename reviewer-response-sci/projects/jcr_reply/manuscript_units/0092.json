@@ -1,0 +1,12 @@
+{
+  "unit_id": "m-0092",
+  "order": 92,
+  "paragraph_index": 121,
+  "text": "Furthermore, we realized that the controllable release of anti-Prdx1 antibody in extracellular space of acinar cells was essential for Prdx1 neutralization. Based on this, an specific-responsive drug delivery system was needed. It was well-known that neutrophils functioned importantly in SAP development, particularly, elastase (EL) released from neutrophils played a crucial role for cascade inflammation and tissues necrosis. ​​Thus, considering the high concentration of EL in SAP tissues, we introduced an EL-responsive linker between the Z-domain and the CD63 protein (Ab-Fc-EL-EV@Que).​​ In this way, once the Fc-EL-EV reached the injured pancreas, the EL-responsive linker would be cleaved by elevated EL activity, releasing antibodies for targeted neutralization of extracellular Prdx1. Our vision was that, based on this antibody loading platform, different antibody and drug delivery therapies can be developed for a variety of diseases. Therefore, we first constructed the blank Fc-EL-EVs without antibody binding and Que loading from a formulation perspective.",
+  "heading_context": "3.4 Construction of Fc-EL-EV and development of Fc-EL-EV@Que",
+  "anchors": [],
+  "tags": {
+    "has_figure_ref": false,
+    "length": 1073
+  }
+}

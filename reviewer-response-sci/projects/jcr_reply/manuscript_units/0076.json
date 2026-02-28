@@ -1,0 +1,20 @@
+{
+  "unit_id": "m-0076",
+  "order": 76,
+  "paragraph_index": 98,
+  "text": "To achieve this purpose, we employed AAV8, a viral vector for gene delivery. In our previous research, the intraductal microinjection of AAV8 was proved to be effective for targeted gene delivery to acinar cells[27]. This strategy successfully enabled targeted gene expression within this specific cell population. To evaluate the tissue targeting and delivery efficiency of this method, we verified AAV8-mediated GFP expression. Robust GFP fluorescence was detected uniformly across pancreatic segments (head, body, and tail), demonstrating a high transduction efficiency and spatial specificity of AAV8 (Figure 2K). Subsequently, we used AAV8 to overexpress Prdx1 in pancreas. The schedule was illustrated in Figure 2L. After two weeks of Prdx1-AAV8 injection, SAP was induced by caerulein. Pancreatic ductal administration of blank AAV8 caused no significant pancreatic damage, confirming its safety as a delivery method. Robust Prdx1 expression was achieved in both healthy and SAP-induced pancreatic tissues, demonstrating the effectiveness of AAV8-mediated transduction regardless of disease status (Figure 2M). As expected, plasma amylase activity in AAV8-Prdx1 group was restrained than AAV8-ctrl group in caerulein induced SAP (Figure 2N). Moreover, H&E staining of pancreatic and lung tissues further validated the protective role of AAV8-Prdx1 in SAP, demonstrating significantly reduced histopathological injury and diminished inflammatory cell infiltration in both organs (Figure 2O-P). Similarly, level of major inflammatory cells like neutrophils and macrophages in SAP were also decreased after Prdx1 overexpression (Figure S1B and S1C). All these results demonstrated that overexpressed Prdx1 in acinar cells could alleviate SAP symptoms though specific mechanisms remained unknown.",
+  "heading_context": "3.1 Intracellular Prdx1 deficiency in acinar cells exacerbates SAP by inducing cell apoptosis and ferroptosis",
+  "anchors": [
+    "Figure 2K",
+    "Figure 2L",
+    "Figure 2M",
+    "Figure 2N",
+    "Figure 2O",
+    "Figure S1B",
+    "S1C"
+  ],
+  "tags": {
+    "has_figure_ref": true,
+    "length": 1799
+  }
+}

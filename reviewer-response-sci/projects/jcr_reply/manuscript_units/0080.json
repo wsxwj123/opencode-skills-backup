@@ -1,0 +1,18 @@
+{
+  "unit_id": "m-0080",
+  "order": 80,
+  "paragraph_index": 105,
+  "text": "Although Prdx1 is well-established as a key regulator of oxidative stress, emerging evidence reveals its paradoxical role. Specifically, extracellular Prdx1 has been shown to act as a novel damage-associated molecular pattern (DAMP), actively triggering inflammatory responses in macrophages across various acute inflammatory diseases. Despite these insights, the specific role of Prdx1 in SAP remained notably unexplored, thus investigating its effects within SAP was clearly warranted. We first measured serum Prdx1 levels in mice with varying severity of pancreatitis. Notably, the level of intracellular Prdx1 expression did not exhibit significant differences between AP and SAP mice models as shown in Figure 2A and S1A, but the serum level of Prdx1 in SAP mice reached 4.76 times than that of the normal group (Figure 3A). To further elucidate the pathogenic role of Prdx1 as a DAMP, we first isolated the primary acinar cells from PcKO and flox mice to co-culture them with bone marrow-derived macrophages (BMDMs). Standard assessment of macrophage-mediated acute inflammation includes evaluation of pro-inflammatory cytokine release and phenotypic polarization. As shown in Figure 3B, the expression of classic pro-inflammatory factors in BMDMs such as TNF-α, IL-1β and IL-6 all exhibited no significant changes when treated with solo caerulein. However, BMDMs co-cultured with Flox acinar cells obviously induced explosive expression of these factors, but PcKO acinar cells showed significant less expression. The results were consistent with our expectation, that extracellular Prdx1 content of the Prdx1-knockout PcKO acinar cells evidently decreased while that of Flox did not. This suggested a close association between Prdx1 expression in acinar cells and macrophage activation. Previous studies demonstrate that extracellular antibodies can neutralize damage-associated molecular patterns (DAMPs), effectively attenuating their specific pro-inflammatory signaling pathways. For precisely neutralizing large macromolecular proteins like extracellular Prdx1, therapeutic antibodies are the preferred agents due to their high specificity and affinity, as well as their potent neutralizing capacity against specific protein epitopes. Therefore, we treated acinar cells isolated from Flox mice with an Anti-Prdx1 antibody. This intervention led to a significant reduction in the expression of key pro-inflammatory cytokines, specifically IL-1β and IL-6, observed in macrophages (Figure 3C). Therefore, extracellular Prdx1 indeed acted as a DAMP to activate macrophages in SAP, and neutralizing them could attenuate the cascade inflammation.",
+  "heading_context": "3.2 Extracellular Prdx1 significantly promoted macrophage-mediated inflammation in SAP through a TLR3-dependent pathways",
+  "anchors": [
+    "Figure 2A",
+    "S1A",
+    "Figure 3A",
+    "Figure 3B",
+    "Figure 3C"
+  ],
+  "tags": {
+    "has_figure_ref": true,
+    "length": 2651
+  }
+}

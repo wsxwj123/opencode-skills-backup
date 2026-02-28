@@ -1,0 +1,12 @@
+{
+  "unit_id": "m-0013",
+  "order": 13,
+  "paragraph_index": 17,
+  "text": "To address this complex therapeutic dilemma, a precise strategy is needed to simultaneously promote intracellular Prdx1 and inhibit extracellular Prdx1, achieving spatially differentiated delivery of multiple payloads. Traditional drug delivery systems, such as synthetic nanoparticles and viral vectors, often exhibit significant limitations in this complex scenario. Synthetic nanoparticles often face issues such as low biocompatibility, rapid systemic clearance, or non-specific cellular uptake, making precise multi-site delivery challenging. While viral vectors are effective in gene delivery, they have inherent limitations in efficiently encapsulating large protein molecules like antibodies, are associated with immunogenicity risks, and are difficult to combine with small molecule drug encapsulation. Furthermore, they cannot facilitate controlled, environment-responsive release to achieve differentiated targeting of payloads, making them unsuitable for addressing the dual role of Prdx1.",
+  "heading_context": "",
+  "anchors": [],
+  "tags": {
+    "has_figure_ref": false,
+    "length": 1001
+  }
+}

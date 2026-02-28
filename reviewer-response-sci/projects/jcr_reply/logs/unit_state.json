@@ -1,0 +1,114 @@
+{
+  "updated_at": "2026-02-28T13:41:20.031486+00:00",
+  "units": {
+    "u-000-email": {
+      "state": "final",
+      "title": "回复审稿人的邮件",
+      "reviewer": "all",
+      "section": "email",
+      "comment_number": "0"
+    },
+    "u-001": {
+      "state": "draft",
+      "title": "Reviewer #1 | MAJOR | Comment 1",
+      "reviewer": "Reviewer #1",
+      "section": "major",
+      "comment_number": "1"
+    },
+    "u-002": {
+      "state": "draft",
+      "title": "Reviewer #1 | MAJOR | Comment 2",
+      "reviewer": "Reviewer #1",
+      "section": "major",
+      "comment_number": "2"
+    },
+    "u-003": {
+      "state": "draft",
+      "title": "Reviewer #1 | MAJOR | Comment 3",
+      "reviewer": "Reviewer #1",
+      "section": "major",
+      "comment_number": "3"
+    },
+    "u-004": {
+      "state": "draft",
+      "title": "Reviewer #1 | MAJOR | Comment 4",
+      "reviewer": "Reviewer #1",
+      "section": "major",
+      "comment_number": "4"
+    },
+    "u-005": {
+      "state": "draft",
+      "title": "Reviewer #1 | MAJOR | Comment 5",
+      "reviewer": "Reviewer #1",
+      "section": "major",
+      "comment_number": "5"
+    },
+    "u-006": {
+      "state": "draft",
+      "title": "Reviewer #1 | MAJOR | Comment 6",
+      "reviewer": "Reviewer #1",
+      "section": "major",
+      "comment_number": "6"
+    },
+    "u-007": {
+      "state": "draft",
+      "title": "Reviewer #1 | MAJOR | Comment 7",
+      "reviewer": "Reviewer #1",
+      "section": "major",
+      "comment_number": "7"
+    },
+    "u-008": {
+      "state": "draft",
+      "title": "Reviewer #1 | MINOR | Comment 1",
+      "reviewer": "Reviewer #1",
+      "section": "minor",
+      "comment_number": "1"
+    },
+    "u-009": {
+      "state": "draft",
+      "title": "Reviewer #1 | MINOR | Comment 2",
+      "reviewer": "Reviewer #1",
+      "section": "minor",
+      "comment_number": "2"
+    },
+    "u-010": {
+      "state": "draft",
+      "title": "Reviewer #1 | MINOR | Comment 3",
+      "reviewer": "Reviewer #1",
+      "section": "minor",
+      "comment_number": "3"
+    },
+    "u-011": {
+      "state": "draft",
+      "title": "Reviewer #1 | MINOR | Comment 4",
+      "reviewer": "Reviewer #1",
+      "section": "minor",
+      "comment_number": "4"
+    },
+    "u-012": {
+      "state": "draft",
+      "title": "Reviewer #1 | MINOR | Comment 5",
+      "reviewer": "Reviewer #1",
+      "section": "minor",
+      "comment_number": "5"
+    },
+    "u-013": {
+      "state": "draft",
+      "title": "Reviewer #1 | MINOR | Comment 6",
+      "reviewer": "Reviewer #1",
+      "section": "minor",
+      "comment_number": "6"
+    },
+    "u-014": {
+      "state": "draft",
+      "title": "Reviewer #1 | MINOR | Comment 7",
+      "reviewer": "Reviewer #1",
+      "section": "minor",
+      "comment_number": "7"
+    }
+  },
+  "pipeline": {
+    "last_status": "pass",
+    "last_run": "2026-02-28T13:41:20.031622+00:00"
+  }
+}

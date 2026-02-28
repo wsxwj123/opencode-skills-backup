@@ -1,0 +1,12 @@
+{
+  "unit_id": "m-0021",
+  "order": 21,
+  "paragraph_index": 26,
+  "text": "The animal use protocol for this study has been reviewed and approved by the Institutional Animal Care and Use Committee (IACUC) of the Second Xiangya Hospital of Central South University in China, in accordance with principles of animal protection, welfare, and ethics (The approved number was No. 20221325). The wild-type mice (C57BL/6J background) were sourced from Hunan SJA Laboratory Animal Co., Ltd. Be placed in a specific pathogen-free barrier facility. Male mice aged 6-8 weeks were selected for model induction. For the induction of the SAP model, mice were fasted for 12 hours and then given intraperitoneal injections of caerulein (50 μg/kg) every hour for a total of 12 times. The mice were sacrificed 24 hours after the first injection, and samples were collected for experimental analysis. For the induction of the AP model, intraperitoneal injections of caerulein (50 μg/kg) were administered every hour for a total of 8 times, followed by euthanasia and sample collection.",
+  "heading_context": "2.1 Materials and Animals",
+  "anchors": [],
+  "tags": {
+    "has_figure_ref": false,
+    "length": 990
+  }
+}

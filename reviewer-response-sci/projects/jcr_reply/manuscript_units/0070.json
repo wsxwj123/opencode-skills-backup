@@ -1,0 +1,12 @@
+{
+  "unit_id": "m-0070",
+  "order": 70,
+  "paragraph_index": 91,
+  "text": "Our results are consistently presented as the mean ± standard deviation (SD). For all statistical analyses and data visualization, we leveraged GraphPad Prism software (version 9.5.0). When comparing two groups, we typically employed a standard t-test. For comparisons involving three or more groups, we turned to either one-way or two-way analysis of variance (ANOVA), always followed by Tukey’s multiple-comparison test. Crucially, each figure caption clearly indicated the exact number of experimental replicates and also provided a detailed account of the specific statistical methods employed for that dataset.",
+  "heading_context": "2.18 Statistical analysis",
+  "anchors": [],
+  "tags": {
+    "has_figure_ref": false,
+    "length": 615
+  }
+}

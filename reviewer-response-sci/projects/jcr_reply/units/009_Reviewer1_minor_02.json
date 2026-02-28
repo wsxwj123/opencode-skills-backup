@@ -1,0 +1,85 @@
+{
+  "unit_id": "u-009",
+  "order": 9,
+  "reviewer": "Reviewer #1",
+  "section": "minor",
+  "comment_number": "2",
+  "title": "Reviewer #1 | MINOR | Comment 2",
+  "source": {
+    "comments_docx": "/Users/wsxwj/Library/CloudStorage/OneDrive-个人/old files/xwj/研究生/博士课题/贺君/Exos递送抗体/投稿/JCR/Comments.docx",
+    "manuscript_docx": "/Users/wsxwj/Library/CloudStorage/OneDrive-个人/old files/xwj/研究生/博士课题/贺君/Exos递送抗体/投稿/JCR/manuscript.docx",
+    "si_docx": "/Users/wsxwj/Library/CloudStorage/OneDrive-个人/old files/xwj/研究生/博士课题/贺君/Exos递送抗体/投稿/JCR/SI.docx"
+  },
+  "links": {
+    "anchors": [
+      "Figure 2J"
+    ],
+    "manuscript_unit_ids": [
+      "m-0007",
+      "m-0016",
+      "m-0021"
+    ],
+    "si_unit_ids": [
+      "s-0007",
+      "s-0009"
+    ]
+  },
+  "content": {
+    "reviewer_comment_zh": "无",
+    "reviewer_comment_en": "Figure 2J is not cited in the main text. Every figure should be referenced and discussed in the manuscript.",
+    "reviewer_intent_zh": "审稿人核心关切：Figure 2J is not cited in the main text. Every figure should be referenced and discussed in the manuscript.",
+    "reviewer_intent_en": "Interpretation: The reviewer is requesting a clear, evidence-aligned clarification and a concrete manuscript-level correction for this specific point.",
+    "response_en": "Thank you for this helpful suggestion. We have revised the relevant text or figure presentation accordingly and rechecked consistency across the manuscript.",
+    "response_zh": "中文对应：感谢审稿人意见。我们已针对该问题完成对应修订，并确保结论与证据保持一致。",
+    "revision_location_en": "Paragraph index: 10",
+    "original_excerpt_en": "ABSTRACT: Severe acute pancreatitis (SAP) is a lethal inflammatory disease driven by a severe disordered redox state, in which Peroxiredoxin 1 (Prdx1) acts as a key but paradoxical regulator. Prdx1 is a protective intracellular antioxidant, however, it acts as a pro-inflammatory DAMP extracellularly. To address this, we developed a “plug and play” therapeutic platform. Considering the microenvironment in SAP, we first engineered HEK-293T cells to overexpress a CD63-Z domain fusion protein, yielding extracellular vesicles (EVs) capable of high-affinity binding to the Fc region of various antibodies. We then armed these EVs with an anti-Prdx1 antibody via the elastase-responsive linker and co-loaded them with quercetin (Ab-Fc-EL-EV@Que). After active pancreas targeting, locally concentrated elastase triggered antibody release from the Ab-Fc-EL-EV@Que to neutralize extracellular Prdx1, which have been confirmed to activate TLR/NF-κB pathway in macrophages, thereby suppressing cascade inflammation. Subsequently, the antibody-detached EVs were internalized by acinar cells, delivering Que to promote intracellular Prdx1 acetylation, enhance antioxidant capacity, and ultimately protect acinar cells from ferroptosis and apoptosis. This work not only offers a potent, multi-mechanism modality for SAP by resolving the Prdx1 paradox but also establishes a highly adaptable \"plug-and-play\" platform for tailored therapies against other complex diseases.",
+    "revised_excerpt_en": "Not provided by user",
+    "revised_excerpt_zh": "无",
+    "modification_actions": [
+      {
+        "action": "修改",
+        "reason": "按审稿意见进行针对性优化。"
+      }
+    ],
+    "notes_core_zh": [
+      "针对该条意见完成规范化修订（术语、图注、编号或排版），并逐项核对对应位置。"
+    ],
+    "notes_support_zh": [
+      "进行全文一致性校对，避免同类细节问题重复出现。"
+    ],
+    "evidence": {
+      "text": [
+        "Not provided by user"
+      ],
+      "image_change_required": true,
+      "images": [
+        {
+          "src": "",
+          "alt": "Image placeholder",
+          "caption": "请替换为修订后图片（如有）"
+        }
+      ],
+      "table": {
+        "columns": [
+          "Item",
+          "Before",
+          "After",
+          "Evidence"
+        ],
+        "rows": [
+          [
+            "Key correction",
+            "Not provided by user",
+            "Not provided by user",
+            "Not provided by user"
+          ]
+        ]
+      }
+    }
+  },
+  "status": {
+    "response_state": "draft",
+    "excerpt_state": "needs_manual_revision",
+    "notes_state": "draft"
+  }
+}

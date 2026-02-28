@@ -1,0 +1,14 @@
+{
+  "unit_id": "m-0099",
+  "order": 99,
+  "paragraph_index": 132,
+  "text": "Figure 6. Cellular uptake and pancreatic targeting evaluation of Ab-Fc-EL-EV@Que. (A) Cellular uptake fluorescent images of Ab-Fc-EL-EV@Que on MPC-38 cells. (B) Biodistribution images of Ab-Fc-EL-EV@DiR across the mice body. (C-D) Fluorescence density in excised pancreas and its statistical analysis. (E-F) The fluorescence distribution of Ab-Fc-EL-EV@DiR in excised organs and its statistical analysis. Data = Mean ± SD (n=3). Statistical analysis was performed by GraphPad Prism (9.5.0). One-way ANOVA using the Tukey’s multiple-comparison test was applied for comparison among three groups. ****P<0.0001.",
+  "heading_context": "3.5 Evaluation of cellular uptake and pancreatic targeting ability of Fc-EL-EV@Que",
+  "anchors": [
+    "Figure 6"
+  ],
+  "tags": {
+    "has_figure_ref": true,
+    "length": 608
+  }
+}

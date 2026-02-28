@@ -1,0 +1,12 @@
+{
+  "unit_id": "m-0053",
+  "order": 53,
+  "paragraph_index": 67,
+  "text": "To achieve pancreas-specific overexpression of Prdx1, the mouse Prdx1 gene was cloned into an AAV8 expression vector, and the protocol for AAV8 administration was detailed in our previous work[26]. Briefly, 8- to 10-week-old mice were anesthetized, and a midline abdominal incision was made to expose the pancreatic duct. For each mouse, 3 × 1012 vector genomes of AAV8 in PBS (total volume 150 μL) were prepared and slowly infused using a syringe pump. The control group was injected with an equivalent amount of empty AAV8 vector. During the procedure, a 31G needle was used to puncture the duodenum opposite the ampulla of Vater, and the ampulla was clamped around the catheter and the common bile duct. The syringe pump was started to infuse the pancreas at a flow rate of 6 μL/min, for a total volume of 150 μL. After the infusion was completed, the serrefines were removed and the catheter was gently withdrawn. The puncture site in the duodenum was then sutured, the intestines were repositioned in the abdominal cavity, and the abdominal incision was closed with 6-0 sutures. The mice were maintained under standard conditions, and pancreatic tissues were harvested for subsequent experimental analysis 2 weeks later.",
+  "heading_context": "2.10 Delivering AAV8 to the pancreas via intraductal administration",
+  "anchors": [],
+  "tags": {
+    "has_figure_ref": false,
+    "length": 1225
+  }
+}

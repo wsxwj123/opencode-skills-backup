@@ -1,0 +1,17 @@
+{
+  "unit_id": "m-0075",
+  "order": 75,
+  "paragraph_index": 97,
+  "text": "After obtaining the stable PcKO mice, we wondered if Prdx1 influenced the severe degree of SAP, thus we constructed the SAP mice model by caerulein induction. The pancreas from PcKO mice exhibited much severer injury and more inflammatory cell infiltration than that in Flox mice (Figure 2E). It is well-known that lung injury is the most common extra-pancreatic organ injury during SAP advancement. And this systemic inflammation response was more serious in PcKO mice according to the pathological analysis in Figure 2F. Also, the key metrics of SAP, plasma level of amylase and lipase elevated more in PcKO mice than Flox mice (Figure 2G). Apart from the internal injury, inflammatory cells including neutrophils and macrophages were also compared in both groups of mice. As shown in Figure 2H and 2I, the pancreas of PcKO mice exhibited more severe inflammatory cell infiltration and pro-inflammatory cytokines expression compared to Flox mice. Therefore, these evidences revealed that knockout of Prdx1 in acinar cells could significantly accelerate death of acinar cells and increase infiltration of inflammatory cells. From the perspective, promoting the expression of Prdx1 may effectively alleviate SAP symptoms. However, we have already realized that Prdx1 expression would not increase in SAP when compared to AP, and its antioxidant capacity weakened when this injury worsening gradually. Thereby, we speculated overexpressing Prdx1 artificially may become the crucial core of SAP treatment.",
+  "heading_context": "3.1 Intracellular Prdx1 deficiency in acinar cells exacerbates SAP by inducing cell apoptosis and ferroptosis",
+  "anchors": [
+    "Figure 2E",
+    "Figure 2F",
+    "Figure 2G",
+    "Figure 2H"
+  ],
+  "tags": {
+    "has_figure_ref": true,
+    "length": 1503
+  }
+}

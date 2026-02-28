@@ -1,0 +1,12 @@
+{
+  "unit_id": "m-0057",
+  "order": 57,
+  "paragraph_index": 73,
+  "text": "Apoptosis was assessed using the annexin V-FITC apoptosis detection kit (Beyotime, China) according to the manufacturer’s instructions. Briefly, after harvesting, the cells were gently resuspended in PBS and counted. A total of 50,000–100,000 resuspended cells were centrifuged at 1000g for 5 minutes, the supernatant was discarded, and the cells were gently resuspended in 195 μl of Annexin V-FITC binding buffer. Subsequently, 5 μl of Annexin V-FITC and 10 μl of propidium iodide (PI) staining solution were added and gently mixed. After incubation in the dark for 20 minutes, apoptosis levels were measured by flow cytometry.",
+  "heading_context": "2.12 Flow Cytometric Analysis of Apoptosis",
+  "anchors": [],
+  "tags": {
+    "has_figure_ref": false,
+    "length": 628
+  }
+}
