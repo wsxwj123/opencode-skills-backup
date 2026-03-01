@@ -24,7 +24,7 @@
   "content": {
     "reviewer_comment_zh": "无",
     "reviewer_comment_en": "The authors should provide the flow cytometry gating strategy.",
-    "reviewer_intent_zh": "审稿人核心关切：The authors should provide the flow cytometry gating strategy.",
+    "reviewer_intent_zh": "审稿人核心关切：该意见要求作者就特定科学点提供更充分、可核查的修订。建议处理：在对应段落给出定点修改并说明修改依据。",
     "reviewer_intent_en": "Interpretation: The reviewer is requesting a clear, evidence-aligned clarification and a concrete manuscript-level correction for this specific point.",
     "response_en": "Thank you for this helpful suggestion. We have revised the relevant text or figure presentation accordingly and rechecked consistency across the manuscript.",
     "response_zh": "中文对应：感谢审稿人意见。我们已针对该问题完成对应修订，并确保结论与证据保持一致。",

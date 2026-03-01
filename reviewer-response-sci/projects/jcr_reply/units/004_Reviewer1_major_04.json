@@ -26,7 +26,7 @@
   "content": {
     "reviewer_comment_zh": "无",
     "reviewer_comment_en": "In Figure 5, while the authors have thoroughly characterized particle size and morphology, NTA data to report particle concentration is need to demonstrate EV purity and quality. Please include and compare the zeta potential for both Fc-EL-EVs and Ab-Fc-EL-EVs in the manuscript.",
-    "reviewer_intent_zh": "审稿人核心关切：In Figure 5, while the authors have thoroughly characterized particle size and morphology, NTA data to report particle concentration is need to demonstrate EV purity and quality. Please include and compare the zeta poten...",
+    "reviewer_intent_zh": "审稿人核心关切：图像标注、分组标签或图文对应关系需要复核；关键证据或方法细节说明不足。建议处理：核对图号、面板标签与对应描述；补充必要的实验信息、证据或说明文本；重点定位：Figure 5。",
     "reviewer_intent_en": "Interpretation: The reviewer is requesting a clear, evidence-aligned clarification and a concrete manuscript-level correction for this specific point.",
     "response_en": "We appreciate this constructive recommendation. We have incorporated the requested clarification and updated the corresponding section in the revised manuscript.",
     "response_zh": "中文对应：感谢审稿人意见。我们已针对该问题完成对应修订，并确保结论与证据保持一致。",

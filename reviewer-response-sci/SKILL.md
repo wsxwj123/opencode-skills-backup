@@ -1,6 +1,6 @@
 ---
 name: reviewer-response-sci
-description: Use when generating a complete SCI reviewer-response package from manuscript, supplementary material, and review comments, especially when a user needs a one-shot hierarchical HTML deliverable with an email summary and per-comment detailed response pages.
+description: 使用于 SCI 审稿意见回复（回复审稿人、审稿意见逐条回复、Response to Reviewer）。当用户提到“审稿意见回复/回复审稿人/SCI审稿回复”时优先调用。Supports one-shot hierarchical HTML deliverable with atomic manuscript/SI linking.
 ---
 
 # Reviewer Response SCI
@@ -58,15 +58,25 @@ TOC hierarchy must be:
 
 Each leaf page must include:
 1. Reviewer intent block:
-   - show original reviewer comment first (English)
-   - then show interpretation in Chinese and English
+   - show original reviewer comment (English)
+   - show Chinese translation of reviewer comment (direct/literal translation, not paraphrased rewriting)
+   - translation implementation rule:
+     - translation must be produced directly by the current model (AI direct translation), not by local machine-translation dependencies
+     - script must not output final Chinese translation automatically; script only keeps AI-to-fill placeholders before final rendering
+   - show Chinese understanding of reviewer intent
+   - do not include English interpretation in this block
+   - Chinese fields must be written in Chinese summary form; do not directly paste English comment text as the Chinese understanding
 2. Response block (`Response to Reviewer`):
-   - Chinese + English stacked dual boxes (top/bottom layout)
+   - Chinese response first, then corresponding English translation (top/bottom layout)
    - each box has a `复制` button (button text must be exactly `复制`)
 3. Revision candidate block (`可能需要修改的正文/附件内容`):
    - must include original location information:
      - which section/subsection
      - which original sentence/paragraph
+   - must include atomic-document location fields:
+     - `manuscript_unit_id` / `si_unit_id`
+     - atomic json relative path (e.g., `manuscript_units/0007.json`)
+     - paragraph index and matched sentence index/text
    - must include original text (for side-by-side logic, stacked display)
    - must include revised text (English)
    - must include Chinese translation for the revised text
@@ -89,15 +99,26 @@ Project layout:
 - `project_root/index.json` (hierarchical TOC source)
 - `project_root/units/000_email.json`
 - `project_root/units/*.json` (one file per comment)
-- `project_root/manuscript_units/*.json` (one paragraph per unit)
-- `project_root/si_units/*.json` (one paragraph per unit)
+- `project_root/manuscript_units/*.json` (one section-level block per unit: heading + corresponding body text + corresponding figure captions when present)
+- `project_root/si_units/*.json` (one section-level block per unit: heading + corresponding body text + corresponding figure captions when present)
 
 Each unit follows `references/atomic-unit-schema.json`.
+Each comment unit should carry `content.atomic_location` and must be renderable in HTML section 3.
+Source atomic units (`manuscript_units` / `si_units`) must include:
+- section-level units (`unit_type=section_block`, optionally `preamble_block`)
+- section text and corresponding figure captions in the same section-level unit when available
+- if no figure exists, figure-caption units can be absent
+- optional image attachment extraction is allowed but not mandatory; section text + corresponding figure caption text is mandatory
 
 ## Rules
 - Do not fabricate experiments, statistics, or references.
 - If evidence is missing, explicitly mark `Not provided by user`.
 - Keep tone professional and non-defensive.
+- English reviewer responses must be fluent and natural, with low AI-style phrasing.
+- Prefer short sentences; avoid long and complex sentences by default.
+- Short-sentence preference means clear and natural rhythm, not mechanical sentence splitting.
+- If a reviewer comment requires adding references, literature retrieval must use `paper-search` MCP with PubMed only.
+- Do not use any non-PubMed search tool for citation retrieval in this skill.
 - Keep one-page-per-comment structure.
 - All copy buttons in the UI must use Chinese label `复制`.
 - Frontend must be intentionally designed (not default/plain style), with clear hierarchy, strong readability, and responsive layout.
@@ -108,15 +129,26 @@ Each unit follows `references/atomic-unit-schema.json`.
 
 ## One-Shot Workflow
 1. Parse all reviewer comments from `comments_docx_path`.
-2. Atomize manuscript and SI into paragraph-level units.
-3. Build comment atomic units in `project_root/units/` and attach anchor-based links to manuscript/SI units.
-4. Build hierarchical index in `project_root/index.json`.
-5. Render single HTML with left hierarchical TOC + right content pane.
-6. Run hard gate checks and HTML checks before delivery.
-7. Run final consistency report.
-8. Write checkpoint + transaction logs to `project_root/logs/`.
-9. Sync unit state map to `project_root/logs/unit_state.json`.
-10. Write reproducibility snapshot to `project_root/logs/version_snapshot.json` (hashes for key scripts + outputs).
+2. If any comment needs additional citations, run PubMed retrieval via `paper-search` MCP only.
+3. Atomize manuscript and SI into section-level units (heading + body + corresponding figure captions).
+4. Build comment atomic units in `project_root/units/` and attach anchor-based links to manuscript/SI units.
+5. Build hierarchical index in `project_root/index.json`.
+6. Let model fill all Chinese translation/Chinese response fields in atomic JSON units.
+   - model must also fill:
+     - reviewer intent understanding
+     - English response to reviewer
+     - revised excerpt (EN + ZH)
+     - core/support modification notes
+     - modification action reasons
+7. Render single HTML with left hierarchical TOC + right content pane from updated atomic JSON.
+8. Run hard gate checks and HTML checks before delivery.
+   - final delivery must pass `final_content_gate.py`:
+     - if any `待AI` / `AI_FILL_REQUIRED` placeholder remains, gate fails
+     - `--allow-placeholder` is only for skeleton/prewrite stage, not final delivery
+9. Run final consistency report.
+10. Write checkpoint + transaction logs to `project_root/logs/`.
+11. Sync unit state map to `project_root/logs/unit_state.json`.
+12. Write reproducibility snapshot to `project_root/logs/version_snapshot.json` (hashes for key scripts + outputs).
 
 ## Re-Render Workflow
 After manual editing of any unit JSON:
@@ -132,6 +164,7 @@ After manual editing of any unit JSON:
 - Re-render from atomic JSON: `scripts/render_from_atomic_json.py`
 - Unit state manager: `scripts/state_manager.py`
 - Hard gate checker: `scripts/strict_gate.py`
+- Final content gate: `scripts/final_content_gate.py`
 - Consistency checker: `scripts/consistency_check.py`
 - Final consistency report: `scripts/final_consistency_report.py`
 - HTML validator: `scripts/html_format_check.py`

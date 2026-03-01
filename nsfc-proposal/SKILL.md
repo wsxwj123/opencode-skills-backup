@@ -12,6 +12,17 @@ Use two modes:
 - Write Mode: build from zero in phased gates.
 - Polish Mode: import an existing draft, diagnose first, then revise section by section.
 
+## Mode Handshake Gate (Mandatory)
+Before any drafting/revision action, the assistant must ask exactly one mode-selection question and wait for the user answer:
+- `Write Mode` (from scratch)
+- `Polish Mode` (revise existing draft)
+
+Hard rules:
+- If mode is not explicitly confirmed, do not run section writing, diagnosis, citation verification, or merge commands.
+- First actionable response in this skill must be the mode-selection question when mode is missing.
+- If the user already explicitly states `Write Mode` or `Polish Mode` in the opening message, do not ask again; proceed directly with the specified mode.
+- After user confirms mode, record it in project state/profile and continue with that mode workflow only.
+
 ## Inputs Required
 Collect before execution:
 - Project basics: title, discipline code, project type, research attribute, duration, budget.
@@ -24,6 +35,13 @@ Academic literature retrieval must use paper-search MCP tools:
 - `paper-search_search_semantic` (supplement)
 - `paper-search_search_google_scholar` (coverage)
 - `paper-search_search_biorxiv` / `paper-search_search_medrxiv` (recent preprints)
+
+Runtime name mapping (for environments using MCP namespaced tools):
+- `paper-search_search_pubmed` -> `mcp__paper-search__search_pubmed`
+- `paper-search_search_semantic` -> `mcp__paper-search__search_semantic`
+- `paper-search_search_google_scholar` -> `mcp__paper-search__search_google_scholar`
+- `paper-search_search_biorxiv` -> `mcp__paper-search__search_biorxiv`
+- `paper-search_search_medrxiv` -> `mcp__paper-search__search_medrxiv`
 
 Do not use generic web search/fetch tools for citation evidence in proposal claims.
 
@@ -76,7 +94,7 @@ Maintain and sync after each section edit:
 Any missing sync blocks phase progression.
 
 
-- Use dual-track verification for citations: provide MCP retrieval cache in `data/mcp_literature_cache.json` and run online validation without `--offline` whenever network is available.
+- Use dual-track verification for citations: provide MCP retrieval cache in `data/mcp_literature_cache.json` and run online validation without `--offline` whenever network is available. Final gate should enforce `--require-mcp`.
 
 ## Quality Gates
 Block progression when any of the following fails:
@@ -86,6 +104,15 @@ Block progression when any of the following fails:
 - Any D-grade in global review dimensions.
 - More than 3 C-grade dimensions in global review.
 - Page estimate beyond configured hard limit.
+
+Use atomic gate command for final checks:
+- `python scripts/state_manager.py --root . gate-check --sections-dir sections --index data/literature_index.json --p1 sections/P1_立项依据.md --ref sections/REF_参考文献.md --mcp-cache data/mcp_literature_cache.json --mcp-ttl-days 30 --require-mcp`
+
+Failure handling playbook:
+- `failed_at=sync`: run `sync-all --auto-fix`, then re-run `gate-check`.
+- `failed_at=citation`: repair index/cache, re-run `verify-all --require-mcp`, then `gate-check`.
+- `failed_at=matrix`: run `matrix-check` and `reorder`, then `gate-check`.
+- `failed_at=review`: fix D/C dimensions from review report, then `gate-check`.
 
 ## References
 Load only what is needed:
@@ -118,10 +145,11 @@ Use scripts under `scripts/` from proposal project root:
 - `python scripts/state_manager.py --root . load --section P1 --minimal`
 - `python scripts/state_manager.py --root . write-cycle --section P1 --token-budget 4000`
 - `python scripts/state_manager.py --root . sync-all --auto-fix`
+- `python scripts/state_manager.py --root . gate-check --sections-dir sections --index data/literature_index.json --p1 sections/P1_立项依据.md --ref sections/REF_参考文献.md --mcp-cache data/mcp_literature_cache.json --mcp-ttl-days 30 --require-mcp`
 - `python scripts/consistency_mapper.py --path data/consistency_map.json validate`
 - `python scripts/consistency_mapper.py --path data/consistency_map.json validate-one V-01`
-- `python scripts/citation_validator.py verify-all --index data/literature_index.json --p1 sections/P1_立项依据.md --mcp-cache data/mcp_literature_cache.json --mcp-ttl-days 30 --manual-review data/manual_review_queue.json --log data/verification_run_log.json`
-- `python scripts/citation_validator.py verify-entry --index data/literature_index.json --p1 sections/P1_立项依据.md --ref-number 1 --mcp-cache data/mcp_literature_cache.json`
+- `python scripts/citation_validator.py verify-all --index data/literature_index.json --p1 sections/P1_立项依据.md --mcp-cache data/mcp_literature_cache.json --mcp-ttl-days 30 --require-mcp --manual-review data/manual_review_queue.json --log data/verification_run_log.json`
+- `python scripts/citation_validator.py verify-entry --index data/literature_index.json --p1 sections/P1_立项依据.md --ref-number 1 --mcp-cache data/mcp_literature_cache.json --require-mcp`
 - `python scripts/citation_validator.py matrix-check --p1 sections/P1_立项依据.md --index data/literature_index.json --ref sections/REF_参考文献.md`
 - `python scripts/humanizer_zh.py scan-all sections`
 - `python scripts/diagnosis_engine.py full-review --sections-dir sections --consistency data/consistency_map.json --index data/literature_index.json --p1 sections/P1_立项依据.md --ref sections/REF_参考文献.md --output data/diagnosis_report.json`
@@ -132,3 +160,7 @@ Use scripts under `scripts/` from proposal project root:
 - `python scripts/word_counter.py summary sections`
 
 These scripts are production-ready workflow utilities for iterative proposal drafting and polishing.
+
+
+## Regression Tests
+- `python3 -m unittest discover -s tests -p 'test_*.py'`

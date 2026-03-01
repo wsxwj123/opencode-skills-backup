@@ -25,6 +25,24 @@ PMID_RE = re.compile(r"^\d{4,10}$")
 CIT_RE = re.compile(r"\[(\d+)\]")
 TITLE_TOKEN_RE = re.compile(r"[a-z0-9\u4e00-\u9fff]+")
 
+CACHE_SCHEMA_VERSION = "1.0"
+HARD_FAIL_REASONS = {
+    "retracted",
+    "id_mismatch",
+    "doi_invalid_or_unresolved",
+    "pmid_invalid_or_unresolved",
+    "identifier_missing",
+    "mcp_unresolved",
+    "mcp_stale",
+    "mcp_timestamp_missing",
+}
+SOFT_FAIL_REASONS = {
+    "source_unreachable",
+    "title_mismatch",
+    "context_mismatch",
+    "title_missing",
+}
+
 
 def load_json(path: Path, default: Any) -> Any:
     if not path.exists():
@@ -221,6 +239,13 @@ def _context_check(entry: dict[str, Any], p1_text: str | None) -> bool | None:
     return cited
 
 
+def _classify_failure_reasons(reasons: list[str]) -> dict[str, list[str]]:
+    hard = [r for r in reasons if r in HARD_FAIL_REASONS]
+    soft = [r for r in reasons if r in SOFT_FAIL_REASONS]
+    info = [r for r in reasons if r not in HARD_FAIL_REASONS and r not in SOFT_FAIL_REASONS]
+    return {"hard": hard, "soft": soft, "info": info}
+
+
 def _confidence_score(
     *,
     title_similarity: float,
@@ -387,8 +412,8 @@ def validate_entry(
     if online_check and not http_ok:
         failure_reasons.append("source_unreachable")
 
-    conflict_reasons = {"title_mismatch", "id_mismatch", "mcp_stale", "mcp_timestamp_missing", "source_unreachable"}
-    needs_manual_review = any(r in conflict_reasons for r in failure_reasons)
+    levels = _classify_failure_reasons(failure_reasons)
+    needs_manual_review = bool(levels["soft"])
 
     confidence_score = _confidence_score(
         title_similarity=title_similarity,
@@ -416,6 +441,11 @@ def validate_entry(
         "checked_at": now_utc.isoformat(),
         "sources": sources,
         "failure_reasons": failure_reasons,
+        "hard_fail_reasons": levels["hard"],
+        "soft_fail_reasons": levels["soft"],
+        "info_fail_reasons": levels["info"],
+        "has_hard_fail": bool(levels["hard"]),
+        "has_soft_fail": bool(levels["soft"]),
         "needs_manual_review": needs_manual_review,
         "confidence_score": confidence_score,
     }
@@ -440,12 +470,37 @@ def _normalize_index(raw: Any) -> dict[str, Any]:
     return {"metadata": {}, "entries": []}
 
 
+def _normalize_mcp_cache(raw: Any) -> dict[str, Any]:
+    if not isinstance(raw, dict):
+        return {"metadata": {"schema_version": CACHE_SCHEMA_VERSION}, "entries": []}
+
+    data = dict(raw)
+    metadata = data.get("metadata") if isinstance(data.get("metadata"), dict) else {}
+    metadata.setdefault("schema_version", CACHE_SCHEMA_VERSION)
+    data["metadata"] = metadata
+
+    entries: list[dict[str, Any]] = []
+    if isinstance(data.get("entries"), list):
+        entries.extend(x for x in data.get("entries", []) if isinstance(x, dict))
+
+    for k, v in data.items():
+        if k in {"entries", "metadata"}:
+            continue
+        if isinstance(v, dict):
+            entries.append(v)
+
+    data["entries"] = entries
+    return data
+
+
 def verify_all(
     index: dict[str, Any] | list[dict[str, Any]],
     p1_text: str | None = None,
     online_check: bool = True,
     mcp_index: dict[str, dict[str, Any]] | None = None,
     mcp_ttl_days: int = 30,
+    require_mcp: bool = False,
+    mcp_schema_version: str | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any], list[dict[str, Any]]]:
     idx = _normalize_index(index)
     entries = idx.get("entries", [])
@@ -465,6 +520,15 @@ def verify_all(
         for e in entries
     ]
 
+    if require_mcp:
+        for e in out:
+            details = e.get("verification_details") or {}
+            reasons = list(details.get("failure_reasons") or [])
+            if "mcp_unresolved" in reasons and e.get("verified"):
+                e["verified"] = False
+                details["failure_reasons"] = reasons
+                e["verification_details"] = details
+
     all_ok = all(e.get("verified") for e in out) if out else False
     any_ok = any(e.get("verified") for e in out)
     status = "verified" if all_ok else ("partial" if any_ok else "failed")
@@ -472,11 +536,17 @@ def verify_all(
     failure_counter: Counter[str] = Counter()
     confidence_values = []
     manual_review_queue = []
+    hard_fail_entries = 0
+    soft_fail_entries = 0
     for e in out:
         vd = e.get("verification_details", {})
         confidence_values.append(int(vd.get("confidence_score", 0)))
         for reason in vd.get("failure_reasons", []):
             failure_counter[str(reason)] += 1
+        if vd.get("has_hard_fail"):
+            hard_fail_entries += 1
+        if vd.get("has_soft_fail"):
+            soft_fail_entries += 1
         if e.get("needs_manual_review"):
             manual_review_queue.append(
                 {
@@ -485,6 +555,8 @@ def verify_all(
                     "doi": e.get("doi"),
                     "pmid": e.get("pmid"),
                     "failure_reasons": vd.get("failure_reasons", []),
+                    "hard_fail_reasons": vd.get("hard_fail_reasons", []),
+                    "soft_fail_reasons": vd.get("soft_fail_reasons", []),
                     "confidence_score": vd.get("confidence_score"),
                 }
             )
@@ -495,11 +567,14 @@ def verify_all(
         "checked_entries": len(out),
         "verified_count": sum(1 for e in out if e.get("verified")),
         "manual_review_count": len(manual_review_queue),
+        "hard_fail_entries": hard_fail_entries,
+        "soft_fail_entries": soft_fail_entries,
         "avg_confidence": round((sum(confidence_values) / len(confidence_values)), 2) if confidence_values else 0.0,
         "failure_type_counts": dict(sorted(failure_counter.items())),
         "duration_ms": duration_ms,
         "online_check": online_check,
         "mcp_ttl_days": mcp_ttl_days,
+        "require_mcp": require_mcp,
         "checked_at": now_utc.isoformat(),
     }
 
@@ -510,6 +585,7 @@ def verify_all(
     idx["metadata"]["recent_5yr_count"] = sum(1 for e in out if e.get("is_recent_5yr"))
     idx["metadata"]["cn_journal_count"] = sum(1 for e in out if e.get("is_cn_journal"))
     idx["metadata"]["mcp_entries_count"] = len(mcp_index or {})
+    idx["metadata"]["mcp_cache_schema_version"] = mcp_schema_version or CACHE_SCHEMA_VERSION
     idx["metadata"]["verification_stats"] = stats_payload
 
     return idx, stats_payload, manual_review_queue
@@ -651,6 +727,7 @@ def main() -> int:
     p_verify_all.add_argument("--offline", action="store_true")
     p_verify_all.add_argument("--mcp-cache", default="data/mcp_literature_cache.json")
     p_verify_all.add_argument("--mcp-ttl-days", type=int, default=30)
+    p_verify_all.add_argument("--require-mcp", action="store_true")
     p_verify_all.add_argument("--manual-review", default="data/manual_review_queue.json")
     p_verify_all.add_argument("--log", default="data/verification_run_log.json")
 
@@ -661,6 +738,7 @@ def main() -> int:
     p_verify_entry.add_argument("--offline", action="store_true")
     p_verify_entry.add_argument("--mcp-cache", default="data/mcp_literature_cache.json")
     p_verify_entry.add_argument("--mcp-ttl-days", type=int, default=30)
+    p_verify_entry.add_argument("--require-mcp", action="store_true")
 
     p_matrix = sub.add_parser("matrix-check")
     p_matrix.add_argument("--p1", default="sections/P1_立项依据.md")
@@ -680,8 +758,15 @@ def main() -> int:
 
     args = parser.parse_args()
 
-    mcp_cache = load_json(Path(getattr(args, "mcp_cache", "")), {"entries": []}) if getattr(args, "mcp_cache", None) else {"entries": []}
-    mcp_index = _build_mcp_index(mcp_cache)
+    mcp_index: dict[str, dict[str, Any]] = {}
+    mcp_schema_version = CACHE_SCHEMA_VERSION
+    if args.cmd in {"verify-all", "verify-entry"}:
+        mcp_cache_path = Path(getattr(args, "mcp_cache", "data/mcp_literature_cache.json"))
+        mcp_cache_raw = load_json(mcp_cache_path, {"metadata": {"schema_version": CACHE_SCHEMA_VERSION}, "entries": []})
+        mcp_cache = _normalize_mcp_cache(mcp_cache_raw)
+        save_json(mcp_cache_path, mcp_cache)
+        mcp_index = _build_mcp_index(mcp_cache)
+        mcp_schema_version = str((mcp_cache.get("metadata") or {}).get("schema_version") or CACHE_SCHEMA_VERSION)
 
     if args.cmd == "verify-all":
         index_path = Path(args.index)
@@ -695,6 +780,8 @@ def main() -> int:
             online_check=not args.offline,
             mcp_index=mcp_index,
             mcp_ttl_days=max(0, int(args.mcp_ttl_days)),
+            require_mcp=bool(args.require_mcp),
+            mcp_schema_version=mcp_schema_version,
         )
         save_json(index_path, idx)
         _save_manual_review_queue(Path(args.manual_review), queue)
@@ -726,13 +813,19 @@ def main() -> int:
         updated = False
         for i, entry in enumerate(idx.get("entries", [])):
             if int(entry.get("ref_number", -1)) == args.ref_number:
-                idx["entries"][i] = validate_entry(
+                updated_entry = validate_entry(
                     dict(entry),
                     p1_text=p1_text,
                     online_check=not args.offline,
                     mcp_index=mcp_index,
                     mcp_ttl_days=max(0, int(args.mcp_ttl_days)),
                 )
+                if args.require_mcp:
+                    details = updated_entry.get("verification_details") or {}
+                    reasons = list(details.get("failure_reasons") or [])
+                    if any(r in {"mcp_unresolved", "mcp_stale", "mcp_timestamp_missing"} for r in reasons):
+                        updated_entry["verified"] = False
+                idx["entries"][i] = updated_entry
                 updated = True
                 break
         if not updated:

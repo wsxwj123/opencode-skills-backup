@@ -46,7 +46,12 @@ def read_docx_paragraphs(path: Path) -> list[dict[str, Any]]:
         t = p.text.strip()
         if not t:
             continue
-        rows.append({"paragraph_index": i, "text": simplify_ws(t)})
+        style_name = ""
+        try:
+            style_name = simplify_ws(getattr(getattr(p, "style", None), "name", "") or "")
+        except Exception:
+            style_name = ""
+        rows.append({"paragraph_index": i, "text": simplify_ws(t), "style_name": style_name})
     return rows
 
 
@@ -116,31 +121,250 @@ def collect_comment_pairs(text: str) -> list[CommentPair]:
 
 def zh_understanding(comment_en: str) -> str:
     txt = simplify_ws(comment_en)
-    if len(txt) > 220:
-        txt = txt[:220] + "..."
-    return "审稿人核心关切：" + txt
+    low = txt.lower()
+
+    concerns: list[str] = []
+    actions: list[str] = []
+
+    if any(k in low for k in ["discrepancy", "mismatch", "inconsistent", "contradict"]):
+        concerns.append("数据结果与文字表述（或图注）存在一致性风险")
+        actions.append("逐项对齐原始数据、图表和正文结论")
+    if any(k in low for k in ["figure", "fig.", "fig ", "image", "panel", "label", "legend"]):
+        concerns.append("图像标注、分组标签或图文对应关系需要复核")
+        actions.append("核对图号、面板标签与对应描述")
+    if any(k in low for k in ["please provide", "please include", "add", "supplementary", "western blot"]):
+        concerns.append("关键证据或方法细节说明不足")
+        actions.append("补充必要的实验信息、证据或说明文本")
+    if any(k in low for k in ["clarify", "explain", "interpretation"]):
+        concerns.append("论证链条表达不够清晰")
+        actions.append("增强因果逻辑并明确结论边界")
+    if any(k in low for k in ["grammar", "proofread", "language editing"]):
+        concerns.append("语言与学术表达规范性不足")
+        actions.append("进行专业语言润色和术语统一")
+    if any(k in low for k in ["format", "superscript", "notation"]):
+        concerns.append("术语或格式书写不符合期刊规范")
+        actions.append("按期刊规范统一格式（如上标、符号、缩写）")
+
+    if not concerns:
+        concerns.append("该意见要求作者就特定科学点提供更充分、可核查的修订")
+    if not actions:
+        actions.append("在对应段落给出定点修改并说明修改依据")
+
+    anchors = extract_anchors(txt)
+    anchor_txt = f"；重点定位：{', '.join(anchors[:3])}" if anchors else ""
+    return f"审稿人核心关切：{'；'.join(concerns)}。建议处理：{'；'.join(actions)}{anchor_txt}。"
+
+
+def _regex_replace_ci(text: str, pattern: str, repl: str) -> str:
+    return re.sub(pattern, repl, text, flags=re.IGNORECASE)
+
+
+def _figure_ref_to_zh(text: str) -> str:
+    s = text
+    # Pair references first to avoid partial replacements like "图s".
+    s = _regex_replace_ci(
+        s,
+        r"\b(?:Figures?|Figs?\.?)[\s]*([S]?\d+[A-Za-z]?)\s*(?:and|&)\s*([S]?\d+[A-Za-z]?)\b",
+        r"图\1和图\2",
+    )
+    s = _regex_replace_ci(s, r"\b(?:Figure|Fig\.?)\s*([S]?\d+[A-Za-z]?)\b", r"图\1")
+    s = _regex_replace_ci(s, r"\b(Fig)(?=[S]?\d+[A-Za-z]?)", "图")
+    return s
+
+
+def _collapse_spaces_and_punct(text: str) -> str:
+    s = text
+    s = re.sub(r"\s+", " ", s).strip()
+    # Punctuation normalization around Chinese text.
+    s = s.replace(", ", "，")
+    s = s.replace("; ", "；")
+    s = s.replace(": ", "：")
+    s = s.replace("( ", "(").replace(" )", ")")
+    s = s.replace(" ，", "，").replace(" 。", "。")
+    s = s.replace("。。", "。")
+    s = s.replace("，，", "，")
+    s = s.rstrip(". ")
+    return s
+
+
+def _translation_quality_tune(text: str) -> str:
+    s = text
+    # Light cleanup only: avoid introducing template-like Chinese function words.
+    cleanup_patterns = [
+        (r"\bthe\b", ""),
+        (r"\ba\b", ""),
+        (r"\ban\b", ""),
+        (r"\bis\b", ""),
+        (r"\bare\b", ""),
+        (r"\bwas\b", ""),
+        (r"\bwere\b", ""),
+        (r"\bbe\b", ""),
+        (r"\bthat\b", ""),
+        (r"\bwhich\b", ""),
+        (r"\bwhile\b", "尽管"),
+        (r"\bhowever\b", "然而"),
+        (r"\bmoreover\b", "此外"),
+        (r"\btherefore\b", "因此"),
+        (r"\bcould\b", ""),
+        (r"\bwould\b", ""),
+        (r"\bcan\b", ""),
+        (r"\bnot\b", "不"),
+        (r"\bbetween\b", "在…之间"),
+        (r"\bfrom\b", "来自"),
+        (r"\bto\b", ""),
+        (r"\bby\b", "通过"),
+    ]
+    for pat, repl in cleanup_patterns:
+        s = _regex_replace_ci(s, pat, repl)
+    s = re.sub(r"\s+", " ", s).strip()
+    return s
+
+
+def _rule_based_zh_translation(comment_en: str) -> str:
+    txt = simplify_ws(comment_en)
+    s = txt.replace("，", ", ")
+    s = _figure_ref_to_zh(s)
+
+    phrase_patterns = [
+        (r"\bthere is a serious discrepancy\b", "存在严重差异"),
+        (r"\bthere is a clear mismatch\b", "存在明显不匹配"),
+        (r"\bthere is\b", "存在"),
+        (r"\bclearly indicated that\b", "清楚表明"),
+        (r"\blower than\b", "低于"),
+        (r"\bdirectly opposite to\b", "与…直接相反"),
+        (r"\bstated conclusion\b", "所述结论"),
+        (r"\bis observed in both\b", "在两者中均可观察到"),
+        (r"\bsuggesting it is not an isolated error\b", "这表明这并非孤立错误"),
+        (r"\bif the data is correct as plotted\b", "如果图示数据正确"),
+        (r"\bit would imply that\b", "这将意味着"),
+        (r"\brather than\b", "而不是"),
+        (r"\bfundamentally contradict\b", "从根本上与…矛盾"),
+        (r"\bcore narrative of the paper\b", "论文核心叙述"),
+        (r"\bregarding\b", "关于"),
+        (r"\burgently\b", "紧急地"),
+        (r"\bdemonstrated that\b", "表明"),
+        (r"\bshowed that\b", "显示"),
+        (r"\bsignificantly attenuated\b", "显著减弱了"),
+        (r"\bnuclear translocation\b", "核转位"),
+        (r"\bprotein knockdown in\b", "在…中的蛋白敲低："),
+        (r"\bplease\b", "请"),
+        (r"\bplease provide\b", "请提供"),
+        (r"\bplease include\b", "请补充"),
+        (r"\bplease add\b", "请添加"),
+        (r"\bplease clarify\b", "请澄清"),
+        (r"\bcould the authors explain whether\b", "请作者解释是否"),
+        (r"\bcould authors explain whether\b", "请作者解释是否"),
+        (r"\bit is imperative that\b", "必须"),
+        (r"\bit is strongly recommended to\b", "强烈建议"),
+        (r"\bit is strongly recommended that\b", "强烈建议"),
+        (r"\bit is recommended to\b", "建议"),
+        (r"\bmust\b", "必须"),
+        (r"\bshould\b", "应当"),
+        (r"\bneed to\b", "需要"),
+        (r"\bused for the experiments in\b", "用于以下实验："),
+        (r"\bused for experiments in\b", "用于以下实验："),
+        (r"\bdemonstrating the efficiency of\b", "以证明……效率："),
+        (r"\bto further confirm\b", "以进一步确认"),
+    ]
+    for pat, repl in phrase_patterns:
+        s = _regex_replace_ci(s, pat, repl)
+
+    term_patterns = [
+        (r"\bthe authors\b", "作者"),
+        (r"\bauthors\b", "作者"),
+        (r"\bmanuscript\b", "稿件"),
+        (r"\bsupplementary information\b", "补充信息"),
+        (r"\bsupplementary\b", "补充材料"),
+        (r"\bcell viability\b", "细胞活力"),
+        (r"\bprotective effect\b", "保护作用"),
+        (r"\bwestern blot analysis\b", "Western blot分析"),
+        (r"\bwestern blot\b", "Western blot"),
+        (r"\bprotein knockdown\b", "蛋白敲低"),
+        (r"\befficiency\b", "效率"),
+        (r"\bmismatch\b", "不匹配"),
+        (r"\binconsistent\b", "不一致"),
+        (r"\bclarify\b", "澄清"),
+        (r"\bcorrect(?:ed|ion)?\b", "更正"),
+        (r"\bverify\b", "验证"),
+        (r"\bprovide(?:d)?\b", "提供"),
+        (r"\binclude(?:d)?\b", "补充"),
+        (r"\badd(?:ed)?\b", "补充"),
+        (r"\bproofread(?:ing)?\b", "校对"),
+        (r"\blanguage editing\b", "语言润色"),
+        (r"\bgrammar\b", "语法"),
+        (r"\bresults\b", "结果"),
+        (r"\bdata\b", "数据"),
+        (r"\btext\b", "正文"),
+        (r"\blabel(?:s|ing)?\b", "标签"),
+        (r"\blegend(?:s)?\b", "图例"),
+        (r"\bpanel(?:s)?\b", "面板"),
+        (r"\bflow cytometry\b", "流式细胞术"),
+        (r"\bgating strategy\b", "门控策略"),
+        (r"\bscale bars\b", "比例尺"),
+        (r"\bcellular uptake\b", "细胞摄取"),
+        (r"\bconfocal microscopy\b", "共聚焦显微镜"),
+        (r"\bserum stability\b", "血清稳定性"),
+        (r"\bparticle concentration\b", "颗粒浓度"),
+        (r"\bparticle size\b", "粒径"),
+        (r"\bmorphology\b", "形态"),
+        (r"\bmajor organs\b", "主要器官"),
+        (r"\bliver\b", "肝脏"),
+        (r"\bkidney\b", "肾脏"),
+        (r"\bspleen\b", "脾脏"),
+        (r"\blung\b", "肺脏"),
+        (r"\bheart\b", "心脏"),
+        (r"\bcorrection(?:s)?\b", "更正"),
+        (r"\bcited\b", "引用"),
+        (r"\breferenced\b", "引用"),
+        (r"\bdiscussed\b", "讨论"),
+    ]
+    for pat, repl in term_patterns:
+        s = _regex_replace_ci(s, pat, repl)
+
+    small_words = [
+        (r"\band\b", "和"),
+        (r"\bor\b", "或"),
+        (r"\bin\b", "在"),
+        (r"\bfor\b", "用于"),
+        (r"\bof\b", "的"),
+        (r"\bwith\b", "伴随"),
+    ]
+    for pat, repl in small_words:
+        s = _regex_replace_ci(s, pat, repl)
+
+    s = _translation_quality_tune(s)
+    s = _collapse_spaces_and_punct(s)
+    if not s.endswith("。"):
+        s += "。"
+    return "中文翻译（直译）：" + s
+
+
+def zh_translation(comment_en: str) -> str:
+    # Final Chinese translation must be generated by the model, not script.
+    return "【待AI直译：请在生成HTML前由模型完成中文直译】"
 
 
 def auto_response(comment_en: str, section: str) -> str:
     low = comment_en.lower()
     if section == "minor":
         return (
-            "Thank you for this helpful suggestion. We have revised the relevant text or figure presentation accordingly "
-            "and rechecked consistency across the manuscript."
+            "Thank you for this helpful suggestion. "
+            "We revised the relevant text or figure and rechecked consistency across the manuscript."
         )
     if any(k in low for k in ["discrepancy", "mismatch", "inconsistent", "contradict", "clarify"]):
         return (
-            "We sincerely thank the reviewer for identifying this critical issue. We have rechecked the corresponding "
-            "data and revised the related text-figure alignment to ensure that interpretation is consistent with evidence."
+            "Thank you for pointing out this critical issue. "
+            "We rechecked the source data and corrected the text-figure alignment. "
+            "The interpretation now matches the evidence."
         )
     if any(k in low for k in ["please provide", "please include", "recommended", "add"]):
         return (
-            "We appreciate this constructive recommendation. We have incorporated the requested clarification and updated "
-            "the corresponding section in the revised manuscript."
+            "Thank you for this constructive recommendation. "
+            "We added the requested clarification and updated the corresponding section in the revised manuscript."
         )
     return (
-        "Thank you for this valuable comment. We have revised the manuscript accordingly and clarified the corresponding "
-        "scientific point in the revised version."
+        "Thank you for this valuable comment. "
+        "We revised the manuscript accordingly and clarified the related scientific point."
     )
 
 
@@ -164,7 +388,7 @@ def intent_en_from_comment(comment_en: str) -> str:
 
 
 def response_zh_from_en(response_en: str) -> str:
-    return "中文对应：感谢审稿人意见。我们已针对该问题完成对应修订，并确保结论与证据保持一致。"
+    return "【待AI翻译：请在生成HTML前由模型完成中文回应】"
 
 
 def excerpt_zh_from_en(excerpt_en: str) -> str:
@@ -200,31 +424,220 @@ def extract_anchors(text: str) -> list[str]:
     return uniq[:15]
 
 
+def is_figure_caption(text: str) -> bool:
+    t = simplify_ws(text)
+    return bool(re.match(r"^(Figure|Fig\.?)\s*S?\d+[A-Za-z]?[:.\s]", t, flags=re.IGNORECASE))
+
+
+def parse_figure_ids(text: str) -> list[str]:
+    ids = [m.group(0) for m in re.finditer(r"(?:Figure|Fig\.?)\s*S?\d+[A-Za-z]?", text, flags=re.IGNORECASE)]
+    out: list[str] = []
+    seen: set[str] = set()
+    for x in ids:
+        k = simplify_ws(x).lower()
+        if k not in seen:
+            seen.add(k)
+            out.append(simplify_ws(x))
+    return out
+
+
+def is_section_heading_text(text: str, style_name: str = "") -> bool:
+    t = simplify_ws(text)
+    if not t:
+        return False
+    if is_figure_caption(t):
+        return False
+    style_low = simplify_ws(style_name).lower()
+    if style_low and ("heading" in style_low or "标题" in style_low):
+        return True
+    if len(t) > 180:
+        return False
+    if re.match(r"^\d+(?:\.\d+)*\s+", t):
+        return True
+    if re.match(
+        r"^(abstract|keywords?|introduction|materials and methods|methods|results(?: and discussion)?|discussion|conclusion|references)\\b",
+        t,
+        flags=re.IGNORECASE,
+    ):
+        return True
+    if re.match(r"^[A-Z][A-Za-z0-9\s,;:()\-/.]{1,120}$", t) and len(t.split()) <= 14 and not t.endswith('.'):
+        return True
+    return False
+
+
+def split_sentences(text: str) -> list[str]:
+    txt = simplify_ws(text)
+    if not txt:
+        return []
+    # Keep punctuation-boundary sentence splitting lightweight and deterministic.
+    parts = re.split(r"(?<=[。！？；.!?;])\s+", txt)
+    return [p.strip() for p in parts if p.strip()]
+
+
+def choose_sentence(comment_en: str, paragraph_text: str) -> tuple[int, str]:
+    sents = split_sentences(paragraph_text)
+    if not sents:
+        return (0, paragraph_text)
+    q = _tokenize_for_match(comment_en)
+    best_idx = 0
+    best_score = -1
+    for i, s in enumerate(sents):
+        score = len(q.intersection(_tokenize_for_match(s)))
+        if score > best_score:
+            best_score = score
+            best_idx = i
+    return (best_idx, sents[best_idx])
+
+
+def unit_json_relpath(unit_id: str, kind: str) -> str:
+    # unit_id like m-0007 / s-0003 -> manuscript_units/0007.json
+    suffix = unit_id.split("-", 1)[1] if "-" in unit_id else unit_id
+    folder = "manuscript_units" if kind == "m" else "si_units"
+    return f"{folder}/{suffix}.json"
+
+
 def atomize_docx_units(docx_path: Path, out_dir: Path, prefix: str) -> list[dict[str, Any]]:
     rows = read_docx_paragraphs(docx_path)
     units: list[dict[str, Any]] = []
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    current_heading = ""
-    for i, row in enumerate(rows, start=1):
-        text = row["text"]
-        if re.match(r"^\d+(\.\d+)*\s+", text) or (len(text) < 110 and text.endswith(":")):
-            current_heading = text
-        fig_refs = [m.group(0) for m in re.finditer(r"(?:Figure|Fig\.?)[ ]*S?\d+[A-Za-z]?|\bS\d+[A-Za-z]?\b", text, flags=re.IGNORECASE)]
-        unit = {
-            "unit_id": f"{prefix}-{i:04d}",
-            "order": i,
-            "paragraph_index": row["paragraph_index"],
-            "text": text,
-            "heading_context": current_heading,
-            "anchors": fig_refs,
-            "tags": {
-                "has_figure_ref": bool(fig_refs),
-                "length": len(text),
-            },
+    sections: list[dict[str, Any]] = []
+    current: dict[str, Any] | None = None
+
+    def _new_section(heading: str, heading_para_idx: int, is_preamble: bool = False) -> dict[str, Any]:
+        return {
+            "heading": heading,
+            "heading_paragraph_index": heading_para_idx,
+            "paragraphs": [],
+            "captions": [],
+            "is_preamble": is_preamble,
         }
-        units.append(unit)
-        (out_dir / f"{i:04d}.json").write_text(json.dumps(unit, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    def _flush_section(sec: dict[str, Any] | None) -> None:
+        if not sec:
+            return
+        if not sec.get("paragraphs") and not sec.get("captions") and not sec.get("heading"):
+            return
+        sections.append(sec)
+
+    for row in rows:
+        text = row["text"]
+        if is_section_heading_text(text, row.get("style_name", "")):
+            _flush_section(current)
+            current = _new_section(text, row["paragraph_index"], is_preamble=False)
+            continue
+
+        if current is None:
+            current = _new_section("Front matter", row["paragraph_index"], is_preamble=True)
+
+        if is_figure_caption(text):
+            current["captions"].append(row)
+        else:
+            current["paragraphs"].append(row)
+
+    _flush_section(current)
+
+    unit_no = 0
+    max_paragraphs_per_chunk = 12
+
+    for sec_i, sec in enumerate(sections, start=1):
+        heading = simplify_ws(sec.get("heading", ""))
+        body_rows = sec.get("paragraphs", [])
+        cap_rows = sec.get("captions", [])
+        all_rows_sorted = sorted(body_rows + cap_rows, key=lambda x: x["paragraph_index"])
+
+        # Split oversized sections into readable atomic chunks while keeping section context.
+        chunks: list[list[dict[str, Any]]] = []
+        cur: list[dict[str, Any]] = []
+        for row in all_rows_sorted:
+            is_cap = is_figure_caption(row["text"])
+            if cur and len(cur) >= max_paragraphs_per_chunk and (is_cap or not is_figure_caption(cur[-1]["text"])):
+                chunks.append(cur)
+                cur = []
+            cur.append(row)
+        if cur:
+            chunks.append(cur)
+        if not chunks:
+            chunks = [[]]
+
+        chunk_total = len(chunks)
+        for chunk_idx, chunk_rows in enumerate(chunks, start=1):
+            unit_no += 1
+            unit_id = f"{prefix}-{unit_no:04d}"
+
+            heading_context = heading if heading and heading != "Front matter" else "Front matter"
+            if chunk_total > 1:
+                heading_context = f"{heading_context} [part {chunk_idx}/{chunk_total}]"
+
+            combined_parts: list[str] = []
+            if heading and heading != "Front matter":
+                combined_parts.append(heading)
+            combined_parts.extend(r["text"] for r in chunk_rows)
+            combined_text = "\n".join([x for x in combined_parts if x]).strip()
+            if not combined_text:
+                continue
+
+            para_indices = [r["paragraph_index"] for r in chunk_rows] or [sec.get("heading_paragraph_index", 0)]
+            para_start = min(para_indices)
+            para_end = max(para_indices)
+
+            fig_refs: list[str] = []
+            for txt in combined_parts:
+                fig_refs.extend([m.group(0) for m in re.finditer(r"(?:Figure|Fig\\.?)[ ]*S?\\d+[A-Za-z]?|\\bS\\d+[A-Za-z]?\\b", txt, flags=re.IGNORECASE)])
+
+            seen_refs: set[str] = set()
+            anchors: list[str] = []
+            for ref in fig_refs:
+                k = simplify_ws(ref).lower()
+                if k not in seen_refs:
+                    seen_refs.add(k)
+                    anchors.append(simplify_ws(ref))
+
+            figure_captions = [r["text"] for r in chunk_rows if is_figure_caption(r["text"])]
+            figure_ids: list[str] = []
+            seen_ids: set[str] = set()
+            for cap in figure_captions:
+                for fid in parse_figure_ids(cap):
+                    k = fid.lower()
+                    if k not in seen_ids:
+                        seen_ids.add(k)
+                        figure_ids.append(fid)
+
+            sents = split_sentences(combined_text)
+            unit_type = "preamble_block" if sec.get("is_preamble") else "section_block"
+
+            unit = {
+                "unit_id": unit_id,
+                "order": unit_no,
+                "section_index": sec_i,
+                "section_chunk_index": chunk_idx,
+                "section_chunk_total": chunk_total,
+                "paragraph_index": para_start,
+                "paragraph_start_index": para_start,
+                "paragraph_end_index": para_end,
+                "text": combined_text,
+                "sentences": [{"sentence_index": j, "text": st} for j, st in enumerate(sents)],
+                "unit_type": unit_type,
+                "section_unit_id": f"{prefix}-sec-{sec_i:04d}",
+                "heading_context": heading_context,
+                "section_title": heading if heading else heading_context,
+                "title_en": heading_context,
+                "source_paragraph_indices": para_indices,
+                "anchors": anchors,
+                "figure_ids": figure_ids,
+                "figure_captions": figure_captions,
+                "tags": {
+                    "has_figure_ref": bool(anchors),
+                    "length": len(combined_text),
+                    "sentence_count": len(sents),
+                    "paragraph_count": len(chunk_rows),
+                    "is_heading": False,
+                    "is_figure_caption": False,
+                    "has_figure_caption": bool(figure_captions),
+                },
+            }
+            units.append(unit)
+            (out_dir / f"{unit_no:04d}.json").write_text(json.dumps(unit, ensure_ascii=False, indent=2), encoding="utf-8")
 
     return units
 
@@ -282,12 +695,31 @@ def build_comment_unit(order: int, row: CommentPair, src: dict[str, str], m_unit
     if not m_links and m_units:
         m_links = [m_units[0]["unit_id"]]
 
-    response = row.reply_en if row.reply_en else auto_response(row.comment_en, row.section)
-    core_notes, support_notes = auto_notes(row.section)
+    response_en = row.reply_en if row.reply_en else "[AI_FILL_REQUIRED] Response to reviewer in English."
 
     excerpt = "Not provided by user"
     original_excerpt = "无"
     revision_location = "无"
+    atomic_location = {
+        "manuscript_unit_id": "",
+        "manuscript_unit_json": "",
+        "manuscript_unit_type": "",
+        "manuscript_paragraph_index": None,
+        "manuscript_heading_context": "",
+        "manuscript_sentence_index": None,
+        "manuscript_sentence_text": "",
+        "manuscript_figure_caption_unit_id": "",
+        "manuscript_figure_caption_json": "",
+        "manuscript_figure_caption_text": "",
+        "si_unit_id": "",
+        "si_unit_json": "",
+        "si_unit_type": "",
+        "si_paragraph_index": None,
+        "si_heading_context": "",
+        "si_figure_caption_unit_id": "",
+        "si_figure_caption_json": "",
+        "si_figure_caption_text": "",
+    }
     if m_links:
         # fetch first linked manuscript paragraph as draft anchor text
         first = next((x for x in m_units if x["unit_id"] == m_links[0]), None)
@@ -300,6 +732,60 @@ def build_comment_unit(order: int, row: CommentPair, src: dict[str, str], m_unit
                 revision_location = f"Section: {heading} | Paragraph index: {first.get('paragraph_index')}"
             else:
                 revision_location = f"Paragraph index: {first.get('paragraph_index')}"
+            sent_idx, sent_txt = choose_sentence(row.comment_en, first["text"])
+            atomic_location.update(
+                {
+                    "manuscript_unit_id": first["unit_id"],
+                    "manuscript_unit_json": unit_json_relpath(first["unit_id"], "m"),
+                    "manuscript_unit_type": first.get("unit_type", ""),
+                    "manuscript_paragraph_index": first.get("paragraph_index"),
+                    "manuscript_heading_context": heading,
+                    "manuscript_sentence_index": sent_idx,
+                    "manuscript_sentence_text": sent_txt,
+                }
+            )
+    if m_links:
+        m_caption = next((x for x in m_units if x["unit_id"] in m_links and x.get("unit_type") == "figure_caption"), None)
+        if not m_caption:
+            m_caption = next((x for x in m_units if x["unit_id"] in m_links and x.get("figure_captions")), None)
+        if m_caption:
+            caption_text = m_caption.get("text", "")
+            if not caption_text and m_caption.get("figure_captions"):
+                caption_text = m_caption["figure_captions"][0]
+            atomic_location.update(
+                {
+                    "manuscript_figure_caption_unit_id": m_caption["unit_id"],
+                    "manuscript_figure_caption_json": unit_json_relpath(m_caption["unit_id"], "m"),
+                    "manuscript_figure_caption_text": caption_text,
+                }
+            )
+    if s_links:
+        s_first = next((x for x in s_units if x["unit_id"] == s_links[0]), None)
+        if s_first:
+            atomic_location.update(
+                {
+                    "si_unit_id": s_first["unit_id"],
+                    "si_unit_json": unit_json_relpath(s_first["unit_id"], "s"),
+                    "si_unit_type": s_first.get("unit_type", ""),
+                    "si_paragraph_index": s_first.get("paragraph_index"),
+                    "si_heading_context": s_first.get("heading_context", ""),
+                }
+            )
+    if s_links:
+        s_caption = next((x for x in s_units if x["unit_id"] in s_links and x.get("unit_type") == "figure_caption"), None)
+        if not s_caption:
+            s_caption = next((x for x in s_units if x["unit_id"] in s_links and x.get("figure_captions")), None)
+        if s_caption:
+            caption_text = s_caption.get("text", "")
+            if not caption_text and s_caption.get("figure_captions"):
+                caption_text = s_caption["figure_captions"][0]
+            atomic_location.update(
+                {
+                    "si_figure_caption_unit_id": s_caption["unit_id"],
+                    "si_figure_caption_json": unit_json_relpath(s_caption["unit_id"], "s"),
+                    "si_figure_caption_text": caption_text,
+                }
+            )
 
     image_change_required = bool(
         re.search(
@@ -309,16 +795,7 @@ def build_comment_unit(order: int, row: CommentPair, src: dict[str, str], m_unit
         )
     )
 
-    actions = []
-    low = row.comment_en.lower()
-    if any(k in low for k in ["add", "include", "provide"]):
-        actions.append({"action": "添加", "reason": "审稿人要求补充缺失信息或证据。"})
-    if any(k in low for k in ["delete", "remove"]):
-        actions.append({"action": "删除", "reason": "审稿人指出冗余/不当内容需去除。"})
-    if any(k in low for k in ["clarify", "discrepancy", "mismatch", "inconsistent", "revise", "correct"]):
-        actions.append({"action": "修改", "reason": "审稿人指出表述或图文一致性问题，需定点修订。"})
-    if not actions:
-        actions.append({"action": "修改", "reason": "按审稿意见进行针对性优化。"})
+    actions = [{"action": "修改", "reason": "【待AI填写：添加/删除/修改及原因】"}]
 
     return {
         "unit_id": f"u-{order:03d}",
@@ -334,19 +811,20 @@ def build_comment_unit(order: int, row: CommentPair, src: dict[str, str], m_unit
             "si_unit_ids": s_links,
         },
         "content": {
-            "reviewer_comment_zh": "无",
+            "reviewer_comment_zh": "【待AI直译：请按原文直译，不要意译】",
             "reviewer_comment_en": row.comment_en,
-            "reviewer_intent_zh": zh_understanding(row.comment_en),
+            "reviewer_intent_zh": "【待AI填写：审稿意见中文理解】",
             "reviewer_intent_en": intent_en_from_comment(row.comment_en),
-            "response_en": response,
-            "response_zh": response_zh_from_en(response),
+            "response_en": response_en,
+            "response_zh": "【待AI翻译：Response to Reviewer中文对应】",
             "revision_location_en": revision_location,
+            "atomic_location": atomic_location,
             "original_excerpt_en": original_excerpt,
-            "revised_excerpt_en": excerpt,
-            "revised_excerpt_zh": excerpt_zh_from_en(excerpt),
+            "revised_excerpt_en": "[AI_FILL_REQUIRED] Revised manuscript/SI text in English.",
+            "revised_excerpt_zh": "【待AI翻译：修订后英文文本中文对应】",
             "modification_actions": actions,
-            "notes_core_zh": core_notes,
-            "notes_support_zh": support_notes,
+            "notes_core_zh": ["【待AI填写：🔴核心修改说明】"],
+            "notes_support_zh": ["【待AI填写：🟡辅助修改说明】"],
             "evidence": {
                 "text": ["Not provided by user"],
                 "image_change_required": image_change_required,
@@ -379,6 +857,7 @@ def build_email_unit(src: dict[str, str], email_text: str) -> dict[str, Any]:
             "reviewer_comment_zh": "",
             "reviewer_comment_en": "",
             "response_en": email_text,
+            "atomic_location": {},
             "revised_excerpt_en": "",
             "notes_core_zh": [],
             "notes_support_zh": [],
@@ -483,8 +962,9 @@ def render_html(project_title: str, index_data: dict[str, Any], units: list[dict
                 response_zh = unit["content"].get("response_zh", "无")
                 excerpt_zh = unit["content"].get("revised_excerpt_zh", "无")
                 intent_zh = unit["content"].get("reviewer_intent_zh", "无")
-                intent_en = unit["content"].get("reviewer_intent_en", "N/A")
+                comment_zh = unit["content"].get("reviewer_comment_zh", "无")
                 location_en = unit["content"].get("revision_location_en", "无")
+                atomic_loc = unit["content"].get("atomic_location", {})
                 original_en = unit["content"].get("original_excerpt_en", "无")
                 actions = unit["content"].get("modification_actions", [])
                 action_list = "".join(
@@ -498,25 +978,42 @@ def render_html(project_title: str, index_data: dict[str, Any], units: list[dict
 
                 pages.append(
                     f'''<section id="page-{escape(uid)}" class="page"><h2>{escape(unit['title'])}</h2>
-<div class="card"><h3>1) 审稿人意图理解 / Reviewer Intent</h3>
+<div class="card"><h3>1) 审稿意见与中文理解</h3>
 <div class="stack-box"><h4>原始审稿意见（English）</h4><p>{escape(unit['content']['reviewer_comment_en'])}</p></div>
-<div class="stack-box"><h4>应如何理解（中文）</h4><p>{escape(intent_zh)}</p></div>
-<div class="stack-box"><h4>How to interpret (English)</h4><p>{escape(intent_en)}</p></div>
+<div class="stack-box"><h4>审稿意见中文翻译（直译）</h4><p>{escape(comment_zh)}</p></div>
+<div class="stack-box"><h4>审稿意见中文理解</h4><p>{escape(intent_zh)}</p></div>
 </div>
 
 <div class="card"><h3>2) Response to Reviewer（中英对照）</h3>
 <div class="stack-box copy-box">
-  <div class="box-head"><h4>English Response</h4><button class="copy-btn" onclick="copyText('resp-en-{escape(uid)}', this)">复制</button></div>
-  <p id="resp-en-{escape(uid)}">{escape(unit['content']['response_en'])}</p>
+  <div class="box-head"><h4>中文回应</h4><button class="copy-btn" onclick="copyText('resp-zh-{escape(uid)}', this)">复制</button></div>
+  <p id="resp-zh-{escape(uid)}">{escape(response_zh)}</p>
 </div>
 <div class="stack-box copy-box">
-  <div class="box-head"><h4>中文对照</h4><button class="copy-btn" onclick="copyText('resp-zh-{escape(uid)}', this)">复制</button></div>
-  <p id="resp-zh-{escape(uid)}">{escape(response_zh)}</p>
+  <div class="box-head"><h4>English Translation</h4><button class="copy-btn" onclick="copyText('resp-en-{escape(uid)}', this)">复制</button></div>
+  <p id="resp-en-{escape(uid)}">{escape(unit['content']['response_en'])}</p>
 </div>
 </div>
 
 <div class="card"><h3>3) 可能需要修改的正文/附件内容（中英对照）</h3>
 <div class="stack-box"><h4>定位信息（原文位置）</h4><p>{escape(location_en)}</p></div>
+<div class="stack-box"><h4>原子化定位（Atomic Location）</h4>
+<p><strong>manuscript_unit_id:</strong> {escape(str(atomic_loc.get('manuscript_unit_id') or 'None'))}</p>
+<p><strong>manuscript_unit_json:</strong> {escape(str(atomic_loc.get('manuscript_unit_json') or 'None'))}</p>
+<p><strong>manuscript_unit_type:</strong> {escape(str(atomic_loc.get('manuscript_unit_type') or 'None'))}</p>
+<p><strong>manuscript_paragraph_index:</strong> {escape(str(atomic_loc.get('manuscript_paragraph_index')) if atomic_loc.get('manuscript_paragraph_index') is not None else 'None')}</p>
+<p><strong>manuscript_sentence_index:</strong> {escape(str(atomic_loc.get('manuscript_sentence_index')) if atomic_loc.get('manuscript_sentence_index') is not None else 'None')}</p>
+<p><strong>manuscript_sentence_text:</strong> {escape(str(atomic_loc.get('manuscript_sentence_text') or 'None'))}</p>
+<p><strong>manuscript_figure_caption_unit_id:</strong> {escape(str(atomic_loc.get('manuscript_figure_caption_unit_id') or 'None'))}</p>
+<p><strong>manuscript_figure_caption_json:</strong> {escape(str(atomic_loc.get('manuscript_figure_caption_json') or 'None'))}</p>
+<p><strong>manuscript_figure_caption_text:</strong> {escape(str(atomic_loc.get('manuscript_figure_caption_text') or 'None'))}</p>
+<p><strong>si_unit_id:</strong> {escape(str(atomic_loc.get('si_unit_id') or 'None'))}</p>
+<p><strong>si_unit_json:</strong> {escape(str(atomic_loc.get('si_unit_json') or 'None'))}</p>
+<p><strong>si_unit_type:</strong> {escape(str(atomic_loc.get('si_unit_type') or 'None'))}</p>
+<p><strong>si_figure_caption_unit_id:</strong> {escape(str(atomic_loc.get('si_figure_caption_unit_id') or 'None'))}</p>
+<p><strong>si_figure_caption_json:</strong> {escape(str(atomic_loc.get('si_figure_caption_json') or 'None'))}</p>
+<p><strong>si_figure_caption_text:</strong> {escape(str(atomic_loc.get('si_figure_caption_text') or 'None'))}</p>
+</div>
 <div class="stack-box copy-box">
   <div class="box-head"><h4>Original Text (English, 对照)</h4><button class="copy-btn" onclick="copyText('orig-en-{escape(uid)}', this)">复制</button></div>
   <p id="orig-en-{escape(uid)}">{escape(original_en)}</p>

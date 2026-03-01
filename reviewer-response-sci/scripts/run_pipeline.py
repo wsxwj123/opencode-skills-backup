@@ -106,6 +106,7 @@ def main() -> int:
     consistency = script_dir / "consistency_check.py"
     final_report = script_dir / "final_consistency_report.py"
     html_gate = script_dir / "html_format_check.py"
+    final_content_gate = script_dir / "final_content_gate.py"
     state_mgr = script_dir / "state_manager.py"
 
     preflight_cmd = [sys.executable, str(preflight), "--comments", args.comments, "--manuscript", args.manuscript, "--project-root", args.project_root, "--output-html", args.output_html]
@@ -130,6 +131,10 @@ def main() -> int:
     if args.fail_on_gap:
         report_cmd.append("--fail-on-gap")
 
+    final_content_cmd = [sys.executable, str(final_content_gate), "--project-root", args.project_root]
+    if args.allow_placeholder:
+        final_content_cmd.append("--allow-placeholder")
+
     html_cmd = [sys.executable, str(html_gate), args.output_html]
     state_sync_cmd = [sys.executable, str(state_mgr), "sync", "--project-root", args.project_root, "--pipeline-status", "pass"]
 
@@ -137,6 +142,7 @@ def main() -> int:
         ("preflight", preflight_cmd),
         ("build", build_cmd),
         ("strict_gate", gate_cmd),
+        ("final_content_gate", final_content_cmd),
         ("consistency", consistency_cmd),
         ("final_report", report_cmd),
         ("html_gate", html_cmd),

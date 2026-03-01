@@ -72,6 +72,12 @@ def main() -> int:
     if "可能需要修改的正文/附件内容（中英对照）" not in html:
         errors.append("Missing bilingual revision section heading")
 
+    if "原子化定位（Atomic Location）" not in html:
+        errors.append("Missing atomic location block in revision section")
+
+    if "manuscript_unit_id" not in html:
+        errors.append("Missing manuscript_unit_id display in HTML")
+
     if "核心" not in html and "Core" not in html:
         errors.append("Missing core/support note markers")
 

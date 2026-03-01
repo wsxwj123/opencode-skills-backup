@@ -26,7 +26,7 @@
   "content": {
     "reviewer_comment_zh": "无",
     "reviewer_comment_en": "Figure S2B, there is a clear mismatch between the images and their labels. The authors must carefully review the source data for Figure S2B and provide the correct images underneath the correct labels. It is imperative that the authors verify the integrity and correct labeling of all images in the manuscript and supplementary information to ensure the scientific rigor and credibility of their data.",
-    "reviewer_intent_zh": "审稿人核心关切：Figure S2B, there is a clear mismatch between the images and their labels. The authors must carefully review the source data for Figure S2B and provide the correct images underneath the correct labels. It is imperative t...",
+    "reviewer_intent_zh": "审稿人核心关切：数据结果与文字表述（或图注）存在一致性风险；图像标注、分组标签或图文对应关系需要复核；关键证据或方法细节说明不足；术语或格式书写不符合期刊规范。建议处理：逐项对齐原始数据、图表和正文结论；核对图号、面板标签与对应描述；补充必要的实验信息、证据或说明文本；按期刊规范统一格式（如上标、符号、缩写）；重点定位：Figure S2B, S2B。",
     "reviewer_intent_en": "Interpretation: The reviewer is requesting a clear, evidence-aligned clarification and a concrete manuscript-level correction for this specific point.",
     "response_en": "We sincerely thank the reviewer for identifying this critical issue. We have rechecked the corresponding data and revised the related text-figure alignment to ensure that interpretation is consistent with evidence.",
     "response_zh": "中文对应：感谢审稿人意见。我们已针对该问题完成对应修订，并确保结论与证据保持一致。",

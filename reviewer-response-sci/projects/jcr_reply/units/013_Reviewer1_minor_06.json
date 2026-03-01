@@ -33,7 +33,7 @@
   "content": {
     "reviewer_comment_zh": "无",
     "reviewer_comment_en": "Please correct the text to use the standard format: CD4+T cells and CD8+T cells, the plus sign (+) indicating positive expression should be formatted as a superscript.",
-    "reviewer_intent_zh": "审稿人核心关切：Please correct the text to use the standard format: CD4+T cells and CD8+T cells, the plus sign (+) indicating positive expression should be formatted as a superscript.",
+    "reviewer_intent_zh": "审稿人核心关切：术语或格式书写不符合期刊规范。建议处理：按期刊规范统一格式（如上标、符号、缩写）；重点定位：CD4+, CD8+, CD4。",
     "reviewer_intent_en": "Interpretation: The reviewer is requesting a clear, evidence-aligned clarification and a concrete manuscript-level correction for this specific point.",
     "response_en": "Thank you for this helpful suggestion. We have revised the relevant text or figure presentation accordingly and rechecked consistency across the manuscript.",
     "response_zh": "中文对应：感谢审稿人意见。我们已针对该问题完成对应修订，并确保结论与证据保持一致。",

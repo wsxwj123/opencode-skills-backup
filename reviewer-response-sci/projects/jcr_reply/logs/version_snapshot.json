@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2026-02-28T13:41:20.035463+00:00",
+  "generated_at_utc": "2026-02-28T14:12:39.342833+00:00",
   "project_root": "/Users/wsxwj/Desktop/opencode file/reviewer-response-sci/projects/jcr_reply",
   "output_html": "/Users/wsxwj/Desktop/opencode file/reviewer-response-sci/projects/jcr_reply/reviewer_response_full_catalog.html",
   "inputs": {
@@ -10,8 +10,8 @@
   "files": [
     {
       "path": "/Users/wsxwj/Desktop/opencode file/reviewer-response-sci/scripts/build_full_package.py",
-      "sha256": "d5511b7368ef929dcade78c222da586b29e28a9facffe58b468728655a456457",
-      "size": 34484
+      "sha256": "f55fb4f560a2347de8c03174258e961c1057837e720784818477537cefb0499c",
+      "size": 36313
     },
     {
       "path": "/Users/wsxwj/Desktop/opencode file/reviewer-response-sci/scripts/strict_gate.py",
@@ -30,8 +30,8 @@
     },
     {
       "path": "/Users/wsxwj/Desktop/opencode file/reviewer-response-sci/SKILL.md",
-      "sha256": "a95d2fe8446dbe0477de7249622799e35fc95018d0f69524c2ce292f857d58f5",
-      "size": 6585
+      "sha256": "3233be7f2a8fc218337d6daef5ff50f32fbf4288d4214f1719696cc36db3b985",
+      "size": 6822
     },
     {
       "path": "/Users/wsxwj/Desktop/opencode file/reviewer-response-sci/projects/jcr_reply/index.json",
@@ -45,8 +45,8 @@
     },
     {
       "path": "/Users/wsxwj/Desktop/opencode file/reviewer-response-sci/projects/jcr_reply/reviewer_response_full_catalog.html",
-      "sha256": "734d277acaea6e20e01dc5c0db020c4f5261e98243642f1faeb79ec6e28ff8f5",
-      "size": 88776
+      "sha256": "2350a910961720fe5bb3c286fa26586306016d069b49a1e377c4a050e5dd337a",
+      "size": 89254
     }
   ]
 }

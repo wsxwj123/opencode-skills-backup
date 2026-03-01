@@ -9,15 +9,22 @@ from pathlib import Path
 
 
 REQUIRED_UNIT_KEYS = ["unit_id", "order", "reviewer", "section", "comment_number", "title", "source", "links", "content", "status"]
-REQUIRED_CONTENT_KEYS = ["reviewer_comment_zh", "reviewer_comment_en", "response_en", "revised_excerpt_en", "notes_core_zh", "notes_support_zh", "evidence"]
+REQUIRED_CONTENT_KEYS = ["reviewer_comment_zh", "reviewer_comment_en", "response_en", "atomic_location", "revised_excerpt_en", "notes_core_zh", "notes_support_zh", "evidence"]
 REQUIRED_LINK_KEYS = ["anchors", "manuscript_unit_ids", "si_unit_ids"]
-PLACEHOLDERS = {"", "none", "n/a", "无", "not provided by user"}
+PLACEHOLDERS = {"", "none", "n/a", "无", "not provided by user", "[ai_fill_required] response to reviewer in english.", "[ai_fill_required] revised manuscript/si text in english."}
 
 
 def _norm(s: object) -> str:
     if s is None:
         return ""
     return str(s).strip().lower()
+
+
+def _is_placeholder_text(v: object) -> bool:
+    n = _norm(v)
+    if n in PLACEHOLDERS:
+        return True
+    return ("待ai" in n) or ("ai_fill_required" in n)
 
 
 def read_json(path: Path):
@@ -91,8 +98,34 @@ def main() -> int:
         if uid not in unit_map:
             errors.append(f"TOC references missing unit_id: {uid}")
 
-    m_ids = {read_json(p).get("unit_id") for p in m_dir.glob("*.json")}
-    s_ids = {read_json(p).get("unit_id") for p in s_dir.glob("*.json")} if s_dir.exists() else set()
+    m_units_all = [read_json(p) for p in sorted(m_dir.glob("*.json"))]
+    s_units_all = [read_json(p) for p in sorted(s_dir.glob("*.json"))] if s_dir.exists() else []
+    m_ids = {u.get("unit_id") for u in m_units_all}
+    s_ids = {u.get("unit_id") for u in s_units_all}
+
+    # Source atomic-unit structure checks (manuscript/SI)
+    def _check_source_units(units_all: list[dict], label: str) -> None:
+        section_like_count = 0
+        caption_count = 0
+        for u in units_all:
+            for key in ["unit_id", "paragraph_index", "text", "unit_type", "section_unit_id"]:
+                if key not in u:
+                    errors.append(f"{label} unit {u.get('unit_id','<unknown>')} missing key: {key}")
+            utype = u.get("unit_type")
+            if utype in {"section_block", "section_heading"}:
+                section_like_count += 1
+            if utype == "figure_caption":
+                caption_count += 1
+        if not units_all:
+            errors.append(f"{label} units are empty")
+            return
+        if section_like_count == 0 and label == "manuscript":
+            errors.append(f"{label} has no section-level units (section_block/section_heading)")
+        # Caption may be zero when document has no figures; do not hard-fail on caption_count == 0.
+
+    _check_source_units(m_units_all, "manuscript")
+    if s_units_all:
+        _check_source_units(s_units_all, "si")
 
     # Link validity
     for u in comment_units:
@@ -118,17 +151,43 @@ def main() -> int:
         original_en = _norm(content.get("original_excerpt_en"))
         excerpt_state = _norm(status.get("excerpt_state"))
 
-        if response_en in PLACEHOLDERS:
+        if not args.allow_placeholder and _is_placeholder_text(response_en):
             errors.append(f"Unit {u.get('unit_id')} response_en is placeholder/empty")
 
-        if not args.allow_placeholder and revised_en in PLACEHOLDERS:
+        if not args.allow_placeholder and _is_placeholder_text(revised_en):
             errors.append(f"Unit {u.get('unit_id')} revised_excerpt_en is placeholder/empty")
+
+        if not args.allow_placeholder:
+            ai_fields = [
+                ("reviewer_comment_zh", content.get("reviewer_comment_zh")),
+                ("reviewer_intent_zh", content.get("reviewer_intent_zh")),
+                ("response_zh", content.get("response_zh")),
+                ("revised_excerpt_zh", content.get("revised_excerpt_zh")),
+            ]
+            for field_name, value in ai_fields:
+                if _is_placeholder_text(value):
+                    errors.append(f"Unit {u.get('unit_id')} {field_name} is placeholder/empty")
+
+            notes_core = content.get("notes_core_zh", [])
+            notes_support = content.get("notes_support_zh", [])
+            if not notes_core or any(_is_placeholder_text(x) for x in notes_core):
+                errors.append(f"Unit {u.get('unit_id')} notes_core_zh is placeholder/empty")
+            if not notes_support or any(_is_placeholder_text(x) for x in notes_support):
+                errors.append(f"Unit {u.get('unit_id')} notes_support_zh is placeholder/empty")
 
         if original_en not in PLACEHOLDERS and revised_en not in PLACEHOLDERS and revised_en == original_en:
             errors.append(f"Unit {u.get('unit_id')} revised_excerpt_en is identical to original_excerpt_en")
 
         if excerpt_state == "needs_manual_revision" and not args.allow_placeholder:
             errors.append(f"Unit {u.get('unit_id')} excerpt_state=needs_manual_revision (manual revision required)")
+
+        atomic_loc = content.get("atomic_location", {})
+        m_uid = _norm(atomic_loc.get("manuscript_unit_id"))
+        m_sent_idx = atomic_loc.get("manuscript_sentence_index")
+        if m_uid in {"", "none"}:
+            errors.append(f"Unit {u.get('unit_id')} missing atomic_location.manuscript_unit_id")
+        if m_sent_idx is None:
+            errors.append(f"Unit {u.get('unit_id')} missing atomic_location.manuscript_sentence_index")
 
     if errors:
         print("STRICT_GATE: FAIL")

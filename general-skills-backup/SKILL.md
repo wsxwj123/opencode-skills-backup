@@ -17,13 +17,32 @@ description: Use when the user asks to backup or sync their Codex skills. This s
 
 ## Agent 执行规则（必须遵守）
 1. 如果用户只给触发短语，没有提供仓库地址：
-先检测 `~/.codex/skills/.git` 和 `origin` 是否存在。
+先检测本机 skills 根目录（默认 `~/.config/opencode/skills`）的 `.git` 和 `origin` 是否存在。
 2. 若已完成初始化：
 直接执行全量同步脚本 `scripts/sync_skills.py`。
 3. 若未完成初始化：
 提示用户提供一次 `repo-url`，然后执行 `scripts/quick_start.py --repo-url <url>` 完成初始化并首轮同步。
 4. 初始化完成后，后续再次触发“备份所有skill”时，不再追问，直接同步。
 5. 除非用户明确要求，不执行“只同步部分 skill”。
+
+## 代理与端口规则（必须遵守）
+1. 在首次执行网络相关步骤前，先询问用户：`你使用的 Clash Verge 代理端口是多少（HTTP/HTTPS）？`
+2. 如果用户未提供端口，按顺序自动回退：先 `7897`，失败再 `7890`。
+3. 所有需要联网的操作必须通过本 skill 的脚本触发，不直接拼接 `git pull/push` 作为主流程。
+4. macOS/Linux 建议命令格式：
+   `HTTP_PROXY=http://127.0.0.1:<port> HTTPS_PROXY=http://127.0.0.1:<port> ALL_PROXY=socks5://127.0.0.1:<port> python3 <script>`
+5. Windows PowerShell 建议命令格式：
+   `$env:HTTP_PROXY="http://127.0.0.1:<port>"; $env:HTTPS_PROXY="http://127.0.0.1:<port>"; $env:ALL_PROXY="socks5://127.0.0.1:<port>"; python <script>`
+
+## 脚本限制（必须遵守）
+仅允许调用以下脚本完成备份流程：
+- `scripts/quick_start.py`
+- `scripts/bootstrap_repo.py`
+- `scripts/sync_skills.py`
+- `scripts/auto_sync.py`
+- `setup_auto_backup.py`
+
+禁止在主流程中用零散 `git` 命令替代以上脚本（诊断信息查询除外，如 `git remote -v`）。
 
 ## 功能
 - **自动识别系统**：在 Windows 和 Mac 上都能直接运行。
@@ -40,20 +59,22 @@ description: Use when the user asks to backup or sync their Codex skills. This s
 首次只需要这一个命令：
 
 ```bash
-python3 ~/.codex/skills/general-skills-backup/scripts/quick_start.py --repo-url <你的GitHub仓库地址>
+HTTP_PROXY=http://127.0.0.1:7897 HTTPS_PROXY=http://127.0.0.1:7897 ALL_PROXY=socks5://127.0.0.1:7897 python3 ~/.config/opencode/skills/general-skills-backup/scripts/quick_start.py --repo-url <你的GitHub仓库地址>
 ```
 
 示例：
 
 ```bash
-python3 ~/.codex/skills/general-skills-backup/scripts/quick_start.py --repo-url https://github.com/<username>/codex-skills-backup.git
+HTTP_PROXY=http://127.0.0.1:7897 HTTPS_PROXY=http://127.0.0.1:7897 ALL_PROXY=socks5://127.0.0.1:7897 python3 ~/.config/opencode/skills/general-skills-backup/scripts/quick_start.py --repo-url https://github.com/<username>/codex-skills-backup.git
 ```
 
 Windows（PowerShell）示例：
 
 ```powershell
-python $env:USERPROFILE\.config\opencode\skills\general-skills-backup\scripts\quick_start.py --repo-url https://github.com/<username>/codex-skills-backup.git
+$env:HTTP_PROXY="http://127.0.0.1:7897"; $env:HTTPS_PROXY="http://127.0.0.1:7897"; $env:ALL_PROXY="socks5://127.0.0.1:7897"; python $env:USERPROFILE\.config\opencode\skills\general-skills-backup\scripts\quick_start.py --repo-url https://github.com/<username>/codex-skills-backup.git
 ```
+
+若 7897 无法连通，则将端口改为 7890 重试。
 
 `quick_start.py` 会自动完成：
 1. 初始化/检查 git 仓库与分支
@@ -65,7 +86,7 @@ python $env:USERPROFILE\.config\opencode\skills\general-skills-backup\scripts\qu
 如果 `origin` 配错了，可用 bootstrap 强制覆盖：
 
 ```bash
-python3 ~/.codex/skills/general-skills-backup/scripts/bootstrap_repo.py --repo-url <你的GitHub仓库地址> --force-origin
+python3 ~/.config/opencode/skills/general-skills-backup/scripts/bootstrap_repo.py --repo-url <你的GitHub仓库地址> --force-origin
 ```
 
 ## 使用方法
@@ -78,13 +99,13 @@ python3 ~/.codex/skills/general-skills-backup/scripts/bootstrap_repo.py --repo-u
 或手动运行：
 
 ```bash
-python3 ~/.codex/skills/general-skills-backup/scripts/sync_skills.py
+HTTP_PROXY=http://127.0.0.1:7897 HTTPS_PROXY=http://127.0.0.1:7897 ALL_PROXY=socks5://127.0.0.1:7897 python3 ~/.config/opencode/skills/general-skills-backup/scripts/sync_skills.py
 ```
 
 仅同步指定 skill：
 
 ```bash
-python3 ~/.codex/skills/general-skills-backup/scripts/sync_skills.py writing-plans theme-factory
+HTTP_PROXY=http://127.0.0.1:7897 HTTPS_PROXY=http://127.0.0.1:7897 ALL_PROXY=socks5://127.0.0.1:7897 python3 ~/.config/opencode/skills/general-skills-backup/scripts/sync_skills.py writing-plans theme-factory
 ```
 
 如果提示 `git is not available in PATH`，先安装 Git 并重开终端。

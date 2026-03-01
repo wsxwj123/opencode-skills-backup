@@ -13,6 +13,7 @@ from typing import Any
 
 import consistency_mapper
 import diagnosis_engine
+import citation_validator
 import word_counter
 
 
@@ -170,7 +171,7 @@ def _semantic_sync_checks(root: Path, state: dict[str, Any]) -> dict[str, Any]:
     has_history = bool(history.get("events"))
 
     phase_no = _phase_number(state)
-    require_strict = phase_no >= 2
+    require_strict = phase_no >= 1
 
     return {
         "cm_has_error": cm_error,
@@ -213,6 +214,146 @@ def sync_all(root: Path) -> dict[str, Any]:
         "exists": exists,
         "fresh": fresh,
         "semantic": semantic,
+    }
+
+
+
+def _sync_semantic_ok(semantic: dict[str, Any]) -> bool:
+    if semantic.get("strict_mode"):
+        return (
+            (not semantic.get("cm_has_error"))
+            and bool(semantic.get("has_context_blocks"))
+            and bool(semantic.get("has_history"))
+            and bool(semantic.get("p1_verified"))
+        )
+    return bool(semantic.get("has_context_blocks")) and bool(semantic.get("has_history"))
+
+
+def _append_verification_log(path: Path, record: dict[str, Any]) -> None:
+    existing = load_json(path, {"runs": []})
+    if not isinstance(existing, dict):
+        existing = {"runs": []}
+    runs = existing.get("runs")
+    if not isinstance(runs, list):
+        runs = []
+    runs.append(record)
+    existing["runs"] = runs[-200:]
+    save_json(path, existing)
+
+
+def gate_check(
+    root: Path,
+    sections_dir: str = "sections",
+    index_path: str = "data/literature_index.json",
+    p1_path: str = "sections/P1_立项依据.md",
+    ref_path: str = "sections/REF_参考文献.md",
+    mcp_cache_path: str = "data/mcp_literature_cache.json",
+    mcp_ttl_days: int = 30,
+    offline: bool = False,
+    require_mcp: bool = True,
+) -> dict[str, Any]:
+    sync_status = sync_all(root)
+    exists_ok = all(sync_status["exists"].values())
+    fresh_ok = all(sync_status["fresh"].values()) if sync_status["fresh"] else True
+    semantic_ok = _sync_semantic_ok(sync_status["semantic"])
+    sync_ok = exists_ok and fresh_ok and semantic_ok
+
+    idx_file = root / index_path
+    p1_file = root / p1_path
+    ref_file = root / ref_path
+    mcp_file = root / mcp_cache_path
+
+    idx = citation_validator._normalize_index(load_json(idx_file, {"metadata": {}, "entries": []}))
+    mcp_cache = citation_validator._normalize_mcp_cache(
+        load_json(mcp_file, {"metadata": {"schema_version": citation_validator.CACHE_SCHEMA_VERSION}, "entries": []})
+    )
+    save_json(mcp_file, mcp_cache)
+    mcp_schema_version = str((mcp_cache.get("metadata") or {}).get("schema_version") or citation_validator.CACHE_SCHEMA_VERSION)
+    mcp_index = citation_validator._build_mcp_index(mcp_cache)
+
+    p1_text = p1_file.read_text(encoding="utf-8") if p1_file.exists() else ""
+    ref_text = ref_file.read_text(encoding="utf-8") if ref_file.exists() else ""
+
+    idx, run_stats, manual_queue = citation_validator.verify_all(
+        idx,
+        p1_text=p1_text,
+        online_check=not offline,
+        mcp_index=mcp_index,
+        mcp_ttl_days=max(0, int(mcp_ttl_days)),
+        require_mcp=require_mcp,
+        mcp_schema_version=mcp_schema_version,
+    )
+    save_json(idx_file, idx)
+    save_json(
+        root / "data/manual_review_queue.json",
+        {
+            "generated_at": utc_now(),
+            "count": len(manual_queue),
+            "entries": manual_queue,
+        },
+    )
+    _append_verification_log(
+        root / "data/verification_run_log.json",
+        {
+            "index": str(idx_file),
+            "verification_status": idx.get("metadata", {}).get("verification_status"),
+            **run_stats,
+        },
+    )
+
+    citation_ok = idx.get("metadata", {}).get("verification_status") == "verified"
+    matrix = citation_validator.matrix_check(p1_text, idx, ref_text)
+    matrix_ok = bool(matrix.get("ok"))
+
+    profile = load_json(root / "proposal_profile.json", DEFAULT_PROFILE)
+    review = diagnosis_engine.full_review(
+        sections_dir=root / sections_dir,
+        consistency_path=root / "data/consistency_map.json",
+        index_path=idx_file,
+        p1_path=p1_file,
+        ref_path=ref_file,
+        page_limit=int(profile.get("page_limit", 30)),
+    )
+    review_ok = review.get("pass_status") == "pass" and int(review.get("d_count", 0)) == 0 and int(review.get("c_count", 0)) <= 3
+
+    overall_ok = sync_ok and citation_ok and matrix_ok and review_ok
+    if not sync_ok:
+        failed_at = "sync"
+    elif not citation_ok:
+        failed_at = "citation"
+    elif not matrix_ok:
+        failed_at = "matrix"
+    elif not review_ok:
+        failed_at = "review"
+    else:
+        failed_at = "none"
+
+    return {
+        "ok": overall_ok,
+        "failed_at": failed_at,
+        "sync": {
+            "ok": sync_ok,
+            "exists_ok": exists_ok,
+            "fresh_ok": fresh_ok,
+            "semantic_ok": semantic_ok,
+            **sync_status,
+        },
+        "citation": {
+            "ok": citation_ok,
+            "verification_status": idx.get("metadata", {}).get("verification_status"),
+            "stats": run_stats,
+            "manual_review_count": len(manual_queue),
+        },
+        "matrix": matrix,
+        "review": {
+            "ok": review_ok,
+            "overall_grade": review.get("overall_grade"),
+            "pass_status": review.get("pass_status"),
+            "c_count": review.get("c_count"),
+            "d_count": review.get("d_count"),
+            "page_estimate": review.get("page_estimate"),
+            "page_limit": review.get("page_limit"),
+        },
     }
 
 
@@ -446,6 +587,16 @@ def main() -> int:
     p_review.add_argument("--sections-dir", default="sections")
     p_review.add_argument("--output", default="data/diagnosis_report.json")
 
+    p_gate = sub.add_parser("gate-check")
+    p_gate.add_argument("--sections-dir", default="sections")
+    p_gate.add_argument("--index", default="data/literature_index.json")
+    p_gate.add_argument("--p1", default="sections/P1_立项依据.md")
+    p_gate.add_argument("--ref", default="sections/REF_参考文献.md")
+    p_gate.add_argument("--mcp-cache", default="data/mcp_literature_cache.json")
+    p_gate.add_argument("--mcp-ttl-days", type=int, default=30)
+    p_gate.add_argument("--offline", action="store_true")
+    p_gate.add_argument("--require-mcp", action="store_true")
+
     p_sync = sub.choices["sync-all"]
     p_sync.add_argument("--auto-fix", action="store_true")
 
@@ -515,19 +666,26 @@ def main() -> int:
         fresh_ok = all(status["fresh"].values()) if status["fresh"] else True
 
         semantic = status["semantic"]
-        if semantic["strict_mode"]:
-            semantic_ok = (
-                (not semantic["cm_has_error"])
-                and semantic["has_context_blocks"]
-                and semantic["has_history"]
-                and semantic["p1_verified"]
-            )
-        else:
-            semantic_ok = semantic["has_context_blocks"] and semantic["has_history"]
+        semantic_ok = _sync_semantic_ok(semantic)
 
         ok = exists_ok and fresh_ok and semantic_ok
         print(json.dumps({"ok": ok, **status, "semantic_ok": semantic_ok, "auto_fix": fix}, ensure_ascii=False, indent=2))
         return 0 if ok else 2
+
+    if args.cmd == "gate-check":
+        report = gate_check(
+            root=root,
+            sections_dir=args.sections_dir,
+            index_path=args.index,
+            p1_path=args.p1,
+            ref_path=args.ref,
+            mcp_cache_path=args.mcp_cache,
+            mcp_ttl_days=args.mcp_ttl_days,
+            offline=bool(args.offline),
+            require_mcp=bool(args.require_mcp),
+        )
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        return 0 if report.get("ok") else 2
 
     if args.cmd == "self-review":
         profile = load_json(root / "proposal_profile.json", DEFAULT_PROFILE)

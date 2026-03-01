@@ -1,15 +1,16 @@
 {
-  "signature": "015b43ac09697afcc5c66f34e28bf1f4858852240e57ba5fb8bae1916a4ffc65",
-  "updated_at": "2026-02-28T14:12:39.342114+00:00",
-  "completed_steps": [
-    "build",
-    "consistency",
-    "final_report",
-    "html_gate",
-    "preflight",
-    "state_sync",
-    "strict_gate"
-  ],
+  "timestamp_utc": "2026-02-28T14:12:39.342560+00:00",
+  "project_root": "/Users/wsxwj/Desktop/opencode file/reviewer-response-sci/projects/jcr_reply",
+  "output_html": "/Users/wsxwj/Desktop/opencode file/reviewer-response-sci/projects/jcr_reply/reviewer_response_full_catalog.html",
+  "title": "JCR Reviewer Response Package",
+  "require_links": false,
+  "allow_placeholder": true,
+  "fail_on_conflict": false,
+  "fail_on_gap": false,
+  "resume": false,
+  "pipeline_status": "pass",
+  "failed_step": "",
+  "failed_code": 0,
   "steps": [
     {
       "step": "preflight",
@@ -116,6 +117,5 @@
       "status": "pass",
       "return_code": 0
     }
-  ],
-  "pipeline_status": "pass"
+  ]
 }

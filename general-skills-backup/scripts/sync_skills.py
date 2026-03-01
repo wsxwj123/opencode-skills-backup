@@ -13,8 +13,9 @@ if sys.platform == 'win32':
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 SKILLS_BACKUP_DIR = os.path.dirname(SCRIPT_DIR) # Parent of scripts
 SKILLS_ROOT = os.path.dirname(SKILLS_BACKUP_DIR) # Parent of skills-backup
+DEFAULT_PROXY_PORTS = ["7897", "7890"]
 
-def run_command(cmd, cwd=SKILLS_ROOT):
+def run_command(cmd, cwd=SKILLS_ROOT, check=True):
     """Run a shell command and return output, or None on error."""
     try:
         # On Windows, we need shell=True for some commands to work properly, 
@@ -28,7 +29,7 @@ def run_command(cmd, cwd=SKILLS_ROOT):
         result = subprocess.run(
             cmd,
             cwd=cwd,
-            check=True,
+            check=check,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
@@ -65,7 +66,26 @@ def ensure_gitattributes():
         except Exception as e:
             print(f"Warning: Could not write .gitattributes: {e}")
 
-def sync(specific_skills=None):
+def set_proxy_env(port):
+    os.environ["HTTP_PROXY"] = f"http://127.0.0.1:{port}"
+    os.environ["HTTPS_PROXY"] = f"http://127.0.0.1:{port}"
+    os.environ["ALL_PROXY"] = f"socks5://127.0.0.1:{port}"
+
+def resolve_proxy_port(explicit_port=None):
+    if explicit_port:
+        return [str(explicit_port)]
+    env_port = os.environ.get("CLASH_VERGE_PORT", "").strip()
+    if env_port:
+        return [env_port]
+    return DEFAULT_PROXY_PORTS
+
+def check_proxy_connectivity(branch, port):
+    set_proxy_env(port)
+    # Probe remote connectivity with the current proxy port.
+    res = run_command(['git', 'ls-remote', '--heads', 'origin', branch], check=False)
+    return res is not None
+
+def sync(specific_skills=None, proxy_port=None):
     print(f"📂 Skills Directory: {SKILLS_ROOT}")
     
     py_cmd = "python" if platform.system() == "Windows" else "python3"
@@ -96,6 +116,21 @@ def sync(specific_skills=None):
         return
 
     print(f"🌿 Current Branch: {branch}")
+    proxy_candidates = resolve_proxy_port(proxy_port)
+    selected_port = None
+
+    for port in proxy_candidates:
+        print(f"🌐 Trying proxy port: {port}")
+        if check_proxy_connectivity(branch, port):
+            selected_port = port
+            break
+
+    if selected_port is None:
+        print("❌ Pull failed on all proxy ports. Tried:", ", ".join(proxy_candidates))
+        return 1
+
+    set_proxy_env(selected_port)
+    print(f"✅ Using proxy port: {selected_port}")
     machine = platform.node()
     os_name = platform.system()
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -104,8 +139,7 @@ def sync(specific_skills=None):
     print("\n⬇️  Pulling remote changes...")
     stash_output = run_command(['git', 'stash'])
     stashed = stash_output and "No local changes to save" not in stash_output
-
-    pull_res = run_command(['git', 'pull', '--rebase', 'origin', branch])
+    pull_res = run_command(['git', 'pull', '--rebase', 'origin', branch], check=False)
     
     if stashed:
         print("📦 Restoring local changes...")
@@ -113,7 +147,7 @@ def sync(specific_skills=None):
 
     if pull_res is None:
         print("⚠️  Pull failed. You might need to resolve conflicts manually.")
-        return
+        return 1
 
     # 4. Add and Commit
     print("\n💾 Checking for local changes...")
@@ -140,7 +174,7 @@ def sync(specific_skills=None):
         commit_res = run_command(['git', 'commit', '-m', commit_msg])
         if commit_res is None:
             print("❌ Commit failed. Configure git user/email and retry.")
-            return
+            return 1
         
         # 5. Push
         print("⬆️  Pushing to remote...")
@@ -149,6 +183,7 @@ def sync(specific_skills=None):
             print("✅ Backup successful!")
         else:
             print("❌ Push failed. Check your internet or credentials.")
+            return 1
     else:
         print("✨ No local changes to commit.")
         push_res = run_command(['git', 'push', 'origin', branch])
@@ -156,10 +191,13 @@ def sync(specific_skills=None):
             print("✅ Sync complete.")
         else:
             print("❌ Push failed. Check your internet or credentials.")
+            return 1
+    return 0
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Sync OpenCode Skills")
+    parser.add_argument("--proxy-port", help="Clash Verge proxy port (e.g. 7897). If omitted, tries 7897 then 7890.")
     parser.add_argument("skills", nargs="*", help="Specific skills to sync (optional)")
     args = parser.parse_args()
     
-    sync(args.skills)
+    raise SystemExit(sync(args.skills, args.proxy_port))
