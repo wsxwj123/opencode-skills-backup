@@ -441,12 +441,113 @@ def parse_figure_ids(text: str) -> list[str]:
     return out
 
 
+BACK_MATTER_PATTERNS = [
+    r"references",
+    r"acknowledg(?:e)?ments?",
+    r"author contributions?",
+    r"funding",
+    r"conflicts? of interest",
+    r"declaration of competing interest",
+    r"data availability",
+    r"ethics statement",
+    r"参考文献",
+    r"致谢",
+    r"作者贡献",
+    r"资金支持",
+    r"利益冲突",
+    r"数据可用性",
+    r"伦理声明",
+]
+
+
+def _back_matter_regex() -> str:
+    # Allow optional numeric prefix like "6. AUTHOR CONTRIBUTIONS".
+    english = (
+        r"references|acknowledg(?:e)?ments?|author contributions?|funding|"
+        r"conflicts? of interest|declaration of competing interest|"
+        r"data availability|ethics statement"
+    )
+    chinese = r"参考文献|致谢|作者贡献|资金支持|利益冲突|数据可用性|伦理声明"
+    return (
+        r"^(?:\d+\.\s*)?(?:(?:" + english + r")\b|(?:" + chinese + r"))"
+    )
+
+
+def is_back_matter_heading_text(text: str) -> bool:
+    t = simplify_ws(text)
+    if not t:
+        return False
+    return bool(re.match(_back_matter_regex(), t, flags=re.IGNORECASE))
+
+
+def split_inline_back_matter_heading(text: str) -> tuple[str, str]:
+    """
+    Split 'References ...' style inline paragraph into heading + remainder.
+    Returns (heading, remainder). If no inline split needed, remainder is empty.
+    """
+    t = simplify_ws(text)
+    m = re.match(
+        r"^(?:\d+\.\s*)?(references|acknowledg(?:e)?ments?|author contributions?|funding|conflicts? of interest|"
+        r"declaration of competing interest|data availability|ethics statement|"
+        r"参考文献|致谢|作者贡献|资金支持|利益冲突|数据可用性|伦理声明)"
+        r"(?:\s*[:：.\-]\s*|\s+)(.+)$",
+        t,
+        flags=re.IGNORECASE,
+    )
+    if not m:
+        return (t, "")
+    return (simplify_ws(m.group(1)), simplify_ws(m.group(2)))
+
+
+def split_row_by_inline_back_matter_headings(row: dict[str, Any]) -> list[dict[str, Any]]:
+    """
+    Split one paragraph row when back-matter headings appear inline in the middle
+    of a long paragraph (common in exported DOCX content).
+    """
+    text = simplify_ws(row.get("text", ""))
+    if not text:
+        return []
+    pat = re.compile(
+        r"(?:^|(?<=\s))(?:\d+\.\s*)?"
+        r"(references|acknowledg(?:e)?ments?|author contributions?|"
+        r"conflicts? of interest|declaration of competing interest|"
+        r"data availability|ethics statement|"
+        r"参考文献|致谢|作者贡献|利益冲突|数据可用性|伦理声明)"
+        r"(?=\s|[:：.\-]|$)",
+        flags=re.IGNORECASE,
+    )
+    starts = [m.start() for m in pat.finditer(text)]
+    if not starts:
+        return [row]
+    # Only split when heading marker appears after non-empty prefix text.
+    starts = sorted(set(i for i in starts if i > 0))
+    if not starts:
+        return [row]
+
+    points = [0] + starts + [len(text)]
+    out: list[dict[str, Any]] = []
+    for i in range(len(points) - 1):
+        seg = simplify_ws(text[points[i]:points[i + 1]])
+        if not seg:
+            continue
+        out.append(
+            {
+                "paragraph_index": row["paragraph_index"],
+                "text": seg,
+                "style_name": row.get("style_name", ""),
+            }
+        )
+    return out or [row]
+
+
 def is_section_heading_text(text: str, style_name: str = "") -> bool:
     t = simplify_ws(text)
     if not t:
         return False
     if is_figure_caption(t):
         return False
+    if is_back_matter_heading_text(t):
+        return True
     style_low = simplify_ws(style_name).lower()
     if style_low and ("heading" in style_low or "标题" in style_low):
         return True
@@ -497,7 +598,10 @@ def unit_json_relpath(unit_id: str, kind: str) -> str:
 
 
 def atomize_docx_units(docx_path: Path, out_dir: Path, prefix: str) -> list[dict[str, Any]]:
-    rows = read_docx_paragraphs(docx_path)
+    raw_rows = read_docx_paragraphs(docx_path)
+    rows: list[dict[str, Any]] = []
+    for r in raw_rows:
+        rows.extend(split_row_by_inline_back_matter_headings(r))
     units: list[dict[str, Any]] = []
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -522,6 +626,22 @@ def atomize_docx_units(docx_path: Path, out_dir: Path, prefix: str) -> list[dict
 
     for row in rows:
         text = row["text"]
+        # Force back-matter sections (References/Acknowledgements/Author contributions, etc.)
+        # to be isolated even if they are not styled as headings in DOCX.
+        if is_back_matter_heading_text(text):
+            heading, remainder = split_inline_back_matter_heading(text)
+            _flush_section(current)
+            current = _new_section(heading, row["paragraph_index"], is_preamble=False)
+            if remainder:
+                current["paragraphs"].append(
+                    {
+                        "paragraph_index": row["paragraph_index"],
+                        "text": remainder,
+                        "style_name": row.get("style_name", ""),
+                    }
+                )
+            continue
+
         if is_section_heading_text(text, row.get("style_name", "")):
             _flush_section(current)
             current = _new_section(text, row["paragraph_index"], is_preamble=False)
@@ -901,6 +1021,42 @@ def build_index(units: list[dict[str, Any]]) -> dict[str, Any]:
 def render_html(project_title: str, index_data: dict[str, Any], units: list[dict[str, Any]]) -> str:
     unit_by_id = {u["unit_id"]: u for u in units}
 
+    def _pick_focus_paragraph(original_text: str, anchor_sentence: str) -> str:
+        txt = (original_text or "").strip()
+        if not txt:
+            return "无"
+        if txt == "无":
+            return txt
+
+        # Prefer paragraph-level context instead of dumping whole section.
+        paras = [simplify_ws(p) for p in re.split(r"\n{2,}|\r\n\r\n", txt) if simplify_ws(p)]
+        if not paras:
+            paras = [simplify_ws(p) for p in re.split(r"\n+", txt) if simplify_ws(p)]
+        if not paras:
+            paras = [simplify_ws(txt)]
+
+        anchor = simplify_ws(anchor_sentence or "")
+        if not anchor or anchor == "N/A":
+            return paras[0]
+
+        # 1) direct containment (prefix) first
+        prefix = anchor[:48]
+        if prefix:
+            for p in paras:
+                if prefix in p:
+                    return p
+
+        # 2) token overlap fallback
+        q = _tokenize_for_match(anchor)
+        best = paras[0]
+        best_score = -1
+        for p in paras:
+            s = len(q.intersection(_tokenize_for_match(p)))
+            if s > best_score:
+                best_score = s
+                best = p
+        return best
+
     toc_items: list[str] = []
     pages: list[str] = []
 
@@ -966,15 +1122,37 @@ def render_html(project_title: str, index_data: dict[str, Any], units: list[dict
                 location_en = unit["content"].get("revision_location_en", "无")
                 atomic_loc = unit["content"].get("atomic_location", {})
                 original_en = unit["content"].get("original_excerpt_en", "无")
+                quick_section = atomic_loc.get("manuscript_heading_context") or atomic_loc.get("si_heading_context") or "N/A"
+                quick_para = (
+                    str(atomic_loc.get("manuscript_paragraph_index"))
+                    if atomic_loc.get("manuscript_paragraph_index") is not None
+                    else (
+                        f"SI:{atomic_loc.get('si_paragraph_index')}"
+                        if atomic_loc.get("si_paragraph_index") is not None
+                        else "N/A"
+                    )
+                )
+                quick_sentence = atomic_loc.get("manuscript_sentence_text") or "N/A"
+                quick_sentence = " ".join(str(quick_sentence).split())
+                if len(quick_sentence) > 220:
+                    quick_sentence = quick_sentence[:219] + "…"
                 actions = unit["content"].get("modification_actions", [])
+                focus_original_en = _pick_focus_paragraph(
+                    original_text=original_en,
+                    anchor_sentence=quick_sentence,
+                )
                 action_list = "".join(
                     f"<li><strong>{escape(x.get('action','修改'))}</strong>：{escape(x.get('reason',''))}</li>" for x in actions
                 ) or "<li>无</li>"
                 image_required = bool(unit["content"]["evidence"].get("image_change_required", False))
                 image_block = ""
                 if image_required:
-                    image_block = f"""<div class=\"img-placeholder\">图片修改占位符：请插入修订后图片（如 Figure 面板替换、图注同步更新）。</div>
-<figure><img src=\"{escape(img['src'])}\" alt=\"{escape(img['alt'])}\" /><figcaption>{escape(img['caption'])}</figcaption></figure>"""
+                    img_src = str(img.get("src", "") or "").strip()
+                    if img_src:
+                        image_block = f"""<div class=\"img-placeholder\">图片修改占位符：请插入修订后图片（如 Figure 面板替换、图注同步更新）。</div>
+<figure><img src=\"{escape(img_src)}\" alt=\"{escape(str(img.get('alt','image')))}\" /><figcaption>{escape(str(img.get('caption','')))}</figcaption></figure>"""
+                    else:
+                        image_block = """<div class=\"img-placeholder\">图片修改占位符：请插入修订后图片（如 Figure 面板替换、图注同步更新）。</div>"""
 
                 pages.append(
                     f'''<section id="page-{escape(uid)}" class="page"><h2>{escape(unit['title'])}</h2>
@@ -996,8 +1174,13 @@ def render_html(project_title: str, index_data: dict[str, Any], units: list[dict
 </div>
 
 <div class="card"><h3>3) 可能需要修改的正文/附件内容（中英对照）</h3>
-<div class="stack-box"><h4>定位信息（原文位置）</h4><p>{escape(location_en)}</p></div>
-<div class="stack-box"><h4>原子化定位（Atomic Location）</h4>
+<div class="stack-box"><h4>快速定位（请先看这里）</h4>
+<p><strong>Step 1 - 小节：</strong>{escape(str(quick_section))}</p>
+<p><strong>Step 2 - 段落索引：</strong>{escape(str(quick_para))}</p>
+<p><strong>Step 3 - Word检索锚句：</strong>{escape(str(quick_sentence))}</p>
+<p><strong>Step 4 - 修改动作：</strong>{escape(' / '.join([x.get('action','修改') for x in actions]) if actions else '修改')}</p>
+</div>
+<details class="stack-box"><summary><strong>原子化定位（Atomic Location）</strong>（调试信息）</summary>
 <p><strong>manuscript_unit_id:</strong> {escape(str(atomic_loc.get('manuscript_unit_id') or 'None'))}</p>
 <p><strong>manuscript_unit_json:</strong> {escape(str(atomic_loc.get('manuscript_unit_json') or 'None'))}</p>
 <p><strong>manuscript_unit_type:</strong> {escape(str(atomic_loc.get('manuscript_unit_type') or 'None'))}</p>
@@ -1013,23 +1196,26 @@ def render_html(project_title: str, index_data: dict[str, Any], units: list[dict
 <p><strong>si_figure_caption_unit_id:</strong> {escape(str(atomic_loc.get('si_figure_caption_unit_id') or 'None'))}</p>
 <p><strong>si_figure_caption_json:</strong> {escape(str(atomic_loc.get('si_figure_caption_json') or 'None'))}</p>
 <p><strong>si_figure_caption_text:</strong> {escape(str(atomic_loc.get('si_figure_caption_text') or 'None'))}</p>
-</div>
+</details>
+<details class="stack-box copy-box">
+  <summary><strong>Original Text (English, 对照)</strong>（已按锚句定位，仅展示相关段落）</summary>
+  <div class="box-head" style="margin-top:8px"><h4>定位段落</h4><button class="copy-btn" onclick="copyText('orig-en-{escape(uid)}', this)">复制</button></div>
+  <p id="orig-en-{escape(uid)}">{escape(focus_original_en)}</p>
+</details>
 <div class="stack-box copy-box">
-  <div class="box-head"><h4>Original Text (English, 对照)</h4><button class="copy-btn" onclick="copyText('orig-en-{escape(uid)}', this)">复制</button></div>
-  <p id="orig-en-{escape(uid)}">{escape(original_en)}</p>
-</div>
-<div class="stack-box copy-box">
-  <div class="box-head"><h4>Revised Text (English)</h4><button class="copy-btn" onclick="copyText('rev-en-{escape(uid)}', this)">复制</button></div>
+  <div class="box-head"><h4>对应段落修订文本（English）</h4><button class="copy-btn" onclick="copyText('rev-en-{escape(uid)}', this)">复制</button></div>
   <p id="rev-en-{escape(uid)}">{escape(unit['content']['revised_excerpt_en'])}</p>
 </div>
 <div class="stack-box copy-box">
   <div class="box-head"><h4>修改后中文对照</h4><button class="copy-btn" onclick="copyText('rev-zh-{escape(uid)}', this)">复制</button></div>
   <p id="rev-zh-{escape(uid)}">{escape(excerpt_zh)}</p>
 </div>
-<div class="stack-box"><h4>修改说明（添加/删除/修改及原由）</h4><ul>{action_list}</ul></div>
 </div>
 
-<div class="card"><h3>4) 修改说明（中文）</h3><ul>{core_list}{support_list}</ul></div>
+<div class="card"><h3>4) 修改说明（中文）</h3>
+<div class="stack-box"><h4>细节修改（添加/删除/修改及原由）</h4><ul>{action_list}</ul></div>
+<div class="stack-box"><h4>总结（核心/辅助）</h4><ul>{core_list}{support_list}</ul></div>
+</div>
 <div class="card"><h3>5) Evidence Attachments</h3><p><strong>Text:</strong><br/>{ev_text}</p>
 <p><strong>Anchors:</strong> {escape(', '.join(anchors) if anchors else 'None')}</p>
 <p><strong>Linked manuscript units:</strong> {escape(mlinks)}</p>
@@ -1076,6 +1262,7 @@ h2{{color:var(--accent);margin:0 0 10px;font-size:1.4rem}}h3{{margin:0 0 10px;co
 .box-head{{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px}}
 .copy-btn{{border:1px solid #b58c5c;background:linear-gradient(180deg,#fffdf8 0%,#f7e9d6 100%);color:#4c3118;border-radius:999px;padding:4px 11px;font-size:.78rem;font-weight:700;cursor:pointer}}
 .copy-btn:hover{{border-color:#8f6637}}
+.mark-add{{font-weight:700;text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:2px;background:#fff3c4;padding:0 2px;border-radius:3px}}
 .tag{{display:inline-block;padding:2px 8px;border-radius:999px;color:#fff;font-size:.8rem;font-weight:600;margin-right:6px}}.core{{background:#8f1f18}}.support{{background:#8a5b2b}}
 .img-placeholder{{border:1px dashed #c5a171;background:#fff7ed;border-radius:10px;padding:10px 12px;color:#7a4b1b;margin:8px 0}}
 figure{{margin:8px 0;border:1px dashed var(--line);padding:10px;border-radius:10px;background:#fafcff}}img{{max-width:100%;height:auto;min-height:80px;background:#fff;border:1px solid var(--line);border-radius:7px}}
