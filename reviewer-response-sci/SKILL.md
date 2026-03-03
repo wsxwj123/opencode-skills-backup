@@ -123,6 +123,8 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
 - Short-sentence preference means clear and natural rhythm, not mechanical sentence splitting.
 - If a reviewer comment requires adding references, literature retrieval must use `paper-search` MCP with PubMed only.
 - Do not use any non-PubMed search tool for citation retrieval in this skill.
+- Do not create ad-hoc fixer scripts (e.g., `fix_gate_errors.py`, temporary patch scripts) during normal runs.
+- When gate checks fail, directly edit the failing `project_root/units/*.json` fields and re-run checks.
 - Keep one-page-per-comment structure.
 - All copy buttons in the UI must use Chinese label `复制`.
 - Frontend must be intentionally designed (not default/plain style), with clear hierarchy, strong readability, and responsive layout.
@@ -162,6 +164,7 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
    - final delivery must pass `final_content_gate.py`:
      - if any `待AI` / `AI_FILL_REQUIRED` placeholder remains, gate fails
      - `--allow-placeholder` is only for skeleton/prewrite stage, not final delivery
+   - if gate fails, fix the listed units by direct JSON edits; do not generate extra fixer scripts
 10. Run final consistency report.
 11. Write checkpoint + transaction logs to `project_root/logs/`.
 12. Sync unit state map to `project_root/logs/unit_state.json`.
