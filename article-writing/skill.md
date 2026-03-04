@@ -48,6 +48,10 @@
    - `python scripts/citation_guard.py --index literature_index.json --mcp-cache mcp_literature_cache.json --mcp-ttl-days 30 --manual-review manual_review_queue.json --log verification_run_log.json --report citation_guard_report.json`
    - 若返回非零或报告 `ok=false`，立即阻断写作；未通过核验条目禁止进入正文与参考文献列表。
    - 默认不改变原有检索顺序与流程（PubMed/Semantic/arXiv/Google 回退链）；仅增加核验门禁。
+   - 来源提供者策略（provider policy）严格生效：
+     - 允许：`paper-search`（主检索）、`tavily`（仅用于反向验证）。
+     - 禁止：`websearch` provider 条目。
+     - `tavily` 仅适用于无 DOI/PMID 条目（no-identifier fallback），有 DOI/PMID 条目不得以 tavily 作为来源。
    - 最终交付前建议追加 `--require-mcp` 强制 MCP 证据轨通过。
 
 **语言风格 (Anti-AI Protocol)**：

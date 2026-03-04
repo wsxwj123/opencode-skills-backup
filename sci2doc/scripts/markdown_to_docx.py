@@ -490,6 +490,48 @@ def _thin_border():
     return {"sz": "6", "val": "single", "color": "000000"}   # 0.75pt
 
 
+def apply_three_line_table_borders(table, header_rows=1):
+    """
+    对已有 Word 表格应用三线表边框。
+
+    规则：
+    - 顶线：1.5pt 粗线（sz=12）
+    - 表头分隔线：0.5pt 细线（sz=4），位于最后一个表头行底部
+    - 底线：1.5pt 粗线（sz=12）
+    - 无竖线
+
+    Args:
+        table: python-docx Table
+        header_rows: 表头行数，>=1
+    """
+    if table is None or not getattr(table, "rows", None):
+        return
+
+    total_rows = len(table.rows)
+    if total_rows == 0:
+        return
+
+    header_rows = max(1, int(header_rows or 1))
+    header_sep_idx = min(header_rows - 1, total_rows - 1)
+    last_idx = total_rows - 1
+
+    no = _no_border()
+    thick = _thick_border()
+    thin_05pt = {"sz": "4", "val": "single", "color": "000000"}
+
+    for i, row in enumerate(table.rows):
+        for cell in row.cells:
+            top = no
+            bottom = no
+            if i == 0:
+                top = thick
+            if i == header_sep_idx:
+                bottom = thin_05pt
+            if i == last_idx:
+                bottom = thick
+            _set_cell_border(cell, top=top, bottom=bottom, left=no, right=no)
+
+
 def is_table_row(line):
     """检测是否为 Markdown 表格行: | col1 | col2 |"""
     stripped = line.strip()

@@ -78,6 +78,10 @@ Rules:
 - If guard exits non-zero or report `ok=false`, stop writing and resolve the queue first.
 - Unverified references must not be cited in chapter markdown.
 - Every cited entry must carry traceability fields (`source_provider` + `source_id`) and DOI/PMID whenever available.
+- Source provider policy is strict:
+  - Allowed: `paper-search` (primary academic retrieval), `tavily` (reverse verification only).
+  - Forbidden: `websearch` provider entries.
+  - `tavily` is only valid for entries without DOI/PMID (no-identifier fallback path).
 - This guard does not change existing chapter writing workflow; it only validates reference correctness.
 - For final delivery strict mode, run with `--require-mcp`.
 
