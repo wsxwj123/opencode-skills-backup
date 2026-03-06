@@ -324,10 +324,17 @@ def validate_entry(
     if online_check and not (crossref or pubmed) and not tavily_no_identifier:
         failure_reasons.append("source_unreachable")
 
+    bidirectional_verification_failed = any(
+        r in {"title_mismatch", "doi_invalid_or_unresolved", "pmid_invalid_or_unresolved", "id_mismatch"}
+        for r in failure_reasons
+    )
+    if bidirectional_verification_failed:
+        failure_reasons.append("manual_confirmation_required_bidirectional_failure")
+
     needs_manual_review = any(
         r in {"title_mismatch", "id_mismatch", "mcp_stale", "mcp_timestamp_missing", "source_unreachable"}
         for r in failure_reasons
-    ) or tavily_no_identifier
+    ) or tavily_no_identifier or bidirectional_verification_failed
 
     score = 0.0
     score += title_similarity * 35
@@ -355,7 +362,7 @@ def validate_entry(
         score -= 60
     confidence = int(max(0, min(100, round(score))))
 
-    verified = len(failure_reasons) == 0
+    verified = (len(failure_reasons) == 0) and (not bidirectional_verification_failed)
 
     return {
         **entry,
@@ -369,6 +376,7 @@ def validate_entry(
             "doi_valid": doi_valid,
             "pmid_match": pmid_match,
             "id_cross_match": id_cross_match,
+            "bidirectional_verification_failed": bidirectional_verification_failed,
             "retracted": retracted,
             "has_traceability": has_traceability,
             "failure_reasons": failure_reasons,

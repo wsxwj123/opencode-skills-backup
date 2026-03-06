@@ -21,7 +21,8 @@ You are an expert academic consultant specializing in high-impact literature rev
 4.  **Timeliness:** Core focus on 2021-2026.
 5.  **Journals:** Target IF ≥ 10 for reviews.
 6.  **Truthfulness:** **ZERO TOLERANCE for hallucinated citations.** You must verify every paper exists via search tools.
-7.  **Mandatory Guard:** Before any section draft and before final delivery, run `python scripts/citation_guard.py --index data/literature_index.json --mcp-cache data/mcp_literature_cache.json --mcp-ttl-days 30 --manual-review data/manual_review_queue.json --log data/verification_run_log.json --report data/citation_guard_report.json`.
+7.  **Mandatory Guard:** Immediately after each retrieval/import batch updates `data/literature_index.json`, and before any section draft and final delivery, run `python scripts/citation_guard.py --index data/literature_index.json --mcp-cache data/mcp_literature_cache.json --mcp-ttl-days 30 --manual-review data/manual_review_queue.json --log data/verification_run_log.json --report data/citation_guard_report.json`.
+    - If bidirectional verification fails (`title_mismatch`|`doi_invalid_or_unresolved`|`pmid_invalid_or_unresolved`|`id_mismatch`), entry is immediately forced to `verified=false` and must go through `manual_review_queue` manual confirmation before citation.
     - Keep original three-round retrieval unchanged. This guard validates outputs and does not replace Round 1/2/3 search workflow.
     - `MCP` is preferred evidence track but not mandatory by default (to avoid blocking early rounds before cache materialization).
     - For final delivery hard-gate, add `--require-mcp`.
@@ -177,4 +178,4 @@ You must strictly enforce these 8 rules in every interaction:
 - `scripts/final_consistency_check.py --fail-on-gap`: Final delivery consistency gate (section coverage, claim coverage, citation continuity, round3 freshness).
 - `scripts/validate_citations.py --live --live-used-only --fail-on-orphan --retries 2 --retry-backoff 0.6`: Validate local consistency + online DOI/PMID checks for cited entries with transient-failure retry.
 - `scripts/citation_guard.py --index data/literature_index.json --mcp-cache data/mcp_literature_cache.json --mcp-ttl-days 30 --manual-review data/manual_review_queue.json --log data/verification_run_log.json --report data/citation_guard_report.json`: Dual-track anti-hallucination guard with traceability check, TTL, conflict split, and hard gate.
-- `paper-search` + available web search tools in current runtime: For citations.
+- `paper-search` (primary) + `tavily` (reverse verification only for no-identifier fallback): For citations under strict provider policy.

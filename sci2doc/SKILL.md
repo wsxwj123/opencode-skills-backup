@@ -75,7 +75,9 @@ Before writing any chapter section and before final full-thesis merge, run:
 `python3 scripts/citation_guard.py --index "${save_path}/literature_index.json" --mcp-cache "${save_path}/mcp_literature_cache.json" --mcp-ttl-days 30 --manual-review "${save_path}/manual_review_queue.json" --log "${save_path}/verification_run_log.json" --report "${save_path}/citation_guard_report.json"`
 
 Rules:
+- Immediately after each retrieval/import batch updates `literature_index.json`, run the guard once before any drafting.
 - If guard exits non-zero or report `ok=false`, stop writing and resolve the queue first.
+- When bidirectional verification fails (`title_mismatch`|`doi_invalid_or_unresolved`|`pmid_invalid_or_unresolved`|`id_mismatch`), set `verified=false` immediately and route entry to `manual_review_queue` for manual confirmation before正文引用.
 - Unverified references must not be cited in chapter markdown.
 - Every cited entry must carry traceability fields (`source_provider` + `source_id`) and DOI/PMID whenever available.
 - Source provider policy is strict:

@@ -36,7 +36,7 @@
 2.  **文献补充 (辅助)**：使用 `paper-search` (Semantic Scholar) 和 `arxiv` (Preprints)。
     -   *原因*：Semantic Scholar 覆盖广、更新快；arXiv/bioRxiv 获取最新预印本。
 3.  **兜底检索**：Google Scholar (仅在上述工具无果时尝试)。
-4.  **概念查询**：仅当查询宽泛非学术概念时才使用 `tavily`。禁止用 Tavily 找论文。
+4.  **反向验证补充**：`tavily` 仅用于无 DOI/PMID 条目的反向验证补充（no-identifier fallback），不得作为有 DOI/PMID 条目的主来源。
 
 **文献真实性硬约束 (Zero-Fabrication Policy)**：
 1. **零容忍**：严禁编造虚拟文献；严禁把不同文献的标题/作者/期刊/年份/DOI 交叉拼接成“新文献”。
@@ -46,7 +46,9 @@
 5. **补全边界**：摘要补全协议仅允许补全 `abstract` 字段，禁止改写已核验文献的核心元数据（标题/作者/期刊/年份/DOI）。
 6. **强制核验门禁**：任何正文写作前与交付前，必须执行：
    - `python scripts/citation_guard.py --index literature_index.json --mcp-cache mcp_literature_cache.json --mcp-ttl-days 30 --manual-review manual_review_queue.json --log verification_run_log.json --report citation_guard_report.json`
+   - 检索/导入批次每次更新 `literature_index.json` 后，必须先运行一次门禁再继续写作。
    - 若返回非零或报告 `ok=false`，立即阻断写作；未通过核验条目禁止进入正文与参考文献列表。
+   - 若双向验证失败（`title_mismatch`|`doi_invalid_or_unresolved`|`pmid_invalid_or_unresolved`|`id_mismatch`），条目立即强制 `verified=false`，且必须进入 `manual_review_queue` 完成人工确认后方可引用。
    - 默认不改变原有检索顺序与流程（PubMed/Semantic/arXiv/Google 回退链）；仅增加核验门禁。
    - 来源提供者策略（provider policy）严格生效：
      - 允许：`paper-search`（主检索）、`tavily`（仅用于反向验证）。
