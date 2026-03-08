@@ -284,3 +284,45 @@ class BuildReferenceRegistryTests(unittest.TestCase):
         self.assertIn("paper-search", request)
         self.assertIn("citation_guard.py", request)
         self.assertIn("synthesis_matrix.json", request)
+
+    def test_writes_reference_search_manifest_when_search_is_approved(self):
+        output_md = self.project_root / "revised_manuscript.md"
+        output_md.write_text(
+            "\n".join(
+                [
+                    "# Introduction",
+                    "",
+                    "Background statement [1,5].",
+                    "",
+                    "## References",
+                    "",
+                    "1. Smith J. Study A. 2023.",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        (self.project_root / "project_state.json").write_text(
+            json.dumps({"inputs": {"reference_search_decision": "approved"}}),
+            encoding="utf-8",
+        )
+        result = run_script(
+            "build_reference_registry.py",
+            [
+                "--project-root",
+                str(self.project_root),
+                "--output-md",
+                str(output_md),
+                "--reference-search-decision",
+                "approved",
+            ],
+            cwd=self.root,
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        manifest = json.loads((self.project_root / "reference_search_manifest.json").read_text(encoding="utf-8"))
+        task = (self.project_root / "reference_search_task.md").read_text(encoding="utf-8")
+        self.assertEqual(manifest["reference_search_decision"], "approved")
+        self.assertEqual(manifest["allowed_provider_families"], ["paper-search"])
+        self.assertIn("citation_guard.py", task)
+        self.assertIn("paper-search", task)
+        self.assertIn("build_literature_index.py", task)

@@ -74,6 +74,10 @@ def main() -> int:
         failures.append("reference search decision required before searching and filling new references")
     if isinstance(reference_coverage, dict) and reference_coverage.get("reference_search_required") and reference_coverage.get("reference_search_decision") == "approved":
         failures.append("reference search approved but no validated retrieval batch has closed the reference gaps yet")
+        if not (project_root / "reference_search_manifest.json").exists():
+            failures.append("reference search approved but reference_search_manifest.json is missing")
+        if not (project_root / "reference_search_task.md").exists():
+            failures.append("reference search approved but reference_search_task.md is missing")
 
     if citation_units:
         for artifact in (literature_index_path, synthesis_matrix_path, synthesis_audit_path):

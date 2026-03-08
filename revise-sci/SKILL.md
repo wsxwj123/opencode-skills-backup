@@ -97,6 +97,7 @@ Each comment must contain:
 - If unresolved reference gaps still remain after registry rebuild, `build_reference_registry.py` must emit `reference_recovery_request.md` so the author knows exactly which source formats to provide next.
 - If no original or legacy reference source is available, the workflow must first ask the user whether to start a new literature-search-and-fill cycle; default state is `reference_search_decision=ask`, not silent auto-search.
 - If the user approves new reference search, the search-and-fill path must follow the `review-writing` discipline: `paper-search` retrieval only, immediate `citation_guard.py` after each import batch, update canonical `data/literature_index.json`, then refresh `data/synthesis_matrix.json` / `data/synthesis_matrix_audit.json` before any new references can enter the manuscript.
+- If `reference_search_decision=approved` and reference gaps still exist, the skill must generate `reference_search_manifest.json` and `reference_search_task.md` so the approved search cycle is executable and auditable rather than implicit.
 - `build_reference_registry.py` should audit both numeric citations and author-year citations; unresolved gaps in either style must block delivery.
 - Confirmed citation support must include an explicit anchor such as `target_section_heading`, `target_paragraph_index`, or `target_text`; otherwise the item stays in `needs_author_confirmation`.
 - If current materials are insufficient, keep the item in `needs_author_confirmation` instead of inventing a resolution.

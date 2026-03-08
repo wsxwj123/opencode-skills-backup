@@ -6,7 +6,7 @@ import json
 import re
 from pathlib import Path
 
-from common import autodiscover_reference_source, normalize_ws, read_docx_paragraphs, read_json, write_json, write_text
+from common import autodiscover_reference_source, docx_title_hint, normalize_ws, read_docx_paragraphs, read_json, write_json, write_text
 
 
 HEADING_RE = re.compile(r"^\s{0,3}#{1,6}\s*(references|reference|参考文献)\s*$", re.IGNORECASE)
@@ -375,6 +375,123 @@ def write_reference_recovery_request(project_root: Path, report: dict) -> None:
     write_text(request_path, "\n".join(lines))
 
 
+def cleanup_reference_search_artifacts(project_root: Path) -> None:
+    for name in ("reference_search_manifest.json", "reference_search_task.md"):
+        path = project_root / name
+        if path.exists():
+            path.unlink()
+
+
+def search_query_hints(project_root: Path, state: dict, report: dict) -> list[dict]:
+    manuscript_path = Path(state.get("inputs", {}).get("manuscript_docx_path", "")) if state.get("inputs", {}).get("manuscript_docx_path") else None
+    title = docx_title_hint(manuscript_path) if manuscript_path and manuscript_path.exists() else ""
+    output_md = project_root / "revised_manuscript.md"
+    headings: list[str] = []
+    if output_md.exists():
+        for line in output_md.read_text(encoding="utf-8").splitlines():
+            stripped = normalize_ws(line)
+            if stripped.startswith("#"):
+                heading = normalize_ws(stripped.lstrip("#"))
+                if heading and heading.lower() not in {"references", "reference", "参考文献"}:
+                    headings.append(heading)
+    hints: list[dict] = []
+    if title:
+        hints.append({"type": "manuscript_title", "query": f"{title} review pulmonary disease extracellular vesicles"})
+    for heading in headings[:5]:
+        hints.append({"type": "section_heading", "query": heading})
+    for key in report.get("missing_author_year_citations", [])[:10]:
+        author, _, year = key.partition("|")
+        hints.append({"type": "missing_author_year", "query": f"{author} {year}"})
+    if report.get("missing_reference_numbers"):
+        hints.append({"type": "missing_number_batch", "query": f"Resolve missing references for citation numbers {', '.join(str(x) for x in report.get('missing_reference_numbers', [])[:20])}"})
+    deduped: list[dict] = []
+    seen: set[str] = set()
+    for hint in hints:
+        query = normalize_ws(hint.get("query", ""))
+        if not query or query in seen:
+            continue
+        seen.add(query)
+        deduped.append({"type": hint["type"], "query": query})
+    return deduped
+
+
+def write_reference_search_artifacts(project_root: Path, state: dict, report: dict) -> None:
+    if not report.get("reference_search_required") or report.get("reference_search_decision") != "approved":
+        cleanup_reference_search_artifacts(project_root)
+        return
+    manifest = {
+        "reference_search_required": True,
+        "reference_search_decision": "approved",
+        "allowed_provider_families": ["paper-search"],
+        "forbidden_provider_families": ["websearch"],
+        "query_hints": search_query_hints(project_root, state, report),
+        "workflow_rules": {
+            "rounds": [
+                {
+                    "round": 1,
+                    "goal": "Build a candidate pool for missing references under review-writing governance",
+                    "required_steps": [
+                        "Run paper-search retrieval batches only",
+                        "Save imported rows to project_root/paper_search_results.json",
+                        "Run citation_guard.py immediately after each retrieval/import batch",
+                    ],
+                },
+                {
+                    "round": 2,
+                    "goal": "Convert validated rows into canonical literature artifacts",
+                    "required_steps": [
+                        "Run build_literature_index.py",
+                        "Run matrix_manager.py bootstrap and audit",
+                        "Keep new references out of the manuscript until citation_guard and matrix audit both pass",
+                    ],
+                },
+                {
+                    "round": 3,
+                    "goal": "Write validated references back into the manuscript package",
+                    "required_steps": [
+                        "Rerun revise_units.py if citation comments are affected",
+                        "Run reference_sync.py and build_reference_registry.py",
+                        "Require strict_gate.py to pass before delivery",
+                    ],
+                },
+            ]
+        },
+    }
+    write_json(project_root / "reference_search_manifest.json", manifest)
+    lines = [
+        "# Reference Search Task",
+        "",
+        "作者已批准在缺少原始参考文献源的情况下启动新文献检索，但后续步骤必须严格遵守 review-writing 风格治理。",
+        "",
+        "## Provider Policy",
+        "",
+        "- Allowed provider: `paper-search` only",
+        "- Forbidden direct fallback: `websearch` and other free-form web retrieval",
+        "",
+        "## Required Step Order",
+        "",
+        "1. 使用 `paper-search` 分批检索，并把结果保存到 `project_root/paper_search_results.json`。",
+        "2. 每个检索/导入批次后，立即运行 `citation_guard.py`；未通过双重验证的条目不得进入下一步。",
+        "3. 运行 `build_literature_index.py`，把验证通过的条目写入 `data/literature_index.json`。",
+        "4. 运行 `matrix_manager.py bootstrap` 和 `matrix_manager.py audit`，更新 `data/synthesis_matrix.json` 与审计报告。",
+        "5. 如 citation comment 受影响，重新运行 `revise_units.py`，然后运行 `reference_sync.py` 与 `build_reference_registry.py`。",
+        "6. 最后重新运行 `strict_gate.py`，只有全部通过后才能交付。",
+        "",
+        "## Query Hints",
+        "",
+    ]
+    for hint in manifest["query_hints"]:
+        lines.append(f"- {hint['type']}: {hint['query']}")
+    lines.extend(["", "## Canonical Commands", ""])
+    lines.append("- `python scripts/citation_guard.py --paper-search-results <project_root/paper_search_results.json> --project-root <project_root> --live`")
+    lines.append("- `python scripts/build_literature_index.py --project-root <project_root>`")
+    lines.append("- `python scripts/matrix_manager.py bootstrap --index <project_root/data/literature_index.json> --matrix <project_root/data/synthesis_matrix.json> --round 2`")
+    lines.append("- `python scripts/matrix_manager.py audit --matrix <project_root/data/synthesis_matrix.json> --report <project_root/data/synthesis_matrix_audit.json>`")
+    lines.append("- `python scripts/reference_sync.py --project-root <project_root> --output-md <output_md>`")
+    lines.append("- `python scripts/build_reference_registry.py --project-root <project_root> --output-md <output_md> --reference-search-decision approved`")
+    write_text(project_root / "reference_search_task.md", "\n".join(lines) + "\n")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Build canonical reference registry and coverage audit from merged manuscript markdown")
     parser.add_argument("--project-root", required=True)
@@ -490,6 +607,7 @@ def main() -> int:
     }
     write_json(data_dir / "reference_coverage_audit.json", report)
     write_reference_recovery_request(project_root, report)
+    write_reference_search_artifacts(project_root, state if isinstance(state, dict) else {}, report)
     print(
         json.dumps(
             {

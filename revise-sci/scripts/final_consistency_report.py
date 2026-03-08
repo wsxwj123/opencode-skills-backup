@@ -62,6 +62,8 @@ def main() -> int:
                 f"- missing_author_year_citations: `{missing_author_year}`",
                 f"- reference_search_required: `{reference_coverage.get('reference_search_required', False)}`",
                 f"- reference_search_decision: `{reference_coverage.get('reference_search_decision', 'ask')}`",
+                f"- reference_search_manifest: `{str((project_root / 'reference_search_manifest.json').resolve()) if (project_root / 'reference_search_manifest.json').exists() else 'Not generated'}`",
+                f"- reference_search_task: `{str((project_root / 'reference_search_task.md').resolve()) if (project_root / 'reference_search_task.md').exists() else 'Not generated'}`",
             ]
         )
     if state.get("delivery_status") == "author_confirmation_required":
