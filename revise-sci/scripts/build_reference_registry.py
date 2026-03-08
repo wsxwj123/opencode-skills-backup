@@ -376,10 +376,21 @@ def write_reference_recovery_request(project_root: Path, report: dict) -> None:
 
 
 def cleanup_reference_search_artifacts(project_root: Path) -> None:
-    for name in ("reference_search_manifest.json", "reference_search_task.md"):
+    for name in ("reference_search_manifest.json", "reference_search_task.md", "reference_search_strategy.json", "reference_search_status.json"):
         path = project_root / name
         if path.exists():
             path.unlink()
+
+
+def reference_search_governance_active(project_root: Path, report: dict) -> bool:
+    if report.get("reference_search_decision") != "approved":
+        return False
+    if report.get("reference_search_required"):
+        return True
+    return any(
+        (project_root / name).exists()
+        for name in ("paper_search_results.json", "paper_search_validated.json", "paper_search_guard_report.json")
+    )
 
 
 def search_query_hints(project_root: Path, state: dict, report: dict) -> list[dict]:
@@ -416,15 +427,33 @@ def search_query_hints(project_root: Path, state: dict, report: dict) -> list[di
 
 
 def write_reference_search_artifacts(project_root: Path, state: dict, report: dict) -> None:
-    if not report.get("reference_search_required") or report.get("reference_search_decision") != "approved":
+    if not reference_search_governance_active(project_root, report):
         cleanup_reference_search_artifacts(project_root)
         return
+    guard_command = "python scripts/citation_guard.py --paper-search-results <project_root/paper_search_results.json> --project-root <project_root> --live"
     manifest = {
-        "reference_search_required": True,
+        "workflow": "review-writing",
+        "reference_search_required": bool(report.get("reference_search_required")),
         "reference_search_decision": "approved",
+        "governance_active": True,
         "allowed_provider_families": ["paper-search"],
         "forbidden_provider_families": ["websearch"],
+        "verification_policy": {
+            "dual_verification_required": True,
+            "allow_unverified": False,
+            "guard_command": guard_command,
+        },
+        "canonical_outputs": [
+            "data/literature_index.json",
+            "data/revision_claims.json",
+            "data/synthesis_matrix.json",
+            "data/synthesis_matrix_audit.json",
+            "reference_sync_report.json",
+            "data/reference_registry.json",
+            "data/reference_coverage_audit.json",
+        ],
         "query_hints": search_query_hints(project_root, state, report),
+        "mode": "gap-recovery" if report.get("reference_search_required") else "citation-supplement",
         "workflow_rules": {
             "rounds": [
                 {
@@ -457,7 +486,86 @@ def write_reference_search_artifacts(project_root: Path, state: dict, report: di
             ]
         },
     }
+    strategy = {
+        "workflow": "review-writing",
+        "reference_search_decision": "approved",
+        "mode": manifest["mode"],
+        "mandatory_guard_command": guard_command,
+        "provider_policy": {
+            "primary": ["paper-search"],
+            "reverse_verification_only": [],
+            "forbidden": ["websearch"],
+        },
+        "scope": {
+            "citation_style": report.get("citation_style", "unknown"),
+            "missing_reference_numbers": report.get("missing_reference_numbers", []),
+            "missing_author_year_citations": report.get("missing_author_year_citations", []),
+            "core_time_window": "2021-2026",
+            "manuscript_title": docx_title_hint(Path(state.get("inputs", {}).get("manuscript_docx_path", ""))) if state.get("inputs", {}).get("manuscript_docx_path") else "",
+        },
+        "round_model": [
+            {
+                "round": 1,
+                "name": "Candidate retrieval",
+                "requirements": [
+                    "paper-search only",
+                    "save project_root/paper_search_results.json",
+                    "run citation_guard.py immediately after import",
+                ],
+            },
+            {
+                "round": 2,
+                "name": "Canonicalization and matrix audit",
+                "requirements": [
+                    "run build_literature_index.py",
+                    "run matrix_manager.py bootstrap",
+                    "run matrix_manager.py audit",
+                ],
+            },
+            {
+                "round": 3,
+                "name": "Write-back and final gate",
+                "requirements": [
+                    "run reference_sync.py",
+                    "rerun build_reference_registry.py",
+                    "run strict_gate.py before delivery",
+                ],
+            },
+        ],
+        "hard_block_conditions": [
+            "Do not cite entries that fail citation_guard.py",
+            "Do not write references back before literature index and synthesis matrix audit exist",
+            "Do not deliver until strict_gate.py passes",
+        ],
+        "required_outputs": manifest["canonical_outputs"],
+        "query_hints": manifest["query_hints"],
+    }
+    paper_search_results_path = project_root / "paper_search_results.json"
+    paper_search_validated_path = project_root / "paper_search_validated.json"
+    guard_report = read_json(project_root / "paper_search_guard_report.json", {})
+    literature_report = read_json(project_root / "literature_index_report.json", {})
+    matrix_audit = read_json(project_root / "data" / "synthesis_matrix_audit.json", {})
+    status = {
+        "reference_search_required": bool(report.get("reference_search_required")),
+        "reference_search_decision": "approved",
+        "governance_active": True,
+        "mode": manifest["mode"],
+        "steps": {
+            "paper_search_batch_imported": paper_search_results_path.exists(),
+            "validated_batch_present": paper_search_validated_path.exists(),
+            "citation_guard_passed": bool(guard_report.get("summary", {}).get("all_rows_guard_verified", False)),
+            "literature_index_built": bool(literature_report.get("entries", 0) > 0),
+            "synthesis_matrix_audited": bool((project_root / "data" / "synthesis_matrix_audit.json").exists()),
+            "reference_sync_completed": bool((project_root / "reference_sync_report.json").exists()),
+        },
+        "pending_missing_reference_numbers": report.get("missing_reference_numbers", []),
+        "pending_missing_author_year_citations": report.get("missing_author_year_citations", []),
+        "matrix_audit_missing_claim": matrix_audit.get("missing_claim", 0) if isinstance(matrix_audit, dict) else 0,
+        "matrix_audit_missing_key_fields": matrix_audit.get("missing_key_fields", 0) if isinstance(matrix_audit, dict) else 0,
+    }
     write_json(project_root / "reference_search_manifest.json", manifest)
+    write_json(project_root / "reference_search_strategy.json", strategy)
+    write_json(project_root / "reference_search_status.json", status)
     lines = [
         "# Reference Search Task",
         "",

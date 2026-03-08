@@ -320,9 +320,61 @@ class BuildReferenceRegistryTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         manifest = json.loads((self.project_root / "reference_search_manifest.json").read_text(encoding="utf-8"))
+        strategy = json.loads((self.project_root / "reference_search_strategy.json").read_text(encoding="utf-8"))
+        status = json.loads((self.project_root / "reference_search_status.json").read_text(encoding="utf-8"))
         task = (self.project_root / "reference_search_task.md").read_text(encoding="utf-8")
+        self.assertEqual(manifest["workflow"], "review-writing")
         self.assertEqual(manifest["reference_search_decision"], "approved")
         self.assertEqual(manifest["allowed_provider_families"], ["paper-search"])
+        self.assertTrue(manifest["verification_policy"]["dual_verification_required"])
+        self.assertFalse(manifest["verification_policy"]["allow_unverified"])
+        self.assertEqual(strategy["workflow"], "review-writing")
+        self.assertEqual(strategy["provider_policy"]["primary"], ["paper-search"])
+        self.assertIn("websearch", strategy["provider_policy"]["forbidden"])
+        self.assertIn("citation_guard.py", strategy["mandatory_guard_command"])
+        self.assertEqual(len(strategy["round_model"]), 3)
+        self.assertEqual(status["reference_search_decision"], "approved")
+        self.assertFalse(status["steps"]["paper_search_batch_imported"])
+        self.assertFalse(status["steps"]["validated_batch_present"])
         self.assertIn("citation_guard.py", task)
         self.assertIn("paper-search", task)
         self.assertIn("build_literature_index.py", task)
+
+    def test_generates_search_governance_artifacts_for_approved_supplement_path(self):
+        output_md = self.project_root / "revised_manuscript.md"
+        output_md.write_text(
+            "\n".join(
+                [
+                    "# Introduction",
+                    "",
+                    "Background statement [1].",
+                    "",
+                    "## References",
+                    "",
+                    "1. Smith J. Study A. 2023.",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        (self.project_root / "project_state.json").write_text(
+            json.dumps({"inputs": {"reference_search_decision": "approved"}}),
+            encoding="utf-8",
+        )
+        (self.project_root / "paper_search_results.json").write_text(json.dumps({"results": []}), encoding="utf-8")
+        result = run_script(
+            "build_reference_registry.py",
+            [
+                "--project-root",
+                str(self.project_root),
+                "--output-md",
+                str(output_md),
+                "--reference-search-decision",
+                "approved",
+            ],
+            cwd=self.root,
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertTrue((self.project_root / "reference_search_manifest.json").exists())
+        self.assertTrue((self.project_root / "reference_search_strategy.json").exists())
+        self.assertTrue((self.project_root / "reference_search_status.json").exists())

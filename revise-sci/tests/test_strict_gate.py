@@ -236,3 +236,115 @@ class StrictGateTests(unittest.TestCase):
         result = run_script("strict_gate.py", ["--project-root", str(self.project_root)], cwd=self.root)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("reference search decision required", result.stdout + result.stderr)
+
+    def test_gate_requires_strategy_and_status_artifacts_when_search_is_approved(self):
+        self._write_valid_base()
+        (self.project_root / "data").mkdir(exist_ok=True)
+        (self.project_root / "data" / "reference_registry.json").write_text("[]", encoding="utf-8")
+        (self.project_root / "data" / "reference_coverage_audit.json").write_text(
+            json.dumps(
+                {
+                    "ok": False,
+                    "citation_style": "numeric",
+                    "reference_entries": 0,
+                    "cited_numbers": [1, 2, 3],
+                    "missing_reference_numbers": [1, 2, 3],
+                    "author_year_citations": [],
+                    "missing_author_year_citations": [],
+                    "reference_source": "",
+                    "reference_search_required": True,
+                    "reference_search_decision": "approved",
+                }
+            ),
+            encoding="utf-8",
+        )
+        (self.project_root / "reference_search_manifest.json").write_text("{}", encoding="utf-8")
+        (self.project_root / "reference_search_task.md").write_text("# task\n", encoding="utf-8")
+        result = run_script("strict_gate.py", ["--project-root", str(self.project_root)], cwd=self.root)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("reference_search_strategy.json", result.stdout + result.stderr)
+        self.assertIn("reference_search_status.json", result.stdout + result.stderr)
+
+    def test_gate_rejects_non_review_writing_search_governance(self):
+        self._write_valid_base()
+        (self.project_root / "data").mkdir(exist_ok=True)
+        (self.project_root / "data" / "reference_registry.json").write_text("[]", encoding="utf-8")
+        (self.project_root / "data" / "reference_coverage_audit.json").write_text(
+            json.dumps(
+                {
+                    "ok": True,
+                    "citation_style": "numeric",
+                    "reference_entries": 1,
+                    "cited_numbers": [1],
+                    "missing_reference_numbers": [],
+                    "author_year_citations": [],
+                    "missing_author_year_citations": [],
+                    "reference_source": "",
+                    "reference_search_required": False,
+                    "reference_search_decision": "approved",
+                }
+            ),
+            encoding="utf-8",
+        )
+        state = json.loads((self.project_root / "project_state.json").read_text(encoding="utf-8"))
+        state["inputs"] = {"references_source_path": "", "reference_search_decision": "approved"}
+        (self.project_root / "project_state.json").write_text(json.dumps(state), encoding="utf-8")
+        (self.project_root / "paper_search_results.json").write_text(json.dumps({"results": []}), encoding="utf-8")
+        (self.project_root / "paper_search_validated.json").write_text(json.dumps({"results": []}), encoding="utf-8")
+        (self.project_root / "paper_search_guard_report.json").write_text(
+            json.dumps({"summary": {"all_rows_guard_verified": True}}),
+            encoding="utf-8",
+        )
+        (self.project_root / "reference_search_manifest.json").write_text(
+            json.dumps(
+                {
+                    "reference_search_decision": "approved",
+                    "governance_active": True,
+                    "allowed_provider_families": ["paper-search"],
+                    "forbidden_provider_families": ["websearch"],
+                    "workflow_rules": {"rounds": [1, 2, 3]},
+                }
+            ),
+            encoding="utf-8",
+        )
+        (self.project_root / "reference_search_task.md").write_text("# task\n", encoding="utf-8")
+        (self.project_root / "reference_search_strategy.json").write_text(
+            json.dumps(
+                {
+                    "workflow": "not-review-writing",
+                    "provider_policy": {"primary": ["paper-search"], "forbidden": ["websearch"]},
+                    "round_model": [1, 2, 3],
+                }
+            ),
+            encoding="utf-8",
+        )
+        (self.project_root / "reference_search_status.json").write_text(
+            json.dumps(
+                {
+                    "reference_search_decision": "approved",
+                    "governance_active": True,
+                    "steps": {
+                        "paper_search_batch_imported": True,
+                        "validated_batch_present": True,
+                        "citation_guard_passed": True,
+                        "literature_index_built": True,
+                        "synthesis_matrix_audited": True,
+                        "reference_sync_completed": True,
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        (self.project_root / "data" / "literature_index.json").write_text("[]", encoding="utf-8")
+        (self.project_root / "data" / "synthesis_matrix.json").write_text("[]", encoding="utf-8")
+        (self.project_root / "data" / "synthesis_matrix_audit.json").write_text(
+            json.dumps({"missing_claim": 0, "missing_key_fields": 0}),
+            encoding="utf-8",
+        )
+        (self.project_root / "reference_sync_report.json").write_text(
+            json.dumps({"covered_comment_ids": [], "references_added": 0}),
+            encoding="utf-8",
+        )
+        result = run_script("strict_gate.py", ["--project-root", str(self.project_root)], cwd=self.root)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("review-writing", result.stdout + result.stderr)

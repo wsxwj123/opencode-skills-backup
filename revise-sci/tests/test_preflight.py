@@ -80,3 +80,29 @@ class PreflightTests(unittest.TestCase):
         )
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("paper_search_results_path must be valid json", result.stdout + result.stderr)
+
+    def test_preflight_requires_explicit_approved_decision_for_paper_search_results(self):
+        good_json = self.root / "paper_search_results.json"
+        good_json.write_text(json.dumps({"results": []}), encoding="utf-8")
+        result = run_script(
+            "preflight.py",
+            [
+                "--comments",
+                str(self.comments),
+                "--manuscript",
+                str(self.manuscript),
+                "--attachments-dir",
+                str(self.attachments),
+                "--project-root",
+                str(self.project_root),
+                "--output-md",
+                str(self.project_root / "revised.md"),
+                "--output-docx",
+                str(self.project_root / "revised.docx"),
+                "--paper-search-results",
+                str(good_json),
+            ],
+            cwd=self.root,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("--reference-search-decision approved", result.stdout + result.stderr)

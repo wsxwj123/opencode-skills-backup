@@ -31,6 +31,9 @@ def main() -> int:
     units = [read_json(path, {}) for path in sorted((project_root / "units").glob("*.json"))]
     state = read_json(project_root / "project_state.json", {})
     reference_coverage = read_json(project_root / "data" / "reference_coverage_audit.json", {})
+    search_manifest = read_json(project_root / "reference_search_manifest.json", {})
+    search_strategy = read_json(project_root / "reference_search_strategy.json", {})
+    search_status = read_json(project_root / "reference_search_status.json", {})
     lines = [
         "# Final Consistency Report",
         "",
@@ -62,7 +65,13 @@ def main() -> int:
                 f"- missing_author_year_citations: `{missing_author_year}`",
                 f"- reference_search_required: `{reference_coverage.get('reference_search_required', False)}`",
                 f"- reference_search_decision: `{reference_coverage.get('reference_search_decision', 'ask')}`",
+                f"- reference_search_governance_active: `{(project_root / 'reference_search_manifest.json').exists()}`",
+                f"- reference_search_workflow: `{search_manifest.get('workflow') or search_strategy.get('workflow') or 'Not generated'}`",
+                f"- reference_search_guard_passed: `{((search_status.get('steps') or {}).get('citation_guard_passed', False))}`",
+                f"- reference_search_validated_batch_present: `{((search_status.get('steps') or {}).get('validated_batch_present', False))}`",
                 f"- reference_search_manifest: `{str((project_root / 'reference_search_manifest.json').resolve()) if (project_root / 'reference_search_manifest.json').exists() else 'Not generated'}`",
+                f"- reference_search_strategy: `{str((project_root / 'reference_search_strategy.json').resolve()) if (project_root / 'reference_search_strategy.json').exists() else 'Not generated'}`",
+                f"- reference_search_status: `{str((project_root / 'reference_search_status.json').resolve()) if (project_root / 'reference_search_status.json').exists() else 'Not generated'}`",
                 f"- reference_search_task: `{str((project_root / 'reference_search_task.md').resolve()) if (project_root / 'reference_search_task.md').exists() else 'Not generated'}`",
             ]
         )

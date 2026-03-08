@@ -38,6 +38,102 @@ def completed_citation_units(units: list[dict]) -> list[dict]:
     ]
 
 
+def approved_search_governance_failures(project_root: Path, reference_coverage: dict) -> list[str]:
+    failures: list[str] = []
+    if not isinstance(reference_coverage, dict) or reference_coverage.get("reference_search_decision") != "approved":
+        return failures
+
+    manifest_path = project_root / "reference_search_manifest.json"
+    strategy_path = project_root / "reference_search_strategy.json"
+    status_path = project_root / "reference_search_status.json"
+    task_path = project_root / "reference_search_task.md"
+    paper_results_path = project_root / "paper_search_results.json"
+    paper_validated_path = project_root / "paper_search_validated.json"
+    guard_report_path = project_root / "paper_search_guard_report.json"
+    literature_index_path = project_root / "data" / "literature_index.json"
+    synthesis_matrix_path = project_root / "data" / "synthesis_matrix.json"
+    synthesis_audit_path = project_root / "data" / "synthesis_matrix_audit.json"
+    reference_sync_path = project_root / "reference_sync_report.json"
+
+    for artifact in (manifest_path, task_path, strategy_path, status_path):
+        if not artifact.exists():
+            failures.append(f"reference search approved but {artifact.name} is missing")
+    if failures:
+        return failures
+
+    manifest = read_json(manifest_path, {})
+    strategy = read_json(strategy_path, {})
+    status = read_json(status_path, {})
+    guard_report = read_json(guard_report_path, {})
+
+    if manifest.get("workflow") != "review-writing":
+        failures.append("reference_search_manifest.json must declare workflow review-writing")
+    if manifest.get("reference_search_decision") != "approved":
+        failures.append("reference_search_manifest.json must keep reference_search_decision approved")
+    if manifest.get("governance_active") is not True:
+        failures.append("reference_search_manifest.json must keep governance_active true")
+    if manifest.get("allowed_provider_families") != ["paper-search"]:
+        failures.append("reference_search_manifest.json must restrict allowed_provider_families to paper-search")
+    if "websearch" not in (manifest.get("forbidden_provider_families") or []):
+        failures.append("reference_search_manifest.json must forbid websearch")
+    verification_policy = manifest.get("verification_policy") or {}
+    if verification_policy.get("dual_verification_required") is not True:
+        failures.append("reference_search_manifest.json must require dual verification")
+    if verification_policy.get("allow_unverified") is not False:
+        failures.append("reference_search_manifest.json must disallow unverified search rows")
+    if "citation_guard.py" not in normalize_ws(str(verification_policy.get("guard_command") or "")):
+        failures.append("reference_search_manifest.json must include citation_guard.py as mandatory guard command")
+    if len((manifest.get("workflow_rules") or {}).get("rounds") or []) != 3:
+        failures.append("reference_search_manifest.json must describe exactly three search rounds")
+
+    if strategy.get("workflow") != "review-writing":
+        failures.append("reference_search_strategy.json must declare workflow review-writing")
+    provider_policy = strategy.get("provider_policy") or {}
+    if provider_policy.get("primary") != ["paper-search"]:
+        failures.append("reference_search_strategy.json must restrict primary providers to paper-search")
+    if "websearch" not in (provider_policy.get("forbidden") or []):
+        failures.append("reference_search_strategy.json must forbid websearch")
+    if "citation_guard.py" not in normalize_ws(str(strategy.get("mandatory_guard_command") or "")):
+        failures.append("reference_search_strategy.json must declare citation_guard.py as mandatory guard command")
+    if len(strategy.get("round_model") or []) != 3:
+        failures.append("reference_search_strategy.json must declare a three-round model")
+    required_outputs = strategy.get("required_outputs") or []
+    for required in ("data/literature_index.json", "data/synthesis_matrix.json", "data/synthesis_matrix_audit.json"):
+        if required not in required_outputs:
+            failures.append(f"reference_search_strategy.json missing required output {required}")
+
+    if status.get("reference_search_decision") != "approved":
+        failures.append("reference_search_status.json must keep reference_search_decision approved")
+    if status.get("governance_active") is not True:
+        failures.append("reference_search_status.json must keep governance_active true")
+    steps = status.get("steps") or {}
+    if steps.get("paper_search_batch_imported") is not paper_results_path.exists():
+        failures.append("reference_search_status.json step paper_search_batch_imported is inconsistent with paper_search_results.json")
+    if steps.get("validated_batch_present") is not paper_validated_path.exists():
+        failures.append("reference_search_status.json step validated_batch_present is inconsistent with paper_search_validated.json")
+    guard_passed = bool((guard_report.get("summary") or {}).get("all_rows_guard_verified", False))
+    if steps.get("citation_guard_passed") is not guard_passed:
+        failures.append("reference_search_status.json step citation_guard_passed is inconsistent with paper_search_guard_report.json")
+    if steps.get("literature_index_built") is not literature_index_path.exists():
+        failures.append("reference_search_status.json step literature_index_built is inconsistent with literature_index artifact presence")
+    if steps.get("synthesis_matrix_audited") is not synthesis_audit_path.exists():
+        failures.append("reference_search_status.json step synthesis_matrix_audited is inconsistent with synthesis_matrix_audit artifact presence")
+    if steps.get("reference_sync_completed") is not reference_sync_path.exists():
+        failures.append("reference_search_status.json step reference_sync_completed is inconsistent with reference_sync_report.json")
+
+    if paper_results_path.exists():
+        if not paper_validated_path.exists():
+            failures.append("approved reference search batch is missing paper_search_validated.json")
+        if not guard_report_path.exists():
+            failures.append("approved reference search batch is missing paper_search_guard_report.json")
+        if not guard_passed:
+            failures.append("approved reference search batch has not passed citation_guard.py")
+        for artifact in (literature_index_path, synthesis_matrix_path, synthesis_audit_path):
+            if not artifact.exists():
+                failures.append(f"approved reference search batch is missing canonical artifact {artifact.name}")
+    return failures
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Hard gate for revise-sci outputs")
     parser.add_argument("--project-root", required=True)
@@ -63,6 +159,7 @@ def main() -> int:
     synthesis_matrix = read_json(synthesis_matrix_path, [])
     synthesis_audit = read_json(synthesis_audit_path, {})
     reference_coverage = read_json(reference_coverage_path, {})
+    reference_search_decision = normalize_ws(str((state.get("inputs") or {}).get("reference_search_decision") or "ask"))
     citation_units = completed_citation_units(units)
 
     for artifact in (reference_registry_path, reference_coverage_path):
@@ -70,14 +167,13 @@ def main() -> int:
             failures.append(f"missing reference artifact: {artifact.name}")
     if isinstance(reference_coverage, dict) and not reference_coverage.get("ok", True):
         failures.append("reference coverage audit reports unresolved citation coverage gaps")
+    if any((project_root / name).exists() for name in ("paper_search_results.json", "paper_search_validated.json", "paper_search_guard_report.json")) and reference_search_decision != "approved":
+        failures.append("paper-search artifacts exist but reference_search_decision is not approved")
     if isinstance(reference_coverage, dict) and reference_coverage.get("reference_search_required") and reference_coverage.get("reference_search_decision") == "ask":
         failures.append("reference search decision required before searching and filling new references")
     if isinstance(reference_coverage, dict) and reference_coverage.get("reference_search_required") and reference_coverage.get("reference_search_decision") == "approved":
         failures.append("reference search approved but no validated retrieval batch has closed the reference gaps yet")
-        if not (project_root / "reference_search_manifest.json").exists():
-            failures.append("reference search approved but reference_search_manifest.json is missing")
-        if not (project_root / "reference_search_task.md").exists():
-            failures.append("reference search approved but reference_search_task.md is missing")
+    failures.extend(approved_search_governance_failures(project_root, reference_coverage))
 
     if citation_units:
         for artifact in (literature_index_path, synthesis_matrix_path, synthesis_audit_path):

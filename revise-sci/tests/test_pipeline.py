@@ -540,6 +540,8 @@ class PipelineTests(unittest.TestCase):
                 str(project_root / "revised_manuscript.docx"),
                 "--paper-search-results",
                 str(project_root / "paper_search_results.json"),
+                "--reference-search-decision",
+                "approved",
             ],
             cwd=self.root,
         )
@@ -626,6 +628,8 @@ class PipelineTests(unittest.TestCase):
                 str(project_root / "revised_manuscript.docx"),
                 "--paper-search-results",
                 str(project_root / "paper_search_results.json"),
+                "--reference-search-decision",
+                "approved",
                 "--live-citation-verify",
             ],
             cwd=self.root,
@@ -660,7 +664,19 @@ class PipelineTests(unittest.TestCase):
                             "comment_id": "R1-Major-01",
                             "confirmed": True,
                             "formatted_citation_text": "(Smith et al., 2023)",
-                            "citations": [{"source": "PMID:123456"}],
+                            "citations": [
+                                {
+                                    "source": "PMID:123456",
+                                    "source_provider": "paper-search",
+                                    "source_id": "PMID:123456",
+                                    "pmid": "123456",
+                                    "title": "Quercetin in cardiovascular models",
+                                    "pubmed_title": "Quercetin in cardiovascular models",
+                                    "authors": ["Smith J", "Lee K"],
+                                    "journal": "Cardiovasc Res",
+                                    "year": 2023,
+                                }
+                            ],
                         }
                     ]
                 }
@@ -684,6 +700,8 @@ class PipelineTests(unittest.TestCase):
                 str(project_root / "revised_manuscript.docx"),
                 "--paper-search-results",
                 str(project_root / "paper_search_results.json"),
+                "--reference-search-decision",
+                "approved",
             ],
             cwd=self.root,
         )
@@ -750,10 +768,13 @@ class PipelineTests(unittest.TestCase):
                 str(project_root / "revised_manuscript.docx"),
                 "--paper-search-results",
                 str(project_root / "paper_search_results.json"),
+                "--reference-search-decision",
+                "approved",
             ],
             cwd=self.root,
         )
-        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("approved reference search batch has not passed citation_guard.py", result.stdout + result.stderr)
         unit = json.loads(next((project_root / "units").glob("*.json")).read_text(encoding="utf-8"))
         self.assertEqual(unit["status"], "needs_author_confirmation")
         self.assertIn("双重验证", unit["author_confirmation_reason"])

@@ -108,6 +108,8 @@ def main() -> int:
                 json.loads(paper_search_results.read_text(encoding="utf-8"))
             except json.JSONDecodeError:
                 errors.append(f"paper_search_results_path must be valid json: {paper_search_results}")
+            if args.reference_search_decision != "approved":
+                errors.append("paper_search_results_path requires --reference-search-decision approved")
     if references_source is None:
         missing_items.append("references_source_path")
     elif not references_source.exists():
