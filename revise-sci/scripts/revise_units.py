@@ -38,6 +38,29 @@ def infer_target_document(comment_text: str, has_si: bool) -> str:
     return "manuscript"
 
 
+def resolve_citation_anchor(citation_payload: dict[str, Any] | None, section_index: dict) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    if not citation_payload:
+        return None, None
+    target_section_heading = normalize_ws(str(citation_payload.get("target_section_heading", "")))
+    target_paragraph_index = citation_payload.get("target_paragraph_index")
+    target_text = normalize_ws(str(citation_payload.get("target_text", "")))
+    if not target_section_heading and target_paragraph_index is None and not target_text:
+        return None, None
+    for section in section_index.get("sections", []):
+        heading = normalize_ws(section.get("heading", ""))
+        if target_section_heading and heading != target_section_heading:
+            continue
+        for paragraph in section.get("paragraphs", []):
+            if target_paragraph_index is not None and paragraph.get("paragraph_index") != target_paragraph_index:
+                continue
+            if target_text and target_text not in normalize_ws(paragraph.get("text", "")):
+                continue
+            return section, paragraph
+        if target_section_heading and target_paragraph_index is None and not target_text and section.get("paragraphs"):
+            return section, section["paragraphs"][0]
+    return None, None
+
+
 def literal_translate_comment(comment_text: str) -> str:
     text = normalize_ws(comment_text)
     lowered = text.lower()
@@ -74,6 +97,7 @@ def assess_status(
     paragraph: dict[str, Any] | None,
     best_score: int,
     citation_payload: dict[str, Any] | None,
+    citation_anchor_ok: bool,
 ) -> tuple[str, str, list[str]]:
     reasons: list[str] = []
     intent = editorial_intent(comment_text)
@@ -83,6 +107,8 @@ def assess_status(
         reasons.append("当前材料未提供新增实验或结果。")
     if requirements["needs_citation"] and not (citation_payload and citation_payload.get("confirmed")):
         reasons.append("当前材料未提供已确认的新文献信息；如需补充检索，必须仅使用 paper-search。")
+    if intent == "citation" and citation_payload and citation_payload.get("confirmed") and not citation_anchor_ok:
+        reasons.append("citation 类评论缺少明确的目标章节或段落锚点，当前不能安全地自动写回正文。")
     if requirements["needs_figure"]:
         reasons.append("图表或补充材料相关修改需要作者确认具体变更内容。")
     if not intent and not reasons:
@@ -357,11 +383,23 @@ def main() -> int:
         unit = read_json(unit_path, {})
         target_document = infer_target_document(unit["reviewer_comment_en"], bool(si_index.get("sections")))
         index_data = si_index if target_document == "si" else manuscript_index
-        section, paragraph, best_score = best_location(unit["reviewer_comment_en"], index_data)
+        citation_payload = paper_search_map.get(unit["comment_id"])
+        anchored_section, anchored_paragraph = resolve_citation_anchor(citation_payload, index_data)
+        if anchored_section and anchored_paragraph:
+            section, paragraph, best_score = anchored_section, anchored_paragraph, 1
+        else:
+            section, paragraph, best_score = best_location(unit["reviewer_comment_en"], index_data)
         original_excerpt = paragraph["text"] if paragraph else "无"
         requirements = detect_comment_requirements(unit["reviewer_comment_en"])
-        citation_payload = paper_search_map.get(unit["comment_id"])
-        status, intent, reasons = assess_status(unit["reviewer_comment_en"], requirements, section, paragraph, best_score, citation_payload)
+        status, intent, reasons = assess_status(
+            unit["reviewer_comment_en"],
+            requirements,
+            section,
+            paragraph,
+            best_score,
+            citation_payload,
+            bool(anchored_section and anchored_paragraph),
+        )
         response_zh, response_en = response_blocks(unit, status, "；".join(reasons), intent)
         revised_excerpt_en = revise_paragraph(original_excerpt, intent, citation_payload) if status == "completed" else original_excerpt
         revised_excerpt_zh = revised_excerpt_zh_summary(intent, status, citation_payload)

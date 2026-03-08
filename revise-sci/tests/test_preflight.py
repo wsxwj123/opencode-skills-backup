@@ -51,3 +51,29 @@ class PreflightTests(unittest.TestCase):
         manifest = json.loads((self.project_root / "attachments_manifest.json").read_text(encoding="utf-8"))
         self.assertEqual(manifest["count"], 1)
         self.assertEqual(manifest["files"][0]["name"], "figure1.png")
+
+    def test_preflight_rejects_invalid_paper_search_json(self):
+        bad_json = self.root / "paper_search_results.json"
+        bad_json.write_text("{not-json", encoding="utf-8")
+        result = run_script(
+            "preflight.py",
+            [
+                "--comments",
+                str(self.comments),
+                "--manuscript",
+                str(self.manuscript),
+                "--attachments-dir",
+                str(self.attachments),
+                "--project-root",
+                str(self.project_root),
+                "--output-md",
+                str(self.project_root / "revised.md"),
+                "--output-docx",
+                str(self.project_root / "revised.docx"),
+                "--paper-search-results",
+                str(bad_json),
+            ],
+            cwd=self.root,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("paper_search_results_path must be valid json", result.stdout + result.stderr)

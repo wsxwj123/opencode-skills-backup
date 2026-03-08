@@ -92,6 +92,43 @@ def parse_html_comments(path: Path) -> list[dict[str, str]]:
                 "comment_text": item["comment_text"],
             }
         )
+    if units:
+        return units
+
+    try:
+        from bs4 import BeautifulSoup
+    except ImportError:
+        return units
+
+    soup = BeautifulSoup(path.read_text(encoding="utf-8"), "html.parser")
+    reviewer = "Reviewer #1"
+    severity_counters: dict[str, int] = {"major": 0, "minor": 0}
+    for section in soup.select("section.critique-section"):
+        heading = normalize_ws(section.find("h2").get_text(" ", strip=True) if section.find("h2") else "")
+        if "必须解决的核心问题" in heading:
+            severity = "major"
+        elif "其他改进建议" in heading:
+            severity = "minor"
+        else:
+            continue
+        for item in section.select("ul.critique-list > li"):
+            title = normalize_ws(item.select_one(".critique-title").get_text(" ", strip=True) if item.select_one(".critique-title") else "")
+            parts = [title] if title else []
+            for selector in (".critique-content", ".evidence-anchor", ".root-cause", ".response-strategy"):
+                node = item.select_one(selector)
+                if node:
+                    parts.append(normalize_ws(node.get_text(" ", strip=True)))
+            if not parts:
+                continue
+            severity_counters[severity] += 1
+            units.append(
+                {
+                    "comment_id": format_comment_id(reviewer, severity, severity_counters[severity]),
+                    "reviewer": reviewer,
+                    "severity": severity,
+                    "comment_text": normalize_ws(" ".join(parts)),
+                }
+            )
     return units
 
 

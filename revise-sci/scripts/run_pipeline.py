@@ -6,6 +6,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from common import directory_signature, path_signature, read_json
+
 
 def run_step(cmd: list[str]) -> None:
     completed = subprocess.run(cmd, text=True, capture_output=True)
@@ -38,6 +40,28 @@ def has_revision_outputs(project_root: Path) -> bool:
     )
 
 
+def current_input_signatures(args: argparse.Namespace) -> dict:
+    return {
+        "comments_path": path_signature(Path(args.comments)),
+        "manuscript_docx_path": path_signature(Path(args.manuscript)),
+        "si_docx_path": path_signature(Path(args.si)) if args.si else path_signature(None),
+        "attachments_dir_path": directory_signature(Path(args.attachments_dir)) if args.attachments_dir else directory_signature(None),
+        "reference_docx_path": path_signature(Path(args.reference_docx)) if args.reference_docx else path_signature(None),
+        "paper_search_results_path": path_signature(Path(args.paper_search_results)) if args.paper_search_results else path_signature(None),
+    }
+
+
+def resume_inputs_changed(project_root: Path, args: argparse.Namespace) -> list[str]:
+    state = read_json(project_root / "project_state.json", {})
+    previous = state.get("input_signatures", {})
+    current = current_input_signatures(args)
+    changed = []
+    for key, value in current.items():
+        if previous.get(key) != value:
+            changed.append(key)
+    return changed
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run the revise-sci pipeline end to end")
     parser.add_argument("--comments", required=True)
@@ -55,6 +79,13 @@ def main() -> int:
     script_dir = Path(__file__).resolve().parent
     project_root = Path(args.project_root)
     py = sys.executable
+
+    if args.resume:
+        changed_inputs = resume_inputs_changed(project_root, args)
+        if changed_inputs:
+            print(f"resume inputs changed: {', '.join(changed_inputs)}", file=sys.stderr)
+            raise SystemExit(1)
+
     common_args = [
         "--comments",
         args.comments,

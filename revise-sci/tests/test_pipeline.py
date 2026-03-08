@@ -145,7 +145,7 @@ class PipelineTests(unittest.TestCase):
             document_xml = zf.read("word/document.xml").decode("utf-8", errors="ignore")
         self.assertEqual(document_xml.count('w:type="page"'), 1)
 
-    def test_pipeline_resume_keeps_existing_units_and_skips_re_atomizing_comments(self):
+    def test_pipeline_resume_keeps_existing_units_when_inputs_are_unchanged(self):
         comments = create_docx(
             self.root / "comments.docx",
             [
@@ -185,6 +185,67 @@ class PipelineTests(unittest.TestCase):
         unit = json.loads(unit_path.read_text(encoding="utf-8"))
         unit["resume_marker"] = "keep-me"
         unit_path.write_text(json.dumps(unit), encoding="utf-8")
+        second = run_script(
+            "run_pipeline.py",
+            [
+                "--comments",
+                str(comments),
+                "--manuscript",
+                str(manuscript),
+                "--attachments-dir",
+                str(self.attachments),
+                "--project-root",
+                str(project_root),
+                "--output-md",
+                str(project_root / "revised_manuscript.md"),
+                "--output-docx",
+                str(project_root / "revised_manuscript.docx"),
+                "--resume",
+            ],
+            cwd=self.root,
+        )
+        self.assertEqual(second.returncode, 0, msg=second.stdout + second.stderr)
+        unit_paths = sorted((project_root / "units").glob("*.json"))
+        self.assertEqual(len(unit_paths), 1)
+        resumed = json.loads(unit_paths[0].read_text(encoding="utf-8"))
+        self.assertEqual(resumed["resume_marker"], "keep-me")
+
+    def test_pipeline_resume_fails_when_comments_file_changes(self):
+        comments = create_docx(
+            self.root / "comments.docx",
+            [
+                ("paragraph", "Reviewer #1"),
+                ("paragraph", "Major"),
+                ("paragraph", "1. Please clarify the protective effect statement in the Results section."),
+            ],
+        )
+        manuscript = create_docx(
+            self.root / "manuscript.docx",
+            [
+                ("heading1", "Results"),
+                ("paragraph", "Quercetin showed a protective effect in TAC-treated cells."),
+            ],
+        )
+        project_root = self.root / "resume_changed_run"
+        first = run_script(
+            "run_pipeline.py",
+            [
+                "--comments",
+                str(comments),
+                "--manuscript",
+                str(manuscript),
+                "--attachments-dir",
+                str(self.attachments),
+                "--project-root",
+                str(project_root),
+                "--output-md",
+                str(project_root / "revised_manuscript.md"),
+                "--output-docx",
+                str(project_root / "revised_manuscript.docx"),
+            ],
+            cwd=self.root,
+        )
+        self.assertEqual(first.returncode, 0, msg=first.stdout + first.stderr)
 
         create_docx(
             comments,
@@ -214,11 +275,8 @@ class PipelineTests(unittest.TestCase):
             ],
             cwd=self.root,
         )
-        self.assertEqual(second.returncode, 0, msg=second.stdout + second.stderr)
-        unit_paths = sorted((project_root / "units").glob("*.json"))
-        self.assertEqual(len(unit_paths), 1)
-        resumed = json.loads(unit_paths[0].read_text(encoding="utf-8"))
-        self.assertEqual(resumed["resume_marker"], "keep-me")
+        self.assertNotEqual(second.returncode, 0)
+        self.assertIn("resume inputs changed", second.stdout + second.stderr)
 
     def test_pipeline_ingests_confirmed_paper_search_results_for_citation_comment(self):
         comments = create_docx(
@@ -246,6 +304,8 @@ class PipelineTests(unittest.TestCase):
                             "comment_id": "R1-Major-01",
                             "confirmed": True,
                             "formatted_citation_text": "(Smith et al., 2023)",
+                            "target_section_heading": "Introduction",
+                            "target_paragraph_index": 1,
                             "citations": [
                                 {
                                     "source": "PMID:123456",
@@ -283,3 +343,60 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(unit["status"], "completed")
         self.assertIn("(Smith et al., 2023)", unit["revised_excerpt_en"])
         self.assertIn("PMID:123456", json.dumps(unit["evidence_sources"], ensure_ascii=False))
+
+    def test_pipeline_requires_anchor_for_auto_completed_citation_comment(self):
+        comments = create_docx(
+            self.root / "comments.docx",
+            [
+                ("paragraph", "Reviewer #1"),
+                ("paragraph", "Major"),
+                ("paragraph", "1. Add a citation for the background statement."),
+            ],
+        )
+        manuscript = create_docx(
+            self.root / "manuscript.docx",
+            [
+                ("heading1", "Introduction"),
+                ("paragraph", "Quercetin has been widely studied in cardiovascular models."),
+            ],
+        )
+        project_root = self.root / "paper_search_no_anchor_run"
+        project_root.mkdir()
+        (project_root / "paper_search_results.json").write_text(
+            json.dumps(
+                {
+                    "results": [
+                        {
+                            "comment_id": "R1-Major-01",
+                            "confirmed": True,
+                            "formatted_citation_text": "(Smith et al., 2023)",
+                            "citations": [{"source": "PMID:123456"}],
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        result = run_script(
+            "run_pipeline.py",
+            [
+                "--comments",
+                str(comments),
+                "--manuscript",
+                str(manuscript),
+                "--attachments-dir",
+                str(self.attachments),
+                "--project-root",
+                str(project_root),
+                "--output-md",
+                str(project_root / "revised_manuscript.md"),
+                "--output-docx",
+                str(project_root / "revised_manuscript.docx"),
+                "--paper-search-results",
+                str(project_root / "paper_search_results.json"),
+            ],
+            cwd=self.root,
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        unit = json.loads(next((project_root / "units").glob("*.json")).read_text(encoding="utf-8"))
+        self.assertEqual(unit["status"], "needs_author_confirmation")

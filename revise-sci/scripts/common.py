@@ -41,6 +41,36 @@ def write_text(path: Path, text: str) -> None:
     path.write_text(text, encoding="utf-8")
 
 
+def path_signature(path: Path | None) -> dict[str, Any]:
+    if path is None:
+        return {"path": "", "exists": False}
+    resolved = path.resolve()
+    if not resolved.exists():
+        return {"path": str(resolved), "exists": False}
+    stat = resolved.stat()
+    return {
+        "path": str(resolved),
+        "exists": True,
+        "size": stat.st_size,
+        "mtime_ns": stat.st_mtime_ns,
+    }
+
+
+def directory_signature(path: Path | None) -> dict[str, Any]:
+    if path is None:
+        return {"path": "", "exists": False, "files": []}
+    resolved = path.resolve()
+    if not resolved.exists() or not resolved.is_dir():
+        return {"path": str(resolved), "exists": False, "files": []}
+    files = []
+    for item in sorted(resolved.iterdir()):
+        if not item.is_file():
+            continue
+        stat = item.stat()
+        files.append({"name": item.name, "size": stat.st_size, "mtime_ns": stat.st_mtime_ns})
+    return {"path": str(resolved), "exists": True, "files": files}
+
+
 def read_docx_paragraphs(path: Path) -> list[dict[str, Any]]:
     doc = Document(str(path))
     rows: list[dict[str, Any]] = []

@@ -9,6 +9,7 @@ description: Use when revising a scientific manuscript from reviewer comments, m
 Use this skill to convert reviewer comments, the original manuscript, SI, and attachments into two formal deliverables: a revised manuscript and a structured `Response to Reviewers`, both in Markdown and Word.
 
 The workflow is script-gated. Do not skip steps. Do not fabricate experiments, data, statistics, or references.
+The comment parser supports both atomic `comment-unit` HTML and reviewer-simulator style report HTML with critique lists.
 
 ## Required Inputs
 - `comments_path`
@@ -73,6 +74,7 @@ Each comment must contain:
 - Missing information must be written as `Not provided by user` or `需作者确认`.
 - If a reviewer asks for new literature, only `paper-search` is allowed as the external provider family.
 - `paper_search_results_path` may be used to ingest confirmed paper-search results into citation-oriented comment handling.
+- Confirmed citation support must include an explicit anchor such as `target_section_heading`, `target_paragraph_index`, or `target_text`; otherwise the item stays in `needs_author_confirmation`.
 - If current materials are insufficient, keep the item in `needs_author_confirmation` instead of inventing a resolution.
 - Treat `completed` as a narrow state: only conservative text-only clarification or limitation edits with reliable paragraph localization may be auto-completed.
 - Citation-only comments may be auto-completed only when confirmed `paper-search` results and formatted citation text are explicitly provided.
@@ -80,3 +82,4 @@ Each comment must contain:
 - `strict_gate.py` must verify comment coverage, response/manuscript/edit-plan consistency, atomic location completeness, provider-family policy, and per-comment evidence blocks before delivery.
 - Keep `Evidence Attachments` in every comment block, even when no image or table is available.
 - `--resume` skips already-materialized upstream artifacts so a rerun does not silently overwrite previously curated units.
+- `--resume` also checks stored input fingerprints; if comments/manuscript/SI/attachments/reference/paper-search inputs changed, the rerun fails fast instead of trusting stale artifacts.

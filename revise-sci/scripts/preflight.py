@@ -5,7 +5,7 @@ import argparse
 import json
 from pathlib import Path
 
-from common import write_json, write_text
+from common import directory_signature, path_signature, write_json, write_text
 
 
 def describe_file(path: Path) -> dict[str, object]:
@@ -89,8 +89,14 @@ def main() -> int:
         missing_items.append("reference_docx_path")
     elif not reference_docx.exists() or reference_docx.suffix.lower() != ".docx":
         errors.append(f"reference_docx_path must be readable .docx: {reference_docx}")
-    if paper_search_results is not None and not paper_search_results.exists():
-        errors.append(f"paper_search_results_path must be readable json: {paper_search_results}")
+    if paper_search_results is not None:
+        if not paper_search_results.exists():
+            errors.append(f"paper_search_results_path must be readable json: {paper_search_results}")
+        else:
+            try:
+                json.loads(paper_search_results.read_text(encoding="utf-8"))
+            except json.JSONDecodeError:
+                errors.append(f"paper_search_results_path must be valid json: {paper_search_results}")
 
     project_root.mkdir(parents=True, exist_ok=True)
 
@@ -117,6 +123,14 @@ def main() -> int:
         project_root / "project_state.json",
         {
             "inputs": summary,
+            "input_signatures": {
+                "comments_path": path_signature(comments),
+                "manuscript_docx_path": path_signature(manuscript),
+                "si_docx_path": path_signature(si),
+                "attachments_dir_path": directory_signature(attachments_dir),
+                "reference_docx_path": path_signature(reference_docx),
+                "paper_search_results_path": path_signature(paper_search_results),
+            },
             "outputs": {
                 "response_md": str((project_root / "response_to_reviewers.md").resolve()),
                 "response_docx": str((project_root / "response_to_reviewers.docx").resolve()),
