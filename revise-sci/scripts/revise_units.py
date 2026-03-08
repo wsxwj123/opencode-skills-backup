@@ -168,15 +168,18 @@ def assess_status(
         reasons.append("当前无法将该评论可靠定位到原稿中的具体段落。")
     if requirements["needs_experiment"]:
         reasons.append("当前材料未提供新增实验或结果。")
+    citation_guard_ok = bool(citation_payload and citation_payload.get("confirmed") and citation_payload.get("guard_verified"))
     if requirements["needs_citation"] and not (citation_payload and citation_payload.get("confirmed")):
         reasons.append("当前材料未提供已确认的新文献信息；如需补充检索，必须仅使用 paper-search。")
-    if intent == "citation" and citation_payload and citation_payload.get("confirmed") and not citation_anchor_ok:
+    if requirements["needs_citation"] and citation_payload and citation_payload.get("confirmed") and not citation_guard_ok:
+        reasons.append("当前材料未提供通过双重验证的新增文献信息；需先完成 paper-search 结果的 citation_guard 校验。")
+    if intent == "citation" and citation_payload and citation_payload.get("confirmed") and citation_guard_ok and not citation_anchor_ok:
         reasons.append("citation 类评论缺少明确的目标章节或段落锚点，当前不能安全地自动写回正文。")
     if requirements["needs_figure"]:
         reasons.append("图表或补充材料相关修改需要作者确认具体变更内容。")
     if not intent and not reasons:
         reasons.append("该评论属于实质性解释或论证要求，当前无法在不引入新证据的情况下自动完成。")
-    if intent == "citation" and citation_payload and citation_payload.get("confirmed") and not reasons:
+    if intent == "citation" and citation_guard_ok and not reasons:
         return "completed", intent, []
     status = "completed" if intent and not reasons else "needs_author_confirmation"
     return status, intent, reasons
@@ -240,6 +243,7 @@ def translate_reason_to_en(reason_text: str) -> str:
         "当前材料未提供已确认的新文献信息": "The current materials do not provide confirmed new references.",
         "如需补充检索，必须仅使用 paper-search": "If additional retrieval is needed, only paper-search may be used.",
         "当前材料未提供已确认的新文献信息；如需补充检索，必须仅使用 paper-search": "The current materials do not provide confirmed new references; if additional retrieval is needed, only paper-search may be used.",
+        "当前材料未提供通过双重验证的新增文献信息；需先完成 paper-search 结果的 citation_guard 校验": "The current materials do not provide newly added references that passed dual verification; the paper-search results must first pass citation_guard validation.",
         "图表或补充材料相关修改需要作者确认具体变更内容": "Figure, table, or supplementary-material revisions still require the author to confirm the exact change set.",
         "该评论属于实质性解释或论证要求，当前无法在不引入新证据的情况下自动完成": "This comment requires substantive explanation or argumentation and cannot be resolved automatically without introducing new evidence.",
         "citation 类评论缺少明确的目标章节或段落锚点，当前不能安全地自动写回正文": "This citation-oriented comment lacks an explicit target section or paragraph anchor, so the manuscript cannot be updated safely in automatic mode.",
@@ -461,8 +465,7 @@ def main() -> int:
     project_root = Path(args.project_root)
     manuscript_index = read_json(project_root / "manuscript_section_index.json", {"sections": []})
     si_index = read_json(project_root / "si_section_index.json", {"sections": []})
-    attachments_manifest = read_json(project_root / "attachments_manifest.json", {"files": [], "count": 0})
-    paper_search_path = args.paper_search_results or str(project_root / "paper_search_results.json")
+    paper_search_path = args.paper_search_results or str(project_root / "paper_search_validated.json")
     paper_search_map = load_paper_search_map(paper_search_path if Path(paper_search_path).exists() else "")
     units_paths = sorted((project_root / "units").glob("*.json"))
     comment_records_dir = project_root / "comment_records"
@@ -509,8 +512,8 @@ def main() -> int:
             notes_core = ["已在原段中直接补入局限性提示句，保持与现有证据边界一致。"]
             notes_support = ["该自动修订不扩展机制解释，也不新增未提供的证据。"]
         elif intent == "citation":
-            notes_core = ["已将经确认的 paper-search 结果接入该条评论，并补入对应的文献支持。"]
-            notes_support = ["仅在提供了已确认的检索结果和格式化引文文本时，才允许自动完成该类文献补充。"]
+            notes_core = ["已将通过双重验证的 paper-search 结果接入该条评论，并补入对应的文献支持。"]
+            notes_support = ["仅在 citation_guard 校验通过、锚点明确且提供了格式化引文文本时，才允许自动完成该类文献补充。"]
 
         sent_idx, sent_text = choose_sentence(query_text, original_excerpt)
         atomic_location = {
@@ -529,12 +532,12 @@ def main() -> int:
             }
         ]
         if requirements["needs_citation"]:
-            if citation_payload and citation_payload.get("confirmed"):
+            if citation_payload and citation_payload.get("confirmed") and citation_payload.get("guard_verified"):
                 for citation in citation_payload.get("citations", []):
                     evidence_sources.append(
                         {
                             "provider_family": "paper-search",
-                            "source": citation.get("source", "paper-search-confirmed"),
+                            "source": citation.get("source_id") or citation.get("source") or "paper-search-confirmed",
                         }
                     )
             else:
@@ -565,6 +568,7 @@ def main() -> int:
                 "notes_support_zh": notes_support,
                 "evidence_sources": evidence_sources,
                 "target_document": target_document,
+                "editorial_intent": intent,
                 "status": status,
                 "author_confirmation_reason": "；".join(reasons),
             }

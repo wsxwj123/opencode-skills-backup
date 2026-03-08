@@ -379,7 +379,14 @@ class PipelineTests(unittest.TestCase):
                             "citations": [
                                 {
                                     "source": "PMID:123456",
+                                    "source_provider": "paper-search",
+                                    "source_id": "PMID:123456",
+                                    "pmid": "123456",
                                     "title": "Quercetin in cardiovascular models",
+                                    "pubmed_title": "Quercetin in cardiovascular models",
+                                    "authors": ["Smith J", "Lee K"],
+                                    "journal": "Cardiovasc Res",
+                                    "year": 2023,
                                 }
                             ],
                         }
@@ -413,6 +420,9 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(unit["status"], "completed")
         self.assertIn("(Smith et al., 2023)", unit["revised_excerpt_en"])
         self.assertIn("PMID:123456", json.dumps(unit["evidence_sources"], ensure_ascii=False))
+        revised_md = (project_root / "revised_manuscript.md").read_text(encoding="utf-8")
+        self.assertIn("## References", revised_md)
+        self.assertIn("Quercetin in cardiovascular models", revised_md)
 
     def test_pipeline_requires_anchor_for_auto_completed_citation_comment(self):
         comments = create_docx(
@@ -470,6 +480,73 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         unit = json.loads(next((project_root / "units").glob("*.json")).read_text(encoding="utf-8"))
         self.assertEqual(unit["status"], "needs_author_confirmation")
+
+    def test_pipeline_requires_double_verified_paper_search_results_for_citation_completion(self):
+        comments = create_docx(
+            self.root / "comments.docx",
+            [
+                ("paragraph", "Reviewer #1"),
+                ("paragraph", "Major"),
+                ("paragraph", "1. Add a citation for the background statement."),
+            ],
+        )
+        manuscript = create_docx(
+            self.root / "manuscript.docx",
+            [
+                ("heading1", "Introduction"),
+                ("paragraph", "Quercetin has been widely studied in cardiovascular models."),
+            ],
+        )
+        project_root = self.root / "paper_search_not_double_verified_run"
+        project_root.mkdir()
+        (project_root / "paper_search_results.json").write_text(
+            json.dumps(
+                {
+                    "results": [
+                        {
+                            "comment_id": "R1-Major-01",
+                            "confirmed": True,
+                            "formatted_citation_text": "(Smith et al., 2023)",
+                            "target_section_heading": "Introduction",
+                            "target_paragraph_index": 1,
+                            "citations": [
+                                {
+                                    "source_provider": "paper-search",
+                                    "source_id": "PMID:123456",
+                                    "pmid": "123456",
+                                    "title": "Quercetin in cardiovascular models",
+                                }
+                            ],
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        result = run_script(
+            "run_pipeline.py",
+            [
+                "--comments",
+                str(comments),
+                "--manuscript",
+                str(manuscript),
+                "--attachments-dir",
+                str(self.attachments),
+                "--project-root",
+                str(project_root),
+                "--output-md",
+                str(project_root / "revised_manuscript.md"),
+                "--output-docx",
+                str(project_root / "revised_manuscript.docx"),
+                "--paper-search-results",
+                str(project_root / "paper_search_results.json"),
+            ],
+            cwd=self.root,
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        unit = json.loads(next((project_root / "units").glob("*.json")).read_text(encoding="utf-8"))
+        self.assertEqual(unit["status"], "needs_author_confirmation")
+        self.assertIn("双重验证", unit["author_confirmation_reason"])
 
     def test_pipeline_uses_structured_evidence_anchor_for_location(self):
         comments_html = self.root / "report.html"

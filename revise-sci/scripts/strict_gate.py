@@ -44,6 +44,8 @@ def main() -> int:
     response_text = response_md.read_text(encoding="utf-8") if response_md.exists() else ""
     edit_plan_path = project_root / "manuscript_edit_plan.md"
     edit_plan_text = edit_plan_path.read_text(encoding="utf-8") if edit_plan_path.exists() else ""
+    reference_sync_report = read_json(project_root / "reference_sync_report.json", {})
+    covered_reference_comments = set(reference_sync_report.get("covered_comment_ids", []))
 
     for unit in units:
         comment_id = unit.get("comment_id", "<unknown>")
@@ -89,6 +91,10 @@ def main() -> int:
         elif unit.get("status") == "completed" and unit.get("revised_excerpt_en") not in edit_plan_text:
             failures.append(f"{comment_id}: edit plan missing revised excerpt")
 
+        if unit.get("status") == "completed" and unit.get("editorial_intent") == "citation":
+            if comment_id not in covered_reference_comments:
+                failures.append(f"{comment_id}: completed citation unit missing reference_sync coverage")
+
         section_file = (unit.get("atomic_location") or {}).get("section_file", "")
         if unit.get("status") == "completed":
             if not section_file:
@@ -131,6 +137,7 @@ def main() -> int:
         Path(state.get("outputs", {}).get("output_md", project_root / "missing.md")),
         Path(state.get("outputs", {}).get("output_docx", project_root / "missing.docx")),
         edit_plan_path,
+        project_root / "reference_sync_report.json",
     ):
         if not required_file.exists():
             failures.append(f"missing output: {required_file}")

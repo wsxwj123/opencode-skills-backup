@@ -41,6 +41,10 @@ def has_revision_outputs(project_root: Path) -> bool:
     )
 
 
+def has_citation_guard_outputs(project_root: Path) -> bool:
+    return (project_root / "paper_search_guard_report.json").exists() and (project_root / "paper_search_validated.json").exists()
+
+
 def current_input_signatures(args: argparse.Namespace) -> dict:
     return {
         "comments_path": path_signature(Path(args.comments)),
@@ -149,6 +153,18 @@ def main() -> int:
 
     if not args.resume or not (project_root / "precheck_report.md").exists():
         run_step([py, str(script_dir / "preflight.py")] + common_args)
+    if args.paper_search_results and (not args.resume or not has_citation_guard_outputs(project_root)):
+        guard_args = [
+            py,
+            str(script_dir / "citation_guard.py"),
+            "--paper-search-results",
+            args.paper_search_results,
+            "--project-root",
+            args.project_root,
+            "--offline",
+            "--allow-unverified",
+        ]
+        run_step(guard_args)
     if not args.resume or not has_units(project_root):
         run_step([py, str(script_dir / "atomize_comments.py"), "--comments", args.comments, "--project-root", args.project_root])
     if not args.resume or not has_manuscript_sections(project_root):
@@ -161,12 +177,13 @@ def main() -> int:
     if not args.resume or not has_revision_outputs(project_root):
         revise_args = [py, str(script_dir / "revise_units.py"), "--project-root", args.project_root]
         if args.paper_search_results:
-            revise_args.extend(["--paper-search-results", args.paper_search_results])
+            revise_args.extend(["--paper-search-results", str(project_root / "paper_search_validated.json")])
         run_step(revise_args)
         run_step([py, str(script_dir / "build_issue_matrix.py"), "--project-root", args.project_root])
     elif args.resume:
         run_step([py, str(script_dir / "build_issue_matrix.py"), "--project-root", args.project_root])
     run_step([py, str(script_dir / "merge_manuscript.py"), "--project-root", args.project_root, "--output-md", args.output_md])
+    run_step([py, str(script_dir / "reference_sync.py"), "--project-root", args.project_root, "--output-md", args.output_md])
     export_args = [
         py,
         str(script_dir / "export_docx.py"),
