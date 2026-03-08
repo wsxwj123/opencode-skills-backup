@@ -280,3 +280,7 @@ class BuildReferenceRegistryTests(unittest.TestCase):
         request = (self.project_root / "reference_recovery_request.md").read_text(encoding="utf-8")
         self.assertIn("5", request)
         self.assertIn(".docx/.bib/.ris/.json/.md/.txt", request)
+        self.assertIn("是否允许按 review-writing 规则启动新文献检索并补全文末参考文献", request)
+        self.assertIn("paper-search", request)
+        self.assertIn("citation_guard.py", request)
+        self.assertIn("synthesis_matrix.json", request)

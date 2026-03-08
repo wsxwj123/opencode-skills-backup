@@ -70,6 +70,10 @@ def main() -> int:
             failures.append(f"missing reference artifact: {artifact.name}")
     if isinstance(reference_coverage, dict) and not reference_coverage.get("ok", True):
         failures.append("reference coverage audit reports unresolved citation coverage gaps")
+    if isinstance(reference_coverage, dict) and reference_coverage.get("reference_search_required") and reference_coverage.get("reference_search_decision") == "ask":
+        failures.append("reference search decision required before searching and filling new references")
+    if isinstance(reference_coverage, dict) and reference_coverage.get("reference_search_required") and reference_coverage.get("reference_search_decision") == "approved":
+        failures.append("reference search approved but no validated retrieval batch has closed the reference gaps yet")
 
     if citation_units:
         for artifact in (literature_index_path, synthesis_matrix_path, synthesis_audit_path):

@@ -22,6 +22,7 @@ STEP_ORDER = (
     "final_report",
     "gate",
 )
+REFERENCE_SEARCH_DECISIONS = ("ask", "approved", "declined")
 
 
 def run_step(cmd: list[str]) -> None:
@@ -94,6 +95,7 @@ def current_input_signatures(args: argparse.Namespace) -> dict:
         "reference_docx_path": path_signature(Path(args.reference_docx)) if args.reference_docx else path_signature(None),
         "paper_search_results_path": path_signature(Path(args.paper_search_results)) if args.paper_search_results else path_signature(None),
         "references_source_path": path_signature(references_source),
+        "reference_search_decision": getattr(args, "reference_search_decision", "ask"),
     }
 
 
@@ -249,6 +251,7 @@ def main() -> int:
     parser.add_argument("--reference-docx", default="")
     parser.add_argument("--paper-search-results", default="")
     parser.add_argument("--references-source", default="")
+    parser.add_argument("--reference-search-decision", choices=REFERENCE_SEARCH_DECISIONS, default="ask")
     parser.add_argument("--live-citation-verify", action="store_true")
     parser.add_argument("--offline-citation-verify", action="store_true")
     parser.add_argument("--resume", action="store_true")
@@ -302,6 +305,8 @@ def main() -> int:
         args.output_md,
         "--output-docx",
         args.output_docx,
+        "--reference-search-decision",
+        args.reference_search_decision,
     ]
     if args.si:
         common_args.extend(["--si", args.si])
@@ -382,6 +387,7 @@ def main() -> int:
         reference_registry_args = [py, str(script_dir / "build_reference_registry.py"), "--project-root", args.project_root, "--output-md", args.output_md]
         if resolved_references_source:
             reference_registry_args.extend(["--references-source", resolved_references_source])
+        reference_registry_args.extend(["--reference-search-decision", args.reference_search_decision])
         run_step(reference_registry_args)
     export_args = [
         py,

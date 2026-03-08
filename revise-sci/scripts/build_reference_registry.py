@@ -300,6 +300,8 @@ def write_reference_recovery_request(project_root: Path, report: dict) -> None:
         if request_path.exists():
             request_path.unlink()
         return
+    decision = report.get("reference_search_decision", "ask")
+    source_missing = not normalize_ws(str(report.get("reference_source", "")))
     lines = [
         "# Reference Recovery Request",
         "",
@@ -311,6 +313,7 @@ def write_reference_recovery_request(project_root: Path, report: dict) -> None:
         f"- missing_reference_numbers: {', '.join(str(number) for number in missing_numbers) if missing_numbers else '无'}",
         f"- missing_author_year_citations: {', '.join(missing_author_year) if missing_author_year else '无'}",
         f"- current_reference_source: {report.get('reference_source') or 'Not provided by user'}",
+        f"- reference_search_decision: {decision}",
         "",
         "## 需作者补充的材料",
         "",
@@ -318,12 +321,57 @@ def write_reference_recovery_request(project_root: Path, report: dict) -> None:
         "- 如果当前稿件采用数字引文，请优先提供带完整编号的旧稿或 Bib/RIS 文件。",
         "- 如果当前稿件采用 author-year 引文，请优先提供完整参考文献列表，并确保作者-年份信息可唯一对应。",
         "",
+        "## 是否允许按 review-writing 规则启动新文献检索并补全文末参考文献？",
+        "",
+    ]
+    if source_missing:
+        if decision == "ask":
+            lines.extend(
+                [
+                    "- 当前没有可追溯的旧版参考文献源。请作者明确回复：是否允许启动新文献检索并补全文末参考文献？",
+                    "- 在收到作者明确批准前，系统不会自行检索或补写新文献。",
+                    "",
+                ]
+            )
+        elif decision == "approved":
+            lines.extend(
+                [
+                    "- 作者已批准启动新文献检索，但当前项目中尚未导入可用的检索结果批次。",
+                    "- 请按下述流程提供新的 paper-search 检索批次，然后重新运行 pipeline。",
+                    "",
+                ]
+            )
+        else:
+            lines.extend(
+                [
+                    "- 作者当前未批准启动新文献检索，因此系统只能等待旧版参考文献源或作者后续改变决定。",
+                    "",
+                ]
+            )
+    else:
+        lines.extend(
+            [
+                "- 当前已经存在旧版参考文献源，但其覆盖仍不足；若作者同意，也可以额外启动新文献检索补齐缺口。",
+                "",
+            ]
+        )
+    lines.extend(
+        [
+            "## review-writing 风格检索约束",
+            "",
+            "- 仅允许使用 paper-search 作为新增文献检索入口；不得接入其他自由网页搜索来直接补引文。",
+            "- 每个检索/导入批次更新后，必须立即运行 citation_guard.py 做双重验证，未验证通过的条目不得引用。",
+            "- 检索结果必须进入 canonical data/literature_index.json，并继续更新 data/synthesis_matrix.json 与 data/synthesis_matrix_audit.json。",
+            "- 只有在 citation_guard、literature index、synthesis matrix 和 reference sync 四处全部闭环后，新增文献才可进入最终 References。",
+            "- 引文编号必须继续保持全文全局顺序，不得局部重排或跳号。",
+            "",
         "## 处理原则",
         "",
         "- 系统不会凭空生成或猜测缺失的历史参考文献条目。",
         "- 在未获得可追溯的参考文献源之前，相关缺口会持续阻断 strict gate。",
         "",
-    ]
+        ]
+    )
     write_text(request_path, "\n".join(lines))
 
 
@@ -332,6 +380,7 @@ def main() -> int:
     parser.add_argument("--project-root", required=True)
     parser.add_argument("--output-md", required=True)
     parser.add_argument("--references-source", default="")
+    parser.add_argument("--reference-search-decision", choices=("ask", "approved", "declined"), default="")
     args = parser.parse_args()
 
     project_root = Path(args.project_root)
@@ -340,6 +389,7 @@ def main() -> int:
     data_dir.mkdir(parents=True, exist_ok=True)
     state = read_json(project_root / "project_state.json", {})
     inputs = state.get("inputs", {}) if isinstance(state, dict) else {}
+    reference_search_decision = args.reference_search_decision or inputs.get("reference_search_decision") or "ask"
     references_source = (
         Path(args.references_source).resolve()
         if args.references_source
@@ -353,6 +403,7 @@ def main() -> int:
 
     if not output_md.exists():
         write_json(data_dir / "reference_registry.json", [])
+        resolved_reference_source = str(references_source.resolve()) if references_source else ""
         report = {
             "ok": True,
             "citation_style": "none",
@@ -361,7 +412,10 @@ def main() -> int:
             "cited_numbers": [],
             "available_reference_numbers": [],
             "missing_reference_numbers": [],
-            "reference_source": str(references_source) if references_source else "",
+            "reference_source": resolved_reference_source,
+            "reference_source_used": "",
+            "reference_search_required": False,
+            "reference_search_decision": reference_search_decision,
         }
         write_json(data_dir / "reference_coverage_audit.json", report)
         write_reference_recovery_request(project_root, report)
@@ -415,6 +469,7 @@ def main() -> int:
         citation_style = "author-year"
     else:
         citation_style = "none"
+    resolved_reference_source = str(references_source.resolve()) if references_source else ""
     report = {
         "ok": not missing_numbers and not missing_author_year_citations,
         "citation_style": citation_style,
@@ -427,8 +482,11 @@ def main() -> int:
         "available_author_year_keys": available_author_year_keys,
         "missing_author_year_citations": missing_author_year_citations,
         "max_cited_number": max(cited_numbers) if cited_numbers else 0,
-        "reference_source": imported_source,
+        "reference_source": resolved_reference_source,
+        "reference_source_used": imported_source,
         "imported_reference_numbers": imported_reference_numbers,
+        "reference_search_required": bool((missing_numbers or missing_author_year_citations) and not normalize_ws(resolved_reference_source)),
+        "reference_search_decision": reference_search_decision,
     }
     write_json(data_dir / "reference_coverage_audit.json", report)
     write_reference_recovery_request(project_root, report)

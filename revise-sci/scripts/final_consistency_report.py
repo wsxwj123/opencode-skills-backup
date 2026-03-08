@@ -60,6 +60,8 @@ def main() -> int:
                 f"- missing_reference_numbers: `{missing_numbers}`",
                 f"- author_year_citations_detected: `{len(reference_coverage.get('author_year_citations', []))}`",
                 f"- missing_author_year_citations: `{missing_author_year}`",
+                f"- reference_search_required: `{reference_coverage.get('reference_search_required', False)}`",
+                f"- reference_search_decision: `{reference_coverage.get('reference_search_decision', 'ask')}`",
             ]
         )
     if state.get("delivery_status") == "author_confirmation_required":

@@ -31,6 +31,7 @@ def build_report(summary: dict[str, object], attachments: dict[str, object], mis
         f"- reference_docx_path: `{summary['reference_docx_path'] or 'Not provided by user'}`",
         f"- paper_search_results_path: `{summary['paper_search_results_path'] or 'Not provided by user'}`",
         f"- references_source_path: `{summary['references_source_path'] or 'Not provided by user'}`",
+        f"- reference_search_decision: `{summary['reference_search_decision']}`",
         f"- citation_verify_mode: `{summary['citation_verify_mode']}`",
         "",
         "## 附件清单",
@@ -59,6 +60,7 @@ def main() -> int:
     parser.add_argument("--reference-docx", default="")
     parser.add_argument("--paper-search-results", default="")
     parser.add_argument("--references-source", default="")
+    parser.add_argument("--reference-search-decision", choices=("ask", "approved", "declined"), default="ask")
     parser.add_argument("--live-citation-verify", action="store_true")
     args = parser.parse_args()
 
@@ -129,6 +131,7 @@ def main() -> int:
         "reference_docx_path": str(reference_docx.resolve()) if reference_docx else "",
         "paper_search_results_path": str(paper_search_results.resolve()) if paper_search_results else "",
         "references_source_path": str(references_source.resolve()) if references_source else "",
+        "reference_search_decision": args.reference_search_decision,
         "citation_verify_mode": "live" if args.live_citation_verify else "offline",
     }
     skill_root = Path(__file__).resolve().parent.parent
@@ -148,6 +151,7 @@ def main() -> int:
                 "reference_docx_path": path_signature(reference_docx),
                 "paper_search_results_path": path_signature(paper_search_results),
                 "references_source_path": path_signature(references_source),
+                "reference_search_decision": args.reference_search_decision,
             },
             "outputs": {
                 "response_md": str((project_root / "response_to_reviewers.md").resolve()),

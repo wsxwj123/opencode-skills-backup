@@ -95,6 +95,8 @@ Each comment must contain:
 - `build_reference_registry.py` may import a fallback reference seed from `references_source_path` when the manuscript reference list is empty or absent.
 - If a manuscript already has a partial numeric `References` section, `build_reference_registry.py` should try to merge missing numbered entries from the detected legacy reference source instead of failing immediately.
 - If unresolved reference gaps still remain after registry rebuild, `build_reference_registry.py` must emit `reference_recovery_request.md` so the author knows exactly which source formats to provide next.
+- If no original or legacy reference source is available, the workflow must first ask the user whether to start a new literature-search-and-fill cycle; default state is `reference_search_decision=ask`, not silent auto-search.
+- If the user approves new reference search, the search-and-fill path must follow the `review-writing` discipline: `paper-search` retrieval only, immediate `citation_guard.py` after each import batch, update canonical `data/literature_index.json`, then refresh `data/synthesis_matrix.json` / `data/synthesis_matrix_audit.json` before any new references can enter the manuscript.
 - `build_reference_registry.py` should audit both numeric citations and author-year citations; unresolved gaps in either style must block delivery.
 - Confirmed citation support must include an explicit anchor such as `target_section_heading`, `target_paragraph_index`, or `target_text`; otherwise the item stays in `needs_author_confirmation`.
 - If current materials are insufficient, keep the item in `needs_author_confirmation` instead of inventing a resolution.
@@ -123,6 +125,7 @@ Each comment must contain:
 - `--live-citation-verify` enables online title/identifier verification when `paper-search` results are provided; pipeline mode should be recorded in preflight output.
 - `final_consistency_report.md` should list each `needs_author_confirmation` item with a blocker type and the exact stored reason.
 - `final_consistency_report.md` should also summarize reference coverage status, including detected numeric citations, reference entry count, and missing reference numbers when present.
+- `final_consistency_report.md` should also report whether `reference_search_required=true` and the current `reference_search_decision`.
 - Word export should render common markdown emphasis and list markers as real Word formatting instead of leaving raw `**...**` and list prefixes in the document body.
 - `response_to_reviewers.docx` should include a visible heading hierarchy plus a TOC field, centered header text, and footer page-number field so the exported package is review-ready rather than plain-text only.
 - Markdown pipe tables in manuscript or response markdown should be rendered as actual Word tables rather than plain paragraphs.

@@ -208,3 +208,31 @@ class StrictGateTests(unittest.TestCase):
         result = run_script("strict_gate.py", ["--project-root", str(self.project_root)], cwd=self.root)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("response_to_reviewers.docx", result.stdout + result.stderr)
+
+    def test_gate_requires_user_decision_before_searching_for_new_references(self):
+        self._write_valid_base()
+        (self.project_root / "data").mkdir(exist_ok=True)
+        (self.project_root / "data" / "reference_registry.json").write_text("[]", encoding="utf-8")
+        (self.project_root / "data" / "reference_coverage_audit.json").write_text(
+            json.dumps(
+                {
+                    "ok": False,
+                    "citation_style": "numeric",
+                    "reference_entries": 0,
+                    "cited_numbers": [1, 2, 3],
+                    "missing_reference_numbers": [1, 2, 3],
+                    "author_year_citations": [],
+                    "missing_author_year_citations": [],
+                    "reference_source": "",
+                    "reference_search_required": True,
+                    "reference_search_decision": "ask",
+                }
+            ),
+            encoding="utf-8",
+        )
+        state = json.loads((self.project_root / "project_state.json").read_text(encoding="utf-8"))
+        state["inputs"] = {"references_source_path": "", "reference_search_decision": "ask"}
+        (self.project_root / "project_state.json").write_text(json.dumps(state), encoding="utf-8")
+        result = run_script("strict_gate.py", ["--project-root", str(self.project_root)], cwd=self.root)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("reference search decision required", result.stdout + result.stderr)
