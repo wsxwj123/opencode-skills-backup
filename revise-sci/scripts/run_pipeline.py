@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -62,6 +63,36 @@ def resume_inputs_changed(project_root: Path, args: argparse.Namespace) -> list[
     return changed
 
 
+def clear_project_outputs(project_root: Path) -> None:
+    removable_dirs = [
+        "units",
+        "manuscript_sections",
+        "si_sections",
+        "comment_records",
+    ]
+    removable_files = [
+        "precheck_report.md",
+        "attachments_manifest.json",
+        "project_state.json",
+        "index.json",
+        "issue_matrix.md",
+        "manuscript_section_index.json",
+        "si_section_index.json",
+        "response_to_reviewers.md",
+        "response_to_reviewers.docx",
+        "manuscript_edit_plan.md",
+        "final_consistency_report.md",
+    ]
+    for dirname in removable_dirs:
+        path = project_root / dirname
+        if path.exists():
+            shutil.rmtree(path)
+    for filename in removable_files:
+        path = project_root / filename
+        if path.exists():
+            path.unlink()
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run the revise-sci pipeline end to end")
     parser.add_argument("--comments", required=True)
@@ -74,11 +105,20 @@ def main() -> int:
     parser.add_argument("--reference-docx", default="")
     parser.add_argument("--paper-search-results", default="")
     parser.add_argument("--resume", action="store_true")
+    parser.add_argument("--force-rebuild", action="store_true")
     args = parser.parse_args()
 
     script_dir = Path(__file__).resolve().parent
     project_root = Path(args.project_root)
     py = sys.executable
+
+    if args.resume and args.force_rebuild:
+        print("--resume and --force-rebuild cannot be used together", file=sys.stderr)
+        raise SystemExit(2)
+
+    if args.force_rebuild:
+        project_root.mkdir(parents=True, exist_ok=True)
+        clear_project_outputs(project_root)
 
     if args.resume:
         changed_inputs = resume_inputs_changed(project_root, args)

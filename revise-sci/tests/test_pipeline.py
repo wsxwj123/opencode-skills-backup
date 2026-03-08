@@ -280,6 +280,74 @@ class PipelineTests(unittest.TestCase):
         self.assertNotEqual(second.returncode, 0)
         self.assertIn("resume inputs changed", second.stdout + second.stderr)
 
+    def test_pipeline_force_rebuild_recreates_outputs_when_inputs_change(self):
+        comments = create_docx(
+            self.root / "comments.docx",
+            [
+                ("paragraph", "Reviewer #1"),
+                ("paragraph", "Major"),
+                ("paragraph", "1. Please clarify the protective effect statement in the Results section."),
+            ],
+        )
+        manuscript = create_docx(
+            self.root / "manuscript.docx",
+            [
+                ("heading1", "Results"),
+                ("paragraph", "Quercetin showed a protective effect in TAC-treated cells."),
+            ],
+        )
+        project_root = self.root / "force_rebuild_run"
+        first = run_script(
+            "run_pipeline.py",
+            [
+                "--comments",
+                str(comments),
+                "--manuscript",
+                str(manuscript),
+                "--attachments-dir",
+                str(self.attachments),
+                "--project-root",
+                str(project_root),
+                "--output-md",
+                str(project_root / "revised_manuscript.md"),
+                "--output-docx",
+                str(project_root / "revised_manuscript.docx"),
+            ],
+            cwd=self.root,
+        )
+        self.assertEqual(first.returncode, 0, msg=first.stdout + first.stderr)
+
+        create_docx(
+            comments,
+            [
+                ("paragraph", "Reviewer #1"),
+                ("paragraph", "Major"),
+                ("paragraph", "1. Please clarify the protective effect statement in the Results section."),
+                ("paragraph", "2. Add a citation for the background statement."),
+            ],
+        )
+        second = run_script(
+            "run_pipeline.py",
+            [
+                "--comments",
+                str(comments),
+                "--manuscript",
+                str(manuscript),
+                "--attachments-dir",
+                str(self.attachments),
+                "--project-root",
+                str(project_root),
+                "--output-md",
+                str(project_root / "revised_manuscript.md"),
+                "--output-docx",
+                str(project_root / "revised_manuscript.docx"),
+                "--force-rebuild",
+            ],
+            cwd=self.root,
+        )
+        self.assertEqual(second.returncode, 0, msg=second.stdout + second.stderr)
+        self.assertEqual(len(list((project_root / "units").glob("*.json"))), 2)
+
     def test_pipeline_ingests_confirmed_paper_search_results_for_citation_comment(self):
         comments = create_docx(
             self.root / "comments.docx",

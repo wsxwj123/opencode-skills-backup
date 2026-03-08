@@ -134,10 +134,41 @@ def choose_sentence(comment_text: str, paragraph_text: str) -> tuple[int, str]:
 
 def detect_comment_requirements(comment_text: str) -> dict[str, bool]:
     lowered = comment_text.lower()
+    needs_methodology = bool(
+        re.search(
+            r"\b(methodology|methodologies|search strategy|search strategies|database|databases|keyword|keywords|"
+            r"inclusion|exclusion|criteria|review method|review methods|evidence level|evidence levels|"
+            r"novelty|scope|boundary|boundaries|logic|framework|restructure|reorganization|organization)\b",
+            lowered,
+        )
+    ) or any(
+        token in comment_text
+        for token in (
+            "方法学",
+            "检索",
+            "数据库",
+            "关键词",
+            "纳入",
+            "排除",
+            "证据等级",
+            "综述方法",
+            "创新性",
+            "新颖性",
+            "边界",
+            "逻辑",
+            "框架",
+            "重构",
+            "结构",
+        )
+    )
     return {
         "needs_experiment": bool(re.search(r"\b(experiment|assay|animal|western blot|validate|replicate)\b", lowered)),
         "needs_citation": bool(re.search(r"\b(reference|references|citation|citations|literature|pubmed)\b", lowered)),
-        "needs_figure": bool(re.search(r"\b(figure|fig\.?|table|legend|panel|supplementary)\b", lowered)),
+        "needs_figure": bool(
+            re.search(r"\b(figure|fig\.?|table|legend|panel|supplementary|caption|captions|copyright|redraw|graphic)\b", lowered)
+        )
+        and not needs_methodology,
+        "needs_methodology": needs_methodology,
     }
 
 
@@ -145,6 +176,8 @@ def comment_nature(comment_text: str) -> str:
     requirements = detect_comment_requirements(comment_text)
     if requirements["needs_experiment"]:
         return "需要新增实验或结果支持"
+    if requirements.get("needs_methodology"):
+        return "需要实质性解释、结构重构或方法学澄清"
     if requirements["needs_citation"]:
         return "需要新增或核验文献支持"
     if requirements["needs_figure"]:

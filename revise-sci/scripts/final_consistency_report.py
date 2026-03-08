@@ -7,6 +7,21 @@ from pathlib import Path
 from common import read_json, write_text
 
 
+def classify_blocking_reason(reason: str) -> str:
+    reason = reason or ""
+    if "新增实验" in reason or "结果" in reason:
+        return "缺实验/结果"
+    if "新文献" in reason or "paper-search" in reason:
+        return "缺文献/检索确认"
+    if "图表" in reason or "补充材料" in reason:
+        return "缺图表/补充材料确认"
+    if "定位" in reason or "具体段落" in reason:
+        return "缺定位"
+    if "实质性解释" in reason or "新证据" in reason:
+        return "需作者学术判断"
+    return "其他待确认"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Write final consistency report")
     parser.add_argument("--project-root", required=True)
@@ -30,7 +45,14 @@ def main() -> int:
         trace = ", ".join(src.get("provider_family", "unknown") for src in unit.get("evidence_sources", [])) or "unknown"
         lines.append(f"| {unit.get('comment_id','')} | {unit.get('severity','')} | {unit.get('status','')} | {unit.get('target_document','')} | {trace} |")
     if state.get("delivery_status") == "author_confirmation_required":
-        lines.extend(["", "## Blocking Reasons", "", "- 当前至少一条评论仍需作者确认，故项目状态不是 ready_to_submit。"])
+        lines.extend(["", "## Blocking Reasons", "", "- 当前至少一条评论仍需作者确认，故项目状态不是 ready_to_submit。", ""])
+        lines.append("| comment_id | blocker_type | reason |")
+        lines.append("|---|---|---|")
+        for unit in units:
+            if unit.get("status") != "needs_author_confirmation":
+                continue
+            reason = unit.get("author_confirmation_reason", "") or "未提供具体原因。"
+            lines.append(f"| {unit.get('comment_id','')} | {classify_blocking_reason(reason)} | {reason} |")
     write_text(project_root / "final_consistency_report.md", "\n".join(lines) + "\n")
     print('{"ok": true}')
     return 0

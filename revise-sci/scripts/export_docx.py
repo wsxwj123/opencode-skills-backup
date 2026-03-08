@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 
 from docx import Document
@@ -14,6 +15,32 @@ def doc_for_template(template_path: str) -> Document:
     if template_path:
         return Document(template_path)
     return Document()
+
+
+def add_runs_with_bold(paragraph, text: str) -> None:
+    parts = re.split(r"(\*\*.*?\*\*)", text)
+    for part in parts:
+        if not part:
+            continue
+        if part.startswith("**") and part.endswith("**") and len(part) >= 4:
+            paragraph.add_run(part[2:-2]).bold = True
+        else:
+            paragraph.add_run(part)
+
+
+def add_markdown_paragraph(doc: Document, line: str) -> None:
+    bullet_match = re.match(r"^- (.+)$", line)
+    if bullet_match:
+        paragraph = doc.add_paragraph(style="List Bullet")
+        add_runs_with_bold(paragraph, bullet_match.group(1))
+        return
+    number_match = re.match(r"^\d+\. (.+)$", line)
+    if number_match:
+        paragraph = doc.add_paragraph(style="List Number")
+        add_runs_with_bold(paragraph, number_match.group(1))
+        return
+    paragraph = doc.add_paragraph("")
+    add_runs_with_bold(paragraph, line)
 
 
 def markdown_to_docx(md_path: Path, docx_path: Path, template_path: str = "", page_break_before_comment: bool = False) -> None:
@@ -38,7 +65,7 @@ def markdown_to_docx(md_path: Path, docx_path: Path, template_path: str = "", pa
         elif line.startswith("# "):
             doc.add_heading(line[2:], level=1)
         else:
-            doc.add_paragraph(line)
+            add_markdown_paragraph(doc, line)
     doc.save(str(docx_path))
 
 

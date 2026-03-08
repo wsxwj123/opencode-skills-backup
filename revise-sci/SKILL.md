@@ -54,7 +54,7 @@ python scripts/strict_gate.py ...
 Or use the single entrypoint:
 
 ```bash
-python scripts/run_pipeline.py --comments <comments_path> --manuscript <manuscript_docx_path> --project-root <project_root> --output-md <output_md_path> --output-docx <output_docx_path> [--paper-search-results <paper_search_results_path>] [--resume]
+python scripts/run_pipeline.py --comments <comments_path> --manuscript <manuscript_docx_path> --project-root <project_root> --output-md <output_md_path> --output-docx <output_docx_path> [--paper-search-results <paper_search_results_path>] [--resume] [--force-rebuild]
 ```
 
 ## Response Format
@@ -86,3 +86,6 @@ Each comment must contain:
 - Keep `Evidence Attachments` in every comment block, even when no image or table is available.
 - `--resume` skips already-materialized upstream artifacts so a rerun does not silently overwrite previously curated units.
 - `--resume` also checks stored input fingerprints; if comments/manuscript/SI/attachments/reference/paper-search inputs changed, the rerun fails fast instead of trusting stale artifacts.
+- `--force-rebuild` clears generated project artifacts and reruns the pipeline from scratch inside the same `project_root`.
+- `final_consistency_report.md` should list each `needs_author_confirmation` item with a blocker type and the exact stored reason.
+- Word export should render common markdown emphasis and list markers as real Word formatting instead of leaving raw `**...**` and list prefixes in the document body.
