@@ -3,28 +3,18 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
-from common import (
-    build_section_markdown,
-    choose_sentence,
-    comment_nature,
-    detect_comment_requirements,
-    normalize_ws,
-    read_json,
-    slugify,
-    tokenize,
-    write_json,
-    write_text,
-)
+from common import build_section_markdown, choose_sentence, comment_nature, detect_comment_requirements, normalize_ws, read_json, tokenize, write_json, write_text
 
 
-def best_location(comment_text: str, section_index: dict) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+def best_location(comment_text: str, section_index: dict) -> tuple[dict[str, Any] | None, dict[str, Any] | None, int]:
     sections = section_index.get("sections", [])
     if not sections:
-        return None, None
+        return None, None, -1
     query = tokenize(comment_text)
     best_section = sections[0]
     best_para = sections[0]["paragraphs"][0] if sections[0]["paragraphs"] else None
@@ -38,7 +28,7 @@ def best_location(comment_text: str, section_index: dict) -> tuple[dict[str, Any
                 best_score = score
                 best_section = section
                 best_para = paragraph
-    return best_section, best_para
+    return best_section, best_para, best_score
 
 
 def infer_target_document(comment_text: str, has_si: bool) -> str:
@@ -48,15 +38,52 @@ def infer_target_document(comment_text: str, has_si: bool) -> str:
     return "manuscript"
 
 
-def revise_paragraph(original_excerpt: str, comment_text: str) -> str:
+def editorial_intent(comment_text: str) -> str:
+    lowered = comment_text.lower()
+    if re.search(r"\b(clarify|clarification|rephrase|reword|wording|scope|overstate|tone down|temper)\b", lowered):
+        return "clarify"
+    if re.search(r"\b(limitation|limitations)\b", lowered):
+        return "limitation"
+    return ""
+
+
+def assess_status(
+    comment_text: str,
+    requirements: dict[str, bool],
+    section: dict[str, Any] | None,
+    paragraph: dict[str, Any] | None,
+    best_score: int,
+) -> tuple[str, str, list[str]]:
+    reasons: list[str] = []
+    intent = editorial_intent(comment_text)
+    if not section or not paragraph or best_score <= 0:
+        reasons.append("当前无法将该评论可靠定位到原稿中的具体段落。")
+    if requirements["needs_experiment"]:
+        reasons.append("当前材料未提供新增实验或结果。")
+    if requirements["needs_citation"]:
+        reasons.append("当前材料未提供已确认的新文献信息；如需补充检索，必须仅使用 paper-search。")
+    if requirements["needs_figure"]:
+        reasons.append("图表或补充材料相关修改需要作者确认具体变更内容。")
+    if not intent and not reasons:
+        reasons.append("该评论属于实质性解释或论证要求，当前无法在不引入新证据的情况下自动完成。")
+    status = "completed" if intent and not reasons else "needs_author_confirmation"
+    return status, intent, reasons
+
+
+def revise_paragraph(original_excerpt: str, intent: str) -> str:
     sentence = normalize_ws(original_excerpt)
     if not sentence:
         return "无"
-    if "clarify" in comment_text.lower():
-        return sentence + " This sentence has been clarified to align the stated conclusion with the reviewed evidence."
-    if "limitation" in comment_text.lower():
-        return sentence + " We additionally state the study limitation directly in this paragraph."
-    return sentence + " This paragraph has been revised in response to the reviewer comment."
+    if intent == "clarify":
+        if sentence.lower().startswith("in the present dataset,"):
+            return sentence
+        return f"In the present dataset, {sentence}"
+    if intent == "limitation":
+        limitation_sentence = "This finding should be interpreted within the scope of the present study design."
+        if limitation_sentence.lower() in sentence.lower():
+            return sentence
+        return f"{sentence} {limitation_sentence}"
+    return sentence
 
 
 def response_blocks(unit: dict, status: str, needs_reason: str) -> tuple[str, str]:
@@ -254,21 +281,14 @@ def main() -> int:
         unit = read_json(unit_path, {})
         target_document = infer_target_document(unit["reviewer_comment_en"], bool(si_index.get("sections")))
         index_data = si_index if target_document == "si" else manuscript_index
-        section, paragraph = best_location(unit["reviewer_comment_en"], index_data)
+        section, paragraph, best_score = best_location(unit["reviewer_comment_en"], index_data)
         original_excerpt = paragraph["text"] if paragraph else "无"
         requirements = detect_comment_requirements(unit["reviewer_comment_en"])
-        reasons = []
-        if requirements["needs_experiment"]:
-            reasons.append("当前材料未提供新增实验或结果。")
-        if requirements["needs_citation"]:
-            reasons.append("当前材料未提供已确认的新文献信息；如需补充检索，必须仅使用 paper-search。")
-        if requirements["needs_figure"] and attachments_manifest.get("count", 0) == 0:
-            reasons.append("当前材料未提供可核对的图表附件。")
-        status = "needs_author_confirmation" if reasons else "completed"
+        status, intent, reasons = assess_status(unit["reviewer_comment_en"], requirements, section, paragraph, best_score)
         response_zh, response_en = response_blocks(unit, status, "；".join(reasons))
-        revised_excerpt_en = revise_paragraph(original_excerpt, unit["reviewer_comment_en"]) if status == "completed" else original_excerpt
+        revised_excerpt_en = revise_paragraph(original_excerpt, intent) if status == "completed" else original_excerpt
         revised_excerpt_zh = (
-            "该段已按审稿意见完成澄清性修订。"
+            "该段已按审稿意见完成保守的文本性修订。"
             if status == "completed"
             else "需作者确认：当前材料不足以生成可直接投稿的新中文修订段落。"
         )
@@ -277,6 +297,12 @@ def main() -> int:
         if status == "needs_author_confirmation":
             notes_core = ["该条涉及新增证据需求，当前只能形成边界清晰的修订草案。"]
             notes_support = ["已明确记录需作者确认原因，并限制外部文献 provider 仅为 paper-search。"]
+        elif intent == "clarify":
+            notes_core = ["已将原句限定在当前数据范围内，避免超出证据边界的泛化表述。"]
+            notes_support = ["该自动修订仅限保守措辞澄清，不引入任何新增实验、数据或参考文献。"]
+        elif intent == "limitation":
+            notes_core = ["已在原段中直接补入局限性提示句，保持与现有证据边界一致。"]
+            notes_support = ["该自动修订不扩展机制解释，也不新增未提供的证据。"]
 
         sent_idx, sent_text = choose_sentence(unit["reviewer_comment_en"], original_excerpt)
         atomic_location = {
@@ -315,7 +341,7 @@ def main() -> int:
                 "modification_actions": [
                     {
                         "action": "修改" if status == "completed" else "需确认",
-                        "reason": "根据审稿意见完成正文澄清。" if status == "completed" else "当前材料不足以直接完成可投稿改写。",
+                        "reason": "根据审稿意见完成保守的文本性修订。" if status == "completed" else "当前材料不足以直接完成可投稿改写。",
                     }
                 ],
                 "notes_core_zh": notes_core,

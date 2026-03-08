@@ -10,7 +10,7 @@ from typing import Any
 from docx import Document
 
 
-PLACEHOLDER_MARKERS = ("{{", "待ai", "ai_fill_required", "not provided by user")
+BANNED_PLACEHOLDER_MARKERS = ("{{", "待ai", "ai_fill_required")
 ALLOWED_PROVIDER_FAMILIES = {"paper-search", "user-provided"}
 
 
@@ -128,11 +128,11 @@ def build_section_markdown(section: dict[str, Any]) -> str:
     return "\n".join(parts).strip() + "\n"
 
 
-def placeholder_found(value: object) -> bool:
+def blocked_placeholder_found(value: object) -> bool:
     text = normalize_ws(str(value or "")).lower()
     if not text:
         return True
-    return any(marker in text for marker in PLACEHOLDER_MARKERS)
+    return any(marker in text for marker in BANNED_PLACEHOLDER_MARKERS)
 
 
 class AtomicCommentHTMLParser(HTMLParser):

@@ -87,3 +87,40 @@ class PipelineTests(unittest.TestCase):
         self.assertIn("needs_author_confirmation", report)
         state = json.loads((project_root / "project_state.json").read_text(encoding="utf-8"))
         self.assertEqual(state["delivery_status"], "author_confirmation_required")
+
+    def test_pipeline_does_not_auto_complete_substantive_comment_without_explicit_support(self):
+        project_root, result = self._run_pipeline(
+            [
+                ("paragraph", "Reviewer #1"),
+                ("paragraph", "Major"),
+                ("paragraph", "1. Please explain why this effect occurs in the current model."),
+            ],
+            [
+                ("heading1", "Results"),
+                ("paragraph", "Quercetin showed a protective effect in TAC-treated cells."),
+            ],
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        state = json.loads((project_root / "project_state.json").read_text(encoding="utf-8"))
+        self.assertEqual(state["delivery_status"], "author_confirmation_required")
+        unit = json.loads(next((project_root / "units").glob("*.json")).read_text(encoding="utf-8"))
+        self.assertEqual(unit["status"], "needs_author_confirmation")
+        revised_md = (project_root / "revised_manuscript.md").read_text(encoding="utf-8")
+        self.assertNotIn("This paragraph has been revised in response to the reviewer comment.", revised_md)
+
+    def test_pipeline_replaces_generic_clarify_boilerplate_with_scoped_revision(self):
+        project_root, result = self._run_pipeline(
+            [
+                ("paragraph", "Reviewer #1"),
+                ("paragraph", "Major"),
+                ("paragraph", "1. Please clarify the protective effect statement in the Results section."),
+            ],
+            [
+                ("heading1", "Results"),
+                ("paragraph", "Quercetin showed a protective effect in TAC-treated cells."),
+            ],
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        revised_md = (project_root / "revised_manuscript.md").read_text(encoding="utf-8")
+        self.assertIn("In the present dataset, Quercetin showed a protective effect in TAC-treated cells.", revised_md)
+        self.assertNotIn("This sentence has been clarified to align the stated conclusion with the reviewed evidence.", revised_md)
