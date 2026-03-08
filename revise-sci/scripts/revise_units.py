@@ -11,24 +11,89 @@ from typing import Any
 from common import build_section_markdown, choose_sentence, comment_nature, detect_comment_requirements, normalize_ws, read_json, tokenize, write_json, write_text
 
 
+LOW_SIGNAL_REVIEW_TOKENS = {
+    "add",
+    "added",
+    "address",
+    "background",
+    "better",
+    "clarification",
+    "clarify",
+    "comment",
+    "comments",
+    "current",
+    "details",
+    "discussion",
+    "expand",
+    "explain",
+    "follow",
+    "improve",
+    "issue",
+    "issues",
+    "logic",
+    "major",
+    "manuscript",
+    "mechanism",
+    "minor",
+    "more",
+    "needs",
+    "organization",
+    "paragraph",
+    "please",
+    "response",
+    "results",
+    "review",
+    "reviewer",
+    "revise",
+    "section",
+    "sections",
+    "statement",
+    "structure",
+    "support",
+    "text",
+    "wording",
+}
+
+
+def salient_tokens(text: str) -> set[str]:
+    return {
+        token.lower()
+        for token in tokenize(text)
+        if len(token) >= 4 and token.lower() not in LOW_SIGNAL_REVIEW_TOKENS
+    }
+
+
 def best_location(comment_text: str, section_index: dict) -> tuple[dict[str, Any] | None, dict[str, Any] | None, int, bool]:
     sections = section_index.get("sections", [])
     if not sections:
         return None, None, -1, True
-    query = tokenize(comment_text)
-    scored: list[tuple[int, dict[str, Any], dict[str, Any] | None]] = []
+    query_salient = salient_tokens(comment_text)
+    query_all = tokenize(comment_text)
+    fallback_mode = not query_salient
+    scored: list[tuple[int, int, int, dict[str, Any], dict[str, Any] | None]] = []
     for section in sections:
+        heading_salient = salient_tokens(section.get("heading", ""))
+        heading_all = tokenize(section.get("heading", ""))
         for paragraph in section.get("paragraphs", []):
-            score = len(query.intersection(tokenize(paragraph["text"])))
-            if section["heading"]:
-                score += len(query.intersection(tokenize(section["heading"])))
-            scored.append((score, section, paragraph))
+            paragraph_salient = salient_tokens(paragraph["text"])
+            paragraph_all = tokenize(paragraph["text"])
+            paragraph_hits = len(query_salient.intersection(paragraph_salient)) * 3 + len(query_all.intersection(paragraph_all))
+            heading_hits = len(query_salient.intersection(heading_salient)) * 4 + len(query_all.intersection(heading_all)) * 2
+            score = paragraph_hits + heading_hits
+            scored.append((score, heading_hits, paragraph_hits, section, paragraph))
     if not scored:
         return sections[0], sections[0]["paragraphs"][0] if sections[0]["paragraphs"] else None, -1, True
-    scored.sort(key=lambda item: item[0], reverse=True)
-    best_score, best_section, best_para = scored[0]
+    scored.sort(key=lambda item: (item[0], item[1], item[2]), reverse=True)
+    best_score, best_heading_hits, best_paragraph_hits, best_section, best_para = scored[0]
     second_score = scored[1][0] if len(scored) > 1 else -1
-    ambiguous = best_score <= 1 or (second_score >= 0 and best_score - second_score <= 1)
+    query_size = len(query_salient or query_all) or 1
+    overlap_ratio = max(best_heading_hits, best_paragraph_hits) / query_size
+    ambiguous = (
+        best_score <= 2
+        or overlap_ratio < 0.2
+        or (second_score >= 0 and best_score - second_score <= 1)
+        or (fallback_mode and best_score <= 3)
+    )
     return best_section, best_para, best_score, ambiguous
 
 
@@ -40,7 +105,15 @@ def infer_target_document(comment_text: str, has_si: bool) -> str:
 
 
 def comment_query_text(unit: dict) -> str:
-    return normalize_ws(unit.get("problem_description") or unit.get("reviewer_comment_original") or unit.get("reviewer_comment_en") or "")
+    parts = [
+        normalize_ws(unit.get("problem_description", "")),
+        normalize_ws(unit.get("comment_title", "")),
+        normalize_ws(unit.get("root_cause", "")),
+        normalize_ws(unit.get("author_strategy", "")),
+        normalize_ws(unit.get("reviewer_comment_original", "")),
+        normalize_ws(unit.get("reviewer_comment_en", "")),
+    ]
+    return normalize_ws(" ".join(part for part in parts if part))
 
 
 def english_summary_for_comment(unit: dict) -> str:

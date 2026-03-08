@@ -30,6 +30,8 @@ def build_report(summary: dict[str, object], attachments: dict[str, object], mis
         f"- output_docx_path: `{summary['output_docx_path']}`",
         f"- reference_docx_path: `{summary['reference_docx_path'] or 'Not provided by user'}`",
         f"- paper_search_results_path: `{summary['paper_search_results_path'] or 'Not provided by user'}`",
+        f"- auto_run_reference_search: `{summary['auto_run_reference_search']}`",
+        f"- paper_search_runner: `{summary['paper_search_runner'] or 'Not provided by user'}`",
         f"- references_source_path: `{summary['references_source_path'] or 'Not provided by user'}`",
         f"- reference_search_decision: `{summary['reference_search_decision']}`",
         f"- citation_verify_mode: `{summary['citation_verify_mode']}`",
@@ -62,6 +64,8 @@ def main() -> int:
     parser.add_argument("--references-source", default="")
     parser.add_argument("--reference-search-decision", choices=("ask", "approved", "declined"), default="ask")
     parser.add_argument("--live-citation-verify", action="store_true")
+    parser.add_argument("--auto-run-reference-search", action="store_true")
+    parser.add_argument("--paper-search-runner", default="")
     args = parser.parse_args()
 
     comments = Path(args.comments)
@@ -132,6 +136,8 @@ def main() -> int:
         "output_docx_path": str(output_docx.resolve()),
         "reference_docx_path": str(reference_docx.resolve()) if reference_docx else "",
         "paper_search_results_path": str(paper_search_results.resolve()) if paper_search_results else "",
+        "auto_run_reference_search": bool(args.auto_run_reference_search),
+        "paper_search_runner": args.paper_search_runner,
         "references_source_path": str(references_source.resolve()) if references_source else "",
         "reference_search_decision": args.reference_search_decision,
         "citation_verify_mode": "live" if args.live_citation_verify else "offline",
@@ -152,6 +158,8 @@ def main() -> int:
                 "attachments_dir_path": directory_signature(attachments_dir),
                 "reference_docx_path": path_signature(reference_docx),
                 "paper_search_results_path": path_signature(paper_search_results),
+                "auto_run_reference_search": bool(args.auto_run_reference_search),
+                "paper_search_runner": args.paper_search_runner,
                 "references_source_path": path_signature(references_source),
                 "reference_search_decision": args.reference_search_decision,
             },

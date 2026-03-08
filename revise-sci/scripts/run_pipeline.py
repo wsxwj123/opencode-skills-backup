@@ -18,6 +18,7 @@ STEP_ORDER = (
     "revise",
     "literature",
     "reference_registry",
+    "reference_search_execute",
     "export",
     "final_report",
     "gate",
@@ -75,6 +76,39 @@ def has_reference_registry_outputs(project_root: Path) -> bool:
     )
 
 
+def has_pending_citation_units(project_root: Path) -> bool:
+    units_dir = project_root / "units"
+    if not units_dir.exists():
+        return False
+    for unit_path in units_dir.glob("*.json"):
+        unit = read_json(unit_path, {})
+        if unit.get("status") != "needs_author_confirmation":
+            continue
+        if unit.get("editorial_intent") == "citation":
+            return True
+        for source in unit.get("evidence_sources", []) or []:
+            if source.get("provider_family") == "paper-search" and source.get("source") == "candidate-search-required":
+                return True
+    return False
+
+
+def default_paper_search_results_path(project_root: Path) -> Path:
+    return project_root / "paper_search_results.json"
+
+
+def normalize_runner_value(value: str) -> str:
+    return value.strip()
+
+
+def effective_paper_search_results_path(args: argparse.Namespace, project_root: Path) -> Path | None:
+    if args.paper_search_results:
+        return Path(args.paper_search_results).resolve()
+    default_path = default_paper_search_results_path(project_root)
+    if default_path.exists():
+        return default_path.resolve()
+    return None
+
+
 def resolve_references_source(args: argparse.Namespace) -> Path | None:
     if getattr(args, "references_source", ""):
         return Path(args.references_source).resolve()
@@ -96,6 +130,8 @@ def current_input_signatures(args: argparse.Namespace) -> dict:
         "paper_search_results_path": path_signature(Path(args.paper_search_results)) if args.paper_search_results else path_signature(None),
         "references_source_path": path_signature(references_source),
         "reference_search_decision": getattr(args, "reference_search_decision", "ask"),
+        "auto_run_reference_search": bool(getattr(args, "auto_run_reference_search", False)),
+        "paper_search_runner": normalize_runner_value(getattr(args, "paper_search_runner", "")),
     }
 
 
@@ -143,6 +179,9 @@ def clear_project_outputs(project_root: Path) -> None:
         "reference_search_strategy.json",
         "reference_search_status.json",
         "reference_search_rounds.json",
+        "reference_search_execution.json",
+        "reference_search_execution_request.md",
+        "paper_search_results.json",
     ]
     for dirname in removable_dirs:
         path = project_root / dirname
@@ -229,6 +268,16 @@ def clear_step_outputs(project_root: Path, output_md: Path, output_docx: Path, s
             output_md.unlink()
         return
 
+    if step_name == "reference_search_execute":
+        for filename in ("reference_search_execution.json", "reference_search_execution_request.md"):
+            path = project_root / filename
+            if path.exists():
+                path.unlink()
+        auto_results = default_paper_search_results_path(project_root)
+        if auto_results.exists():
+            auto_results.unlink()
+        return
+
     if step_name == "export":
         for artifact in (project_root / "response_to_reviewers.docx", output_docx):
             if artifact.exists():
@@ -263,6 +312,8 @@ def main() -> int:
     parser.add_argument("--reference-search-decision", choices=REFERENCE_SEARCH_DECISIONS, default="ask")
     parser.add_argument("--live-citation-verify", action="store_true")
     parser.add_argument("--offline-citation-verify", action="store_true")
+    parser.add_argument("--auto-run-reference-search", action="store_true")
+    parser.add_argument("--paper-search-runner", default="")
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--resume-from", choices=STEP_ORDER)
     parser.add_argument("--force-rebuild", action="store_true")
@@ -325,19 +376,26 @@ def main() -> int:
         common_args.extend(["--reference-docx", args.reference_docx])
     if args.paper_search_results:
         common_args.extend(["--paper-search-results", args.paper_search_results])
+    if args.auto_run_reference_search:
+        common_args.append("--auto-run-reference-search")
+    if args.paper_search_runner:
+        common_args.extend(["--paper-search-runner", args.paper_search_runner])
     if resolved_references_source:
         common_args.extend(["--references-source", resolved_references_source])
     if args.live_citation_verify or (args.paper_search_results and not args.offline_citation_verify):
         common_args.append("--live-citation-verify")
 
+    search_results_path = effective_paper_search_results_path(args, project_root)
+
     if not args.resume or not (project_root / "precheck_report.md").exists():
         run_step([py, str(script_dir / "preflight.py")] + common_args)
-    if args.paper_search_results and (not args.resume or not has_citation_guard_outputs(project_root)):
+    search_results_path = effective_paper_search_results_path(args, project_root)
+    if search_results_path and (not args.resume or not has_citation_guard_outputs(project_root)):
         guard_args = [
             py,
             str(script_dir / "citation_guard.py"),
             "--paper-search-results",
-            args.paper_search_results,
+            str(search_results_path),
             "--project-root",
             args.project_root,
             "--allow-unverified",
@@ -358,7 +416,7 @@ def main() -> int:
         run_step([py, str(script_dir / "build_issue_matrix.py"), "--project-root", args.project_root])
     if not args.resume or not has_revision_outputs(project_root):
         revise_args = [py, str(script_dir / "revise_units.py"), "--project-root", args.project_root]
-        if args.paper_search_results:
+        if search_results_path:
             revise_args.extend(["--paper-search-results", str(project_root / "paper_search_validated.json")])
         run_step(revise_args)
         run_step([py, str(script_dir / "build_issue_matrix.py"), "--project-root", args.project_root])
@@ -398,6 +456,86 @@ def main() -> int:
             reference_registry_args.extend(["--references-source", resolved_references_source])
         reference_registry_args.extend(["--reference-search-decision", args.reference_search_decision])
         run_step(reference_registry_args)
+
+    coverage_report = read_json(project_root / "data" / "reference_coverage_audit.json", {})
+    should_auto_run_reference_search = (
+        args.reference_search_decision == "approved"
+        and args.auto_run_reference_search
+        and (bool(coverage_report.get("reference_search_required")) or has_pending_citation_units(project_root))
+        and effective_paper_search_results_path(args, project_root) is None
+    )
+    if should_auto_run_reference_search:
+        execute_args = [
+            py,
+            str(script_dir / "execute_reference_search.py"),
+            "--project-root",
+            args.project_root,
+        ]
+        if args.paper_search_runner:
+            execute_args.extend(["--paper-search-runner", args.paper_search_runner])
+        run_step(execute_args)
+        search_results_path = effective_paper_search_results_path(args, project_root)
+        if search_results_path is None:
+            print("approved reference search did not produce paper_search_results.json", file=sys.stderr)
+            raise SystemExit(1)
+        guard_args = [
+            py,
+            str(script_dir / "citation_guard.py"),
+            "--paper-search-results",
+            str(search_results_path),
+            "--project-root",
+            args.project_root,
+            "--allow-unverified",
+        ]
+        if args.offline_citation_verify:
+            guard_args.append("--offline")
+        else:
+            guard_args.append("--live")
+        run_step(guard_args)
+        revise_args = [py, str(script_dir / "revise_units.py"), "--project-root", args.project_root, "--paper-search-results", str(project_root / "paper_search_validated.json")]
+        run_step(revise_args)
+        run_step([py, str(script_dir / "build_issue_matrix.py"), "--project-root", args.project_root])
+        run_step([py, str(script_dir / "build_literature_index.py"), "--project-root", args.project_root])
+        run_step(
+            [
+                py,
+                str(script_dir / "matrix_manager.py"),
+                "bootstrap",
+                "--index",
+                str(project_root / "data" / "literature_index.json"),
+                "--matrix",
+                str(project_root / "data" / "synthesis_matrix.json"),
+                "--round",
+                "2",
+            ]
+        )
+        run_step(
+            [
+                py,
+                str(script_dir / "matrix_manager.py"),
+                "audit",
+                "--matrix",
+                str(project_root / "data" / "synthesis_matrix.json"),
+                "--report",
+                str(project_root / "data" / "synthesis_matrix_audit.json"),
+            ]
+        )
+        run_step([py, str(script_dir / "merge_manuscript.py"), "--project-root", args.project_root, "--output-md", args.output_md])
+        run_step([py, str(script_dir / "reference_sync.py"), "--project-root", args.project_root, "--output-md", args.output_md])
+        reference_registry_args = [
+            py,
+            str(script_dir / "build_reference_registry.py"),
+            "--project-root",
+            args.project_root,
+            "--output-md",
+            args.output_md,
+            "--reference-search-decision",
+            args.reference_search_decision,
+        ]
+        if resolved_references_source:
+            reference_registry_args.extend(["--references-source", resolved_references_source])
+        run_step(reference_registry_args)
+
     export_args = [
         py,
         str(script_dir / "export_docx.py"),

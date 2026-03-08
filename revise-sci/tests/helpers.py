@@ -32,6 +32,29 @@ def run_script(script_name: str, args: list[str], cwd: Path) -> subprocess.Compl
     )
 
 
+def create_fake_paper_search_runner(path: Path, output_payload: str) -> Path:
+    path.write_text(
+        "\n".join(
+            [
+                "#!/usr/bin/env python3",
+                "import argparse",
+                "from pathlib import Path",
+                "",
+                "parser = argparse.ArgumentParser()",
+                "parser.add_argument('--rounds-json', required=True)",
+                "parser.add_argument('--output', required=True)",
+                "parser.add_argument('--project-root', required=True)",
+                "args = parser.parse_args()",
+                "Path(args.output).write_text(" + repr(output_payload) + ", encoding='utf-8')",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    path.chmod(0o755)
+    return path
+
+
 class TempProject:
     def __init__(self):
         self._tmp = tempfile.TemporaryDirectory()

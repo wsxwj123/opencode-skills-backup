@@ -35,11 +35,22 @@ def add_runs_with_bold(paragraph, text: str) -> None:
 
 def ensure_custom_styles(doc: Document) -> None:
     style_names = {style.name for style in doc.styles}
+    if "ReviseSciBody" not in style_names:
+        style = doc.styles.add_style("ReviseSciBody", WD_STYLE_TYPE.PARAGRAPH)
+        style.base_style = doc.styles["Normal"]
+        style.font.name = "Times New Roman"
+        style.font.size = Pt(11)
     if "ReviseSciLabel" not in style_names:
         style = doc.styles.add_style("ReviseSciLabel", WD_STYLE_TYPE.PARAGRAPH)
         style.base_style = doc.styles["Normal"]
         style.font.name = "Times New Roman"
         style.font.size = Pt(11)
+        style.font.bold = True
+    if "ReviseSciReviewerHeading" not in style_names:
+        style = doc.styles.add_style("ReviseSciReviewerHeading", WD_STYLE_TYPE.PARAGRAPH)
+        style.base_style = doc.styles["Heading 1"]
+        style.font.name = "Times New Roman"
+        style.font.size = Pt(14)
         style.font.bold = True
     if "ReviseSciCommentHeading" not in style_names:
         style = doc.styles.add_style("ReviseSciCommentHeading", WD_STYLE_TYPE.PARAGRAPH)
@@ -47,6 +58,35 @@ def ensure_custom_styles(doc: Document) -> None:
         style.font.name = "Times New Roman"
         style.font.size = Pt(12)
         style.font.bold = True
+    normal_style = doc.styles["Normal"]
+    normal_style.font.name = "Times New Roman"
+    normal_style.font.size = Pt(11)
+    body_style = doc.styles["ReviseSciBody"]
+    body_style.paragraph_format.line_spacing = 1.2
+    body_style.paragraph_format.space_after = Pt(6)
+    label_style = doc.styles["ReviseSciLabel"]
+    label_style.paragraph_format.space_before = Pt(6)
+    label_style.paragraph_format.space_after = Pt(0)
+    reviewer_style = doc.styles["ReviseSciReviewerHeading"]
+    reviewer_style.paragraph_format.space_before = Pt(12)
+    reviewer_style.paragraph_format.space_after = Pt(6)
+    reviewer_style.paragraph_format.keep_with_next = True
+    comment_style = doc.styles["ReviseSciCommentHeading"]
+    comment_style.paragraph_format.space_before = Pt(10)
+    comment_style.paragraph_format.space_after = Pt(4)
+    comment_style.paragraph_format.keep_with_next = True
+    for heading_name in ("Heading 1", "Heading 2", "Heading 3", "Heading 4"):
+        style = doc.styles[heading_name]
+        style.font.name = "Times New Roman"
+        style.font.bold = True
+    doc.styles["Heading 1"].paragraph_format.space_before = Pt(12)
+    doc.styles["Heading 1"].paragraph_format.space_after = Pt(6)
+    doc.styles["Heading 2"].paragraph_format.space_before = Pt(10)
+    doc.styles["Heading 2"].paragraph_format.space_after = Pt(4)
+    doc.styles["Heading 3"].paragraph_format.space_before = Pt(8)
+    doc.styles["Heading 3"].paragraph_format.space_after = Pt(3)
+    doc.styles["Heading 4"].paragraph_format.space_before = Pt(6)
+    doc.styles["Heading 4"].paragraph_format.space_after = Pt(2)
 
 
 def add_markdown_paragraph(doc: Document, line: str) -> None:
@@ -54,8 +94,6 @@ def add_markdown_paragraph(doc: Document, line: str) -> None:
     if label_match:
         paragraph = doc.add_paragraph(style="ReviseSciLabel")
         paragraph.add_run(label_match.group(1)).bold = True
-        paragraph.paragraph_format.space_before = Pt(6)
-        paragraph.paragraph_format.space_after = Pt(0)
         return
     bullet_match = re.match(r"^- (.+)$", line)
     if bullet_match:
@@ -67,7 +105,7 @@ def add_markdown_paragraph(doc: Document, line: str) -> None:
         paragraph = doc.add_paragraph(style="List Number")
         add_runs_with_bold(paragraph, number_match.group(1))
         return
-    paragraph = doc.add_paragraph("")
+    paragraph = doc.add_paragraph(style="ReviseSciBody")
     add_runs_with_bold(paragraph, line)
 
 
@@ -95,6 +133,11 @@ def add_markdown_table(doc: Document, rows: list[list[str]]) -> None:
             if row_idx == 0:
                 for run in cell_paragraph.runs:
                     run.bold = True
+                cell = table.cell(row_idx, col_idx)
+                tc_pr = cell._tc.get_or_add_tcPr()
+                shade = OxmlElement("w:shd")
+                shade.set(qn("w:fill"), "D9E2F3")
+                tc_pr.append(shade)
 
 
 def append_field(paragraph, instruction: str, placeholder: str = "") -> None:
@@ -200,7 +243,11 @@ def markdown_to_docx(
         elif line.startswith("## "):
             doc.add_heading(line[3:], level=2)
         elif line.startswith("# "):
-            doc.add_heading(line[2:], level=1)
+            if page_break_before_comment and line[2:].startswith("Reviewer #"):
+                paragraph = doc.add_paragraph(style="ReviseSciReviewerHeading")
+                paragraph.add_run(line[2:]).bold = True
+            else:
+                doc.add_heading(line[2:], level=1)
             if include_toc and not toc_inserted:
                 add_toc_block(doc)
                 toc_inserted = True

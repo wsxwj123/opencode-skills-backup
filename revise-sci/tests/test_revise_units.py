@@ -14,6 +14,19 @@ spec.loader.exec_module(revise_units)
 
 
 class ReviseUnitsTests(unittest.TestCase):
+    def test_comment_query_text_aggregates_structured_fields(self):
+        unit = {
+            "comment_title": "Section 3.2 therapeutic potential needs restructuring",
+            "problem_description": "The current organization is difficult to follow.",
+            "root_cause": "The logic in therapeutic scenarios is fragmented.",
+            "author_strategy": "Reframe the section around clinical scenarios.",
+            "reviewer_comment_original": "",
+            "reviewer_comment_en": "",
+        }
+        query = revise_units.comment_query_text(unit)
+        self.assertIn("Section 3.2 therapeutic potential", query)
+        self.assertIn("clinical scenarios", query)
+
     def test_translate_reason_to_en_handles_split_paper_search_requirement(self):
         reason = "当前材料未提供已确认的新文献信息；如需补充检索，必须仅使用 paper-search。"
         translated = revise_units.translate_reason_to_en(reason)
@@ -41,6 +54,22 @@ class ReviseUnitsTests(unittest.TestCase):
         self.assertIsNotNone(section)
         self.assertIsNotNone(paragraph)
         self.assertGreaterEqual(score, 1)
+        self.assertTrue(ambiguous)
+
+    def test_best_location_rejects_low_signal_lexical_matches(self):
+        section_index = {
+            "sections": [
+                {
+                    "section_id": "manuscript-001",
+                    "heading": "Introduction",
+                    "file": "manuscript_sections/01-introduction.md",
+                    "paragraphs": [
+                        {"paragraph_index": 1, "text": "This section introduces the study context."},
+                    ],
+                }
+            ]
+        }
+        _, _, _, ambiguous = revise_units.best_location("Please improve the current section structure.", section_index)
         self.assertTrue(ambiguous)
 
     def test_resolve_evidence_anchor_matches_section_number_token(self):

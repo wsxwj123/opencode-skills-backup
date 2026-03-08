@@ -137,3 +137,10 @@ Each comment must contain:
 - `response_to_reviewers.docx` should include a visible heading hierarchy plus a TOC field, centered header text, and footer page-number field so the exported package is review-ready rather than plain-text only.
 - Markdown pipe tables in manuscript or response markdown should be rendered as actual Word tables rather than plain paragraphs.
 - Response block labels such as `Text / Image / Table` should be rendered with a dedicated Word paragraph style so exported reviewer-response documents keep a consistent block structure.
+- If `reference_search_decision=approved` and `--auto-run-reference-search` is enabled, the pipeline should invoke a local runner hook via `execute_reference_search.py`; this runner must still obey `review-writing` governance and may only emit `paper-search` rows.
+- If approved auto-run is requested but no local runner is configured, the pipeline must fail explicitly and write `reference_search_execution_request.md` instead of pretending that search has already been executed.
+- The local runner contract must remain machine-checkable: `--rounds-json <path> --output <path> --project-root <path>`, with output saved to `project_root/paper_search_results.json`.
+- Approved search auto-execution must rerun `citation_guard.py`, `revise_units.py`, literature-index/matrix steps, `reference_sync.py`, and `build_reference_registry.py` before export and gate.
+- Query hints for approved search should come not only from missing reference coverage but also from pending citation-oriented review comments that still point to `paper-search` as a required evidence source.
+- Lexical paragraph localization should use structured fields plus low-signal-token filtering and heading-weighted scoring; if the best lexical candidate is still low-confidence, keep the item in `needs_author_confirmation`.
+- Reviewer-response Word export should use dedicated body, reviewer-heading, label, and comment-heading styles, with improved spacing and Word-native table header shading, rather than leaving all blocks as generic paragraphs.

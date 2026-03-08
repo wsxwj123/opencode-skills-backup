@@ -47,6 +47,7 @@ class ExportDocxTests(unittest.TestCase):
             mixed_para = next(p for p in doc.paragraphs if p.text == "plain bold text")
             bold_runs = [run for run in mixed_para.runs if run.text == "bold"]
             self.assertTrue(bold_runs and bold_runs[0].bold)
+            self.assertEqual(mixed_para.style.name, "ReviseSciBody")
             self.assertNotIn("**", "\n".join(p.text for p in doc.paragraphs))
 
     def test_export_docx_adds_header_footer_and_toc_field(self):
@@ -82,6 +83,7 @@ class ExportDocxTests(unittest.TestCase):
             self.assertIn("TOC", document_xml)
             self.assertIn("PAGE", footer_xml)
             self.assertIn("Response to Reviewers", header_xml)
+            self.assertIn("Reviewer #1", document_xml)
 
     def test_export_docx_uses_custom_label_style_for_response_blocks(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -111,6 +113,8 @@ class ExportDocxTests(unittest.TestCase):
             doc = Document(str(project_root / "response_to_reviewers.docx"))
             label_para = next(p for p in doc.paragraphs if p.text == "Text")
             self.assertEqual(label_para.style.name, "ReviseSciLabel")
+            reviewer_para = next(p for p in doc.paragraphs if p.text == "Reviewer #1")
+            self.assertEqual(reviewer_para.style.name, "ReviseSciReviewerHeading")
 
     def test_export_docx_converts_markdown_table_to_word_table(self):
         with tempfile.TemporaryDirectory() as tmpdir:

@@ -382,10 +382,33 @@ def cleanup_reference_search_artifacts(project_root: Path) -> None:
             path.unlink()
 
 
+def pending_citation_units(project_root: Path) -> list[dict]:
+    units_dir = project_root / "units"
+    pending: list[dict] = []
+    if not units_dir.exists():
+        return pending
+    for unit_path in sorted(units_dir.glob("*.json")):
+        unit = read_json(unit_path, {})
+        if normalize_ws(str(unit.get("status", ""))) != "needs_author_confirmation":
+            continue
+        if normalize_ws(str(unit.get("editorial_intent", ""))) == "citation":
+            pending.append(unit)
+            continue
+        for source in unit.get("evidence_sources", []) or []:
+            provider = normalize_ws(str(source.get("provider_family", "")))
+            source_name = normalize_ws(str(source.get("source", "")))
+            if provider == "paper-search" and source_name == "candidate-search-required":
+                pending.append(unit)
+                break
+    return pending
+
+
 def reference_search_governance_active(project_root: Path, report: dict) -> bool:
     if report.get("reference_search_decision") != "approved":
         return False
     if report.get("reference_search_required"):
+        return True
+    if pending_citation_units(project_root):
         return True
     return any(
         (project_root / name).exists()
@@ -415,6 +438,11 @@ def search_query_hints(project_root: Path, state: dict, report: dict) -> list[di
         hints.append({"type": "missing_author_year", "query": f"{author} {year}"})
     if report.get("missing_reference_numbers"):
         hints.append({"type": "missing_number_batch", "query": f"Resolve missing references for citation numbers {', '.join(str(x) for x in report.get('missing_reference_numbers', [])[:20])}"})
+    for unit in pending_citation_units(project_root):
+        for key in ("comment_title", "problem_description", "root_cause", "author_strategy", "reviewer_comment_original", "reviewer_comment_en"):
+            value = normalize_ws(str(unit.get(key, "")))
+            if value:
+                hints.append({"type": "citation_comment", "query": value})
     deduped: list[dict] = []
     seen: set[str] = set()
     for hint in hints:

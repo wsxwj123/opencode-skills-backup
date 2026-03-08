@@ -1,8 +1,9 @@
 import json
+import sys
 import unittest
 import zipfile
 
-from helpers import TempProject, create_docx, run_script
+from helpers import TempProject, create_docx, create_fake_paper_search_runner, run_script
 
 
 class PipelineTests(unittest.TestCase):
@@ -985,3 +986,78 @@ class PipelineTests(unittest.TestCase):
         audit = json.loads((project_root / "data" / "reference_coverage_audit.json").read_text(encoding="utf-8"))
         self.assertTrue(audit["ok"])
         self.assertEqual(audit["reference_source"], str(sibling.resolve()))
+
+    def test_pipeline_auto_runs_approved_reference_search_with_local_runner(self):
+        comments = create_docx(
+            self.root / "comments_auto_runner.docx",
+            [
+                ("paragraph", "Reviewer #1"),
+                ("paragraph", "Major"),
+                ("paragraph", "1. Add a citation for the background statement."),
+            ],
+        )
+        manuscript = create_docx(
+            self.root / "manuscript_auto_runner.docx",
+            [
+                ("heading1", "Introduction"),
+                ("paragraph", "Quercetin has been widely studied in cardiovascular models."),
+            ],
+        )
+        project_root = self.root / "paper_search_auto_run"
+        project_root.mkdir()
+        runner_payload = json.dumps(
+            {
+                "results": [
+                    {
+                        "comment_id": "R1-Major-01",
+                        "confirmed": True,
+                        "formatted_citation_text": "(Smith et al., 2023)",
+                        "target_section_heading": "Introduction",
+                        "target_paragraph_index": 1,
+                        "citations": [
+                            {
+                                "source": "PMID:123456",
+                                "source_provider": "paper-search",
+                                "source_id": "PMID:123456",
+                                "pmid": "123456",
+                                "title": "Quercetin in cardiovascular models",
+                                "pubmed_title": "Quercetin in cardiovascular models",
+                                "authors": ["Smith J", "Lee K"],
+                                "journal": "Cardiovasc Res",
+                                "year": 2023,
+                            }
+                        ],
+                    }
+                ]
+            }
+        )
+        runner = create_fake_paper_search_runner(self.root / "fake_runner.py", runner_payload)
+        result = run_script(
+            "run_pipeline.py",
+            [
+                "--comments",
+                str(comments),
+                "--manuscript",
+                str(manuscript),
+                "--attachments-dir",
+                str(self.attachments),
+                "--project-root",
+                str(project_root),
+                "--output-md",
+                str(project_root / "revised_manuscript.md"),
+                "--output-docx",
+                str(project_root / "revised_manuscript.docx"),
+                "--reference-search-decision",
+                "approved",
+                "--auto-run-reference-search",
+                "--paper-search-runner",
+                f"{sys.executable} {runner}",
+            ],
+            cwd=self.root,
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        execution = json.loads((project_root / "reference_search_execution.json").read_text(encoding="utf-8"))
+        self.assertTrue(execution["ok"])
+        unit = json.loads(next((project_root / "units").glob("*.json")).read_text(encoding="utf-8"))
+        self.assertEqual(unit["status"], "completed")
+        self.assertIn("(Smith et al., 2023)", unit["revised_excerpt_en"])
