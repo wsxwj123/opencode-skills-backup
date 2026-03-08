@@ -282,6 +282,68 @@ class PipelineTests(unittest.TestCase):
         self.assertNotEqual(second.returncode, 0)
         self.assertIn("resume inputs changed", second.stdout + second.stderr)
 
+    def test_pipeline_resume_fails_when_skill_signature_changes(self):
+        comments = create_docx(
+            self.root / "comments.docx",
+            [
+                ("paragraph", "Reviewer #1"),
+                ("paragraph", "Major"),
+                ("paragraph", "1. Please clarify the protective effect statement in the Results section."),
+            ],
+        )
+        manuscript = create_docx(
+            self.root / "manuscript.docx",
+            [
+                ("heading1", "Results"),
+                ("paragraph", "Quercetin showed a protective effect in TAC-treated cells."),
+            ],
+        )
+        project_root = self.root / "resume_version_changed_run"
+        first = run_script(
+            "run_pipeline.py",
+            [
+                "--comments",
+                str(comments),
+                "--manuscript",
+                str(manuscript),
+                "--attachments-dir",
+                str(self.attachments),
+                "--project-root",
+                str(project_root),
+                "--output-md",
+                str(project_root / "revised_manuscript.md"),
+                "--output-docx",
+                str(project_root / "revised_manuscript.docx"),
+            ],
+            cwd=self.root,
+        )
+        self.assertEqual(first.returncode, 0, msg=first.stdout + first.stderr)
+        state_path = project_root / "project_state.json"
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+        state["skill_signature"] = "old-signature"
+        state_path.write_text(json.dumps(state), encoding="utf-8")
+        second = run_script(
+            "run_pipeline.py",
+            [
+                "--comments",
+                str(comments),
+                "--manuscript",
+                str(manuscript),
+                "--attachments-dir",
+                str(self.attachments),
+                "--project-root",
+                str(project_root),
+                "--output-md",
+                str(project_root / "revised_manuscript.md"),
+                "--output-docx",
+                str(project_root / "revised_manuscript.docx"),
+                "--resume",
+            ],
+            cwd=self.root,
+        )
+        self.assertNotEqual(second.returncode, 0)
+        self.assertIn("resume skill version changed", second.stdout + second.stderr)
+
     def test_pipeline_force_rebuild_recreates_outputs_when_inputs_change(self):
         comments = create_docx(
             self.root / "comments.docx",
@@ -435,6 +497,78 @@ class PipelineTests(unittest.TestCase):
         revised_md = (project_root / "revised_manuscript.md").read_text(encoding="utf-8")
         self.assertIn("## References", revised_md)
         self.assertIn("Quercetin in cardiovascular models", revised_md)
+
+    def test_pipeline_live_citation_verify_sets_guard_report_to_online_mode(self):
+        comments = create_docx(
+            self.root / "comments.docx",
+            [
+                ("paragraph", "Reviewer #1"),
+                ("paragraph", "Major"),
+                ("paragraph", "1. Add a citation for the background statement."),
+            ],
+        )
+        manuscript = create_docx(
+            self.root / "manuscript.docx",
+            [
+                ("heading1", "Introduction"),
+                ("paragraph", "Quercetin has been widely studied in cardiovascular models."),
+            ],
+        )
+        project_root = self.root / "paper_search_live_verify_run"
+        project_root.mkdir()
+        (project_root / "paper_search_results.json").write_text(
+            json.dumps(
+                {
+                    "results": [
+                        {
+                            "comment_id": "R1-Major-01",
+                            "confirmed": True,
+                            "formatted_citation_text": "(Smith et al., 2023)",
+                            "target_section_heading": "Introduction",
+                            "target_paragraph_index": 1,
+                            "citations": [
+                                {
+                                    "source": "PMID:123456",
+                                    "source_provider": "paper-search",
+                                    "source_id": "PMID:123456",
+                                    "pmid": "123456",
+                                    "title": "Quercetin in cardiovascular models",
+                                    "pubmed_title": "Quercetin in cardiovascular models",
+                                    "authors": ["Smith J", "Lee K"],
+                                    "journal": "Cardiovasc Res",
+                                    "year": 2023,
+                                }
+                            ],
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        result = run_script(
+            "run_pipeline.py",
+            [
+                "--comments",
+                str(comments),
+                "--manuscript",
+                str(manuscript),
+                "--attachments-dir",
+                str(self.attachments),
+                "--project-root",
+                str(project_root),
+                "--output-md",
+                str(project_root / "revised_manuscript.md"),
+                "--output-docx",
+                str(project_root / "revised_manuscript.docx"),
+                "--paper-search-results",
+                str(project_root / "paper_search_results.json"),
+                "--live-citation-verify",
+            ],
+            cwd=self.root,
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        guard = json.loads((project_root / "paper_search_guard_report.json").read_text(encoding="utf-8"))
+        self.assertTrue(guard["summary"]["online_check"])
 
     def test_pipeline_requires_anchor_for_auto_completed_citation_comment(self):
         comments = create_docx(

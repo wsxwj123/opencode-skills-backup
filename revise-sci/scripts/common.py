@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import unicodedata
@@ -14,7 +15,7 @@ from docx.opc.exceptions import PackageNotFoundError
 BANNED_PLACEHOLDER_MARKERS = ("{{", "待ai", "ai_fill_required")
 ALLOWED_PROVIDER_FAMILIES = {"paper-search", "user-provided"}
 REFERENCE_SOURCE_NAME_RE = re.compile(r"(reference|references|bibliography|literature_index|refs?)", re.IGNORECASE)
-REFERENCE_SOURCE_EXTS = {".json", ".md", ".txt", ".docx", ".bib"}
+REFERENCE_SOURCE_EXTS = {".json", ".md", ".txt", ".docx", ".bib", ".ris"}
 MANUSCRIPT_VERSION_SUFFIX_RE = re.compile(r"\s*\(\d+\)\s*$")
 
 
@@ -43,6 +44,21 @@ def write_json(path: Path, data: Any) -> None:
 def write_text(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
+
+
+def compute_tree_signature(root: Path, patterns: tuple[str, ...] = ("*.py", "*.md", "*.json")) -> str:
+    digest = hashlib.sha256()
+    seen: set[Path] = set()
+    for pattern in patterns:
+        for path in sorted(root.rglob(pattern)):
+            if path in seen or not path.is_file():
+                continue
+            seen.add(path)
+            digest.update(str(path.relative_to(root)).encode("utf-8"))
+            digest.update(b"\0")
+            digest.update(path.read_bytes())
+            digest.update(b"\0")
+    return digest.hexdigest()
 
 
 def path_signature(path: Path | None) -> dict[str, Any]:
@@ -338,9 +354,11 @@ def autodiscover_reference_source(
             "references_source.json",
             "legacy_references.json",
             "legacy_references.docx",
+            "legacy_references.ris",
             "legacy_references.md",
             "legacy_references.txt",
             "references.bib",
+            "references.ris",
         ):
             candidates.append(project_root / name)
     for candidate in candidates:

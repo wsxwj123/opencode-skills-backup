@@ -4,7 +4,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from common import ALLOWED_PROVIDER_FAMILIES, blocked_placeholder_found, normalize_ws, read_json
+from common import ALLOWED_PROVIDER_FAMILIES, blocked_placeholder_found, normalize_ws, read_docx_paragraphs, read_json
 
 
 REQUIRED_RESPONSE_HEADINGS = [
@@ -69,7 +69,7 @@ def main() -> int:
         if not artifact.exists():
             failures.append(f"missing reference artifact: {artifact.name}")
     if isinstance(reference_coverage, dict) and not reference_coverage.get("ok", True):
-        failures.append("reference coverage audit reports unresolved numeric citation gaps")
+        failures.append("reference coverage audit reports unresolved citation coverage gaps")
 
     if citation_units:
         for artifact in (literature_index_path, synthesis_matrix_path, synthesis_audit_path):
@@ -178,6 +178,25 @@ def main() -> int:
             if response_text.count(label) < len(units):
                 failures.append(f"response_to_reviewers.md missing per-comment evidence block: {label}")
 
+    response_docx = project_root / "response_to_reviewers.docx"
+    if not response_docx.exists():
+        failures.append("missing output: response_to_reviewers.docx")
+    else:
+        try:
+            response_docx_rows = read_docx_paragraphs(response_docx)
+        except Exception:
+            failures.append("response_to_reviewers.docx is not a readable docx")
+        else:
+            response_docx_texts = [normalize_ws(row.get("text", "")) for row in response_docx_rows if normalize_ws(row.get("text", ""))]
+            if "回复审稿人的邮件" not in response_docx_texts:
+                failures.append("response_to_reviewers.docx missing top-level title")
+            if sum(1 for text in response_docx_texts if text.startswith("Comment ")) < len(units):
+                failures.append("response_to_reviewers.docx missing comment headings")
+            if response_docx_texts.count("2) Response to Reviewer（中英对照）") < len(units):
+                failures.append("response_to_reviewers.docx missing response section headings")
+            if response_docx_texts.count("5) Evidence Attachments") < len(units):
+                failures.append("response_to_reviewers.docx missing evidence section headings")
+
     manuscript_index = read_json(project_root / "manuscript_section_index.json", {"sections": []})
     section_files = {section.get("file") for section in manuscript_index.get("sections", [])}
     for unit in units:
@@ -186,7 +205,6 @@ def main() -> int:
             failures.append(f"{unit.get('comment_id', '<unknown>')}: atomic section_file not found in manuscript index")
 
     for required_file in (
-        project_root / "response_to_reviewers.docx",
         Path(state.get("outputs", {}).get("output_md", project_root / "missing.md")),
         Path(state.get("outputs", {}).get("output_docx", project_root / "missing.docx")),
         edit_plan_path,

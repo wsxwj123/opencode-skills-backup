@@ -13,6 +13,9 @@ HEADING_RE = re.compile(r"^\s{0,3}#{1,6}\s*(references|reference|参考文献)\s
 NEXT_HEADING_RE = re.compile(r"^\s{0,3}#{1,6}\s+\S+")
 NUMBERED_REF_RE = re.compile(r"^\s*(\d+)[\.\)]\s+(.*)$")
 INLINE_NUMERIC_CITATION_RE = re.compile(r"\[(\d+(?:\s*[-,–]\s*\d+)*)\]")
+AUTHOR_YEAR_PAREN_RE = re.compile(r"\(([A-Z][A-Za-z'`-]+(?:\s+et al\.)?),\s*((?:19|20)\d{2}[a-z]?)\)")
+AUTHOR_YEAR_NARRATIVE_RE = re.compile(r"\b([A-Z][A-Za-z'`-]+(?:\s+et al\.)?)\s*\(((?:19|20)\d{2}[a-z]?)\)")
+AUTHOR_YEAR_IN_MULTI_PAREN_RE = re.compile(r"([A-Z][A-Za-z'`-]+(?:\s+et al\.)?),\s*((?:19|20)\d{2}[a-z]?)")
 
 
 def split_reference_section(text: str) -> tuple[str, list[str], bool]:
@@ -66,6 +69,17 @@ def build_registry(reference_lines: list[str]) -> list[dict]:
             }
         )
     return registry
+
+
+def registry_to_reference_lines(registry: list[dict]) -> list[str]:
+    lines = []
+    for entry in sorted(registry, key=lambda item: item.get("reference_number", 0)):
+        number = int(entry.get("reference_number") or 0)
+        raw_text = normalize_ws(str(entry.get("raw_text") or ""))
+        if not raw_text:
+            continue
+        lines.append(f"{number}. {raw_text}" if number else raw_text)
+    return lines
 
 
 def build_reference_entry_from_fields(entry: dict, fallback_number: int) -> str:
@@ -145,6 +159,34 @@ def parse_seed_bib(path: Path) -> list[str]:
     return [line for line in lines if normalize_ws(line)]
 
 
+def parse_seed_ris(path: Path) -> list[str]:
+    text = path.read_text(encoding="utf-8", errors="ignore")
+    records = re.split(r"(?m)^ER\s*-\s*$", text)
+    lines = []
+    for idx, block in enumerate(records, start=1):
+        tags: dict[str, list[str]] = {}
+        for raw_line in block.splitlines():
+            match = re.match(r"^([A-Z0-9]{2})\s*-\s*(.*)$", raw_line.strip())
+            if not match:
+                continue
+            tags.setdefault(match.group(1), []).append(normalize_ws(match.group(2)))
+        if not tags:
+            continue
+        year_field = next((key for key in ("PY", "Y1", "DA") if tags.get(key)), "")
+        year_text = tags.get(year_field, [""])[0] if year_field else ""
+        year_match = re.search(r"(19|20)\d{2}", year_text)
+        entry = {
+            "authors": tags.get("AU", []) or tags.get("A1", []),
+            "title": (tags.get("TI", []) or tags.get("T1", []) or tags.get("CT", [""]))[0],
+            "journal": (tags.get("JO", []) or tags.get("JF", []) or tags.get("T2", [""]))[0],
+            "year": year_match.group(0) if year_match else "",
+            "doi": (tags.get("DO", [""]))[0],
+            "pmid": (tags.get("AN", [""]))[0],
+        }
+        lines.append(build_reference_entry_from_fields(entry, idx))
+    return [line for line in lines if normalize_ws(line)]
+
+
 def load_reference_source_lines(path: Path | None) -> tuple[list[str], str]:
     if path is None or not path.exists():
         return [], ""
@@ -161,6 +203,8 @@ def load_reference_source_lines(path: Path | None) -> tuple[list[str], str]:
         return parse_seed_docx(path), str(path.resolve())
     if suffix == ".bib":
         return parse_seed_bib(path), str(path.resolve())
+    if suffix == ".ris":
+        return parse_seed_ris(path), str(path.resolve())
     return [], str(path.resolve())
 
 
@@ -200,6 +244,52 @@ def detect_cited_numbers(body_text: str) -> list[int]:
     for match in INLINE_NUMERIC_CITATION_RE.finditer(body_text):
         cited.update(expand_citation_numbers(match.group(1)))
     return sorted(cited)
+
+
+def normalize_author_year_key(author: str, year: str) -> str:
+    surname = normalize_ws(author).lower().replace(" et al.", "")
+    surname = re.sub(r"[^a-z0-9\u4e00-\u9fff]+", "", surname)
+    return f"{surname}|{normalize_ws(year)}"
+
+
+def detect_author_year_citations(body_text: str) -> list[str]:
+    citations: set[str] = set()
+    for match in AUTHOR_YEAR_PAREN_RE.finditer(body_text):
+        citations.add(normalize_author_year_key(match.group(1), match.group(2)))
+    for match in AUTHOR_YEAR_NARRATIVE_RE.finditer(body_text):
+        citations.add(normalize_author_year_key(match.group(1), match.group(2)))
+    for parenthetical in re.findall(r"\(([^)]*;\s*[^)]*)\)", body_text):
+        for match in AUTHOR_YEAR_IN_MULTI_PAREN_RE.finditer(parenthetical):
+            citations.add(normalize_author_year_key(match.group(1), match.group(2)))
+    return sorted(citations)
+
+
+def reference_author_year_keys(registry: list[dict]) -> list[str]:
+    keys: set[str] = set()
+    for entry in registry:
+        raw_text = normalize_ws(str(entry.get("raw_text") or ""))
+        if not raw_text:
+            continue
+        year_match = re.search(r"\b((?:19|20)\d{2}[a-z]?)\b", raw_text)
+        author_match = re.match(r"^[\[\]\d\.\)\s]*([A-Z][A-Za-z'`-]+)", raw_text)
+        if year_match and author_match:
+            keys.add(normalize_author_year_key(author_match.group(1), year_match.group(1)))
+    return sorted(keys)
+
+
+def merge_missing_numeric_references(current_registry: list[dict], source_registry: list[dict], missing_numbers: list[int]) -> tuple[list[dict], list[int]]:
+    if not missing_numbers:
+        return current_registry, []
+    current_by_number = {int(entry.get("reference_number") or 0): dict(entry) for entry in current_registry}
+    source_by_number = {int(entry.get("reference_number") or 0): dict(entry) for entry in source_registry}
+    imported_numbers: list[int] = []
+    for number in missing_numbers:
+        if number in current_by_number or number not in source_by_number:
+            continue
+        current_by_number[number] = dict(source_by_number[number])
+        imported_numbers.append(number)
+    merged = [current_by_number[number] for number in sorted(current_by_number)]
+    return merged, imported_numbers
 
 
 def main() -> int:
@@ -246,6 +336,9 @@ def main() -> int:
     body_text, reference_lines, references_found = split_reference_section(text)
     imported_lines: list[str] = []
     imported_source = ""
+    cited_numbers = detect_cited_numbers(body_text)
+    author_year_citations = detect_author_year_citations(body_text)
+
     if not reference_lines:
         imported_lines, imported_source = load_reference_source_lines(references_source)
         if imported_lines:
@@ -253,23 +346,53 @@ def main() -> int:
             rewrite_references_section(output_md, body_text, reference_lines, references_found)
             text = output_md.read_text(encoding="utf-8")
             body_text, reference_lines, references_found = split_reference_section(text)
+
     registry = build_registry(reference_lines)
+    missing_numbers: list[int] = []
+    imported_reference_numbers: list[int] = []
+    if cited_numbers:
+        available_numbers = sorted({entry["reference_number"] for entry in registry})
+        missing_numbers = [number for number in cited_numbers if number not in set(available_numbers)]
+        if missing_numbers and references_source is not None:
+            imported_lines, imported_source = load_reference_source_lines(references_source)
+            if imported_lines:
+                source_registry = build_registry(imported_lines)
+                registry, imported_reference_numbers = merge_missing_numeric_references(registry, source_registry, missing_numbers)
+                if imported_reference_numbers:
+                    reference_lines = registry_to_reference_lines(registry)
+                    rewrite_references_section(output_md, body_text, reference_lines, references_found)
+                    text = output_md.read_text(encoding="utf-8")
+                    body_text, reference_lines, references_found = split_reference_section(text)
+                    registry = build_registry(reference_lines)
+
     write_json(data_dir / "reference_registry.json", registry)
 
-    cited_numbers = detect_cited_numbers(body_text)
     available_numbers = sorted({entry["reference_number"] for entry in registry})
     missing_numbers = [number for number in cited_numbers if number not in set(available_numbers)]
-    citation_style = "numeric" if cited_numbers else "none"
+    available_author_year_keys = reference_author_year_keys(registry)
+    missing_author_year_citations = [key for key in author_year_citations if key not in set(available_author_year_keys)]
+    if cited_numbers and author_year_citations:
+        citation_style = "mixed"
+    elif cited_numbers:
+        citation_style = "numeric"
+    elif author_year_citations:
+        citation_style = "author-year"
+    else:
+        citation_style = "none"
     report = {
-        "ok": not missing_numbers,
+        "ok": not missing_numbers and not missing_author_year_citations,
         "citation_style": citation_style,
         "references_section_found": references_found,
         "reference_entries": len(registry),
         "cited_numbers": cited_numbers,
         "available_reference_numbers": available_numbers,
         "missing_reference_numbers": missing_numbers,
+        "author_year_citations": author_year_citations,
+        "available_author_year_keys": available_author_year_keys,
+        "missing_author_year_citations": missing_author_year_citations,
         "max_cited_number": max(cited_numbers) if cited_numbers else 0,
         "reference_source": imported_source,
+        "imported_reference_numbers": imported_reference_numbers,
     }
     write_json(data_dir / "reference_coverage_audit.json", report)
     print(

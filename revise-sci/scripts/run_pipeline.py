@@ -7,7 +7,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from common import autodiscover_reference_source, directory_signature, path_signature, read_json
+from common import autodiscover_reference_source, compute_tree_signature, directory_signature, path_signature, read_json
 
 
 def run_step(cmd: list[str]) -> None:
@@ -94,6 +94,10 @@ def resume_inputs_changed(project_root: Path, args: argparse.Namespace) -> list[
     return changed
 
 
+def current_skill_signature(script_dir: Path) -> str:
+    return compute_tree_signature(script_dir.parent, patterns=("*.py", "*.md"))
+
+
 def clear_project_outputs(project_root: Path) -> None:
     removable_dirs = [
         "units",
@@ -141,6 +145,8 @@ def main() -> int:
     parser.add_argument("--reference-docx", default="")
     parser.add_argument("--paper-search-results", default="")
     parser.add_argument("--references-source", default="")
+    parser.add_argument("--live-citation-verify", action="store_true")
+    parser.add_argument("--offline-citation-verify", action="store_true")
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--force-rebuild", action="store_true")
     args = parser.parse_args()
@@ -149,9 +155,13 @@ def main() -> int:
     project_root = Path(args.project_root)
     py = sys.executable
     resolved_references_source = str(resolve_references_source(args) or "")
+    skill_signature = current_skill_signature(script_dir)
 
     if args.resume and args.force_rebuild:
         print("--resume and --force-rebuild cannot be used together", file=sys.stderr)
+        raise SystemExit(2)
+    if args.live_citation_verify and args.offline_citation_verify:
+        print("--live-citation-verify and --offline-citation-verify cannot be used together", file=sys.stderr)
         raise SystemExit(2)
 
     if args.force_rebuild:
@@ -159,6 +169,11 @@ def main() -> int:
         clear_project_outputs(project_root)
 
     if args.resume:
+        state = read_json(project_root / "project_state.json", {})
+        previous_skill_signature = state.get("skill_signature", "")
+        if previous_skill_signature and previous_skill_signature != skill_signature:
+            print("resume skill version changed", file=sys.stderr)
+            raise SystemExit(1)
         changed_inputs = resume_inputs_changed(project_root, args)
         if changed_inputs:
             print(f"resume inputs changed: {', '.join(changed_inputs)}", file=sys.stderr)
@@ -186,6 +201,8 @@ def main() -> int:
         common_args.extend(["--paper-search-results", args.paper_search_results])
     if resolved_references_source:
         common_args.extend(["--references-source", resolved_references_source])
+    if args.live_citation_verify or (args.paper_search_results and not args.offline_citation_verify):
+        common_args.append("--live-citation-verify")
 
     if not args.resume or not (project_root / "precheck_report.md").exists():
         run_step([py, str(script_dir / "preflight.py")] + common_args)
@@ -197,9 +214,12 @@ def main() -> int:
             args.paper_search_results,
             "--project-root",
             args.project_root,
-            "--offline",
             "--allow-unverified",
         ]
+        if args.offline_citation_verify:
+            guard_args.append("--offline")
+        else:
+            guard_args.append("--live")
         run_step(guard_args)
     if not args.resume or not has_units(project_root):
         run_step([py, str(script_dir / "atomize_comments.py"), "--comments", args.comments, "--project-root", args.project_root])

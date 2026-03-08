@@ -47,6 +47,7 @@ def main() -> int:
         lines.append(f"| {unit.get('comment_id','')} | {unit.get('severity','')} | {unit.get('status','')} | {unit.get('target_document','')} | {trace} |")
     if isinstance(reference_coverage, dict) and reference_coverage:
         missing_numbers = ", ".join(str(x) for x in reference_coverage.get("missing_reference_numbers", [])) or "无"
+        missing_author_year = ", ".join(reference_coverage.get("missing_author_year_citations", [])) or "无"
         lines.extend(
             [
                 "",
@@ -57,6 +58,8 @@ def main() -> int:
                 f"- reference_entries: `{reference_coverage.get('reference_entries', 0)}`",
                 f"- cited_numbers_detected: `{len(reference_coverage.get('cited_numbers', []))}`",
                 f"- missing_reference_numbers: `{missing_numbers}`",
+                f"- author_year_citations_detected: `{len(reference_coverage.get('author_year_citations', []))}`",
+                f"- missing_author_year_citations: `{missing_author_year}`",
             ]
         )
     if state.get("delivery_status") == "author_confirmation_required":

@@ -1,6 +1,8 @@
 import json
 import unittest
 
+from docx import Document
+
 from helpers import TempProject, run_script
 
 
@@ -82,8 +84,23 @@ class StrictGateTests(unittest.TestCase):
             ),
             encoding="utf-8",
         )
-        (self.project_root / "response_to_reviewers.docx").write_bytes(b"fake")
-        (self.project_root / "revised.docx").write_bytes(b"fake")
+        response_doc = Document()
+        response_doc.add_heading("回复审稿人的邮件", level=1)
+        response_doc.add_heading("Reviewer #1", level=1)
+        response_doc.add_heading("Major", level=2)
+        response_doc.add_heading("Comment 1", level=3)
+        response_doc.add_heading("2) Response to Reviewer（中英对照）", level=4)
+        response_doc.add_paragraph("We revised the sentence to limit the claim to the present dataset.")
+        response_doc.add_heading("5) Evidence Attachments", level=4)
+        response_doc.add_paragraph("Text")
+        response_doc.add_paragraph("Image")
+        response_doc.add_paragraph("Table")
+        response_doc.save(self.project_root / "response_to_reviewers.docx")
+
+        revised_doc = Document()
+        revised_doc.add_heading("Results", level=1)
+        revised_doc.add_paragraph("In the present dataset, Quercetin showed a protective effect in TAC-treated cells.")
+        revised_doc.save(self.project_root / "revised.docx")
         (self.project_root / "revised.md").write_text("# Results\n\nIn the present dataset, Quercetin showed a protective effect in TAC-treated cells.\n", encoding="utf-8")
         (self.project_root / "manuscript_edit_plan.md").write_text(
             "\n".join(
@@ -181,3 +198,13 @@ class StrictGateTests(unittest.TestCase):
         result = run_script("strict_gate.py", ["--project-root", str(self.project_root)], cwd=self.root)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("literature_index", result.stdout + result.stderr)
+
+    def test_gate_rejects_response_docx_without_comment_structure(self):
+        self._write_valid_base()
+        bad_doc = Document()
+        bad_doc.add_heading("回复审稿人的邮件", level=1)
+        bad_doc.add_paragraph("Only a title")
+        bad_doc.save(self.project_root / "response_to_reviewers.docx")
+        result = run_script("strict_gate.py", ["--project-root", str(self.project_root)], cwd=self.root)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("response_to_reviewers.docx", result.stdout + result.stderr)

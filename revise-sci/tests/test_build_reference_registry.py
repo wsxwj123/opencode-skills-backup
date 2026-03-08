@@ -120,3 +120,136 @@ class BuildReferenceRegistryTests(unittest.TestCase):
         self.assertEqual(len(registry), 2)
         self.assertTrue(audit["ok"])
         self.assertEqual(audit["reference_source"], str(seed.resolve()))
+
+    def test_merges_missing_numeric_reference_numbers_from_external_seed(self):
+        output_md = self.project_root / "revised_manuscript.md"
+        output_md.write_text(
+            "\n".join(
+                [
+                    "# Introduction",
+                    "",
+                    "Background statement [1-4].",
+                    "",
+                    "## References",
+                    "",
+                    "1. Smith J. Study A. 2023.",
+                    "3. Wang M. Study C. 2025.",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        seed = self.project_root / "seed.json"
+        seed.write_text(
+            json.dumps(
+                {
+                    "entries": [
+                        {"reference_number": 1, "reference_entry": "1. Smith J. Study A. 2023."},
+                        {"reference_number": 2, "reference_entry": "2. Lee K. Study B. 2024."},
+                        {"reference_number": 3, "reference_entry": "3. Wang M. Study C. 2025."},
+                        {"reference_number": 4, "reference_entry": "4. Zhao T. Study D. 2026."},
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        result = run_script(
+            "build_reference_registry.py",
+            [
+                "--project-root",
+                str(self.project_root),
+                "--output-md",
+                str(output_md),
+                "--references-source",
+                str(seed),
+            ],
+            cwd=self.root,
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        audit = json.loads((self.project_root / "data" / "reference_coverage_audit.json").read_text(encoding="utf-8"))
+        self.assertTrue(audit["ok"])
+        self.assertEqual(audit["missing_reference_numbers"], [])
+        rebuilt_md = output_md.read_text(encoding="utf-8")
+        self.assertIn("2. Lee K. Study B. 2024.", rebuilt_md)
+        self.assertIn("4. Zhao T. Study D. 2026.", rebuilt_md)
+
+    def test_reports_missing_author_year_citations(self):
+        output_md = self.project_root / "revised_manuscript.md"
+        output_md.write_text(
+            "\n".join(
+                [
+                    "# Introduction",
+                    "",
+                    "As reported by Smith et al. (2023) and (Lee, 2024), EVs shape pulmonary signaling.",
+                    "",
+                    "## References",
+                    "",
+                    "1. Smith J. Study A. 2023.",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        result = run_script(
+            "build_reference_registry.py",
+            ["--project-root", str(self.project_root), "--output-md", str(output_md)],
+            cwd=self.root,
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        audit = json.loads((self.project_root / "data" / "reference_coverage_audit.json").read_text(encoding="utf-8"))
+        self.assertFalse(audit["ok"])
+        self.assertEqual(audit["citation_style"], "author-year")
+        self.assertIn("lee|2024", audit["missing_author_year_citations"])
+
+    def test_imports_ris_reference_seed(self):
+        output_md = self.project_root / "revised_manuscript.md"
+        output_md.write_text(
+            "\n".join(
+                [
+                    "# Introduction",
+                    "",
+                    "Background statement [1-2].",
+                    "",
+                    "## References",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        seed = self.project_root / "references.ris"
+        seed.write_text(
+            "\n".join(
+                [
+                    "TY  - JOUR",
+                    "AU  - Smith, John",
+                    "TI  - Study A",
+                    "JO  - Journal A",
+                    "PY  - 2023",
+                    "DO  - 10.1000/a",
+                    "ER  -",
+                    "TY  - JOUR",
+                    "AU  - Lee, Kelly",
+                    "TI  - Study B",
+                    "JO  - Journal B",
+                    "PY  - 2024",
+                    "ER  -",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        result = run_script(
+            "build_reference_registry.py",
+            [
+                "--project-root",
+                str(self.project_root),
+                "--output-md",
+                str(output_md),
+                "--references-source",
+                str(seed),
+            ],
+            cwd=self.root,
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        registry = json.loads((self.project_root / "data" / "reference_registry.json").read_text(encoding="utf-8"))
+        self.assertEqual(len(registry), 2)
+        self.assertIn("Study A", registry[0]["raw_text"])

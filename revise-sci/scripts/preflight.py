@@ -5,7 +5,7 @@ import argparse
 import json
 from pathlib import Path
 
-from common import autodiscover_reference_source, directory_signature, path_signature, write_json, write_text
+from common import autodiscover_reference_source, compute_tree_signature, directory_signature, path_signature, write_json, write_text
 
 
 def describe_file(path: Path) -> dict[str, object]:
@@ -31,6 +31,7 @@ def build_report(summary: dict[str, object], attachments: dict[str, object], mis
         f"- reference_docx_path: `{summary['reference_docx_path'] or 'Not provided by user'}`",
         f"- paper_search_results_path: `{summary['paper_search_results_path'] or 'Not provided by user'}`",
         f"- references_source_path: `{summary['references_source_path'] or 'Not provided by user'}`",
+        f"- citation_verify_mode: `{summary['citation_verify_mode']}`",
         "",
         "## 附件清单",
         f"- 附件数量: `{attachments['count']}`",
@@ -58,6 +59,7 @@ def main() -> int:
     parser.add_argument("--reference-docx", default="")
     parser.add_argument("--paper-search-results", default="")
     parser.add_argument("--references-source", default="")
+    parser.add_argument("--live-citation-verify", action="store_true")
     args = parser.parse_args()
 
     comments = Path(args.comments)
@@ -127,7 +129,10 @@ def main() -> int:
         "reference_docx_path": str(reference_docx.resolve()) if reference_docx else "",
         "paper_search_results_path": str(paper_search_results.resolve()) if paper_search_results else "",
         "references_source_path": str(references_source.resolve()) if references_source else "",
+        "citation_verify_mode": "live" if args.live_citation_verify else "offline",
     }
+    skill_root = Path(__file__).resolve().parent.parent
+    skill_signature = compute_tree_signature(skill_root, patterns=("*.py", "*.md"))
 
     write_json(project_root / "attachments_manifest.json", attachments_manifest)
     write_text(project_root / "precheck_report.md", build_report(summary, attachments_manifest, missing_items))
@@ -151,6 +156,7 @@ def main() -> int:
             "counts": {"comment_units": 0},
             "missing_items": missing_items,
             "delivery_status": "draft",
+            "skill_signature": skill_signature,
         },
     )
 
