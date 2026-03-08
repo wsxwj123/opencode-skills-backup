@@ -132,6 +132,7 @@ def current_input_signatures(args: argparse.Namespace) -> dict:
         "reference_search_decision": getattr(args, "reference_search_decision", "ask"),
         "auto_run_reference_search": bool(getattr(args, "auto_run_reference_search", False)),
         "paper_search_runner": normalize_runner_value(getattr(args, "paper_search_runner", "")),
+        "opencode_driver_command": normalize_runner_value(getattr(args, "opencode_driver_command", "")),
     }
 
 
@@ -314,6 +315,7 @@ def main() -> int:
     parser.add_argument("--offline-citation-verify", action="store_true")
     parser.add_argument("--auto-run-reference-search", action="store_true")
     parser.add_argument("--paper-search-runner", default="")
+    parser.add_argument("--opencode-driver-command", default="")
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--resume-from", choices=STEP_ORDER)
     parser.add_argument("--force-rebuild", action="store_true")
@@ -380,6 +382,8 @@ def main() -> int:
         common_args.append("--auto-run-reference-search")
     if args.paper_search_runner:
         common_args.extend(["--paper-search-runner", args.paper_search_runner])
+    if args.opencode_driver_command:
+        common_args.extend(["--opencode-driver-command", args.opencode_driver_command])
     if resolved_references_source:
         common_args.extend(["--references-source", resolved_references_source])
     if args.live_citation_verify or (args.paper_search_results and not args.offline_citation_verify):
@@ -473,6 +477,8 @@ def main() -> int:
         ]
         if args.paper_search_runner:
             execute_args.extend(["--paper-search-runner", args.paper_search_runner])
+        if args.opencode_driver_command:
+            execute_args.extend(["--opencode-driver-command", args.opencode_driver_command])
         run_step(execute_args)
         search_results_path = effective_paper_search_results_path(args, project_root)
         if search_results_path is None:

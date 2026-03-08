@@ -34,6 +34,7 @@ def main() -> int:
     search_manifest = read_json(project_root / "reference_search_manifest.json", {})
     search_strategy = read_json(project_root / "reference_search_strategy.json", {})
     search_status = read_json(project_root / "reference_search_status.json", {})
+    search_execution = read_json(project_root / "reference_search_execution.json", {})
     lines = [
         "# Final Consistency Report",
         "",
@@ -69,11 +70,13 @@ def main() -> int:
                 f"- reference_search_workflow: `{search_manifest.get('workflow') or search_strategy.get('workflow') or 'Not generated'}`",
                 f"- reference_search_guard_passed: `{((search_status.get('steps') or {}).get('citation_guard_passed', False))}`",
                 f"- reference_search_validated_batch_present: `{((search_status.get('steps') or {}).get('validated_batch_present', False))}`",
+                f"- reference_search_execution_mode: `{search_execution.get('driver_mode') or 'Not executed'}`",
                 f"- reference_search_manifest: `{str((project_root / 'reference_search_manifest.json').resolve()) if (project_root / 'reference_search_manifest.json').exists() else 'Not generated'}`",
                 f"- reference_search_strategy: `{str((project_root / 'reference_search_strategy.json').resolve()) if (project_root / 'reference_search_strategy.json').exists() else 'Not generated'}`",
                 f"- reference_search_status: `{str((project_root / 'reference_search_status.json').resolve()) if (project_root / 'reference_search_status.json').exists() else 'Not generated'}`",
                 f"- reference_search_rounds: `{str((project_root / 'reference_search_rounds.json').resolve()) if (project_root / 'reference_search_rounds.json').exists() else 'Not generated'}`",
                 f"- reference_search_task: `{str((project_root / 'reference_search_task.md').resolve()) if (project_root / 'reference_search_task.md').exists() else 'Not generated'}`",
+                f"- reference_search_execution: `{str((project_root / 'reference_search_execution.json').resolve()) if (project_root / 'reference_search_execution.json').exists() else 'Not generated'}`",
             ]
         )
     if state.get("delivery_status") == "author_confirmation_required":

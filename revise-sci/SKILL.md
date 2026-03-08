@@ -141,6 +141,9 @@ Each comment must contain:
 - If approved auto-run is requested but no local runner is configured, the pipeline must fail explicitly and write `reference_search_execution_request.md` instead of pretending that search has already been executed.
 - The local runner contract must remain machine-checkable: `--rounds-json <path> --output <path> --project-root <path>`, with output saved to `project_root/paper_search_results.json`.
 - Approved search auto-execution must rerun `citation_guard.py`, `revise_units.py`, literature-index/matrix steps, `reference_sync.py`, and `build_reference_registry.py` before export and gate.
+- If no explicit local runner is provided but `opencode` is available, the workflow may fall back to an internal `opencode run` driver that still writes the same `paper_search_results.json` schema under `review-writing` governance.
+- The `opencode` fallback must write a preserved prompt file (`reference_search_opencode_prompt.md`) and an execution report (`reference_search_execution.json`) so the retrieval path remains auditable.
+- `strict_gate.py` and `final_consistency_report.md` should surface `reference_search_execution.json` state instead of hiding the actual execution mode.
 - Query hints for approved search should come not only from missing reference coverage but also from pending citation-oriented review comments that still point to `paper-search` as a required evidence source.
 - Lexical paragraph localization should use structured fields plus low-signal-token filtering and heading-weighted scoring; if the best lexical candidate is still low-confidence, keep the item in `needs_author_confirmation`.
 - Reviewer-response Word export should use dedicated body, reviewer-heading, label, and comment-heading styles, with improved spacing and Word-native table header shading, rather than leaving all blocks as generic paragraphs.

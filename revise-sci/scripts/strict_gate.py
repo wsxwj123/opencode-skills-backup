@@ -48,6 +48,7 @@ def approved_search_governance_failures(project_root: Path, reference_coverage: 
     status_path = project_root / "reference_search_status.json"
     rounds_path = project_root / "reference_search_rounds.json"
     task_path = project_root / "reference_search_task.md"
+    execution_path = project_root / "reference_search_execution.json"
     paper_results_path = project_root / "paper_search_results.json"
     paper_validated_path = project_root / "paper_search_validated.json"
     guard_report_path = project_root / "paper_search_guard_report.json"
@@ -67,6 +68,7 @@ def approved_search_governance_failures(project_root: Path, reference_coverage: 
     status = read_json(status_path, {})
     rounds = read_json(rounds_path, {})
     guard_report = read_json(guard_report_path, {})
+    execution = read_json(execution_path, {})
 
     if manifest.get("workflow") != "review-writing":
         failures.append("reference_search_manifest.json must declare workflow review-writing")
@@ -149,6 +151,11 @@ def approved_search_governance_failures(project_root: Path, reference_coverage: 
         for artifact in (literature_index_path, synthesis_matrix_path, synthesis_audit_path):
             if not artifact.exists():
                 failures.append(f"approved reference search batch is missing canonical artifact {artifact.name}")
+    if execution_path.exists():
+        if execution.get("ok") is not True:
+            failures.append("reference_search_execution.json exists but reports ok=false")
+        if execution.get("driver_mode") not in {"local-runner", "opencode-driver"}:
+            failures.append("reference_search_execution.json has unsupported driver_mode")
     return failures
 
 

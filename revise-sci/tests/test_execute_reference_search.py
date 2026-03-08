@@ -1,8 +1,9 @@
 import json
+import os
 import sys
 import unittest
 
-from helpers import TempProject, create_fake_paper_search_runner, run_script
+from helpers import TempProject, create_fake_opencode, create_fake_paper_search_runner, run_script
 
 
 class ExecuteReferenceSearchTests(unittest.TestCase):
@@ -54,7 +55,7 @@ class ExecuteReferenceSearchTests(unittest.TestCase):
     def test_execute_reference_search_requires_runner_when_not_configured(self):
         result = run_script(
             "execute_reference_search.py",
-            ["--project-root", str(self.project_root)],
+            ["--project-root", str(self.project_root), "--disable-opencode-driver"],
             cwd=self.root,
         )
         self.assertEqual(result.returncode, 2, msg=result.stdout + result.stderr)
@@ -104,6 +105,43 @@ class ExecuteReferenceSearchTests(unittest.TestCase):
         self.assertTrue(execution["ok"])
         status = json.loads((self.project_root / "reference_search_status.json").read_text(encoding="utf-8"))
         self.assertTrue(status["steps"]["paper_search_batch_imported"])
+
+    def test_execute_reference_search_uses_opencode_driver_when_runner_missing(self):
+        payload = json.dumps(
+            {
+                "results": [
+                    {
+                        "comment_id": "R1-Major-01",
+                        "confirmed": True,
+                        "formatted_citation_text": "(Smith et al., 2023)",
+                        "target_section_heading": "Introduction",
+                        "target_paragraph_index": 1,
+                        "citations": [
+                            {
+                                "source_provider": "paper-search",
+                                "source_id": "PMID:123456",
+                                "pmid": "123456",
+                                "title": "Quercetin in cardiovascular models",
+                            }
+                        ],
+                    }
+                ]
+            }
+        )
+        fake_opencode = create_fake_opencode(self.root / "opencode", payload)
+        env = dict(os.environ)
+        env["PATH"] = f"{self.root}:{env.get('PATH', '')}"
+        result = run_script(
+            "execute_reference_search.py",
+            ["--project-root", str(self.project_root)],
+            cwd=self.root,
+            env=env,
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        execution = json.loads((self.project_root / "reference_search_execution.json").read_text(encoding="utf-8"))
+        self.assertEqual(execution["driver_mode"], "opencode-driver")
+        self.assertTrue((self.project_root / "reference_search_opencode_prompt.md").exists())
+        self.assertEqual(fake_opencode.exists(), True)
 
 
 if __name__ == "__main__":

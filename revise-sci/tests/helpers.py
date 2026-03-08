@@ -23,12 +23,13 @@ def create_docx(path: Path, rows: list[tuple[str, str]]) -> Path:
     return path
 
 
-def run_script(script_name: str, args: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
+def run_script(script_name: str, args: list[str], cwd: Path, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [sys.executable, str(SCRIPTS_DIR / script_name)] + args,
         cwd=cwd,
         text=True,
         capture_output=True,
+        env=env,
     )
 
 
@@ -50,6 +51,31 @@ def create_fake_paper_search_runner(path: Path, output_payload: str) -> Path:
         )
         + "\n",
         encoding="utf-8",
+    )
+    path.chmod(0o755)
+    return path
+
+
+def create_fake_opencode(path: Path, output_payload: str) -> Path:
+    path.write_text(
+        "\n".join(
+            [
+                "#!/usr/bin/env python3",
+                "import re",
+                "import sys",
+                "from pathlib import Path",
+                "",
+                "joined = '\\n'.join(sys.argv[1:])",
+                "match = re.search(r'OUTPUT_JSON_PATH=(.+)', joined)",
+                "if not match:",
+                "    raise SystemExit(2)",
+                "output_path = Path(match.group(1).splitlines()[0].strip())",
+                "output_path.write_text(" + repr(output_payload) + ", encoding='utf-8')",
+                "print('fake opencode driver wrote results')",
+            ]
+        )
+        + "\n",
+        encoding='utf-8',
     )
     path.chmod(0o755)
     return path

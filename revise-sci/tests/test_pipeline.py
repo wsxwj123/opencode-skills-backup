@@ -1,9 +1,10 @@
 import json
+import os
 import sys
 import unittest
 import zipfile
 
-from helpers import TempProject, create_docx, create_fake_paper_search_runner, run_script
+from helpers import TempProject, create_docx, create_fake_opencode, create_fake_paper_search_runner, run_script
 
 
 class PipelineTests(unittest.TestCase):
@@ -1061,3 +1062,77 @@ class PipelineTests(unittest.TestCase):
         unit = json.loads(next((project_root / "units").glob("*.json")).read_text(encoding="utf-8"))
         self.assertEqual(unit["status"], "completed")
         self.assertIn("(Smith et al., 2023)", unit["revised_excerpt_en"])
+
+    def test_pipeline_auto_runs_approved_reference_search_with_opencode_driver(self):
+        comments = create_docx(
+            self.root / "comments_auto_opencode.docx",
+            [
+                ("paragraph", "Reviewer #1"),
+                ("paragraph", "Major"),
+                ("paragraph", "1. Add a citation for the background statement."),
+            ],
+        )
+        manuscript = create_docx(
+            self.root / "manuscript_auto_opencode.docx",
+            [
+                ("heading1", "Introduction"),
+                ("paragraph", "Quercetin has been widely studied in cardiovascular models."),
+            ],
+        )
+        project_root = self.root / "paper_search_auto_opencode"
+        project_root.mkdir()
+        payload = json.dumps(
+            {
+                "results": [
+                    {
+                        "comment_id": "R1-Major-01",
+                        "confirmed": True,
+                        "formatted_citation_text": "(Smith et al., 2023)",
+                        "target_section_heading": "Introduction",
+                        "target_paragraph_index": 1,
+                        "citations": [
+                            {
+                                "source_provider": "paper-search",
+                                "source_id": "PMID:123456",
+                                "pmid": "123456",
+                                "title": "Quercetin in cardiovascular models",
+                                "pubmed_title": "Quercetin in cardiovascular models",
+                                "authors": ["Smith J", "Lee K"],
+                                "journal": "Cardiovasc Res",
+                                "year": 2023,
+                            }
+                        ],
+                    }
+                ]
+            }
+        )
+        create_fake_opencode(self.root / "opencode", payload)
+        env = dict(os.environ)
+        env["PATH"] = f"{self.root}:{env.get('PATH', '')}"
+        result = run_script(
+            "run_pipeline.py",
+            [
+                "--comments",
+                str(comments),
+                "--manuscript",
+                str(manuscript),
+                "--attachments-dir",
+                str(self.attachments),
+                "--project-root",
+                str(project_root),
+                "--output-md",
+                str(project_root / "revised_manuscript.md"),
+                "--output-docx",
+                str(project_root / "revised_manuscript.docx"),
+                "--reference-search-decision",
+                "approved",
+                "--auto-run-reference-search",
+            ],
+            cwd=self.root,
+            env=env,
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        execution = json.loads((project_root / "reference_search_execution.json").read_text(encoding="utf-8"))
+        self.assertEqual(execution["driver_mode"], "opencode-driver")
+        unit = json.loads(next((project_root / "units").glob("*.json")).read_text(encoding="utf-8"))
+        self.assertEqual(unit["status"], "completed")

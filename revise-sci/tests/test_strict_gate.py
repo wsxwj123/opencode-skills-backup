@@ -352,3 +352,83 @@ class StrictGateTests(unittest.TestCase):
         result = run_script("strict_gate.py", ["--project-root", str(self.project_root)], cwd=self.root)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("review-writing", result.stdout + result.stderr)
+
+    def test_gate_rejects_failed_reference_search_execution_report(self):
+        self._write_valid_base()
+        (self.project_root / "data").mkdir(exist_ok=True)
+        (self.project_root / "data" / "reference_registry.json").write_text("[]", encoding="utf-8")
+        (self.project_root / "data" / "reference_coverage_audit.json").write_text(
+            json.dumps(
+                {
+                    "ok": True,
+                    "citation_style": "numeric",
+                    "reference_entries": 1,
+                    "cited_numbers": [1],
+                    "missing_reference_numbers": [],
+                    "author_year_citations": [],
+                    "missing_author_year_citations": [],
+                    "reference_source": "",
+                    "reference_search_required": False,
+                    "reference_search_decision": "approved",
+                }
+            ),
+            encoding="utf-8",
+        )
+        state = json.loads((self.project_root / "project_state.json").read_text(encoding="utf-8"))
+        state["inputs"] = {"references_source_path": "", "reference_search_decision": "approved"}
+        (self.project_root / "project_state.json").write_text(json.dumps(state), encoding="utf-8")
+        for name, content in {
+            "paper_search_results.json": {"results": []},
+            "paper_search_validated.json": {"results": []},
+            "paper_search_guard_report.json": {"summary": {"all_rows_guard_verified": True}},
+            "reference_search_manifest.json": {
+                "workflow": "review-writing",
+                "reference_search_decision": "approved",
+                "governance_active": True,
+                "allowed_provider_families": ["paper-search"],
+                "forbidden_provider_families": ["websearch"],
+                "verification_policy": {"dual_verification_required": True, "allow_unverified": False, "guard_command": "python scripts/citation_guard.py"},
+                "workflow_rules": {"rounds": [1, 2, 3]},
+            },
+            "reference_search_strategy.json": {
+                "workflow": "review-writing",
+                "provider_policy": {"primary": ["paper-search"], "forbidden": ["websearch"]},
+                "mandatory_guard_command": "python scripts/citation_guard.py",
+                "round_model": [1, 2, 3],
+                "required_outputs": ["data/literature_index.json", "data/synthesis_matrix.json", "data/synthesis_matrix_audit.json"],
+            },
+            "reference_search_status.json": {
+                "reference_search_decision": "approved",
+                "governance_active": True,
+                "steps": {
+                    "search_round_plan_generated": True,
+                    "paper_search_batch_imported": True,
+                    "validated_batch_present": True,
+                    "citation_guard_passed": True,
+                    "literature_index_built": True,
+                    "synthesis_matrix_audited": True,
+                    "reference_sync_completed": True,
+                },
+            },
+            "reference_search_rounds.json": {
+                "workflow": "review-writing",
+                "rounds": [
+                    {"round": 1, "provider_family": "paper-search", "queries": ["q1"]},
+                    {"round": 2, "provider_family": "paper-search", "queries": ["q2"]},
+                    {"round": 3, "provider_family": "paper-search", "queries": ["q3"]},
+                ],
+            },
+            "reference_search_execution.json": {"ok": False, "driver_mode": "opencode-driver"},
+            "reference_sync_report.json": {"covered_comment_ids": [], "references_added": 0},
+        }.items():
+            (self.project_root / name).write_text(json.dumps(content), encoding="utf-8") if name.endswith(".json") else (self.project_root / name).write_text(content, encoding="utf-8")
+        (self.project_root / "reference_search_task.md").write_text("# task\n", encoding="utf-8")
+        (self.project_root / "data" / "literature_index.json").write_text("[]", encoding="utf-8")
+        (self.project_root / "data" / "synthesis_matrix.json").write_text("[]", encoding="utf-8")
+        (self.project_root / "data" / "synthesis_matrix_audit.json").write_text(
+            json.dumps({"missing_claim": 0, "missing_key_fields": 0}),
+            encoding="utf-8",
+        )
+        result = run_script("strict_gate.py", ["--project-root", str(self.project_root)], cwd=self.root)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("reference_search_execution.json exists but reports ok=false", result.stdout + result.stderr)

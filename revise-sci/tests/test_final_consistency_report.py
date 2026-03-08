@@ -114,6 +114,10 @@ class FinalConsistencyReportTests(unittest.TestCase):
                 json.dumps({"steps": {"citation_guard_passed": False}}),
                 encoding="utf-8",
             )
+            (project_root / "reference_search_execution.json").write_text(
+                json.dumps({"ok": True, "driver_mode": "opencode-driver"}),
+                encoding="utf-8",
+            )
             (project_root / "reference_search_rounds.json").write_text(
                 json.dumps({"workflow": "review-writing", "rounds": [{"round": 1, "queries": ["q1"]}]}),
                 encoding="utf-8",
@@ -129,6 +133,8 @@ class FinalConsistencyReportTests(unittest.TestCase):
             self.assertIn("review-writing", report)
             self.assertIn("reference_search_guard_passed", report)
             self.assertIn("reference_search_rounds", report)
+            self.assertIn("reference_search_execution_mode", report)
+            self.assertIn("opencode-driver", report)
 
 
 if __name__ == "__main__":

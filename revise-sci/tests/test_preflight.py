@@ -49,6 +49,7 @@ class PreflightTests(unittest.TestCase):
         self.assertIn("预检报告", report)
         self.assertIn("si_docx_path", report)
         self.assertIn("reference_search_decision", report)
+        self.assertIn("opencode_driver_command", report)
         state = json.loads((self.project_root / "project_state.json").read_text(encoding="utf-8"))
         self.assertEqual(state["inputs"]["reference_search_decision"], "ask")
         manifest = json.loads((self.project_root / "attachments_manifest.json").read_text(encoding="utf-8"))
