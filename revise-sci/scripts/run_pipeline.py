@@ -7,7 +7,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from common import directory_signature, path_signature, read_json
+from common import autodiscover_reference_source, directory_signature, path_signature, read_json
 
 
 def run_step(cmd: list[str]) -> None:
@@ -60,7 +60,17 @@ def has_reference_registry_outputs(project_root: Path) -> bool:
     )
 
 
+def resolve_references_source(args: argparse.Namespace) -> Path | None:
+    if getattr(args, "references_source", ""):
+        return Path(args.references_source).resolve()
+    comments = Path(args.comments)
+    attachments = Path(args.attachments_dir) if getattr(args, "attachments_dir", "") else None
+    project_root = Path(args.project_root)
+    return autodiscover_reference_source(comments, attachments, project_root)
+
+
 def current_input_signatures(args: argparse.Namespace) -> dict:
+    references_source = resolve_references_source(args)
     return {
         "comments_path": path_signature(Path(args.comments)),
         "manuscript_docx_path": path_signature(Path(args.manuscript)),
@@ -68,6 +78,7 @@ def current_input_signatures(args: argparse.Namespace) -> dict:
         "attachments_dir_path": directory_signature(Path(args.attachments_dir)) if args.attachments_dir else directory_signature(None),
         "reference_docx_path": path_signature(Path(args.reference_docx)) if args.reference_docx else path_signature(None),
         "paper_search_results_path": path_signature(Path(args.paper_search_results)) if args.paper_search_results else path_signature(None),
+        "references_source_path": path_signature(references_source),
     }
 
 
@@ -128,6 +139,7 @@ def main() -> int:
     parser.add_argument("--output-docx", required=True)
     parser.add_argument("--reference-docx", default="")
     parser.add_argument("--paper-search-results", default="")
+    parser.add_argument("--references-source", default="")
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--force-rebuild", action="store_true")
     args = parser.parse_args()
@@ -135,6 +147,7 @@ def main() -> int:
     script_dir = Path(__file__).resolve().parent
     project_root = Path(args.project_root)
     py = sys.executable
+    resolved_references_source = str(resolve_references_source(args) or "")
 
     if args.resume and args.force_rebuild:
         print("--resume and --force-rebuild cannot be used together", file=sys.stderr)
@@ -170,6 +183,8 @@ def main() -> int:
         common_args.extend(["--reference-docx", args.reference_docx])
     if args.paper_search_results:
         common_args.extend(["--paper-search-results", args.paper_search_results])
+    if resolved_references_source:
+        common_args.extend(["--references-source", resolved_references_source])
 
     if not args.resume or not (project_root / "precheck_report.md").exists():
         run_step([py, str(script_dir / "preflight.py")] + common_args)
@@ -231,7 +246,10 @@ def main() -> int:
     run_step([py, str(script_dir / "merge_manuscript.py"), "--project-root", args.project_root, "--output-md", args.output_md])
     run_step([py, str(script_dir / "reference_sync.py"), "--project-root", args.project_root, "--output-md", args.output_md])
     if not args.resume or not has_reference_registry_outputs(project_root):
-        run_step([py, str(script_dir / "build_reference_registry.py"), "--project-root", args.project_root, "--output-md", args.output_md])
+        reference_registry_args = [py, str(script_dir / "build_reference_registry.py"), "--project-root", args.project_root, "--output-md", args.output_md]
+        if resolved_references_source:
+            reference_registry_args.extend(["--references-source", resolved_references_source])
+        run_step(reference_registry_args)
     export_args = [
         py,
         str(script_dir / "export_docx.py"),

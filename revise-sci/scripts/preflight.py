@@ -5,7 +5,7 @@ import argparse
 import json
 from pathlib import Path
 
-from common import directory_signature, path_signature, write_json, write_text
+from common import autodiscover_reference_source, directory_signature, path_signature, write_json, write_text
 
 
 def describe_file(path: Path) -> dict[str, object]:
@@ -30,6 +30,7 @@ def build_report(summary: dict[str, object], attachments: dict[str, object], mis
         f"- output_docx_path: `{summary['output_docx_path']}`",
         f"- reference_docx_path: `{summary['reference_docx_path'] or 'Not provided by user'}`",
         f"- paper_search_results_path: `{summary['paper_search_results_path'] or 'Not provided by user'}`",
+        f"- references_source_path: `{summary['references_source_path'] or 'Not provided by user'}`",
         "",
         "## 附件清单",
         f"- 附件数量: `{attachments['count']}`",
@@ -56,6 +57,7 @@ def main() -> int:
     parser.add_argument("--output-docx", required=True)
     parser.add_argument("--reference-docx", default="")
     parser.add_argument("--paper-search-results", default="")
+    parser.add_argument("--references-source", default="")
     args = parser.parse_args()
 
     comments = Path(args.comments)
@@ -67,6 +69,7 @@ def main() -> int:
     output_docx = Path(args.output_docx)
     reference_docx = Path(args.reference_docx) if args.reference_docx else None
     paper_search_results = Path(args.paper_search_results) if args.paper_search_results else None
+    references_source = Path(args.references_source) if args.references_source else autodiscover_reference_source(comments, attachments_dir, project_root)
 
     errors: list[str] = []
     missing_items: list[str] = []
@@ -97,6 +100,10 @@ def main() -> int:
                 json.loads(paper_search_results.read_text(encoding="utf-8"))
             except json.JSONDecodeError:
                 errors.append(f"paper_search_results_path must be valid json: {paper_search_results}")
+    if references_source is None:
+        missing_items.append("references_source_path")
+    elif not references_source.exists():
+        errors.append(f"references_source_path must be readable: {references_source}")
 
     project_root.mkdir(parents=True, exist_ok=True)
 
@@ -115,6 +122,7 @@ def main() -> int:
         "output_docx_path": str(output_docx.resolve()),
         "reference_docx_path": str(reference_docx.resolve()) if reference_docx else "",
         "paper_search_results_path": str(paper_search_results.resolve()) if paper_search_results else "",
+        "references_source_path": str(references_source.resolve()) if references_source else "",
     }
 
     write_json(project_root / "attachments_manifest.json", attachments_manifest)
@@ -130,6 +138,7 @@ def main() -> int:
                 "attachments_dir_path": directory_signature(attachments_dir),
                 "reference_docx_path": path_signature(reference_docx),
                 "paper_search_results_path": path_signature(paper_search_results),
+                "references_source_path": path_signature(references_source),
             },
             "outputs": {
                 "response_md": str((project_root / "response_to_reviewers.md").resolve()),

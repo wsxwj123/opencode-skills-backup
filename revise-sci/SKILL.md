@@ -24,6 +24,7 @@ Optional but supported:
 - `attachments_dir_path`
 - `reference_docx_path`
 - `paper_search_results_path`
+- `references_source_path`
 
 ## Output Contract
 Always produce:
@@ -91,6 +92,7 @@ Each comment must contain:
 - `build_literature_index.py` must convert validated citation support into review-writing style canonical artifacts: `data/literature_index.json` and `data/revision_claims.json`.
 - `matrix_manager.py` must derive `data/synthesis_matrix.json` from the canonical literature index and emit `data/synthesis_matrix_audit.json` before delivery.
 - `build_reference_registry.py` must extract the final manuscript reference list into canonical `data/reference_registry.json` and audit body-to-reference coverage into `data/reference_coverage_audit.json`.
+- `build_reference_registry.py` may import a fallback reference seed from `references_source_path` when the manuscript reference list is empty or absent.
 - Confirmed citation support must include an explicit anchor such as `target_section_heading`, `target_paragraph_index`, or `target_text`; otherwise the item stays in `needs_author_confirmation`.
 - If current materials are insufficient, keep the item in `needs_author_confirmation` instead of inventing a resolution.
 - Treat `completed` as a narrow state: only conservative text-only clarification or limitation edits with reliable paragraph localization may be auto-completed.
@@ -104,6 +106,7 @@ Each comment must contain:
 - `strict_gate.py` must also verify that every auto-completed citation comment is covered by `reference_sync_report.json`; otherwise delivery fails.
 - `strict_gate.py` must also verify that every auto-completed citation comment is present in both `data/literature_index.json` and `data/synthesis_matrix.json`, and that `data/synthesis_matrix_audit.json` reports no unresolved matrix gaps.
 - `strict_gate.py` must fail delivery when `data/reference_coverage_audit.json` reports unresolved numeric citation gaps, even if the comment-level workflow itself completed.
+- `references_source_path` is optional. If not provided explicitly, the pipeline may auto-detect likely sources such as `<comments_dir>/data/literature_index.json`, attachment files named like `reference*`/`bibliography*`, or project-local seed files.
 - Keep `Evidence Attachments` in every comment block, even when no image or table is available.
 - `--resume` skips already-materialized upstream artifacts so a rerun does not silently overwrite previously curated units.
 - `--resume` also checks stored input fingerprints; if comments/manuscript/SI/attachments/reference/paper-search inputs changed, the rerun fails fast instead of trusting stale artifacts.

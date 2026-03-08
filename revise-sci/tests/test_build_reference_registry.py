@@ -75,3 +75,48 @@ class BuildReferenceRegistryTests(unittest.TestCase):
         self.assertFalse(audit["ok"])
         self.assertEqual(audit["missing_reference_numbers"], [4])
 
+    def test_imports_review_writing_style_reference_seed_when_manuscript_has_no_references(self):
+        output_md = self.project_root / "revised_manuscript.md"
+        output_md.write_text(
+            "\n".join(
+                [
+                    "# Introduction",
+                    "",
+                    "Background statement [1-2].",
+                    "",
+                    "## References",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        seed = self.project_root / "seed.json"
+        seed.write_text(
+            json.dumps(
+                {
+                    "entries": [
+                        {"id": "ext-001", "title": "Study A", "doi": "10.1000/a"},
+                        {"id": "ext-002", "title": "Study B", "pmid": "123456"},
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        result = run_script(
+            "build_reference_registry.py",
+            [
+                "--project-root",
+                str(self.project_root),
+                "--output-md",
+                str(output_md),
+                "--references-source",
+                str(seed),
+            ],
+            cwd=self.root,
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        registry = json.loads((self.project_root / "data" / "reference_registry.json").read_text(encoding="utf-8"))
+        audit = json.loads((self.project_root / "data" / "reference_coverage_audit.json").read_text(encoding="utf-8"))
+        self.assertEqual(len(registry), 2)
+        self.assertTrue(audit["ok"])
+        self.assertEqual(audit["reference_source"], str(seed.resolve()))

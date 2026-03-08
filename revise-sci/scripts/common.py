@@ -12,6 +12,8 @@ from docx import Document
 
 BANNED_PLACEHOLDER_MARKERS = ("{{", "待ai", "ai_fill_required")
 ALLOWED_PROVIDER_FAMILIES = {"paper-search", "user-provided"}
+REFERENCE_SOURCE_NAME_RE = re.compile(r"(reference|references|bibliography|literature_index|refs?)", re.IGNORECASE)
+REFERENCE_SOURCE_EXTS = {".json", ".md", ".txt", ".docx", ".bib"}
 
 
 def normalize_ws(text: str) -> str:
@@ -220,6 +222,35 @@ def blocked_placeholder_found(value: object) -> bool:
     if not text:
         return True
     return any(marker in text for marker in BANNED_PLACEHOLDER_MARKERS)
+
+
+def autodiscover_reference_source(comments_path: Path | None, attachments_dir: Path | None, project_root: Path | None) -> Path | None:
+    candidates: list[Path] = []
+    if comments_path is not None:
+        candidates.append(comments_path.parent / "data" / "literature_index.json")
+    if attachments_dir is not None and attachments_dir.exists():
+        for item in sorted(attachments_dir.iterdir()):
+            if not item.is_file():
+                continue
+            if item.suffix.lower() not in REFERENCE_SOURCE_EXTS:
+                continue
+            if REFERENCE_SOURCE_NAME_RE.search(item.name):
+                candidates.append(item)
+    if project_root is not None:
+        for name in (
+            "reference_seed.json",
+            "references_source.json",
+            "legacy_references.json",
+            "legacy_references.docx",
+            "legacy_references.md",
+            "legacy_references.txt",
+            "references.bib",
+        ):
+            candidates.append(project_root / name)
+    for candidate in candidates:
+        if candidate.exists() and candidate.is_file():
+            return candidate.resolve()
+    return None
 
 
 class AtomicCommentHTMLParser(HTMLParser):

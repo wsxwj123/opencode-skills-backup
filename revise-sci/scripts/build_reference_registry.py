@@ -6,7 +6,7 @@ import json
 import re
 from pathlib import Path
 
-from common import normalize_ws, write_json
+from common import autodiscover_reference_source, normalize_ws, read_docx_paragraphs, read_json, write_json, write_text
 
 
 HEADING_RE = re.compile(r"^\s{0,3}#{1,6}\s*(references|reference|参考文献)\s*$", re.IGNORECASE)
@@ -68,6 +68,113 @@ def build_registry(reference_lines: list[str]) -> list[dict]:
     return registry
 
 
+def build_reference_entry_from_fields(entry: dict, fallback_number: int) -> str:
+    raw = normalize_ws(str(entry.get("reference_entry") or entry.get("raw_text") or entry.get("text") or ""))
+    if raw:
+        return raw
+    authors = entry.get("authors") or []
+    if isinstance(authors, list):
+        authors_text = ", ".join(normalize_ws(str(author)) for author in authors if normalize_ws(str(author)))
+    else:
+        authors_text = normalize_ws(str(authors))
+    title = normalize_ws(str(entry.get("title") or f"Reference {fallback_number}"))
+    journal = normalize_ws(str(entry.get("journal") or entry.get("venue") or ""))
+    year = normalize_ws(str(entry.get("year") or ""))
+    doi = normalize_ws(str(entry.get("doi") or ""))
+    pmid = normalize_ws(str(entry.get("pmid") or ""))
+    parts = []
+    if authors_text:
+        parts.append(f"{authors_text}.")
+    parts.append(f"{title}.")
+    if journal:
+        parts.append(f"{journal}.")
+    if year:
+        parts.append(f"{year}.")
+    if doi:
+        parts.append(f"DOI: {doi}.")
+    if pmid:
+        parts.append(f"PMID: {pmid}.")
+    return " ".join(part for part in parts if part).strip()
+
+
+def parse_seed_json(path: Path) -> list[str]:
+    payload = read_json(path, {})
+    if isinstance(payload, dict):
+        entries = payload.get("entries") or payload.get("results") or payload.get("references") or []
+    elif isinstance(payload, list):
+        entries = payload
+    else:
+        entries = []
+    lines = []
+    for idx, entry in enumerate(entries, start=1):
+        if not isinstance(entry, dict):
+            lines.append(normalize_ws(str(entry)))
+            continue
+        lines.append(build_reference_entry_from_fields(entry, idx))
+    return [line for line in lines if normalize_ws(line)]
+
+
+def parse_seed_docx(path: Path) -> list[str]:
+    rows = read_docx_paragraphs(path)
+    texts = [row["text"] for row in rows if normalize_ws(row["text"])]
+    _, reference_lines, found = split_reference_section("\n".join(texts))
+    if found and reference_lines:
+        return reference_lines
+    return [text for text in texts if NUMBERED_REF_RE.match(text)]
+
+
+def parse_seed_bib(path: Path) -> list[str]:
+    text = path.read_text(encoding="utf-8", errors="ignore")
+    entries = re.split(r"(?=@\w+\s*\{)", text)
+    lines = []
+    for idx, block in enumerate(entries, start=1):
+        if "title" not in block.lower():
+            continue
+        def grab(field: str) -> str:
+            match = re.search(rf"{field}\s*=\s*[\{{\"](.+?)[\}}\"],?\s*$", block, flags=re.IGNORECASE | re.MULTILINE)
+            return normalize_ws(match.group(1)) if match else ""
+        entry = {
+            "authors": grab("author"),
+            "title": grab("title"),
+            "journal": grab("journal") or grab("booktitle"),
+            "year": grab("year"),
+            "doi": grab("doi"),
+            "pmid": grab("pmid"),
+        }
+        lines.append(build_reference_entry_from_fields(entry, idx))
+    return [line for line in lines if normalize_ws(line)]
+
+
+def load_reference_source_lines(path: Path | None) -> tuple[list[str], str]:
+    if path is None or not path.exists():
+        return [], ""
+    suffix = path.suffix.lower()
+    if suffix == ".json":
+        return parse_seed_json(path), str(path.resolve())
+    if suffix in {".md", ".txt"}:
+        text = path.read_text(encoding="utf-8", errors="ignore")
+        _, reference_lines, found = split_reference_section(text)
+        if found and reference_lines:
+            return reference_lines, str(path.resolve())
+        return [line for line in text.splitlines() if normalize_ws(line)], str(path.resolve())
+    if suffix == ".docx":
+        return parse_seed_docx(path), str(path.resolve())
+    if suffix == ".bib":
+        return parse_seed_bib(path), str(path.resolve())
+    return [], str(path.resolve())
+
+
+def rewrite_references_section(output_md: Path, body_text: str, reference_lines: list[str], references_found: bool) -> None:
+    body = body_text.rstrip()
+    lines = body.splitlines() if body else []
+    if lines and normalize_ws(lines[-1]):
+        lines.append("")
+    lines.append("## References")
+    lines.append("")
+    lines.extend(reference_lines)
+    write_text(output_md, "\n".join(lines).rstrip() + "\n")
+
+
 def expand_citation_numbers(payload: str) -> list[int]:
     numbers: list[int] = []
     for chunk in re.split(r"\s*,\s*", payload.replace("–", "-").strip()):
@@ -99,12 +206,24 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Build canonical reference registry and coverage audit from merged manuscript markdown")
     parser.add_argument("--project-root", required=True)
     parser.add_argument("--output-md", required=True)
+    parser.add_argument("--references-source", default="")
     args = parser.parse_args()
 
     project_root = Path(args.project_root)
     output_md = Path(args.output_md)
     data_dir = project_root / "data"
     data_dir.mkdir(parents=True, exist_ok=True)
+    state = read_json(project_root / "project_state.json", {})
+    inputs = state.get("inputs", {}) if isinstance(state, dict) else {}
+    references_source = (
+        Path(args.references_source).resolve()
+        if args.references_source
+        else autodiscover_reference_source(
+            Path(inputs["comments_path"]) if inputs.get("comments_path") else None,
+            Path(inputs["attachments_dir_path"]) if inputs.get("attachments_dir_path") else None,
+            project_root,
+        )
+    )
 
     if not output_md.exists():
         write_json(data_dir / "reference_registry.json", [])
@@ -116,6 +235,7 @@ def main() -> int:
             "cited_numbers": [],
             "available_reference_numbers": [],
             "missing_reference_numbers": [],
+            "reference_source": str(references_source) if references_source else "",
         }
         write_json(data_dir / "reference_coverage_audit.json", report)
         print(json.dumps({"ok": True, "reference_entries": 0, "cited_numbers": 0}, ensure_ascii=False))
@@ -123,6 +243,15 @@ def main() -> int:
 
     text = output_md.read_text(encoding="utf-8")
     body_text, reference_lines, references_found = split_reference_section(text)
+    imported_lines: list[str] = []
+    imported_source = ""
+    if not reference_lines:
+        imported_lines, imported_source = load_reference_source_lines(references_source)
+        if imported_lines:
+            reference_lines = imported_lines
+            rewrite_references_section(output_md, body_text, reference_lines, references_found)
+            text = output_md.read_text(encoding="utf-8")
+            body_text, reference_lines, references_found = split_reference_section(text)
     registry = build_registry(reference_lines)
     write_json(data_dir / "reference_registry.json", registry)
 
@@ -139,6 +268,7 @@ def main() -> int:
         "available_reference_numbers": available_numbers,
         "missing_reference_numbers": missing_numbers,
         "max_cited_number": max(cited_numbers) if cited_numbers else 0,
+        "reference_source": imported_source,
     }
     write_json(data_dir / "reference_coverage_audit.json", report)
     print(
