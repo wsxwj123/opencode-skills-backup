@@ -99,6 +99,7 @@ Each comment must contain:
 - If the user approves new reference search, the search-and-fill path must follow the `review-writing` discipline: `paper-search` retrieval only, immediate `citation_guard.py` after each import batch, update canonical `data/literature_index.json`, then refresh `data/synthesis_matrix.json` / `data/synthesis_matrix_audit.json` before any new references can enter the manuscript.
 - If `reference_search_decision=approved` and reference gaps still exist, the skill must generate `reference_search_manifest.json` and `reference_search_task.md` so the approved search cycle is executable and auditable rather than implicit.
 - The approved search cycle should also emit `reference_search_strategy.json` and `reference_search_status.json` so search scope, provider policy, round model, and step status remain explicit and machine-checkable.
+- The approved search cycle should also emit `reference_search_rounds.json`, containing concrete query batches for Round 1 / Round 2 / Round 3 under `review-writing` governance.
 - The approved search cycle must explicitly declare `workflow=review-writing`, `allowed_provider_families=["paper-search"]`, `forbidden_provider_families` containing `websearch`, and `verification_policy.dual_verification_required=true`.
 - The approved search cycle must keep a three-round structure in both `reference_search_manifest.json` and `reference_search_strategy.json`, and must record `citation_guard.py` as the mandatory verification command.
 - `build_reference_registry.py` should audit both numeric citations and author-year citations; unresolved gaps in either style must block delivery.
@@ -106,6 +107,7 @@ Each comment must contain:
 - If current materials are insufficient, keep the item in `needs_author_confirmation` instead of inventing a resolution.
 - Treat `completed` as a narrow state: only conservative text-only clarification or limitation edits with reliable paragraph localization may be auto-completed.
 - If paragraph localization is ambiguous and multiple candidates score similarly, the item must fall back to `needs_author_confirmation` instead of selecting a paragraph aggressively.
+- If a comment contains an explicit structured section hint such as `Section 4.2` or `4.2 节` but that hint cannot be matched to an existing section, the workflow must not fall back to lexical matching and must keep the item in `needs_author_confirmation`.
 - For Chinese-source reviewer comments, keep the original Chinese comment as the authoritative source block and render a separate English working summary instead of mislabeled bilingual fields.
 - Citation-only comments may be auto-completed only when confirmed `paper-search` results and formatted citation text are explicitly provided.
 - Citation-only comments may be auto-completed only when the row is `confirmed`, the citation guard marks it `guard_verified=true`, and the target anchor is explicit.
@@ -134,3 +136,4 @@ Each comment must contain:
 - Word export should render common markdown emphasis and list markers as real Word formatting instead of leaving raw `**...**` and list prefixes in the document body.
 - `response_to_reviewers.docx` should include a visible heading hierarchy plus a TOC field, centered header text, and footer page-number field so the exported package is review-ready rather than plain-text only.
 - Markdown pipe tables in manuscript or response markdown should be rendered as actual Word tables rather than plain paragraphs.
+- Response block labels such as `Text / Image / Table` should be rendered with a dedicated Word paragraph style so exported reviewer-response documents keep a consistent block structure.

@@ -88,6 +88,24 @@ class ReviseUnitsTests(unittest.TestCase):
         self.assertEqual(section["section_id"], "manuscript-007")
         self.assertEqual(paragraph["paragraph_index"], 92)
 
+    def test_unresolved_structured_heading_hint_blocks_aggressive_fallback(self):
+        unit = {
+            "comment_title": "Section 4.2 needs rewriting",
+            "problem_description": "The logic in section 4.2 is inconsistent.",
+        }
+        self.assertTrue(revise_units.has_unresolved_structured_heading_hint(unit))
+        self.assertIn("结构化章节提示", revise_units.assess_status(
+            "The logic in section 4.2 is inconsistent.",
+            {"needs_experiment": False, "needs_citation": False, "needs_figure": False},
+            None,
+            None,
+            -1,
+            False,
+            None,
+            False,
+            unresolved_structured_hint=True,
+        )[2][0])
+
 
 if __name__ == "__main__":
     unittest.main()

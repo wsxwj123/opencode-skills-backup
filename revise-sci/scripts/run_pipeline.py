@@ -138,6 +138,11 @@ def clear_project_outputs(project_root: Path) -> None:
         "paper_search_validated.json",
         "literature_index_report.json",
         "reference_sync_report.json",
+        "reference_search_manifest.json",
+        "reference_search_task.md",
+        "reference_search_strategy.json",
+        "reference_search_status.json",
+        "reference_search_rounds.json",
     ]
     for dirname in removable_dirs:
         path = project_root / dirname
@@ -213,6 +218,10 @@ def clear_step_outputs(project_root: Path, output_md: Path, output_docx: Path, s
             if path.exists():
                 path.unlink()
         for filename in ("reference_sync_report.json", "reference_recovery_request.md"):
+            path = project_root / filename
+            if path.exists():
+                path.unlink()
+        for filename in ("reference_search_manifest.json", "reference_search_task.md", "reference_search_strategy.json", "reference_search_status.json", "reference_search_rounds.json"):
             path = project_root / filename
             if path.exists():
                 path.unlink()

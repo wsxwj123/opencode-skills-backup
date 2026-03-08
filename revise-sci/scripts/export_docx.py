@@ -7,6 +7,7 @@ import re
 from pathlib import Path
 
 from docx import Document
+from docx.enum.style import WD_STYLE_TYPE
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
@@ -32,7 +33,30 @@ def add_runs_with_bold(paragraph, text: str) -> None:
             paragraph.add_run(part)
 
 
+def ensure_custom_styles(doc: Document) -> None:
+    style_names = {style.name for style in doc.styles}
+    if "ReviseSciLabel" not in style_names:
+        style = doc.styles.add_style("ReviseSciLabel", WD_STYLE_TYPE.PARAGRAPH)
+        style.base_style = doc.styles["Normal"]
+        style.font.name = "Times New Roman"
+        style.font.size = Pt(11)
+        style.font.bold = True
+    if "ReviseSciCommentHeading" not in style_names:
+        style = doc.styles.add_style("ReviseSciCommentHeading", WD_STYLE_TYPE.PARAGRAPH)
+        style.base_style = doc.styles["Heading 3"]
+        style.font.name = "Times New Roman"
+        style.font.size = Pt(12)
+        style.font.bold = True
+
+
 def add_markdown_paragraph(doc: Document, line: str) -> None:
+    label_match = re.fullmatch(r"\*\*(.+?)\*\*", line.strip())
+    if label_match:
+        paragraph = doc.add_paragraph(style="ReviseSciLabel")
+        paragraph.add_run(label_match.group(1)).bold = True
+        paragraph.paragraph_format.space_before = Pt(6)
+        paragraph.paragraph_format.space_after = Pt(0)
+        return
     bullet_match = re.match(r"^- (.+)$", line)
     if bullet_match:
         paragraph = doc.add_paragraph(style="List Bullet")
@@ -99,6 +123,7 @@ def append_field(paragraph, instruction: str, placeholder: str = "") -> None:
 
 
 def configure_document(doc: Document, header_text: str = "") -> None:
+    ensure_custom_styles(doc)
     normal_style = doc.styles["Normal"]
     normal_style.font.name = "Times New Roman"
     normal_style.font.size = Pt(11)
@@ -170,7 +195,8 @@ def markdown_to_docx(
         if line.startswith("#### "):
             doc.add_heading(line[5:], level=4)
         elif line.startswith("### "):
-            doc.add_heading(line[4:], level=3)
+            paragraph = doc.add_paragraph(style="ReviseSciCommentHeading")
+            paragraph.add_run(line[4:]).bold = True
         elif line.startswith("## "):
             doc.add_heading(line[3:], level=2)
         elif line.startswith("# "):

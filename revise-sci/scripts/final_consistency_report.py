@@ -72,6 +72,7 @@ def main() -> int:
                 f"- reference_search_manifest: `{str((project_root / 'reference_search_manifest.json').resolve()) if (project_root / 'reference_search_manifest.json').exists() else 'Not generated'}`",
                 f"- reference_search_strategy: `{str((project_root / 'reference_search_strategy.json').resolve()) if (project_root / 'reference_search_strategy.json').exists() else 'Not generated'}`",
                 f"- reference_search_status: `{str((project_root / 'reference_search_status.json').resolve()) if (project_root / 'reference_search_status.json').exists() else 'Not generated'}`",
+                f"- reference_search_rounds: `{str((project_root / 'reference_search_rounds.json').resolve()) if (project_root / 'reference_search_rounds.json').exists() else 'Not generated'}`",
                 f"- reference_search_task: `{str((project_root / 'reference_search_task.md').resolve()) if (project_root / 'reference_search_task.md').exists() else 'Not generated'}`",
             ]
         )

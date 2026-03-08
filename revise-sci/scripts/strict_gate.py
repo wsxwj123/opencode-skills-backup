@@ -46,6 +46,7 @@ def approved_search_governance_failures(project_root: Path, reference_coverage: 
     manifest_path = project_root / "reference_search_manifest.json"
     strategy_path = project_root / "reference_search_strategy.json"
     status_path = project_root / "reference_search_status.json"
+    rounds_path = project_root / "reference_search_rounds.json"
     task_path = project_root / "reference_search_task.md"
     paper_results_path = project_root / "paper_search_results.json"
     paper_validated_path = project_root / "paper_search_validated.json"
@@ -55,7 +56,7 @@ def approved_search_governance_failures(project_root: Path, reference_coverage: 
     synthesis_audit_path = project_root / "data" / "synthesis_matrix_audit.json"
     reference_sync_path = project_root / "reference_sync_report.json"
 
-    for artifact in (manifest_path, task_path, strategy_path, status_path):
+    for artifact in (manifest_path, task_path, strategy_path, status_path, rounds_path):
         if not artifact.exists():
             failures.append(f"reference search approved but {artifact.name} is missing")
     if failures:
@@ -64,6 +65,7 @@ def approved_search_governance_failures(project_root: Path, reference_coverage: 
     manifest = read_json(manifest_path, {})
     strategy = read_json(strategy_path, {})
     status = read_json(status_path, {})
+    rounds = read_json(rounds_path, {})
     guard_report = read_json(guard_report_path, {})
 
     if manifest.get("workflow") != "review-writing":
@@ -102,11 +104,27 @@ def approved_search_governance_failures(project_root: Path, reference_coverage: 
         if required not in required_outputs:
             failures.append(f"reference_search_strategy.json missing required output {required}")
 
+    if rounds.get("workflow") != "review-writing":
+        failures.append("reference_search_rounds.json must declare workflow review-writing")
+    round_entries = rounds.get("rounds") or []
+    if len(round_entries) != 3:
+        failures.append("reference_search_rounds.json must describe exactly three rounds")
+    else:
+        for expected_round, round_entry in enumerate(round_entries, start=1):
+            if round_entry.get("round") != expected_round:
+                failures.append("reference_search_rounds.json round ordering is invalid")
+            if round_entry.get("provider_family") != "paper-search":
+                failures.append("reference_search_rounds.json must restrict provider_family to paper-search")
+        if not any((round_entry.get("queries") or []) for round_entry in round_entries):
+            failures.append("reference_search_rounds.json must include at least one executable search query")
+
     if status.get("reference_search_decision") != "approved":
         failures.append("reference_search_status.json must keep reference_search_decision approved")
     if status.get("governance_active") is not True:
         failures.append("reference_search_status.json must keep governance_active true")
     steps = status.get("steps") or {}
+    if steps.get("search_round_plan_generated") is not rounds_path.exists():
+        failures.append("reference_search_status.json step search_round_plan_generated is inconsistent with reference_search_rounds.json")
     if steps.get("paper_search_batch_imported") is not paper_results_path.exists():
         failures.append("reference_search_status.json step paper_search_batch_imported is inconsistent with paper_search_results.json")
     if steps.get("validated_batch_present") is not paper_validated_path.exists():

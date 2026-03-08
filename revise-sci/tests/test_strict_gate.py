@@ -308,6 +308,10 @@ class StrictGateTests(unittest.TestCase):
             encoding="utf-8",
         )
         (self.project_root / "reference_search_task.md").write_text("# task\n", encoding="utf-8")
+        (self.project_root / "reference_search_rounds.json").write_text(
+            json.dumps({"workflow": "review-writing", "rounds": [{"round": 1, "queries": ["q1"]}, {"round": 2, "queries": []}, {"round": 3, "queries": []}]}),
+            encoding="utf-8",
+        )
         (self.project_root / "reference_search_strategy.json").write_text(
             json.dumps(
                 {

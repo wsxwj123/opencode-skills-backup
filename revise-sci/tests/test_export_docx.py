@@ -83,6 +83,35 @@ class ExportDocxTests(unittest.TestCase):
             self.assertIn("PAGE", footer_xml)
             self.assertIn("Response to Reviewers", header_xml)
 
+    def test_export_docx_uses_custom_label_style_for_response_blocks(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            project_root = root / "project"
+            project_root.mkdir()
+            md_path = project_root / "sample.md"
+            md_path.write_text("# Title\n\nBody\n", encoding="utf-8")
+            response_md = project_root / "response_to_reviewers.md"
+            response_md.write_text(
+                "# 回复审稿人的邮件\n\n# Reviewer #1\n\n## Major\n\n### Comment 1\n\n#### 5) Evidence Attachments\n\n**Text**\n\n- user-provided: a.md\n\n**Image**\n\n- Not provided by user\n\n**Table**\n\n- Not provided by user\n",
+                encoding="utf-8",
+            )
+            result = run_script(
+                "export_docx.py",
+                [
+                    "--project-root",
+                    str(project_root),
+                    "--output-md",
+                    str(md_path),
+                    "--output-docx",
+                    str(project_root / "sample.docx"),
+                ],
+                cwd=root,
+            )
+            self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+            doc = Document(str(project_root / "response_to_reviewers.docx"))
+            label_para = next(p for p in doc.paragraphs if p.text == "Text")
+            self.assertEqual(label_para.style.name, "ReviseSciLabel")
+
     def test_export_docx_converts_markdown_table_to_word_table(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

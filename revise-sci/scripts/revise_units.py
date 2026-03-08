@@ -221,6 +221,24 @@ def resolve_structured_heading_hint(unit: dict, section_index: dict) -> tuple[di
     return best_section, best_section["paragraphs"][0]
 
 
+def has_unresolved_structured_heading_hint(unit: dict) -> bool:
+    candidates = [
+        normalize_ws(unit.get("comment_title", "")),
+        normalize_ws(unit.get("root_cause", "")),
+        normalize_ws(unit.get("author_strategy", "")),
+        normalize_ws(unit.get("problem_description", "")),
+        normalize_ws(unit.get("reviewer_comment_original", "")),
+        normalize_ws(unit.get("reviewer_comment_en", "")),
+    ]
+    joined = " ".join(text for text in candidates if text)
+    if not joined:
+        return False
+    return bool(
+        re.search(r"\bsection\s+\d+(?:\.\d+)+\b", joined, flags=re.IGNORECASE)
+        or re.search(r"\b\d+(?:\.\d+)+\s*节\b", joined)
+    )
+
+
 def literal_translate_comment(comment_text: str) -> str:
     text = normalize_ws(comment_text)
     lowered = text.lower()
@@ -259,9 +277,12 @@ def assess_status(
     location_ambiguous: bool,
     citation_payload: dict[str, Any] | None,
     citation_anchor_ok: bool,
+    unresolved_structured_hint: bool = False,
 ) -> tuple[str, str, list[str]]:
     reasons: list[str] = []
     intent = editorial_intent(comment_text)
+    if unresolved_structured_hint and intent != "citation":
+        reasons.append("当前结构化章节提示未能匹配到现有 section，不能安全地回退到词面匹配。")
     if not section or not paragraph or (best_score <= 0 and intent != "citation"):
         reasons.append("当前无法将该评论可靠定位到原稿中的具体段落。")
     elif location_ambiguous and intent != "citation":
@@ -344,6 +365,7 @@ def translate_reason_to_en(reason_text: str) -> str:
         "如需补充检索，必须仅使用 paper-search": "If additional retrieval is needed, only paper-search may be used.",
         "当前材料未提供已确认的新文献信息；如需补充检索，必须仅使用 paper-search": "The current materials do not provide confirmed new references; if additional retrieval is needed, only paper-search may be used.",
         "当前材料未提供通过双重验证的新增文献信息；需先完成 paper-search 结果的 citation_guard 校验": "The current materials do not provide newly added references that passed dual verification; the paper-search results must first pass citation_guard validation.",
+        "当前结构化章节提示未能匹配到现有 section，不能安全地回退到词面匹配": "The structured section hint could not be matched to an existing section, so the workflow cannot safely fall back to lexical matching.",
         "图表或补充材料相关修改需要作者确认具体变更内容": "Figure, table, or supplementary-material revisions still require the author to confirm the exact change set.",
         "该评论属于实质性解释或论证要求，当前无法在不引入新证据的情况下自动完成": "This comment requires substantive explanation or argumentation and cannot be resolved automatically without introducing new evidence.",
         "citation 类评论缺少明确的目标章节或段落锚点，当前不能安全地自动写回正文": "This citation-oriented comment lacks an explicit target section or paragraph anchor, so the manuscript cannot be updated safely in automatic mode.",
@@ -581,12 +603,15 @@ def main() -> int:
         anchored_section, anchored_paragraph = resolve_citation_anchor(citation_payload, index_data)
         evidence_section, evidence_paragraph = resolve_evidence_anchor(unit, index_data)
         heading_section, heading_paragraph = resolve_structured_heading_hint(unit, index_data)
+        unresolved_structured_hint = has_unresolved_structured_heading_hint(unit) and not bool(heading_section and heading_paragraph)
         if anchored_section and anchored_paragraph:
             section, paragraph, best_score, location_ambiguous = anchored_section, anchored_paragraph, 1, False
         elif evidence_section and evidence_paragraph:
             section, paragraph, best_score, location_ambiguous = evidence_section, evidence_paragraph, 1, False
         elif heading_section and heading_paragraph:
             section, paragraph, best_score, location_ambiguous = heading_section, heading_paragraph, 1, False
+        elif unresolved_structured_hint:
+            section, paragraph, best_score, location_ambiguous = None, None, -1, True
         else:
             section, paragraph, best_score, location_ambiguous = best_location(query_text, index_data)
         original_excerpt = paragraph["text"] if paragraph else "无"
@@ -600,6 +625,7 @@ def main() -> int:
             location_ambiguous,
             citation_payload,
             bool(anchored_section and anchored_paragraph),
+            unresolved_structured_hint=unresolved_structured_hint,
         )
         response_zh, response_en = response_blocks(unit, status, "；".join(reasons), intent)
         revised_excerpt_en = revise_paragraph(original_excerpt, intent, citation_payload) if status == "completed" else original_excerpt

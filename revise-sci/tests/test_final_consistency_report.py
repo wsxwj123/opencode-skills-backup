@@ -114,6 +114,10 @@ class FinalConsistencyReportTests(unittest.TestCase):
                 json.dumps({"steps": {"citation_guard_passed": False}}),
                 encoding="utf-8",
             )
+            (project_root / "reference_search_rounds.json").write_text(
+                json.dumps({"workflow": "review-writing", "rounds": [{"round": 1, "queries": ["q1"]}]}),
+                encoding="utf-8",
+            )
             result = run_script(
                 "final_consistency_report.py",
                 ["--project-root", str(project_root)],
@@ -124,6 +128,7 @@ class FinalConsistencyReportTests(unittest.TestCase):
             self.assertIn("reference_search_workflow", report)
             self.assertIn("review-writing", report)
             self.assertIn("reference_search_guard_passed", report)
+            self.assertIn("reference_search_rounds", report)
 
 
 if __name__ == "__main__":

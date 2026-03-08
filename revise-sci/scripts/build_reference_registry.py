@@ -376,7 +376,7 @@ def write_reference_recovery_request(project_root: Path, report: dict) -> None:
 
 
 def cleanup_reference_search_artifacts(project_root: Path) -> None:
-    for name in ("reference_search_manifest.json", "reference_search_task.md", "reference_search_strategy.json", "reference_search_status.json"):
+    for name in ("reference_search_manifest.json", "reference_search_task.md", "reference_search_strategy.json", "reference_search_status.json", "reference_search_rounds.json"):
         path = project_root / name
         if path.exists():
             path.unlink()
@@ -424,6 +424,58 @@ def search_query_hints(project_root: Path, state: dict, report: dict) -> list[di
         seen.add(query)
         deduped.append({"type": hint["type"], "query": query})
     return deduped
+
+
+def build_search_rounds(query_hints: list[dict], report: dict) -> dict:
+    round1_queries: list[str] = []
+    round2_queries: list[str] = []
+    round3_queries: list[str] = []
+    for hint in query_hints:
+        hint_type = normalize_ws(str(hint.get("type", "")))
+        query = normalize_ws(str(hint.get("query", "")))
+        if not query:
+            continue
+        if hint_type in {"manuscript_title", "missing_number_batch"}:
+            round1_queries.append(query)
+        elif hint_type in {"section_heading", "missing_author_year"}:
+            round2_queries.append(query)
+        else:
+            round1_queries.append(query)
+    if not round1_queries:
+        fallback_queries = []
+        if report.get("missing_reference_numbers"):
+            fallback_queries.append(f"Resolve missing references for citation numbers {', '.join(str(x) for x in report.get('missing_reference_numbers', [])[:20])}")
+        for key in report.get("missing_author_year_citations", [])[:10]:
+            author, _, year = key.partition("|")
+            fallback_queries.append(f"{author} {year}")
+        round1_queries.extend(fallback_queries)
+    round3_queries.extend(round2_queries[:3] or round1_queries[:3])
+    return {
+        "workflow": "review-writing",
+        "rounds": [
+            {
+                "round": 1,
+                "name": "Candidate retrieval",
+                "status": "pending",
+                "provider_family": "paper-search",
+                "queries": round1_queries,
+            },
+            {
+                "round": 2,
+                "name": "Section-deepening retrieval",
+                "status": "pending",
+                "provider_family": "paper-search",
+                "queries": round2_queries,
+            },
+            {
+                "round": 3,
+                "name": "Critical refresh",
+                "status": "pending",
+                "provider_family": "paper-search",
+                "queries": round3_queries,
+            },
+        ],
+    }
 
 
 def write_reference_search_artifacts(project_root: Path, state: dict, report: dict) -> None:
@@ -486,6 +538,7 @@ def write_reference_search_artifacts(project_root: Path, state: dict, report: di
             ]
         },
     }
+    round_plan = build_search_rounds(manifest["query_hints"], report)
     strategy = {
         "workflow": "review-writing",
         "reference_search_decision": "approved",
@@ -551,6 +604,7 @@ def write_reference_search_artifacts(project_root: Path, state: dict, report: di
         "governance_active": True,
         "mode": manifest["mode"],
         "steps": {
+            "search_round_plan_generated": True,
             "paper_search_batch_imported": paper_search_results_path.exists(),
             "validated_batch_present": paper_search_validated_path.exists(),
             "citation_guard_passed": bool(guard_report.get("summary", {}).get("all_rows_guard_verified", False)),
@@ -566,6 +620,7 @@ def write_reference_search_artifacts(project_root: Path, state: dict, report: di
     write_json(project_root / "reference_search_manifest.json", manifest)
     write_json(project_root / "reference_search_strategy.json", strategy)
     write_json(project_root / "reference_search_status.json", status)
+    write_json(project_root / "reference_search_rounds.json", round_plan)
     lines = [
         "# Reference Search Task",
         "",
@@ -597,6 +652,7 @@ def write_reference_search_artifacts(project_root: Path, state: dict, report: di
     lines.append("- `python scripts/matrix_manager.py audit --matrix <project_root/data/synthesis_matrix.json> --report <project_root/data/synthesis_matrix_audit.json>`")
     lines.append("- `python scripts/reference_sync.py --project-root <project_root> --output-md <output_md>`")
     lines.append("- `python scripts/build_reference_registry.py --project-root <project_root> --output-md <output_md> --reference-search-decision approved`")
+    lines.extend(["", "## Search Round Plan", "", f"- `reference_search_rounds.json`: {str((project_root / 'reference_search_rounds.json').resolve())}"])
     write_text(project_root / "reference_search_task.md", "\n".join(lines) + "\n")
 
 
