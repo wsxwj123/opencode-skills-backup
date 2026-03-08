@@ -83,6 +83,40 @@ class ExportDocxTests(unittest.TestCase):
             self.assertIn("PAGE", footer_xml)
             self.assertIn("Response to Reviewers", header_xml)
 
+    def test_export_docx_converts_markdown_table_to_word_table(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            project_root = root / "project"
+            project_root.mkdir()
+            md_path = project_root / "sample.md"
+            md_path.write_text(
+                "# Title\n\n| Item | Meaning |\n| --- | --- |\n| A | Alpha |\n| B | Beta |\n",
+                encoding="utf-8",
+            )
+            response_md = project_root / "response_to_reviewers.md"
+            response_md.write_text("# 回复审稿人的邮件\n\n### Comment 1\n\nBody\n", encoding="utf-8")
+
+            result = run_script(
+                "export_docx.py",
+                [
+                    "--project-root",
+                    str(project_root),
+                    "--output-md",
+                    str(md_path),
+                    "--output-docx",
+                    str(project_root / "sample.docx"),
+                ],
+                cwd=root,
+            )
+            self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+
+            doc = Document(str(project_root / "sample.docx"))
+            self.assertEqual(len(doc.tables), 1)
+            table = doc.tables[0]
+            self.assertEqual(table.cell(0, 0).text, "Item")
+            self.assertEqual(table.cell(1, 1).text, "Alpha")
+            self.assertEqual(table.cell(2, 1).text, "Beta")
+
 
 if __name__ == "__main__":
     unittest.main()

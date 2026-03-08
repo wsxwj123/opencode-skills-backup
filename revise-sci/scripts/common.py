@@ -169,17 +169,31 @@ def normalize_stem_key(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", lowered).strip()
 
 
+def iter_nearby_docx_candidates(manuscript_path: Path) -> list[Path]:
+    root = manuscript_path.parent
+    candidates: list[Path] = []
+    for candidate in sorted(root.rglob("*.docx")):
+        if candidate.resolve() == manuscript_path.resolve():
+            continue
+        if candidate.name.startswith("~$"):
+            continue
+        try:
+            relative = candidate.relative_to(root)
+        except ValueError:
+            continue
+        if len(relative.parts) > 3:
+            continue
+        candidates.append(candidate)
+    return candidates
+
+
 def find_same_title_reference_docx(manuscript_path: Path | None) -> Path | None:
     if manuscript_path is None or not manuscript_path.exists() or manuscript_path.suffix.lower() != ".docx":
         return None
     manuscript_title = normalize_title_key(docx_title_hint(manuscript_path))
     manuscript_stem = normalize_stem_key(manuscript_path.stem)
     siblings: list[tuple[int, Path]] = []
-    for candidate in sorted(manuscript_path.parent.glob("*.docx")):
-        if candidate.resolve() == manuscript_path.resolve():
-            continue
-        if candidate.name.startswith("~$"):
-            continue
+    for candidate in iter_nearby_docx_candidates(manuscript_path):
         reference_count = docx_reference_entry_count(candidate)
         if reference_count < 3:
             continue
@@ -187,13 +201,23 @@ def find_same_title_reference_docx(manuscript_path: Path | None) -> Path | None:
         candidate_stem = normalize_stem_key(candidate.stem)
         title_match = bool(manuscript_title and candidate_title and manuscript_title == candidate_title)
         stem_match = bool(manuscript_stem and candidate_stem and manuscript_stem == candidate_stem)
-        if not title_match and not stem_match:
+        title_overlap = 0
+        if manuscript_title and candidate_title:
+            manuscript_tokens = set(manuscript_title.split())
+            candidate_tokens = set(candidate_title.split())
+            title_overlap = len(manuscript_tokens.intersection(candidate_tokens))
+        near_title_match = title_overlap >= 6
+        if not title_match and not stem_match and not near_title_match:
             continue
         score = 0
         if title_match:
             score += 100
+        elif near_title_match:
+            score += 70
         if stem_match:
             score += 20
+        if candidate.parent != manuscript_path.parent:
+            score -= 5
         score += min(reference_count, 50)
         siblings.append((score, candidate.resolve()))
     if not siblings:

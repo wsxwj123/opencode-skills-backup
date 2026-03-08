@@ -112,6 +112,7 @@ Each comment must contain:
 - `strict_gate.py` must fail delivery when `data/reference_coverage_audit.json` reports unresolved numeric citation gaps, even if the comment-level workflow itself completed.
 - `strict_gate.py` must parse `response_to_reviewers.docx` and verify that comment headings, response-section headings, and evidence-section headings are present for every comment block.
 - `references_source_path` is optional. If not provided explicitly, the pipeline may auto-detect likely sources such as a same-title sibling manuscript docx with a populated `References` block, `<comments_dir>/data/literature_index.json`, attachment files named like `reference*`/`bibliography*`, or project-local seed files.
+- `references_source_path` auto-discovery should also inspect nearby versioned manuscript docx files inside shallow subdirectories of the manuscript folder when they share the same title and contain a usable `References` block.
 - `references_source_path` may also be a `.ris` file exported from a reference manager.
 - Keep `Evidence Attachments` in every comment block, even when no image or table is available.
 - `--resume` skips already-materialized upstream artifacts so a rerun does not silently overwrite previously curated units.
@@ -124,3 +125,4 @@ Each comment must contain:
 - `final_consistency_report.md` should also summarize reference coverage status, including detected numeric citations, reference entry count, and missing reference numbers when present.
 - Word export should render common markdown emphasis and list markers as real Word formatting instead of leaving raw `**...**` and list prefixes in the document body.
 - `response_to_reviewers.docx` should include a visible heading hierarchy plus a TOC field, centered header text, and footer page-number field so the exported package is review-ready rather than plain-text only.
+- Markdown pipe tables in manuscript or response markdown should be rendered as actual Word tables rather than plain paragraphs.

@@ -104,6 +104,34 @@ class CommonTests(unittest.TestCase):
             discovered = common.autodiscover_reference_source(comments, None, root, manuscript)
             self.assertEqual(discovered, sibling.resolve())
 
+    def test_autodiscover_reference_source_finds_same_title_docx_in_subdirectory(self):
+        from tempfile import TemporaryDirectory
+
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            comments = root / "comments.html"
+            comments.write_text("<html></html>", encoding="utf-8")
+            manuscript = root / "Manuscript .docx"
+            legacy_dir = root / "revision"
+            legacy_dir.mkdir()
+            sibling = legacy_dir / "revised manuscript.docx"
+
+            current = Document()
+            current.add_paragraph("Advancement of Extracellular Vesicles Applications in Pulmonary Diseases")
+            current.add_paragraph("Introduction")
+            current.save(manuscript)
+
+            legacy = Document()
+            legacy.add_paragraph("Advancement of Extracellular Vesicles Applications in Pulmonary Diseases")
+            legacy.add_paragraph("References")
+            legacy.add_paragraph("1. Smith J. Study A. 2023.")
+            legacy.add_paragraph("2. Lee K. Study B. 2024.")
+            legacy.add_paragraph("3. Wang M. Study C. 2025.")
+            legacy.save(sibling)
+
+            discovered = common.autodiscover_reference_source(comments, None, root, manuscript)
+            self.assertEqual(discovered, sibling.resolve())
+
 
 if __name__ == "__main__":
     unittest.main()

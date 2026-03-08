@@ -61,6 +61,33 @@ class ReviseUnitsTests(unittest.TestCase):
         self.assertEqual(section["section_id"], "manuscript-010")
         self.assertEqual(paragraph["paragraph_index"], 87)
 
+    def test_resolve_structured_heading_hint_prefers_section_heading(self):
+        unit = {
+            "comment_title": "Section 3.2 therapeutic potential needs restructuring",
+            "problem_description": "The current organization is difficult to follow.",
+            "root_cause": "The logic in section 3.2 Therapeutic Potential is too fragmented.",
+            "author_strategy": "Reframe the section around clinical scenarios.",
+        }
+        section_index = {
+            "sections": [
+                {
+                    "section_id": "manuscript-003",
+                    "heading": "2.4 Isolation methods",
+                    "file": "manuscript_sections/03-isolation.md",
+                    "paragraphs": [{"paragraph_index": 41, "text": "Isolation methods include ultracentrifugation."}],
+                },
+                {
+                    "section_id": "manuscript-007",
+                    "heading": "3.2 Therapeutic Potential",
+                    "file": "manuscript_sections/07-therapeutic-potential.md",
+                    "paragraphs": [{"paragraph_index": 92, "text": "EV-based therapy has shown promise in pulmonary disease models."}],
+                },
+            ]
+        }
+        section, paragraph = revise_units.resolve_structured_heading_hint(unit, section_index)
+        self.assertEqual(section["section_id"], "manuscript-007")
+        self.assertEqual(paragraph["paragraph_index"], 92)
+
 
 if __name__ == "__main__":
     unittest.main()

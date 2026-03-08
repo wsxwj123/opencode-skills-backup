@@ -145,6 +145,82 @@ def resolve_evidence_anchor(unit: dict, section_index: dict) -> tuple[dict[str, 
     return None, None
 
 
+def resolve_structured_heading_hint(unit: dict, section_index: dict) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    candidates = [
+        normalize_ws(unit.get("comment_title", "")),
+        normalize_ws(unit.get("root_cause", "")),
+        normalize_ws(unit.get("author_strategy", "")),
+        normalize_ws(unit.get("problem_description", "")),
+        normalize_ws(unit.get("reviewer_comment_original", "")),
+        normalize_ws(unit.get("reviewer_comment_en", "")),
+    ]
+    joined = " ".join(text for text in candidates if text)
+    if not joined:
+        return None, None
+
+    section_tokens = re.findall(r"\b(\d+(?:\.\d+)*)\b", joined)
+    for token in section_tokens:
+        if token.isdigit() and len(token) <= 1:
+            continue
+        for section in section_index.get("sections", []):
+            heading = normalize_ws(section.get("heading", ""))
+            if heading.startswith(f"{token} ") or heading.startswith(f"{token}."):
+                if section.get("paragraphs"):
+                    return section, section["paragraphs"][0]
+
+    stopwords = {
+        "section",
+        "comment",
+        "needs",
+        "need",
+        "current",
+        "logic",
+        "issue",
+        "issues",
+        "structure",
+        "restructure",
+        "reframed",
+        "reframe",
+        "clarify",
+        "discussion",
+        "results",
+        "introduction",
+        "major",
+        "minor",
+    }
+    query_tokens = {
+        token
+        for token in tokenize(joined)
+        if len(token) >= 4 and token.lower() not in stopwords
+    }
+    if not query_tokens:
+        return None, None
+
+    scored: list[tuple[int, dict[str, Any]]] = []
+    for section in section_index.get("sections", []):
+        heading = normalize_ws(section.get("heading", ""))
+        heading_tokens = {
+            token
+            for token in tokenize(heading)
+            if len(token) >= 4 and token.lower() not in stopwords
+        }
+        if not heading_tokens:
+            continue
+        score = len(query_tokens.intersection(heading_tokens))
+        if score > 0:
+            scored.append((score, section))
+    if not scored:
+        return None, None
+    scored.sort(key=lambda item: item[0], reverse=True)
+    best_score, best_section = scored[0]
+    second_score = scored[1][0] if len(scored) > 1 else -1
+    if best_score < 2 or (second_score >= 0 and best_score - second_score <= 1):
+        return None, None
+    if not best_section.get("paragraphs"):
+        return None, None
+    return best_section, best_section["paragraphs"][0]
+
+
 def literal_translate_comment(comment_text: str) -> str:
     text = normalize_ws(comment_text)
     lowered = text.lower()
@@ -504,10 +580,13 @@ def main() -> int:
         citation_payload = paper_search_map.get(unit["comment_id"])
         anchored_section, anchored_paragraph = resolve_citation_anchor(citation_payload, index_data)
         evidence_section, evidence_paragraph = resolve_evidence_anchor(unit, index_data)
+        heading_section, heading_paragraph = resolve_structured_heading_hint(unit, index_data)
         if anchored_section and anchored_paragraph:
             section, paragraph, best_score, location_ambiguous = anchored_section, anchored_paragraph, 1, False
         elif evidence_section and evidence_paragraph:
             section, paragraph, best_score, location_ambiguous = evidence_section, evidence_paragraph, 1, False
+        elif heading_section and heading_paragraph:
+            section, paragraph, best_score, location_ambiguous = heading_section, heading_paragraph, 1, False
         else:
             section, paragraph, best_score, location_ambiguous = best_location(query_text, index_data)
         original_excerpt = paragraph["text"] if paragraph else "无"

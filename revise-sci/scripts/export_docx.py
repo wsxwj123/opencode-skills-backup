@@ -47,6 +47,32 @@ def add_markdown_paragraph(doc: Document, line: str) -> None:
     add_runs_with_bold(paragraph, line)
 
 
+def parse_markdown_table_row(line: str) -> list[str]:
+    stripped = line.strip().strip("|")
+    return [cell.strip() for cell in stripped.split("|")]
+
+
+def is_markdown_table_separator(line: str) -> bool:
+    cells = parse_markdown_table_row(line)
+    return bool(cells) and all(re.fullmatch(r":?-{3,}:?", cell) for cell in cells)
+
+
+def add_markdown_table(doc: Document, rows: list[list[str]]) -> None:
+    if not rows:
+        return
+    column_count = max(len(row) for row in rows)
+    table = doc.add_table(rows=len(rows), cols=column_count)
+    table.style = "Table Grid"
+    for row_idx, row in enumerate(rows):
+        for col_idx in range(column_count):
+            text = row[col_idx] if col_idx < len(row) else ""
+            cell_paragraph = table.cell(row_idx, col_idx).paragraphs[0]
+            add_runs_with_bold(cell_paragraph, text)
+            if row_idx == 0:
+                for run in cell_paragraph.runs:
+                    run.bold = True
+
+
 def append_field(paragraph, instruction: str, placeholder: str = "") -> None:
     run = paragraph.add_run()
     begin = OxmlElement("w:fldChar")
@@ -118,10 +144,24 @@ def markdown_to_docx(
     lines = md_path.read_text(encoding="utf-8").splitlines()
     seen_comment = False
     toc_inserted = False
-    for raw_line in lines:
+    idx = 0
+    while idx < len(lines):
+        raw_line = lines[idx]
         line = raw_line.rstrip()
         if not line:
             doc.add_paragraph("")
+            idx += 1
+            continue
+        if "|" in line and idx + 1 < len(lines) and is_markdown_table_separator(lines[idx + 1]):
+            table_rows = [parse_markdown_table_row(line)]
+            idx += 2
+            while idx < len(lines):
+                next_line = lines[idx].rstrip()
+                if not next_line or "|" not in next_line:
+                    break
+                table_rows.append(parse_markdown_table_row(next_line))
+                idx += 1
+            add_markdown_table(doc, table_rows)
             continue
         if line.startswith("### Comment") and page_break_before_comment:
             if seen_comment:
@@ -140,6 +180,7 @@ def markdown_to_docx(
                 toc_inserted = True
         else:
             add_markdown_paragraph(doc, line)
+        idx += 1
     doc.save(str(docx_path))
 
 
