@@ -10,6 +10,7 @@ Use this skill to convert reviewer comments, the original manuscript, SI, and at
 
 The workflow is script-gated. Do not skip steps. Do not fabricate experiments, data, statistics, or references.
 The comment parser supports both atomic `comment-unit` HTML and reviewer-simulator style report HTML with critique lists.
+The manuscript atomizer also recognizes numbered section headings such as `1`, `1.1`, and `2.3.4` even when the source Word paragraph style is not a formal heading style.
 
 ## Required Inputs
 - `comments_path`
@@ -77,7 +78,9 @@ Each comment must contain:
 - Confirmed citation support must include an explicit anchor such as `target_section_heading`, `target_paragraph_index`, or `target_text`; otherwise the item stays in `needs_author_confirmation`.
 - If current materials are insufficient, keep the item in `needs_author_confirmation` instead of inventing a resolution.
 - Treat `completed` as a narrow state: only conservative text-only clarification or limitation edits with reliable paragraph localization may be auto-completed.
+- For Chinese-source reviewer comments, keep the original Chinese comment as the authoritative source block and render a separate English working summary instead of mislabeled bilingual fields.
 - Citation-only comments may be auto-completed only when confirmed `paper-search` results and formatted citation text are explicitly provided.
+- When `author_confirmation_reason` is rendered into English, the translated reason must remain fully English with no leftover Chinese fragments.
 - For substantive requests such as new mechanism explanations, new evidence, new figures, or unresolved section matches, stop at `needs_author_confirmation`.
 - `strict_gate.py` must verify comment coverage, response/manuscript/edit-plan consistency, atomic location completeness, provider-family policy, and per-comment evidence blocks before delivery.
 - Keep `Evidence Attachments` in every comment block, even when no image or table is available.

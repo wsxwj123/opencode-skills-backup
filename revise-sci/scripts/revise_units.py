@@ -38,6 +38,27 @@ def infer_target_document(comment_text: str, has_si: bool) -> str:
     return "manuscript"
 
 
+def comment_query_text(unit: dict) -> str:
+    return normalize_ws(unit.get("problem_description") or unit.get("reviewer_comment_original") or unit.get("reviewer_comment_en") or "")
+
+
+def english_summary_for_comment(unit: dict) -> str:
+    explicit = normalize_ws(unit.get("reviewer_comment_en_summary", ""))
+    if explicit:
+        return explicit
+    if unit.get("reviewer_comment_lang") == "zh":
+        return "The source reviewer comment is written in Chinese. Please use the original Chinese comment as the authoritative version for this item."
+    return normalize_ws(unit.get("reviewer_comment_en", ""))
+
+
+def original_comment_label(unit: dict) -> str:
+    return "**原始审稿意见（中文原文）**" if unit.get("reviewer_comment_lang") == "zh" else "**原始审稿意见（English）**"
+
+
+def secondary_comment_label(unit: dict) -> str:
+    return "**审稿意见英文摘要（工作译文）**" if unit.get("reviewer_comment_lang") == "zh" else "**审稿意见中文翻译（直译）**"
+
+
 def resolve_citation_anchor(citation_payload: dict[str, Any] | None, section_index: dict) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
     if not citation_payload:
         return None, None
@@ -58,6 +79,48 @@ def resolve_citation_anchor(citation_payload: dict[str, Any] | None, section_ind
             return section, paragraph
         if target_section_heading and target_paragraph_index is None and not target_text and section.get("paragraphs"):
             return section, section["paragraphs"][0]
+    return None, None
+
+
+def normalize_anchor_text(text: str) -> str:
+    text = normalize_ws(text)
+    replacements = {
+        "证据锚点:": "",
+        "问题描述:": "",
+        "作者应对方案:": "",
+        "根源质询:": "",
+    }
+    for old, new in replacements.items():
+        text = text.replace(old, new)
+    return normalize_ws(text)
+
+
+def resolve_evidence_anchor(unit: dict, section_index: dict) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    anchor = normalize_anchor_text(unit.get("evidence_anchor", ""))
+    if not anchor:
+        return None, None
+
+    paragraph_numbers = [int(value) for value in re.findall(r"第\s*(\d+)\s*段", anchor)]
+    if paragraph_numbers:
+        for section in section_index.get("sections", []):
+            for paragraph in section.get("paragraphs", []):
+                if paragraph.get("paragraph_index") in paragraph_numbers:
+                    return section, paragraph
+
+    section_tokens = re.findall(r"(\d+(?:\.\d+)*)\s*节", anchor)
+    if section_tokens:
+        for token in section_tokens:
+            for section in section_index.get("sections", []):
+                heading = normalize_ws(section.get("heading", ""))
+                if heading.startswith(f"{token} ") or heading.startswith(f"{token}."):
+                    if section.get("paragraphs"):
+                        return section, section["paragraphs"][0]
+
+    for heading_name in ("Abstract", "Introduction", "Discussion", "Conclusion", "Results", "Methods"):
+        if heading_name.lower() in anchor.lower():
+            for section in section_index.get("sections", []):
+                if normalize_ws(section.get("heading", "")).lower() == heading_name.lower() and section.get("paragraphs"):
+                    return section, section["paragraphs"][0]
     return None, None
 
 
@@ -140,6 +203,7 @@ def revise_paragraph(original_excerpt: str, intent: str, citation_payload: dict[
 
 
 def response_blocks(unit: dict, status: str, needs_reason: str, intent: str) -> tuple[str, str]:
+    needs_reason_en = translate_reason_to_en(needs_reason)
     if status == "completed":
         if intent == "clarify":
             return (
@@ -163,8 +227,30 @@ def response_blocks(unit: dict, status: str, needs_reason: str, intent: str) -> 
     reason = needs_reason or "当前材料仍需作者确认。"
     return (
         f"感谢审稿人的重要建议。根据当前用户提供材料，我们已完成定位、问题拆解和可执行修订草案，但该条仍需作者确认：{reason}",
-        f"We thank the reviewer for this important comment. Based on the materials currently provided by the user, we completed the localization, issue analysis, and a draft revision path; however, this item still requires author confirmation: {reason}",
+        f"We thank the reviewer for this important comment. Based on the materials currently provided by the user, we completed the localization, issue analysis, and a draft revision path; however, this item still requires author confirmation: {needs_reason_en}",
     )
+
+
+def translate_reason_to_en(reason_text: str) -> str:
+    if not reason_text:
+        return "The currently available materials still require author confirmation."
+    normalized_map = {
+        "当前无法将该评论可靠定位到原稿中的具体段落": "The current materials do not allow this comment to be mapped reliably to a specific manuscript paragraph.",
+        "当前材料未提供新增实验或结果": "The current materials do not provide the additional experiments or results required for this item.",
+        "当前材料未提供已确认的新文献信息": "The current materials do not provide confirmed new references.",
+        "如需补充检索，必须仅使用 paper-search": "If additional retrieval is needed, only paper-search may be used.",
+        "当前材料未提供已确认的新文献信息；如需补充检索，必须仅使用 paper-search": "The current materials do not provide confirmed new references; if additional retrieval is needed, only paper-search may be used.",
+        "图表或补充材料相关修改需要作者确认具体变更内容": "Figure, table, or supplementary-material revisions still require the author to confirm the exact change set.",
+        "该评论属于实质性解释或论证要求，当前无法在不引入新证据的情况下自动完成": "This comment requires substantive explanation or argumentation and cannot be resolved automatically without introducing new evidence.",
+        "citation 类评论缺少明确的目标章节或段落锚点，当前不能安全地自动写回正文": "This citation-oriented comment lacks an explicit target section or paragraph anchor, so the manuscript cannot be updated safely in automatic mode.",
+        "当前材料仍需作者确认": "The currently available materials still require author confirmation.",
+    }
+    full_reason = normalize_ws(reason_text).rstrip("。.;；:：")
+    if full_reason in normalized_map:
+        return normalized_map[full_reason]
+    parts = [normalize_ws(segment).rstrip("。.;；:：") for segment in re.split(r"[；;]", reason_text) if normalize_ws(segment)]
+    translated = [normalized_map.get(part, "Author confirmation is still required for this item.") for part in parts]
+    return "; ".join(translated)
 
 
 def revised_excerpt_zh_summary(intent: str, status: str, citation_payload: dict[str, Any] | None = None) -> str:
@@ -201,14 +287,16 @@ def load_paper_search_map(path: str) -> dict[str, dict[str, Any]]:
 def render_comment_record(unit: dict) -> str:
     atomic = unit["atomic_location"]
     actions = unit["modification_actions"] or [{"action": "无", "reason": "无"}]
+    original_block = unit.get("reviewer_comment_original") or unit["reviewer_comment_en"]
+    secondary_block = unit["reviewer_comment_zh_literal"] if unit.get("reviewer_comment_lang") != "zh" else english_summary_for_comment(unit)
     lines = [
         f"# {unit['comment_id']}",
         "",
         "## 1) 审稿意见与中文理解",
         "",
-        f"**原始审稿意见（English）**  \n{unit['reviewer_comment_en']}",
+        f"{original_comment_label(unit)}  \n{original_block}",
         "",
-        f"**审稿意见中文翻译（直译）**  \n{unit['reviewer_comment_zh_literal']}",
+        f"{secondary_comment_label(unit)}  \n{secondary_block}",
         "",
         f"**审稿意见中文理解**  \n{unit['intent_zh']}",
         "",
@@ -285,13 +373,15 @@ def render_response_to_reviewers(units: list[dict]) -> str:
             lines.append(f"## {severity.capitalize()}")
             lines.append("")
             for idx, unit in enumerate(items, start=1):
+                original_block = unit.get("reviewer_comment_original") or unit["reviewer_comment_en"]
+                secondary_block = unit["reviewer_comment_zh_literal"] if unit.get("reviewer_comment_lang") != "zh" else english_summary_for_comment(unit)
                 lines.append(f"### Comment {idx}")
                 lines.append("")
                 lines.append("#### 1) 审稿意见与中文理解")
                 lines.append("")
-                lines.append(f"**原始审稿意见（English）**  \n{unit['reviewer_comment_en']}")
+                lines.append(f"{original_comment_label(unit)}  \n{original_block}")
                 lines.append("")
-                lines.append(f"**审稿意见中文翻译（直译）**  \n{unit['reviewer_comment_zh_literal']}")
+                lines.append(f"{secondary_comment_label(unit)}  \n{secondary_block}")
                 lines.append("")
                 lines.append(f"**审稿意见中文理解**  \n{unit['intent_zh']}")
                 lines.append("")
@@ -381,18 +471,22 @@ def main() -> int:
     processed_units = []
     for unit_path in units_paths:
         unit = read_json(unit_path, {})
-        target_document = infer_target_document(unit["reviewer_comment_en"], bool(si_index.get("sections")))
+        query_text = comment_query_text(unit)
+        target_document = infer_target_document(query_text, bool(si_index.get("sections")))
         index_data = si_index if target_document == "si" else manuscript_index
         citation_payload = paper_search_map.get(unit["comment_id"])
         anchored_section, anchored_paragraph = resolve_citation_anchor(citation_payload, index_data)
+        evidence_section, evidence_paragraph = resolve_evidence_anchor(unit, index_data)
         if anchored_section and anchored_paragraph:
             section, paragraph, best_score = anchored_section, anchored_paragraph, 1
+        elif evidence_section and evidence_paragraph:
+            section, paragraph, best_score = evidence_section, evidence_paragraph, 1
         else:
-            section, paragraph, best_score = best_location(unit["reviewer_comment_en"], index_data)
+            section, paragraph, best_score = best_location(query_text, index_data)
         original_excerpt = paragraph["text"] if paragraph else "无"
-        requirements = detect_comment_requirements(unit["reviewer_comment_en"])
+        requirements = detect_comment_requirements(query_text)
         status, intent, reasons = assess_status(
-            unit["reviewer_comment_en"],
+            query_text,
             requirements,
             section,
             paragraph,
@@ -418,7 +512,7 @@ def main() -> int:
             notes_core = ["已将经确认的 paper-search 结果接入该条评论，并补入对应的文献支持。"]
             notes_support = ["仅在提供了已确认的检索结果和格式化引文文本时，才允许自动完成该类文献补充。"]
 
-        sent_idx, sent_text = choose_sentence(unit["reviewer_comment_en"], original_excerpt)
+        sent_idx, sent_text = choose_sentence(query_text, original_excerpt)
         atomic_location = {
             "manuscript_section_id": section["section_id"] if section and target_document == "manuscript" else "",
             "si_section_id": section["section_id"] if section and target_document == "si" else "",
@@ -454,7 +548,7 @@ def main() -> int:
         unit.update(
             {
                 "reviewer_comment_zh_literal": literal_translate_comment(unit["reviewer_comment_en"]),
-                "intent_zh": f"审稿人关注点：{comment_nature(unit['reviewer_comment_en'])}。",
+                "intent_zh": f"审稿人关注点：{comment_nature(query_text)}。",
                 "response_zh": response_zh,
                 "response_en": response_en,
                 "atomic_location": atomic_location,

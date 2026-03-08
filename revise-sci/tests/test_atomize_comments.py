@@ -110,6 +110,11 @@ class AtomizeCommentsTests(unittest.TestCase):
         self.assertEqual(second["severity"], "minor")
         self.assertIn("参考文献系统已经失效", first["reviewer_comment_en"])
         self.assertIn("统一 EV 与 exosome 的术语边界", second["reviewer_comment_en"])
+        self.assertEqual(first["reviewer_comment_lang"], "zh")
+        self.assertIn("References section is empty", first["problem_description"])
+        self.assertIn("References section", first["evidence_anchor"])
+        self.assertIn("Citation management failed", first["root_cause"])
+        self.assertIn("Rebuild references", first["author_strategy"])
 
     def test_docx_multiline_comment_is_kept_in_one_unit(self):
         comments = create_docx(

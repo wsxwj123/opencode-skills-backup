@@ -87,6 +87,8 @@ class PipelineTests(unittest.TestCase):
         self.assertIn("needs_author_confirmation", report)
         state = json.loads((project_root / "project_state.json").read_text(encoding="utf-8"))
         self.assertEqual(state["delivery_status"], "author_confirmation_required")
+        unit = json.loads(next((project_root / "units").glob("*.json")).read_text(encoding="utf-8"))
+        self.assertNotRegex(unit["response_en"], r"[\u4e00-\u9fff]")
 
     def test_pipeline_does_not_auto_complete_substantive_comment_without_explicit_support(self):
         project_root, result = self._run_pipeline(
@@ -400,3 +402,59 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         unit = json.loads(next((project_root / "units").glob("*.json")).read_text(encoding="utf-8"))
         self.assertEqual(unit["status"], "needs_author_confirmation")
+
+    def test_pipeline_uses_structured_evidence_anchor_for_location(self):
+        comments_html = self.root / "report.html"
+        comments_html.write_text(
+            """
+            <html><body>
+            <section class="critique-section">
+              <h2>七、必须解决的核心问题</h2>
+              <ul class="critique-list">
+                <li>
+                  <div class="critique-title">【问题1】重建 1.1 小节逻辑</div>
+                  <div class="critique-content"><strong>问题描述:</strong> The 1.1 section needs restructuring.</div>
+                  <span class="evidence-anchor"><strong>证据锚点:</strong> 1.1 节。</span>
+                  <div class="response-strategy"><strong>作者应对方案:</strong> Rewrite section 1.1.</div>
+                </li>
+              </ul>
+            </section>
+            </body></html>
+            """,
+            encoding="utf-8",
+        )
+        manuscript = create_docx(
+            self.root / "anchored_manuscript.docx",
+            [
+                ("paragraph", "Introduction"),
+                ("paragraph", "Front paragraph."),
+                ("paragraph", "1. Current Status of Pulmonary Disease Research"),
+                ("paragraph", "Section 1 paragraph."),
+                ("paragraph", "1.1 Pathophysiological Features and the Targeting Gap"),
+                ("paragraph", "Section 1.1 paragraph."),
+                ("paragraph", "2. Engineering Strategies"),
+                ("paragraph", "Section 2 paragraph."),
+            ],
+        )
+        project_root = self.root / "anchor_run"
+        result = run_script(
+            "run_pipeline.py",
+            [
+                "--comments",
+                str(comments_html),
+                "--manuscript",
+                str(manuscript),
+                "--attachments-dir",
+                str(self.attachments),
+                "--project-root",
+                str(project_root),
+                "--output-md",
+                str(project_root / "revised_manuscript.md"),
+                "--output-docx",
+                str(project_root / "revised_manuscript.docx"),
+            ],
+            cwd=self.root,
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        unit = json.loads(next((project_root / "units").glob("*.json")).read_text(encoding="utf-8"))
+        self.assertEqual(unit["atomic_location"]["section_heading"], "1.1 Pathophysiological Features and the Targeting Gap")

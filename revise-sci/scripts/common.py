@@ -88,6 +88,8 @@ def is_heading(row: dict[str, Any]) -> bool:
     text = row.get("text", "")
     if style_name.startswith("heading"):
         return True
+    if re.match(r"^\d+(?:\.\d+)*\.?\s+\S+", text) and not re.match(r"^(fig|figure|table)\b", text, flags=re.IGNORECASE):
+        return True
     if len(text.split()) <= 8 and text.lower() in {
         "abstract",
         "introduction",

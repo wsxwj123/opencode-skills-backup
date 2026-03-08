@@ -52,3 +52,34 @@ class AtomizeManuscriptTests(unittest.TestCase):
         section_file = self.project_root / m_index["sections"][0]["file"]
         self.assertTrue(section_file.exists())
         self.assertIn("Introduction", section_file.read_text(encoding="utf-8"))
+
+    def test_numbered_normal_paragraph_headings_are_promoted_to_sections(self):
+        manuscript = create_docx(
+            self.root / "numbered.docx",
+            [
+                ("paragraph", "Introduction"),
+                ("paragraph", "Overview paragraph."),
+                ("paragraph", "1. Current Status of Pulmonary Disease Research"),
+                ("paragraph", "Status paragraph."),
+                ("paragraph", "1.1 Pathophysiological Features and the Targeting Gap"),
+                ("paragraph", "Gap paragraph."),
+                ("paragraph", "2. Engineering Strategies"),
+                ("paragraph", "Engineering paragraph."),
+            ],
+        )
+        result = run_script(
+            "atomize_manuscript.py",
+            [
+                "--manuscript",
+                str(manuscript),
+                "--project-root",
+                str(self.project_root),
+            ],
+            cwd=self.root,
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        m_index = json.loads((self.project_root / "manuscript_section_index.json").read_text(encoding="utf-8"))
+        headings = [section["heading"] for section in m_index["sections"]]
+        self.assertIn("1. Current Status of Pulmonary Disease Research", headings)
+        self.assertIn("1.1 Pathophysiological Features and the Targeting Gap", headings)
+        self.assertIn("2. Engineering Strategies", headings)

@@ -18,6 +18,10 @@ def format_comment_id(reviewer: str, severity: str, index: int) -> str:
     return f"R{reviewer_number(reviewer)}-{severity.capitalize()}-{index:02d}"
 
 
+def detect_language(text: str) -> str:
+    return "zh" if re.search(r"[\u4e00-\u9fff]", text or "") else "en"
+
+
 def parse_docx_comments(path: Path) -> list[dict[str, str]]:
     rows = read_docx_paragraphs(path)
     comments: list[dict[str, str]] = []
@@ -36,6 +40,7 @@ def parse_docx_comments(path: Path) -> list[dict[str, str]]:
                 "reviewer": current_reviewer,
                 "severity": current_severity,
                 "comment_text": normalize_ws(" ".join(current_text)),
+                "comment_lang": detect_language(" ".join(current_text)),
             }
         )
         current_text = []
@@ -90,6 +95,7 @@ def parse_html_comments(path: Path) -> list[dict[str, str]]:
                 "reviewer": item["reviewer"],
                 "severity": item["severity"],
                 "comment_text": item["comment_text"],
+                "comment_lang": detect_language(item["comment_text"]),
             }
         )
     if units:
@@ -121,12 +127,19 @@ def parse_html_comments(path: Path) -> list[dict[str, str]]:
             if not parts:
                 continue
             severity_counters[severity] += 1
+            comment_text = normalize_ws(" ".join(parts))
             units.append(
                 {
                     "comment_id": format_comment_id(reviewer, severity, severity_counters[severity]),
                     "reviewer": reviewer,
                     "severity": severity,
-                    "comment_text": normalize_ws(" ".join(parts)),
+                    "comment_text": comment_text,
+                    "comment_lang": detect_language(comment_text),
+                    "comment_title": title,
+                    "problem_description": normalize_ws(item.select_one(".critique-content").get_text(" ", strip=True) if item.select_one(".critique-content") else ""),
+                    "evidence_anchor": normalize_ws(item.select_one(".evidence-anchor").get_text(" ", strip=True) if item.select_one(".evidence-anchor") else ""),
+                    "root_cause": normalize_ws(item.select_one(".root-cause").get_text(" ", strip=True) if item.select_one(".root-cause") else ""),
+                    "author_strategy": normalize_ws(item.select_one(".response-strategy").get_text(" ", strip=True) if item.select_one(".response-strategy") else ""),
                 }
             )
     return units
@@ -153,8 +166,11 @@ def main() -> int:
             "comment_id": item["comment_id"],
             "reviewer": item["reviewer"],
             "severity": item["severity"],
+            "reviewer_comment_original": item["comment_text"],
+            "reviewer_comment_lang": item.get("comment_lang", detect_language(item["comment_text"])),
             "reviewer_comment_en": item["comment_text"],
             "reviewer_comment_zh_literal": "",
+            "reviewer_comment_en_summary": "",
             "intent_zh": "",
             "response_zh": "",
             "response_en": "",
@@ -169,6 +185,11 @@ def main() -> int:
             "target_document": "",
             "status": "not_started",
             "author_confirmation_reason": "",
+            "comment_title": item.get("comment_title", ""),
+            "problem_description": item.get("problem_description", ""),
+            "evidence_anchor": item.get("evidence_anchor", ""),
+            "root_cause": item.get("root_cause", ""),
+            "author_strategy": item.get("author_strategy", ""),
         }
         write_json(units_dir / f"{idx:03d}_{item['comment_id']}.json", payload)
 
