@@ -21,6 +21,7 @@ Optional but supported:
 - `si_docx_path`
 - `attachments_dir_path`
 - `reference_docx_path`
+- `paper_search_results_path`
 
 ## Output Contract
 Always produce:
@@ -51,7 +52,7 @@ python scripts/strict_gate.py ...
 Or use the single entrypoint:
 
 ```bash
-python scripts/run_pipeline.py --comments <comments_path> --manuscript <manuscript_docx_path> --project-root <project_root> --output-md <output_md_path> --output-docx <output_docx_path>
+python scripts/run_pipeline.py --comments <comments_path> --manuscript <manuscript_docx_path> --project-root <project_root> --output-md <output_md_path> --output-docx <output_docx_path> [--paper-search-results <paper_search_results_path>] [--resume]
 ```
 
 ## Response Format
@@ -71,8 +72,11 @@ Each comment must contain:
 ## Rules
 - Missing information must be written as `Not provided by user` or `需作者确认`.
 - If a reviewer asks for new literature, only `paper-search` is allowed as the external provider family.
+- `paper_search_results_path` may be used to ingest confirmed paper-search results into citation-oriented comment handling.
 - If current materials are insufficient, keep the item in `needs_author_confirmation` instead of inventing a resolution.
 - Treat `completed` as a narrow state: only conservative text-only clarification or limitation edits with reliable paragraph localization may be auto-completed.
+- Citation-only comments may be auto-completed only when confirmed `paper-search` results and formatted citation text are explicitly provided.
 - For substantive requests such as new mechanism explanations, new evidence, new figures, or unresolved section matches, stop at `needs_author_confirmation`.
 - `strict_gate.py` must verify comment coverage, response/manuscript/edit-plan consistency, atomic location completeness, provider-family policy, and per-comment evidence blocks before delivery.
 - Keep `Evidence Attachments` in every comment block, even when no image or table is available.
+- `--resume` skips already-materialized upstream artifacts so a rerun does not silently overwrite previously curated units.

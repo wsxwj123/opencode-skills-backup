@@ -17,6 +17,27 @@ def run_step(cmd: list[str]) -> None:
         raise SystemExit(completed.returncode)
 
 
+def has_units(project_root: Path) -> bool:
+    return (project_root / "units").exists() and any((project_root / "units").glob("*.json"))
+
+
+def has_manuscript_sections(project_root: Path) -> bool:
+    return (project_root / "manuscript_section_index.json").exists() and any((project_root / "manuscript_sections").glob("*.md"))
+
+
+def has_issue_index(project_root: Path) -> bool:
+    return (project_root / "index.json").exists() and (project_root / "issue_matrix.md").exists()
+
+
+def has_revision_outputs(project_root: Path) -> bool:
+    return (
+        (project_root / "response_to_reviewers.md").exists()
+        and (project_root / "manuscript_edit_plan.md").exists()
+        and (project_root / "comment_records").exists()
+        and any((project_root / "comment_records").glob("*.md"))
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run the revise-sci pipeline end to end")
     parser.add_argument("--comments", required=True)
@@ -27,10 +48,12 @@ def main() -> int:
     parser.add_argument("--output-md", required=True)
     parser.add_argument("--output-docx", required=True)
     parser.add_argument("--reference-docx", default="")
+    parser.add_argument("--paper-search-results", default="")
     parser.add_argument("--resume", action="store_true")
     args = parser.parse_args()
 
     script_dir = Path(__file__).resolve().parent
+    project_root = Path(args.project_root)
     py = sys.executable
     common_args = [
         "--comments",
@@ -50,16 +73,28 @@ def main() -> int:
         common_args.extend(["--attachments-dir", args.attachments_dir])
     if args.reference_docx:
         common_args.extend(["--reference-docx", args.reference_docx])
+    if args.paper_search_results:
+        common_args.extend(["--paper-search-results", args.paper_search_results])
 
-    run_step([py, str(script_dir / "preflight.py")] + common_args)
-    run_step([py, str(script_dir / "atomize_comments.py"), "--comments", args.comments, "--project-root", args.project_root])
-    atomize_doc_args = [py, str(script_dir / "atomize_manuscript.py"), "--manuscript", args.manuscript, "--project-root", args.project_root]
-    if args.si:
-        atomize_doc_args.extend(["--si", args.si])
-    run_step(atomize_doc_args)
-    run_step([py, str(script_dir / "build_issue_matrix.py"), "--project-root", args.project_root])
-    run_step([py, str(script_dir / "revise_units.py"), "--project-root", args.project_root])
-    run_step([py, str(script_dir / "build_issue_matrix.py"), "--project-root", args.project_root])
+    if not args.resume or not (project_root / "precheck_report.md").exists():
+        run_step([py, str(script_dir / "preflight.py")] + common_args)
+    if not args.resume or not has_units(project_root):
+        run_step([py, str(script_dir / "atomize_comments.py"), "--comments", args.comments, "--project-root", args.project_root])
+    if not args.resume or not has_manuscript_sections(project_root):
+        atomize_doc_args = [py, str(script_dir / "atomize_manuscript.py"), "--manuscript", args.manuscript, "--project-root", args.project_root]
+        if args.si:
+            atomize_doc_args.extend(["--si", args.si])
+        run_step(atomize_doc_args)
+    if not args.resume or not has_issue_index(project_root):
+        run_step([py, str(script_dir / "build_issue_matrix.py"), "--project-root", args.project_root])
+    if not args.resume or not has_revision_outputs(project_root):
+        revise_args = [py, str(script_dir / "revise_units.py"), "--project-root", args.project_root]
+        if args.paper_search_results:
+            revise_args.extend(["--paper-search-results", args.paper_search_results])
+        run_step(revise_args)
+        run_step([py, str(script_dir / "build_issue_matrix.py"), "--project-root", args.project_root])
+    elif args.resume:
+        run_step([py, str(script_dir / "build_issue_matrix.py"), "--project-root", args.project_root])
     run_step([py, str(script_dir / "merge_manuscript.py"), "--project-root", args.project_root, "--output-md", args.output_md])
     export_args = [
         py,

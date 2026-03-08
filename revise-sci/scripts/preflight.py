@@ -29,6 +29,7 @@ def build_report(summary: dict[str, object], attachments: dict[str, object], mis
         f"- output_md_path: `{summary['output_md_path']}`",
         f"- output_docx_path: `{summary['output_docx_path']}`",
         f"- reference_docx_path: `{summary['reference_docx_path'] or 'Not provided by user'}`",
+        f"- paper_search_results_path: `{summary['paper_search_results_path'] or 'Not provided by user'}`",
         "",
         "## 附件清单",
         f"- 附件数量: `{attachments['count']}`",
@@ -54,6 +55,7 @@ def main() -> int:
     parser.add_argument("--output-md", required=True)
     parser.add_argument("--output-docx", required=True)
     parser.add_argument("--reference-docx", default="")
+    parser.add_argument("--paper-search-results", default="")
     args = parser.parse_args()
 
     comments = Path(args.comments)
@@ -64,6 +66,7 @@ def main() -> int:
     output_md = Path(args.output_md)
     output_docx = Path(args.output_docx)
     reference_docx = Path(args.reference_docx) if args.reference_docx else None
+    paper_search_results = Path(args.paper_search_results) if args.paper_search_results else None
 
     errors: list[str] = []
     missing_items: list[str] = []
@@ -86,6 +89,8 @@ def main() -> int:
         missing_items.append("reference_docx_path")
     elif not reference_docx.exists() or reference_docx.suffix.lower() != ".docx":
         errors.append(f"reference_docx_path must be readable .docx: {reference_docx}")
+    if paper_search_results is not None and not paper_search_results.exists():
+        errors.append(f"paper_search_results_path must be readable json: {paper_search_results}")
 
     project_root.mkdir(parents=True, exist_ok=True)
 
@@ -103,6 +108,7 @@ def main() -> int:
         "output_md_path": str(output_md.resolve()),
         "output_docx_path": str(output_docx.resolve()),
         "reference_docx_path": str(reference_docx.resolve()) if reference_docx else "",
+        "paper_search_results_path": str(paper_search_results.resolve()) if paper_search_results else "",
     }
 
     write_json(project_root / "attachments_manifest.json", attachments_manifest)

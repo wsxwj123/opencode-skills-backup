@@ -19,18 +19,16 @@ def doc_for_template(template_path: str) -> Document:
 def markdown_to_docx(md_path: Path, docx_path: Path, template_path: str = "", page_break_before_comment: bool = False) -> None:
     doc = doc_for_template(template_path)
     lines = md_path.read_text(encoding="utf-8").splitlines()
-    first_comment = True
+    seen_comment = False
     for raw_line in lines:
         line = raw_line.rstrip()
         if not line:
             doc.add_paragraph("")
             continue
         if line.startswith("### Comment") and page_break_before_comment:
-            if first_comment:
+            if seen_comment:
                 doc.add_page_break()
-                first_comment = False
-            else:
-                doc.add_page_break()
+            seen_comment = True
         if line.startswith("#### "):
             doc.add_heading(line[5:], level=4)
         elif line.startswith("### "):

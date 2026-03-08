@@ -38,12 +38,32 @@ def infer_target_document(comment_text: str, has_si: bool) -> str:
     return "manuscript"
 
 
+def literal_translate_comment(comment_text: str) -> str:
+    text = normalize_ws(comment_text)
+    lowered = text.lower()
+    replacements = [
+        (r"^please clarify ", "请澄清"),
+        (r"^please explain ", "请解释"),
+        (r"^please expand ", "请扩展说明"),
+        (r"^please add ", "请补充"),
+        (r"^add a citation for ", "请为以下内容补充参考文献："),
+        (r"^correct the typo in ", "请更正以下部分的拼写错误："),
+    ]
+    for pattern, prefix in replacements:
+        if re.search(pattern, lowered):
+            remainder = re.sub(pattern, "", text, flags=re.IGNORECASE).rstrip(".")
+            return f"{prefix}{remainder}。"
+    return f"需作者确认的忠实翻译：{text}"
+
+
 def editorial_intent(comment_text: str) -> str:
     lowered = comment_text.lower()
     if re.search(r"\b(clarify|clarification|rephrase|reword|wording|scope|overstate|tone down|temper)\b", lowered):
         return "clarify"
     if re.search(r"\b(limitation|limitations)\b", lowered):
         return "limitation"
+    if re.search(r"\b(citation|citations|reference|references)\b", lowered):
+        return "citation"
     return ""
 
 
@@ -53,24 +73,27 @@ def assess_status(
     section: dict[str, Any] | None,
     paragraph: dict[str, Any] | None,
     best_score: int,
+    citation_payload: dict[str, Any] | None,
 ) -> tuple[str, str, list[str]]:
     reasons: list[str] = []
     intent = editorial_intent(comment_text)
-    if not section or not paragraph or best_score <= 0:
+    if not section or not paragraph or (best_score <= 0 and intent != "citation"):
         reasons.append("当前无法将该评论可靠定位到原稿中的具体段落。")
     if requirements["needs_experiment"]:
         reasons.append("当前材料未提供新增实验或结果。")
-    if requirements["needs_citation"]:
+    if requirements["needs_citation"] and not (citation_payload and citation_payload.get("confirmed")):
         reasons.append("当前材料未提供已确认的新文献信息；如需补充检索，必须仅使用 paper-search。")
     if requirements["needs_figure"]:
         reasons.append("图表或补充材料相关修改需要作者确认具体变更内容。")
     if not intent and not reasons:
         reasons.append("该评论属于实质性解释或论证要求，当前无法在不引入新证据的情况下自动完成。")
+    if intent == "citation" and citation_payload and citation_payload.get("confirmed") and not reasons:
+        return "completed", intent, []
     status = "completed" if intent and not reasons else "needs_author_confirmation"
     return status, intent, reasons
 
 
-def revise_paragraph(original_excerpt: str, intent: str) -> str:
+def revise_paragraph(original_excerpt: str, intent: str, citation_payload: dict[str, Any] | None = None) -> str:
     sentence = normalize_ws(original_excerpt)
     if not sentence:
         return "无"
@@ -83,11 +106,30 @@ def revise_paragraph(original_excerpt: str, intent: str) -> str:
         if limitation_sentence.lower() in sentence.lower():
             return sentence
         return f"{sentence} {limitation_sentence}"
+    if intent == "citation" and citation_payload:
+        citation_text = normalize_ws(citation_payload.get("formatted_citation_text", ""))
+        if citation_text and citation_text not in sentence:
+            return f"{sentence} {citation_text}".strip()
     return sentence
 
 
-def response_blocks(unit: dict, status: str, needs_reason: str) -> tuple[str, str]:
+def response_blocks(unit: dict, status: str, needs_reason: str, intent: str) -> tuple[str, str]:
     if status == "completed":
+        if intent == "clarify":
+            return (
+                "感谢审稿人的宝贵意见。我们已将相关表述收紧为仅基于本文当前数据的观察，避免超出证据边界的泛化结论，并同步更新了正文。",
+                "We thank the reviewer for this valuable comment. We tightened the statement so that it is explicitly limited to the observation supported by the present dataset, thereby avoiding over-generalization beyond the available evidence, and revised the manuscript accordingly.",
+            )
+        if intent == "limitation":
+            return (
+                "感谢审稿人的建议。我们已在对应段落中直接补充研究局限性的说明，使讨论与当前证据边界保持一致。",
+                "We thank the reviewer for this suggestion. We added an explicit limitation statement to the relevant paragraph so that the discussion remains aligned with the boundary of the current evidence.",
+            )
+        if intent == "citation":
+            return (
+                "感谢审稿人的建议。我们已根据已确认的 paper-search 检索结果补入对应参考文献信息，并在回复中保留来源追踪。",
+                "We thank the reviewer for this suggestion. We incorporated the corresponding reference support based on confirmed paper-search results and preserved the source trace in the response package.",
+            )
         return (
             "感谢审稿人的宝贵意见。我们已依据该意见修订相关表述，并确保回复内容与正文改动保持一致。",
             "We thank the reviewer for this valuable comment. We have revised the relevant text accordingly and aligned the response with the manuscript changes.",
@@ -97,6 +139,37 @@ def response_blocks(unit: dict, status: str, needs_reason: str) -> tuple[str, st
         f"感谢审稿人的重要建议。根据当前用户提供材料，我们已完成定位、问题拆解和可执行修订草案，但该条仍需作者确认：{reason}",
         f"We thank the reviewer for this important comment. Based on the materials currently provided by the user, we completed the localization, issue analysis, and a draft revision path; however, this item still requires author confirmation: {reason}",
     )
+
+
+def revised_excerpt_zh_summary(intent: str, status: str, citation_payload: dict[str, Any] | None = None) -> str:
+    if status != "completed":
+        return "需作者确认：当前材料不足以生成可直接投稿的新中文修订段落。"
+    if intent == "clarify":
+        return "该段已改为仅陈述当前数据范围内可以支持的观察结果。"
+    if intent == "limitation":
+        return "该段已补入与现有证据边界一致的局限性说明。"
+    if intent == "citation":
+        citation_text = normalize_ws((citation_payload or {}).get("formatted_citation_text", ""))
+        if citation_text:
+            return f"该段已补入经确认的参考文献支持：{citation_text}"
+        return "该段已补入经确认的参考文献支持。"
+    return "该段已按审稿意见完成保守的文本性修订。"
+
+
+def load_paper_search_map(path: str) -> dict[str, dict[str, Any]]:
+    if not path:
+        return {}
+    payload = read_json(Path(path), {"results": []})
+    if isinstance(payload, dict):
+        rows = payload.get("results", [])
+    else:
+        rows = payload
+    mapping: dict[str, dict[str, Any]] = {}
+    for row in rows or []:
+        comment_id = normalize_ws(str(row.get("comment_id", "")))
+        if comment_id:
+            mapping[comment_id] = row
+    return mapping
 
 
 def render_comment_record(unit: dict) -> str:
@@ -266,12 +339,15 @@ def render_edit_plan(units: list[dict]) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Populate units, comment records, response markdown, and edit plan")
     parser.add_argument("--project-root", required=True)
+    parser.add_argument("--paper-search-results", default="")
     args = parser.parse_args()
 
     project_root = Path(args.project_root)
     manuscript_index = read_json(project_root / "manuscript_section_index.json", {"sections": []})
     si_index = read_json(project_root / "si_section_index.json", {"sections": []})
     attachments_manifest = read_json(project_root / "attachments_manifest.json", {"files": [], "count": 0})
+    paper_search_path = args.paper_search_results or str(project_root / "paper_search_results.json")
+    paper_search_map = load_paper_search_map(paper_search_path if Path(paper_search_path).exists() else "")
     units_paths = sorted((project_root / "units").glob("*.json"))
     comment_records_dir = project_root / "comment_records"
     comment_records_dir.mkdir(parents=True, exist_ok=True)
@@ -284,14 +360,11 @@ def main() -> int:
         section, paragraph, best_score = best_location(unit["reviewer_comment_en"], index_data)
         original_excerpt = paragraph["text"] if paragraph else "无"
         requirements = detect_comment_requirements(unit["reviewer_comment_en"])
-        status, intent, reasons = assess_status(unit["reviewer_comment_en"], requirements, section, paragraph, best_score)
-        response_zh, response_en = response_blocks(unit, status, "；".join(reasons))
-        revised_excerpt_en = revise_paragraph(original_excerpt, intent) if status == "completed" else original_excerpt
-        revised_excerpt_zh = (
-            "该段已按审稿意见完成保守的文本性修订。"
-            if status == "completed"
-            else "需作者确认：当前材料不足以生成可直接投稿的新中文修订段落。"
-        )
+        citation_payload = paper_search_map.get(unit["comment_id"])
+        status, intent, reasons = assess_status(unit["reviewer_comment_en"], requirements, section, paragraph, best_score, citation_payload)
+        response_zh, response_en = response_blocks(unit, status, "；".join(reasons), intent)
+        revised_excerpt_en = revise_paragraph(original_excerpt, intent, citation_payload) if status == "completed" else original_excerpt
+        revised_excerpt_zh = revised_excerpt_zh_summary(intent, status, citation_payload)
         notes_core = ["已逐条建立评论、回复、正文位置和证据来源的对应关系。"]
         notes_support = ["已保留 Evidence Attachments 三模块，并对缺失材料明确标注。"]
         if status == "needs_author_confirmation":
@@ -303,6 +376,9 @@ def main() -> int:
         elif intent == "limitation":
             notes_core = ["已在原段中直接补入局限性提示句，保持与现有证据边界一致。"]
             notes_support = ["该自动修订不扩展机制解释，也不新增未提供的证据。"]
+        elif intent == "citation":
+            notes_core = ["已将经确认的 paper-search 结果接入该条评论，并补入对应的文献支持。"]
+            notes_support = ["仅在提供了已确认的检索结果和格式化引文文本时，才允许自动完成该类文献补充。"]
 
         sent_idx, sent_text = choose_sentence(unit["reviewer_comment_en"], original_excerpt)
         atomic_location = {
@@ -321,16 +397,25 @@ def main() -> int:
             }
         ]
         if requirements["needs_citation"]:
-            evidence_sources.append(
-                {
-                    "provider_family": "paper-search",
-                    "source": "candidate-search-required",
-                }
-            )
+            if citation_payload and citation_payload.get("confirmed"):
+                for citation in citation_payload.get("citations", []):
+                    evidence_sources.append(
+                        {
+                            "provider_family": "paper-search",
+                            "source": citation.get("source", "paper-search-confirmed"),
+                        }
+                    )
+            else:
+                evidence_sources.append(
+                    {
+                        "provider_family": "paper-search",
+                        "source": "candidate-search-required",
+                    }
+                )
 
         unit.update(
             {
-                "reviewer_comment_zh_literal": f"需人工确认的中文直译：{unit['reviewer_comment_en']}",
+                "reviewer_comment_zh_literal": literal_translate_comment(unit["reviewer_comment_en"]),
                 "intent_zh": f"审稿人关注点：{comment_nature(unit['reviewer_comment_en'])}。",
                 "response_zh": response_zh,
                 "response_en": response_en,

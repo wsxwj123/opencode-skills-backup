@@ -65,3 +65,50 @@ class AtomizeCommentsTests(unittest.TestCase):
         payload = json.loads(units[0].read_text(encoding="utf-8"))
         self.assertEqual(payload["comment_id"], "R1-Major-09")
         self.assertEqual(payload["reviewer_comment_en"], "Please correct Figure 2 legend.")
+
+    def test_docx_multiline_comment_is_kept_in_one_unit(self):
+        comments = create_docx(
+            self.root / "comments.docx",
+            [
+                ("paragraph", "Reviewer #1"),
+                ("paragraph", "Major"),
+                ("paragraph", "1. Please clarify the mechanism statement."),
+                ("paragraph", "Please also explain whether the claim is limited to the current dataset."),
+                ("paragraph", "2. Please expand the limitation discussion."),
+            ],
+        )
+        result = run_script(
+            "atomize_comments.py",
+            ["--comments", str(comments), "--project-root", str(self.project_root)],
+            cwd=self.root,
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        units = sorted((self.project_root / "units").glob("*.json"))
+        self.assertEqual(len(units), 2)
+        first = json.loads(units[0].read_text(encoding="utf-8"))
+        self.assertIn("Please clarify the mechanism statement.", first["reviewer_comment_en"])
+        self.assertIn("limited to the current dataset", first["reviewer_comment_en"])
+
+    def test_docx_comment_prefix_format_is_supported(self):
+        comments = create_docx(
+            self.root / "comments.docx",
+            [
+                ("paragraph", "Reviewer #1"),
+                ("paragraph", "Major"),
+                ("paragraph", "Comment 1: Please clarify the mechanism statement."),
+                ("paragraph", "Additional context for the first comment."),
+                ("paragraph", "Comment 2: Add a citation for the background statement."),
+            ],
+        )
+        result = run_script(
+            "atomize_comments.py",
+            ["--comments", str(comments), "--project-root", str(self.project_root)],
+            cwd=self.root,
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        units = sorted((self.project_root / "units").glob("*.json"))
+        self.assertEqual(len(units), 2)
+        first = json.loads(units[0].read_text(encoding="utf-8"))
+        second = json.loads(units[1].read_text(encoding="utf-8"))
+        self.assertIn("Additional context for the first comment.", first["reviewer_comment_en"])
+        self.assertIn("Add a citation", second["reviewer_comment_en"])

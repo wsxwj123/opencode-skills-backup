@@ -24,62 +24,58 @@ def parse_docx_comments(path: Path) -> list[dict[str, str]]:
     current_reviewer = "Reviewer #1"
     current_severity = "major"
     current_text: list[str] = []
-    current_comment_number = 0
+    current_comment_id = ""
 
     def flush_current() -> None:
-        nonlocal current_text, current_comment_number
-        if not current_text:
+        nonlocal current_text, current_comment_id
+        if not current_text or not current_comment_id:
             return
-        current_comment_number += 1
         comments.append(
             {
-                "comment_id": format_comment_id(current_reviewer, current_severity, current_comment_number),
+                "comment_id": current_comment_id,
                 "reviewer": current_reviewer,
                 "severity": current_severity,
                 "comment_text": normalize_ws(" ".join(current_text)),
             }
         )
         current_text = []
+        current_comment_id = ""
 
     severity_counters: dict[tuple[str, str], int] = {}
+
+    def start_new_comment(text: str) -> None:
+        nonlocal current_text, current_comment_id
+        key = (current_reviewer, current_severity)
+        severity_counters[key] = severity_counters.get(key, 0) + 1
+        current_comment_id = format_comment_id(current_reviewer, current_severity, severity_counters[key])
+        current_text = [text]
+
     for row in rows:
         text = row["text"]
         if re.match(r"^Reviewer\s*#?\d+", text, flags=re.IGNORECASE):
             flush_current()
             current_reviewer = normalize_ws(text.replace("Reviewer", "Reviewer "))
             current_severity = "major"
-            current_comment_number = severity_counters.get((current_reviewer, current_severity), 0)
             continue
         lowered = text.lower()
         if lowered in {"major", "major comments", "major comment"}:
             flush_current()
             current_severity = "major"
-            current_comment_number = severity_counters.get((current_reviewer, current_severity), 0)
             continue
         if lowered in {"minor", "minor comments", "minor comment"}:
             flush_current()
             current_severity = "minor"
-            current_comment_number = severity_counters.get((current_reviewer, current_severity), 0)
             continue
-        match = re.match(r"^(\d+)[\.\)]\s*(.+)$", text)
+        match = re.match(r"^(?:comment\s*)?(\d+)\s*[\.\)\:\-]\s*(.+)$", text, flags=re.IGNORECASE)
         if match:
             flush_current()
-            current_text = [match.group(2)]
-            current_comment_number = severity_counters.get((current_reviewer, current_severity), 0)
-            severity_counters[(current_reviewer, current_severity)] = current_comment_number + 1
-            comments.append(
-                {
-                    "comment_id": format_comment_id(current_reviewer, current_severity, severity_counters[(current_reviewer, current_severity)]),
-                    "reviewer": current_reviewer,
-                    "severity": current_severity,
-                    "comment_text": normalize_ws(match.group(2)),
-                }
-            )
-            current_text = []
-            current_comment_number = severity_counters[(current_reviewer, current_severity)]
+            start_new_comment(match.group(2))
             continue
-        if comments:
-            comments[-1]["comment_text"] = normalize_ws(comments[-1]["comment_text"] + " " + text)
+        if current_text:
+            current_text.append(text)
+            continue
+        start_new_comment(text)
+    flush_current()
     return comments
 
 
