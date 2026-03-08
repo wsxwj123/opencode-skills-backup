@@ -222,6 +222,7 @@ def main() -> int:
             Path(inputs["comments_path"]) if inputs.get("comments_path") else None,
             Path(inputs["attachments_dir_path"]) if inputs.get("attachments_dir_path") else None,
             project_root,
+            Path(inputs["manuscript_docx_path"]) if inputs.get("manuscript_docx_path") else None,
         )
     )
 

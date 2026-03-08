@@ -64,9 +64,10 @@ def resolve_references_source(args: argparse.Namespace) -> Path | None:
     if getattr(args, "references_source", ""):
         return Path(args.references_source).resolve()
     comments = Path(args.comments)
+    manuscript = Path(args.manuscript)
     attachments = Path(args.attachments_dir) if getattr(args, "attachments_dir", "") else None
     project_root = Path(args.project_root)
-    return autodiscover_reference_source(comments, attachments, project_root)
+    return autodiscover_reference_source(comments, attachments, project_root, manuscript)
 
 
 def current_input_signatures(args: argparse.Namespace) -> dict:

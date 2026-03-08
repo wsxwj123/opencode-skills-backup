@@ -714,3 +714,55 @@ class PipelineTests(unittest.TestCase):
         audit = json.loads((project_root / "data" / "reference_coverage_audit.json").read_text(encoding="utf-8"))
         self.assertTrue(audit["ok"])
         self.assertEqual(audit["reference_source"], str(seed.resolve()))
+
+    def test_pipeline_autodiscovers_same_title_sibling_docx_when_references_are_missing(self):
+        comments = create_docx(
+            self.root / "comments.docx",
+            [
+                ("paragraph", "Reviewer #1"),
+                ("paragraph", "Major"),
+                ("paragraph", "1. Please clarify the protective effect statement in the Results section."),
+            ],
+        )
+        manuscript = create_docx(
+            self.root / "Manuscript .docx",
+            [
+                ("paragraph", "Advancement of Extracellular Vesicles Applications in Pulmonary Diseases"),
+                ("heading1", "Introduction"),
+                ("paragraph", "Background statement [1,2,3]."),
+                ("heading1", "References"),
+            ],
+        )
+        sibling = create_docx(
+            self.root / "Manuscript (1).docx",
+            [
+                ("paragraph", "Advancement of Extracellular Vesicles Applications in Pulmonary Diseases"),
+                ("heading1", "References"),
+                ("paragraph", "1. Legacy Study A. 2023."),
+                ("paragraph", "2. Legacy Study B. 2024."),
+                ("paragraph", "3. Legacy Study C. 2025."),
+            ],
+        )
+        project_root = self.root / "autodiscovered_refs_run"
+        result = run_script(
+            "run_pipeline.py",
+            [
+                "--comments",
+                str(comments),
+                "--manuscript",
+                str(manuscript),
+                "--attachments-dir",
+                str(self.attachments),
+                "--project-root",
+                str(project_root),
+                "--output-md",
+                str(project_root / "revised_manuscript.md"),
+                "--output-docx",
+                str(project_root / "revised_manuscript.docx"),
+            ],
+            cwd=self.root,
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        audit = json.loads((project_root / "data" / "reference_coverage_audit.json").read_text(encoding="utf-8"))
+        self.assertTrue(audit["ok"])
+        self.assertEqual(audit["reference_source"], str(sibling.resolve()))

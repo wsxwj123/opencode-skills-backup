@@ -69,7 +69,11 @@ def main() -> int:
     output_docx = Path(args.output_docx)
     reference_docx = Path(args.reference_docx) if args.reference_docx else None
     paper_search_results = Path(args.paper_search_results) if args.paper_search_results else None
-    references_source = Path(args.references_source) if args.references_source else autodiscover_reference_source(comments, attachments_dir, project_root)
+    references_source = (
+        Path(args.references_source)
+        if args.references_source
+        else autodiscover_reference_source(comments, attachments_dir, project_root, manuscript)
+    )
 
     errors: list[str] = []
     missing_items: list[str] = []

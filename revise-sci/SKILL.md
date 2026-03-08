@@ -106,7 +106,7 @@ Each comment must contain:
 - `strict_gate.py` must also verify that every auto-completed citation comment is covered by `reference_sync_report.json`; otherwise delivery fails.
 - `strict_gate.py` must also verify that every auto-completed citation comment is present in both `data/literature_index.json` and `data/synthesis_matrix.json`, and that `data/synthesis_matrix_audit.json` reports no unresolved matrix gaps.
 - `strict_gate.py` must fail delivery when `data/reference_coverage_audit.json` reports unresolved numeric citation gaps, even if the comment-level workflow itself completed.
-- `references_source_path` is optional. If not provided explicitly, the pipeline may auto-detect likely sources such as `<comments_dir>/data/literature_index.json`, attachment files named like `reference*`/`bibliography*`, or project-local seed files.
+- `references_source_path` is optional. If not provided explicitly, the pipeline may auto-detect likely sources such as a same-title sibling manuscript docx with a populated `References` block, `<comments_dir>/data/literature_index.json`, attachment files named like `reference*`/`bibliography*`, or project-local seed files.
 - Keep `Evidence Attachments` in every comment block, even when no image or table is available.
 - `--resume` skips already-materialized upstream artifacts so a rerun does not silently overwrite previously curated units.
 - `--resume` also checks stored input fingerprints; if comments/manuscript/SI/attachments/reference/paper-search inputs changed, the rerun fails fast instead of trusting stale artifacts.

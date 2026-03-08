@@ -8,12 +8,14 @@ from pathlib import Path
 from typing import Any
 
 from docx import Document
+from docx.opc.exceptions import PackageNotFoundError
 
 
 BANNED_PLACEHOLDER_MARKERS = ("{{", "待ai", "ai_fill_required")
 ALLOWED_PROVIDER_FAMILIES = {"paper-search", "user-provided"}
 REFERENCE_SOURCE_NAME_RE = re.compile(r"(reference|references|bibliography|literature_index|refs?)", re.IGNORECASE)
 REFERENCE_SOURCE_EXTS = {".json", ".md", ".txt", ".docx", ".bib"}
+MANUSCRIPT_VERSION_SUFFIX_RE = re.compile(r"\s*\(\d+\)\s*$")
 
 
 def normalize_ws(text: str) -> str:
@@ -85,6 +87,24 @@ def read_docx_paragraphs(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
+def docx_title_hint(path: Path) -> str:
+    try:
+        rows = read_docx_paragraphs(path)
+    except (PackageNotFoundError, KeyError, ValueError):
+        return ""
+    for row in rows[:12]:
+        text = normalize_ws(row.get("text", ""))
+        if not text:
+            continue
+        lowered = text.lower()
+        if lowered in {"highlights", "abstract", "keywords", "references"}:
+            continue
+        if re.match(r"^(fig|figure|table)\b", text, flags=re.IGNORECASE):
+            continue
+        return text
+    return ""
+
+
 def looks_like_reference_entry(text: str) -> bool:
     candidate = normalize_ws(text)
     lowered = candidate.lower()
@@ -96,6 +116,74 @@ def looks_like_reference_entry(text: str) -> bool:
         if has_year and author_like:
             return True
     return False
+
+
+def docx_reference_entry_count(path: Path) -> int:
+    try:
+        rows = read_docx_paragraphs(path)
+    except (PackageNotFoundError, KeyError, ValueError):
+        return 0
+    in_references = False
+    count = 0
+    for row in rows:
+        text = normalize_ws(row.get("text", ""))
+        if not text:
+            continue
+        lowered = text.lower()
+        style_name = row.get("style_name", "").lower()
+        if lowered in {"references", "reference", "参考文献"}:
+            in_references = True
+            continue
+        if in_references and is_heading(row):
+            break
+        if "bibliography" in style_name and looks_like_reference_entry(text):
+            count += 1
+            continue
+        if in_references and looks_like_reference_entry(text):
+            count += 1
+    return count
+
+
+def normalize_title_key(text: str) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", normalize_ws(text).lower()).strip()
+
+
+def normalize_stem_key(text: str) -> str:
+    lowered = MANUSCRIPT_VERSION_SUFFIX_RE.sub("", normalize_ws(text).lower())
+    return re.sub(r"[^a-z0-9]+", " ", lowered).strip()
+
+
+def find_same_title_reference_docx(manuscript_path: Path | None) -> Path | None:
+    if manuscript_path is None or not manuscript_path.exists() or manuscript_path.suffix.lower() != ".docx":
+        return None
+    manuscript_title = normalize_title_key(docx_title_hint(manuscript_path))
+    manuscript_stem = normalize_stem_key(manuscript_path.stem)
+    siblings: list[tuple[int, Path]] = []
+    for candidate in sorted(manuscript_path.parent.glob("*.docx")):
+        if candidate.resolve() == manuscript_path.resolve():
+            continue
+        if candidate.name.startswith("~$"):
+            continue
+        reference_count = docx_reference_entry_count(candidate)
+        if reference_count < 3:
+            continue
+        candidate_title = normalize_title_key(docx_title_hint(candidate))
+        candidate_stem = normalize_stem_key(candidate.stem)
+        title_match = bool(manuscript_title and candidate_title and manuscript_title == candidate_title)
+        stem_match = bool(manuscript_stem and candidate_stem and manuscript_stem == candidate_stem)
+        if not title_match and not stem_match:
+            continue
+        score = 0
+        if title_match:
+            score += 100
+        if stem_match:
+            score += 20
+        score += min(reference_count, 50)
+        siblings.append((score, candidate.resolve()))
+    if not siblings:
+        return None
+    siblings.sort(key=lambda item: (-item[0], str(item[1])))
+    return siblings[0][1]
 
 
 def is_heading(row: dict[str, Any]) -> bool:
@@ -224,8 +312,16 @@ def blocked_placeholder_found(value: object) -> bool:
     return any(marker in text for marker in BANNED_PLACEHOLDER_MARKERS)
 
 
-def autodiscover_reference_source(comments_path: Path | None, attachments_dir: Path | None, project_root: Path | None) -> Path | None:
+def autodiscover_reference_source(
+    comments_path: Path | None,
+    attachments_dir: Path | None,
+    project_root: Path | None,
+    manuscript_path: Path | None = None,
+) -> Path | None:
     candidates: list[Path] = []
+    sibling_docx = find_same_title_reference_docx(manuscript_path)
+    if sibling_docx is not None:
+        candidates.append(sibling_docx)
     if comments_path is not None:
         candidates.append(comments_path.parent / "data" / "literature_index.json")
     if attachments_dir is not None and attachments_dir.exists():
