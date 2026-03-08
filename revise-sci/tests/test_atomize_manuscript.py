@@ -83,3 +83,34 @@ class AtomizeManuscriptTests(unittest.TestCase):
         self.assertIn("1. Current Status of Pulmonary Disease Research", headings)
         self.assertIn("1.1 Pathophysiological Features and the Targeting Gap", headings)
         self.assertIn("2. Engineering Strategies", headings)
+
+    def test_endmatter_reference_heading_is_promoted_to_its_own_section(self):
+        manuscript = create_docx(
+            self.root / "endmatter.docx",
+            [
+                ("heading1", "Conclusion"),
+                ("paragraph", "Main conclusion with citations [1,2]."),
+                ("paragraph", "References"),
+                ("paragraph", "1. Smith J. Study A. 2023."),
+                ("paragraph", "2. Lee K. Study B. 2024."),
+                ("paragraph", "Acknowledgement"),
+                ("paragraph", "Thanks to the funding agency."),
+            ],
+        )
+        result = run_script(
+            "atomize_manuscript.py",
+            [
+                "--manuscript",
+                str(manuscript),
+                "--project-root",
+                str(self.project_root),
+            ],
+            cwd=self.root,
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        m_index = json.loads((self.project_root / "manuscript_section_index.json").read_text(encoding="utf-8"))
+        headings = [section["heading"] for section in m_index["sections"]]
+        self.assertIn("References", headings)
+        self.assertIn("Acknowledgement", headings)
+        refs = next(section for section in m_index["sections"] if section["heading"] == "References")
+        self.assertEqual(len(refs["paragraphs"]), 2)

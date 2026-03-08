@@ -57,10 +57,19 @@ def main() -> int:
     literature_index_path = project_root / "data" / "literature_index.json"
     synthesis_matrix_path = project_root / "data" / "synthesis_matrix.json"
     synthesis_audit_path = project_root / "data" / "synthesis_matrix_audit.json"
+    reference_registry_path = project_root / "data" / "reference_registry.json"
+    reference_coverage_path = project_root / "data" / "reference_coverage_audit.json"
     literature_index = read_json(literature_index_path, [])
     synthesis_matrix = read_json(synthesis_matrix_path, [])
     synthesis_audit = read_json(synthesis_audit_path, {})
+    reference_coverage = read_json(reference_coverage_path, {})
     citation_units = completed_citation_units(units)
+
+    for artifact in (reference_registry_path, reference_coverage_path):
+        if not artifact.exists():
+            failures.append(f"missing reference artifact: {artifact.name}")
+    if isinstance(reference_coverage, dict) and not reference_coverage.get("ok", True):
+        failures.append("reference coverage audit reports unresolved numeric citation gaps")
 
     if citation_units:
         for artifact in (literature_index_path, synthesis_matrix_path, synthesis_audit_path):
@@ -182,6 +191,8 @@ def main() -> int:
         Path(state.get("outputs", {}).get("output_docx", project_root / "missing.docx")),
         edit_plan_path,
         project_root / "reference_sync_report.json",
+        reference_registry_path,
+        reference_coverage_path,
     ):
         if not required_file.exists():
             failures.append(f"missing output: {required_file}")

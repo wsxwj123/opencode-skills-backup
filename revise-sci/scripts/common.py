@@ -83,12 +83,25 @@ def read_docx_paragraphs(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
+def looks_like_reference_entry(text: str) -> bool:
+    candidate = normalize_ws(text)
+    lowered = candidate.lower()
+    if re.search(r"\bdoi:\s*10\.", lowered) or re.search(r"\bpmid:\s*\d+", lowered):
+        return True
+    if re.match(r"^\[?\d+\]?[.)]?\s+", candidate):
+        has_year = re.search(r"\b(19|20)\d{2}\b", candidate) is not None
+        author_like = re.search(r"^\[?\d+\]?[.)]?\s+[A-Z][A-Za-z-]+(?:\s+[A-Z]\.)?", candidate) is not None
+        if has_year and author_like:
+            return True
+    return False
+
+
 def is_heading(row: dict[str, Any]) -> bool:
     style_name = row.get("style_name", "").lower()
     text = row.get("text", "")
     if style_name.startswith("heading"):
         return True
-    if re.match(r"^\d+(?:\.\d+)*\.?\s+\S+", text) and not re.match(r"^(fig|figure|table)\b", text, flags=re.IGNORECASE):
+    if re.match(r"^\d+(?:\.\d+)*\.?\s+\S+", text) and not re.match(r"^(fig|figure|table)\b", text, flags=re.IGNORECASE) and not looks_like_reference_entry(text):
         return True
     if len(text.split()) <= 8 and text.lower() in {
         "abstract",
@@ -101,6 +114,15 @@ def is_heading(row: dict[str, Any]) -> bool:
         "conclusion",
         "supplementary methods",
         "supplementary results",
+        "references",
+        "reference",
+        "acknowledgement",
+        "acknowledgment",
+        "data availability",
+        "declaration of competing interest",
+        "credit authorship contribution statement",
+        "author contributions",
+        "funding",
     }:
         return True
     return False

@@ -30,6 +30,7 @@ def main() -> int:
     project_root = Path(args.project_root)
     units = [read_json(path, {}) for path in sorted((project_root / "units").glob("*.json"))]
     state = read_json(project_root / "project_state.json", {})
+    reference_coverage = read_json(project_root / "data" / "reference_coverage_audit.json", {})
     lines = [
         "# Final Consistency Report",
         "",
@@ -44,6 +45,20 @@ def main() -> int:
     for unit in units:
         trace = ", ".join(src.get("provider_family", "unknown") for src in unit.get("evidence_sources", [])) or "unknown"
         lines.append(f"| {unit.get('comment_id','')} | {unit.get('severity','')} | {unit.get('status','')} | {unit.get('target_document','')} | {trace} |")
+    if isinstance(reference_coverage, dict) and reference_coverage:
+        missing_numbers = ", ".join(str(x) for x in reference_coverage.get("missing_reference_numbers", [])) or "无"
+        lines.extend(
+            [
+                "",
+                "## Reference Coverage",
+                "",
+                f"- reference_coverage_ok: `{reference_coverage.get('ok', True)}`",
+                f"- citation_style: `{reference_coverage.get('citation_style', 'none')}`",
+                f"- reference_entries: `{reference_coverage.get('reference_entries', 0)}`",
+                f"- cited_numbers_detected: `{len(reference_coverage.get('cited_numbers', []))}`",
+                f"- missing_reference_numbers: `{missing_numbers}`",
+            ]
+        )
     if state.get("delivery_status") == "author_confirmation_required":
         lines.extend(["", "## Blocking Reasons", "", "- 当前至少一条评论仍需作者确认，故项目状态不是 ready_to_submit。", ""])
         lines.append("| comment_id | blocker_type | reason |")

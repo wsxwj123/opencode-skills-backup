@@ -53,6 +53,13 @@ def has_literature_outputs(project_root: Path) -> bool:
     )
 
 
+def has_reference_registry_outputs(project_root: Path) -> bool:
+    return (
+        (project_root / "data" / "reference_registry.json").exists()
+        and (project_root / "data" / "reference_coverage_audit.json").exists()
+    )
+
+
 def current_input_signatures(args: argparse.Namespace) -> dict:
     return {
         "comments_path": path_signature(Path(args.comments)),
@@ -223,6 +230,8 @@ def main() -> int:
         )
     run_step([py, str(script_dir / "merge_manuscript.py"), "--project-root", args.project_root, "--output-md", args.output_md])
     run_step([py, str(script_dir / "reference_sync.py"), "--project-root", args.project_root, "--output-md", args.output_md])
+    if not args.resume or not has_reference_registry_outputs(project_root):
+        run_step([py, str(script_dir / "build_reference_registry.py"), "--project-root", args.project_root, "--output-md", args.output_md])
     export_args = [
         py,
         str(script_dir / "export_docx.py"),

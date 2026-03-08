@@ -63,6 +63,8 @@ class PipelineTests(unittest.TestCase):
         self.assertTrue((project_root / "response_to_reviewers.docx").exists())
         self.assertTrue((project_root / "revised_manuscript.md").exists())
         self.assertTrue((project_root / "revised_manuscript.docx").exists())
+        self.assertTrue((project_root / "data" / "reference_registry.json").exists())
+        self.assertTrue((project_root / "data" / "reference_coverage_audit.json").exists())
         report = (project_root / "final_consistency_report.md").read_text(encoding="utf-8")
         self.assertIn("ready_to_submit", report)
         with zipfile.ZipFile(project_root / "response_to_reviewers.docx") as zf:
@@ -613,3 +615,44 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         unit = json.loads(next((project_root / "units").glob("*.json")).read_text(encoding="utf-8"))
         self.assertEqual(unit["atomic_location"]["section_heading"], "1.1 Pathophysiological Features and the Targeting Gap")
+
+    def test_pipeline_fails_when_numeric_citations_have_no_matching_reference_entries(self):
+        comments = create_docx(
+            self.root / "comments.docx",
+            [
+                ("paragraph", "Reviewer #1"),
+                ("paragraph", "Major"),
+                ("paragraph", "1. Please clarify the protective effect statement in the Results section."),
+            ],
+        )
+        manuscript = create_docx(
+            self.root / "manuscript_missing_refs.docx",
+            [
+                ("heading1", "Introduction"),
+                ("paragraph", "Background statement [1,2]."),
+                ("heading1", "Results"),
+                ("paragraph", "Quercetin showed a protective effect in TAC-treated cells."),
+                ("paragraph", "References"),
+            ],
+        )
+        project_root = self.root / "missing_refs_run"
+        result = run_script(
+            "run_pipeline.py",
+            [
+                "--comments",
+                str(comments),
+                "--manuscript",
+                str(manuscript),
+                "--attachments-dir",
+                str(self.attachments),
+                "--project-root",
+                str(project_root),
+                "--output-md",
+                str(project_root / "revised_manuscript.md"),
+                "--output-docx",
+                str(project_root / "revised_manuscript.docx"),
+            ],
+            cwd=self.root,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("reference coverage", result.stdout + result.stderr)
