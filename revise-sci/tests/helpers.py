@@ -1,4 +1,5 @@
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -24,7 +25,7 @@ def create_docx(path: Path, rows: list[tuple[str, str]]) -> Path:
 
 def run_script(script_name: str, args: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        ["python3", str(SCRIPTS_DIR / script_name)] + args,
+        [sys.executable, str(SCRIPTS_DIR / script_name)] + args,
         cwd=cwd,
         text=True,
         capture_output=True,

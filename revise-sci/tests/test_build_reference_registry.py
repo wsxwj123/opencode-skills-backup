@@ -253,3 +253,30 @@ class BuildReferenceRegistryTests(unittest.TestCase):
         registry = json.loads((self.project_root / "data" / "reference_registry.json").read_text(encoding="utf-8"))
         self.assertEqual(len(registry), 2)
         self.assertIn("Study A", registry[0]["raw_text"])
+
+    def test_writes_reference_recovery_request_when_missing_citations_remain(self):
+        output_md = self.project_root / "revised_manuscript.md"
+        output_md.write_text(
+            "\n".join(
+                [
+                    "# Introduction",
+                    "",
+                    "Background statement [1,5].",
+                    "",
+                    "## References",
+                    "",
+                    "1. Smith J. Study A. 2023.",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        result = run_script(
+            "build_reference_registry.py",
+            ["--project-root", str(self.project_root), "--output-md", str(output_md)],
+            cwd=self.root,
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        request = (self.project_root / "reference_recovery_request.md").read_text(encoding="utf-8")
+        self.assertIn("5", request)
+        self.assertIn(".docx/.bib/.ris/.json/.md/.txt", request)

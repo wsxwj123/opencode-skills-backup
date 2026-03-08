@@ -412,6 +412,70 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(second.returncode, 0, msg=second.stdout + second.stderr)
         self.assertEqual(len(list((project_root / "units").glob("*.json"))), 2)
 
+    def test_pipeline_resume_from_revise_rebuilds_downstream_outputs(self):
+        comments = create_docx(
+            self.root / "comments.docx",
+            [
+                ("paragraph", "Reviewer #1"),
+                ("paragraph", "Major"),
+                ("paragraph", "1. Please clarify the protective effect statement in the Results section."),
+            ],
+        )
+        manuscript = create_docx(
+            self.root / "manuscript.docx",
+            [
+                ("heading1", "Results"),
+                ("paragraph", "Quercetin showed a protective effect in TAC-treated cells."),
+            ],
+        )
+        project_root = self.root / "resume_from_revise_run"
+        first = run_script(
+            "run_pipeline.py",
+            [
+                "--comments",
+                str(comments),
+                "--manuscript",
+                str(manuscript),
+                "--attachments-dir",
+                str(self.attachments),
+                "--project-root",
+                str(project_root),
+                "--output-md",
+                str(project_root / "revised_manuscript.md"),
+                "--output-docx",
+                str(project_root / "revised_manuscript.docx"),
+            ],
+            cwd=self.root,
+        )
+        self.assertEqual(first.returncode, 0, msg=first.stdout + first.stderr)
+        response_md = project_root / "response_to_reviewers.md"
+        response_md.write_text("corrupted", encoding="utf-8")
+        second = run_script(
+            "run_pipeline.py",
+            [
+                "--comments",
+                str(comments),
+                "--manuscript",
+                str(manuscript),
+                "--attachments-dir",
+                str(self.attachments),
+                "--project-root",
+                str(project_root),
+                "--output-md",
+                str(project_root / "revised_manuscript.md"),
+                "--output-docx",
+                str(project_root / "revised_manuscript.docx"),
+                "--resume",
+                "--resume-from",
+                "revise",
+            ],
+            cwd=self.root,
+        )
+        self.assertEqual(second.returncode, 0, msg=second.stdout + second.stderr)
+        rebuilt = response_md.read_text(encoding="utf-8")
+        self.assertIn("# 回复审稿人的邮件", rebuilt)
+        self.assertNotIn("corrupted", rebuilt)
+
     def test_pipeline_ingests_confirmed_paper_search_results_for_citation_comment(self):
         comments = create_docx(
             self.root / "comments.docx",

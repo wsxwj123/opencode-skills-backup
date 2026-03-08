@@ -11,24 +11,25 @@ from typing import Any
 from common import build_section_markdown, choose_sentence, comment_nature, detect_comment_requirements, normalize_ws, read_json, tokenize, write_json, write_text
 
 
-def best_location(comment_text: str, section_index: dict) -> tuple[dict[str, Any] | None, dict[str, Any] | None, int]:
+def best_location(comment_text: str, section_index: dict) -> tuple[dict[str, Any] | None, dict[str, Any] | None, int, bool]:
     sections = section_index.get("sections", [])
     if not sections:
-        return None, None, -1
+        return None, None, -1, True
     query = tokenize(comment_text)
-    best_section = sections[0]
-    best_para = sections[0]["paragraphs"][0] if sections[0]["paragraphs"] else None
-    best_score = -1
+    scored: list[tuple[int, dict[str, Any], dict[str, Any] | None]] = []
     for section in sections:
         for paragraph in section.get("paragraphs", []):
             score = len(query.intersection(tokenize(paragraph["text"])))
             if section["heading"]:
                 score += len(query.intersection(tokenize(section["heading"])))
-            if score > best_score:
-                best_score = score
-                best_section = section
-                best_para = paragraph
-    return best_section, best_para, best_score
+            scored.append((score, section, paragraph))
+    if not scored:
+        return sections[0], sections[0]["paragraphs"][0] if sections[0]["paragraphs"] else None, -1, True
+    scored.sort(key=lambda item: item[0], reverse=True)
+    best_score, best_section, best_para = scored[0]
+    second_score = scored[1][0] if len(scored) > 1 else -1
+    ambiguous = best_score <= 1 or (second_score >= 0 and best_score - second_score <= 1)
+    return best_section, best_para, best_score, ambiguous
 
 
 def infer_target_document(comment_text: str, has_si: bool) -> str:
@@ -100,6 +101,16 @@ def resolve_evidence_anchor(unit: dict, section_index: dict) -> tuple[dict[str, 
     if not anchor:
         return None, None
 
+    quoted_matches = re.findall(r"[\"“](.+?)[\"”]", anchor)
+    for quoted in quoted_matches:
+        quoted_text = normalize_ws(quoted)
+        if len(quoted_text) < 8:
+            continue
+        for section in section_index.get("sections", []):
+            for paragraph in section.get("paragraphs", []):
+                if quoted_text in normalize_ws(paragraph.get("text", "")):
+                    return section, paragraph
+
     paragraph_numbers = [int(value) for value in re.findall(r"第\s*(\d+)\s*段", anchor)]
     if paragraph_numbers:
         for section in section_index.get("sections", []):
@@ -115,6 +126,16 @@ def resolve_evidence_anchor(unit: dict, section_index: dict) -> tuple[dict[str, 
                 if heading.startswith(f"{token} ") or heading.startswith(f"{token}."):
                     if section.get("paragraphs"):
                         return section, section["paragraphs"][0]
+
+    figure_table_tokens = re.findall(r"\b(fig(?:ure)?|table)\s*([a-z]?\d+)\b", anchor, flags=re.IGNORECASE)
+    if figure_table_tokens:
+        for _, token in figure_table_tokens:
+            normalized_token = token.lower()
+            for section in section_index.get("sections", []):
+                for paragraph in section.get("paragraphs", []):
+                    paragraph_text = normalize_ws(paragraph.get("text", "")).lower()
+                    if f"fig {normalized_token}" in paragraph_text or f"figure {normalized_token}" in paragraph_text or f"table {normalized_token}" in paragraph_text:
+                        return section, paragraph
 
     for heading_name in ("Abstract", "Introduction", "Discussion", "Conclusion", "Results", "Methods"):
         if heading_name.lower() in anchor.lower():
@@ -159,6 +180,7 @@ def assess_status(
     section: dict[str, Any] | None,
     paragraph: dict[str, Any] | None,
     best_score: int,
+    location_ambiguous: bool,
     citation_payload: dict[str, Any] | None,
     citation_anchor_ok: bool,
 ) -> tuple[str, str, list[str]]:
@@ -166,6 +188,8 @@ def assess_status(
     intent = editorial_intent(comment_text)
     if not section or not paragraph or (best_score <= 0 and intent != "citation"):
         reasons.append("当前无法将该评论可靠定位到原稿中的具体段落。")
+    elif location_ambiguous and intent != "citation":
+        reasons.append("当前存在多个候选段落且匹配度接近，自动回写存在误定位风险。")
     if requirements["needs_experiment"]:
         reasons.append("当前材料未提供新增实验或结果。")
     citation_guard_ok = bool(citation_payload and citation_payload.get("confirmed") and citation_payload.get("guard_verified"))
@@ -481,11 +505,11 @@ def main() -> int:
         anchored_section, anchored_paragraph = resolve_citation_anchor(citation_payload, index_data)
         evidence_section, evidence_paragraph = resolve_evidence_anchor(unit, index_data)
         if anchored_section and anchored_paragraph:
-            section, paragraph, best_score = anchored_section, anchored_paragraph, 1
+            section, paragraph, best_score, location_ambiguous = anchored_section, anchored_paragraph, 1, False
         elif evidence_section and evidence_paragraph:
-            section, paragraph, best_score = evidence_section, evidence_paragraph, 1
+            section, paragraph, best_score, location_ambiguous = evidence_section, evidence_paragraph, 1, False
         else:
-            section, paragraph, best_score = best_location(query_text, index_data)
+            section, paragraph, best_score, location_ambiguous = best_location(query_text, index_data)
         original_excerpt = paragraph["text"] if paragraph else "无"
         requirements = detect_comment_requirements(query_text)
         status, intent, reasons = assess_status(
@@ -494,6 +518,7 @@ def main() -> int:
             section,
             paragraph,
             best_score,
+            location_ambiguous,
             citation_payload,
             bool(anchored_section and anchored_paragraph),
         )

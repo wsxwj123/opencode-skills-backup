@@ -9,6 +9,20 @@ from pathlib import Path
 
 from common import autodiscover_reference_source, compute_tree_signature, directory_signature, path_signature, read_json
 
+STEP_ORDER = (
+    "preflight",
+    "citation_guard",
+    "atomize_comments",
+    "atomize_manuscript",
+    "issue_index",
+    "revise",
+    "literature",
+    "reference_registry",
+    "export",
+    "final_report",
+    "gate",
+)
+
 
 def run_step(cmd: list[str]) -> None:
     completed = subprocess.run(cmd, text=True, capture_output=True)
@@ -133,6 +147,96 @@ def clear_project_outputs(project_root: Path) -> None:
             path.unlink()
 
 
+def clear_step_outputs(project_root: Path, output_md: Path, output_docx: Path, step_name: str) -> None:
+    if step_name == "preflight":
+        clear_project_outputs(project_root)
+        for artifact in (output_md, output_docx):
+            if artifact.exists():
+                artifact.unlink()
+        return
+
+    if step_name == "citation_guard":
+        for filename in ("paper_search_guard_report.json", "paper_search_validated.json"):
+            path = project_root / filename
+            if path.exists():
+                path.unlink()
+        return
+
+    if step_name == "atomize_comments":
+        units_dir = project_root / "units"
+        if units_dir.exists():
+            shutil.rmtree(units_dir)
+        return
+
+    if step_name == "atomize_manuscript":
+        for dirname in ("manuscript_sections", "si_sections"):
+            path = project_root / dirname
+            if path.exists():
+                shutil.rmtree(path)
+        for filename in ("manuscript_section_index.json", "si_section_index.json"):
+            path = project_root / filename
+            if path.exists():
+                path.unlink()
+        return
+
+    if step_name == "issue_index":
+        for filename in ("index.json", "issue_matrix.md"):
+            path = project_root / filename
+            if path.exists():
+                path.unlink()
+        return
+
+    if step_name == "revise":
+        records_dir = project_root / "comment_records"
+        if records_dir.exists():
+            shutil.rmtree(records_dir)
+        for filename in ("response_to_reviewers.md", "response_to_reviewers.docx", "manuscript_edit_plan.md"):
+            path = project_root / filename
+            if path.exists():
+                path.unlink()
+        return
+
+    if step_name == "literature":
+        data_dir = project_root / "data"
+        for filename in ("literature_index.json", "synthesis_matrix.json", "synthesis_matrix_audit.json", "literature_index_report.json"):
+            path = data_dir / filename
+            if path.exists():
+                path.unlink()
+        return
+
+    if step_name == "reference_registry":
+        data_dir = project_root / "data"
+        for filename in ("reference_registry.json", "reference_coverage_audit.json"):
+            path = data_dir / filename
+            if path.exists():
+                path.unlink()
+        for filename in ("reference_sync_report.json", "reference_recovery_request.md"):
+            path = project_root / filename
+            if path.exists():
+                path.unlink()
+        if output_md.exists():
+            output_md.unlink()
+        return
+
+    if step_name == "export":
+        for artifact in (project_root / "response_to_reviewers.docx", output_docx):
+            if artifact.exists():
+                artifact.unlink()
+        return
+
+    if step_name == "final_report":
+        report_path = project_root / "final_consistency_report.md"
+        if report_path.exists():
+            report_path.unlink()
+        return
+
+
+def clear_outputs_from_step(project_root: Path, output_md: Path, output_docx: Path, start_step: str) -> None:
+    start_index = STEP_ORDER.index(start_step)
+    for step_name in STEP_ORDER[start_index:]:
+        clear_step_outputs(project_root, output_md, output_docx, step_name)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run the revise-sci pipeline end to end")
     parser.add_argument("--comments", required=True)
@@ -148,17 +252,23 @@ def main() -> int:
     parser.add_argument("--live-citation-verify", action="store_true")
     parser.add_argument("--offline-citation-verify", action="store_true")
     parser.add_argument("--resume", action="store_true")
+    parser.add_argument("--resume-from", choices=STEP_ORDER)
     parser.add_argument("--force-rebuild", action="store_true")
     args = parser.parse_args()
 
     script_dir = Path(__file__).resolve().parent
     project_root = Path(args.project_root)
+    output_md_path = Path(args.output_md)
+    output_docx_path = Path(args.output_docx)
     py = sys.executable
     resolved_references_source = str(resolve_references_source(args) or "")
     skill_signature = current_skill_signature(script_dir)
 
     if args.resume and args.force_rebuild:
         print("--resume and --force-rebuild cannot be used together", file=sys.stderr)
+        raise SystemExit(2)
+    if args.resume_from and not args.resume:
+        print("--resume-from requires --resume", file=sys.stderr)
         raise SystemExit(2)
     if args.live_citation_verify and args.offline_citation_verify:
         print("--live-citation-verify and --offline-citation-verify cannot be used together", file=sys.stderr)
@@ -178,6 +288,8 @@ def main() -> int:
         if changed_inputs:
             print(f"resume inputs changed: {', '.join(changed_inputs)}", file=sys.stderr)
             raise SystemExit(1)
+        if args.resume_from:
+            clear_outputs_from_step(project_root, output_md_path, output_docx_path, args.resume_from)
 
     common_args = [
         "--comments",

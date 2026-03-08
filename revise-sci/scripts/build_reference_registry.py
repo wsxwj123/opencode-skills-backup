@@ -292,6 +292,41 @@ def merge_missing_numeric_references(current_registry: list[dict], source_regist
     return merged, imported_numbers
 
 
+def write_reference_recovery_request(project_root: Path, report: dict) -> None:
+    request_path = project_root / "reference_recovery_request.md"
+    missing_numbers = report.get("missing_reference_numbers", [])
+    missing_author_year = report.get("missing_author_year_citations", [])
+    if not missing_numbers and not missing_author_year:
+        if request_path.exists():
+            request_path.unlink()
+        return
+    lines = [
+        "# Reference Recovery Request",
+        "",
+        "当前主稿中的正文引文尚未被现有参考文献源完整覆盖，因此该项目不能被视为可直接投稿版本。",
+        "",
+        "## 缺失概览",
+        "",
+        f"- citation_style: {report.get('citation_style', 'unknown')}",
+        f"- missing_reference_numbers: {', '.join(str(number) for number in missing_numbers) if missing_numbers else '无'}",
+        f"- missing_author_year_citations: {', '.join(missing_author_year) if missing_author_year else '无'}",
+        f"- current_reference_source: {report.get('reference_source') or 'Not provided by user'}",
+        "",
+        "## 需作者补充的材料",
+        "",
+        "- 请提供同一篇稿件的完整旧版参考文献源，推荐格式：.docx/.bib/.ris/.json/.md/.txt",
+        "- 如果当前稿件采用数字引文，请优先提供带完整编号的旧稿或 Bib/RIS 文件。",
+        "- 如果当前稿件采用 author-year 引文，请优先提供完整参考文献列表，并确保作者-年份信息可唯一对应。",
+        "",
+        "## 处理原则",
+        "",
+        "- 系统不会凭空生成或猜测缺失的历史参考文献条目。",
+        "- 在未获得可追溯的参考文献源之前，相关缺口会持续阻断 strict gate。",
+        "",
+    ]
+    write_text(request_path, "\n".join(lines))
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Build canonical reference registry and coverage audit from merged manuscript markdown")
     parser.add_argument("--project-root", required=True)
@@ -329,6 +364,7 @@ def main() -> int:
             "reference_source": str(references_source) if references_source else "",
         }
         write_json(data_dir / "reference_coverage_audit.json", report)
+        write_reference_recovery_request(project_root, report)
         print(json.dumps({"ok": True, "reference_entries": 0, "cited_numbers": 0}, ensure_ascii=False))
         return 0
 
@@ -395,6 +431,7 @@ def main() -> int:
         "imported_reference_numbers": imported_reference_numbers,
     }
     write_json(data_dir / "reference_coverage_audit.json", report)
+    write_reference_recovery_request(project_root, report)
     print(
         json.dumps(
             {

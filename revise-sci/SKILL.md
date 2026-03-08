@@ -67,7 +67,7 @@ python scripts/strict_gate.py ...
 Or use the single entrypoint:
 
 ```bash
-python scripts/run_pipeline.py --comments <comments_path> --manuscript <manuscript_docx_path> --project-root <project_root> --output-md <output_md_path> --output-docx <output_docx_path> [--paper-search-results <paper_search_results_path>] [--resume] [--force-rebuild]
+python scripts/run_pipeline.py --comments <comments_path> --manuscript <manuscript_docx_path> --project-root <project_root> --output-md <output_md_path> --output-docx <output_docx_path> [--paper-search-results <paper_search_results_path>] [--resume] [--resume-from <step>] [--force-rebuild]
 ```
 
 ## Response Format
@@ -94,10 +94,12 @@ Each comment must contain:
 - `build_reference_registry.py` must extract the final manuscript reference list into canonical `data/reference_registry.json` and audit body-to-reference coverage into `data/reference_coverage_audit.json`.
 - `build_reference_registry.py` may import a fallback reference seed from `references_source_path` when the manuscript reference list is empty or absent.
 - If a manuscript already has a partial numeric `References` section, `build_reference_registry.py` should try to merge missing numbered entries from the detected legacy reference source instead of failing immediately.
+- If unresolved reference gaps still remain after registry rebuild, `build_reference_registry.py` must emit `reference_recovery_request.md` so the author knows exactly which source formats to provide next.
 - `build_reference_registry.py` should audit both numeric citations and author-year citations; unresolved gaps in either style must block delivery.
 - Confirmed citation support must include an explicit anchor such as `target_section_heading`, `target_paragraph_index`, or `target_text`; otherwise the item stays in `needs_author_confirmation`.
 - If current materials are insufficient, keep the item in `needs_author_confirmation` instead of inventing a resolution.
 - Treat `completed` as a narrow state: only conservative text-only clarification or limitation edits with reliable paragraph localization may be auto-completed.
+- If paragraph localization is ambiguous and multiple candidates score similarly, the item must fall back to `needs_author_confirmation` instead of selecting a paragraph aggressively.
 - For Chinese-source reviewer comments, keep the original Chinese comment as the authoritative source block and render a separate English working summary instead of mislabeled bilingual fields.
 - Citation-only comments may be auto-completed only when confirmed `paper-search` results and formatted citation text are explicitly provided.
 - Citation-only comments may be auto-completed only when the row is `confirmed`, the citation guard marks it `guard_verified=true`, and the target anchor is explicit.
@@ -115,8 +117,10 @@ Each comment must contain:
 - `--resume` skips already-materialized upstream artifacts so a rerun does not silently overwrite previously curated units.
 - `--resume` also checks stored input fingerprints; if comments/manuscript/SI/attachments/reference/paper-search inputs changed, the rerun fails fast instead of trusting stale artifacts.
 - `--resume` must also fail fast when the stored skill signature differs from the current script tree signature.
+- `--resume-from <step>` must clear the selected step and all downstream generated artifacts, then rebuild only from that step onward under the same verified input fingerprint.
 - `--force-rebuild` clears generated project artifacts, including `data/` and citation intermediate files, and reruns the pipeline from scratch inside the same `project_root`.
 - `--live-citation-verify` enables online title/identifier verification when `paper-search` results are provided; pipeline mode should be recorded in preflight output.
 - `final_consistency_report.md` should list each `needs_author_confirmation` item with a blocker type and the exact stored reason.
 - `final_consistency_report.md` should also summarize reference coverage status, including detected numeric citations, reference entry count, and missing reference numbers when present.
 - Word export should render common markdown emphasis and list markers as real Word formatting instead of leaving raw `**...**` and list prefixes in the document body.
+- `response_to_reviewers.docx` should include a visible heading hierarchy plus a TOC field, centered header text, and footer page-number field so the exported package is review-ready rather than plain-text only.
