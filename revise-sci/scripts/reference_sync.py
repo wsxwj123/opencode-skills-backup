@@ -49,17 +49,34 @@ def next_reference_number(existing_lines: list[str]) -> int:
 
 def completed_citation_rows(project_root: Path) -> list[dict]:
     units = [read_json(path, {}) for path in sorted((project_root / "units").glob("*.json"))]
+    literature_index = read_json(project_root / "data" / "literature_index.json", [])
+    comment_to_entries: dict[str, list[dict]] = {}
+    if isinstance(literature_index, list):
+        for entry in literature_index:
+            if not isinstance(entry, dict):
+                continue
+            for comment_id in entry.get("comment_ids", []) or []:
+                normalized = normalize_ws(str(comment_id))
+                if not normalized:
+                    continue
+                comment_to_entries.setdefault(normalized, []).append(entry)
+
     validated = read_json(project_root / "paper_search_validated.json", {"results": []})
-    row_map = {row.get("comment_id"): row for row in validated.get("results", [])}
+    row_map = {normalize_ws(str(row.get("comment_id", ""))): row for row in validated.get("results", []) if isinstance(row, dict)}
     completed = []
     for unit in units:
         if unit.get("status") != "completed":
             continue
         if unit.get("editorial_intent") != "citation":
             continue
-        row = row_map.get(unit.get("comment_id"))
+        comment_id = normalize_ws(str(unit.get("comment_id", "")))
+        entries = comment_to_entries.get(comment_id, [])
+        if entries:
+            completed.append({"unit": unit, "entries": entries})
+            continue
+        row = row_map.get(comment_id)
         if row and row.get("guard_verified"):
-            completed.append({"unit": unit, "row": row})
+            completed.append({"unit": unit, "row": row, "entries": []})
     return completed
 
 
@@ -85,10 +102,18 @@ def main() -> int:
 
     for item in completed_citation_rows(project_root):
         unit = item["unit"]
-        row = item["row"]
         row_added = False
-        for citation in row.get("citations", []):
-            entry = normalize_ws(str(citation.get("reference_entry") or ""))
+        entry_rows = item.get("entries") or []
+        if entry_rows:
+            candidate_entries = [normalize_ws(str(entry.get("reference_entry") or "")) for entry in entry_rows]
+        else:
+            row = item.get("row", {})
+            candidate_entries = [
+                normalize_ws(str(citation.get("reference_entry") or ""))
+                for citation in row.get("citations", [])
+            ]
+
+        for entry in candidate_entries:
             if not entry:
                 continue
             key = normalize_reference_key(entry)

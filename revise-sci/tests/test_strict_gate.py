@@ -59,6 +59,8 @@ class StrictGateTests(unittest.TestCase):
                     "",
                     "### Comment 1",
                     "",
+                    "Please clarify the mechanism statement.",
+                    "",
                     "#### 2) Response to Reviewer（中英对照）",
                     "",
                     "We revised the sentence to limit the claim to the present dataset.",
@@ -164,3 +166,18 @@ class StrictGateTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("completed excerpt not found in manuscript section", result.stdout + result.stderr)
         self.assertIn("edit plan missing comment_id", result.stdout + result.stderr)
+
+    def test_gate_requires_literature_index_and_matrix_for_completed_citation_unit(self):
+        self._write_valid_base()
+        unit_path = self.project_root / "units" / "001_R1-Major-01.json"
+        unit = json.loads(unit_path.read_text(encoding="utf-8"))
+        unit["editorial_intent"] = "citation"
+        unit["evidence_sources"] = [{"provider_family": "paper-search", "source": "PMID:123456"}]
+        unit_path.write_text(json.dumps(unit), encoding="utf-8")
+        (self.project_root / "reference_sync_report.json").write_text(
+            json.dumps({"covered_comment_ids": ["R1-Major-01"], "references_added": 1}),
+            encoding="utf-8",
+        )
+        result = run_script("strict_gate.py", ["--project-root", str(self.project_root)], cwd=self.root)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("literature_index", result.stdout + result.stderr)

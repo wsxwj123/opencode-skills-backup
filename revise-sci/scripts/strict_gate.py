@@ -30,6 +30,14 @@ def section_label(unit: dict) -> str:
     return "si section" if unit.get("target_document") == "si" else "manuscript section"
 
 
+def completed_citation_units(units: list[dict]) -> list[dict]:
+    return [
+        unit
+        for unit in units
+        if unit.get("status") == "completed" and unit.get("editorial_intent") == "citation"
+    ]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Hard gate for revise-sci outputs")
     parser.add_argument("--project-root", required=True)
@@ -46,6 +54,23 @@ def main() -> int:
     edit_plan_text = edit_plan_path.read_text(encoding="utf-8") if edit_plan_path.exists() else ""
     reference_sync_report = read_json(project_root / "reference_sync_report.json", {})
     covered_reference_comments = set(reference_sync_report.get("covered_comment_ids", []))
+    literature_index_path = project_root / "data" / "literature_index.json"
+    synthesis_matrix_path = project_root / "data" / "synthesis_matrix.json"
+    synthesis_audit_path = project_root / "data" / "synthesis_matrix_audit.json"
+    literature_index = read_json(literature_index_path, [])
+    synthesis_matrix = read_json(synthesis_matrix_path, [])
+    synthesis_audit = read_json(synthesis_audit_path, {})
+    citation_units = completed_citation_units(units)
+
+    if citation_units:
+        for artifact in (literature_index_path, synthesis_matrix_path, synthesis_audit_path):
+            if not artifact.exists():
+                failures.append(f"missing literature artifact: {artifact.name}")
+        if isinstance(synthesis_audit, dict):
+            if synthesis_audit.get("missing_claim", 0) > 0:
+                failures.append("synthesis_matrix_audit reports missing_claim gaps")
+            if synthesis_audit.get("missing_key_fields", 0) > 0:
+                failures.append("synthesis_matrix_audit reports missing_key_fields gaps")
 
     for unit in units:
         comment_id = unit.get("comment_id", "<unknown>")
@@ -94,6 +119,25 @@ def main() -> int:
         if unit.get("status") == "completed" and unit.get("editorial_intent") == "citation":
             if comment_id not in covered_reference_comments:
                 failures.append(f"{comment_id}: completed citation unit missing reference_sync coverage")
+            entry = None
+            if isinstance(literature_index, list):
+                for candidate in literature_index:
+                    if comment_id in (candidate.get("comment_ids") or []) or comment_id in (candidate.get("claim_ids") or []):
+                        entry = candidate
+                        break
+            if not entry:
+                failures.append(f"{comment_id}: literature_index missing citation mapping")
+            elif isinstance(synthesis_matrix, list):
+                has_matrix_row = any(
+                    row.get("global_id") == entry.get("global_id")
+                    and (
+                        row.get("claim_id") == comment_id
+                        or comment_id in (row.get("comment_ids") or [])
+                    )
+                    for row in synthesis_matrix
+                )
+                if not has_matrix_row:
+                    failures.append(f"{comment_id}: synthesis_matrix missing citation mapping")
 
         section_file = (unit.get("atomic_location") or {}).get("section_file", "")
         if unit.get("status") == "completed":

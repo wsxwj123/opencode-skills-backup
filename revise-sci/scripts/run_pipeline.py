@@ -45,6 +45,14 @@ def has_citation_guard_outputs(project_root: Path) -> bool:
     return (project_root / "paper_search_guard_report.json").exists() and (project_root / "paper_search_validated.json").exists()
 
 
+def has_literature_outputs(project_root: Path) -> bool:
+    return (
+        (project_root / "data" / "literature_index.json").exists()
+        and (project_root / "data" / "synthesis_matrix.json").exists()
+        and (project_root / "data" / "synthesis_matrix_audit.json").exists()
+    )
+
+
 def current_input_signatures(args: argparse.Namespace) -> dict:
     return {
         "comments_path": path_signature(Path(args.comments)),
@@ -73,6 +81,7 @@ def clear_project_outputs(project_root: Path) -> None:
         "manuscript_sections",
         "si_sections",
         "comment_records",
+        "data",
     ]
     removable_files = [
         "precheck_report.md",
@@ -86,6 +95,10 @@ def clear_project_outputs(project_root: Path) -> None:
         "response_to_reviewers.docx",
         "manuscript_edit_plan.md",
         "final_consistency_report.md",
+        "paper_search_guard_report.json",
+        "paper_search_validated.json",
+        "literature_index_report.json",
+        "reference_sync_report.json",
     ]
     for dirname in removable_dirs:
         path = project_root / dirname
@@ -182,6 +195,32 @@ def main() -> int:
         run_step([py, str(script_dir / "build_issue_matrix.py"), "--project-root", args.project_root])
     elif args.resume:
         run_step([py, str(script_dir / "build_issue_matrix.py"), "--project-root", args.project_root])
+    if not args.resume or not has_literature_outputs(project_root):
+        run_step([py, str(script_dir / "build_literature_index.py"), "--project-root", args.project_root])
+        run_step(
+            [
+                py,
+                str(script_dir / "matrix_manager.py"),
+                "bootstrap",
+                "--index",
+                str(project_root / "data" / "literature_index.json"),
+                "--matrix",
+                str(project_root / "data" / "synthesis_matrix.json"),
+                "--round",
+                "2",
+            ]
+        )
+        run_step(
+            [
+                py,
+                str(script_dir / "matrix_manager.py"),
+                "audit",
+                "--matrix",
+                str(project_root / "data" / "synthesis_matrix.json"),
+                "--report",
+                str(project_root / "data" / "synthesis_matrix_audit.json"),
+            ]
+        )
     run_step([py, str(script_dir / "merge_manuscript.py"), "--project-root", args.project_root, "--output-md", args.output_md])
     run_step([py, str(script_dir / "reference_sync.py"), "--project-root", args.project_root, "--output-md", args.output_md])
     export_args = [
