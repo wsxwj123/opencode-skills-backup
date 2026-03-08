@@ -1,9 +1,12 @@
 {
   "project_config_template": {
     "project_name": "",
+    "research_field": "Drug Delivery System",
+    "field_config": "drug_delivery",
     "target_journal": "Nature Nanotechnology",
     "delivery_system_type": "",
     "disease_model": "",
+    "model_system": "",
     "word_limits": {
       "abstract": 250,
       "introduction": [800, 1500],
@@ -61,7 +64,7 @@
     "next_action": "Run /preview to start"
   },
   
-  "context_memory_template": "# 写作上下文记忆 (v2.0) - 最后更新：YYYY-MM-DD HH:MM\n\n## 当前状态\n- 正在撰写：[章节名]\n- 已完成字数：X/7000 words\n\n## 最近讨论要点\n1. [决策内容]\n\n## 待办事项\n- [ ] [待办1]\n\n## 关键决策记录\n- YYYY-MM-DD：[决策内容]\n",
+  "context_memory_template": "# 写作上下文记忆 (v2.0) - 最后更新：YYYY-MM-DD HH:MM\n\n## 当前状态\n- 正在撰写：[章节名]\n- 已完成字数：X/7000 words\n- 研究方向：[field_config]\n\n## 最近讨论要点\n1. [决策内容]\n\n## 待办事项\n- [ ] [待办1]\n\n## 关键决策记录\n- YYYY-MM-DD：[决策内容]\n",
   
   "literature_index_template": [
     {

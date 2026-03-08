@@ -5,9 +5,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-SCRIPT = "/Users/wsxwj/.codex/skills/article-writing/scripts/state_manager.py"
-MERGE_SCRIPT = "/Users/wsxwj/.codex/skills/article-writing/scripts/merge_manuscript.py"
-EXPORT_BIB_SCRIPT = "/Users/wsxwj/.codex/skills/article-writing/scripts/export_bibtex.py"
+SKILL_ROOT = Path(__file__).resolve().parents[1]
+SCRIPT = str(SKILL_ROOT / "scripts" / "state_manager.py")
+MERGE_SCRIPT = str(SKILL_ROOT / "scripts" / "merge_manuscript.py")
+EXPORT_BIB_SCRIPT = str(SKILL_ROOT / "scripts" / "export_bibtex.py")
 
 
 def run_cmd(args, cwd):
@@ -226,6 +227,22 @@ class StateManagerTests(unittest.TestCase):
             "write-cycle", "--section", "results_3.1", "--preflight-lenient"
         ], cwd=self.root)
         self.assertEqual(lenient.returncode, 0)
+
+    def test_set_field_persists_active_configuration(self):
+        p = run_cmd(["set-field", "--field", "computer_science"], cwd=self.root)
+        self.assertEqual(p.returncode, 0)
+        out = json.loads(p.stdout)
+        self.assertTrue(out.get("ok"))
+        self.assertEqual(out.get("field_id"), "computer_science")
+
+        project_config = json.loads((self.root / "project_config.json").read_text(encoding="utf-8"))
+        self.assertEqual(project_config.get("field_config"), "computer_science")
+
+        active_field = json.loads((self.root / "active_field_config.json").read_text(encoding="utf-8"))
+        self.assertEqual(active_field.get("field_id"), "computer_science")
+
+        reviewer_concerns = json.loads((self.root / "reviewer_concerns.json").read_text(encoding="utf-8"))
+        self.assertIsInstance(reviewer_concerns, dict)
 
     def test_word_count_excludes_references_by_default(self):
         md = self.root / "manuscripts" / "04_Results_3.1_Word.md"

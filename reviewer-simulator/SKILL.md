@@ -351,6 +351,16 @@ description: Use when simulating a high-bar academic peer review for manuscripts
 基于前四步的分析结果,按照第五部分规定的输出格式生成完整的审稿报告。
 输出时将内部分析转化为结构化的评审意见。
 
+第六步：产出前硬门禁校验
+
+在输出最终HTML前,必须执行以下校验命令并确保通过:
+`python scripts/validate_report_html.py <生成后的报告HTML路径>`
+
+硬门禁:
+1. 若存在未替换占位符(如`{{...}}`),必须终止交付并返工。
+2. 头部`VERDICT_TEXT`与第十部分`FINAL_RECOMMENDATION`必须一致且只能为"拒稿/大修/小修/接收"之一。
+3. 仅当校验通过才允许提交最终报告。
+
 
 第五部分：审稿报告输出格式
 
@@ -546,3 +556,11 @@ AIGC率过高或涉嫌造假
 
 
 现在请提供待审稿件及投稿目标,开始执行严格的审稿流程。
+
+
+附加维护规范:
+- 每次修改`assets/report_template.html`后,必须执行回归测试:
+`python scripts/template_regression_test.py`
+- 若为有意样式或结构变更,先执行:
+`python scripts/template_regression_test.py --bless`
+更新基线,再执行不带参数的回归校验。

@@ -1,6 +1,6 @@
 ---
 github_url: https://github.com/anthropics/skills
-github_hash: 3d59511518591fa82e6cfcf0438d68dd5dad3e76
+github_hash: b0cbd3df1533b396d281a6886d5132f623393a9c
 name: canvas-design
 description: Create beautiful visual art in .png and .pdf documents using design philosophy. You should use this skill when the user asks to create a poster, piece of art, design, or other static piece. Create original visual designs, never copying existing artists' work to avoid copyright violations.
 license: Complete terms in LICENSE.txt

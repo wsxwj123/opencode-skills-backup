@@ -4,18 +4,18 @@ description: 用于撰写符合Nature/Science/Cell发表标准的SCI研究论文
 license: Proprietary
 ---
 
-# General SCI Writing Skill - 通用SCI论文写作系统 (v2.16.0)
+# General SCI Writing Skill - 通用SCI论文写作系统 (v2.16.2)
 
 ## 🎯 Skill概述
 
 本skill用于通用SCI学术论文写作与润色，目标对齐 Nature/Science/Cell 等高水平期刊标准，适用于多学科研究。
 
-**研究方向配置系统 (v2.16.0新增)**：
+**研究方向配置系统 (v2.16.2延续)**：
 - **多领域支持**：内置药物递送、临床药学与大模型、计算机科学、定量药理学等研究方向配置
 - **可扩展配置**：用户可通过配置文件自定义研究方向
 - **配置切换**：初始化时通过 `python scripts/state_manager.py set-field --field [field_id]` 设置研究方向
 
-**核心升级 (v2.16.0)**：
+**核心升级 (v2.16.2)**：
 - **章节级上下文隔离**：`/write [section]` 默认只读取当前章节相关上下文，禁止跨章节正文污染。
 - **双层记忆模型**：新增 `section_memory/<section_id>.md` 记录章节局部记忆，全局 `context_memory.md` 仅保留决策与约束。
 - **Token预算守卫**：`state_manager.py` 支持预算估算与自动降载（tail + compact），避免上下文爆炸。
@@ -47,17 +47,21 @@ license: Proprietary
 2.  **文献补充 (辅助)**：使用 `paper-search` (Semantic Scholar) 和 `arxiv` (Preprints)。
     -   *原因*：覆盖广泛、更新快速，可获取最新预印本。
 3.  **兜底检索**：Google Scholar (仅在上述工具无果时尝试)。
-4.  **概念查询**：仅当查询宽泛非学术概念时才使用 `tavily`。禁止用 Tavily 找论文。
+4.  **概念查询**：仅当查询宽泛非学术概念时才使用 `tavily`。禁止用 Tavily 直接检索论文来源。
 
 **文献真实性硬约束 (Zero-Fabrication Policy)**：
 1. **零容忍**：严禁编造虚拟文献；严禁把不同文献的标题/作者/期刊/年份/DOI 交叉拼接成“新文献”。
-2. **来源强制**：写入 `literature_index.json` 的每条文献必须来自 MCP 检索原始结果（`paper-search`/`arxiv`/Google Scholar/Semantic 回退链），并保留可追溯来源信息（至少包含 `source_provider` + `source_id`，如 PMID/DOI/arXiv ID/S2 ID 之一）。
-3. **入库前核对**：入库前必须核对“标题-作者-DOI/ID”来自同一条原始记录；任一关键字段冲突则判定为无效条目，禁止入库。
-4. **不确定处理**：无法完成同源核验的条目必须标记为 `unverified`，且**禁止在正文使用 `[n]` 引用**，只能向用户请求补充或重新检索。
-5. **补全边界**：摘要补全协议仅允许补全 `abstract` 字段，禁止改写已核验文献的核心元数据（标题/作者/期刊/年份/DOI）。
-6. **强制核验门禁**：任何正文写作前与交付前，必须执行：
+2. **来源强制**：写入 `literature_index.json` 的每条文献必须来自 MCP 检索原始结果，并保留可追溯来源信息（至少包含 `source_provider` + `source_id`，如 PMID/DOI/arXiv ID/S2 ID 之一）。
+3. **Provider 白名单**：`citation_guard.py` 仅允许 `paper-search` 与 `tavily` 两类 provider family；未知 provider 或 websearch 变体一律阻断。
+4. **Tavily 边界**：`tavily` 只能用于无 DOI/PMID 条目的反向核验或摘要补全最后兜底；凡带 DOI/PMID 的 Tavily 条目必须判为失败，禁止入库。
+5. **入库前核对**：入库前必须核对“标题-作者-DOI/ID”来自同一条原始记录；任一关键字段冲突则判定为无效条目，禁止入库。
+6. **双向核验失败处理**：若出现 `title_mismatch`、`doi_invalid_or_unresolved`、`pmid_invalid_or_unresolved`、`id_mismatch`，必须立即设为 `verified=false`，写入 `manual_review_queue.json`，禁止正文引用。
+7. **不确定处理**：无法完成同源核验的条目必须标记为 `unverified`；未带 `source_provider` / `source_id` 的条目不得入库。`unverified` 与 `needs_manual_review=true` 条目都**禁止在正文使用 `[n]` 引用**，也不得进入参考文献列表。
+8. **补全边界**：摘要补全协议仅允许补全 `abstract` 字段，禁止改写已核验文献的核心元数据（标题/作者/期刊/年份/DOI）。
+9. **强制核验门禁**：任何正文写作前与交付前，必须执行：
    - `python scripts/citation_guard.py --index literature_index.json --mcp-cache mcp_literature_cache.json --mcp-ttl-days 30 --manual-review manual_review_queue.json --log verification_run_log.json --report citation_guard_report.json`
-   - 若返回非零或报告 `ok=false`，立即阻断写作；未通过核验条目禁止进入正文与参考文献列表。
+   - 若返回非零或报告 `ok=false`，立即阻断写作；必须先处理 `manual_review_queue.json` 后再继续。
+   - guard 报告必须显式包含 provider policy、bidirectional failure 与 manual review 触发原因，便于追溯。
    - 默认不改变原有检索顺序与流程（PubMed/Semantic/arXiv/Google 回退链）；仅增加核验门禁。
    - 最终交付前建议追加 `--require-mcp` 强制 MCP 证据轨通过。
 
@@ -189,7 +193,7 @@ license: Proprietary
    - 将SI引用（如 `(Figure S1, Table S2)`）作为完整证据链的一部分自然插入正文。
 
 ### 10. 强制交互结构 (Mandatory Response Architecture)
-**为了解决“健忘”问题，每次回复（除极简确认外）必须严格遵守以下结构。严禁遗漏任何板块！**
+**为了解决“健忘”问题，每次回复（除极简确认外）必须严格遵守以下结构。Part 1 与 Part 3 为强制用户可见板块；Part 2 默认内部维护，仅在用户明确要求审计日志或加载明细时显式输出。**
 
 #### 🏗️ Part 1: 执行内容 (Execution Core)
 - 正常的对话回复、代码执行、文件写入结果。
@@ -225,7 +229,10 @@ license: Proprietary
 **针对检索结果中缺失摘要（Abstract）的文献，严禁直接丢弃。必须严格执行以下补全回退链（Mandatory Fallback Chain）**：
 1. **Google Scholar (Primary)**: 必须优先使用 `paper-search_search_google_scholar` 检索论文标题。
 2. **Semantic Scholar (Secondary)**: 若前者失败，使用 `paper-search_search_semantic` 检索。
-3. **Tavily (Final Fallback)**: 若前两者均失败，使用 `tavily_tavily-search` 搜索 "Title abstract"。
+3. **Tavily (Final Fallback)**: 若前两者均失败，才允许使用 `tavily_tavily-search` 搜索 "Title abstract"。
+**执行边界**：
+- Tavily 在此阶段只允许补全 `abstract` 或辅助反向核验，**不得**替换原始文献的 `source_provider` / `source_id`。
+- 若该条文献本身没有 DOI/PMID，且 Tavily 仅提供网页级佐证，则必须进入 `manual_review_queue.json`，且不得视为 `verified=true`。
 **终止条件**：仅当上述三个步骤均无法获取摘要时，才允许将该文献标记为 "Abstract Missing" 并询问用户手动补充。
 
 ### 12. 章节局部上下文与Token预算协议 (Section-Local + Budget Guard) - v2.15新增
@@ -285,6 +292,7 @@ license: Proprietary
 分阶段检索（Phase 1核心，Phase 2写作时实时补充）。
 **执行红线**：本阶段必须遵守“文献真实性硬约束”，任何未通过同源核验的条目不得进入 `literature_index.json`，也不得在正文中引用。
 **新增硬门禁**：完成本阶段后必须运行 `citation_guard.py`，仅当 `citation_guard_report.json` 为 `ok=true` 才能进入 `/write`。
+**阻断条件**：只要 `manual_review_queue.json` 非空，或报告存在 provider policy / bidirectional verification failure 相关失败项，都必须先处理后再写作。
 **首轮检索后强制分配与重编号（Mandatory）**：
 1. **首轮完成即分配**：第一轮文献检索完成后，必须将每条已核验文献分配到目标小节（`section_id`），禁止保持“未分配”状态进入写作阶段。
 2. **矩阵落地**：在用户确认后，必须将“小节-文献”映射写入文献矩阵（建议存入 `storyline.json` 的矩阵字段，或独立 `literature_matrix.json`），作为后续正文撰写唯一依据。
@@ -389,7 +397,7 @@ Storyline阶段逻辑检查 + Final阶段完整报告。
 
 ---
 
-## 🔧 研究方向配置系统 (v2.16.0)
+## 🔧 研究方向配置系统 (v2.16.2)
 
 ### 配置文件位置
 研究方向配置文件位于 `configs/` 目录：
@@ -447,12 +455,13 @@ python scripts/state_manager.py set-field --field drug_delivery
 
 ---
 
-**版本**: 2.16.0
+**版本**: 2.16.2
 **更新**:
-1. **研究方向配置系统**: 新增多领域配置文件支持
-2. **配置管理器**: 新增 config_manager.py 脚本
-3. **泛化主文档**: 移除具体专业领域表述
-4. **内置配置**: 添加药物递送、临床药学与大模型、计算机科学、定量药理学配置
+1. **研究方向配置系统**: 延续多领域配置文件支持
+2. **配置管理器**: 保留 config_manager.py 与 set-field 工作流
+3. **文献核验收紧**: 新增 provider 白名单、Tavily no-identifier 人工复核、双向核验失败强制阻断
+4. **协议澄清**: 明确状态仪表盘默认内部维护，只有用户点名要求审计日志时才显式渲染
+5. **文档对齐**: 将 manual_review_queue / provider policy / unverified 禁用规则写入主文档与速查卡
 
 ---
 

@@ -1,5 +1,21 @@
 # Changelog - General SCI Writing Skill
 
+## [2.16.2] - 2026-03-07
+
+### 📚 Protocol and Document Sync
+- Clarified the response protocol: Part 1 and Part 3 remain mandatory in user-visible replies, while the Status Dashboard is maintained internally by default and rendered only on explicit audit/log requests.
+- Updated `QUICK_REFERENCE.md`, `README.md`, `USAGE_GUIDE.md`, `TEST_CHECKLIST.md`, and `RUNTIME_LAYOUT.md` so documentation matches the current runtime behavior.
+- Normalized source-file references in runtime docs (`SKILL.md`, `scripts/config_manager.py`, `configs/*.json`) to remove stale path/case drift.
+
+## [2.16.1] - 2026-03-07
+
+### 🔒 Citation Verification Hardening
+- `scripts/citation_guard.py` now enforces provider family policy: only `paper-search` and restricted `tavily` entries are accepted.
+- Tavily entries carrying DOI/PMID are blocked; Tavily no-identifier entries are routed to `manual_review_queue.json` and remain unverified.
+- Bidirectional verification failures (`title_mismatch`, DOI/PMID mismatch, `id_mismatch`) now force `verified=false` and append an explicit manual-confirmation reason.
+- `citation_guard_report.json` now records provider policy details for auditability.
+- Added regression tests covering provider allowlist, Tavily restrictions, manual review routing, and bidirectional verification failure handling.
+
 ## [2.15.2] - 2026-02-12
 
 ### ✅ Reliability Hardening

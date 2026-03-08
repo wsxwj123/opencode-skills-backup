@@ -10,6 +10,7 @@ import tempfile
 import hashlib
 import difflib
 import subprocess
+from pathlib import Path
 from collections import OrderedDict
 from datetime import datetime
 
@@ -2714,6 +2715,79 @@ def update_state(payload_path):
     except:
         pass
 
+
+def set_field_config(
+    field_id,
+    project_config_file=STATE_FILES["project_config"],
+    output_file="active_field_config.json",
+    reviewer_file=STATE_FILES["reviewer_concerns"],
+):
+    """Sets research field config for current project and persists a resolved field snapshot."""
+    try:
+        from config_manager import FieldConfigManager
+    except Exception as e:
+        print(json.dumps({
+            "ok": False,
+            "error": "failed_to_import_config_manager",
+            "detail": str(e),
+        }, ensure_ascii=False))
+        sys.exit(1)
+
+    try:
+        manager = FieldConfigManager(project_config_dir=Path(os.getcwd()) / "configs")
+        config = manager.load_config(field_id)
+    except FileNotFoundError:
+        print(json.dumps({
+            "ok": False,
+            "error": "field_not_found",
+            "field_id": field_id,
+        }, ensure_ascii=False))
+        sys.exit(1)
+    except Exception as e:
+        print(json.dumps({
+            "ok": False,
+            "error": "field_load_failed",
+            "field_id": field_id,
+            "detail": str(e),
+        }, ensure_ascii=False))
+        sys.exit(1)
+
+    project_config = {}
+    if os.path.exists(project_config_file):
+        try:
+            loaded = read_json_file(project_config_file)
+            if isinstance(loaded, dict):
+                project_config = loaded
+        except Exception:
+            project_config = {}
+
+    project_config["field_config"] = field_id
+    project_config["research_field"] = config.get("field_name", field_id)
+    project_config["last_modified"] = datetime.now().isoformat(timespec="seconds")
+
+    with open(project_config_file, "w", encoding="utf-8") as f:
+        json.dump(project_config, f, indent=2, ensure_ascii=False)
+
+    with open(output_file, "w", encoding="utf-8") as f:
+        json.dump(config, f, indent=2, ensure_ascii=False)
+
+    reviewer_concerns = config.get("reviewer_concerns")
+    if isinstance(reviewer_concerns, dict):
+        with open(reviewer_file, "w", encoding="utf-8") as f:
+            json.dump(reviewer_concerns, f, indent=2, ensure_ascii=False)
+
+    result = {
+        "ok": True,
+        "field_id": field_id,
+        "field_name": config.get("field_name", field_id),
+        "project_config_file": project_config_file,
+        "active_field_file": output_file,
+        "reviewer_file_updated": isinstance(reviewer_concerns, dict),
+        "reviewer_file": reviewer_file,
+    }
+    print(json.dumps(result, ensure_ascii=False))
+    return result
+
 def backup_project_state(backup_dir="backups"):
     """Creates a full project snapshot including all state files and manuscripts."""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -3046,6 +3120,13 @@ def main():
     guard_parser.add_argument("--report", default="citation_guard_report.json")
     guard_parser.add_argument("--write-back", action="store_true", help="Write verification fields back to index")
 
+    # Field config command
+    set_field_parser = subparsers.add_parser("set-field", help="Set current research field for this project")
+    set_field_parser.add_argument("--field", required=True, help="Field id, e.g. default/drug_delivery")
+    set_field_parser.add_argument("--project-config-file", default=STATE_FILES["project_config"], help="Project config JSON path")
+    set_field_parser.add_argument("--output-file", default="active_field_config.json", help="Resolved active field config path")
+    set_field_parser.add_argument("--reviewer-file", default=STATE_FILES["reviewer_concerns"], help="Reviewer concerns JSON path")
+
     args = parser.parse_args()
 
     if args.command == "load":
@@ -3180,6 +3261,13 @@ def main():
             cmd.append("--write-back")
         proc = subprocess.run(cmd, check=False)
         sys.exit(proc.returncode)
+    elif args.command == "set-field":
+        set_field_config(
+            field_id=args.field,
+            project_config_file=args.project_config_file,
+            output_file=args.output_file,
+            reviewer_file=args.reviewer_file,
+        )
 
 if __name__ == "__main__":
     main()

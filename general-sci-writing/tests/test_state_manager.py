@@ -228,6 +228,22 @@ class StateManagerTests(unittest.TestCase):
         ], cwd=self.root)
         self.assertEqual(lenient.returncode, 0)
 
+    def test_set_field_persists_active_configuration(self):
+        p = run_cmd(["set-field", "--field", "computer_science"], cwd=self.root)
+        self.assertEqual(p.returncode, 0)
+        out = json.loads(p.stdout)
+        self.assertTrue(out.get("ok"))
+        self.assertEqual(out.get("field_id"), "computer_science")
+
+        project_config = json.loads((self.root / "project_config.json").read_text(encoding="utf-8"))
+        self.assertEqual(project_config.get("field_config"), "computer_science")
+
+        active_field = json.loads((self.root / "active_field_config.json").read_text(encoding="utf-8"))
+        self.assertEqual(active_field.get("field_id"), "computer_science")
+
+        reviewer_concerns = json.loads((self.root / "reviewer_concerns.json").read_text(encoding="utf-8"))
+        self.assertIsInstance(reviewer_concerns, dict)
+
     def test_word_count_excludes_references_by_default(self):
         md = self.root / "manuscripts" / "04_Results_3.1_Word.md"
         md.write_text(

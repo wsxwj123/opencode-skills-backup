@@ -1,6 +1,6 @@
 ---
 github_url: https://github.com/anthropics/skills
-github_hash: 3d59511518591fa82e6cfcf0438d68dd5dad3e76
+github_hash: b0cbd3df1533b396d281a6886d5132f623393a9c
 name: pdf
 description: Use this skill whenever the user wants to do anything with PDF files. This includes reading or extracting text/tables from PDFs, combining or merging multiple PDFs into one, splitting PDFs apart, rotating pages, adding watermarks, creating new PDFs, filling PDF forms, encrypting/decrypting PDFs, extracting images, and OCR on scanned PDFs to make them searchable. If the user mentions a .pdf file or asks to produce one, use this skill.
 license: Proprietary. LICENSE.txt has complete terms

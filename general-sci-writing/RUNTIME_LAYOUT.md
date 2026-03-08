@@ -12,10 +12,14 @@ To clarify which files are runtime artifacts versus manuscript assets.
 
 ## Source Files (maintained by skill)
 - `scripts/state_manager.py`
-- `skill.md`
+- `scripts/citation_guard.py`
+- `SKILL.md`
+- `scripts/config_manager.py`
+- `configs/*.json`
 - `QUICK_REFERENCE.md`
 - `CHANGELOG.md`
 - `tests/test_state_manager.py`
+- `tests/test_citation_guard.py`
 
 ## Manuscript Project Files (outside skill root)
 Your actual paper workspace should contain:

@@ -302,6 +302,8 @@ def validate_entry(
         failure_reasons.append("identifier_missing")
     if provider_family == "tavily" and has_identifier:
         failure_reasons.append("tavily_not_for_identifier_entries")
+    if tavily_no_identifier:
+        failure_reasons.append("tavily_manual_review_required")
     if title and not title_match:
         failure_reasons.append("title_mismatch")
     if doi_valid is False:

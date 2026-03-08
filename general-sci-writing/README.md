@@ -5,7 +5,7 @@ This Skill is a structured manuscript collaboration system specifically engineer
 ---
 
 
-# General SCI Writing Skill (v2.16.0)
+# General SCI Writing Skill (v2.16.2)
 
 ## Purpose
 This skill is for long-form academic manuscript writing with strict state consistency.
@@ -15,7 +15,7 @@ Primary goals:
 - stable citation/index consistency after each writing turn
 - multi-disciplinary research field support
 
-## Research Field Configuration System (v2.16.0)
+## Research Field Configuration System (v2.16.2)
 
 This version introduces a configurable research field system that supports multiple academic disciplines.
 
@@ -97,6 +97,13 @@ python scripts/export_bibtex.py --index-file literature_index.json --output-file
 - apply only proceeds if you explicitly pass `--allow-conflicts`.
 - md rewrite is default; docx rewrite is opt-in with `--rewrite-docx`.
 
+## Citation Integrity Defaults
+- `citation_guard.py` now enforces provider family allowlist: only `paper-search` and restricted `tavily` are accepted.
+- `tavily` is only allowed for no-identifier reverse verification or abstract recovery fallback; Tavily entries carrying DOI/PMID are rejected.
+- Any bidirectional verification failure (`title_mismatch`, DOI/PMID mismatch, id mismatch) forces `verified=false` and routes the entry to `manual_review_queue.json`.
+- Entries without `source_provider` / `source_id`, or with `needs_manual_review=true`, must not be cited in manuscript text or emitted into the final references list.
+- If `citation_guard.py` exits non-zero or report `ok=false`, writing must stop until `manual_review_queue.json` is resolved.
+
 ## Runtime Files and Why They Exist
 - `.state/write_gate.json`: hard-gate state (prewrite/complete guard)
 - `.state/lit_sync_preview.json`: latest dry-run preview payload
@@ -108,9 +115,11 @@ These are runtime artifacts, not manuscript content.
 ## Tests
 Regression tests live in:
 - `tests/test_state_manager.py`
+- `tests/test_citation_guard.py`
 
 Run:
 ```bash
+python3 -m py_compile scripts/citation_guard.py scripts/state_manager.py
 python3 -m unittest discover -s tests -p 'test_*.py' -q
 ```
 
@@ -122,4 +131,4 @@ python3 -m unittest discover -s tests -p 'test_*.py' -q
 - `manuscripts/` (in project workspace, not skill root): actual section drafts
 
 ## Version
-- Current: `2.16.0`
+- Current: `2.16.2`

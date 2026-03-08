@@ -1,6 +1,6 @@
-# General SCI Writing Skill (v2.16.0) 使用指南
+# General SCI Writing Skill (v2.16.2) 使用指南
 
-## 📘 完整工作流程示例 (v2.16.0)
+## 📘 完整工作流程示例 (v2.16.2)
 
 ### 研究方向配置示例
 
@@ -24,6 +24,26 @@ python scripts/state_manager.py set-field --field default
 ### 场景：撰写一篇pH响应性脂质体治疗三阴性乳腺癌的论文
 
 ---
+
+## 文献核验硬门禁（新增默认要求）
+
+在任何 `/write` 或最终交付前，必须先执行：
+
+```bash
+python scripts/citation_guard.py \
+  --index literature_index.json \
+  --mcp-cache mcp_literature_cache.json \
+  --mcp-ttl-days 30 \
+  --manual-review manual_review_queue.json \
+  --log verification_run_log.json \
+  --report citation_guard_report.json
+```
+
+执行规则：
+- 只有 `paper-search` 与受限 `tavily` provider family 能通过 guard。
+- `tavily` 仅可用于无 DOI/PMID 的反向核验或摘要补全兜底；带 identifier 的 Tavily 条目会直接失败。
+- 只要 `citation_guard` 返回非零、`citation_guard_report.json` 中 `ok=false`，或 `manual_review_queue.json` 非空，都必须先处理，不能继续正文写作。
+- `unverified` 或 `needs_manual_review=true` 的条目不得出现在 `[n]` 引用和参考文献列表中。
 
 ## 第一步：项目初始化
 
@@ -103,6 +123,17 @@ python scripts/state_manager.py set-field --field default
 ---
 
 ## 第四步：撰写章节 (融合模式 + 自我修正)
+
+**前置条件**：
+```bash
+python scripts/citation_guard.py --index literature_index.json --mcp-cache mcp_literature_cache.json --manual-review manual_review_queue.json --log verification_run_log.json --report citation_guard_report.json
+```
+
+若输出包含以下任一情况，必须先停止：
+- `source_provider_not_allowed`
+- `tavily_not_for_identifier_entries`
+- `manual_confirmation_required_bidirectional_failure`
+- `manual_review_queue.json` 中仍有待人工确认条目
 
 **用户输入**：
 ```
@@ -208,4 +239,4 @@ A key feature of our design is the charge-reversal capability. As shown in Figur
 ---
 
 **提示**：
-v2.0版本中，您不再需要单独撰写Discussion章节。所有的机制探讨和文献对比都已融入上述Results写作中。最后只需撰写Conclusion。
+v2.0版本中，您不再需要单独撰写Discussion章节。所有的机制探讨和文献对比都已融入上述Results写作中。最后只需撰写Conclusion。v2.16.2 起，文献 guard 也会同时检查 provider policy 和人工复核队列，避免将错配条目带入正文。

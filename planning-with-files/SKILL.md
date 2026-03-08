@@ -1,6 +1,6 @@
 ---
 github_url: https://github.com/OthmanAdi/planning-with-files
-github_hash: 8004498f35f12f11bb2cd08048eeb79fd6dfec90
+github_hash: 7b55095bce7624011ec118e6a6029e37ec8a1ea2
 name: planning-with-files
 version: "2.10.0"
 description: Implements Manus-style file-based planning for complex tasks. Creates task_plan.md, findings.md, and progress.md. Use when starting complex multi-step tasks, research projects, or any task requiring >5 tool calls. Now with automatic session recovery after /clear.

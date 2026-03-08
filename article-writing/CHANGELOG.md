@@ -1,5 +1,41 @@
 # Changelog - Article Writing Skill
 
+## [2.16.4] - 2026-03-07
+
+### 🎯 Default Field Correction and Reviewer-Concern Expansion
+- Restored the article-writing default field profile to `drug_delivery` inside the biomedical domain, rather than using the broader `biomedical_pharma` profile as the default.
+- Restored the original drug-delivery reviewer concerns template, including detailed `Nanocarrier`, `Living_Bacteria`, `Exosome`, `EPR_controversy`, `batch_variability`, and related translational checks.
+- Kept `/init` as a single combined question for save path plus optional field switching, but clarified that the default kept field is now `drug_delivery`.
+- Expanded reviewer-concern details for `clinical_pharmacy_llm`, `computer_science`, `quantitative_pharmacology`, and `default` field profiles so non-drug-delivery fields also carry more concrete review guidance.
+- Added regression coverage for default-field restoration and preservation of detailed drug-delivery reviewer concerns.
+
+## [2.16.3] - 2026-03-07
+
+### 🧭 Init Default and Field Prompt Clarification
+- Switched the article-writing default field profile from `drug_delivery` to `biomedical_pharma`, covering drug delivery, biomaterials, pharmacology, mechanism studies, and clinical research under one biomedical umbrella.
+- Added `configs/biomedical_pharma.json` and aligned `templates/reviewer_concerns.json` with the broader biomedical/pharmaceutical default.
+- Updated `templates/project_init.json` so initialization persists `field_config=biomedical_pharma` and `research_field=Biomedical & Pharmaceutical Research`.
+- Clarified the `/init` protocol: the assistant must ask for the save path and whether to keep or switch the default field profile in the same initialization question.
+- Added regression tests covering the article default template field and config-manager default field.
+
+## [2.16.2] - 2026-03-07
+
+### 🔄 Shared Infrastructure Alignment
+- Added `scripts/config_manager.py`, `configs/*.json`, and `state_manager.py set-field` so article-writing now shares the same field-configuration workflow as general-sci-writing.
+- Updated `templates/project_init.json` to persist `field_config` / `research_field` while keeping article-specific defaults such as `Nature Nanotechnology`, `delivery_system_type`, and `disease_model`.
+- Synchronized `README.md`, `SKILL.md`, `USAGE_GUIDE.md`, `TEST_CHECKLIST.md`, `QUICK_REFERENCE.md`, and `RUNTIME_LAYOUT.md` with the latest runtime behavior.
+- Clarified that the Status Dashboard is maintained internally by default and only rendered when the user explicitly requests audit/log details.
+- Added regression coverage for `set-field` persistence in `tests/test_state_manager.py`.
+
+## [2.15.4] - 2026-03-07
+
+### 🔒 Citation Verification Hardening
+- `scripts/citation_guard.py` now enforces provider family policy: only `paper-search` and restricted `tavily` entries are accepted.
+- Tavily entries carrying DOI/PMID are blocked; Tavily no-identifier entries are routed to `manual_review_queue.json` and remain unverified.
+- Bidirectional verification failures (`title_mismatch`, DOI/PMID mismatch, `id_mismatch`) now force `verified=false` and append an explicit manual-confirmation reason.
+- `citation_guard_report.json` now records provider policy details for auditability.
+- Added regression tests covering provider allowlist, Tavily restrictions, manual review routing, and bidirectional verification failure handling.
+
 ## [2.15.2] - 2026-02-12
 
 ### ✅ Reliability Hardening

@@ -13,6 +13,7 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 SKILLS_BACKUP_DIR = os.path.dirname(SCRIPT_DIR) # Parent of scripts
 SKILLS_ROOT = os.path.dirname(SKILLS_BACKUP_DIR) # Parent of skills-backup
 LOG_FILE = os.path.join(SKILLS_BACKUP_DIR, 'logs', 'history.md')
+DEFAULT_PROXY_PORTS = ["7897", "7890"]
 
 def run_command(cmd, cwd=SKILLS_ROOT, check=True):
     """Run a shell command and return output, or None on error."""
@@ -39,6 +40,17 @@ def run_command(cmd, cwd=SKILLS_ROOT, check=True):
         return None
     except Exception as e:
         return None
+
+def set_proxy_env(port):
+    os.environ["HTTP_PROXY"] = f"http://127.0.0.1:{port}"
+    os.environ["HTTPS_PROXY"] = f"http://127.0.0.1:{port}"
+    os.environ["ALL_PROXY"] = f"socks5://127.0.0.1:{port}"
+
+def resolve_proxy_ports():
+    env_port = os.environ.get("CLASH_VERGE_PORT", "").strip()
+    if env_port:
+        return [env_port]
+    return DEFAULT_PROXY_PORTS
 
 def ensure_gitattributes():
     attr_path = os.path.join(SKILLS_ROOT, '.gitattributes')
@@ -132,6 +144,17 @@ def main():
     branch = run_command(['git', 'rev-parse', '--abbrev-ref', 'HEAD'])
     if not branch:
         append_log("Error", error_msg="Could not determine git branch")
+        return
+
+    selected_port = None
+    for port in resolve_proxy_ports():
+        set_proxy_env(port)
+        probe = run_command(['git', 'ls-remote', '--heads', 'origin', branch], check=False)
+        if probe is not None:
+            selected_port = port
+            break
+    if selected_port is None:
+        append_log("Error", error_msg="Proxy connectivity failed on all proxy ports")
         return
 
     # 3. Check for local changes

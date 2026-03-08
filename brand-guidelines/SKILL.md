@@ -1,6 +1,6 @@
 ---
 github_url: https://github.com/anthropics/skills
-github_hash: 3d59511518591fa82e6cfcf0438d68dd5dad3e76
+github_hash: b0cbd3df1533b396d281a6886d5132f623393a9c
 name: brand-guidelines
 description: Applies Anthropic's official brand colors and typography to any sort of artifact that may benefit from having Anthropic's look-and-feel. Use it when brand colors or style guidelines, visual formatting, or company design standards apply.
 license: Complete terms in LICENSE.txt

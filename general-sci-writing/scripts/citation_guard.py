@@ -24,6 +24,8 @@ from typing import Any
 DOI_RE = re.compile(r"^10\.\d{4,9}/[-._;()/:A-Z0-9]+$", re.IGNORECASE)
 PMID_RE = re.compile(r"^\d{4,10}$")
 TITLE_TOKEN_RE = re.compile(r"[a-z0-9\u4e00-\u9fff]+")
+ALLOWED_PROVIDER_FAMILIES = {"paper-search", "tavily"}
+FORBIDDEN_PROVIDER_FAMILIES = {"websearch"}
 
 
 def load_json(path: Path, default: Any) -> Any:
@@ -194,6 +196,25 @@ def _entry_ref_id(entry: dict[str, Any], fallback_idx: int) -> str:
     return f"idx:{fallback_idx}"
 
 
+def _provider_family(provider: str) -> str:
+    p = str(provider or "").strip().lower()
+    if p.startswith("paper-search"):
+        return "paper-search"
+    if p.startswith("tavily"):
+        return "tavily"
+    if "websearch" in p or "web-search" in p or "web_search" in p:
+        return "websearch"
+    return p
+
+
+def _extract_tavily_title(entry: dict[str, Any]) -> str:
+    for k in ("tavily_title", "tavily_verified_title", "reverse_verified_title", "web_title"):
+        v = entry.get(k)
+        if isinstance(v, str) and v.strip():
+            return v.strip()
+    return ""
+
+
 def validate_entry(
     entry: dict[str, Any],
     *,
@@ -209,6 +230,7 @@ def validate_entry(
 
     source_provider = str(entry.get("source_provider") or "").strip()
     source_id = str(entry.get("source_id") or "").strip()
+    provider_family = _provider_family(source_provider)
 
     doi_fmt_ok = DOI_RE.match(doi) is not None if doi else None
     pmid_fmt_ok = PMID_RE.match(pmid) is not None if pmid else None
@@ -224,6 +246,10 @@ def validate_entry(
     for rec in (mcp_record, pubmed, crossref):
         if rec and rec.get("title"):
             source_titles.append(str(rec["title"]))
+    if provider_family == "tavily":
+        tavily_title = _extract_tavily_title(entry)
+        if tavily_title:
+            source_titles.append(tavily_title)
 
     title_similarity = max((_title_similarity(title, st) for st in source_titles), default=0.0)
     title_match = bool(source_titles) and title_similarity >= 0.72
@@ -263,12 +289,21 @@ def validate_entry(
 
     has_traceability = bool(source_provider and source_id)
     has_identifier = bool(doi or pmid)
+    tavily_no_identifier = (provider_family == "tavily" and not has_identifier)
 
     failure_reasons: list[str] = []
     if not title:
         failure_reasons.append("title_missing")
-    if not has_identifier:
+    if provider_family in FORBIDDEN_PROVIDER_FAMILIES:
+        failure_reasons.append("source_provider_forbidden")
+    elif provider_family and provider_family not in ALLOWED_PROVIDER_FAMILIES:
+        failure_reasons.append("source_provider_not_allowed")
+    if not has_identifier and not tavily_no_identifier:
         failure_reasons.append("identifier_missing")
+    if provider_family == "tavily" and has_identifier:
+        failure_reasons.append("tavily_not_for_identifier_entries")
+    if tavily_no_identifier:
+        failure_reasons.append("tavily_manual_review_required")
     if title and not title_match:
         failure_reasons.append("title_mismatch")
     if doi_valid is False:
@@ -288,13 +323,20 @@ def validate_entry(
             failure_reasons.append(mcp_fresh_reason or "mcp_stale")
     elif mcp_ok and (not mcp_fresh):
         failure_reasons.append("mcp_stale_warning")
-    if online_check and not (crossref or pubmed):
+    if online_check and not (crossref or pubmed) and not tavily_no_identifier:
         failure_reasons.append("source_unreachable")
+
+    bidirectional_verification_failed = any(
+        r in {"title_mismatch", "doi_invalid_or_unresolved", "pmid_invalid_or_unresolved", "id_mismatch"}
+        for r in failure_reasons
+    )
+    if bidirectional_verification_failed:
+        failure_reasons.append("manual_confirmation_required_bidirectional_failure")
 
     needs_manual_review = any(
         r in {"title_mismatch", "id_mismatch", "mcp_stale", "mcp_timestamp_missing", "source_unreachable"}
         for r in failure_reasons
-    )
+    ) or tavily_no_identifier or bidirectional_verification_failed
 
     score = 0.0
     score += title_similarity * 35
@@ -308,6 +350,12 @@ def validate_entry(
         score -= 8
     score += 10 if id_cross_match else -12
     score += 8 if has_traceability else -15
+    if provider_family in ALLOWED_PROVIDER_FAMILIES:
+        score += 6
+    elif provider_family in FORBIDDEN_PROVIDER_FAMILIES:
+        score -= 20
+    elif provider_family:
+        score -= 10
     score += (8 if mcp_ok else (-10 if require_mcp else 0))
     if mcp_ok:
         score += 6 if mcp_fresh else -8
@@ -316,7 +364,7 @@ def validate_entry(
         score -= 60
     confidence = int(max(0, min(100, round(score))))
 
-    verified = len(failure_reasons) == 0
+    verified = (len(failure_reasons) == 0) and (not bidirectional_verification_failed)
 
     return {
         **entry,
@@ -330,6 +378,7 @@ def validate_entry(
             "doi_valid": doi_valid,
             "pmid_match": pmid_match,
             "id_cross_match": id_cross_match,
+            "bidirectional_verification_failed": bidirectional_verification_failed,
             "retracted": retracted,
             "has_traceability": has_traceability,
             "failure_reasons": failure_reasons,
@@ -342,6 +391,9 @@ def validate_entry(
                 "online_check": online_check,
                 "mcp_ttl_days": mcp_ttl_days,
                 "require_mcp": require_mcp,
+                "source_provider": source_provider,
+                "provider_family": provider_family,
+                "tavily_no_identifier": tavily_no_identifier,
             },
         },
     }
@@ -419,6 +471,11 @@ def main() -> int:
         "online_check": not args.offline,
         "require_mcp": bool(args.require_mcp),
         "mcp_ttl_days": max(0, int(args.mcp_ttl_days)),
+        "provider_policy": {
+            "allowed_provider_families": sorted(ALLOWED_PROVIDER_FAMILIES),
+            "forbidden_provider_families": sorted(FORBIDDEN_PROVIDER_FAMILIES),
+            "tavily_only_for_no_identifier": True,
+        },
     }
 
     save_json(Path(args.report), {"report": report, "manual_review_queue": manual})
