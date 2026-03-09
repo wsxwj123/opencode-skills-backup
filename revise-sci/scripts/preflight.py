@@ -28,6 +28,7 @@ def build_report(summary: dict[str, object], attachments: dict[str, object], mis
         f"- project_root: `{summary['project_root']}`",
         f"- output_md_path: `{summary['output_md_path']}`",
         f"- output_docx_path: `{summary['output_docx_path']}`",
+        f"- journal_style: `{summary['journal_style']}`",
         f"- reference_docx_path: `{summary['reference_docx_path'] or 'Not provided by user'}`",
         f"- paper_search_results_path: `{summary['paper_search_results_path'] or 'Not provided by user'}`",
         f"- auto_run_reference_search: `{summary['auto_run_reference_search']}`",
@@ -66,6 +67,11 @@ def main() -> int:
     parser.add_argument("--output-md", required=True)
     parser.add_argument("--output-docx", required=True)
     parser.add_argument("--reference-docx", default="")
+    parser.add_argument(
+        "--journal-style",
+        choices=("journal-manuscript", "nature-review", "cell-press", "lancet-review"),
+        default="journal-manuscript",
+    )
     parser.add_argument("--paper-search-results", default="")
     parser.add_argument("--references-source", default="")
     parser.add_argument("--reference-search-decision", choices=("ask", "approved", "declined"), default="ask")
@@ -154,6 +160,7 @@ def main() -> int:
         "project_root": str(project_root.resolve()),
         "output_md_path": str(output_md.resolve()),
         "output_docx_path": str(output_docx.resolve()),
+        "journal_style": args.journal_style,
         "reference_docx_path": str(reference_docx.resolve()) if reference_docx else "",
         "paper_search_results_path": str(paper_search_results.resolve()) if paper_search_results else "",
         "auto_run_reference_search": bool(args.auto_run_reference_search),
@@ -183,6 +190,7 @@ def main() -> int:
                 "si_docx_path": path_signature(si),
                 "attachments_dir_path": directory_signature(attachments_dir),
                 "reference_docx_path": path_signature(reference_docx),
+                "journal_style": args.journal_style,
                 "paper_search_results_path": path_signature(paper_search_results),
                 "auto_run_reference_search": bool(args.auto_run_reference_search),
                 "paper_search_runner": args.paper_search_runner,

@@ -67,6 +67,7 @@ Optional but supported:
 - `si_docx_path`
 - `attachments_dir_path`
 - `reference_docx_path`
+- `journal_style`
 - `paper_search_results_path`
 - `references_source_path`
 - `expected_comments_mode`
@@ -116,7 +117,7 @@ python scripts/strict_gate.py ...
 Or use the single entrypoint:
 
 ```bash
-python scripts/run_pipeline.py --comments <comments_path> --manuscript <manuscript_docx_path> --project-root <project_root> --output-md <output_md_path> --output-docx <output_docx_path> [--expected-comments-mode <comments_input_mode>] [--context-token-budget 4200] [--context-tail-lines 80] [--paper-search-results <paper_search_results_path>] [--resume] [--resume-from <step>] [--force-rebuild]
+python scripts/run_pipeline.py --comments <comments_path> --manuscript <manuscript_docx_path> --project-root <project_root> --output-md <output_md_path> --output-docx <output_docx_path> [--journal-style journal-manuscript|nature-review|cell-press|lancet-review] [--expected-comments-mode <comments_input_mode>] [--context-token-budget 4200] [--context-tail-lines 80] [--paper-search-results <paper_search_results_path>] [--resume] [--resume-from <step>] [--force-rebuild]
 ```
 
 `--expected-comments-mode` is strongly recommended after the user confirms the branch chosen by `intake_router.py`. `preflight.py` will block execution if the confirmed mode and the detected mode do not match.
@@ -214,10 +215,20 @@ Each comment must contain:
 - `final_consistency_report.md` should also summarize intake mode, expected mode, state-window budget, section digest counts, and comment-window counts.
 - Word export should render common markdown emphasis and list markers as real Word formatting instead of leaving raw `**...**` and list prefixes in the document body.
 - `response_to_reviewers.docx` should include a visible heading hierarchy plus a TOC field, centered header text, and footer page-number field so the exported package is review-ready rather than plain-text only.
+- `export_docx.py` should support profile-based manuscript export via `--journal-style`, with distinct body/title/heading/reference/table styles for at least `journal-manuscript`, `nature-review`, `cell-press`, and `lancet-review`.
 - Markdown pipe tables in manuscript or response markdown should be rendered as actual Word tables rather than plain paragraphs.
 - Response block labels such as `Text / Image / Table` should be rendered with a dedicated Word paragraph style so exported reviewer-response documents keep a consistent block structure.
 - If `reference_search_decision=approved` and `--auto-run-reference-search` is enabled, the pipeline should invoke a local runner hook via `execute_reference_search.py`; this runner must still obey `review-writing` governance and may only emit `paper-search` rows.
 - If approved auto-run is requested but no local runner is configured, the pipeline must fail explicitly and write `reference_search_execution_request.md` instead of pretending that search has already been executed.
+
+## 追加完成记录（2026-03-09 第十七轮）
+1. 已完成语义角色定位增强：`revise_units.py` 新增 `front/introduction/methods/results/discussion/conclusion` 角色映射，并在缺少显式结构锚点时尝试按评论语义将抽象评论路由到最可能 section。
+2. 已完成单候选 section 的语义兜底：当评论没有结构化 hint，但语义角色只对应一个 section 时，系统可保守地使用该 section，而不再一律降级。
+3. 已完成 `location_strategy` 落盘，便于后续审计具体采用了 `citation-anchor / response-seed / evidence-anchor / structured-heading / semantic-role / lexical-fallback` 中哪一种定位路径。
+4. 已完成 profile-based Word 导出：`export_docx.py` 现在支持 `journal-manuscript / nature-review / cell-press / lancet-review` 四套 manuscript profile。
+5. 已完成 Word 参考文献编号保留：当 markdown 文末 references 使用显式编号时，导出的 Word 不再丢失编号文本。
+6. 已完成 `journal_style` 在 `preflight.py / run_pipeline.py / final_consistency_report.py / strict_gate.py` 中的贯通与审计。
+7. 已完成 references 区块清洗回写：`build_reference_registry.py` 会过滤掉章节标题/目录项这类伪参考文献，并把干净的 bibliography 重新写回 markdown。
 - The local runner contract must remain machine-checkable: `--rounds-json <path> --output <path> --project-root <path>`, with output saved to `project_root/paper_search_results.json`.
 - Approved search auto-execution must rerun `citation_guard.py`, `revise_units.py`, literature-index/matrix steps, `reference_sync.py`, and `build_reference_registry.py` before export and gate.
 - If no explicit local runner is provided but `opencode` is available, the workflow may fall back to an internal `opencode run` driver that still writes the same `paper_search_results.json` schema under `review-writing` governance.

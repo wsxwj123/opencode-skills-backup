@@ -51,6 +51,7 @@ def main() -> int:
         f"- needs_author_confirmation: `{sum(1 for unit in units if unit.get('status') == 'needs_author_confirmation')}`",
         f"- comments_input_mode: `{inputs.get('comments_input_mode', 'unknown')}`",
         f"- expected_comments_mode: `{inputs.get('expected_comments_mode') or 'Not provided by user'}`",
+        f"- journal_style: `{inputs.get('journal_style', 'journal-manuscript')}`",
         f"- revision_polish_driver_mode: `{polish_execution.get('driver_mode', 'Not executed')}`",
         f"- revision_polish_candidate_count: `{polish_execution.get('candidate_count', 0)}`",
         f"- revision_polish_scope_ok: `{polished_scope_ok}`",

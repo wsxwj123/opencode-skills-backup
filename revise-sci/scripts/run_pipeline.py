@@ -144,6 +144,7 @@ def current_input_signatures(args: argparse.Namespace) -> dict:
         "si_docx_path": path_signature(Path(args.si)) if args.si else path_signature(None),
         "attachments_dir_path": directory_signature(Path(args.attachments_dir)) if args.attachments_dir else directory_signature(None),
         "reference_docx_path": path_signature(Path(args.reference_docx)) if args.reference_docx else path_signature(None),
+        "journal_style": getattr(args, "journal_style", "journal-manuscript"),
         "paper_search_results_path": path_signature(Path(args.paper_search_results)) if args.paper_search_results else path_signature(None),
         "references_source_path": path_signature(references_source),
         "reference_search_decision": getattr(args, "reference_search_decision", "ask"),
@@ -356,6 +357,11 @@ def main() -> int:
     parser.add_argument("--output-md", required=True)
     parser.add_argument("--output-docx", required=True)
     parser.add_argument("--reference-docx", default="")
+    parser.add_argument(
+        "--journal-style",
+        choices=("journal-manuscript", "nature-review", "cell-press", "lancet-review"),
+        default="journal-manuscript",
+    )
     parser.add_argument("--paper-search-results", default="")
     parser.add_argument("--references-source", default="")
     parser.add_argument("--reference-search-decision", choices=REFERENCE_SEARCH_DECISIONS, default="ask")
@@ -419,6 +425,8 @@ def main() -> int:
         args.output_md,
         "--output-docx",
         args.output_docx,
+        "--journal-style",
+        args.journal_style,
         "--reference-search-decision",
         args.reference_search_decision,
         "--context-token-budget",
@@ -629,6 +637,7 @@ def main() -> int:
     ]
     if args.reference_docx:
         export_args.extend(["--reference-docx", args.reference_docx])
+    export_args.extend(["--journal-style", args.journal_style])
     run_step(export_args)
     run_step([py, str(script_dir / "final_consistency_report.py"), "--project-root", args.project_root])
     run_step([py, str(script_dir / "strict_gate.py"), "--project-root", args.project_root])

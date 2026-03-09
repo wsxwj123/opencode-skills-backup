@@ -193,12 +193,15 @@ def main() -> int:
     reference_search_decision = normalize_ws(str((state.get("inputs") or {}).get("reference_search_decision") or "ask"))
     comments_input_mode = normalize_ws(str((state.get("inputs") or {}).get("comments_input_mode") or ""))
     expected_comments_mode = normalize_ws(str((state.get("inputs") or {}).get("expected_comments_mode") or ""))
+    journal_style = normalize_ws(str((state.get("inputs") or {}).get("journal_style") or "journal-manuscript"))
     citation_units = completed_citation_units(units)
 
     if comments_input_mode in {"", "unsupported", "html-unknown"}:
         failures.append("project_state missing a supported comments_input_mode")
     if expected_comments_mode and expected_comments_mode != comments_input_mode:
         failures.append("project_state expected_comments_mode does not match detected comments_input_mode")
+    if journal_style not in {"journal-manuscript", "nature-review", "cell-press", "lancet-review"}:
+        failures.append("project_state journal_style is missing or unsupported")
     for artifact in (section_digests_path, comment_registry_path):
         if not artifact.exists():
             failures.append(f"missing state artifact: {artifact.name}")
@@ -394,6 +397,22 @@ def main() -> int:
     ):
         if not required_file.exists():
             failures.append(f"missing output: {required_file}")
+
+    output_docx = Path(state.get("outputs", {}).get("output_docx", project_root / "missing.docx"))
+    if output_docx.exists():
+        try:
+            manuscript_docx_rows = read_docx_paragraphs(output_docx)
+        except Exception:
+            failures.append("output_docx is not a readable docx")
+        else:
+            manuscript_texts = [normalize_ws(row.get("text", "")) for row in manuscript_docx_rows if normalize_ws(row.get("text", ""))]
+            if not manuscript_texts:
+                failures.append("output_docx missing readable manuscript content")
+            if isinstance(reference_coverage, dict) and int(reference_coverage.get("reference_entries", 0) or 0) > 0:
+                if not any(text == "References" or text == "参考文献" for text in manuscript_texts):
+                    failures.append("output_docx missing references heading")
+                if not any(text.startswith("1.") or text.startswith("1 ") for text in manuscript_texts):
+                    failures.append("output_docx missing numbered reference entries")
 
     if state.get("delivery_status") == "ready_to_submit" and any(unit.get("status") == "needs_author_confirmation" for unit in units):
         failures.append("delivery_status ready_to_submit conflicts with needs_author_confirmation units")

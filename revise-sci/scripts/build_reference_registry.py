@@ -16,6 +16,8 @@ INLINE_NUMERIC_CITATION_RE = re.compile(r"\[(\d+(?:\s*[-,–]\s*\d+)*)\]")
 AUTHOR_YEAR_PAREN_RE = re.compile(r"\(([A-Z][A-Za-z'`-]+(?:\s+et al\.)?),\s*((?:19|20)\d{2}[a-z]?)\)")
 AUTHOR_YEAR_NARRATIVE_RE = re.compile(r"\b([A-Z][A-Za-z'`-]+(?:\s+et al\.)?)\s*\(((?:19|20)\d{2}[a-z]?)\)")
 AUTHOR_YEAR_IN_MULTI_PAREN_RE = re.compile(r"([A-Z][A-Za-z'`-]+(?:\s+et al\.)?),\s*((?:19|20)\d{2}[a-z]?)")
+REFERENCE_YEAR_RE = re.compile(r"\b(?:19|20)\d{2}[a-z]?\b")
+AUTHOR_LIKE_RE = re.compile(r"^[A-Z][A-Za-z'`-]+,\s")
 
 
 def split_reference_section(text: str) -> tuple[str, list[str], bool]:
@@ -45,6 +47,22 @@ def normalize_reference_key(text: str) -> str:
     return re.sub(r"\s+", " ", lowered).strip()
 
 
+def looks_like_reference_entry(text: str) -> bool:
+    normalized = normalize_ws(text)
+    if not normalized:
+        return False
+    lowered = normalized.lower()
+    if "doi:" in lowered or "pmid:" in lowered:
+        return True
+    if REFERENCE_YEAR_RE.search(normalized):
+        return True
+    if AUTHOR_LIKE_RE.search(normalized):
+        return True
+    if " et al." in normalized:
+        return True
+    return False
+
+
 def build_registry(reference_lines: list[str]) -> list[dict]:
     registry: list[dict] = []
     next_number = 1
@@ -58,6 +76,8 @@ def build_registry(reference_lines: list[str]) -> list[dict]:
             number = next_number
             raw_text = normalize_ws(line)
             next_number += 1
+        if not looks_like_reference_entry(raw_text):
+            continue
         registry.append(
             {
                 "reference_number": number,
@@ -747,6 +767,13 @@ def main() -> int:
             body_text, reference_lines, references_found = split_reference_section(text)
 
     registry = build_registry(reference_lines)
+    sanitized_reference_lines = registry_to_reference_lines(registry)
+    if reference_lines != sanitized_reference_lines:
+        reference_lines = sanitized_reference_lines
+        rewrite_references_section(output_md, body_text, reference_lines, references_found)
+        text = output_md.read_text(encoding="utf-8")
+        body_text, reference_lines, references_found = split_reference_section(text)
+        registry = build_registry(reference_lines)
     missing_numbers: list[int] = []
     imported_reference_numbers: list[int] = []
     if cited_numbers:

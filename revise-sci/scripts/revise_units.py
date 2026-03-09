@@ -68,6 +68,126 @@ LOW_SIGNAL_REVIEW_TOKENS = {
     "wording",
 }
 
+SECTION_ROLE_HINTS: dict[str, tuple[str, ...]] = {
+    "front": ("abstract", "summary", "highlights", "front matter", "keywords"),
+    "introduction": ("introduction", "background", "overview", "rationale", "motivation"),
+    "methods": ("methods", "materials and methods", "methodology", "search strategy", "method"),
+    "results": ("results", "findings"),
+    "discussion": ("discussion", "interpretation", "analysis"),
+    "conclusion": ("conclusion", "conclusions", "outlook", "future perspectives", "perspectives"),
+    "references": ("references", "reference", "bibliography"),
+}
+
+ABSTRACT_COMMENT_ROLE_KEYWORDS: dict[str, tuple[str, ...]] = {
+    "front": (
+        "abstract",
+        "title",
+        "keyword",
+        "keywords",
+        "summary",
+        "highlight",
+        "graphical abstract",
+        "running title",
+        "题目",
+        "标题",
+        "摘要",
+        "关键词",
+        "亮点",
+        "图文摘要",
+    ),
+    "introduction": (
+        "background",
+        "scope",
+        "novelty",
+        "rationale",
+        "unmet",
+        "clinical need",
+        "importance",
+        "overview",
+        "introduction",
+        "why",
+        "标题",
+        "背景",
+        "研究意义",
+        "创新性",
+        "新颖性",
+        "综述范围",
+        "研究背景",
+    ),
+    "methods": (
+        "methodology",
+        "search strategy",
+        "search strategies",
+        "database",
+        "databases",
+        "keyword",
+        "keywords",
+        "inclusion",
+        "exclusion",
+        "eligibility",
+        "criteria",
+        "screening",
+        "review method",
+        "review methods",
+        "evidence level",
+        "检索",
+        "数据库",
+        "关键词",
+        "纳入",
+        "排除",
+        "综述方法",
+        "证据等级",
+    ),
+    "results": (
+        "result",
+        "results",
+        "figure",
+        "table",
+        "legend",
+        "panel",
+        "dataset",
+        "evidence map",
+        "结果",
+        "图",
+        "表",
+        "图注",
+        "证据图谱",
+    ),
+    "discussion": (
+        "mechanism",
+        "interpretation",
+        "discussion",
+        "clinical translation",
+        "balanced",
+        "tone down",
+        "overstate",
+        "comparison",
+        "limitation",
+        "limitations",
+        "implication",
+        "mechanistic",
+        "讨论",
+        "机制",
+        "临床转化",
+        "局限性",
+        "解释",
+        "讨论部分",
+    ),
+    "conclusion": (
+        "conclusion",
+        "concluding",
+        "future perspective",
+        "future perspectives",
+        "future direction",
+        "outlook",
+        "summary",
+        "结论",
+        "总结",
+        "展望",
+        "未来方向",
+    ),
+}
+
 
 def salient_tokens(text: str) -> set[str]:
     return {
@@ -109,6 +229,107 @@ def best_location(comment_text: str, section_index: dict) -> tuple[dict[str, Any
         or (fallback_mode and best_score <= 3)
     )
     return best_section, best_para, best_score, ambiguous
+
+
+def infer_section_role(heading: str) -> str:
+    normalized = normalize_ws(heading).lower()
+    if not normalized:
+        return "unknown"
+    for role, hints in SECTION_ROLE_HINTS.items():
+        if any(hint in normalized for hint in hints):
+            return role
+    return "unknown"
+
+
+def role_signal_scores(comment_text: str) -> dict[str, int]:
+    normalized = normalize_ws(comment_text).lower()
+    scores = {role: 0 for role in ABSTRACT_COMMENT_ROLE_KEYWORDS}
+    for role, keywords in ABSTRACT_COMMENT_ROLE_KEYWORDS.items():
+        for keyword in keywords:
+            if keyword in normalized:
+                scores[role] += 1
+    return scores
+
+
+def best_paragraph_in_section(comment_text: str, section: dict[str, Any]) -> dict[str, Any] | None:
+    query_salient = salient_tokens(comment_text)
+    query_all = tokenize(comment_text)
+    best: tuple[int, dict[str, Any] | None] = (-1, None)
+    for paragraph in section.get("paragraphs", []):
+        paragraph_salient = salient_tokens(paragraph.get("text", ""))
+        paragraph_all = tokenize(paragraph.get("text", ""))
+        score = len(query_salient.intersection(paragraph_salient)) * 3 + len(query_all.intersection(paragraph_all))
+        if score > best[0]:
+            best = (score, paragraph)
+    return best[1] if best[1] is not None else (section.get("paragraphs") or [None])[0]
+
+
+def resolve_semantic_section_hint(unit: dict, section_index: dict) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    query_text = comment_query_text(unit)
+    if not query_text:
+        return None, None
+    scores = role_signal_scores(query_text)
+    if max(scores.values(), default=0) <= 0:
+        return None, None
+
+    best_roles = sorted(scores.items(), key=lambda item: item[1], reverse=True)
+    top_role, top_score = best_roles[0]
+    second_score = best_roles[1][1] if len(best_roles) > 1 else 0
+    if top_score < 2 or top_score - second_score < 1:
+        return None, None
+
+    candidate_sections: list[tuple[int, dict[str, Any]]] = []
+    sections = section_index.get("sections", [])
+    total_sections = max(len(sections), 1)
+    for idx, section in enumerate(sections):
+        role = infer_section_role(section.get("heading", ""))
+        if role != top_role:
+            continue
+        positional_bonus = 0
+        if top_role == "introduction":
+            positional_bonus = max(0, 5 - idx)
+        elif top_role in {"discussion", "conclusion"}:
+            positional_bonus = max(0, 5 - (total_sections - idx - 1))
+        elif top_role == "methods":
+            positional_bonus = 2 if idx <= total_sections // 2 else 0
+        elif top_role == "results":
+            positional_bonus = 2 if 0 < idx < total_sections - 1 else 0
+        candidate_sections.append((top_score * 3 + positional_bonus, section))
+
+    if not candidate_sections:
+        return None, None
+    candidate_sections.sort(key=lambda item: item[0], reverse=True)
+    best_score, best_section = candidate_sections[0]
+    second_section_score = candidate_sections[1][0] if len(candidate_sections) > 1 else -1
+    if best_score < 6 or (second_section_score >= 0 and best_score - second_section_score <= 1):
+        return None, None
+    best_paragraph = best_paragraph_in_section(query_text, best_section)
+    return best_section, best_paragraph
+
+
+def semantic_location_strategy(unit: dict, section_index: dict) -> tuple[str, dict[str, Any] | None, dict[str, Any] | None]:
+    semantic_section, semantic_paragraph = resolve_semantic_section_hint(unit, section_index)
+    if semantic_section and semantic_paragraph:
+        return "semantic-role", semantic_section, semantic_paragraph
+
+    query_text = comment_query_text(unit)
+    if not query_text:
+        return "", None, None
+    scores = role_signal_scores(query_text)
+    top_role = max(scores, key=scores.get, default="") if scores else ""
+    top_score = scores.get(top_role, 0) if top_role else 0
+    if top_score <= 0:
+        return "", None, None
+
+    role_sections = [section for section in section_index.get("sections", []) if infer_section_role(section.get("heading", "")) == top_role]
+    if len(role_sections) != 1:
+        return "", None, None
+
+    section = role_sections[0]
+    paragraph = best_paragraph_in_section(query_text, section)
+    if not paragraph:
+        return "", None, None
+    return "semantic-role-single-section", section, paragraph
 
 
 def infer_target_document(comment_text: str, has_si: bool) -> str:
@@ -911,17 +1132,27 @@ def main() -> int:
         seed_section, seed_paragraph = resolve_seed_location(unit, index_data)
         evidence_section, evidence_paragraph = resolve_evidence_anchor(unit, index_data)
         heading_section, heading_paragraph = resolve_structured_heading_hint(unit, index_data)
+        semantic_strategy, semantic_section, semantic_paragraph = semantic_location_strategy(unit, index_data)
+        location_strategy = "lexical-fallback"
         unresolved_structured_hint = has_unresolved_structured_heading_hint(unit) and not bool(heading_section and heading_paragraph)
         if anchored_section and anchored_paragraph:
             section, paragraph, best_score, location_ambiguous = anchored_section, anchored_paragraph, 1, False
+            location_strategy = "citation-anchor"
         elif seed_section and seed_paragraph:
             section, paragraph, best_score, location_ambiguous = seed_section, seed_paragraph, 2, False
+            location_strategy = "response-seed"
         elif evidence_section and evidence_paragraph:
             section, paragraph, best_score, location_ambiguous = evidence_section, evidence_paragraph, 1, False
+            location_strategy = "evidence-anchor"
         elif heading_section and heading_paragraph:
             section, paragraph, best_score, location_ambiguous = heading_section, heading_paragraph, 1, False
+            location_strategy = "structured-heading"
+        elif semantic_section and semantic_paragraph:
+            section, paragraph, best_score, location_ambiguous = semantic_section, semantic_paragraph, 3, False
+            location_strategy = semantic_strategy or "semantic-role"
         elif unresolved_structured_hint:
             section, paragraph, best_score, location_ambiguous = None, None, -1, True
+            location_strategy = "blocked-structured-hint"
         else:
             section, paragraph, best_score, location_ambiguous = best_location(query_text, index_data)
         original_excerpt = paragraph["text"] if paragraph else (
@@ -1030,6 +1261,7 @@ def main() -> int:
                 "evidence_sources": evidence_sources,
                 "target_document": target_document,
                 "editorial_intent": intent,
+                "location_strategy": location_strategy,
                 "revision_plan": revision_plan,
                 "polish_applied": False,
                 "polish_driver_mode": "pending" if status == "completed" and revision_plan.get("scope") != "none" else "not-required",
