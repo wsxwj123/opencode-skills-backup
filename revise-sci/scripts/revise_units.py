@@ -16,6 +16,7 @@ from common import (
     is_meaningful_text,
     normalize_ws,
     read_json,
+    reviewer_sort_key,
     split_sentences,
     tokenize,
     write_json,
@@ -118,6 +119,8 @@ def infer_target_document(comment_text: str, has_si: bool) -> str:
 
 def comment_query_text(unit: dict) -> str:
     parts = [
+        normalize_ws(unit.get("editor_statement_seed", "")),
+        normalize_ws(unit.get("reviewer_statement_seed", "")),
         normalize_ws(unit.get("problem_description", "")),
         normalize_ws(unit.get("comment_title", "")),
         normalize_ws(unit.get("root_cause", "")),
@@ -662,6 +665,8 @@ def render_comment_record(unit: dict) -> str:
     actions = unit["modification_actions"] or [{"action": "无", "reason": "无"}]
     original_block = unit.get("reviewer_comment_original") or unit["reviewer_comment_en"]
     secondary_block = unit["reviewer_comment_zh_literal"] if unit.get("reviewer_comment_lang") != "zh" else english_summary_for_comment(unit)
+    editor_statement = normalize_ws(unit.get("editor_statement_seed", ""))
+    reviewer_statement = normalize_ws(unit.get("reviewer_statement_seed", ""))
     lines = [
         f"# {unit['comment_id']}",
         "",
@@ -671,30 +676,48 @@ def render_comment_record(unit: dict) -> str:
         "",
         f"{secondary_comment_label(unit)}  \n{secondary_block}",
         "",
-        f"**审稿意见中文理解**  \n{unit['intent_zh']}",
-        "",
-        "## 2) Response to Reviewer（中英对照）",
-        "",
-        f"**中文回应**  \n{unit['response_zh']}",
-        "",
-        f"**English Translation**  \n{unit['response_en']}",
-        "",
-        "## 3) 可能需要修改的正文/附件内容（中英对照）",
-        "",
-        f"**快速定位**  \n- 章节: {atomic.get('section_heading', '无')}\n- 段落索引: {atomic.get('paragraph_index', '无')}\n- Word检索锚句: {atomic.get('matched_sentence', '无')}\n- 修改动作: {' / '.join(a['action'] for a in actions)}",
-        "",
-        f"**原子化定位**  \n- manuscript_section_id / si_section_id: {atomic.get('manuscript_section_id') or atomic.get('si_section_id') or '无'}\n- 原子文件路径: {atomic.get('section_file', '无')}\n- paragraph_index: {atomic.get('paragraph_index', '无')}\n- matched_sentence: {atomic.get('matched_sentence', '无')}",
-        "",
-        f"**Original Text**  \n{unit['original_excerpt_en'] or '无'}",
-        "",
-        f"**对应段落修订文本（English）**  \n{unit['revised_excerpt_en'] or '无'}",
-        "",
-        f"**修改后中文对照**  \n{unit['revised_excerpt_zh'] or '无'}",
-        "",
-        "## 4) 修改说明（中文）",
-        "",
-        "**细节修改**",
     ]
+    if editor_statement:
+        lines.extend(
+            [
+                f"**编辑来信摘要 / Editor Statement**  \n{editor_statement}",
+                "",
+            ]
+        )
+    if reviewer_statement:
+        lines.extend(
+            [
+                f"**审稿人总体评价 / Reviewer Overall Statement**  \n{reviewer_statement}",
+                "",
+            ]
+        )
+    lines.extend(
+        [
+            f"**审稿意见中文理解**  \n{unit['intent_zh']}",
+            "",
+            "## 2) Response to Reviewer（中英对照）",
+            "",
+            f"**中文回应**  \n{unit['response_zh']}",
+            "",
+            f"**English Translation**  \n{unit['response_en']}",
+            "",
+            "## 3) 可能需要修改的正文/附件内容（中英对照）",
+            "",
+            f"**快速定位**  \n- 章节: {atomic.get('section_heading', '无')}\n- 段落索引: {atomic.get('paragraph_index', '无')}\n- Word检索锚句: {atomic.get('matched_sentence', '无')}\n- 修改动作: {' / '.join(a['action'] for a in actions)}",
+            "",
+            f"**原子化定位**  \n- manuscript_section_id / si_section_id: {atomic.get('manuscript_section_id') or atomic.get('si_section_id') or '无'}\n- 原子文件路径: {atomic.get('section_file', '无')}\n- paragraph_index: {atomic.get('paragraph_index', '无')}\n- matched_sentence: {atomic.get('matched_sentence', '无')}",
+            "",
+            f"**Original Text**  \n{unit['original_excerpt_en'] or '无'}",
+            "",
+            f"**对应段落修订文本（English）**  \n{unit['revised_excerpt_en'] or '无'}",
+            "",
+            f"**修改后中文对照**  \n{unit['revised_excerpt_zh'] or '无'}",
+            "",
+            "## 4) 修改说明（中文）",
+            "",
+            "**细节修改**",
+        ]
+    )
     for action in actions:
         lines.append(f"- {action['action']}：{action['reason']}")
     lines.extend(
@@ -736,9 +759,41 @@ def render_response_to_reviewers(units: list[dict]) -> str:
         "感谢编辑和审稿人的审阅。我们已逐条整理审稿意见、回复内容、正文修订位置及证据边界，相关需作者确认之处已明确标注。",
         "",
     ]
-    for reviewer in sorted(grouped.keys()):
+    global_editor_statement = ""
+    for unit in units:
+        seed = normalize_ws(unit.get("editor_statement_seed", ""))
+        if seed:
+            global_editor_statement = seed
+            break
+    if global_editor_statement and "Editor" not in grouped:
+        lines.extend(
+            [
+                "## Editor Statement",
+                "",
+                global_editor_statement,
+                "",
+            ]
+        )
+    for reviewer in sorted(grouped.keys(), key=reviewer_sort_key):
         lines.append(f"# {reviewer}")
         lines.append("")
+        reviewer_statement = ""
+        if reviewer == "Editor":
+            reviewer_statement = global_editor_statement
+        else:
+            for severity in ("major", "minor"):
+                for unit in grouped[reviewer].get(severity, []):
+                    seed = normalize_ws(unit.get("reviewer_statement_seed", ""))
+                    if seed:
+                        reviewer_statement = seed
+                        break
+                if reviewer_statement:
+                    break
+        if reviewer_statement:
+            label = "Editor Statement" if reviewer == "Editor" else "Reviewer Overall Statement"
+            lines.append(f"**{label}**  ")
+            lines.append(reviewer_statement)
+            lines.append("")
         for severity in ("major", "minor"):
             items = grouped[reviewer].get(severity, [])
             if not items:

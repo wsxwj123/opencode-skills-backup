@@ -75,6 +75,46 @@ class PipelineTests(unittest.TestCase):
             document_xml = zf.read("word/document.xml").decode("utf-8", errors="ignore")
         self.assertNotIn('w:type="page"', document_xml)
 
+    def test_pipeline_handles_editor_email_and_reviewer_statement_style_docx(self):
+        project_root, result = self._run_pipeline(
+            [
+                ("paragraph", "Editor Comments"),
+                ("paragraph", "Please address all reviewer concerns carefully before resubmission."),
+                ("paragraph", "1. Please provide a point-by-point response letter."),
+                ("paragraph", "Reviewer #1"),
+                ("paragraph", "Overall statement: The review is potentially useful, but the mechanistic discussion needs clearer boundaries."),
+                ("paragraph", "1. Please clarify the protective effect statement in the Results section."),
+                ("paragraph", "Reviewer #2: The organization remains difficult to follow."),
+                ("paragraph", "1. Please reorganize the discussion section."),
+            ],
+            [
+                ("heading1", "Results"),
+                ("paragraph", "Quercetin showed a protective effect in TAC-treated cells."),
+                ("heading1", "Discussion"),
+                ("paragraph", "These findings support the proposed mechanism."),
+            ],
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        state = json.loads((project_root / "project_state.json").read_text(encoding="utf-8"))
+        self.assertEqual(state["inputs"]["comments_input_mode"], "docx-review-letter")
+        response_md = (project_root / "response_to_reviewers.md").read_text(encoding="utf-8")
+        self.assertIn("# Editor", response_md)
+        self.assertIn("**Editor Statement**", response_md)
+        self.assertIn("Please address all reviewer concerns carefully before resubmission.", response_md)
+        self.assertIn("**Reviewer Overall Statement**", response_md)
+        unit_map = {
+            payload["comment_id"]: payload
+            for payload in (
+                json.loads(path.read_text(encoding="utf-8"))
+                for path in sorted((project_root / "units").glob("*.json"))
+            )
+        }
+        self.assertIn("E-Major-01", unit_map)
+        self.assertIn("R1-Major-01", unit_map)
+        self.assertIn("R2-Major-01", unit_map)
+        self.assertEqual(unit_map["E-Major-01"]["comment_role"], "editor-comment")
+        self.assertIn("mechanistic discussion needs clearer boundaries", unit_map["R1-Major-01"]["reviewer_statement_seed"])
+
     def test_pipeline_marks_author_confirmation_when_evidence_is_missing(self):
         project_root, result = self._run_pipeline(
             [

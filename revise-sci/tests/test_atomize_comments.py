@@ -163,6 +163,72 @@ class AtomizeCommentsTests(unittest.TestCase):
         self.assertIn("Additional context for the first comment.", first["reviewer_comment_en"])
         self.assertIn("Add a citation", second["reviewer_comment_en"])
 
+    def test_docx_editor_and_reviewer_statements_are_distinguished_from_numbered_comments(self):
+        comments = create_docx(
+            self.root / "comments.docx",
+            [
+                ("paragraph", "Editor Comments"),
+                ("paragraph", "Please address all reviewer concerns carefully before resubmission."),
+                ("paragraph", "1. Please provide a point-by-point response letter."),
+                ("paragraph", "Reviewer #1"),
+                ("paragraph", "Overall statement: The review is potentially useful, but the mechanistic discussion needs clearer boundaries."),
+                ("paragraph", "1. Please clarify the mechanism statement in Section 2."),
+                ("paragraph", "2. Please add references for the background statement."),
+                ("paragraph", "Reviewer #2: The topic is timely, but the manuscript organization remains difficult to follow."),
+                ("paragraph", "1. Please reorganize Section 3."),
+            ],
+        )
+        result = run_script(
+            "atomize_comments.py",
+            ["--comments", str(comments), "--project-root", str(self.project_root)],
+            cwd=self.root,
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        units = sorted((self.project_root / "units").glob("*.json"))
+        self.assertEqual(len(units), 4)
+
+        editor = json.loads(units[0].read_text(encoding="utf-8"))
+        reviewer1_first = json.loads(units[1].read_text(encoding="utf-8"))
+        reviewer1_second = json.loads(units[2].read_text(encoding="utf-8"))
+        reviewer2 = json.loads(units[3].read_text(encoding="utf-8"))
+
+        self.assertEqual(editor["comment_id"], "E-Major-01")
+        self.assertEqual(editor["reviewer"], "Editor")
+        self.assertEqual(editor["comment_role"], "editor-comment")
+        self.assertEqual(editor["comment_input_mode"], "docx-review-letter")
+        self.assertIn("Please address all reviewer concerns carefully", editor["editor_statement_seed"])
+        self.assertEqual(editor["reviewer_comment_en"], "Please provide a point-by-point response letter.")
+
+        self.assertEqual(reviewer1_first["comment_id"], "R1-Major-01")
+        self.assertIn("mechanistic discussion needs clearer boundaries", reviewer1_first["reviewer_statement_seed"])
+        self.assertNotIn("mechanistic discussion needs clearer boundaries", reviewer1_first["reviewer_comment_en"])
+        self.assertEqual(reviewer1_second["comment_id"], "R1-Major-02")
+
+        self.assertEqual(reviewer2["comment_id"], "R2-Major-01")
+        self.assertIn("topic is timely", reviewer2["reviewer_statement_seed"])
+        self.assertNotIn("topic is timely", reviewer2["reviewer_comment_en"])
+
+    def test_docx_prefatory_reviewer_paragraph_without_label_is_treated_as_statement(self):
+        comments = create_docx(
+            self.root / "comments.docx",
+            [
+                ("paragraph", "Reviewer #1"),
+                ("paragraph", "This review is interesting, but several key clarifications are still needed."),
+                ("paragraph", "1. Please clarify the mechanism statement."),
+            ],
+        )
+        result = run_script(
+            "atomize_comments.py",
+            ["--comments", str(comments), "--project-root", str(self.project_root)],
+            cwd=self.root,
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        units = sorted((self.project_root / "units").glob("*.json"))
+        self.assertEqual(len(units), 1)
+        payload = json.loads(units[0].read_text(encoding="utf-8"))
+        self.assertIn("several key clarifications are still needed", payload["reviewer_statement_seed"])
+        self.assertEqual(payload["reviewer_comment_en"], "Please clarify the mechanism statement.")
+
     def test_reviewer_response_sci_html_is_ingested_as_seeded_units(self):
         html = self.root / "reviewer_response.html"
         html.write_text(

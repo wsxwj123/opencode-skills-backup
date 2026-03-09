@@ -243,11 +243,12 @@ def markdown_to_docx(
         elif line.startswith("## "):
             doc.add_heading(line[3:], level=2)
         elif line.startswith("# "):
-            if page_break_before_comment and line[2:].startswith("Reviewer #"):
+            heading_text = line[2:]
+            if page_break_before_comment and (heading_text.startswith("Reviewer #") or heading_text.startswith("Editor")):
                 paragraph = doc.add_paragraph(style="ReviseSciReviewerHeading")
-                paragraph.add_run(line[2:]).bold = True
+                paragraph.add_run(heading_text).bold = True
             else:
-                doc.add_heading(line[2:], level=1)
+                doc.add_heading(heading_text, level=1)
             if include_toc and not toc_inserted:
                 add_toc_block(doc)
                 toc_inserted = True

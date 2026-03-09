@@ -188,6 +188,37 @@ class ReviseUnitsTests(unittest.TestCase):
         self.assertEqual(response_zh, "我们已在修订稿中澄清相关机制表述。")
         self.assertEqual(response_en, "We clarified the mechanism statement in the revised manuscript.")
 
+    def test_render_response_to_reviewers_shows_editor_and_reviewer_statements_separately(self):
+        units = [
+            {
+                "comment_id": "R1-Major-01",
+                "reviewer": "Reviewer #1",
+                "severity": "major",
+                "reviewer_comment_original": "Please clarify the mechanism statement.",
+                "reviewer_comment_lang": "en",
+                "reviewer_comment_en": "Please clarify the mechanism statement.",
+                "reviewer_comment_zh_literal": "请澄清机制表述。",
+                "intent_zh": "审稿人要求澄清机制表述。",
+                "response_zh": "我们已补充澄清。",
+                "response_en": "We clarified the statement.",
+                "atomic_location": {"section_heading": "2.1 Introduction", "paragraph_index": 5, "matched_sentence": "The mechanism remains unclear.", "section_file": "manuscript_sections/02-introduction.md", "manuscript_section_id": "manuscript-002"},
+                "original_excerpt_en": "The mechanism remains unclear.",
+                "revised_excerpt_en": "In the present dataset, the mechanism statement is limited to the current observation.",
+                "revised_excerpt_zh": "我们已将机制表述限定在当前观察范围内。",
+                "modification_actions": [{"action": "修改", "reason": "澄清机制边界"}],
+                "notes_core_zh": ["已按审稿意见澄清机制边界"],
+                "notes_support_zh": ["未引入新证据"],
+                "evidence_sources": [{"provider_family": "user-provided", "source": "manuscript"}],
+                "reviewer_statement_seed": "The review is potentially useful, but the mechanistic discussion needs clearer boundaries.",
+                "editor_statement_seed": "Please address all reviewer concerns carefully before resubmission.",
+            }
+        ]
+        text = revise_units.render_response_to_reviewers(units)
+        self.assertIn("## Editor Statement", text)
+        self.assertIn("Please address all reviewer concerns carefully before resubmission.", text)
+        self.assertIn("**Reviewer Overall Statement**", text)
+        self.assertIn("mechanistic discussion needs clearer boundaries", text)
+
 
 if __name__ == "__main__":
     unittest.main()

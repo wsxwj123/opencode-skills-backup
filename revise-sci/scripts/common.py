@@ -197,6 +197,31 @@ def read_docx_paragraphs(path: Path) -> list[dict[str, Any]]:
 def detect_comments_input_mode(path: Path) -> str:
     suffix = path.suffix.lower()
     if suffix == ".docx":
+        try:
+            rows = read_docx_paragraphs(path)
+        except (PackageNotFoundError, KeyError, ValueError):
+            return "docx-review-comments"
+        texts = [normalize_ws(row.get("text", "")) for row in rows if normalize_ws(row.get("text", ""))]
+        if any(
+            re.match(
+                r"^(editor(?:ial)?(?:\s+(?:comments?|email|letter|decision letter))?|associate editor(?:\s+comments?)?|decision letter)\b",
+                text,
+                flags=re.IGNORECASE,
+            )
+            for text in texts
+        ):
+            return "docx-review-letter"
+        if any(
+            re.match(
+                r"^(overall (?:statement|assessment)|general assessment|general comments?|reviewer statement|summary|comments to the author)\s*[:：-]?",
+                text,
+                flags=re.IGNORECASE,
+            )
+            for text in texts
+        ):
+            return "docx-review-letter"
+        if any(re.match(r"^Reviewer\s*#?\d+\s*[:：-]\s*.+$", text, flags=re.IGNORECASE) for text in texts):
+            return "docx-review-letter"
         return "docx-review-comments"
     if suffix != ".html":
         return "unsupported"
@@ -216,6 +241,17 @@ def detect_comments_input_mode(path: Path) -> str:
     ):
         return "reviewer-response-sci-html"
     return "html-unknown"
+
+
+def reviewer_sort_key(reviewer: str) -> tuple[int, int, str]:
+    label = normalize_ws(reviewer)
+    lowered = label.lower()
+    if lowered.startswith("editor") or lowered.startswith("associate editor") or lowered == "decision letter":
+        return (0, 0, label)
+    match = re.search(r"(\d+)", label)
+    if match:
+        return (1, int(match.group(1)), label)
+    return (2, 999, label)
 
 
 def docx_title_hint(path: Path) -> str:

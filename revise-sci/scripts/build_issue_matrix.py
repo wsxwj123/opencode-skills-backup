@@ -5,7 +5,7 @@ import argparse
 from collections import defaultdict
 from pathlib import Path
 
-from common import comment_nature, read_json, write_json, write_text
+from common import comment_nature, read_json, reviewer_sort_key, write_json, write_text
 
 
 def render_issue_matrix(units: list[dict]) -> str:
@@ -39,7 +39,7 @@ def main() -> int:
         grouped[unit["reviewer"]][unit["severity"]].append(unit)
 
     reviewers = []
-    for reviewer in sorted(grouped.keys()):
+    for reviewer in sorted(grouped.keys(), key=reviewer_sort_key):
         sections = []
         for severity in ("major", "minor"):
             items = grouped[reviewer].get(severity, [])

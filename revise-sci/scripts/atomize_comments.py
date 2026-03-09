@@ -6,7 +6,7 @@ import json
 import re
 from pathlib import Path
 
-from common import AtomicCommentHTMLParser, is_meaningful_text, normalize_ws, read_docx_paragraphs, read_json, write_json
+from common import AtomicCommentHTMLParser, detect_comments_input_mode, is_meaningful_text, normalize_ws, read_docx_paragraphs, read_json, write_json
 
 
 def reviewer_number(reviewer: str) -> int:
@@ -14,21 +14,83 @@ def reviewer_number(reviewer: str) -> int:
     return int(match.group(1)) if match else 1
 
 
+def is_editor_reviewer(reviewer: str) -> bool:
+    lowered = normalize_ws(reviewer).lower()
+    return lowered.startswith("editor") or lowered.startswith("associate editor") or lowered == "decision letter"
+
+
 def format_comment_id(reviewer: str, severity: str, index: int) -> str:
-    return f"R{reviewer_number(reviewer)}-{severity.capitalize()}-{index:02d}"
+    prefix = "E" if is_editor_reviewer(reviewer) else f"R{reviewer_number(reviewer)}"
+    return f"{prefix}-{severity.capitalize()}-{index:02d}"
 
 
 def detect_language(text: str) -> str:
     return "zh" if re.search(r"[\u4e00-\u9fff]", text or "") else "en"
 
 
+def merge_statement(existing: str, new_text: str) -> str:
+    current = normalize_ws(existing)
+    incoming = normalize_ws(new_text)
+    if not incoming:
+        return current
+    if not current:
+        return incoming
+    if incoming in current:
+        return current
+    if current in incoming:
+        return incoming
+    return normalize_ws(f"{current} {incoming}")
+
+
+def normalize_reviewer_label(text: str) -> str:
+    match = re.search(r"reviewer\s*#?\s*(\d+)", text, flags=re.IGNORECASE)
+    if match:
+        return f"Reviewer #{int(match.group(1))}"
+    return normalize_ws(text)
+
+
+def parse_reviewer_heading(text: str) -> tuple[str, str]:
+    match = re.match(r"^(Reviewer\s*#?\s*\d+)\s*(?:[:：-]\s*(.+))?$", text, flags=re.IGNORECASE)
+    if not match:
+        return "", ""
+    return normalize_reviewer_label(match.group(1)), normalize_ws(match.group(2) or "")
+
+
+def parse_editor_heading(text: str) -> tuple[str, str]:
+    match = re.match(
+        r"^(editor(?:ial)?(?:\s+(?:comments?|email|letter|decision letter))?|associate editor(?:\s+comments?)?|decision letter)\s*(?:[:：-]\s*(.+))?$",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if not match:
+        return "", ""
+    return "Editor", normalize_ws(match.group(2) or "")
+
+
+def parse_statement_label(text: str) -> tuple[bool, str]:
+    match = re.match(
+        r"^(overall (?:statement|assessment)|general assessment|general comments?|reviewer statement|summary|comments to the author)\s*[:：-]?\s*(.*)$",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if match:
+        return True, normalize_ws(match.group(2) or "")
+    return False, ""
+
+
 def parse_docx_comments(path: Path) -> list[dict[str, str]]:
     rows = read_docx_paragraphs(path)
     comments: list[dict[str, str]] = []
-    current_reviewer = "Reviewer #1"
+    comment_input_mode = detect_comments_input_mode(path)
+    current_reviewer = "Editor"
     current_severity = "major"
     current_text: list[str] = []
     current_comment_id = ""
+    current_statement_target = ""
+    current_statement_text: list[str] = []
+    reviewer_statements: dict[str, str] = {}
+    editor_statement = ""
+    expect_prefatory_statement = True
 
     def flush_current() -> None:
         nonlocal current_text, current_comment_id
@@ -41,11 +103,31 @@ def parse_docx_comments(path: Path) -> list[dict[str, str]]:
                 "severity": current_severity,
                 "comment_text": normalize_ws(" ".join(current_text)),
                 "comment_lang": detect_language(" ".join(current_text)),
-                "comment_input_mode": "docx-review-comments",
+                "comment_input_mode": comment_input_mode,
+                "reviewer_statement_seed": reviewer_statements.get(current_reviewer, ""),
+                "editor_statement_seed": editor_statement,
+                "comment_role": "editor-comment" if is_editor_reviewer(current_reviewer) else "reviewer-comment",
             }
         )
         current_text = []
         current_comment_id = ""
+
+    def flush_statement() -> None:
+        nonlocal current_statement_target, current_statement_text, editor_statement
+        statement = normalize_ws(" ".join(current_statement_text))
+        if not statement or not current_statement_target:
+            current_statement_target = ""
+            current_statement_text = []
+            return
+        if current_statement_target == "editor":
+            editor_statement = merge_statement(editor_statement, statement)
+        else:
+            reviewer_statements[current_statement_target] = merge_statement(
+                reviewer_statements.get(current_statement_target, ""),
+                statement,
+            )
+        current_statement_target = ""
+        current_statement_text = []
 
     severity_counters: dict[tuple[str, str], int] = {}
 
@@ -58,30 +140,73 @@ def parse_docx_comments(path: Path) -> list[dict[str, str]]:
 
     for row in rows:
         text = row["text"]
-        if re.match(r"^Reviewer\s*#?\d+", text, flags=re.IGNORECASE):
+        reviewer, reviewer_trailing = parse_reviewer_heading(text)
+        if reviewer:
             flush_current()
-            current_reviewer = normalize_ws(text.replace("Reviewer", "Reviewer "))
+            flush_statement()
+            current_reviewer = reviewer
             current_severity = "major"
+            expect_prefatory_statement = True
+            if reviewer_trailing:
+                current_statement_target = current_reviewer
+                current_statement_text = [reviewer_trailing]
+                expect_prefatory_statement = False
+            continue
+        editor_reviewer, editor_trailing = parse_editor_heading(text)
+        if editor_reviewer:
+            flush_current()
+            flush_statement()
+            current_reviewer = editor_reviewer
+            current_severity = "major"
+            expect_prefatory_statement = True
+            if editor_trailing:
+                current_statement_target = "editor"
+                current_statement_text = [editor_trailing]
+                expect_prefatory_statement = False
             continue
         lowered = text.lower()
         if lowered in {"major", "major comments", "major comment"}:
             flush_current()
+            flush_statement()
             current_severity = "major"
+            expect_prefatory_statement = False
             continue
         if lowered in {"minor", "minor comments", "minor comment"}:
             flush_current()
+            flush_statement()
             current_severity = "minor"
+            expect_prefatory_statement = False
+            continue
+        is_statement, statement_trailing = parse_statement_label(text)
+        if is_statement:
+            flush_current()
+            flush_statement()
+            current_statement_target = "editor" if is_editor_reviewer(current_reviewer) else current_reviewer
+            current_statement_text = [statement_trailing] if statement_trailing else []
+            expect_prefatory_statement = False
             continue
         match = re.match(r"^(?:comment\s*)?(\d+)\s*[\.\)\:\-]\s*(.+)$", text, flags=re.IGNORECASE)
         if match:
             flush_current()
+            flush_statement()
             start_new_comment(match.group(2))
+            expect_prefatory_statement = False
+            continue
+        if current_statement_target:
+            current_statement_text.append(text)
             continue
         if current_text:
             current_text.append(text)
             continue
+        if expect_prefatory_statement or is_editor_reviewer(current_reviewer):
+            current_statement_target = "editor" if is_editor_reviewer(current_reviewer) else current_reviewer
+            current_statement_text = [text]
+            expect_prefatory_statement = False
+            continue
         start_new_comment(text)
+        expect_prefatory_statement = False
     flush_current()
+    flush_statement()
     return comments
 
 
@@ -368,6 +493,9 @@ def main() -> int:
             "revised_excerpt_seed_en": item.get("revised_excerpt_seed_en", ""),
             "revised_excerpt_seed_zh": item.get("revised_excerpt_seed_zh", ""),
             "revision_location_seed": item.get("revision_location_seed", ""),
+            "reviewer_statement_seed": item.get("reviewer_statement_seed", ""),
+            "editor_statement_seed": item.get("editor_statement_seed", ""),
+            "comment_role": item.get("comment_role", "reviewer-comment"),
         }
         write_json(units_dir / f"{idx:03d}_{item['comment_id']}.json", payload)
 

@@ -143,3 +143,36 @@ class PreflightTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         state = json.loads((self.project_root / "project_state.json").read_text(encoding="utf-8"))
         self.assertEqual(state["inputs"]["comments_input_mode"], "reviewer-response-sci-html")
+
+    def test_preflight_detects_docx_review_letter_input_mode(self):
+        comments = create_docx(
+            self.root / "review_letter.docx",
+            [
+                ("paragraph", "Editor Comments"),
+                ("paragraph", "Please address the reviewers carefully."),
+                ("paragraph", "Reviewer #1"),
+                ("paragraph", "Overall statement: The review requires clearer organization."),
+                ("paragraph", "1. Please reorganize the discussion."),
+            ],
+        )
+        result = run_script(
+            "preflight.py",
+            [
+                "--comments",
+                str(comments),
+                "--manuscript",
+                str(self.manuscript),
+                "--attachments-dir",
+                str(self.attachments),
+                "--project-root",
+                str(self.project_root),
+                "--output-md",
+                str(self.project_root / "revised.md"),
+                "--output-docx",
+                str(self.project_root / "revised.docx"),
+            ],
+            cwd=self.root,
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        state = json.loads((self.project_root / "project_state.json").read_text(encoding="utf-8"))
+        self.assertEqual(state["inputs"]["comments_input_mode"], "docx-review-letter")
