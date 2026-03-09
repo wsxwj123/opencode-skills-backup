@@ -15,6 +15,7 @@ STEP_ORDER = (
     "atomize_comments",
     "atomize_manuscript",
     "issue_index",
+    "state_refresh",
     "revise",
     "polish",
     "literature",
@@ -55,6 +56,14 @@ def has_revision_outputs(project_root: Path) -> bool:
         and (project_root / "manuscript_edit_plan.md").exists()
         and (project_root / "comment_records").exists()
         and any((project_root / "comment_records").glob("*.md"))
+    )
+
+
+def has_state_outputs(project_root: Path) -> bool:
+    state_dir = project_root / "state"
+    return (
+        (state_dir / "section_digests.json").exists()
+        and (state_dir / "comment_registry.json").exists()
     )
 
 
@@ -138,10 +147,13 @@ def current_input_signatures(args: argparse.Namespace) -> dict:
         "paper_search_results_path": path_signature(Path(args.paper_search_results)) if args.paper_search_results else path_signature(None),
         "references_source_path": path_signature(references_source),
         "reference_search_decision": getattr(args, "reference_search_decision", "ask"),
+        "expected_comments_mode": getattr(args, "expected_comments_mode", ""),
         "auto_run_reference_search": bool(getattr(args, "auto_run_reference_search", False)),
         "paper_search_runner": normalize_runner_value(getattr(args, "paper_search_runner", "")),
         "opencode_driver_command": normalize_runner_value(getattr(args, "opencode_driver_command", "")),
         "revision_polish_runner": normalize_runner_value(getattr(args, "revision_polish_runner", "")),
+        "context_token_budget": int(getattr(args, "context_token_budget", 4200)),
+        "context_tail_lines": int(getattr(args, "context_tail_lines", 80)),
     }
 
 
@@ -167,6 +179,7 @@ def clear_project_outputs(project_root: Path) -> None:
         "si_sections",
         "comment_records",
         "data",
+        "state",
     ]
     removable_files = [
         "precheck_report.md",
@@ -246,10 +259,25 @@ def clear_step_outputs(project_root: Path, output_md: Path, output_docx: Path, s
                 path.unlink()
         return
 
+    if step_name == "state_refresh":
+        state_dir = project_root / "state"
+        if state_dir.exists():
+            shutil.rmtree(state_dir)
+        return
+
     if step_name == "revise":
         records_dir = project_root / "comment_records"
         if records_dir.exists():
             shutil.rmtree(records_dir)
+        state_dir = project_root / "state"
+        for name in ("comment_windows", "write_cycle_reports", "comment_memory"):
+            path = state_dir / name
+            if path.exists():
+                shutil.rmtree(path)
+        for filename in ("comment_cycle_log.json",):
+            path = state_dir / filename
+            if path.exists():
+                path.unlink()
         for filename in ("response_to_reviewers.md", "response_to_reviewers.docx", "manuscript_edit_plan.md"):
             path = project_root / filename
             if path.exists():
@@ -331,12 +359,15 @@ def main() -> int:
     parser.add_argument("--paper-search-results", default="")
     parser.add_argument("--references-source", default="")
     parser.add_argument("--reference-search-decision", choices=REFERENCE_SEARCH_DECISIONS, default="ask")
+    parser.add_argument("--expected-comments-mode", default="")
     parser.add_argument("--live-citation-verify", action="store_true")
     parser.add_argument("--offline-citation-verify", action="store_true")
     parser.add_argument("--auto-run-reference-search", action="store_true")
     parser.add_argument("--paper-search-runner", default="")
     parser.add_argument("--revision-polish-runner", default="")
     parser.add_argument("--opencode-driver-command", default="")
+    parser.add_argument("--context-token-budget", type=int, default=4200)
+    parser.add_argument("--context-tail-lines", type=int, default=80)
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--resume-from", choices=STEP_ORDER)
     parser.add_argument("--force-rebuild", action="store_true")
@@ -390,7 +421,13 @@ def main() -> int:
         args.output_docx,
         "--reference-search-decision",
         args.reference_search_decision,
+        "--context-token-budget",
+        str(args.context_token_budget),
+        "--context-tail-lines",
+        str(args.context_tail_lines),
     ]
+    if args.expected_comments_mode:
+        common_args.extend(["--expected-comments-mode", args.expected_comments_mode])
     if args.si:
         common_args.extend(["--si", args.si])
     if args.attachments_dir:
@@ -441,6 +478,8 @@ def main() -> int:
         run_step(atomize_doc_args)
     if not args.resume or not has_issue_index(project_root):
         run_step([py, str(script_dir / "build_issue_matrix.py"), "--project-root", args.project_root])
+    if not args.resume or not has_state_outputs(project_root):
+        run_step([py, str(script_dir / "state_manager.py"), "--project-root", args.project_root, "refresh"])
     if not args.resume or not has_revision_outputs(project_root):
         revise_args = [py, str(script_dir / "revise_units.py"), "--project-root", args.project_root]
         if search_results_path:

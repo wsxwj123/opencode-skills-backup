@@ -36,6 +36,10 @@ def main() -> int:
     search_status = read_json(project_root / "reference_search_status.json", {})
     search_execution = read_json(project_root / "reference_search_execution.json", {})
     polish_execution = read_json(project_root / "revision_polish_execution.json", {})
+    section_digests = read_json(project_root / "state" / "section_digests.json", {})
+    comment_registry = read_json(project_root / "state" / "comment_registry.json", [])
+    write_cycle_reports = sorted((project_root / "state" / "write_cycle_reports").glob("*.json")) if (project_root / "state" / "write_cycle_reports").exists() else []
+    inputs = state.get("inputs") or {}
     polished_scope_ok = sum(1 for unit in units if unit.get("polish_scope_respected") is True)
     polished_locked_ok = sum(1 for unit in units if unit.get("polish_locked_context_ok") is True)
     lines = [
@@ -45,6 +49,8 @@ def main() -> int:
         f"- total_comments: `{len(units)}`",
         f"- completed: `{sum(1 for unit in units if unit.get('status') == 'completed')}`",
         f"- needs_author_confirmation: `{sum(1 for unit in units if unit.get('status') == 'needs_author_confirmation')}`",
+        f"- comments_input_mode: `{inputs.get('comments_input_mode', 'unknown')}`",
+        f"- expected_comments_mode: `{inputs.get('expected_comments_mode') or 'Not provided by user'}`",
         f"- revision_polish_driver_mode: `{polish_execution.get('driver_mode', 'Not executed')}`",
         f"- revision_polish_candidate_count: `{polish_execution.get('candidate_count', 0)}`",
         f"- revision_polish_scope_ok: `{polished_scope_ok}`",
@@ -61,6 +67,15 @@ def main() -> int:
         missing_author_year = ", ".join(reference_coverage.get("missing_author_year_citations", [])) or "无"
         lines.extend(
             [
+                "",
+                "## Intake And State Windows",
+                "",
+                f"- context_token_budget: `{(state.get('state_policy') or {}).get('context_token_budget', 'unknown')}`",
+                f"- context_tail_lines: `{(state.get('state_policy') or {}).get('context_tail_lines', 'unknown')}`",
+                f"- manuscript_section_digests: `{len((section_digests.get('manuscript') or []))}`",
+                f"- si_section_digests: `{len((section_digests.get('si') or []))}`",
+                f"- comment_registry_entries: `{len(comment_registry)}`",
+                f"- comment_window_reports: `{len(write_cycle_reports)}`",
                 "",
                 "## Reference Coverage",
                 "",

@@ -38,6 +38,9 @@ def build_report(summary: dict[str, object], attachments: dict[str, object], mis
         f"- reference_search_decision: `{summary['reference_search_decision']}`",
         f"- citation_verify_mode: `{summary['citation_verify_mode']}`",
         f"- comments_input_mode: `{summary['comments_input_mode']}`",
+        f"- expected_comments_mode: `{summary['expected_comments_mode'] or 'Not provided by user'}`",
+        f"- context_token_budget: `{summary['context_token_budget']}`",
+        f"- context_tail_lines: `{summary['context_tail_lines']}`",
         "",
         "## 附件清单",
         f"- 附件数量: `{attachments['count']}`",
@@ -66,11 +69,14 @@ def main() -> int:
     parser.add_argument("--paper-search-results", default="")
     parser.add_argument("--references-source", default="")
     parser.add_argument("--reference-search-decision", choices=("ask", "approved", "declined"), default="ask")
+    parser.add_argument("--expected-comments-mode", default="")
     parser.add_argument("--live-citation-verify", action="store_true")
     parser.add_argument("--auto-run-reference-search", action="store_true")
     parser.add_argument("--paper-search-runner", default="")
     parser.add_argument("--revision-polish-runner", default="")
     parser.add_argument("--opencode-driver-command", default="")
+    parser.add_argument("--context-token-budget", type=int, default=4200)
+    parser.add_argument("--context-tail-lines", type=int, default=80)
     args = parser.parse_args()
 
     comments = Path(args.comments)
@@ -90,11 +96,16 @@ def main() -> int:
 
     errors: list[str] = []
     missing_items: list[str] = []
+    comments_input_mode = detect_comments_input_mode(comments) if comments.exists() else "unsupported"
 
     if not comments.exists():
         errors.append(f"Missing comments file: {comments}")
     elif comments.suffix.lower() not in {".docx", ".html"}:
         errors.append(f"comments_path must be .docx or .html: {comments}")
+    elif comments_input_mode in {"unsupported", "html-unknown"}:
+        errors.append(
+            f"comments_path does not match a supported intake branch: detected {comments_input_mode}. Run intake_router.py first and confirm a branch before pipeline execution."
+        )
     if not manuscript.exists() or manuscript.suffix.lower() != ".docx":
         errors.append(f"manuscript_docx_path must be readable .docx: {manuscript}")
     if si is None:
@@ -119,6 +130,10 @@ def main() -> int:
                 errors.append(f"paper_search_results_path must be valid json: {paper_search_results}")
             if args.reference_search_decision != "approved":
                 errors.append("paper_search_results_path requires --reference-search-decision approved")
+    if args.expected_comments_mode and args.expected_comments_mode != comments_input_mode:
+        errors.append(
+            f"expected_comments_mode mismatch: expected {args.expected_comments_mode}, detected {comments_input_mode}"
+        )
     if references_source is None:
         missing_items.append("references_source_path")
     elif not references_source.exists():
@@ -148,7 +163,10 @@ def main() -> int:
         "references_source_path": str(references_source.resolve()) if references_source else "",
         "reference_search_decision": args.reference_search_decision,
         "citation_verify_mode": "live" if args.live_citation_verify else "offline",
-        "comments_input_mode": detect_comments_input_mode(comments),
+        "comments_input_mode": comments_input_mode,
+        "expected_comments_mode": args.expected_comments_mode,
+        "context_token_budget": args.context_token_budget,
+        "context_tail_lines": args.context_tail_lines,
     }
     skill_root = Path(__file__).resolve().parent.parent
     skill_signature = compute_tree_signature(skill_root, patterns=("*.py", "*.md"))
@@ -172,15 +190,27 @@ def main() -> int:
                 "opencode_driver_command": args.opencode_driver_command,
                 "references_source_path": path_signature(references_source),
                 "reference_search_decision": args.reference_search_decision,
+                "expected_comments_mode": args.expected_comments_mode,
+                "context_token_budget": args.context_token_budget,
+                "context_tail_lines": args.context_tail_lines,
             },
             "outputs": {
                 "response_md": str((project_root / "response_to_reviewers.md").resolve()),
                 "response_docx": str((project_root / "response_to_reviewers.docx").resolve()),
+                "output_md": str(output_md.resolve()),
+                "output_docx": str(output_docx.resolve()),
             },
             "counts": {"comment_units": 0},
             "missing_items": missing_items,
             "delivery_status": "draft",
             "skill_signature": skill_signature,
+            "state_policy": {
+                "section_scoped_loading": True,
+                "comment_scoped_windows": True,
+                "context_token_budget": args.context_token_budget,
+                "context_tail_lines": args.context_tail_lines,
+                "fragment_only_rewrite": True,
+            },
         },
     )
 

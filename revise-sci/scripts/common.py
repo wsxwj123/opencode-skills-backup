@@ -17,6 +17,10 @@ ALLOWED_PROVIDER_FAMILIES = {"paper-search", "user-provided"}
 REFERENCE_SOURCE_NAME_RE = re.compile(r"(reference|references|bibliography|literature_index|refs?)", re.IGNORECASE)
 REFERENCE_SOURCE_EXTS = {".json", ".md", ".txt", ".docx", ".bib", ".ris"}
 MANUSCRIPT_VERSION_SUFFIX_RE = re.compile(r"\s*\(\d+\)\s*$")
+GLOBAL_SKILL_ROOTS = (
+    Path.home() / ".codex" / "skills",
+    Path.home() / ".config" / "opencode" / "skills",
+)
 NON_MEANINGFUL_TEXT_VALUES = {
     "",
     "无",
@@ -540,6 +544,22 @@ def autodiscover_reference_source(
         if candidate.exists() and candidate.is_file():
             return candidate.resolve()
     return None
+
+
+def global_skill_install_paths(skill_name: str) -> list[Path]:
+    normalized = normalize_ws(skill_name)
+    if not normalized:
+        return []
+    return [root / normalized for root in GLOBAL_SKILL_ROOTS]
+
+
+def discover_global_skill(skill_name: str) -> list[Path]:
+    discovered: list[Path] = []
+    for candidate in global_skill_install_paths(skill_name):
+        skill_md = candidate / "SKILL.md"
+        if skill_md.exists():
+            discovered.append(candidate.resolve())
+    return discovered
 
 
 class AtomicCommentHTMLParser(HTMLParser):

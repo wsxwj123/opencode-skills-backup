@@ -22,6 +22,7 @@ from common import (
     write_json,
     write_text,
 )
+from state_manager import append_comment_cycle_log, build_comment_window, refresh_state_artifacts, snapshot_state
 
 
 LOW_SIGNAL_REVIEW_TOKENS = {
@@ -894,6 +895,10 @@ def main() -> int:
     units_paths = sorted((project_root / "units").glob("*.json"))
     comment_records_dir = project_root / "comment_records"
     comment_records_dir.mkdir(parents=True, exist_ok=True)
+    state = read_json(project_root / "project_state.json", {})
+    state_policy = state.get("state_policy") or {}
+    context_token_budget = int(state_policy.get("context_token_budget") or (state.get("inputs") or {}).get("context_token_budget") or 4200)
+    context_tail_lines = int(state_policy.get("context_tail_lines") or (state.get("inputs") or {}).get("context_tail_lines") or 80)
 
     processed_units = []
     for unit_path in units_paths:
@@ -1035,6 +1040,26 @@ def main() -> int:
         processed_units.append(unit)
         write_json(unit_path, unit)
         write_text(comment_records_dir / f"{unit['comment_id']}.md", render_comment_record(unit))
+        comment_window, write_cycle_report = build_comment_window(
+            project_root,
+            unit,
+            token_budget=context_token_budget,
+            tail_lines=context_tail_lines,
+        )
+        write_json(project_root / "state" / "comment_windows" / f"{unit['comment_id']}.json", comment_window)
+        write_json(project_root / "state" / "write_cycle_reports" / f"{unit['comment_id']}.json", write_cycle_report)
+        append_comment_cycle_log(
+            project_root,
+            unit["comment_id"],
+            "revise",
+            f"{unit['status']} / {unit['editorial_intent']} / {unit['target_document']}",
+            {
+                "target_section_id": atomic_location.get("manuscript_section_id") or atomic_location.get("si_section_id") or "",
+                "paragraph_index": atomic_location.get("paragraph_index"),
+                "token_budget": context_token_budget,
+                "estimated_tokens_after_compaction": write_cycle_report.get("estimated_tokens_after_compaction", 0),
+            },
+        )
 
         if status == "completed" and section and paragraph:
             for sec in index_data["sections"]:
@@ -1055,6 +1080,7 @@ def main() -> int:
     write_text(project_root / "response_to_reviewers.md", render_response_to_reviewers(processed_units))
     write_text(project_root / "manuscript_edit_plan.md", render_edit_plan(processed_units))
 
+    refresh_state_artifacts(project_root)
     state = read_json(project_root / "project_state.json", {})
     state.setdefault("counts", {})
     state["counts"]["comment_units"] = len(processed_units)
@@ -1062,6 +1088,7 @@ def main() -> int:
     state["counts"]["needs_author_confirmation"] = sum(1 for unit in processed_units if unit["status"] == "needs_author_confirmation")
     state["delivery_status"] = "ready_to_submit" if state["counts"]["needs_author_confirmation"] == 0 else "author_confirmation_required"
     write_json(project_root / "project_state.json", state)
+    snapshot_state(project_root, "post-revise")
     print(json.dumps({"ok": True, "delivery_status": state["delivery_status"]}, ensure_ascii=False))
     return 0
 

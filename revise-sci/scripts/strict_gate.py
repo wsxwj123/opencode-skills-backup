@@ -182,13 +182,26 @@ def main() -> int:
     reference_coverage_path = project_root / "data" / "reference_coverage_audit.json"
     revision_polish_manifest_path = project_root / "revision_polish_manifest.json"
     revision_polish_execution_path = project_root / "revision_polish_execution.json"
+    state_dir = project_root / "state"
+    section_digests_path = state_dir / "section_digests.json"
+    comment_registry_path = state_dir / "comment_registry.json"
     literature_index = read_json(literature_index_path, [])
     synthesis_matrix = read_json(synthesis_matrix_path, [])
     synthesis_audit = read_json(synthesis_audit_path, {})
     reference_coverage = read_json(reference_coverage_path, {})
     revision_polish_execution = read_json(revision_polish_execution_path, {})
     reference_search_decision = normalize_ws(str((state.get("inputs") or {}).get("reference_search_decision") or "ask"))
+    comments_input_mode = normalize_ws(str((state.get("inputs") or {}).get("comments_input_mode") or ""))
+    expected_comments_mode = normalize_ws(str((state.get("inputs") or {}).get("expected_comments_mode") or ""))
     citation_units = completed_citation_units(units)
+
+    if comments_input_mode in {"", "unsupported", "html-unknown"}:
+        failures.append("project_state missing a supported comments_input_mode")
+    if expected_comments_mode and expected_comments_mode != comments_input_mode:
+        failures.append("project_state expected_comments_mode does not match detected comments_input_mode")
+    for artifact in (section_digests_path, comment_registry_path):
+        if not artifact.exists():
+            failures.append(f"missing state artifact: {artifact.name}")
 
     for artifact in (revision_polish_manifest_path, revision_polish_execution_path):
         if not artifact.exists():
@@ -324,6 +337,16 @@ def main() -> int:
         record_path = project_root / "comment_records" / f"{unit.get('comment_id', '')}.md"
         if not record_path.exists():
             failures.append(f"{unit.get('comment_id', '<unknown>')}: missing comment_record file")
+        comment_window_path = state_dir / "comment_windows" / f"{unit.get('comment_id', '')}.json"
+        write_cycle_report_path = state_dir / "write_cycle_reports" / f"{unit.get('comment_id', '')}.json"
+        if not comment_window_path.exists():
+            failures.append(f"{unit.get('comment_id', '<unknown>')}: missing comment_window state artifact")
+        if not write_cycle_report_path.exists():
+            failures.append(f"{unit.get('comment_id', '<unknown>')}: missing write_cycle_report state artifact")
+        else:
+            write_cycle_report = read_json(write_cycle_report_path, {})
+            if int(write_cycle_report.get("token_budget", 0) or 0) <= 0:
+                failures.append(f"{unit.get('comment_id', '<unknown>')}: invalid token budget in write_cycle_report")
 
     if not response_md.exists():
         failures.append("missing response_to_reviewers.md")
