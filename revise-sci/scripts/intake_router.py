@@ -53,6 +53,12 @@ MODE_WORKFLOWS = {
         "保留既有 comment_id 和 reviewer/severity 元数据",
         "直接进入 manuscript/SI 原子定位、逐条修稿、fragment polish 和最终门禁",
     ],
+    "no-comments-manuscript-only": [
+        "先确认是否使用 reviewer-simulator 生成结构化审稿意见",
+        "若确认，则先检查 reviewer-simulator 是否已安装；缺失时先安装到全局 skill 目录",
+        "生成审稿意见 HTML 后，重新进入 revise-sci intake 并确认新的 comments_input_mode",
+        "确认后再进入正式的原子化 revise workflow",
+    ],
 }
 
 
