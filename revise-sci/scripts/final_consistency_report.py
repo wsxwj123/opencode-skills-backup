@@ -36,6 +36,8 @@ def main() -> int:
     search_status = read_json(project_root / "reference_search_status.json", {})
     search_execution = read_json(project_root / "reference_search_execution.json", {})
     polish_execution = read_json(project_root / "revision_polish_execution.json", {})
+    polished_scope_ok = sum(1 for unit in units if unit.get("polish_scope_respected") is True)
+    polished_locked_ok = sum(1 for unit in units if unit.get("polish_locked_context_ok") is True)
     lines = [
         "# Final Consistency Report",
         "",
@@ -45,6 +47,8 @@ def main() -> int:
         f"- needs_author_confirmation: `{sum(1 for unit in units if unit.get('status') == 'needs_author_confirmation')}`",
         f"- revision_polish_driver_mode: `{polish_execution.get('driver_mode', 'Not executed')}`",
         f"- revision_polish_candidate_count: `{polish_execution.get('candidate_count', 0)}`",
+        f"- revision_polish_scope_ok: `{polished_scope_ok}`",
+        f"- revision_polish_locked_context_ok: `{polished_locked_ok}`",
         "",
         "| comment_id | severity | status | target_document | source_trace |",
         "|---|---|---|---|---|",

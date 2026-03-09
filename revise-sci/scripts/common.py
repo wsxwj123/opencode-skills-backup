@@ -54,6 +54,10 @@ def find_ai_style_markers(text: str) -> list[str]:
         markers.append("em dash")
     if re.search(r"\bnot only\b.*\bbut also\b", normalized, flags=re.IGNORECASE):
         markers.append("not only...but also")
+    if re.search(r"\bfrom\s+[A-Za-z0-9].+?\s+to\s+[A-Za-z0-9]", normalized, flags=re.IGNORECASE):
+        markers.append("from A to B")
+    if "?" in normalized:
+        markers.append("rhetorical question")
     if re.search(r",\s*(?:thus|thereby|therefore)\s+[A-Za-z-]+ing\b", normalized, flags=re.IGNORECASE):
         markers.append("trailing -ing clause")
     return markers
@@ -84,7 +88,9 @@ def polish_changed_text_locally(text: str) -> str:
         cleaned = re.sub(pattern, replacement, cleaned, flags=re.IGNORECASE)
     cleaned = cleaned.replace("—", ", ")
     cleaned = re.sub(r"\bnot only\s+(.+?)\s+but also\s+(.+?)([.;!?]|$)", r"\1 and \2\3", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\bfrom\s+([A-Za-z0-9][^,.;]{0,40})\s+to\s+([A-Za-z0-9][^,.;]{0,40})", r"across \1 and \2", cleaned, flags=re.IGNORECASE)
     cleaned = re.sub(r",\s*(?:thus|thereby|therefore)\s+([A-Za-z-]+ing\b[^.;!?]*)", r".", cleaned, flags=re.IGNORECASE)
+    cleaned = cleaned.replace("?", ".")
     cleaned = re.sub(r"\s+([,.;!?])", r"\1", cleaned)
     cleaned = re.sub(r"\.\.+", ".", cleaned)
     cleaned = normalize_ws(cleaned)

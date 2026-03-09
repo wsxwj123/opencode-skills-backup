@@ -37,6 +37,7 @@ class FinalConsistencyReportTests(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
             report = (project_root / "final_consistency_report.md").read_text(encoding="utf-8")
+            self.assertIn("revision_polish_driver_mode", report)
             self.assertIn("## Blocking Reasons", report)
             self.assertIn("R1-Major-01", report)
             self.assertIn("缺实验/结果", report)

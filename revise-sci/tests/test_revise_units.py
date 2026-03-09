@@ -144,6 +144,9 @@ class ReviseUnitsTests(unittest.TestCase):
             "Extracellular vesicles were isolated by ultracentrifugation. In the present dataset, they showed a protective effect in TAC-treated cells. The viability assay was repeated three times.",
         )
         self.assertEqual(plan["original_fragment"], "They showed a protective effect in TAC-treated cells.")
+        self.assertEqual(plan["locked_prefix"], "Extracellular vesicles were isolated by ultracentrifugation.")
+        self.assertEqual(plan["locked_suffix"], "The viability assay was repeated three times.")
+        self.assertEqual(plan["change_scope"], "sentence")
 
     def test_revise_paragraph_limitation_appends_new_sentence_only(self):
         paragraph = "Extracellular vesicles were isolated by ultracentrifugation."
@@ -152,6 +155,8 @@ class ReviseUnitsTests(unittest.TestCase):
         self.assertEqual(plan["original_fragment"], "")
         self.assertIn("This finding should be interpreted", plan["raw_fragment"])
         self.assertTrue(plan["paragraph_after_raw"].startswith("Extracellular vesicles were isolated by ultracentrifugation."))
+        self.assertEqual(plan["locked_prefix"], "Extracellular vesicles were isolated by ultracentrifugation.")
+        self.assertEqual(plan["locked_suffix"], "")
 
 
 if __name__ == "__main__":

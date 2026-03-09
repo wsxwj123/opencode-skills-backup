@@ -257,6 +257,12 @@ def main() -> int:
                 failures.append(f"{comment_id}: polished fragment still contains banned AI-style markers")
             if unit.get("polish_guard_ok") is not True:
                 failures.append(f"{comment_id}: polish_guard_ok is false")
+            if unit.get("polish_scope_respected") is not True:
+                failures.append(f"{comment_id}: polish_scope_respected is false")
+            if unit.get("polish_meaning_changed") is not False:
+                failures.append(f"{comment_id}: polish_meaning_changed must remain false")
+            if unit.get("polish_locked_context_ok") is not True:
+                failures.append(f"{comment_id}: polish_locked_context_ok is false")
 
         atomic_failures = missing_atomic_fields(unit)
         if atomic_failures:

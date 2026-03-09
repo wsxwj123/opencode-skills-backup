@@ -21,17 +21,26 @@ class PolishRevisionsTests(unittest.TestCase):
             "editorial_intent": "clarify",
             "revision_plan": {
                 "scope": "sentence_replace",
+                "change_scope": "sentence",
                 "original_fragment": "They showed a protective effect in TAC-treated cells.",
-                "raw_fragment": "In the present dataset, They showed a protective effect in TAC-treated cells.",
+                "raw_fragment": "In the present dataset, they showed a protective effect in TAC-treated cells.",
+                "locked_prefix": "Extracellular vesicles were isolated by ultracentrifugation.",
+                "locked_suffix": "The viability assay was repeated three times.",
                 "paragraph_before": "They showed a protective effect in TAC-treated cells.",
+                "evidence_boundary_note": "Keep the claim bounded to the present dataset.",
+                "citation_strings": [],
             },
             "atomic_location": {"section_heading": "Results", "paragraph_index": 7},
             "author_confirmation_reason": "",
         }
         prompt = polish_revisions.build_polish_prompt(Path("/tmp/revise-sci"), Path("/tmp/revise-sci/out.json"), [unit])
-        self.assertIn("Do not rewrite untouched source text", prompt)
-        self.assertIn("article-writing, review-writing, and humanizer-zh", prompt)
+        self.assertIn("You are the revision-fragment polisher", prompt)
+        self.assertIn("Do not rewrite locked context", prompt)
+        self.assertIn("article-writing: evidence-bounded", prompt)
+        self.assertIn("sci2doc: declarative academic prose", prompt)
         self.assertIn("not only... but also", prompt)
+        self.assertIn("locked_prefix", prompt)
+        self.assertIn("meaning_changed", prompt)
         self.assertIn("OUTPUT_JSON_PATH=", prompt)
 
     def test_apply_polished_fragment_preserves_unmodified_sentences(self):
@@ -55,6 +64,24 @@ class PolishRevisionsTests(unittest.TestCase):
         self.assertEqual(driver_mode, "not-required")
         self.assertEqual(payload, {"results": []})
         self.assertEqual(execution["driver_mode"], "not-required")
+
+    def test_fragment_map_preserves_polish_metadata(self):
+        payload = {
+            "results": [
+                {
+                    "comment_id": "R1-Major-01",
+                    "polished_fragment": "cleaned fragment",
+                    "edit_decision": "sentence-polish",
+                    "meaning_changed": False,
+                    "scope_respected": True,
+                    "ai_style_flags_removed": ["serves as"],
+                    "notes": "ok",
+                }
+            ]
+        }
+        mapping = polish_revisions.fragment_map_from_payload(payload)
+        self.assertEqual(mapping["R1-Major-01"]["edit_decision"], "sentence-polish")
+        self.assertEqual(mapping["R1-Major-01"]["ai_style_flags_removed"], ["serves as"])
 
 
 if __name__ == "__main__":

@@ -152,3 +152,7 @@ Each comment must contain:
 - The polishing stage should follow `article-writing`, `review-writing`, and `humanizer-zh` constraints together: direct evidence-bounded wording, no invented claims, no new citations, no banned AI phrases, no decorative transitions, and no paragraph-wide rewrite unless the new content is itself a new paragraph.
 - The polishing stage should emit `revision_polish_manifest.json`, `revision_polish_prompt.md`, and `revision_polish_execution.json` so the anti-AI prompt, driver mode, and candidate coverage remain auditable.
 - `strict_gate.py` must verify that completed revised fragments with a non-empty `revision_plan.scope` have polish state, a valid `polish_driver_mode`, and no residual banned AI-style markers.
+- The polishing prompt should be layered, not flat. It must include: role definition, non-negotiable edit/evidence/citation/length constraints, deep anti-AI rewriting protocol, and a JSON-only output contract.
+- `revision_plan` should carry `locked_prefix`, `locked_suffix`, `evidence_boundary_note`, and `citation_strings` so the polishing step can preserve untouched context explicitly rather than infer it.
+- The polishing output schema should include `edit_decision`, `meaning_changed`, `scope_respected`, `ai_style_flags_removed`, and `notes`.
+- `strict_gate.py` must fail if a polished revision reports `meaning_changed=true`, `scope_respected=false`, or if reconstructed paragraph text no longer preserves the locked prefix/suffix context.

@@ -437,6 +437,26 @@ def normalize_sentence_after_intro(sentence: str) -> str:
     return normalized
 
 
+def sentence_lock_context(paragraph_text: str, sentence_index: int) -> tuple[str, str]:
+    sentences = split_sentences(paragraph_text)
+    if not sentences:
+        return "", ""
+    bounded_index = max(0, min(sentence_index, len(sentences) - 1))
+    locked_prefix = normalize_ws(" ".join(sentences[:bounded_index]))
+    locked_suffix = normalize_ws(" ".join(sentences[bounded_index + 1 :]))
+    return locked_prefix, locked_suffix
+
+
+def evidence_boundary_note(intent: str) -> str:
+    if intent == "clarify":
+        return "Keep the claim explicitly bounded to the present dataset and do not broaden interpretation."
+    if intent == "limitation":
+        return "Keep the added limitation sentence restrained and do not expand into new mechanism or speculation."
+    if intent == "citation":
+        return "Preserve the sentence meaning and only maintain the existing citation anchor without adding new claims."
+    return "Keep the scientific meaning unchanged and do not strengthen the claim."
+
+
 def revise_paragraph(
     original_excerpt: str,
     comment_text: str,
@@ -461,12 +481,18 @@ def revise_paragraph(
         replacement = normalize_sentence_after_intro(target_sentence or paragraph_text)
         if not replacement.lower().startswith("in the present dataset,"):
             replacement = f"In the present dataset, {replacement}"
+        locked_prefix, locked_suffix = sentence_lock_context(paragraph_text, sentence_index)
         plan.update(
             {
                 "scope": "sentence_replace",
+                "locked_prefix": locked_prefix,
+                "locked_suffix": locked_suffix,
                 "raw_fragment": normalize_ws(replacement),
                 "paragraph_after_raw": replace_sentence_at(paragraph_text, sentence_index, replacement),
                 "changed_fragment_type": "modified_sentence",
+                "change_scope": "sentence",
+                "evidence_boundary_note": evidence_boundary_note(intent),
+                "citation_strings": [],
             }
         )
         return plan
@@ -480,8 +506,13 @@ def revise_paragraph(
                 "target_sentence_index": None,
                 "original_fragment": "",
                 "raw_fragment": limitation_sentence,
+                "locked_prefix": paragraph_text,
+                "locked_suffix": "",
                 "paragraph_after_raw": paragraph_after,
                 "changed_fragment_type": "added_sentence",
+                "change_scope": "sentence",
+                "evidence_boundary_note": evidence_boundary_note(intent),
+                "citation_strings": [],
             }
         )
         return plan
@@ -489,12 +520,18 @@ def revise_paragraph(
     if intent == "citation" and citation_payload:
         citation_text = normalize_ws(citation_payload.get("formatted_citation_text", ""))
         injected_sentence = inject_citation_into_sentence(target_sentence or paragraph_text, citation_text)
+        locked_prefix, locked_suffix = sentence_lock_context(paragraph_text, sentence_index)
         plan.update(
             {
                 "scope": "sentence_replace",
+                "locked_prefix": locked_prefix,
+                "locked_suffix": locked_suffix,
                 "raw_fragment": injected_sentence,
                 "paragraph_after_raw": replace_sentence_at(paragraph_text, sentence_index, injected_sentence),
                 "changed_fragment_type": "modified_sentence",
+                "change_scope": "sentence",
+                "evidence_boundary_note": evidence_boundary_note(intent),
+                "citation_strings": [citation_text] if citation_text else [],
             }
         )
         return plan
@@ -812,6 +849,11 @@ def main() -> int:
             "paragraph_before": original_excerpt,
             "paragraph_after_raw": original_excerpt,
             "changed_fragment_type": "none",
+            "locked_prefix": "",
+            "locked_suffix": "",
+            "change_scope": "none",
+            "evidence_boundary_note": evidence_boundary_note(intent),
+            "citation_strings": [],
         }
         revised_excerpt_en = revision_plan["paragraph_after_raw"] if status == "completed" else original_excerpt
         revised_excerpt_zh = revised_excerpt_zh_summary(intent, status, citation_payload)

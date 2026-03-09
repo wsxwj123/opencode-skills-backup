@@ -38,11 +38,16 @@ def candidate_payload(unit: dict[str, Any]) -> dict[str, Any]:
         "comment_id": unit.get("comment_id"),
         "editorial_intent": unit.get("editorial_intent"),
         "scope": plan.get("scope"),
+        "change_scope": plan.get("change_scope", plan.get("scope")),
         "section_heading": (unit.get("atomic_location") or {}).get("section_heading", ""),
         "paragraph_index": (unit.get("atomic_location") or {}).get("paragraph_index"),
         "original_fragment": plan.get("original_fragment", ""),
         "raw_fragment": plan.get("raw_fragment", ""),
+        "locked_prefix": plan.get("locked_prefix", ""),
+        "locked_suffix": plan.get("locked_suffix", ""),
         "paragraph_before": plan.get("paragraph_before", ""),
+        "evidence_boundary_note": plan.get("evidence_boundary_note", ""),
+        "citation_strings": plan.get("citation_strings", []),
         "author_confirmation_reason": unit.get("author_confirmation_reason", ""),
     }
 
@@ -50,8 +55,9 @@ def candidate_payload(unit: dict[str, Any]) -> dict[str, Any]:
 def build_manifest(project_root: Path, candidates: list[dict[str, Any]]) -> dict[str, Any]:
     manifest = {
         "workflow": "revise-sci-polish",
-        "source_skills": ["article-writing", "review-writing", "humanizer-zh"],
-        "scope_rule": "Only polish newly added or modified sentences. Do not rewrite untouched original text.",
+        "source_skills": ["article-writing", "review-writing", "sci2doc", "humanizer-zh"],
+        "role": "revision-fragment polisher",
+        "scope_rule": "Only polish newly added or modified sentences. Keep untouched original text immutable.",
         "anti_ai_rules": {
             "forbidden_terms": [
                 "delve into",
@@ -67,22 +73,44 @@ def build_manifest(project_root: Path, candidates: list[dict[str, Any]]) -> dict
                 "Pivot",
                 "Foster",
                 "Spearhead",
+                "It is worth noting",
+                "As mentioned above",
+                "serves as",
+                "acts as",
             ],
             "forbidden_structures": [
                 "not only... but also",
                 "from A to B",
+                "rhetorical question",
                 "trailing -ing clause",
+                "decorative contrast",
                 "em dash",
+                "slogan-like closing line",
             ],
             "style_constraints": [
                 "Keep scientific meaning unchanged.",
-                "Do not add citations, data, statistics, mechanisms, or claims.",
+                "Keep evidence boundary unchanged.",
+                "Do not add citations, data, statistics, mechanisms, figure labels, or claims.",
                 "Stay within roughly ±15% of the raw changed fragment length.",
                 "Prefer direct, evidence-bounded wording.",
-                "Vary sentence rhythm but avoid decorative transitions.",
+                "Use declarative technical prose only.",
+                "Avoid metaphor, promotional tone, and decorative transitions.",
+                "Keep domain terminology unchanged and only rewrite the non-terminological wording around it.",
             ],
         },
-        "output_schema": {"results": [{"comment_id": "R1-Major-01", "polished_fragment": "..." }]},
+        "output_schema": {
+            "results": [
+                {
+                    "comment_id": "R1-Major-01",
+                    "polished_fragment": "...",
+                    "edit_decision": "minimal-cleanup | sentence-polish | paragraph-polish | unchanged",
+                    "meaning_changed": False,
+                    "scope_respected": True,
+                    "ai_style_flags_removed": ["serves as"],
+                    "notes": "short internal note",
+                }
+            ]
+        },
         "candidates": [candidate_payload(unit) for unit in candidates],
     }
     write_json(project_root / "revision_polish_manifest.json", manifest)
@@ -96,19 +124,75 @@ def build_polish_prompt(project_root: Path, output_path: Path, candidates: list[
         f"PROJECT_ROOT={project_root.resolve()}",
         f"OUTPUT_JSON_PATH={output_path.resolve()}",
         "",
-        "You are polishing manuscript revisions for a revise-sci project.",
-        "Use article-writing, review-writing, and humanizer-zh constraints together.",
+        "You are the revision-fragment polisher inside the revise-sci workflow.",
         "",
-        "Hard constraints:",
-        "1. Polish only the provided changed fragment. Do not rewrite untouched source text.",
-        "2. Keep the scientific claim and evidence boundary unchanged.",
-        "3. Do not add data, mechanisms, references, statistics, figure references, or stronger conclusions.",
-        "4. Remove AI-style wording and templated transitions.",
-        "5. Keep the output concise and close in length to the raw changed fragment.",
-        "6. Avoid these terms and structures: delve into, comprehensive landscape, pivotal role, realm, tapestry, underscore, testament, Moreover, Crucial, Landscape, Pivot, Foster, Spearhead, not only... but also, trailing -ing clauses, em dash.",
+        "You polish ONLY the already modified or newly added fragment created for a reviewer comment.",
+        "You are not a general rewriter.",
+        "You must not rewrite untouched original text.",
         "",
-        "Return only JSON with a top-level `results` array.",
-        "Each row must contain `comment_id` and `polished_fragment`.",
+        "You must follow these source policies together:",
+        "- article-writing: evidence-bounded, direct, anti-slop, self-correction",
+        "- review-writing: anti-AI academic style, anti-similarity rewriting, restrained rhythm",
+        "- sci2doc: declarative academic prose, no metaphor, no rhetorical flourish, no em dash",
+        "- humanizer-zh: remove mechanical AI markers and templated phrasing",
+        "",
+        "Task:",
+        "Polish only `raw_fragment`, using `locked_prefix` and `locked_suffix` as immutable context.",
+        "Do not modify any text outside the revised fragment.",
+        "",
+        "Non-negotiable constraints:",
+        "1. Preserve scientific meaning exactly.",
+        "2. Preserve evidence boundary exactly.",
+        "3. Do not add data, citations, mechanisms, statistics, figure references, or stronger claims.",
+        "4. Do not rewrite locked context.",
+        "5. Keep output length within about ±15% of the raw fragment.",
+        "6. If safe polishing is not possible, perform minimal cleanup only.",
+        "",
+        "Forbidden words and phrases:",
+        "delve into, comprehensive landscape, pivotal role, realm, tapestry, underscore, testament, moreover, crucial, spearhead, foster, it is worth noting, as mentioned above, serves as, acts as",
+        "",
+        "Forbidden structures:",
+        "not only... but also...",
+        "from A to B",
+        "rhetorical questions",
+        "decorative contrast structures",
+        "trailing -ing clauses used as fake analysis",
+        "em dash",
+        "grand significance claims not already supported",
+        "slogan-like concluding lines",
+        "",
+        "Style requirements:",
+        "- declarative sentences only",
+        "- precise and direct",
+        "- neutral and evidence-bounded",
+        "- keep domain terminology unchanged",
+        "- vary rhythm mildly, but do not become ornamental",
+        "- preserve uncertainty when present",
+        "- avoid repetitive AI transitions",
+        "",
+        "Silent self-check before finalizing:",
+        "- Did I change meaning?",
+        "- Did I strengthen the claim?",
+        "- Did I touch locked context?",
+        "- Did I introduce any banned AI phrase or fake sophistication?",
+        "- Did I keep the sentence natural but restrained?",
+        "",
+        "Return JSON only.",
+        "Schema:",
+        "{",
+        '  "results": [',
+        "    {",
+        '      "comment_id": "R1-Major-01",',
+        '      "polished_fragment": "...",',
+        '      "edit_decision": "minimal-cleanup | sentence-polish | paragraph-polish | unchanged",',
+        '      "meaning_changed": false,',
+        '      "scope_respected": true,',
+        '      "ai_style_flags_removed": ["..."],',
+        '      "notes": "short internal note"',
+        "    }",
+        "  ]",
+        "}",
+        "Do not include explanations outside JSON.",
         "",
         "Candidates:",
     ]
@@ -116,9 +200,13 @@ def build_polish_prompt(project_root: Path, output_path: Path, candidates: list[
         payload = candidate_payload(unit)
         lines.extend(
             [
-                f"- {payload['comment_id']} | scope={payload['scope']} | section={payload['section_heading']} | paragraph_index={payload['paragraph_index']}",
+                f"- {payload['comment_id']} | scope={payload['scope']} | change_scope={payload['change_scope']} | section={payload['section_heading']} | paragraph_index={payload['paragraph_index']}",
+                f"  locked_prefix: {payload['locked_prefix'] or '无'}",
                 f"  original_fragment: {payload['original_fragment'] or '无'}",
                 f"  raw_fragment: {payload['raw_fragment'] or '无'}",
+                f"  locked_suffix: {payload['locked_suffix'] or '无'}",
+                f"  evidence_boundary_note: {payload['evidence_boundary_note'] or '无'}",
+                f"  citation_strings: {', '.join(payload['citation_strings']) if payload['citation_strings'] else '无'}",
             ]
         )
     return "\n".join(lines) + "\n"
@@ -140,6 +228,10 @@ def validate_output_payload(payload: Any, candidates: list[dict[str, Any]]) -> l
             errors.append("revision polish row has an unknown comment_id")
         if not fragment:
             errors.append(f"revision polish row {comment_id or '<unknown>'} is missing polished_fragment")
+        if row.get("meaning_changed") not in {False, None}:
+            errors.append(f"revision polish row {comment_id or '<unknown>'} must keep meaning_changed=false")
+        if row.get("scope_respected") not in {True, None}:
+            errors.append(f"revision polish row {comment_id or '<unknown>'} must keep scope_respected=true")
     return errors
 
 
@@ -198,13 +290,20 @@ def run_polish_driver(
     }
 
 
-def fragment_map_from_payload(payload: dict[str, Any] | None) -> dict[str, str]:
+def fragment_map_from_payload(payload: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
     if payload is None:
         return {}
     rows = payload.get("results", []) if isinstance(payload, dict) else payload
-    mapping: dict[str, str] = {}
+    mapping: dict[str, dict[str, Any]] = {}
     for row in rows or []:
-        mapping[normalize_ws(str(row.get("comment_id", "")))] = normalize_ws(str(row.get("polished_fragment", "")))
+        mapping[normalize_ws(str(row.get("comment_id", "")))] = {
+            "polished_fragment": normalize_ws(str(row.get("polished_fragment", ""))),
+            "edit_decision": normalize_ws(str(row.get("edit_decision", ""))),
+            "meaning_changed": row.get("meaning_changed", False),
+            "scope_respected": row.get("scope_respected", True),
+            "ai_style_flags_removed": row.get("ai_style_flags_removed", []) or [],
+            "notes": normalize_ws(str(row.get("notes", ""))),
+        }
     return mapping
 
 
@@ -281,20 +380,36 @@ def main() -> int:
     for unit_path, unit in zip(units_paths, units):
         plan = unit.get("revision_plan") or {}
         if unit.get("status") == "completed" and plan.get("scope") not in {"", "none", None}:
-            raw_fragment = normalize_ws(fragment_map.get(unit.get("comment_id", ""), plan.get("raw_fragment", "")))
+            payload_row = fragment_map.get(unit.get("comment_id", ""), {})
+            raw_fragment = normalize_ws(payload_row.get("polished_fragment") or plan.get("raw_fragment", ""))
             polished_fragment = polish_changed_text_locally(raw_fragment)
             polished_paragraph = apply_polished_fragment(plan, polished_fragment)
             unit["revised_excerpt_en"] = polished_paragraph
             unit["revision_plan"]["polished_fragment"] = polished_fragment
             unit["revision_plan"]["paragraph_after_polished"] = polished_paragraph
+            unit["revision_plan"]["polish_edit_decision"] = payload_row.get("edit_decision") or "local-cleanup"
+            unit["revision_plan"]["polish_notes"] = payload_row.get("notes", "")
+            unit["revision_plan"]["ai_style_flags_removed"] = payload_row.get("ai_style_flags_removed", [])
             unit["polish_applied"] = True
             unit["polish_driver_mode"] = driver_mode
-            unit["polish_guard_ok"] = len(find_ai_style_markers(polished_fragment)) == 0
+            locked_prefix = normalize_ws(plan.get("locked_prefix", ""))
+            locked_suffix = normalize_ws(plan.get("locked_suffix", ""))
+            guard_markers = find_ai_style_markers(polished_fragment)
+            unit["polish_scope_respected"] = payload_row.get("scope_respected", True)
+            unit["polish_meaning_changed"] = payload_row.get("meaning_changed", False)
+            unit["polish_locked_context_ok"] = (
+                (not locked_prefix or polished_paragraph.startswith(locked_prefix))
+                and (not locked_suffix or polished_paragraph.endswith(locked_suffix))
+            )
+            unit["polish_guard_ok"] = len(guard_markers) == 0 and unit["polish_scope_respected"] and unit["polish_meaning_changed"] is False
             polished_comment_ids.append(unit.get("comment_id"))
         else:
             unit["polish_applied"] = False
             unit["polish_driver_mode"] = "not-required"
             unit["polish_guard_ok"] = True
+            unit["polish_scope_respected"] = True
+            unit["polish_meaning_changed"] = False
+            unit["polish_locked_context_ok"] = True
         processed_units.append(unit)
         write_json(unit_path, unit)
         write_text(project_root / "comment_records" / f"{unit['comment_id']}.md", revise_units.render_comment_record(unit))
