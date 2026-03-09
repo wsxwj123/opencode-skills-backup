@@ -158,6 +158,36 @@ class ReviseUnitsTests(unittest.TestCase):
         self.assertEqual(plan["locked_prefix"], "Extracellular vesicles were isolated by ultracentrifugation.")
         self.assertEqual(plan["locked_suffix"], "")
 
+    def test_resolve_seed_location_uses_revision_location_and_excerpt_seed(self):
+        unit = {
+            "revision_location_seed": "Section: 2.1 Introduction | Paragraph index: 5",
+            "original_excerpt_seed_en": "The mechanism remains unclear in the current text.",
+        }
+        section_index = {
+            "sections": [
+                {
+                    "section_id": "manuscript-002",
+                    "heading": "2.1 Introduction",
+                    "file": "manuscript_sections/02-introduction.md",
+                    "paragraphs": [
+                        {"paragraph_index": 5, "text": "The mechanism remains unclear in the current text."},
+                    ],
+                }
+            ]
+        }
+        section, paragraph = revise_units.resolve_seed_location(unit, section_index)
+        self.assertEqual(section["section_id"], "manuscript-002")
+        self.assertEqual(paragraph["paragraph_index"], 5)
+
+    def test_response_blocks_prefer_seeded_reviewer_response(self):
+        unit = {
+            "response_seed_zh": "我们已在修订稿中澄清相关机制表述。",
+            "response_seed_en": "We clarified the mechanism statement in the revised manuscript.",
+        }
+        response_zh, response_en = revise_units.response_blocks(unit, "completed", "", "clarify")
+        self.assertEqual(response_zh, "我们已在修订稿中澄清相关机制表述。")
+        self.assertEqual(response_en, "We clarified the mechanism statement in the revised manuscript.")
+
 
 if __name__ == "__main__":
     unittest.main()

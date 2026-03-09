@@ -107,3 +107,39 @@ class PreflightTests(unittest.TestCase):
         )
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("--reference-search-decision approved", result.stdout + result.stderr)
+
+    def test_preflight_detects_reviewer_response_sci_html_input_mode(self):
+        html = self.root / "response.html"
+        html.write_text(
+            """
+            <html><head><title>Reviewer Response Package</title></head><body>
+            <section id="page-u-001" class="page">
+              <h2>Reviewer #1 | MAJOR | Comment 1</h2>
+              <div class="card"><h3>2) Response to Reviewer（中英对照）</h3><p>Example</p></div>
+              <div class="card"><h3>5) Evidence Attachments</h3><p>Not provided by user</p></div>
+            </section>
+            </body></html>
+            """,
+            encoding="utf-8",
+        )
+        result = run_script(
+            "preflight.py",
+            [
+                "--comments",
+                str(html),
+                "--manuscript",
+                str(self.manuscript),
+                "--attachments-dir",
+                str(self.attachments),
+                "--project-root",
+                str(self.project_root),
+                "--output-md",
+                str(self.project_root / "revised.md"),
+                "--output-docx",
+                str(self.project_root / "revised.docx"),
+            ],
+            cwd=self.root,
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        state = json.loads((self.project_root / "project_state.json").read_text(encoding="utf-8"))
+        self.assertEqual(state["inputs"]["comments_input_mode"], "reviewer-response-sci-html")

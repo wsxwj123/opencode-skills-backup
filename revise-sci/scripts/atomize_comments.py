@@ -6,7 +6,7 @@ import json
 import re
 from pathlib import Path
 
-from common import AtomicCommentHTMLParser, normalize_ws, read_docx_paragraphs, read_json, write_json
+from common import AtomicCommentHTMLParser, is_meaningful_text, normalize_ws, read_docx_paragraphs, read_json, write_json
 
 
 def reviewer_number(reviewer: str) -> int:
@@ -41,6 +41,7 @@ def parse_docx_comments(path: Path) -> list[dict[str, str]]:
                 "severity": current_severity,
                 "comment_text": normalize_ws(" ".join(current_text)),
                 "comment_lang": detect_language(" ".join(current_text)),
+                "comment_input_mode": "docx-review-comments",
             }
         )
         current_text = []
@@ -96,6 +97,7 @@ def parse_html_comments(path: Path) -> list[dict[str, str]]:
                 "severity": item["severity"],
                 "comment_text": item["comment_text"],
                 "comment_lang": detect_language(item["comment_text"]),
+                "comment_input_mode": "atomic-comment-html",
             }
         )
     if units:
@@ -107,6 +109,10 @@ def parse_html_comments(path: Path) -> list[dict[str, str]]:
         return units
 
     soup = BeautifulSoup(path.read_text(encoding="utf-8"), "html.parser")
+    response_units = parse_reviewer_response_html(soup)
+    if response_units:
+        return response_units
+
     reviewer = "Reviewer #1"
     severity_counters: dict[str, int] = {"major": 0, "minor": 0}
     for section in soup.select("section.critique-section"):
@@ -140,8 +146,173 @@ def parse_html_comments(path: Path) -> list[dict[str, str]]:
                     "evidence_anchor": normalize_ws(item.select_one(".evidence-anchor").get_text(" ", strip=True) if item.select_one(".evidence-anchor") else ""),
                     "root_cause": normalize_ws(item.select_one(".root-cause").get_text(" ", strip=True) if item.select_one(".root-cause") else ""),
                     "author_strategy": normalize_ws(item.select_one(".response-strategy").get_text(" ", strip=True) if item.select_one(".response-strategy") else ""),
+                    "comment_input_mode": "reviewer-simulator-html",
                 }
             )
+    return units
+
+
+def first_meaningful_text(values: list[str]) -> str:
+    for value in values:
+        cleaned = normalize_ws(value)
+        if is_meaningful_text(cleaned):
+            return cleaned
+    return ""
+
+
+def strip_seed_prefixes(text: str) -> str:
+    cleaned = normalize_ws(text)
+    patterns = (
+        r"^(?:中文对应|对应中文修订说明|审稿人核心关切|中文说明|Interpretation|How to interpret)\s*[:：]\s*",
+    )
+    for pattern in patterns:
+        cleaned = re.sub(pattern, "", cleaned, flags=re.IGNORECASE)
+    return normalize_ws(cleaned)
+
+
+def heading_text(node) -> str:
+    heading = node.find(["h2", "h3", "h4"])
+    return normalize_ws(heading.get_text(" ", strip=True) if heading else "")
+
+
+def card_for_heading(section, keywords: tuple[str, ...]):
+    cards = section.find_all(class_="card", recursive=False)
+    if not cards:
+        cards = section.find_all(class_="card")
+    for card in cards:
+        title = heading_text(card).lower()
+        if any(keyword.lower() in title for keyword in keywords):
+            return card
+    return None
+
+
+def card_value_by_label(card, labels: tuple[str, ...]) -> str:
+    if not card:
+        return ""
+    for box in card.select(".stack-box"):
+        label = heading_text(box).lower()
+        if any(target.lower() in label for target in labels):
+            paragraphs = [normalize_ws(p.get_text(" ", strip=True)) for p in box.find_all("p")]
+            value = strip_seed_prefixes(first_meaningful_text(paragraphs))
+            if value:
+                return value
+    paragraphs = [normalize_ws(p.get_text(" ", strip=True)) for p in card.find_all("p", recursive=False)]
+    return strip_seed_prefixes(first_meaningful_text(paragraphs))
+
+
+def parse_revision_location(card) -> str:
+    if not card:
+        return ""
+    candidates = []
+    for box in card.select(".stack-box"):
+        label = heading_text(box).lower()
+        if "定位" in label or "location" in label:
+            candidates.extend(normalize_ws(p.get_text(" ", strip=True)) for p in box.find_all("p"))
+    return first_meaningful_text(candidates)
+
+
+def parse_evidence_anchors(card) -> str:
+    if not card:
+        return ""
+    anchors: list[str] = []
+    for paragraph in card.find_all("p"):
+        text = normalize_ws(paragraph.get_text(" ", strip=True))
+        if text.lower().startswith("anchors:") or text.startswith("Anchors:"):
+            anchors.append(normalize_ws(text.split(":", 1)[1] if ":" in text else text))
+    return first_meaningful_text(anchors)
+
+
+def parse_reviewer_response_header(section, fallback_index: int) -> tuple[str, str, str]:
+    header = normalize_ws(section.find("h2").get_text(" ", strip=True) if section.find("h2") else "")
+    reviewer = "Reviewer #1"
+    severity = "major"
+    comment_number = str(fallback_index)
+    match = re.search(r"Reviewer\s*#?(\d+)\s*\|\s*(MAJOR|MINOR)\s*\|\s*Comment\s*(\d+)", header, flags=re.IGNORECASE)
+    if match:
+        reviewer = f"Reviewer #{match.group(1)}"
+        severity = match.group(2).lower()
+        comment_number = match.group(3)
+        return reviewer, severity, comment_number
+    meta = normalize_ws(section.get_text(" ", strip=True))
+    meta_match = re.search(r"Comment ID:\s*(R\d+)-(Major|Minor)-(\d+)", meta, flags=re.IGNORECASE)
+    if meta_match:
+        reviewer_match = re.search(r"R(\d+)", meta_match.group(1))
+        reviewer = f"Reviewer #{reviewer_match.group(1)}" if reviewer_match else reviewer
+        severity = meta_match.group(2).lower()
+        comment_number = str(int(meta_match.group(3)))
+    return reviewer, severity, comment_number
+
+
+def parse_reviewer_response_html(soup) -> list[dict[str, str]]:
+    sections = [
+        section
+        for section in soup.find_all("section")
+        if re.match(r"page-u-(?!000-email)", section.get("id", ""), flags=re.IGNORECASE)
+    ]
+    if not sections:
+        title = normalize_ws(soup.find("title").get_text(" ", strip=True) if soup.find("title") else "")
+        if "reviewer response" not in title.lower():
+            return []
+        sections = [soup.find("body") or soup]
+    units: list[dict[str, str]] = []
+    severity_counters: dict[tuple[str, str], int] = {}
+    for fallback_index, section in enumerate(sections, start=1):
+        reviewer, severity, comment_number = parse_reviewer_response_header(section, fallback_index)
+        reviewer_card = card_for_heading(section, ("reviewer comment", "审稿人意图理解", "reviewer intent"))
+        response_card = card_for_heading(section, ("response to reviewer",))
+        revision_card = card_for_heading(section, ("可能需要修改的正文", "revision candidate", "revised text"))
+        notes_card = card_for_heading(section, ("修改说明",))
+        evidence_card = card_for_heading(section, ("evidence attachments",))
+
+        comment_original = first_meaningful_text(
+            [
+                card_value_by_label(reviewer_card, ("原始审稿意见", "reviewer comment", "reviewer comment (bilingual)", "english")),
+                card_value_by_label(reviewer_card, ("审稿意见英文摘要", "how to interpret", "english summary")),
+            ]
+        )
+        if not comment_original:
+            continue
+
+        key = (reviewer, severity)
+        comment_index = int(comment_number) if comment_number.isdigit() else severity_counters.get(key, 0) + 1
+        severity_counters[key] = max(severity_counters.get(key, 0), comment_index)
+        comment_id = format_comment_id(reviewer, severity, comment_index)
+
+        response_en = card_value_by_label(response_card, ("english response", "english"))
+        response_zh = card_value_by_label(response_card, ("中文对照", "中文回应", "chinese"))
+        original_excerpt = card_value_by_label(revision_card, ("original text",))
+        revised_excerpt_en = card_value_by_label(revision_card, ("revised text",))
+        revised_excerpt_zh = card_value_by_label(revision_card, ("修改后中文对照", "中文对照"))
+        revision_location = parse_revision_location(revision_card)
+        notes_summary = first_meaningful_text(
+            [
+                card_value_by_label(reviewer_card, ("应如何理解", "how to interpret")),
+                normalize_ws(notes_card.get_text(" ", strip=True)) if notes_card else "",
+            ]
+        )
+        evidence_anchor = parse_evidence_anchors(evidence_card)
+
+        units.append(
+            {
+                "comment_id": comment_id,
+                "reviewer": reviewer,
+                "severity": severity,
+                "comment_text": comment_original,
+                "comment_lang": detect_language(comment_original),
+                "comment_title": normalize_ws(section.find("h2").get_text(" ", strip=True) if section.find("h2") else ""),
+                "problem_description": notes_summary,
+                "evidence_anchor": evidence_anchor,
+                "root_cause": "",
+                "author_strategy": response_en or response_zh,
+                "comment_input_mode": "reviewer-response-sci-html",
+                "response_seed_en": response_en,
+                "response_seed_zh": response_zh,
+                "original_excerpt_seed_en": original_excerpt,
+                "revised_excerpt_seed_en": revised_excerpt_en,
+                "revised_excerpt_seed_zh": revised_excerpt_zh,
+                "revision_location_seed": revision_location,
+            }
+        )
     return units
 
 
@@ -190,6 +361,13 @@ def main() -> int:
             "evidence_anchor": item.get("evidence_anchor", ""),
             "root_cause": item.get("root_cause", ""),
             "author_strategy": item.get("author_strategy", ""),
+            "comment_input_mode": item.get("comment_input_mode", "raw-comments"),
+            "response_seed_en": item.get("response_seed_en", ""),
+            "response_seed_zh": item.get("response_seed_zh", ""),
+            "original_excerpt_seed_en": item.get("original_excerpt_seed_en", ""),
+            "revised_excerpt_seed_en": item.get("revised_excerpt_seed_en", ""),
+            "revised_excerpt_seed_zh": item.get("revised_excerpt_seed_zh", ""),
+            "revision_location_seed": item.get("revision_location_seed", ""),
         }
         write_json(units_dir / f"{idx:03d}_{item['comment_id']}.json", payload)
 

@@ -162,3 +162,52 @@ class AtomizeCommentsTests(unittest.TestCase):
         second = json.loads(units[1].read_text(encoding="utf-8"))
         self.assertIn("Additional context for the first comment.", first["reviewer_comment_en"])
         self.assertIn("Add a citation", second["reviewer_comment_en"])
+
+    def test_reviewer_response_sci_html_is_ingested_as_seeded_units(self):
+        html = self.root / "reviewer_response.html"
+        html.write_text(
+            """
+            <html><body>
+            <section id="page-u-001" class="page">
+              <h2>Reviewer #1 | MAJOR | Comment 1</h2>
+              <div class="card">
+                <h3>1) 审稿人意图理解 / Reviewer Intent</h3>
+                <div class="stack-box"><h4>原始审稿意见（English）</h4><p>Please clarify the mechanism statement.</p></div>
+                <div class="stack-box"><h4>应如何理解（中文）</h4><p>审稿人要求澄清机制表述。</p></div>
+              </div>
+              <div class="card">
+                <h3>2) Response to Reviewer（中英对照）</h3>
+                <div class="stack-box"><h4>English Response</h4><p>We clarified the mechanism statement in the revised manuscript.</p></div>
+                <div class="stack-box"><h4>中文对照</h4><p>我们已在修订稿中澄清相关机制表述。</p></div>
+              </div>
+              <div class="card">
+                <h3>3) 可能需要修改的正文/附件内容（中英对照）</h3>
+                <div class="stack-box"><h4>定位信息（原文位置）</h4><p>Section: 2.1 Introduction | Paragraph index: 5</p></div>
+                <div class="stack-box"><h4>Original Text (English, 对照)</h4><p>The mechanism remains unclear in the current text.</p></div>
+                <div class="stack-box"><h4>Revised Text (English)</h4><p>In the present dataset, the mechanism statement is limited to the current observation.</p></div>
+                <div class="stack-box"><h4>修改后中文对照</h4><p>我们已将机制表述限定在当前观察范围内。</p></div>
+              </div>
+              <div class="card">
+                <h3>5) Evidence Attachments</h3>
+                <p><strong>Anchors:</strong> Section 2.1</p>
+              </div>
+            </section>
+            </body></html>
+            """,
+            encoding="utf-8",
+        )
+        result = run_script(
+            "atomize_comments.py",
+            ["--comments", str(html), "--project-root", str(self.project_root)],
+            cwd=self.root,
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        units = sorted((self.project_root / "units").glob("*.json"))
+        self.assertEqual(len(units), 1)
+        payload = json.loads(units[0].read_text(encoding="utf-8"))
+        self.assertEqual(payload["comment_input_mode"], "reviewer-response-sci-html")
+        self.assertEqual(payload["response_seed_en"], "We clarified the mechanism statement in the revised manuscript.")
+        self.assertEqual(payload["response_seed_zh"], "我们已在修订稿中澄清相关机制表述。")
+        self.assertEqual(payload["original_excerpt_seed_en"], "The mechanism remains unclear in the current text.")
+        self.assertEqual(payload["revised_excerpt_seed_en"], "In the present dataset, the mechanism statement is limited to the current observation.")
+        self.assertEqual(payload["revision_location_seed"], "Section: 2.1 Introduction | Paragraph index: 5")

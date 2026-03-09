@@ -17,6 +17,18 @@ ALLOWED_PROVIDER_FAMILIES = {"paper-search", "user-provided"}
 REFERENCE_SOURCE_NAME_RE = re.compile(r"(reference|references|bibliography|literature_index|refs?)", re.IGNORECASE)
 REFERENCE_SOURCE_EXTS = {".json", ".md", ".txt", ".docx", ".bib", ".ris"}
 MANUSCRIPT_VERSION_SUFFIX_RE = re.compile(r"\s*\(\d+\)\s*$")
+NON_MEANINGFUL_TEXT_VALUES = {
+    "",
+    "无",
+    "none",
+    "n/a",
+    "na",
+    "not provided by user",
+    "not provided",
+    "not available",
+    "ai_fill_required",
+    "待ai",
+}
 AI_STYLE_BANNED_PATTERNS: tuple[tuple[str, str], ...] = (
     ("delve into", r"\bdelve into\b"),
     ("comprehensive landscape", r"\bcomprehensive landscape\b"),
@@ -40,6 +52,11 @@ AI_STYLE_BANNED_PATTERNS: tuple[tuple[str, str], ...] = (
 
 def normalize_ws(text: str) -> str:
     return re.sub(r"\s+", " ", text or "").strip()
+
+
+def is_meaningful_text(text: str) -> bool:
+    normalized = normalize_ws(text).lower()
+    return normalized not in NON_MEANINGFUL_TEXT_VALUES
 
 
 def find_ai_style_markers(text: str) -> list[str]:
@@ -175,6 +192,30 @@ def read_docx_paragraphs(path: Path) -> list[dict[str, Any]]:
         style_name = normalize_ws(getattr(getattr(paragraph, "style", None), "name", "") or "")
         rows.append({"paragraph_index": i, "text": text, "style_name": style_name})
     return rows
+
+
+def detect_comments_input_mode(path: Path) -> str:
+    suffix = path.suffix.lower()
+    if suffix == ".docx":
+        return "docx-review-comments"
+    if suffix != ".html":
+        return "unsupported"
+    try:
+        text = path.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return "html-unknown"
+    lowered = text.lower()
+    if "class=\"comment-unit\"" in lowered or "data-comment-id=" in lowered:
+        return "atomic-comment-html"
+    if "critique-section" in lowered and "critique-list" in lowered:
+        return "reviewer-simulator-html"
+    if (
+        "response to reviewer" in lowered
+        and "evidence attachments" in lowered
+        and ("page-u-" in lowered or "reviewer #1 |" in lowered or "reviewer #1 -" in lowered)
+    ):
+        return "reviewer-response-sci-html"
+    return "html-unknown"
 
 
 def docx_title_hint(path: Path) -> str:

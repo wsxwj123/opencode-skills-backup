@@ -13,6 +13,7 @@ from common import (
     choose_sentence,
     comment_nature,
     detect_comment_requirements,
+    is_meaningful_text,
     normalize_ws,
     read_json,
     split_sentences,
@@ -121,6 +122,8 @@ def comment_query_text(unit: dict) -> str:
         normalize_ws(unit.get("comment_title", "")),
         normalize_ws(unit.get("root_cause", "")),
         normalize_ws(unit.get("author_strategy", "")),
+        normalize_ws(unit.get("revision_location_seed", "")),
+        normalize_ws(unit.get("original_excerpt_seed_en", "")),
         normalize_ws(unit.get("reviewer_comment_original", "")),
         normalize_ws(unit.get("reviewer_comment_en", "")),
     ]
@@ -226,6 +229,36 @@ def resolve_evidence_anchor(unit: dict, section_index: dict) -> tuple[dict[str, 
             for section in section_index.get("sections", []):
                 if normalize_ws(section.get("heading", "")).lower() == heading_name.lower() and section.get("paragraphs"):
                     return section, section["paragraphs"][0]
+    return None, None
+
+
+def resolve_seed_location(unit: dict, section_index: dict) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    location_seed = normalize_ws(unit.get("revision_location_seed", ""))
+    excerpt_seed = normalize_ws(unit.get("original_excerpt_seed_en", ""))
+    sections = section_index.get("sections", [])
+    paragraph_index_match = re.search(r"paragraph index:\s*(\d+)", location_seed, flags=re.IGNORECASE)
+    section_heading_match = re.search(r"section:\s*(.+?)(?:\s*\|\s*paragraph index:|$)", location_seed, flags=re.IGNORECASE)
+    paragraph_index = int(paragraph_index_match.group(1)) if paragraph_index_match else None
+    section_heading = normalize_ws(section_heading_match.group(1)) if section_heading_match else ""
+
+    if section_heading or paragraph_index is not None:
+        for section in sections:
+            heading_ok = not section_heading or normalize_ws(section.get("heading", "")) == section_heading
+            if not heading_ok:
+                continue
+            for paragraph in section.get("paragraphs", []):
+                if paragraph_index is not None and paragraph.get("paragraph_index") != paragraph_index:
+                    continue
+                return section, paragraph
+            if section_heading and paragraph_index is None and section.get("paragraphs"):
+                return section, section["paragraphs"][0]
+
+    if is_meaningful_text(excerpt_seed):
+        for section in sections:
+            for paragraph in section.get("paragraphs", []):
+                paragraph_text = normalize_ws(paragraph.get("text", ""))
+                if paragraph_text == excerpt_seed or excerpt_seed in paragraph_text or paragraph_text in excerpt_seed:
+                    return section, paragraph
     return None, None
 
 
@@ -540,31 +573,32 @@ def revise_paragraph(
 
 
 def response_blocks(unit: dict, status: str, needs_reason: str, intent: str) -> tuple[str, str]:
+    response_seed_zh = normalize_ws(unit.get("response_seed_zh", ""))
+    response_seed_en = normalize_ws(unit.get("response_seed_en", ""))
     needs_reason_en = translate_reason_to_en(needs_reason)
+    generated_zh = ""
+    generated_en = ""
     if status == "completed":
         if intent == "clarify":
-            return (
-                "感谢审稿人的宝贵意见。我们已将相关表述收紧为仅基于本文当前数据的观察，避免超出证据边界的泛化结论，并同步更新了正文。",
-                "We thank the reviewer for this valuable comment. We tightened the statement so that it is explicitly limited to the observation supported by the present dataset, thereby avoiding over-generalization beyond the available evidence, and revised the manuscript accordingly.",
-            )
-        if intent == "limitation":
-            return (
-                "感谢审稿人的建议。我们已在对应段落中直接补充研究局限性的说明，使讨论与当前证据边界保持一致。",
-                "We thank the reviewer for this suggestion. We added an explicit limitation statement to the relevant paragraph so that the discussion remains aligned with the boundary of the current evidence.",
-            )
-        if intent == "citation":
-            return (
-                "感谢审稿人的建议。我们已根据已确认的 paper-search 检索结果补入对应参考文献信息，并在回复中保留来源追踪。",
-                "We thank the reviewer for this suggestion. We incorporated the corresponding reference support based on confirmed paper-search results and preserved the source trace in the response package.",
-            )
-        return (
-            "感谢审稿人的宝贵意见。我们已依据该意见修订相关表述，并确保回复内容与正文改动保持一致。",
-            "We thank the reviewer for this valuable comment. We have revised the relevant text accordingly and aligned the response with the manuscript changes.",
-        )
-    reason = needs_reason or "当前材料仍需作者确认。"
+            generated_zh = "感谢审稿人的宝贵意见。我们已将相关表述收紧为仅基于本文当前数据的观察，避免超出证据边界的泛化结论，并同步更新了正文。"
+            generated_en = "We thank the reviewer for this valuable comment. We tightened the statement so that it is explicitly limited to the observation supported by the present dataset, thereby avoiding over-generalization beyond the available evidence, and revised the manuscript accordingly."
+        elif intent == "limitation":
+            generated_zh = "感谢审稿人的建议。我们已在对应段落中直接补充研究局限性的说明，使讨论与当前证据边界保持一致。"
+            generated_en = "We thank the reviewer for this suggestion. We added an explicit limitation statement to the relevant paragraph so that the discussion remains aligned with the boundary of the current evidence."
+        elif intent == "citation":
+            generated_zh = "感谢审稿人的建议。我们已根据已确认的 paper-search 检索结果补入对应参考文献信息，并在回复中保留来源追踪。"
+            generated_en = "We thank the reviewer for this suggestion. We incorporated the corresponding reference support based on confirmed paper-search results and preserved the source trace in the response package."
+        else:
+            generated_zh = "感谢审稿人的宝贵意见。我们已依据该意见修订相关表述，并确保回复内容与正文改动保持一致。"
+            generated_en = "We thank the reviewer for this valuable comment. We have revised the relevant text accordingly and aligned the response with the manuscript changes."
+    else:
+        reason = needs_reason or "当前材料仍需作者确认。"
+        generated_zh = f"感谢审稿人的重要建议。根据当前用户提供材料，我们已完成定位、问题拆解和可执行修订草案，但该条仍需作者确认：{reason}"
+        generated_en = f"We thank the reviewer for this important comment. Based on the materials currently provided by the user, we completed the localization, issue analysis, and a draft revision path; however, this item still requires author confirmation: {needs_reason_en}"
+
     return (
-        f"感谢审稿人的重要建议。根据当前用户提供材料，我们已完成定位、问题拆解和可执行修订草案，但该条仍需作者确认：{reason}",
-        f"We thank the reviewer for this important comment. Based on the materials currently provided by the user, we completed the localization, issue analysis, and a draft revision path; however, this item still requires author confirmation: {needs_reason_en}",
+        response_seed_zh if is_meaningful_text(response_seed_zh) else generated_zh,
+        response_seed_en if is_meaningful_text(response_seed_en) else generated_en,
     )
 
 
@@ -814,11 +848,14 @@ def main() -> int:
         index_data = si_index if target_document == "si" else manuscript_index
         citation_payload = paper_search_map.get(unit["comment_id"])
         anchored_section, anchored_paragraph = resolve_citation_anchor(citation_payload, index_data)
+        seed_section, seed_paragraph = resolve_seed_location(unit, index_data)
         evidence_section, evidence_paragraph = resolve_evidence_anchor(unit, index_data)
         heading_section, heading_paragraph = resolve_structured_heading_hint(unit, index_data)
         unresolved_structured_hint = has_unresolved_structured_heading_hint(unit) and not bool(heading_section and heading_paragraph)
         if anchored_section and anchored_paragraph:
             section, paragraph, best_score, location_ambiguous = anchored_section, anchored_paragraph, 1, False
+        elif seed_section and seed_paragraph:
+            section, paragraph, best_score, location_ambiguous = seed_section, seed_paragraph, 2, False
         elif evidence_section and evidence_paragraph:
             section, paragraph, best_score, location_ambiguous = evidence_section, evidence_paragraph, 1, False
         elif heading_section and heading_paragraph:
@@ -827,7 +864,9 @@ def main() -> int:
             section, paragraph, best_score, location_ambiguous = None, None, -1, True
         else:
             section, paragraph, best_score, location_ambiguous = best_location(query_text, index_data)
-        original_excerpt = paragraph["text"] if paragraph else "无"
+        original_excerpt = paragraph["text"] if paragraph else (
+            normalize_ws(unit.get("original_excerpt_seed_en", "")) if is_meaningful_text(unit.get("original_excerpt_seed_en", "")) else "无"
+        )
         requirements = detect_comment_requirements(query_text)
         status, intent, reasons = assess_status(
             query_text,
@@ -857,6 +896,10 @@ def main() -> int:
         }
         revised_excerpt_en = revision_plan["paragraph_after_raw"] if status == "completed" else original_excerpt
         revised_excerpt_zh = revised_excerpt_zh_summary(intent, status, citation_payload)
+        if status != "completed" and is_meaningful_text(unit.get("revised_excerpt_seed_en", "")):
+            revised_excerpt_en = normalize_ws(unit.get("revised_excerpt_seed_en", ""))
+        if status != "completed" and is_meaningful_text(unit.get("revised_excerpt_seed_zh", "")):
+            revised_excerpt_zh = normalize_ws(unit.get("revised_excerpt_seed_zh", ""))
         notes_core = ["已逐条建立评论、回复、正文位置和证据来源的对应关系。"]
         notes_support = ["已保留 Evidence Attachments 三模块，并对缺失材料明确标注。"]
         if status == "needs_author_confirmation":

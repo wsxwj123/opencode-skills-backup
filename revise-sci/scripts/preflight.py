@@ -5,7 +5,7 @@ import argparse
 import json
 from pathlib import Path
 
-from common import autodiscover_reference_source, compute_tree_signature, directory_signature, path_signature, write_json, write_text
+from common import autodiscover_reference_source, compute_tree_signature, detect_comments_input_mode, directory_signature, path_signature, write_json, write_text
 
 
 def describe_file(path: Path) -> dict[str, object]:
@@ -37,6 +37,7 @@ def build_report(summary: dict[str, object], attachments: dict[str, object], mis
         f"- references_source_path: `{summary['references_source_path'] or 'Not provided by user'}`",
         f"- reference_search_decision: `{summary['reference_search_decision']}`",
         f"- citation_verify_mode: `{summary['citation_verify_mode']}`",
+        f"- comments_input_mode: `{summary['comments_input_mode']}`",
         "",
         "## 附件清单",
         f"- 附件数量: `{attachments['count']}`",
@@ -147,6 +148,7 @@ def main() -> int:
         "references_source_path": str(references_source.resolve()) if references_source else "",
         "reference_search_decision": args.reference_search_decision,
         "citation_verify_mode": "live" if args.live_citation_verify else "offline",
+        "comments_input_mode": detect_comments_input_mode(comments),
     }
     skill_root = Path(__file__).resolve().parent.parent
     skill_signature = compute_tree_signature(skill_root, patterns=("*.py", "*.md"))
