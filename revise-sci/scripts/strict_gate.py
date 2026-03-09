@@ -4,7 +4,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from common import ALLOWED_PROVIDER_FAMILIES, blocked_placeholder_found, normalize_ws, read_docx_paragraphs, read_json
+from common import ALLOWED_PROVIDER_FAMILIES, blocked_placeholder_found, find_ai_style_markers, normalize_ws, read_docx_paragraphs, read_json
 
 
 REQUIRED_RESPONSE_HEADINGS = [
@@ -180,12 +180,21 @@ def main() -> int:
     synthesis_audit_path = project_root / "data" / "synthesis_matrix_audit.json"
     reference_registry_path = project_root / "data" / "reference_registry.json"
     reference_coverage_path = project_root / "data" / "reference_coverage_audit.json"
+    revision_polish_manifest_path = project_root / "revision_polish_manifest.json"
+    revision_polish_execution_path = project_root / "revision_polish_execution.json"
     literature_index = read_json(literature_index_path, [])
     synthesis_matrix = read_json(synthesis_matrix_path, [])
     synthesis_audit = read_json(synthesis_audit_path, {})
     reference_coverage = read_json(reference_coverage_path, {})
+    revision_polish_execution = read_json(revision_polish_execution_path, {})
     reference_search_decision = normalize_ws(str((state.get("inputs") or {}).get("reference_search_decision") or "ask"))
     citation_units = completed_citation_units(units)
+
+    for artifact in (revision_polish_manifest_path, revision_polish_execution_path):
+        if not artifact.exists():
+            failures.append(f"missing polish artifact: {artifact.name}")
+    if isinstance(revision_polish_execution, dict) and revision_polish_execution.get("ok") is not True:
+        failures.append("revision polish execution reports ok=false")
 
     for artifact in (reference_registry_path, reference_coverage_path):
         if not artifact.exists():
@@ -235,6 +244,19 @@ def main() -> int:
         for source in unit.get("evidence_sources", []):
             if source.get("provider_family") not in ALLOWED_PROVIDER_FAMILIES:
                 failures.append(f"{comment_id}: invalid provider family {source.get('provider_family')}")
+        revision_plan = unit.get("revision_plan") or {}
+        if unit.get("status") == "completed" and revision_plan.get("scope") not in {"", "none", None}:
+            if unit.get("polish_applied") is not True:
+                failures.append(f"{comment_id}: completed revision is missing revision polishing state")
+            if unit.get("polish_driver_mode") in {"", "pending", "not-required", None}:
+                failures.append(f"{comment_id}: completed revision is missing a valid polish_driver_mode")
+            polished_fragment = normalize_ws(str(revision_plan.get("polished_fragment") or revision_plan.get("raw_fragment") or ""))
+            if not polished_fragment:
+                failures.append(f"{comment_id}: polished fragment is missing")
+            elif find_ai_style_markers(polished_fragment):
+                failures.append(f"{comment_id}: polished fragment still contains banned AI-style markers")
+            if unit.get("polish_guard_ok") is not True:
+                failures.append(f"{comment_id}: polish_guard_ok is false")
 
         atomic_failures = missing_atomic_fields(unit)
         if atomic_failures:

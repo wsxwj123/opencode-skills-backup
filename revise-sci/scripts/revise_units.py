@@ -8,7 +8,18 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
-from common import build_section_markdown, choose_sentence, comment_nature, detect_comment_requirements, normalize_ws, read_json, tokenize, write_json, write_text
+from common import (
+    build_section_markdown,
+    choose_sentence,
+    comment_nature,
+    detect_comment_requirements,
+    normalize_ws,
+    read_json,
+    split_sentences,
+    tokenize,
+    write_json,
+    write_text,
+)
 
 
 LOW_SIGNAL_REVIEW_TOKENS = {
@@ -379,24 +390,116 @@ def assess_status(
     return status, intent, reasons
 
 
-def revise_paragraph(original_excerpt: str, intent: str, citation_payload: dict[str, Any] | None = None) -> str:
-    sentence = normalize_ws(original_excerpt)
-    if not sentence:
-        return "无"
+def replace_sentence_at(paragraph_text: str, sentence_index: int, new_sentence: str) -> str:
+    sentences = split_sentences(paragraph_text)
+    if not sentences:
+        return normalize_ws(new_sentence)
+    bounded_index = max(0, min(sentence_index, len(sentences) - 1))
+    sentences[bounded_index] = normalize_ws(new_sentence)
+    return normalize_ws(" ".join(sentences))
+
+
+def append_sentence_to_paragraph(paragraph_text: str, new_sentence: str) -> str:
+    base = normalize_ws(paragraph_text)
+    addition = normalize_ws(new_sentence)
+    if not base:
+        return addition
+    if not addition:
+        return base
+    if addition in base:
+        return base
+    return normalize_ws(f"{base} {addition}")
+
+
+def inject_citation_into_sentence(sentence: str, citation_text: str) -> str:
+    normalized_sentence = normalize_ws(sentence)
+    normalized_citation = normalize_ws(citation_text)
+    if not normalized_sentence or not normalized_citation or normalized_citation in normalized_sentence:
+        return normalized_sentence
+    match = re.match(r"^(.*?)([.!?])?$", normalized_sentence)
+    body = normalize_ws(match.group(1) if match else normalized_sentence)
+    suffix = match.group(2) if match and match.group(2) else ""
+    return normalize_ws(f"{body} {normalized_citation}{suffix}")
+
+
+def normalize_sentence_after_intro(sentence: str) -> str:
+    normalized = normalize_ws(sentence)
+    pronoun_map = {
+        "They ": "they ",
+        "This ": "this ",
+        "These ": "these ",
+        "The ": "the ",
+        "We ": "we ",
+    }
+    for original, replacement in pronoun_map.items():
+        if normalized.startswith(original):
+            return replacement + normalized[len(original) :]
+    return normalized
+
+
+def revise_paragraph(
+    original_excerpt: str,
+    comment_text: str,
+    intent: str,
+    citation_payload: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    paragraph_text = normalize_ws(original_excerpt)
+    sentence_index, target_sentence = choose_sentence(comment_text, paragraph_text)
+    plan = {
+        "scope": "none",
+        "target_sentence_index": sentence_index if paragraph_text else None,
+        "original_fragment": target_sentence or paragraph_text,
+        "raw_fragment": target_sentence or paragraph_text,
+        "paragraph_before": paragraph_text,
+        "paragraph_after_raw": paragraph_text,
+        "changed_fragment_type": "none",
+    }
+    if not paragraph_text:
+        return plan
+
     if intent == "clarify":
-        if sentence.lower().startswith("in the present dataset,"):
-            return sentence
-        return f"In the present dataset, {sentence}"
+        replacement = normalize_sentence_after_intro(target_sentence or paragraph_text)
+        if not replacement.lower().startswith("in the present dataset,"):
+            replacement = f"In the present dataset, {replacement}"
+        plan.update(
+            {
+                "scope": "sentence_replace",
+                "raw_fragment": normalize_ws(replacement),
+                "paragraph_after_raw": replace_sentence_at(paragraph_text, sentence_index, replacement),
+                "changed_fragment_type": "modified_sentence",
+            }
+        )
+        return plan
+
     if intent == "limitation":
         limitation_sentence = "This finding should be interpreted within the scope of the present study design."
-        if limitation_sentence.lower() in sentence.lower():
-            return sentence
-        return f"{sentence} {limitation_sentence}"
+        paragraph_after = append_sentence_to_paragraph(paragraph_text, limitation_sentence)
+        plan.update(
+            {
+                "scope": "sentence_append",
+                "target_sentence_index": None,
+                "original_fragment": "",
+                "raw_fragment": limitation_sentence,
+                "paragraph_after_raw": paragraph_after,
+                "changed_fragment_type": "added_sentence",
+            }
+        )
+        return plan
+
     if intent == "citation" and citation_payload:
         citation_text = normalize_ws(citation_payload.get("formatted_citation_text", ""))
-        if citation_text and citation_text not in sentence:
-            return f"{sentence} {citation_text}".strip()
-    return sentence
+        injected_sentence = inject_citation_into_sentence(target_sentence or paragraph_text, citation_text)
+        plan.update(
+            {
+                "scope": "sentence_replace",
+                "raw_fragment": injected_sentence,
+                "paragraph_after_raw": replace_sentence_at(paragraph_text, sentence_index, injected_sentence),
+                "changed_fragment_type": "modified_sentence",
+            }
+        )
+        return plan
+
+    return plan
 
 
 def response_blocks(unit: dict, status: str, needs_reason: str, intent: str) -> tuple[str, str]:
@@ -701,7 +804,16 @@ def main() -> int:
             unresolved_structured_hint=unresolved_structured_hint,
         )
         response_zh, response_en = response_blocks(unit, status, "；".join(reasons), intent)
-        revised_excerpt_en = revise_paragraph(original_excerpt, intent, citation_payload) if status == "completed" else original_excerpt
+        revision_plan = revise_paragraph(original_excerpt, query_text, intent, citation_payload) if status == "completed" else {
+            "scope": "none",
+            "target_sentence_index": None,
+            "original_fragment": original_excerpt,
+            "raw_fragment": original_excerpt,
+            "paragraph_before": original_excerpt,
+            "paragraph_after_raw": original_excerpt,
+            "changed_fragment_type": "none",
+        }
+        revised_excerpt_en = revision_plan["paragraph_after_raw"] if status == "completed" else original_excerpt
         revised_excerpt_zh = revised_excerpt_zh_summary(intent, status, citation_payload)
         notes_core = ["已逐条建立评论、回复、正文位置和证据来源的对应关系。"]
         notes_support = ["已保留 Evidence Attachments 三模块，并对缺失材料明确标注。"]
@@ -760,11 +872,12 @@ def main() -> int:
                 "atomic_location": atomic_location,
                 "original_excerpt_en": original_excerpt,
                 "revised_excerpt_en": revised_excerpt_en,
+                "revised_excerpt_en_raw": revised_excerpt_en,
                 "revised_excerpt_zh": revised_excerpt_zh,
                 "modification_actions": [
                     {
                         "action": "修改" if status == "completed" else "需确认",
-                        "reason": "根据审稿意见完成保守的文本性修订。" if status == "completed" else "当前材料不足以直接完成可投稿改写。",
+                        "reason": "根据审稿意见完成保守的文本性修订，并仅修改命中的句子或新增句。" if status == "completed" else "当前材料不足以直接完成可投稿改写。",
                     }
                 ],
                 "notes_core_zh": notes_core,
@@ -772,6 +885,9 @@ def main() -> int:
                 "evidence_sources": evidence_sources,
                 "target_document": target_document,
                 "editorial_intent": intent,
+                "revision_plan": revision_plan,
+                "polish_applied": False,
+                "polish_driver_mode": "pending" if status == "completed" and revision_plan.get("scope") != "none" else "not-required",
                 "status": status,
                 "author_confirmation_reason": "；".join(reasons),
             }

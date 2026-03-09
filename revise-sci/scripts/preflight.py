@@ -32,6 +32,7 @@ def build_report(summary: dict[str, object], attachments: dict[str, object], mis
         f"- paper_search_results_path: `{summary['paper_search_results_path'] or 'Not provided by user'}`",
         f"- auto_run_reference_search: `{summary['auto_run_reference_search']}`",
         f"- paper_search_runner: `{summary['paper_search_runner'] or 'Not provided by user'}`",
+        f"- revision_polish_runner: `{summary['revision_polish_runner'] or 'Local heuristic / Not provided by user'}`",
         f"- opencode_driver_command: `{summary['opencode_driver_command'] or 'Auto / Not provided by user'}`",
         f"- references_source_path: `{summary['references_source_path'] or 'Not provided by user'}`",
         f"- reference_search_decision: `{summary['reference_search_decision']}`",
@@ -67,6 +68,7 @@ def main() -> int:
     parser.add_argument("--live-citation-verify", action="store_true")
     parser.add_argument("--auto-run-reference-search", action="store_true")
     parser.add_argument("--paper-search-runner", default="")
+    parser.add_argument("--revision-polish-runner", default="")
     parser.add_argument("--opencode-driver-command", default="")
     args = parser.parse_args()
 
@@ -140,6 +142,7 @@ def main() -> int:
         "paper_search_results_path": str(paper_search_results.resolve()) if paper_search_results else "",
         "auto_run_reference_search": bool(args.auto_run_reference_search),
         "paper_search_runner": args.paper_search_runner,
+        "revision_polish_runner": args.revision_polish_runner,
         "opencode_driver_command": args.opencode_driver_command,
         "references_source_path": str(references_source.resolve()) if references_source else "",
         "reference_search_decision": args.reference_search_decision,
@@ -163,6 +166,7 @@ def main() -> int:
                 "paper_search_results_path": path_signature(paper_search_results),
                 "auto_run_reference_search": bool(args.auto_run_reference_search),
                 "paper_search_runner": args.paper_search_runner,
+                "revision_polish_runner": args.revision_polish_runner,
                 "opencode_driver_command": args.opencode_driver_command,
                 "references_source_path": path_signature(references_source),
                 "reference_search_decision": args.reference_search_decision,

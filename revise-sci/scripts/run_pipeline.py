@@ -16,6 +16,7 @@ STEP_ORDER = (
     "atomize_manuscript",
     "issue_index",
     "revise",
+    "polish",
     "literature",
     "reference_registry",
     "reference_search_execute",
@@ -54,6 +55,13 @@ def has_revision_outputs(project_root: Path) -> bool:
         and (project_root / "manuscript_edit_plan.md").exists()
         and (project_root / "comment_records").exists()
         and any((project_root / "comment_records").glob("*.md"))
+    )
+
+
+def has_polish_outputs(project_root: Path) -> bool:
+    return (
+        (project_root / "revision_polish_manifest.json").exists()
+        and (project_root / "revision_polish_execution.json").exists()
     )
 
 
@@ -133,6 +141,7 @@ def current_input_signatures(args: argparse.Namespace) -> dict:
         "auto_run_reference_search": bool(getattr(args, "auto_run_reference_search", False)),
         "paper_search_runner": normalize_runner_value(getattr(args, "paper_search_runner", "")),
         "opencode_driver_command": normalize_runner_value(getattr(args, "opencode_driver_command", "")),
+        "revision_polish_runner": normalize_runner_value(getattr(args, "revision_polish_runner", "")),
     }
 
 
@@ -183,6 +192,10 @@ def clear_project_outputs(project_root: Path) -> None:
         "reference_search_execution.json",
         "reference_search_execution_request.md",
         "paper_search_results.json",
+        "revision_polish_manifest.json",
+        "revision_polish_prompt.md",
+        "revision_polish_results.json",
+        "revision_polish_execution.json",
     ]
     for dirname in removable_dirs:
         path = project_root / dirname
@@ -238,6 +251,13 @@ def clear_step_outputs(project_root: Path, output_md: Path, output_docx: Path, s
         if records_dir.exists():
             shutil.rmtree(records_dir)
         for filename in ("response_to_reviewers.md", "response_to_reviewers.docx", "manuscript_edit_plan.md"):
+            path = project_root / filename
+            if path.exists():
+                path.unlink()
+        return
+
+    if step_name == "polish":
+        for filename in ("revision_polish_manifest.json", "revision_polish_prompt.md", "revision_polish_results.json", "revision_polish_execution.json"):
             path = project_root / filename
             if path.exists():
                 path.unlink()
@@ -315,6 +335,7 @@ def main() -> int:
     parser.add_argument("--offline-citation-verify", action="store_true")
     parser.add_argument("--auto-run-reference-search", action="store_true")
     parser.add_argument("--paper-search-runner", default="")
+    parser.add_argument("--revision-polish-runner", default="")
     parser.add_argument("--opencode-driver-command", default="")
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--resume-from", choices=STEP_ORDER)
@@ -382,6 +403,8 @@ def main() -> int:
         common_args.append("--auto-run-reference-search")
     if args.paper_search_runner:
         common_args.extend(["--paper-search-runner", args.paper_search_runner])
+    if args.revision_polish_runner:
+        common_args.extend(["--revision-polish-runner", args.revision_polish_runner])
     if args.opencode_driver_command:
         common_args.extend(["--opencode-driver-command", args.opencode_driver_command])
     if resolved_references_source:
@@ -426,6 +449,13 @@ def main() -> int:
         run_step([py, str(script_dir / "build_issue_matrix.py"), "--project-root", args.project_root])
     elif args.resume:
         run_step([py, str(script_dir / "build_issue_matrix.py"), "--project-root", args.project_root])
+    if not args.resume or not has_polish_outputs(project_root):
+        polish_args = [py, str(script_dir / "polish_revisions.py"), "--project-root", args.project_root]
+        if args.revision_polish_runner:
+            polish_args.extend(["--revision-polish-runner", args.revision_polish_runner])
+        if args.opencode_driver_command:
+            polish_args.extend(["--opencode-driver-command", args.opencode_driver_command])
+        run_step(polish_args)
     if not args.resume or not has_literature_outputs(project_root):
         run_step([py, str(script_dir / "build_literature_index.py"), "--project-root", args.project_root])
         run_step(
@@ -501,6 +531,12 @@ def main() -> int:
         revise_args = [py, str(script_dir / "revise_units.py"), "--project-root", args.project_root, "--paper-search-results", str(project_root / "paper_search_validated.json")]
         run_step(revise_args)
         run_step([py, str(script_dir / "build_issue_matrix.py"), "--project-root", args.project_root])
+        polish_args = [py, str(script_dir / "polish_revisions.py"), "--project-root", args.project_root]
+        if args.revision_polish_runner:
+            polish_args.extend(["--revision-polish-runner", args.revision_polish_runner])
+        if args.opencode_driver_command:
+            polish_args.extend(["--opencode-driver-command", args.opencode_driver_command])
+        run_step(polish_args)
         run_step([py, str(script_dir / "build_literature_index.py"), "--project-root", args.project_root])
         run_step(
             [

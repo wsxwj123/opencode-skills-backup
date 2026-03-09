@@ -135,6 +135,24 @@ class ReviseUnitsTests(unittest.TestCase):
             unresolved_structured_hint=True,
         )[2][0])
 
+    def test_revise_paragraph_clarify_only_replaces_target_sentence(self):
+        paragraph = "Extracellular vesicles were isolated by ultracentrifugation. They showed a protective effect in TAC-treated cells. The viability assay was repeated three times."
+        plan = revise_units.revise_paragraph(paragraph, "Please clarify the protective effect statement.", "clarify")
+        self.assertEqual(plan["scope"], "sentence_replace")
+        self.assertEqual(
+            plan["paragraph_after_raw"],
+            "Extracellular vesicles were isolated by ultracentrifugation. In the present dataset, they showed a protective effect in TAC-treated cells. The viability assay was repeated three times.",
+        )
+        self.assertEqual(plan["original_fragment"], "They showed a protective effect in TAC-treated cells.")
+
+    def test_revise_paragraph_limitation_appends_new_sentence_only(self):
+        paragraph = "Extracellular vesicles were isolated by ultracentrifugation."
+        plan = revise_units.revise_paragraph(paragraph, "Please discuss the limitation.", "limitation")
+        self.assertEqual(plan["scope"], "sentence_append")
+        self.assertEqual(plan["original_fragment"], "")
+        self.assertIn("This finding should be interpreted", plan["raw_fragment"])
+        self.assertTrue(plan["paragraph_after_raw"].startswith("Extracellular vesicles were isolated by ultracentrifugation."))
+
 
 if __name__ == "__main__":
     unittest.main()

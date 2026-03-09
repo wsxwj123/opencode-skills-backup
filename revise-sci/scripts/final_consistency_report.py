@@ -35,6 +35,7 @@ def main() -> int:
     search_strategy = read_json(project_root / "reference_search_strategy.json", {})
     search_status = read_json(project_root / "reference_search_status.json", {})
     search_execution = read_json(project_root / "reference_search_execution.json", {})
+    polish_execution = read_json(project_root / "revision_polish_execution.json", {})
     lines = [
         "# Final Consistency Report",
         "",
@@ -42,6 +43,8 @@ def main() -> int:
         f"- total_comments: `{len(units)}`",
         f"- completed: `{sum(1 for unit in units if unit.get('status') == 'completed')}`",
         f"- needs_author_confirmation: `{sum(1 for unit in units if unit.get('status') == 'needs_author_confirmation')}`",
+        f"- revision_polish_driver_mode: `{polish_execution.get('driver_mode', 'Not executed')}`",
+        f"- revision_polish_candidate_count: `{polish_execution.get('candidate_count', 0)}`",
         "",
         "| comment_id | severity | status | target_document | source_trace |",
         "|---|---|---|---|---|",

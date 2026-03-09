@@ -65,6 +65,8 @@ class PipelineTests(unittest.TestCase):
         self.assertTrue((project_root / "response_to_reviewers.docx").exists())
         self.assertTrue((project_root / "revised_manuscript.md").exists())
         self.assertTrue((project_root / "revised_manuscript.docx").exists())
+        self.assertTrue((project_root / "revision_polish_manifest.json").exists())
+        self.assertTrue((project_root / "revision_polish_execution.json").exists())
         self.assertTrue((project_root / "data" / "reference_registry.json").exists())
         self.assertTrue((project_root / "data" / "reference_coverage_audit.json").exists())
         report = (project_root / "final_consistency_report.md").read_text(encoding="utf-8")

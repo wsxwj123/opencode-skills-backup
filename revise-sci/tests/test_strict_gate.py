@@ -36,6 +36,21 @@ class StrictGateTests(unittest.TestCase):
             "notes_support_zh": ["已保留证据来源。"],
             "evidence_sources": [{"provider_family": "user-provided", "source": "manuscript_sections/01-results.md"}],
             "target_document": "manuscript",
+            "editorial_intent": "clarify",
+            "revision_plan": {
+                "scope": "sentence_replace",
+                "target_sentence_index": 0,
+                "original_fragment": "Quercetin showed a protective effect in TAC-treated cells.",
+                "raw_fragment": "In the present dataset, Quercetin showed a protective effect in TAC-treated cells.",
+                "polished_fragment": "In the present dataset, Quercetin showed a protective effect in TAC-treated cells.",
+                "paragraph_before": "Quercetin showed a protective effect in TAC-treated cells.",
+                "paragraph_after_raw": "In the present dataset, Quercetin showed a protective effect in TAC-treated cells.",
+                "paragraph_after_polished": "In the present dataset, Quercetin showed a protective effect in TAC-treated cells.",
+                "changed_fragment_type": "modified_sentence",
+            },
+            "polish_applied": True,
+            "polish_driver_mode": "local-heuristic",
+            "polish_guard_ok": True,
             "status": "completed",
             "author_confirmation_reason": "",
             "atomic_location": {
@@ -145,12 +160,21 @@ class StrictGateTests(unittest.TestCase):
                 {
                     "delivery_status": "ready_to_submit",
                     "counts": {"comment_units": 1},
+                    "inputs": {"reference_search_decision": "ask"},
                     "outputs": {
                         "output_md": str((self.project_root / "revised.md").resolve()),
                         "output_docx": str((self.project_root / "revised.docx").resolve()),
                     },
                 }
             ),
+            encoding="utf-8",
+        )
+        (self.project_root / "revision_polish_manifest.json").write_text(
+            json.dumps({"workflow": "revise-sci-polish", "candidates": [{"comment_id": "R1-Major-01"}]}),
+            encoding="utf-8",
+        )
+        (self.project_root / "revision_polish_execution.json").write_text(
+            json.dumps({"ok": True, "driver_mode": "local-heuristic", "candidate_count": 1, "polished_comment_ids": ["R1-Major-01"]}),
             encoding="utf-8",
         )
 

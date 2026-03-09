@@ -17,10 +17,78 @@ ALLOWED_PROVIDER_FAMILIES = {"paper-search", "user-provided"}
 REFERENCE_SOURCE_NAME_RE = re.compile(r"(reference|references|bibliography|literature_index|refs?)", re.IGNORECASE)
 REFERENCE_SOURCE_EXTS = {".json", ".md", ".txt", ".docx", ".bib", ".ris"}
 MANUSCRIPT_VERSION_SUFFIX_RE = re.compile(r"\s*\(\d+\)\s*$")
+AI_STYLE_BANNED_PATTERNS: tuple[tuple[str, str], ...] = (
+    ("delve into", r"\bdelve into\b"),
+    ("comprehensive landscape", r"\bcomprehensive landscape\b"),
+    ("pivotal role", r"\bpivotal role\b"),
+    ("realm", r"\brealm\b"),
+    ("tapestry", r"\btapestry\b"),
+    ("underscore", r"\bunderscore(?:s|d)?\b"),
+    ("testament", r"\btestament\b"),
+    ("Moreover", r"\bMoreover\b"),
+    ("Crucial", r"\bCrucial\b"),
+    ("Landscape", r"\bLandscape\b"),
+    ("Pivot", r"\bPivot(?:s|ed|ing)?\b"),
+    ("Foster", r"\bFoster(?:s|ed|ing)?\b"),
+    ("Spearhead", r"\bSpearhead(?:s|ed|ing)?\b"),
+    ("It is worth noting", r"\bIt is worth noting\b"),
+    ("As mentioned above", r"\bAs mentioned above\b"),
+    ("serves as", r"\bserves as\b"),
+    ("acts as", r"\bacts as\b"),
+)
 
 
 def normalize_ws(text: str) -> str:
     return re.sub(r"\s+", " ", text or "").strip()
+
+
+def find_ai_style_markers(text: str) -> list[str]:
+    normalized = normalize_ws(text)
+    if not normalized:
+        return []
+    markers: list[str] = []
+    for label, pattern in AI_STYLE_BANNED_PATTERNS:
+        if re.search(pattern, normalized, flags=re.IGNORECASE):
+            markers.append(label)
+    if "—" in normalized:
+        markers.append("em dash")
+    if re.search(r"\bnot only\b.*\bbut also\b", normalized, flags=re.IGNORECASE):
+        markers.append("not only...but also")
+    if re.search(r",\s*(?:thus|thereby|therefore)\s+[A-Za-z-]+ing\b", normalized, flags=re.IGNORECASE):
+        markers.append("trailing -ing clause")
+    return markers
+
+
+def polish_changed_text_locally(text: str) -> str:
+    cleaned = normalize_ws(text)
+    if not cleaned:
+        return cleaned
+    replacements = (
+        (r"\bMoreover,\s*", ""),
+        (r"\bCrucial\b", "Important"),
+        (r"\bdelve into\b", "examine"),
+        (r"\bcomprehensive landscape\b", "current evidence base"),
+        (r"\bpivotal role\b", "key role"),
+        (r"\brealm\b", "field"),
+        (r"\btapestry\b", "pattern"),
+        (r"\bunderscore(?:s|d)?\b", "show"),
+        (r"\btestament\b", "evidence"),
+        (r"\bIt is worth noting that\s*", ""),
+        (r"\bAs mentioned above,\s*", ""),
+        (r"\bserves as\b", "is"),
+        (r"\bacts as\b", "is"),
+        (r"\bFoster(?:s|ed|ing)?\b", "support"),
+        (r"\bSpearhead(?:s|ed|ing)?\b", "lead"),
+    )
+    for pattern, replacement in replacements:
+        cleaned = re.sub(pattern, replacement, cleaned, flags=re.IGNORECASE)
+    cleaned = cleaned.replace("—", ", ")
+    cleaned = re.sub(r"\bnot only\s+(.+?)\s+but also\s+(.+?)([.;!?]|$)", r"\1 and \2\3", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r",\s*(?:thus|thereby|therefore)\s+([A-Za-z-]+ing\b[^.;!?]*)", r".", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\s+([,.;!?])", r"\1", cleaned)
+    cleaned = re.sub(r"\.\.+", ".", cleaned)
+    cleaned = normalize_ws(cleaned)
+    return cleaned
 
 
 def slugify(text: str) -> str:
