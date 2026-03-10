@@ -1,0 +1,80 @@
+{
+  "unit_id": "u-014",
+  "order": 14,
+  "reviewer": "Reviewer #1",
+  "section": "minor",
+  "comment_number": "7",
+  "title": "Reviewer #1 | MINOR | Comment 7",
+  "source": {
+    "comments_docx": "/Users/wsxwj/Library/CloudStorage/OneDrive-个人/old files/xwj/研究生/博士课题/贺君/Exos递送抗体/投稿/JCR/Comments.docx",
+    "manuscript_docx": "/Users/wsxwj/Library/CloudStorage/OneDrive-个人/old files/xwj/研究生/博士课题/贺君/Exos递送抗体/投稿/JCR/manuscript.docx",
+    "si_docx": "/Users/wsxwj/Library/CloudStorage/OneDrive-个人/old files/xwj/研究生/博士课题/贺君/Exos递送抗体/投稿/JCR/SI.docx"
+  },
+  "links": {
+    "anchors": [],
+    "manuscript_unit_ids": [
+      "m-0065",
+      "m-0078",
+      "m-0081"
+    ],
+    "si_unit_ids": []
+  },
+  "content": {
+    "reviewer_comment_zh": "无",
+    "reviewer_comment_en": "The manuscript contains numerous grammatical errors. It is strongly recommended that the manuscript undergo thorough proofreading and professional language editing.",
+    "reviewer_intent_zh": "审稿人核心关切：语言与学术表达规范性不足。建议处理：进行专业语言润色和术语统一。",
+    "reviewer_intent_en": "Interpretation: The reviewer is requesting a clear, evidence-aligned clarification and a concrete manuscript-level correction for this specific point.",
+    "response_en": "Thank you for this helpful suggestion. We have revised the relevant text or figure presentation accordingly and rechecked consistency across the manuscript.",
+    "response_zh": "中文对应：感谢审稿人意见。我们已针对该问题完成对应修订，并确保结论与证据保持一致。",
+    "revision_location_en": "Section: 2.16 Preparation and characterization of Ab-Fc-EL-EV@Que To prepare Ab-Fc-EL-EV, the isolated Fc-EL-EVs were co-incubated with either the Fc-engineered anti-Prdx1 antibody or control IgG-GFP. Leveraging the specific high-affinity binding of the Z-domain on the surface of Fc-EL-EVs to the Fc fragment, the antibodies were stably conjugated onto the surface of the EVs. After sufficient incubation and washing to remove unbound free antibodies, functionalized Fc-EL-EVs with conjugated antibodies, designated as Ab-Fc-EL-EV, were obtained. Finally, to achieve drug loading, the prepared Ab-Fc-EL-EVs were co-incubated with Quercetin. By optimizing the incubation conditions, Quercetin was efficiently encapsulated into the internal space of the Ab-Fc-EL-EVs. After centrifugation and washing to remove free Quercetin, the engineered EVs loaded with Quercetin, designated as Ab-Fc-EL-EV@Que, were finally obtained. | Paragraph index: 84",
+    "original_excerpt_en": "The prepared Ab-Fc-EL-EV and Ab-Fc-EL-EV@Que will undergo comprehensive physicochemical characterization. Their size distribution, polydispersity index (PDI), and zeta potential will be determined by Dynamic Light Scattering (DLS). Transmission Electron Microscopy (TEM) will be used to observe the morphological characteristics of the EVs. Nanoparticle Tracking Analysis (NTA) will be employed to determine the concentration and size of the EVs. Furthermore, the expression and presence of CD63, Z-domain, mCherry, and the conjugated antibody on the EVs will be verified by Western Blot analysis. The encapsulation efficiency and drug loading content of Quercetin will be quantitatively analyzed using High-Performance Liquid Chromatography (HPLC) or UV-Visible spectrophotometry (UV-Vis).",
+    "revised_excerpt_en": "Not provided by user",
+    "revised_excerpt_zh": "无",
+    "modification_actions": [
+      {
+        "action": "修改",
+        "reason": "按审稿意见进行针对性优化。"
+      }
+    ],
+    "notes_core_zh": [
+      "针对该条意见完成规范化修订（术语、图注、编号或排版），并逐项核对对应位置。"
+    ],
+    "notes_support_zh": [
+      "进行全文一致性校对，避免同类细节问题重复出现。"
+    ],
+    "evidence": {
+      "text": [
+        "Not provided by user"
+      ],
+      "image_change_required": false,
+      "images": [
+        {
+          "src": "",
+          "alt": "Image placeholder",
+          "caption": "请替换为修订后图片（如有）"
+        }
+      ],
+      "table": {
+        "columns": [
+          "Item",
+          "Before",
+          "After",
+          "Evidence"
+        ],
+        "rows": [
+          [
+            "Key correction",
+            "Not provided by user",
+            "Not provided by user",
+            "Not provided by user"
+          ]
+        ]
+      }
+    }
+  },
+  "status": {
+    "response_state": "draft",
+    "excerpt_state": "needs_manual_revision",
+    "notes_state": "draft"
+  }
+}

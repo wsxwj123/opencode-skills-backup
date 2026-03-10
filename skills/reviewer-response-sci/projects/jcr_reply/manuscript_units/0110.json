@@ -1,0 +1,16 @@
+{
+  "unit_id": "m-0110",
+  "order": 110,
+  "paragraph_index": 147,
+  "text": "Then the crucial effector immunocytes in SAP was determined by flow cytometry to evaluate the downstream inflammation-activated by NF-κB. Interestingly, we observed no significant modulatory effect on CD4+ and CD8a+ T cells in blood after different treatments (Figure 9D). These findings indicated that T cell populations were not the principal targets of Ab-Fc-EL-EV@Que. Though, Ab-Fc-EL-EV@Que demonstrated exceptional efficacy in controlling the major inflammatory cell such as macrophages, monocytes and neutrophils. It robustly suppressed the infiltration of macrophages, reducing their proportion from a substantial 49.2% in the Ctrl group to a mere 17.3% in Ab-Fc-EL-EV@Que group (Figure 9D). This reduction was significantly more pronounced than that achieved by free Que and anti-Prdx1 antibody, highlighting the superior targeted delivery and bioavailability offered by the engineered EV platform. Furthermore, the treatment also impacted monocyte and neutrophil accumulation in SAP tissues. The obvious increase of both cells in the positive control group was almost entirely reversed by Ab-Fc-EL-EV@Que (Figure 9E and 9F). These consistent findings powerfully proved the capacity of Ab-Fc-EL-EV@Que in suppressing the recruitment and expansion of these critical pro-inflammatory cell populations.",
+  "heading_context": "3.8 Regulatory mechanism exploration of Ab-Fc-EL-EV@Que against SAP",
+  "anchors": [
+    "Figure 9D",
+    "Figure 9D",
+    "Figure 9E"
+  ],
+  "tags": {
+    "has_figure_ref": true,
+    "length": 1309
+  }
+}

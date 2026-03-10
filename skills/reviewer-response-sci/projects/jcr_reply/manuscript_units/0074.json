@@ -1,0 +1,15 @@
+{
+  "unit_id": "m-0074",
+  "order": 74,
+  "paragraph_index": 96,
+  "text": "As shown in Figure 2B, we first constructed Prdx1 flox mouse (Prdx1flox) based on C57BL/6J background and crossed them with acinar-specific Cre tool mice (ptf1α-Cre) to obtain acinar cell conditional knockout Prdx1 mice (pancreatic Prdx1 ko, PcKO mouse). Southern blot analysis identified the PcKO mice at the DNA level. Subsequently, immunofluorescence (IF) co-staining of Prdx1 and the acinar cell marker protein amylase confirmed the successful construction of PcKO mice (Fig 2C and 2D).",
+  "heading_context": "3.1 Intracellular Prdx1 deficiency in acinar cells exacerbates SAP by inducing cell apoptosis and ferroptosis",
+  "anchors": [
+    "Figure 2B",
+    "Fig 2C"
+  ],
+  "tags": {
+    "has_figure_ref": true,
+    "length": 490
+  }
+}

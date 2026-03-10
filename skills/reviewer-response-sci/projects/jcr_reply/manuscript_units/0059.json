@@ -1,0 +1,12 @@
+{
+  "unit_id": "m-0059",
+  "order": 59,
+  "paragraph_index": 76,
+  "text": "Lipid peroxidation levels were assessed using the BODIPY 581/591 C11 kit (Beyotime, China). According to the manufacturer's instructions, cells were incubated with 1 ml of BODIPY 581/591 C11 staining working solution at 37°C for 30 minutes. After incubation, the supernatant was removed and the cells were washed twice with PBS. Then, 2 ml of PBS was added, and the cells were observed using a fluorescence microscope or confocal laser scanning microscope. The reduced form of BODIPY 581/591 C11 exhibits maximum excitation and emission wavelengths at 581/591 nm. Upon oxidation by lipid peroxides, these wavelengths shift to approximately 488/510 nm.",
+  "heading_context": "2.13 Detection of lipid peroxidation",
+  "anchors": [],
+  "tags": {
+    "has_figure_ref": false,
+    "length": 651
+  }
+}

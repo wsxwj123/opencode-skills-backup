@@ -1,0 +1,327 @@
+{
+  "total_files": 8,
+  "total_settings": 27,
+  "detected_patterns": {},
+  "config_files": [
+    {
+      "file_path": "/Users/wsxwj/Desktop/opencode file/.tmp_hivision_repo/Dockerfile",
+      "relative_path": "Dockerfile",
+      "type": "dockerfile",
+      "purpose": "docker_configuration",
+      "patterns": [],
+      "settings_count": 0,
+      "settings": [],
+      "parse_errors": []
+    },
+    {
+      "file_path": "/Users/wsxwj/Desktop/opencode file/.tmp_hivision_repo/docker-compose.yml",
+      "relative_path": "docker-compose.yml",
+      "type": "yaml",
+      "purpose": "docker_configuration",
+      "patterns": [],
+      "settings_count": 11,
+      "settings": [
+        {
+          "key": "version",
+          "value": "3.8",
+          "type": "string",
+          "env_var": null,
+          "description": ""
+        },
+        {
+          "key": "services.hivision_idphotos.build.context",
+          "value": ".",
+          "type": "string",
+          "env_var": null,
+          "description": ""
+        },
+        {
+          "key": "services.hivision_idphotos.build.dockerfile",
+          "value": "Dockerfile",
+          "type": "string",
+          "env_var": null,
+          "description": ""
+        },
+        {
+          "key": "services.hivision_idphotos.image",
+          "value": "linzeyi/hivision_idphotos",
+          "type": "string",
+          "env_var": null,
+          "description": ""
+        },
+        {
+          "key": "services.hivision_idphotos.command",
+          "value": "python3 -u app.py --host 0.0.0.0 --port 7860",
+          "type": "string",
+          "env_var": null,
+          "description": ""
+        },
+        {
+          "key": "services.hivision_idphotos.ports",
+          "value": [
+            "7860:7860"
+          ],
+          "type": "array",
+          "env_var": null,
+          "description": ""
+        },
+        {
+          "key": "services.hivision_idphotos_api.build.context",
+          "value": ".",
+          "type": "string",
+          "env_var": null,
+          "description": ""
+        },
+        {
+          "key": "services.hivision_idphotos_api.build.dockerfile",
+          "value": "Dockerfile",
+          "type": "string",
+          "env_var": null,
+          "description": ""
+        },
+        {
+          "key": "services.hivision_idphotos_api.image",
+          "value": "linzeyi/hivision_idphotos",
+          "type": "string",
+          "env_var": null,
+          "description": ""
+        },
+        {
+          "key": "services.hivision_idphotos_api.command",
+          "value": "python3 deploy_api.py",
+          "type": "string",
+          "env_var": null,
+          "description": ""
+        },
+        {
+          "key": "services.hivision_idphotos_api.ports",
+          "value": [
+            "8080:8080"
+          ],
+          "type": "array",
+          "env_var": null,
+          "description": ""
+        }
+      ],
+      "parse_errors": []
+    },
+    {
+      "file_path": "/Users/wsxwj/Desktop/opencode file/.tmp_hivision_repo/demo/config.py",
+      "relative_path": "demo/config.py",
+      "type": "python",
+      "purpose": "general_configuration",
+      "patterns": [],
+      "settings_count": 0,
+      "settings": [],
+      "parse_errors": []
+    },
+    {
+      "file_path": "/Users/wsxwj/Desktop/opencode file/.tmp_hivision_repo/hivision/plugin/template/assets/template_config.json",
+      "relative_path": "hivision/plugin/template/assets/template_config.json",
+      "type": "json",
+      "purpose": "general_configuration",
+      "patterns": [],
+      "settings_count": 14,
+      "settings": [
+        {
+          "key": "template_1.width",
+          "value": 1080,
+          "type": "integer",
+          "env_var": null,
+          "description": ""
+        },
+        {
+          "key": "template_1.height",
+          "value": 1400,
+          "type": "integer",
+          "env_var": null,
+          "description": ""
+        },
+        {
+          "key": "template_1.anchor_points.left_top",
+          "value": [
+            358,
+            153
+          ],
+          "type": "array",
+          "env_var": null,
+          "description": ""
+        },
+        {
+          "key": "template_1.anchor_points.right_top",
+          "value": [
+            1017,
+            353
+          ],
+          "type": "array",
+          "env_var": null,
+          "description": ""
+        },
+        {
+          "key": "template_1.anchor_points.left_bottom",
+          "value": [
+            56,
+            1134
+          ],
+          "type": "array",
+          "env_var": null,
+          "description": ""
+        },
+        {
+          "key": "template_1.anchor_points.right_bottom",
+          "value": [
+            747,
+            1332
+          ],
+          "type": "array",
+          "env_var": null,
+          "description": ""
+        },
+        {
+          "key": "template_1.anchor_points.rotation",
+          "value": -16.42,
+          "type": "number",
+          "env_var": null,
+          "description": ""
+        },
+        {
+          "key": "template_2.width",
+          "value": 1080,
+          "type": "integer",
+          "env_var": null,
+          "description": ""
+        },
+        {
+          "key": "template_2.height",
+          "value": 1440,
+          "type": "integer",
+          "env_var": null,
+          "description": ""
+        },
+        {
+          "key": "template_2.anchor_points.left_top",
+          "value": [
+            199,
+            199
+          ],
+          "type": "array",
+          "env_var": null,
+          "description": ""
+        },
+        {
+          "key": "template_2.anchor_points.right_top",
+          "value": [
+            921,
+            216
+          ],
+          "type": "array",
+          "env_var": null,
+          "description": ""
+        },
+        {
+          "key": "template_2.anchor_points.left_bottom",
+          "value": [
+            163,
+            1129
+          ],
+          "type": "array",
+          "env_var": null,
+          "description": ""
+        },
+        {
+          "key": "template_2.anchor_points.right_bottom",
+          "value": [
+            876,
+            1153
+          ],
+          "type": "array",
+          "env_var": null,
+          "description": ""
+        },
+        {
+          "key": "template_2.anchor_points.rotation",
+          "value": -2.2,
+          "type": "number",
+          "env_var": null,
+          "description": ""
+        }
+      ],
+      "parse_errors": []
+    },
+    {
+      "file_path": "/Users/wsxwj/Desktop/opencode file/.tmp_hivision_repo/.devcontainer/devcontainer.json",
+      "relative_path": ".devcontainer/devcontainer.json",
+      "type": "json",
+      "purpose": "general_configuration",
+      "patterns": [],
+      "settings_count": 0,
+      "settings": [],
+      "parse_errors": [
+        "JSON parse error: Expecting value: line 1 column 1 (char 0)"
+      ]
+    },
+    {
+      "file_path": "/Users/wsxwj/Desktop/opencode file/.tmp_hivision_repo/.github/workflows/build-image.yml",
+      "relative_path": ".github/workflows/build-image.yml",
+      "type": "yaml",
+      "purpose": "ci_cd_configuration",
+      "patterns": [],
+      "settings_count": 1,
+      "settings": [
+        {
+          "key": "name",
+          "value": "build image and push",
+          "type": "string",
+          "env_var": null,
+          "description": ""
+        }
+      ],
+      "parse_errors": [
+        "Error parsing .github/workflows/build-image.yml: sequence item 0: expected str instance, bool found"
+      ]
+    },
+    {
+      "file_path": "/Users/wsxwj/Desktop/opencode file/.tmp_hivision_repo/.vscode/settings.json",
+      "relative_path": ".vscode/settings.json",
+      "type": "json",
+      "purpose": "general_configuration",
+      "patterns": [],
+      "settings_count": 0,
+      "settings": [],
+      "parse_errors": [
+        "JSON parse error: Expecting property name enclosed in double quotes: line 8 column 3 (char 215)"
+      ]
+    },
+    {
+      "file_path": "/Users/wsxwj/Desktop/opencode file/.tmp_hivision_repo/.vscode/extensions.json",
+      "relative_path": ".vscode/extensions.json",
+      "type": "json",
+      "purpose": "general_configuration",
+      "patterns": [],
+      "settings_count": 1,
+      "settings": [
+        {
+          "key": "recommendations",
+          "value": [
+            "ms-python.black-formatter",
+            "donjayamanne.python-extension-pack",
+            "njpwerner.autodocstring",
+            "editorconfig.editorconfig",
+            "gruntfuggly.todo-tree",
+            "eamodio.gitlens",
+            "PKief.material-icon-theme",
+            "davidanson.vscode-markdownlint",
+            "usernamehw.errorlens",
+            "tamasfe.even-better-toml",
+            "littlefoxteam.vscode-python-test-adapter"
+          ],
+          "type": "array",
+          "env_var": null,
+          "description": ""
+        }
+      ],
+      "parse_errors": []
+    }
+  ],
+  "errors": []
+}

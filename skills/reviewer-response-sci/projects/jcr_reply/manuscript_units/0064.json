@@ -1,0 +1,12 @@
+{
+  "unit_id": "m-0064",
+  "order": 64,
+  "paragraph_index": 83,
+  "text": "2.16 Preparation and characterization of Ab-Fc-EL-EV@Que To prepare Ab-Fc-EL-EV, the isolated Fc-EL-EVs were co-incubated with either the Fc-engineered anti-Prdx1 antibody or control IgG-GFP. Leveraging the specific high-affinity binding of the Z-domain on the surface of Fc-EL-EVs to the Fc fragment, the antibodies were stably conjugated onto the surface of the EVs. After sufficient incubation and washing to remove unbound free antibodies, functionalized Fc-EL-EVs with conjugated antibodies, designated as Ab-Fc-EL-EV, were obtained. Finally, to achieve drug loading, the prepared Ab-Fc-EL-EVs were co-incubated with Quercetin. By optimizing the incubation conditions, Quercetin was efficiently encapsulated into the internal space of the Ab-Fc-EL-EVs. After centrifugation and washing to remove free Quercetin, the engineered EVs loaded with Quercetin, designated as Ab-Fc-EL-EV@Que, were finally obtained.",
+  "heading_context": "2.16 Preparation and characterization of Ab-Fc-EL-EV@Que To prepare Ab-Fc-EL-EV, the isolated Fc-EL-EVs were co-incubated with either the Fc-engineered anti-Prdx1 antibody or control IgG-GFP. Leveraging the specific high-affinity binding of the Z-domain on the surface of Fc-EL-EVs to the Fc fragment, the antibodies were stably conjugated onto the surface of the EVs. After sufficient incubation and washing to remove unbound free antibodies, functionalized Fc-EL-EVs with conjugated antibodies, designated as Ab-Fc-EL-EV, were obtained. Finally, to achieve drug loading, the prepared Ab-Fc-EL-EVs were co-incubated with Quercetin. By optimizing the incubation conditions, Quercetin was efficiently encapsulated into the internal space of the Ab-Fc-EL-EVs. After centrifugation and washing to remove free Quercetin, the engineered EVs loaded with Quercetin, designated as Ab-Fc-EL-EV@Que, were finally obtained.",
+  "anchors": [],
+  "tags": {
+    "has_figure_ref": false,
+    "length": 912
+  }
+}

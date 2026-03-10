@@ -1,0 +1,14 @@
+{
+  "unit_id": "m-0067",
+  "order": 67,
+  "paragraph_index": 87,
+  "text": "For in vivo studies, male C57BL/6J mice, aged six to eight weeks, were subjected to a 12-hour fast prior to randomization into experimental groups: Free DiR, Fc-EV@DiR, Ab-Fc-EL-EV@DiR, and EL-treated Ab-Fc-EL-EV@DiR. Each DiR-labeled formulation was administered at an equivalent DiR concentration of 1 mg/kg. Acute pancreatitis (AP) was established via hourly intraperitoneal injections of caerulein (50 µg/kg; Selleck, Japan, cat. S9690), totaling twelve doses. Following the sixth caerulein administration, the respective formulations were intravenously administered to the mice. Fluorescent signal intensity was quantified using an In Vivo Imaging System (IVIS) after all intravenous injection, which marked the conclusion of the caerulein regimen. For systemic biodistribution analysis, the pancreas and major organs—including the heart, liver, spleen, lung, kidneys, and intestines—were then harvested and imaged ex vivo with the IVIS.",
+  "heading_context": "2.17 Biodistribution and efficacy assessment",
+  "anchors": [
+    "S9690"
+  ],
+  "tags": {
+    "has_figure_ref": true,
+    "length": 942
+  }
+}

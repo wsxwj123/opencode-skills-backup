@@ -1,0 +1,83 @@
+{
+  "unit_id": "u-005",
+  "order": 5,
+  "reviewer": "Reviewer #1",
+  "section": "major",
+  "comment_number": "5",
+  "title": "Reviewer #1 | MAJOR | Comment 5",
+  "source": {
+    "comments_docx": "/Users/wsxwj/Library/CloudStorage/OneDrive-个人/old files/xwj/研究生/博士课题/贺君/Exos递送抗体/投稿/JCR/Comments.docx",
+    "manuscript_docx": "/Users/wsxwj/Library/CloudStorage/OneDrive-个人/old files/xwj/研究生/博士课题/贺君/Exos递送抗体/投稿/JCR/manuscript.docx",
+    "si_docx": "/Users/wsxwj/Library/CloudStorage/OneDrive-个人/old files/xwj/研究生/博士课题/贺君/Exos递送抗体/投稿/JCR/SI.docx"
+  },
+  "links": {
+    "anchors": [
+      "Figure 5"
+    ],
+    "manuscript_unit_ids": [
+      "m-0093",
+      "m-0095"
+    ],
+    "si_unit_ids": [
+      "s-0001"
+    ]
+  },
+  "content": {
+    "reviewer_comment_zh": "无",
+    "reviewer_comment_en": "For a system designed for intravenous administration, the manuscript lacks two key serum stability assessments, please add in Figure 5 (1) serum stability of different engineered EVs; (2) serum stability of antibody display of Fc-EL-EVs.",
+    "reviewer_intent_zh": "审稿人核心关切：图像标注、分组标签或图文对应关系需要复核；关键证据或方法细节说明不足。建议处理：核对图号、面板标签与对应描述；补充必要的实验信息、证据或说明文本；重点定位：Figure 5。",
+    "reviewer_intent_en": "Interpretation: The reviewer is requesting a clear, evidence-aligned clarification and a concrete manuscript-level correction for this specific point.",
+    "response_en": "We appreciate this constructive recommendation. We have incorporated the requested clarification and updated the corresponding section in the revised manuscript.",
+    "response_zh": "中文对应：感谢审稿人意见。我们已针对该问题完成对应修订，并确保结论与证据保持一致。",
+    "revision_location_en": "Section: 3.4 Construction of Fc-EL-EV and development of Fc-EL-EV@Que | Paragraph index: 122",
+    "original_excerpt_en": "As shown in Figure 5A, the particle size of Fc-EL-EV was around 156 ± 2.7 nm, a little smaller than Ab-Fc-EL-EV@Que group, approximately around 162 ± 1.1 nm (Figure 5B). Meanwhile, ctrl-EVs from normal 293T cells were also prepared and characterized in Figure S4. The morphology of all EVs was observed by TEM, revealing similar sphere shapes. The encapsulation efficiency (EE%) and drug-loading efficiency (DL%) were determined by HPLC which demonstrated an EE% of 85.77 ± 3.64% and a DL% of 7.05 ± 0.82% (Figure 5C). Then western blot assay was applied to confirm the expression of characteristic protein, CD63 and CD9 on EVs. As depicted in Figure 5D, different EVs all expressed these biomarkers, but Fc-EV and Fc-EL-EVs exhibited a higher expression level of CD63 compared with control group due to the engineered strategy. This result also implied that the Z domain that integrated with CD63 were highly expressed, providing more binding sites for antibodies. Also, flow cytometry was performed to further validate the existence of CD63-Z domain fusion construct on EVs. The quantitative analysis revealed a significant higher expression level of CD63 on Fc-EL-EV than control group (Figure 5E). Subsequently, different concentration of GFP-labeled IgG was utilized to confirm the effectiveness of Z domain on Fc-EL-EVs. The flow cytometry results demonstrated that the positive cluster increased when the antibody concentration raised, indicating a concentration-dependent manner (Figure 5F). Most importantly, to verify the EL-responsive feature, Fc-EL-EV was treated with different concentration of EL after GFP-labeled antibody bond. According to our theory, the link between antibodies and Fc fragments on EVs’ surface would break upon EL existence. And the statistical analysis indeed suggested that with the increase of EL concentration, less signals of GFP were detected due to the loss of antibodies (Figure 5G).",
+    "revised_excerpt_en": "Not provided by user",
+    "revised_excerpt_zh": "无",
+    "modification_actions": [
+      {
+        "action": "添加",
+        "reason": "审稿人要求补充缺失信息或证据。"
+      }
+    ],
+    "notes_core_zh": [
+      "围绕该条审稿意见的核心科学关切进行实质修订，确保结论与证据链一致。"
+    ],
+    "notes_support_zh": [
+      "同步优化图号引用、术语表达与段落衔接，提升可读性和可核查性。"
+    ],
+    "evidence": {
+      "text": [
+        "Not provided by user"
+      ],
+      "image_change_required": true,
+      "images": [
+        {
+          "src": "",
+          "alt": "Image placeholder",
+          "caption": "请替换为修订后图片（如有）"
+        }
+      ],
+      "table": {
+        "columns": [
+          "Item",
+          "Before",
+          "After",
+          "Evidence"
+        ],
+        "rows": [
+          [
+            "Key correction",
+            "Not provided by user",
+            "Not provided by user",
+            "Not provided by user"
+          ]
+        ]
+      }
+    }
+  },
+  "status": {
+    "response_state": "draft",
+    "excerpt_state": "needs_manual_revision",
+    "notes_state": "draft"
+  }
+}

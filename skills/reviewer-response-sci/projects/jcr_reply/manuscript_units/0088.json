@@ -1,0 +1,20 @@
+{
+  "unit_id": "m-0088",
+  "order": 88,
+  "paragraph_index": 115,
+  "text": "However, the low solubility and bioavailability of Que limited its applications. Given substantial evidence that extracellular vesicles (EVs) enhance the ​​loading efficiency​​ and ​​cellular internalization​​ of poorly soluble drugs, we subsequently isolated EVs derived from HEK-293T cells and loaded them with ​​Que​) (detailed nanoscale characterization provided below). Co-IP results demonstrated that ​​EV-Que​​ significantly enhanced Prdx1 acetylation compared to free Que (Figure 4G). More importantly, these treatments did not affect the total expression level of Prdx1 protein. And cell viability of MPC-38 cells pre-treated by TAC significantly increased under EV@Que protection when compared to that of single Que (Figure S3D). We speculated this may be attributed to the ability of EVs to promote the intracellular uptake of Que. Also, the lipid peroxidation level decreased more in MPC-38 cells after EV@Que intervention (Figure S3E). Apart from cellular verifications, caerulein-induced SAP mice models were utilized (Figure 4H). As shown in Figure 4I, fewer injured areas and inflammatory cells infiltration in pancreas and lung tissues were observed after Que and EV@Que treatment. And analysis of amylase and lipase activity in plasma also demonstrated similar effects (Figure 4J). Eventually, acinar cell apoptosis marked by TUNEL and ferroptosis marked by MDA levels were investigated (Figure 4K-L). Notably, EV@Que demonstrated superior efficacy compared to single Que, substantially reducing both pancreatic apoptosis and ferroptosis and thereby offering enhanced protection. Therefore, these results reveal the specific mechanisms that Que suppressed acinar injury was to promote Prdx1 acetylation and enhance its anti-ROS ability. Furthermore, EVs served as promising delivery vehicles for Que, substantially enhancing its therapeutic efficacy.",
+  "heading_context": "3.3 Quercetin restored Prdx1-mediated antioxidant function in SAP, while extracellular vesicle (EV)-encapsulated quercetin exhibited superior efficacy",
+  "anchors": [
+    "Figure 4G",
+    "Figure S3D",
+    "Figure S3E",
+    "Figure 4H",
+    "Figure 4I",
+    "Figure 4J",
+    "Figure 4K"
+  ],
+  "tags": {
+    "has_figure_ref": true,
+    "length": 1868
+  }
+}

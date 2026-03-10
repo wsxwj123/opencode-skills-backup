@@ -1,0 +1,14 @@
+{
+  "unit_id": "m-0049",
+  "order": 49,
+  "paragraph_index": 61,
+  "text": "Parallel analysis of cellular lipid peroxidation levels was performed with the BODIPY 581/591 C11 probe (Beyotime, S0043S) as specified in the technical manual.",
+  "heading_context": "2.8 Lipid peroxidation analysis",
+  "anchors": [
+    "S0043S"
+  ],
+  "tags": {
+    "has_figure_ref": true,
+    "length": 160
+  }
+}

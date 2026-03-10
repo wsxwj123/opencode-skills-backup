@@ -1,0 +1,14 @@
+{
+  "unit_id": "m-0089",
+  "order": 89,
+  "paragraph_index": 117,
+  "text": "Figure 4. Que contributes to increasing the antioxidant function of Prdx1 in acinar cells, and EVs act as carriers for Que, markedly boosting its treatment effect. (A-B) Cell viability of acinar cells was evaluated using the CCK-8 assay. Taurocholic acid (TAC) was utilized as an agent to induce SAP in vitro in murine MPC-83 cells. (C) After treatment, cells were double-stained with Annexin V-FITC and PI, then examined using flow cytometry to statistically analyze the percentage of cells in each quadrant. (D) After staining cells with BODIPY 581/591 C11, the ratio of fluorescence readings serves as an indicator of cellular lipid peroxidation levels. (E) Protein structure prediction of mouse Prdx1 and virtual screening of drug-target interactions between Prdx1 and Que. (F) Immunofluorescence staining combined with statistical analysis demonstrated alterations in MOF expression in MPC-83 cells following treatment with different concentrations of Que (n = 4). Scale bar, 50 μm. (G) The acetylation level of Prdx1 in MPC-38 cells was evaluated through immunoprecipitation assay. To enhance the solubility and intracellular uptake of Que, encapsulation within extracellular vesicles (EVs) was performed. (H) The schematic illustrates the construction process of the mouse SAP model treated with Que and EV@Que. (I) Representative H&E-stained images of the pancreas and lung tissues. Scale bar, 500 μm. (J) Expression levels of amylase and lipase in plasma (n = 6). (K) Statistical analysis of TUNEL staining results revealed the rate of cell death (n = 6). (L) Measurement of cellular MDA levels (n = 6). Data = Mean ± SD. Statistical analysis was performed by GraphPad Prism (9.5.0). One-way ANOVA using the Tukey’s multiple-comparison test was applied for comparison among three groups. TAC, taurocholate acid; ctrl, control; si, siRNA; n.s, no statistical significance; ac, acetylation; *P<0.05; **P<0.01; ***P<0.001.",
+  "heading_context": "3.3 Quercetin restored Prdx1-mediated antioxidant function in SAP, while extracellular vesicle (EV)-encapsulated quercetin exhibited superior efficacy",
+  "anchors": [
+    "Figure 4"
+  ],
+  "tags": {
+    "has_figure_ref": true,
+    "length": 1928
+  }
+}

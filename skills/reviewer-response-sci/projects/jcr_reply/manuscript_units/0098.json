@@ -1,0 +1,14 @@
+{
+  "unit_id": "m-0098",
+  "order": 98,
+  "paragraph_index": 130,
+  "text": "To further verify the in vivo pancreatic targeting ability, SAP-bearing mice were established and different fluorescence-labeled EVs-based platforms were injected intravenously including free DiR, DiR-Fc-EV, DiR-Ab-Fc-EL-EV with or without EL pre-treatment. This Ab-Fc-EL-EV referred to anti-Prdx1 antibody integrated Fc-EL-EV rather than GFP-IgG, avoiding the interference of GFP fluorescent signals. Three hours after injection, all mice were subjected IVIS imaging to observe biodistribution of fluorescence. It is worth mentioning that we did not use mcherry-labeled EVs here because DiR's fluorescence penetration ability is stronger in in vivo imaging. As shown in Figure 6B to 6F, DiR-Ab-Fc-EL-EV exhibited the best pancreatic targeting ability while in DiR-Ab-Fc-EL-EV + EL group, pre-administrated EL released the Ab from the EVs, disabling the specific accumulation of EVs in SAP sites. Notably, there was some fluorescence in excised intestine which may be attributed to the inflammation expanded from SAP tissues. Collectively, the anti-Prdx1 antibody enabled the Fc-EL-EV@Que pancreatic targeting ability, thus the first challenge of using this preparation for SAP treatment has been resolved.",
+  "heading_context": "3.5 Evaluation of cellular uptake and pancreatic targeting ability of Fc-EL-EV@Que",
+  "anchors": [
+    "Figure 6B"
+  ],
+  "tags": {
+    "has_figure_ref": true,
+    "length": 1206
+  }
+}

@@ -1,0 +1,86 @@
+{
+  "unit_id": "u-001",
+  "order": 1,
+  "reviewer": "Reviewer #1",
+  "section": "major",
+  "comment_number": "1",
+  "title": "Reviewer #1 | MAJOR | Comment 1",
+  "source": {
+    "comments_docx": "/Users/wsxwj/Library/CloudStorage/OneDrive-个人/old files/xwj/研究生/博士课题/贺君/Exos递送抗体/投稿/JCR/Comments.docx",
+    "manuscript_docx": "/Users/wsxwj/Library/CloudStorage/OneDrive-个人/old files/xwj/研究生/博士课题/贺君/Exos递送抗体/投稿/JCR/manuscript.docx",
+    "si_docx": "/Users/wsxwj/Library/CloudStorage/OneDrive-个人/old files/xwj/研究生/博士课题/贺君/Exos递送抗体/投稿/JCR/SI.docx"
+  },
+  "links": {
+    "anchors": [
+      "Figure 4B",
+      "Figure S3D",
+      "S3D"
+    ],
+    "manuscript_unit_ids": [
+      "m-0086",
+      "m-0088"
+    ],
+    "si_unit_ids": [
+      "s-0009",
+      "s-0008"
+    ]
+  },
+  "content": {
+    "reviewer_comment_zh": "无",
+    "reviewer_comment_en": "There is a serious discrepancy in the cell viability data presented for quercetin (Que) treatment in Figure 4B and Figure S3D. The data points and bar graphs clearly indicated that the cell viability in the \"TAC + Que\" group is lower than in the \"TAC\" group alone. This is directly opposite to the stated conclusion in the text, which claimed that Que exhibited a protective effect. This inconsistency is observed in both the main figure and the supplementary figure, suggesting it is not an isolated error. If the data is correct as plotted, it would imply that quercetin exacerbates TAC-induced cell death rather than alleviating it, which would fundamentally contradict the core narrative of the paper regarding quercetin's efficacy. The authors must urgently clarify this discrepancy.",
+    "reviewer_intent_zh": "审稿人核心关切：数据结果与文字表述（或图注）存在一致性风险；图像标注、分组标签或图文对应关系需要复核；关键证据或方法细节说明不足；论证链条表达不够清晰。建议处理：逐项对齐原始数据、图表和正文结论；核对图号、面板标签与对应描述；补充必要的实验信息、证据或说明文本；增强因果逻辑并明确结论边界；重点定位：Figure 4B, Figure S3D, S3D。",
+    "reviewer_intent_en": "Interpretation: The reviewer is requesting a clear, evidence-aligned clarification and a concrete manuscript-level correction for this specific point.",
+    "response_en": "We sincerely thank the reviewer for identifying this critical issue. We have rechecked the corresponding data and revised the related text-figure alignment to ensure that interpretation is consistent with evidence.",
+    "response_zh": "中文对应：感谢审稿人意见。我们已针对该问题完成对应修订，并确保结论与证据保持一致。",
+    "revision_location_en": "Section: 3.3 Quercetin restored Prdx1-mediated antioxidant function in SAP, while extracellular vesicle (EV)-encapsulated quercetin exhibited superior efficacy | Paragraph index: 113",
+    "original_excerpt_en": "As described above, a dual-targeting drug delivery strategy was required regarding the contradiction of Prdx1 functions in SAP, which meant to promote intracellular Prdx1 expression and neutralize extracellular Prdx1. Through literature review and pharmacological screening, we identified quercetin (Que)—a natural flavonoid—as a potent regulator of intracellular Prdx1, exhibiting robust antioxidant and anti-inflammatory properties. As shown in Figure 4A, Que exhibited a protective effect on MPC-38 cells exposed to taurocholate acid (TAC). Interestingly, the efficacy of Que nearly disappeared in Prdx1-knockdown cells (Figure 4B), which indicated the Prdx1-dependent manner of Que efficacy. And flow cytometry and BODIPY 581/591 staining were performed to further verified that the lack of Prdx1 could significantly weaken the effects of Que (Figure 4C-D). Further, after Que intervention, the expression level of Prdx1 was investigated in MPC-38 cells. The results revealed that no significant differences were observed in RNA or protein level of Prdx1 (Figure S3A and S3B), though the concentration of Que rised. Meanwhile, the expression of potential regulatory factors of Prdx1 such as HIF-1α, NRF2 and SP1 did not change evidently (Figure S3C). All evidence proved Que may act through regulating post-translation modification level of Prdx1 rather than its expression.",
+    "revised_excerpt_en": "Not provided by user",
+    "revised_excerpt_zh": "无",
+    "modification_actions": [
+      {
+        "action": "修改",
+        "reason": "审稿人指出表述或图文一致性问题，需定点修订。"
+      }
+    ],
+    "notes_core_zh": [
+      "围绕该条审稿意见的核心科学关切进行实质修订，确保结论与证据链一致。"
+    ],
+    "notes_support_zh": [
+      "同步优化图号引用、术语表达与段落衔接，提升可读性和可核查性。"
+    ],
+    "evidence": {
+      "text": [
+        "Not provided by user"
+      ],
+      "image_change_required": true,
+      "images": [
+        {
+          "src": "",
+          "alt": "Image placeholder",
+          "caption": "请替换为修订后图片（如有）"
+        }
+      ],
+      "table": {
+        "columns": [
+          "Item",
+          "Before",
+          "After",
+          "Evidence"
+        ],
+        "rows": [
+          [
+            "Key correction",
+            "Not provided by user",
+            "Not provided by user",
+            "Not provided by user"
+          ]
+        ]
+      }
+    }
+  },
+  "status": {
+    "response_state": "draft",
+    "excerpt_state": "needs_manual_revision",
+    "notes_state": "draft"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "unit_id": "m-0097",
+  "order": 97,
+  "paragraph_index": 129,
+  "text": "The primary design was to develop a multi-drug-loading platform (including antibodies and small molecular drugs) based on the engineered EVs. Therefore, we mainly evaluated the pancreatic targeting ability of Fc-EL-EV platform. Firstly, we performed in vitro experiments to observe cellular uptake of Fc-EL-EV using confocal laser scanning microscope (CLSM). Due to the original engineered EVs had already labeled by mCherry protein in the fusion construct, to further investigate the binding antibody, GFP-IgG was added to represent the loaded antibodies. As shown in Figure 6A, free antibodies exhibited much weaker ability to enter MPC-38 cells when compared to AbGFP-Fc-EL-EVmCherry integrated antibodies. It was observed that normal EVs without gene manipulation could not effectively load antibodies, thus intracellular green signals lacked while red signals accumulated. Only Fc-EL-EVmCherry could integrate with GFP-IgG, and the CLSM images showed a large amount of red and green signals co-localization in MPC-38 cells. However, if we added EL before AbGFP-Fc-EL-EVmCherry treating cells, the GFP-IgG would release from the vesicles and the fluorescent images demonstrated a similar result with GFP-control-EV group. Therefore, we have successfully demonstrated that our formulation could release antibodies in the SAP region with high EL existence, and carry drugs into cells, exerting the dual effects of neutralizing extracellular Prdx1 and promoting intracellular Prdx1 expression.",
+  "heading_context": "3.5 Evaluation of cellular uptake and pancreatic targeting ability of Fc-EL-EV@Que",
+  "anchors": [
+    "Figure 6A"
+  ],
+  "tags": {
+    "has_figure_ref": true,
+    "length": 1494
+  }
+}

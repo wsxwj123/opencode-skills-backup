@@ -1,0 +1,12 @@
+{
+  "unit_id": "m-0063",
+  "order": 63,
+  "paragraph_index": 82,
+  "text": "To construct the plasmid expressing the engineered CD63 fusion protein, we designed a gene sequence comprising human CD63, an elastase-sensitive cleavage sequence (EL), a Z-domain, and an mCherry reporter gene. Specifically, human CD63 (NCBI Accession: NM_001780.6) was utilized as the anchoring protein backbone. A functional module was precisely inserted within an extracellular loop of the CD63 protein, specifically between amino acid residues Gln36 and Leu37. This inserted module was designed with the structure: elastase-sensitive cleavage sequence (EL)-Z-domain-elastase-sensitive cleavage sequence (EL). The EL sequence was engineered to be specifically recognized and cleaved by human neutrophil elastase, enabling the conditional release of the Z-domain. The Z-domain functions as an Fc-binding domain, designed for specific conjugation with antibodies containing an Fc fragment. Furthermore, the mCherry fluorescent protein was fused to the C-terminus of the CD63 protein, serving as a reporter gene for subsequent cell tracing and EV visualization. Therefore, the gene sequence was synthesized by GENECHEM (China), and subsequently cloned into the mammalian expression vector GV717. The cloning strategy employed traditional restriction enzyme digestion and ligation, utilizing BglII restriction sites for insertion. All constructed plasmids were verified by Sanger sequencing (Sangon Biotech (Shanghai) Co., Ltd.) to confirm their accuracy. To obtain the engineered EVs, HEK-293T cells were transfected with the Fc-EL-PET22b plasmid. After successful transfection, cells were induced into apoptosis by staurosporine. After sufficient apoptosis, cell supernatant was collected, and extracellular vesicles overexpressed the engineered CD63 fusion protein were isolated and enriched through centrifugation (500 g for 10 min, 12,000 g for 30 min and 100,000 g for 6 hours) and purification. These engineered EVs were collected and stored at -80 ℃ for later study.",
+  "heading_context": "2.15 Construction of engineered EVs",
+  "anchors": [],
+  "tags": {
+    "has_figure_ref": false,
+    "length": 1973
+  }
+}

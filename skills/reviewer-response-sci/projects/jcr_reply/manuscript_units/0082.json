@@ -1,0 +1,17 @@
+{
+  "unit_id": "m-0082",
+  "order": 82,
+  "paragraph_index": 107,
+  "text": "To assess the therapeutic potential and optimal dosage of an Anti-Prdx1 antibody in SAP, we employed an SAP mouse model induced by twelve hourly caerulein injections. Mice received two different antibody concentrations (5 mg/kg and 10 mg/kg), administered once the day before induction and again on the day of induction (Figure 3H). H&E staining images of both pancreatic and lung tissues revealed that this antibody treatment (10 mg/kg of the anti-Prdx1) notably attenuated the characteristic pathological lung damage in SAP (Figure 3I). And a marked reduction in the infiltration of key inflammatory cells—specifically neutrophils and M1 macrophages were observed following antibody administration (Figure 3J to 3K). It was noted that the anti-Prdx1 therapy exhibited a concentration-dependent manner. Furthermore, to further elucidate the effect of the Anti-Prdx1 antibody on macrophages polarization in SAP, we examined the expression of iNOS and CD206, respectively, and found that 10 mg/kg of Anti-Prdx1 antibody can reduce the proportion of M1 macrophages while increasing the proportion of M2 macrophages (Figure 3L to 3M). Taken together, these compelling data strongly suggest that neutralizing extracellular Prdx1 really offers a promising therapeutic avenue against SAP. This approach definitely warrants deeper investigation.",
+  "heading_context": "3.2 Extracellular Prdx1 significantly promoted macrophage-mediated inflammation in SAP through a TLR3-dependent pathways",
+  "anchors": [
+    "Figure 3H",
+    "Figure 3I",
+    "Figure 3J",
+    "Figure 3L"
+  ],
+  "tags": {
+    "has_figure_ref": true,
+    "length": 1338
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "unit_id": "m-0081",
+  "order": 81,
+  "paragraph_index": 106,
+  "text": "As reported, Prdx1 could activate macrophages via binding to TLRs. Using our previously published transcriptome dataset, we investigated the expression profiles of the TLR family members (TLR1-9, TLR11-13) in macrophages, comparing their levels before and after treatment with different acinar cells[26]. Our analysis revealed a striking observation: among all surveyed TLRs, TLR3 exhibited the most significant increase in expression upon stimulation by acinar cells (Figure 3D). This result was further verified by qPCR experiment in Figure 3E. To confirm that Prdx1 exerts its effects via TLR3, we treated BMDMs with recombinant Prdx1 (rPrdx1) and silenced TLR3 using siRNA (Figure 3F). This intervention revealed that silencing TLR3 significantly attenuated the rPrdx1-induced nuclear translocation of NF-κB (Figure 3F). Besides, analysis of macrophage polarization showed that TLR3 knockdown not only reduced M1 polarization but also concurrently increased the proportion of M2 macrophages (Figure 3G). Collectively, these data strongly support the conclusion that acinar cell-derived Prdx1 drives M1 polarization primarily through the TLR3/NF-κB axis.",
+  "heading_context": "3.2 Extracellular Prdx1 significantly promoted macrophage-mediated inflammation in SAP through a TLR3-dependent pathways",
+  "anchors": [
+    "Figure 3D",
+    "Figure 3E",
+    "Figure 3F",
+    "Figure 3F",
+    "Figure 3G"
+  ],
+  "tags": {
+    "has_figure_ref": true,
+    "length": 1157
+  }
+}

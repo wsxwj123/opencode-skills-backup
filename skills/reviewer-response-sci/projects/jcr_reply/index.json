@@ -1,0 +1,67 @@
+{
+  "toc": {
+    "root": "审稿回复目录",
+    "reviewers": [
+      {
+        "id": "r1",
+        "label": "Reviewer #1",
+        "sections": [
+          {
+            "id": "r1-s1",
+            "label": "MAJOR",
+            "items": [
+              {
+                "unit_id": "u-001"
+              },
+              {
+                "unit_id": "u-002"
+              },
+              {
+                "unit_id": "u-003"
+              },
+              {
+                "unit_id": "u-004"
+              },
+              {
+                "unit_id": "u-005"
+              },
+              {
+                "unit_id": "u-006"
+              },
+              {
+                "unit_id": "u-007"
+              }
+            ]
+          },
+          {
+            "id": "r1-s2",
+            "label": "MINOR",
+            "items": [
+              {
+                "unit_id": "u-008"
+              },
+              {
+                "unit_id": "u-009"
+              },
+              {
+                "unit_id": "u-010"
+              },
+              {
+                "unit_id": "u-011"
+              },
+              {
+                "unit_id": "u-012"
+              },
+              {
+                "unit_id": "u-013"
+              },
+              {
+                "unit_id": "u-014"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

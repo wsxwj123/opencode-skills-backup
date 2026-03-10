@@ -1,0 +1,12 @@
+{
+  "unit_id": "m-0114",
+  "order": 114,
+  "paragraph_index": 154,
+  "text": "The oxidative stress dysfunction in pancreatitis microenvironment resulted in multiple adverse consequences like cascade inflammation and acinar cell death[31–33]. As an essential key regulator, Prdx1 functioned contradictorily. The intracellular Prdx1 could mitigated cell death by counteracting oxidative damage [34] while extracellular Prdx1 acted as a novel DAMP to worsen macrophage-mediated inflammation. Therefore, designing a comprehensive drug delivery system to resolve this dilemma was important for SAP treatment from molecular and cellular levels. According to literature and our preliminary research, we successfully developed an engineered EVs-based drug delivery system Ab-Fc-EL-EV@Que. This innovative platform encapsulated quercetin and also overexpressed Z domain in CD63 transmembrane protein to selectively bind antibodies (in this research, anti-Prdx1 antibody). Most importantly, it was engineered to release antibodies once triggered by elastase cleavage in SAP sites. Our results demonstrated that Ab-Fc-EL-EV@Que achieves effective targeting of pancreatic tissue. Upon encountering elevated elastase levels in the injured pancreas, the system released anti-Prdx1 antibodies to neutralize extracellular Prdx1 and successfully downregulated the TLR3/NF-κB pathway in pro-inflammatory macrophages cells for the cascade inflammation responses inhibition. On the other hand, EVs loading Que enabled more cellular uptake due to its biocompatibility, thereby significantly mitigated oxidative stress via Prdx1 acetylation and then reduced cell ferroptosis and apoptosis. Nevertheless, there are severe problems needed to be further addressed. First, more comprehensive evaluations are still needed including long-term safety, pharmacokinetics, and potential immunogenicity in larger animal models. Such studies are crucial before moving towards clinical application. Second, challenges related to manufacturing need to be addressed. We must consider both the scalability of engineered EV production and the development of cost-effective methods for clinical use. Also, it is important to explore the potential synergistic effects of Ab-Fc-EL-EV@Que with other therapeutic approaches such as common supportive therapies would be crucial for establishing its broad clinical applicability.",
+  "heading_context": "3.8 Regulatory mechanism exploration of Ab-Fc-EL-EV@Que against SAP",
+  "anchors": [],
+  "tags": {
+    "has_figure_ref": false,
+    "length": 2305
+  }
+}

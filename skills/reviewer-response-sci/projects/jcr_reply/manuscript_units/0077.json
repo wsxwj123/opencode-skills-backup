@@ -1,0 +1,14 @@
+{
+  "unit_id": "m-0077",
+  "order": 77,
+  "paragraph_index": 100,
+  "text": "Figure 2. The deficiency of Prdx1 in pancreatic acinar cells exacerbates SAP, whereas administration of Prdx1-AAV8 alleviates SAP. (A) Representative immunofluorescence images illustrate the expression of Prdx1 (green) in acinar cells (Amy, red), islet cells (Insulin, red), and ductal cells (KRT19, red) within pancreatic tissues from normal, AP, and SAP models. Scale bar, 50 μm. (B) A schematic diagram illustrates the strategy for generating Prdx1 PcKO mice, in which Prdx1 flox mice were bred with acinar cell-specific Cre driver mice (ptf1α-Cre). (C) Genotype identification of PcKO mice. (D) Representative immunofluorescence images of Prdx1 (green) expression in the pancreatic tissues of Flox and PcKO mice. Scale bar, 50 μm. (E-F) SAP models were established in Flox and PcKO mice by caerulein induction for 12 times at one hour interval, and pancreatic and lung tissues were subjected to H&E staining and statistical analysis (n = 8). Scale bar, 50 μm. (G) Plasma amylase and lipase activities were measured in Flox and PcKO mice (n = 8). (H-I) Representative images and statistical analysis of CD68 (green) and Ly6G (green) in the pancreatic tissues of Flox and PcKO mice after caerulein-induced SAP (n = 8); CD68 serves as a specific marker of macrophage, Ly6G as a marker of neutrophil, and Amy as a marker for pancreatic acinar cells. Scale bar, 50 μm. (J) Relative expression levels of Il-1β and Il-6 RNA in the pancreatic tissues of Flox and PcKO mice following caerulein-induced SAP (n = 8). (K) Fluorescence imaging of the pancreas after AAV8 administration; AAV8 carrying GFP-labeled green fluorescent protein. (L) Schematic diagram of the strategy for overexpressing Prdx1 in the pancreas using AAV8. Two weeks after Prdx1-AAV8 injection, SAP was induced by caerulein administration. (M) Representative immunofluorescence images and statistical analysis of Prdx1 (green) in pancreatic tissue (n = 7). Scale bar, 50 μm. (N) Comparison of amylase activity in plasma in each group (n = 7). (O-P) H&E staining and histological score of pancreatic and lung tissues in each group (n = 7). Scale bar, 50 μm. Data = Mean ± SD. Statistical analysis was performed by GraphPad Prism (9.5.0). T test was used for the comparison between two groups. One-way ANOVA using the Tukey’s multiple-comparison test was applied for comparison among three groups. Amy, amylase; ctrl, control; *P<0.05; **P<0.01; ***P<0.001.",
+  "heading_context": "3.1 Intracellular Prdx1 deficiency in acinar cells exacerbates SAP by inducing cell apoptosis and ferroptosis",
+  "anchors": [
+    "Figure 2"
+  ],
+  "tags": {
+    "has_figure_ref": true,
+    "length": 2420
+  }
+}

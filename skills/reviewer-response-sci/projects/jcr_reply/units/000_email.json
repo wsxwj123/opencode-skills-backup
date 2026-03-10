@@ -1,0 +1,51 @@
+{
+  "unit_id": "u-000-email",
+  "order": 0,
+  "reviewer": "all",
+  "section": "email",
+  "comment_number": "0",
+  "title": "回复审稿人的邮件",
+  "source": {
+    "comments_docx": "/Users/wsxwj/Library/CloudStorage/OneDrive-个人/old files/xwj/研究生/博士课题/贺君/Exos递送抗体/投稿/JCR/Comments.docx",
+    "manuscript_docx": "/Users/wsxwj/Library/CloudStorage/OneDrive-个人/old files/xwj/研究生/博士课题/贺君/Exos递送抗体/投稿/JCR/manuscript.docx",
+    "si_docx": "/Users/wsxwj/Library/CloudStorage/OneDrive-个人/old files/xwj/研究生/博士课题/贺君/Exos递送抗体/投稿/JCR/SI.docx"
+  },
+  "links": {
+    "anchors": [],
+    "manuscript_unit_ids": [],
+    "si_unit_ids": []
+  },
+  "content": {
+    "reviewer_comment_zh": "",
+    "reviewer_comment_en": "",
+    "response_en": "Dear Editor and Reviewers,\n\nThank you for your constructive comments. We revised the manuscript point by point and addressed each concern below.\n\nSincerely,\nThe Authors",
+    "revised_excerpt_en": "",
+    "notes_core_zh": [],
+    "notes_support_zh": [],
+    "evidence": {
+      "text": [],
+      "images": [
+        {
+          "src": "",
+          "alt": "",
+          "caption": ""
+        }
+      ],
+      "table": {
+        "columns": [
+          ""
+        ],
+        "rows": [
+          [
+            ""
+          ]
+        ]
+      }
+    }
+  },
+  "status": {
+    "response_state": "final",
+    "excerpt_state": "missing",
+    "notes_state": "final"
+  }
+}

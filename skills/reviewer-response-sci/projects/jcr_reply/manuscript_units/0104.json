@@ -1,0 +1,14 @@
+{
+  "unit_id": "m-0104",
+  "order": 104,
+  "paragraph_index": 138,
+  "text": "Figure 7. Efficacy evaluation of Ab-Fc-EL-EV@Que on SAP-simulated co-culture system. Ab-Fc-EL-EV@Que exhibited a strong protective effect on acinar cells and suppression of pro-inflammation effect in the in vitro co-culture system. (A) The diagram illustrates the co-culture system of BMDMs and MPC-83 cells under TAC intervention, serving as an in vitro simulation model. (B-C) Cells were treated with an antibody marked by GFP (green), EVs isolated from 293T cells transfected with a fusion plasmid encoding CD63, Z domain, and mCherry (red); nuclei were counterstained with DAPI (blue). Scale bar, 10 μm. (D) GFP signals in the cell supernatant were quantified and subsequently analyzed statistically (n = 4). (E-F) Representative immunofluorescence staining images of CD86 and CD206 in BMDMs, accompanied by statistical analysis (n = 6). Scale bar, 50 μm. (G) The mRNA expression level of Il-1β in BMDMs was determined by qPCR (n = 4). (H) Representative immunofluorescence staining images and statistical analysis of NF-κB in BMDMs (n = 6). Scale bar, 50 μm. (I) Cell viability was evaluated using the CCK8 assay (n = 4). (J) Lipid peroxidation levels in cells were assessed using BODIPY 581/591 C11 (n = 4). (K) Cell apoptosis rates were assessed through flow cytometry analysis. Data = Mean ± SD. Statistical analysis was performed by GraphPad Prism (9.5.0). One-way ANOVA using the Tukey’s multiple-comparison test was applied for comparison among three groups. Ctrl, control; n.s, no significance; nc, negative control; *P<0.05; **P<0.01; ***P<0.001.",
+  "heading_context": "3.6 In vitro efficacy assessment of Ab-Fc-EL-EV@Que on acinar cells and BMDMs co-culture system",
+  "anchors": [
+    "Figure 7"
+  ],
+  "tags": {
+    "has_figure_ref": true,
+    "length": 1559
+  }
+}

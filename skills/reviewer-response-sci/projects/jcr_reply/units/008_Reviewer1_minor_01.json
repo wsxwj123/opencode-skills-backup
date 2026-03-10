@@ -1,0 +1,82 @@
+{
+  "unit_id": "u-008",
+  "order": 8,
+  "reviewer": "Reviewer #1",
+  "section": "minor",
+  "comment_number": "1",
+  "title": "Reviewer #1 | MINOR | Comment 1",
+  "source": {
+    "comments_docx": "/Users/wsxwj/Library/CloudStorage/OneDrive-个人/old files/xwj/研究生/博士课题/贺君/Exos递送抗体/投稿/JCR/Comments.docx",
+    "manuscript_docx": "/Users/wsxwj/Library/CloudStorage/OneDrive-个人/old files/xwj/研究生/博士课题/贺君/Exos递送抗体/投稿/JCR/manuscript.docx",
+    "si_docx": "/Users/wsxwj/Library/CloudStorage/OneDrive-个人/old files/xwj/研究生/博士课题/贺君/Exos递送抗体/投稿/JCR/SI.docx"
+  },
+  "links": {
+    "anchors": [],
+    "manuscript_unit_ids": [
+      "m-0037",
+      "m-0086",
+      "m-0093"
+    ],
+    "si_unit_ids": [
+      "s-0011"
+    ]
+  },
+  "content": {
+    "reviewer_comment_zh": "无",
+    "reviewer_comment_en": "The authors should provide the flow cytometry gating strategy.",
+    "reviewer_intent_zh": "审稿人核心关切：该意见要求作者就特定科学点提供更充分、可核查的修订。建议处理：在对应段落给出定点修改并说明修改依据。",
+    "reviewer_intent_en": "Interpretation: The reviewer is requesting a clear, evidence-aligned clarification and a concrete manuscript-level correction for this specific point.",
+    "response_en": "Thank you for this helpful suggestion. We have revised the relevant text or figure presentation accordingly and rechecked consistency across the manuscript.",
+    "response_zh": "中文对应：感谢审稿人意见。我们已针对该问题完成对应修订，并确保结论与证据保持一致。",
+    "revision_location_en": "Section: 2.4 Immunohistochemistry (IHC) and Immunofluorescence | Paragraph index: 46",
+    "original_excerpt_en": "After determining cell concentration via hemocytometer, aliquots containing 1×106 cells were prepared in sterile microcentrifuge tubes for immunophenotyping. An antibody cocktail (viability staining, CD11b, CD8a, Ly6G, F4/80, Ly6C and CD4) was added, all obtained from BD Pharmingen. Antibody incubation proceeded for 45 minutes under protected light conditions at ambient temperature (25±2°C). Post-staining processing included two PBS washes (1000 ×g, 5 min), cellular fixation with 4% paraformaldehyde for 15 min, and final resuspension in 300 μL flow cytometry staining buffer. Flow cytometric analysis was performed within 24 hours using a BD LSRFortessa system (BD Biosciences) with FACSDiva acquisition software. Compensation and population gating were executed in FlowJo v11 (Tree Star) employing a four-step analytical strategy.",
+    "revised_excerpt_en": "Not provided by user",
+    "revised_excerpt_zh": "无",
+    "modification_actions": [
+      {
+        "action": "添加",
+        "reason": "审稿人要求补充缺失信息或证据。"
+      }
+    ],
+    "notes_core_zh": [
+      "针对该条意见完成规范化修订（术语、图注、编号或排版），并逐项核对对应位置。"
+    ],
+    "notes_support_zh": [
+      "进行全文一致性校对，避免同类细节问题重复出现。"
+    ],
+    "evidence": {
+      "text": [
+        "Not provided by user"
+      ],
+      "image_change_required": true,
+      "images": [
+        {
+          "src": "",
+          "alt": "Image placeholder",
+          "caption": "请替换为修订后图片（如有）"
+        }
+      ],
+      "table": {
+        "columns": [
+          "Item",
+          "Before",
+          "After",
+          "Evidence"
+        ],
+        "rows": [
+          [
+            "Key correction",
+            "Not provided by user",
+            "Not provided by user",
+            "Not provided by user"
+          ]
+        ]
+      }
+    }
+  },
+  "status": {
+    "response_state": "draft",
+    "excerpt_state": "needs_manual_revision",
+    "notes_state": "draft"
+  }
+}

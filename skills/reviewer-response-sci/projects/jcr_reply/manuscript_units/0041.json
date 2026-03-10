@@ -1,0 +1,12 @@
+{
+  "unit_id": "m-0041",
+  "order": 41,
+  "paragraph_index": 52,
+  "text": "Total RNA was isolated with Trizol reagent (Invitrogen, USA). RNA integrity and concentration were analyzed using a Nanodrop ND-1000 spectrophotometer (Thermo Fisher Scientific, USA). First-strand cDNA was synthesized from total RNA using the High-Capacity cDNA Reverse Transcription Kit (Thermo Fisher Scientific, USA). qPCR reactions (20 μL total volume) were performed with Genious 2X SYBR Green Fast qPCR Mix (Abclonal, China) on a LightCycler®96 instrument (Roche Diagnostics GmbH, USA). Data were analyzed with LightCycler®96 SW1.1 software. The primer sequences were:",
+  "heading_context": "2.7 Quantitative real-time PCR (q-PCR)",
+  "anchors": [],
+  "tags": {
+    "has_figure_ref": false,
+    "length": 574
+  }
+}

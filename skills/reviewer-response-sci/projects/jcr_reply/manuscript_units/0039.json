@@ -1,0 +1,12 @@
+{
+  "unit_id": "m-0039",
+  "order": 39,
+  "paragraph_index": 49,
+  "text": "Use the PierceTM Co-IP Kit (Thermo Fisher Scientific, USA) in accordance with the manufacturer's instructions. In brief, after harvesting MPC-38 cells, cell lysates were prepared using a lysis buffer supplemented with combined protease and phosphatase inhibitors (Thermo Fisher, USA). A fraction of the lysate was reserved as input control. The remaining lysate was adjusted to a final volume of 750 μl with IP lysis buffer, then incubated with Protein G agarose beads and IgG antibody at 4 °C for 1.5 hours. Following three washes with pre-chilled D-PBS (Biological Industries, Israel), both IP and input samples were mixed with 2× protein loading buffer (DingGuo Changsheng Biotech, China). Immune complexes were eluted by boiling in gel loading buffer, collected by centrifugation, and stored at -20 °C.",
+  "heading_context": "2.4 Immunohistochemistry (IHC) and Immunofluorescence",
+  "anchors": [],
+  "tags": {
+    "has_figure_ref": false,
+    "length": 806
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "unit_id": "m-0015",
+  "order": 15,
+  "paragraph_index": 19,
+  "text": "Despite the inherent advantages of EVs, a significant challenge remained: once therapeutic antibodies are conjugated to the surface of EVs, the indiscriminate endocytosis of EVs via transmembrane proteins often leads to the internalization of antibodies into target cells[25]. For antibodies designed to neutralize extracellular DAMPs (such as Prdx1), this intracellular trafficking would inactivate their function, severely compromising their therapeutic efficacy because they cannot interact with extracellular targets. To overcome this critical obstacle and leverage the unique dual functionality of Prdx1, we designed a novel, spatiotemporally controlled elastase-responsive antibody release strategy. Capitalizing on the significantly elevated levels of elastase—a key protease—in the inflammatory microenvironment of severe acute pancreatitis, we meticulously engineered the Z-domain region of the Anti-Prdx1 antibody with an embedded elastase-responsive linker. This innovative design ensures that upon arrival at the inflammatory center, locally enriched elastase enzymatically cleaves the linker, releasing the Anti-Prdx1 antibody into the extracellular environment. This precisely targeted \"in situ\" release enables the antibody to potently scavenge and neutralize extracellular Prdx1, effectively mitigating its pro-inflammatory DAMP activity. Crucially, the EVs, now detached from the antibody on their surface, are subsequently endocytosed by pancreatic acinar cells. Within the intracellular environment, co-encapsulated quercetin is then released, synergistically acting by enhancing endogenous antioxidant pathways, protecting intracellular Prdx1 function, and directly safeguarding acinar cells from oxidative damage. This precisely orchestrated, sequential dual-mechanism delivery represents a breakthrough advancement in targeted nanomedicine for severe inflammatory diseases.",
+  "heading_context": "",
+  "anchors": [],
+  "tags": {
+    "has_figure_ref": false,
+    "length": 1895
+  }
+}

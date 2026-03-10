@@ -1,0 +1,14 @@
+{
+  "unit_id": "m-0107",
+  "order": 107,
+  "paragraph_index": 143,
+  "text": "Figure 8. Ab-Fc-EL-EV@Que exhibited significant protective effects on acinar cells and anti-inflammation effect on BMDMs in SAP models. (A) Diagram illustrating the construction of the in vivo validation experimental model. (B-C) Plasma amylase and lipase levels were measured (n=9). (D) Representative H&E staining images of pancreatic and lung tissues, along with histological analysis score (n = 9). Scale bar, 500 μm. (E) Representative images of TUNEL staining in pancreatic tissue and statistical analysis (n = 9). Scale bar, 50 μm. (F-H) Representative immunofluorescent staining images of CD68, Ly6G, CD206, and iNOS in pancreatic tissue and the corresponding statistical analysis (n = 9). Scale bar, 50 μm. Data = Mean ± SD. Statistical analysis was performed by GraphPad Prism (9.5.0). One-way ANOVA using the Tukey’s multiple-comparison test was applied for comparison among three groups. Nc, negative control; ctrl, control; *P<0.05; **P<0.01; ***P<0.001.",
+  "heading_context": "3.7 In vivo therapeutic efficacy evaluation of Ab-Fc-EL-EV@Que against SAP",
+  "anchors": [
+    "Figure 8"
+  ],
+  "tags": {
+    "has_figure_ref": true,
+    "length": 967
+  }
+}

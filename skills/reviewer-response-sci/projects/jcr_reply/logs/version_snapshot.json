@@ -1,0 +1,52 @@
+{
+  "generated_at_utc": "2026-02-28T14:12:39.342833+00:00",
+  "project_root": "/Users/wsxwj/Desktop/opencode file/reviewer-response-sci/projects/jcr_reply",
+  "output_html": "/Users/wsxwj/Desktop/opencode file/reviewer-response-sci/projects/jcr_reply/reviewer_response_full_catalog.html",
+  "inputs": {
+    "comments": "/Users/wsxwj/Library/CloudStorage/OneDrive-个人/old files/xwj/研究生/博士课题/贺君/Exos递送抗体/投稿/JCR/Comments.docx",
+    "manuscript": "/Users/wsxwj/Library/CloudStorage/OneDrive-个人/old files/xwj/研究生/博士课题/贺君/Exos递送抗体/投稿/JCR/manuscript.docx",
+    "si": "/Users/wsxwj/Library/CloudStorage/OneDrive-个人/old files/xwj/研究生/博士课题/贺君/Exos递送抗体/投稿/JCR/SI.docx"
+  },
+  "files": [
+    {
+      "path": "/Users/wsxwj/Desktop/opencode file/reviewer-response-sci/scripts/build_full_package.py",
+      "sha256": "f55fb4f560a2347de8c03174258e961c1057837e720784818477537cefb0499c",
+      "size": 36313
+    },
+    {
+      "path": "/Users/wsxwj/Desktop/opencode file/reviewer-response-sci/scripts/strict_gate.py",
+      "sha256": "314f604ebd2489ea525ce7c6aea4c242bc7875bb6ff773c1ffe1c8dc0c4f6a8a",
+      "size": 5671
+    },
+    {
+      "path": "/Users/wsxwj/Desktop/opencode file/reviewer-response-sci/scripts/html_format_check.py",
+      "sha256": "4442e0cc20b77f98bd7e5a488d270221a47511949d09a8abd39786aaba3019d4",
+      "size": 3053
+    },
+    {
+      "path": "/Users/wsxwj/Desktop/opencode file/reviewer-response-sci/scripts/render_from_atomic_json.py",
+      "sha256": "77f8e1d8ab11468ef99d9a35f6dba69add2be7653813decbbb92a96366fb9645",
+      "size": 1117
+    },
+    {
+      "path": "/Users/wsxwj/Desktop/opencode file/reviewer-response-sci/SKILL.md",
+      "sha256": "3233be7f2a8fc218337d6daef5ff50f32fbf4288d4214f1719696cc36db3b985",
+      "size": 6822
+    },
+    {
+      "path": "/Users/wsxwj/Desktop/opencode file/reviewer-response-sci/projects/jcr_reply/index.json",
+      "sha256": "2e5037b749c96f14a833efd792eb6856e66a7cbe4d377d7723d3ffd1319fd166",
+      "size": 1364
+    },
+    {
+      "path": "/Users/wsxwj/Desktop/opencode file/reviewer-response-sci/projects/jcr_reply/project_state.json",
+      "sha256": "7b1e078bd209df921d2d45d09862309f513341f19af81b316518e84ca0cf42e1",
+      "size": 794
+    },
+    {
+      "path": "/Users/wsxwj/Desktop/opencode file/reviewer-response-sci/projects/jcr_reply/reviewer_response_full_catalog.html",
+      "sha256": "2350a910961720fe5bb3c286fa26586306016d069b49a1e377c4a050e5dd337a",
+      "size": 89254
+    }
+  ]
+}

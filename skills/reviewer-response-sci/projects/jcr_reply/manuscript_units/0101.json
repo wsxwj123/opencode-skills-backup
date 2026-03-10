@@ -1,0 +1,17 @@
+{
+  "unit_id": "m-0101",
+  "order": 101,
+  "paragraph_index": 135,
+  "text": "To evaluate the therapeutic efficacy of the Ab-Fc-EL-EV@Que formulation, we employed a co-culture system of BMDMs and MPC-38 cells as a relevant in vitro model (Figure 7A). As mentioned above, we used GFP-IgG to replace loaded antibody for labeling. Meanwhile, the fusion construct was also labeled by mCherry. In brief, we pre-treated MPC-38 cells with TAC to induce cell damage for SAP simulation and put them in the upper chamber, while primary BMDMs were cultured in the lower chamber. Then we added AbGFP-Fc-EL-EVmCherry@Que in the lower chamber. Strikingly, immunofluorescence staining assays revealed that the uptake ratios of EVmCherry groups were significantly increased. However, a markedly higher extracellular concentration of GFP signals were detected in EL-treated AbGFP-Fc-EL-EVmCherry@Que group when compared with single AbGFP-Fc-EL-EVmCherry@Que, indicating the successful antibody release outside cells by elastase (Figure 7B and 7C). Meanwhile, the GFP signals in cell supernatants were also determined. Free GFP-IgG antibodies exhibited the strongest extracellular signals due to its weak cellular uptake efficiency. And EL-treated group released more antibodies in supernatant when compared to untreated groups, same as the results in Figure 7B and 7C (Figure 7D).",
+  "heading_context": "3.6 In vitro efficacy assessment of Ab-Fc-EL-EV@Que on acinar cells and BMDMs co-culture system",
+  "anchors": [
+    "Figure 7A",
+    "Figure 7B",
+    "Figure 7B",
+    "Figure 7D"
+  ],
+  "tags": {
+    "has_figure_ref": true,
+    "length": 1285
+  }
+}

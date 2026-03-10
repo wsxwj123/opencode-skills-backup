@@ -1,0 +1,15 @@
+{
+  "unit_id": "m-0109",
+  "order": 109,
+  "paragraph_index": 146,
+  "text": "​​Previous data revealed a localization-dependent duality of Prdx1 in SAP: (1) Intracellular Prdx1 exerts essential antioxidant protection by scavenging ROS in acinar cells; (2) Extracellularly, it acts as a proinflammatory DAMP recognized by BMDMs, exacerbating tissue damage via TLR3-mediated signaling. Regarding the dilemma, Que in Ab-Fc-EL-EV@Que could promote the acetylation of intracellular Prdx1 within acinar cells, dramatically enhancing the antioxidant capacity of Prdx1 and leading to minimized cell apoptosis and ferroptosis. Meanwhile, extracellular Prdx1 neutralized with anti-Prdx1 antibody to eliminate macrophage-mediated inflammation via suppression of the TLR3/NF-κB pathway in SAP. Consequently, we sought to determine if Ab-Fc-EL-EV@Que exerted the same mechanism of action in SAP mice model. We first observed similar alleviation phenomenon in SAP after treatments. DCFH-DA probe was commonly used to label ROS. Fluorescent images in Figure 9A showed that Ab-FC-EL-Que-EV reduced ROS content much more than single Que or Fc-EV@Que. We speculated that though Que exerted pro-Prdx1 effect, it could not work without pancreatic targeting when lack of specific antibodies. Considering the DAMP role of extracellular Prdx1, NF-κB would be activated in macrophages to induce the transcription of inflammasome components and subsequently promotes the cleavage of caspase 1, thereby synergistically amplifying the inflammatory response[29]. It is well-known that caspase 1 belongs to the family of inflammatory caspases and serves as a key effector molecule within the inflammasome[30]. However, we observed the lowest signal intensity of NF-κB and caspase 1 in Ab-Fc-EL-EV@Que-treated SAP pancreas, indicating a downregulated inflammation response (Figure 9B and 9C).",
+  "heading_context": "3.8 Regulatory mechanism exploration of Ab-Fc-EL-EV@Que against SAP",
+  "anchors": [
+    "Figure 9A",
+    "Figure 9B"
+  ],
+  "tags": {
+    "has_figure_ref": true,
+    "length": 1784
+  }
+}

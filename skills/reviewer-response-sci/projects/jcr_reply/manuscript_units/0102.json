@@ -1,0 +1,15 @@
+{
+  "unit_id": "m-0102",
+  "order": 102,
+  "paragraph_index": 136,
+  "text": "The anti-inflammatory effects of the Ab-Fc-EL-EV@Que were then evaluated in the co-culture system. Using both immunofluorescence staining and q-PCR analysis, we found that Ab-Fc-EL-EV@Que remarkably suppressed the activation of pro-inflammatory M1 macrophages and promoted the polarization of anti-inflammatory M2 macrophages, along with the downregulated nucleus translocation of NF-κB. As reported, upon sensing DAMPs, NF-κB is activated, which induces the transcription of inflammasome components and subsequently promotes the cleavage of caspase1, thereby synergistically amplifying the inflammatory response[29]. Crucially, this treatment also led to a significant reduction in the expression of the inflammatory cytokine IL-1β (Figure 7E to 7H). Also, cell viability of acinar cells was investigated. Results of both experiments demonstrated that, similar to Que, Ab-Fc-EL-EV@Que nanomedicine can effectively alleviate apoptosis and ferroptosis in acinar cells (Figure 7I to 7K), which meant the successful entrance of Que into acinar cell strains. Collectively, these results demonstrate that in the acinar cell-BMDM co-culture system, Ab-Fc-EL-EV@Que exhibits: (1) Targeted delivery to acinar cells, (2) Potent suppression of M1 polarization of macrophages, classic pro-inflammatory signaling activation, cytokine release, and (3) Dual protection against acinar cell apoptosis and ferroptosis through promotion of the expression of Prdx1 and intracellular ROS scavenging.",
+  "heading_context": "3.6 In vitro efficacy assessment of Ab-Fc-EL-EV@Que on acinar cells and BMDMs co-culture system",
+  "anchors": [
+    "Figure 7E",
+    "Figure 7I"
+  ],
+  "tags": {
+    "has_figure_ref": true,
+    "length": 1479
+  }
+}

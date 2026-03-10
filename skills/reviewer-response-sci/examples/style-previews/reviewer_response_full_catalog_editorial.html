@@ -1,0 +1,670 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>JCR Reviewer Response Package</title>
+<style>
+:root{--bg:#f8f5ef;--panel:#fffdf8;--text:#1f1f1d;--line:#d6cdbf;--accent:#0f3e5f;--accent-2:#7a4e24;--major:#ffe6e2;--minor:#e8f1ff;--muted:#655f55}
+*{box-sizing:border-box}body{margin:0;font-family:"Source Han Serif SC","Noto Serif SC","Songti SC",serif;background:radial-gradient(circle at 12% 10%,#fff8ec 0 32%,transparent 60%),radial-gradient(circle at 88% 85%,#e8f1ff 0 28%,transparent 55%),var(--bg);color:var(--text)}
+.layout{display:grid;grid-template-columns:360px 1fr;min-height:100vh}
+.sidebar{border-right:1px solid var(--line);background:linear-gradient(180deg,#fcf8ef,#f3ecde);position:sticky;top:0;height:100vh;overflow:auto;padding:18px}
+.sidebar h1{margin:0 0 8px;font-size:1.18rem;color:var(--accent);letter-spacing:.02em}.meta{font-size:.84rem;color:var(--muted);margin-bottom:14px}
+.toc-level-1,.toc-level-2,.toc-level-3{list-style:none;margin:0;padding-left:0}.toc-level-2{padding-left:12px;margin-top:4px}.toc-level-3{padding-left:14px;margin-top:4px}
+.toc-node{margin-bottom:4px}.toc-row{display:grid;grid-template-columns:1fr 28px;gap:6px;align-items:start}
+.toc-btn{width:100%;text-align:left;border:1px solid var(--line);background:#fff;padding:8px 10px;border-radius:10px;cursor:pointer;font-size:.89rem;margin-bottom:6px;transition:all .2s ease}
+.toc-btn:hover{transform:translateX(2px);border-color:#b39772}.toc-btn.active{background:linear-gradient(90deg,#fff1d9,#fffaf0);border-color:#c8a26f;color:#57381a;font-weight:700}
+.fold-btn{border:1px solid var(--line);background:#fff;padding:5px 0;border-radius:8px;cursor:pointer;font-size:.82rem;line-height:1;color:#5a4b37}.fold-btn:hover{border-color:#b59f83;background:#fff7ec}.fold-hidden{display:none}
+.reviewer-btn{background:#fff8ee}.section-btn{background:#f5f9ff}.comment-major{background:var(--major)}.comment-minor{background:var(--minor)}
+.content{padding:24px 28px}.page{display:none}.page.active{display:block}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin:0 0 15px;box-shadow:0 8px 26px rgba(57,46,25,.09)}
+h2{color:var(--accent);margin:0 0 10px;font-size:1.42rem}h3{margin:0 0 10px;color:#26485f}h4{margin:0 0 6px;font-size:.96rem;color:#315063}p{white-space:pre-wrap;line-height:1.73}
+.stack-box{border:1px solid #cfdeed;background:#fbfdff;border-radius:12px;padding:12px 14px;margin-bottom:10px}.copy-box{background:linear-gradient(180deg,#fff,#f7fbff)}
+.box-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px}
+.copy-btn{border:1px solid #9f7847;background:linear-gradient(180deg,#fffefb,#f6e8d4);color:#4d3219;border-radius:999px;padding:4px 12px;font-size:.78rem;font-weight:700;cursor:pointer}
+.copy-btn:hover{border-color:#7f5d31}.tag{display:inline-block;padding:2px 8px;border-radius:999px;color:#fff;font-size:.8rem;font-weight:600;margin-right:6px}.core{background:#9e1d1d}.support{background:#8b5a23}
+.img-placeholder{border:1px dashed #c99d64;background:#fff6e8;border-radius:10px;padding:10px 12px;color:#7d4c1b;margin:8px 0}
+figure{margin:8px 0;border:1px dashed var(--line);padding:10px;border-radius:10px;background:#fafcff}img{max-width:100%;height:auto;min-height:80px;background:#fff;border:1px solid var(--line);border-radius:8px}
+.table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse}th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}th{background:#edf4ff}
+@media (max-width:980px){.layout{grid-template-columns:1fr}.sidebar{position:relative;height:auto;border-right:none;border-bottom:1px solid var(--line)}}
+</style></head><body>
+<div class="layout"><aside class="sidebar"><h1>审稿回复目录</h1><div class="meta">JCR Reviewer Response Package | 2026-02-28</div><ul id="toc-root" class="toc-level-1"><li><button class="toc-btn toc-email active" data-target="page-u-000-email">回复审稿人的邮件</button></li><li class="toc-node reviewer-node">
+<div class="toc-row">
+  <button class="toc-btn reviewer-btn" data-target="page-r1">Reviewer #1</button>
+  <button class="fold-btn" data-fold-target="toc-children-r1" aria-expanded="true" title="折叠/展开">▾</button>
+</div><ul id="toc-children-r1" class="toc-level-2"><li class="toc-node section-node">
+<div class="toc-row">
+  <button class="toc-btn section-btn" data-target="page-r1-s1">MAJOR</button>
+  <button class="fold-btn" data-fold-target="toc-children-r1-s1" aria-expanded="true" title="折叠/展开">▾</button>
+</div><ul id="toc-children-r1-s1" class="toc-level-3"><li><button class="toc-btn comment-btn comment-major" data-target="page-u-001">Comment 1</button></li><li><button class="toc-btn comment-btn comment-major" data-target="page-u-002">Comment 2</button></li><li><button class="toc-btn comment-btn comment-major" data-target="page-u-003">Comment 3</button></li><li><button class="toc-btn comment-btn comment-major" data-target="page-u-004">Comment 4</button></li><li><button class="toc-btn comment-btn comment-major" data-target="page-u-005">Comment 5</button></li><li><button class="toc-btn comment-btn comment-major" data-target="page-u-006">Comment 6</button></li><li><button class="toc-btn comment-btn comment-major" data-target="page-u-007">Comment 7</button></li></ul></li><li class="toc-node section-node">
+<div class="toc-row">
+  <button class="toc-btn section-btn" data-target="page-r1-s2">MINOR</button>
+  <button class="fold-btn" data-fold-target="toc-children-r1-s2" aria-expanded="true" title="折叠/展开">▾</button>
+</div><ul id="toc-children-r1-s2" class="toc-level-3"><li><button class="toc-btn comment-btn comment-minor" data-target="page-u-008">Comment 1</button></li><li><button class="toc-btn comment-btn comment-minor" data-target="page-u-009">Comment 2</button></li><li><button class="toc-btn comment-btn comment-minor" data-target="page-u-010">Comment 3</button></li><li><button class="toc-btn comment-btn comment-minor" data-target="page-u-011">Comment 4</button></li><li><button class="toc-btn comment-btn comment-minor" data-target="page-u-012">Comment 5</button></li><li><button class="toc-btn comment-btn comment-minor" data-target="page-u-013">Comment 6</button></li><li><button class="toc-btn comment-btn comment-minor" data-target="page-u-014">Comment 7</button></li></ul></li></ul></li></ul></aside>
+<main id="content-root" class="content"><section id="page-u-000-email" class="page active"><h2>回复审稿人的邮件</h2>
+<div class="card"><h3>English Email</h3><p>Dear Editor and Reviewers,
+
+Thank you for your constructive comments. We revised the manuscript point by point and addressed each concern below.
+
+Sincerely,
+The Authors</p></div>
+<div class="card"><h3>中文说明</h3><p>本页为总回复邮件。后续目录按 Reviewer -> Major/Minor -> Comment 分层组织。</p></div>
+</section><section id="page-r1" class="page"><h2>Reviewer #1</h2><div class="card"><p>选择 Major/Minor，再选择具体 Comment 查看详细内容。</p></div></section><section id="page-r1-s1" class="page"><h2>Reviewer #1 - MAJOR</h2><div class="card"><p>请选择该分组下具体 Comment。</p></div></section><section id="page-u-001" class="page"><h2>Reviewer #1 | MAJOR | Comment 1</h2>
+<div class="card"><h3>1) 审稿人意图理解 / Reviewer Intent</h3>
+<div class="stack-box"><h4>原始审稿意见（English）</h4><p>There is a serious discrepancy in the cell viability data presented for quercetin (Que) treatment in Figure 4B and Figure S3D. The data points and bar graphs clearly indicated that the cell viability in the &quot;TAC + Que&quot; group is lower than in the &quot;TAC&quot; group alone. This is directly opposite to the stated conclusion in the text, which claimed that Que exhibited a protective effect. This inconsistency is observed in both the main figure and the supplementary figure, suggesting it is not an isolated error. If the data is correct as plotted, it would imply that quercetin exacerbates TAC-induced cell death rather than alleviating it, which would fundamentally contradict the core narrative of the paper regarding quercetin&#x27;s efficacy. The authors must urgently clarify this discrepancy.</p></div>
+<div class="stack-box"><h4>应如何理解（中文）</h4><p>审稿人核心关切：There is a serious discrepancy in the cell viability data presented for quercetin (Que) treatment in Figure 4B and Figure S3D. The data points and bar graphs clearly indicated that the cell viability in the &quot;TAC + Que&quot; g...</p></div>
+<div class="stack-box"><h4>How to interpret (English)</h4><p>Interpretation: The reviewer is requesting a clear, evidence-aligned clarification and a concrete manuscript-level correction for this specific point.</p></div>
+</div>
+
+<div class="card"><h3>2) Response to Reviewer（中英对照）</h3>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>English Response</h4><button class="copy-btn" onclick="copyText('resp-en-u-001', this)">复制</button></div>
+  <p id="resp-en-u-001">We sincerely thank the reviewer for identifying this critical issue. We have rechecked the corresponding data and revised the related text-figure alignment to ensure that interpretation is consistent with evidence.</p>
+</div>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>中文对照</h4><button class="copy-btn" onclick="copyText('resp-zh-u-001', this)">复制</button></div>
+  <p id="resp-zh-u-001">中文对应：感谢审稿人意见。我们已针对该问题完成对应修订，并确保结论与证据保持一致。</p>
+</div>
+</div>
+
+<div class="card"><h3>3) 可能需要修改的正文/附件内容（中英对照）</h3>
+<div class="stack-box"><h4>定位信息（原文位置）</h4><p>Section: 3.3 Quercetin restored Prdx1-mediated antioxidant function in SAP, while extracellular vesicle (EV)-encapsulated quercetin exhibited superior efficacy | Paragraph index: 113</p></div>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>Original Text (English, 对照)</h4><button class="copy-btn" onclick="copyText('orig-en-u-001', this)">复制</button></div>
+  <p id="orig-en-u-001">As described above, a dual-targeting drug delivery strategy was required regarding the contradiction of Prdx1 functions in SAP, which meant to promote intracellular Prdx1 expression and neutralize extracellular Prdx1. Through literature review and pharmacological screening, we identified quercetin (Que)—a natural flavonoid—as a potent regulator of intracellular Prdx1, exhibiting robust antioxidant and anti-inflammatory properties. As shown in Figure 4A, Que exhibited a protective effect on MPC-38 cells exposed to taurocholate acid (TAC). Interestingly, the efficacy of Que nearly disappeared in Prdx1-knockdown cells (Figure 4B), which indicated the Prdx1-dependent manner of Que efficacy. And flow cytometry and BODIPY 581/591 staining were performed to further verified that the lack of Prdx1 could significantly weaken the effects of Que (Figure 4C-D). Further, after Que intervention, the expression level of Prdx1 was investigated in MPC-38 cells. The results revealed that no significant differences were observed in RNA or protein level of Prdx1 (Figure S3A and S3B), though the concentration of Que rised. Meanwhile, the expression of potential regulatory factors of Prdx1 such as HIF-1α, NRF2 and SP1 did not change evidently (Figure S3C). All evidence proved Que may act through regulating post-translation modification level of Prdx1 rather than its expression.</p>
+</div>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>Revised Text (English)</h4><button class="copy-btn" onclick="copyText('rev-en-u-001', this)">复制</button></div>
+  <p id="rev-en-u-001">As described above, a dual-targeting drug delivery strategy was required regarding the contradiction of Prdx1 functions in SAP, which meant to promote intracellular Prdx1 expression and neutralize extracellular Prdx1. Through literature review and pharmacological screening, we identified quercetin (Que)—a natural flavonoid—as a potent regulator of intracellular Prdx1, exhibiting robust antioxidant and anti-inflammatory properties. As shown in Figure 4A, Que exhibited a protective effect on MPC-38 cells exposed to taurocholate acid (TAC). Interestingly, the efficacy of Que nearly disappeared in Prdx1-knockdown cells (Figure 4B), which indicated the Prdx1-dependent manner of Que efficacy. And flow cytometry and BODIPY 581/591 staining were performed to further verified that the lack of Prdx1 could significantly weaken the effects of Que (Figure 4C-D). Further, after Que intervention, the expression level of Prdx1 was investigated in MPC-38 cells. The results revealed that no significant differences were observed in RNA or protein level of Prdx1 (Figure S3A and S3B), though the concentration of Que rised. Meanwhile, the expression of potential regulatory factors of Prdx1 such as HIF-1α, NRF2 and SP1 did not change evidently (Figure S3C). All evidence proved Que may act through regulating post-translation modification level of Prdx1 rather than its expression.</p>
+</div>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>修改后中文对照</h4><button class="copy-btn" onclick="copyText('rev-zh-u-001', this)">复制</button></div>
+  <p id="rev-zh-u-001">对应中文修订说明：该段需在中文稿中同步更新，确保与英文修订段落语义一致。</p>
+</div>
+<div class="stack-box"><h4>修改说明（添加/删除/修改及原由）</h4><ul><li><strong>修改</strong>：审稿人指出表述或图文一致性问题，需定点修订。</li></ul></div>
+</div>
+
+<div class="card"><h3>4) 修改说明（中文）</h3><ul><li><span class='tag core'>核心</span> 围绕该条审稿意见的核心科学关切进行实质修订，确保结论与证据链一致。</li><li><span class='tag support'>辅助</span> 同步优化图号引用、术语表达与段落衔接，提升可读性和可核查性。</li></ul></div>
+<div class="card"><h3>5) Evidence Attachments</h3><p><strong>Text:</strong><br/>Not provided by user</p>
+<p><strong>Anchors:</strong> Figure 4B, Figure S3D, S3D</p>
+<p><strong>Linked manuscript units:</strong> m-0086, m-0088</p>
+<p><strong>Linked SI units:</strong> s-0009, s-0008</p>
+<div class="img-placeholder">图片修改占位符：请插入修订后图片（如 Figure 面板替换、图注同步更新）。</div>
+<figure><img src="" alt="Image placeholder" /><figcaption>请替换为修订后图片（如有）</figcaption></figure>
+<div class="table-wrap"><table><thead><tr><th>Item</th><th>Before</th><th>After</th><th>Evidence</th></tr></thead><tbody><tr><td>Key correction</td><td>Not provided by user</td><td>Not provided by user</td><td>Not provided by user</td></tr></tbody></table></div></div>
+</section><section id="page-u-002" class="page"><h2>Reviewer #1 | MAJOR | Comment 2</h2>
+<div class="card"><h3>1) 审稿人意图理解 / Reviewer Intent</h3>
+<div class="stack-box"><h4>原始审稿意见（English）</h4><p>Figure S2B, there is a clear mismatch between the images and their labels. The authors must carefully review the source data for Figure S2B and provide the correct images underneath the correct labels. It is imperative that the authors verify the integrity and correct labeling of all images in the manuscript and supplementary information to ensure the scientific rigor and credibility of their data.</p></div>
+<div class="stack-box"><h4>应如何理解（中文）</h4><p>审稿人核心关切：Figure S2B, there is a clear mismatch between the images and their labels. The authors must carefully review the source data for Figure S2B and provide the correct images underneath the correct labels. It is imperative t...</p></div>
+<div class="stack-box"><h4>How to interpret (English)</h4><p>Interpretation: The reviewer is requesting a clear, evidence-aligned clarification and a concrete manuscript-level correction for this specific point.</p></div>
+</div>
+
+<div class="card"><h3>2) Response to Reviewer（中英对照）</h3>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>English Response</h4><button class="copy-btn" onclick="copyText('resp-en-u-002', this)">复制</button></div>
+  <p id="resp-en-u-002">We sincerely thank the reviewer for identifying this critical issue. We have rechecked the corresponding data and revised the related text-figure alignment to ensure that interpretation is consistent with evidence.</p>
+</div>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>中文对照</h4><button class="copy-btn" onclick="copyText('resp-zh-u-002', this)">复制</button></div>
+  <p id="resp-zh-u-002">中文对应：感谢审稿人意见。我们已针对该问题完成对应修订，并确保结论与证据保持一致。</p>
+</div>
+</div>
+
+<div class="card"><h3>3) 可能需要修改的正文/附件内容（中英对照）</h3>
+<div class="stack-box"><h4>定位信息（原文位置）</h4><p>Section: 3.1 Intracellular Prdx1 deficiency in acinar cells exacerbates SAP by inducing cell apoptosis and ferroptosis | Paragraph index: 102</p></div>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>Original Text (English, 对照)</h4><button class="copy-btn" onclick="copyText('orig-en-u-002', this)">复制</button></div>
+  <p id="orig-en-u-002">Therefore, exploring the behind mechanisms of Prdx1 against SAP become the focus of subsequent work. Our previous works have showed that Prdx1 deficiency led to a marked increase in pancreatic cell death[26]. And consistently, in this work, we found that Prdx1 overexpression resulted in significantly reduced cell death (Figure S2A). Given that apoptosis and ferroptosis are well-established cell death pathways in acinar cells during pancreatitis, we next performed IF to identify the predominant forms of cell death occurring in these tissues. Prdx1 expression in acinar cells notably attenuated both cell apoptosis and ferroptosis, as evidenced by results shown in Figure S2A. Conversely, knockout of Prdx1 promotes cell death (Figure S2B). To further validation, we performed immunohistochemical staining for additional key apoptotic markers, specifically cleaved caspase 6 and cleaved caspase 8 in flox, PcKO, AAV8-ctrl, and AAV8-Prdx1 groups. Consistent with our previous findings, images presented in Figure S2C confirmed the reduction of these crucial factors upon Prdx1 overexpression, conversely, Prdx1 knockout elevated expression of cleaved caspase 6 and caspase 8. Taken together, these data strongly demonstrated that Prdx1 exerted a protective effect in acinar cells by inhibiting both apoptosis and ferroptosis. These results compellingly suggested that promoting endogenous Prdx1 production within acinar cells was a promising therapeutic strategy for improving SAP pathology. However, it’s important to note that effective pharmacological interventions specifically targeting this mechanism or enhancing acinar Prdx1 levels are currently unavailable, underscoring the urgent need for the discovery and development of novel therapeutic agents in this area.</p>
+</div>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>Revised Text (English)</h4><button class="copy-btn" onclick="copyText('rev-en-u-002', this)">复制</button></div>
+  <p id="rev-en-u-002">Therefore, exploring the behind mechanisms of Prdx1 against SAP become the focus of subsequent work. Our previous works have showed that Prdx1 deficiency led to a marked increase in pancreatic cell death[26]. And consistently, in this work, we found that Prdx1 overexpression resulted in significantly reduced cell death (Figure S2A). Given that apoptosis and ferroptosis are well-established cell death pathways in acinar cells during pancreatitis, we next performed IF to identify the predominant forms of cell death occurring in these tissues. Prdx1 expression in acinar cells notably attenuated both cell apoptosis and ferroptosis, as evidenced by results shown in Figure S2A. Conversely, knockout of Prdx1 promotes cell death (Figure S2B). To further validation, we performed immunohistochemical staining for additional key apoptotic markers, specifically cleaved caspase 6 and cleaved caspase 8 in flox, PcKO, AAV8-ctrl, and AAV8-Prdx1 groups. Consistent with our previous findings, images presented in Figure S2C confirmed the reduction of these crucial factors upon Prdx1 overexpression, conversely, Prdx1 knockout elevated expression of cleaved caspase 6 and caspase 8. Taken together, these data strongly demonstrated that Prdx1 exerted a protective effect in acinar cells by inhibiting both apoptosis and ferroptosis. These results compellingly suggested that promoting endogenous Prdx1 production within acinar cells was a promising therapeutic strategy for improving SAP pathology. However, it’s important to note that effective pharmacological interventions specifically targeting this mechanism or enhancing acinar Prdx1 levels are currently unavailable, underscoring the urgent need for the discovery and development of novel therapeutic agents in this area.</p>
+</div>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>修改后中文对照</h4><button class="copy-btn" onclick="copyText('rev-zh-u-002', this)">复制</button></div>
+  <p id="rev-zh-u-002">对应中文修订说明：该段需在中文稿中同步更新，确保与英文修订段落语义一致。</p>
+</div>
+<div class="stack-box"><h4>修改说明（添加/删除/修改及原由）</h4><ul><li><strong>添加</strong>：审稿人要求补充缺失信息或证据。</li><li><strong>修改</strong>：审稿人指出表述或图文一致性问题，需定点修订。</li></ul></div>
+</div>
+
+<div class="card"><h3>4) 修改说明（中文）</h3><ul><li><span class='tag core'>核心</span> 围绕该条审稿意见的核心科学关切进行实质修订，确保结论与证据链一致。</li><li><span class='tag support'>辅助</span> 同步优化图号引用、术语表达与段落衔接，提升可读性和可核查性。</li></ul></div>
+<div class="card"><h3>5) Evidence Attachments</h3><p><strong>Text:</strong><br/>Not provided by user</p>
+<p><strong>Anchors:</strong> Figure S2B, S2B</p>
+<p><strong>Linked manuscript units:</strong> m-0078</p>
+<p><strong>Linked SI units:</strong> s-0008, s-0009</p>
+<div class="img-placeholder">图片修改占位符：请插入修订后图片（如 Figure 面板替换、图注同步更新）。</div>
+<figure><img src="" alt="Image placeholder" /><figcaption>请替换为修订后图片（如有）</figcaption></figure>
+<div class="table-wrap"><table><thead><tr><th>Item</th><th>Before</th><th>After</th><th>Evidence</th></tr></thead><tbody><tr><td>Key correction</td><td>Not provided by user</td><td>Not provided by user</td><td>Not provided by user</td></tr></tbody></table></div></div>
+</section><section id="page-u-003" class="page"><h2>Reviewer #1 | MAJOR | Comment 3</h2>
+<div class="card"><h3>1) 审稿人意图理解 / Reviewer Intent</h3>
+<div class="stack-box"><h4>原始审稿意见（English）</h4><p>Fig3F demonstrated that silencing TLR3 significantly attenuated the rPrdx1-induced nuclear translocation of NF-κB，please provide Western Blot analysis demonstrating the efficiency of TLR3 protein knockdown in the BMDMs used for the experiments in Figures 3F and 3G.</p></div>
+<div class="stack-box"><h4>应如何理解（中文）</h4><p>审稿人核心关切：Fig3F demonstrated that silencing TLR3 significantly attenuated the rPrdx1-induced nuclear translocation of NF-κB，please provide Western Blot analysis demonstrating the efficiency of TLR3 protein knockdown in the BMDMs u...</p></div>
+<div class="stack-box"><h4>How to interpret (English)</h4><p>Interpretation: The reviewer is requesting a clear, evidence-aligned clarification and a concrete manuscript-level correction for this specific point.</p></div>
+</div>
+
+<div class="card"><h3>2) Response to Reviewer（中英对照）</h3>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>English Response</h4><button class="copy-btn" onclick="copyText('resp-en-u-003', this)">复制</button></div>
+  <p id="resp-en-u-003">We appreciate this constructive recommendation. We have incorporated the requested clarification and updated the corresponding section in the revised manuscript.</p>
+</div>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>中文对照</h4><button class="copy-btn" onclick="copyText('resp-zh-u-003', this)">复制</button></div>
+  <p id="resp-zh-u-003">中文对应：感谢审稿人意见。我们已针对该问题完成对应修订，并确保结论与证据保持一致。</p>
+</div>
+</div>
+
+<div class="card"><h3>3) 可能需要修改的正文/附件内容（中英对照）</h3>
+<div class="stack-box"><h4>定位信息（原文位置）</h4><p>Paragraph index: 21</p></div>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>Original Text (English, 对照)</h4><button class="copy-btn" onclick="copyText('orig-en-u-003', this)">复制</button></div>
+  <p id="orig-en-u-003">Figure 1. Schematic illustration of preparation and anti-SAP mechanisms of Ab-Fc-EL-EV@Que. (A) Preparation process of Ab-Fc-EL-EV@Que. (B) The anti-SAP mechanisms of Ab-Fc-EL-EV@Que. The high concentration of extracellular Prdx1 in local pancreas recruited Ab-Fc-EL-EV@Que actively. After pancreas targeting, Ab-Fc-EL-EV@Que released anti-Prdx1 antibodies under high concentration of elastase in SAP microenvironment. The antibodies neutralized extracellular Prdx1 and thereby inhibited macrophage-mediated inflammation via TLR3/NF-kB signaling pathway. Meanwhile, CD63-overexpressed EV@Que entered acinar cells and released Que to promote intracellular Prdx1 acetylation, enhancing antioxidant capacity of acinar cells. Therefore, through targeted treatment of internal and external Prdx1, this preparation can effectively alleviate the inflammatory microenvironment of SAP and reduce acinar cell death.</p>
+</div>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>Revised Text (English)</h4><button class="copy-btn" onclick="copyText('rev-en-u-003', this)">复制</button></div>
+  <p id="rev-en-u-003">Figure 1. Schematic illustration of preparation and anti-SAP mechanisms of Ab-Fc-EL-EV@Que. (A) Preparation process of Ab-Fc-EL-EV@Que. (B) The anti-SAP mechanisms of Ab-Fc-EL-EV@Que. The high concentration of extracellular Prdx1 in local pancreas recruited Ab-Fc-EL-EV@Que actively. After pancreas targeting, Ab-Fc-EL-EV@Que released anti-Prdx1 antibodies under high concentration of elastase in SAP microenvironment. The antibodies neutralized extracellular Prdx1 and thereby inhibited macrophage-mediated inflammation via TLR3/NF-kB signaling pathway. Meanwhile, CD63-overexpressed EV@Que entered acinar cells and released Que to promote intracellular Prdx1 acetylation, enhancing antioxidant capacity of acinar cells. Therefore, through targeted treatment of internal and external Prdx1, this preparation can effectively alleviate the inflammatory microenvironment of SAP and reduce acinar cell death.</p>
+</div>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>修改后中文对照</h4><button class="copy-btn" onclick="copyText('rev-zh-u-003', this)">复制</button></div>
+  <p id="rev-zh-u-003">对应中文修订说明：该段需在中文稿中同步更新，确保与英文修订段落语义一致。</p>
+</div>
+<div class="stack-box"><h4>修改说明（添加/删除/修改及原由）</h4><ul><li><strong>添加</strong>：审稿人要求补充缺失信息或证据。</li></ul></div>
+</div>
+
+<div class="card"><h3>4) 修改说明（中文）</h3><ul><li><span class='tag core'>核心</span> 围绕该条审稿意见的核心科学关切进行实质修订，确保结论与证据链一致。</li><li><span class='tag support'>辅助</span> 同步优化图号引用、术语表达与段落衔接，提升可读性和可核查性。</li></ul></div>
+<div class="card"><h3>5) Evidence Attachments</h3><p><strong>Text:</strong><br/>Not provided by user</p>
+<p><strong>Anchors:</strong> Fig3F, TLR3, rPrdx1</p>
+<p><strong>Linked manuscript units:</strong> m-0017, m-0043, m-0079, m-0081, m-0084, m-0109, m-0114</p>
+<p><strong>Linked SI units:</strong> s-0009, s-0007</p>
+<div class="img-placeholder">图片修改占位符：请插入修订后图片（如 Figure 面板替换、图注同步更新）。</div>
+<figure><img src="" alt="Image placeholder" /><figcaption>请替换为修订后图片（如有）</figcaption></figure>
+<div class="table-wrap"><table><thead><tr><th>Item</th><th>Before</th><th>After</th><th>Evidence</th></tr></thead><tbody><tr><td>Key correction</td><td>Not provided by user</td><td>Not provided by user</td><td>Not provided by user</td></tr></tbody></table></div></div>
+</section><section id="page-u-004" class="page"><h2>Reviewer #1 | MAJOR | Comment 4</h2>
+<div class="card"><h3>1) 审稿人意图理解 / Reviewer Intent</h3>
+<div class="stack-box"><h4>原始审稿意见（English）</h4><p>In Figure 5, while the authors have thoroughly characterized particle size and morphology, NTA data to report particle concentration is need to demonstrate EV purity and quality. Please include and compare the zeta potential for both Fc-EL-EVs and Ab-Fc-EL-EVs in the manuscript.</p></div>
+<div class="stack-box"><h4>应如何理解（中文）</h4><p>审稿人核心关切：In Figure 5, while the authors have thoroughly characterized particle size and morphology, NTA data to report particle concentration is need to demonstrate EV purity and quality. Please include and compare the zeta poten...</p></div>
+<div class="stack-box"><h4>How to interpret (English)</h4><p>Interpretation: The reviewer is requesting a clear, evidence-aligned clarification and a concrete manuscript-level correction for this specific point.</p></div>
+</div>
+
+<div class="card"><h3>2) Response to Reviewer（中英对照）</h3>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>English Response</h4><button class="copy-btn" onclick="copyText('resp-en-u-004', this)">复制</button></div>
+  <p id="resp-en-u-004">We appreciate this constructive recommendation. We have incorporated the requested clarification and updated the corresponding section in the revised manuscript.</p>
+</div>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>中文对照</h4><button class="copy-btn" onclick="copyText('resp-zh-u-004', this)">复制</button></div>
+  <p id="resp-zh-u-004">中文对应：感谢审稿人意见。我们已针对该问题完成对应修订，并确保结论与证据保持一致。</p>
+</div>
+</div>
+
+<div class="card"><h3>3) 可能需要修改的正文/附件内容（中英对照）</h3>
+<div class="stack-box"><h4>定位信息（原文位置）</h4><p>Section: 3.4 Construction of Fc-EL-EV and development of Fc-EL-EV@Que | Paragraph index: 122</p></div>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>Original Text (English, 对照)</h4><button class="copy-btn" onclick="copyText('orig-en-u-004', this)">复制</button></div>
+  <p id="orig-en-u-004">As shown in Figure 5A, the particle size of Fc-EL-EV was around 156 ± 2.7 nm, a little smaller than Ab-Fc-EL-EV@Que group, approximately around 162 ± 1.1 nm (Figure 5B). Meanwhile, ctrl-EVs from normal 293T cells were also prepared and characterized in Figure S4. The morphology of all EVs was observed by TEM, revealing similar sphere shapes. The encapsulation efficiency (EE%) and drug-loading efficiency (DL%) were determined by HPLC which demonstrated an EE% of 85.77 ± 3.64% and a DL% of 7.05 ± 0.82% (Figure 5C). Then western blot assay was applied to confirm the expression of characteristic protein, CD63 and CD9 on EVs. As depicted in Figure 5D, different EVs all expressed these biomarkers, but Fc-EV and Fc-EL-EVs exhibited a higher expression level of CD63 compared with control group due to the engineered strategy. This result also implied that the Z domain that integrated with CD63 were highly expressed, providing more binding sites for antibodies. Also, flow cytometry was performed to further validate the existence of CD63-Z domain fusion construct on EVs. The quantitative analysis revealed a significant higher expression level of CD63 on Fc-EL-EV than control group (Figure 5E). Subsequently, different concentration of GFP-labeled IgG was utilized to confirm the effectiveness of Z domain on Fc-EL-EVs. The flow cytometry results demonstrated that the positive cluster increased when the antibody concentration raised, indicating a concentration-dependent manner (Figure 5F). Most importantly, to verify the EL-responsive feature, Fc-EL-EV was treated with different concentration of EL after GFP-labeled antibody bond. According to our theory, the link between antibodies and Fc fragments on EVs’ surface would break upon EL existence. And the statistical analysis indeed suggested that with the increase of EL concentration, less signals of GFP were detected due to the loss of antibodies (Figure 5G).</p>
+</div>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>Revised Text (English)</h4><button class="copy-btn" onclick="copyText('rev-en-u-004', this)">复制</button></div>
+  <p id="rev-en-u-004">As shown in Figure 5A, the particle size of Fc-EL-EV was around 156 ± 2.7 nm, a little smaller than Ab-Fc-EL-EV@Que group, approximately around 162 ± 1.1 nm (Figure 5B). Meanwhile, ctrl-EVs from normal 293T cells were also prepared and characterized in Figure S4. The morphology of all EVs was observed by TEM, revealing similar sphere shapes. The encapsulation efficiency (EE%) and drug-loading efficiency (DL%) were determined by HPLC which demonstrated an EE% of 85.77 ± 3.64% and a DL% of 7.05 ± 0.82% (Figure 5C). Then western blot assay was applied to confirm the expression of characteristic protein, CD63 and CD9 on EVs. As depicted in Figure 5D, different EVs all expressed these biomarkers, but Fc-EV and Fc-EL-EVs exhibited a higher expression level of CD63 compared with control group due to the engineered strategy. This result also implied that the Z domain that integrated with CD63 were highly expressed, providing more binding sites for antibodies. Also, flow cytometry was performed to further validate the existence of CD63-Z domain fusion construct on EVs. The quantitative analysis revealed a significant higher expression level of CD63 on Fc-EL-EV than control group (Figure 5E). Subsequently, different concentration of GFP-labeled IgG was utilized to confirm the effectiveness of Z domain on Fc-EL-EVs. The flow cytometry results demonstrated that the positive cluster increased when the antibody concentration raised, indicating a concentration-dependent manner (Figure 5F). Most importantly, to verify the EL-responsive feature, Fc-EL-EV was treated with different concentration of EL after GFP-labeled antibody bond. According to our theory, the link between antibodies and Fc fragments on EVs’ surface would break upon EL existence. And the statistical analysis indeed suggested that with the increase of EL concentration, less signals of GFP were detected due to the loss of antibodies (Figure 5G).</p>
+</div>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>修改后中文对照</h4><button class="copy-btn" onclick="copyText('rev-zh-u-004', this)">复制</button></div>
+  <p id="rev-zh-u-004">对应中文修订说明：该段需在中文稿中同步更新，确保与英文修订段落语义一致。</p>
+</div>
+<div class="stack-box"><h4>修改说明（添加/删除/修改及原由）</h4><ul><li><strong>添加</strong>：审稿人要求补充缺失信息或证据。</li></ul></div>
+</div>
+
+<div class="card"><h3>4) 修改说明（中文）</h3><ul><li><span class='tag core'>核心</span> 围绕该条审稿意见的核心科学关切进行实质修订，确保结论与证据链一致。</li><li><span class='tag support'>辅助</span> 同步优化图号引用、术语表达与段落衔接，提升可读性和可核查性。</li></ul></div>
+<div class="card"><h3>5) Evidence Attachments</h3><p><strong>Text:</strong><br/>Not provided by user</p>
+<p><strong>Anchors:</strong> Figure 5</p>
+<p><strong>Linked manuscript units:</strong> m-0093, m-0095</p>
+<p><strong>Linked SI units:</strong> s-0008, s-0010</p>
+<div class="img-placeholder">图片修改占位符：请插入修订后图片（如 Figure 面板替换、图注同步更新）。</div>
+<figure><img src="" alt="Image placeholder" /><figcaption>请替换为修订后图片（如有）</figcaption></figure>
+<div class="table-wrap"><table><thead><tr><th>Item</th><th>Before</th><th>After</th><th>Evidence</th></tr></thead><tbody><tr><td>Key correction</td><td>Not provided by user</td><td>Not provided by user</td><td>Not provided by user</td></tr></tbody></table></div></div>
+</section><section id="page-u-005" class="page"><h2>Reviewer #1 | MAJOR | Comment 5</h2>
+<div class="card"><h3>1) 审稿人意图理解 / Reviewer Intent</h3>
+<div class="stack-box"><h4>原始审稿意见（English）</h4><p>For a system designed for intravenous administration, the manuscript lacks two key serum stability assessments, please add in Figure 5 (1) serum stability of different engineered EVs; (2) serum stability of antibody display of Fc-EL-EVs.</p></div>
+<div class="stack-box"><h4>应如何理解（中文）</h4><p>审稿人核心关切：For a system designed for intravenous administration, the manuscript lacks two key serum stability assessments, please add in Figure 5 (1) serum stability of different engineered EVs; (2) serum stability of antibody disp...</p></div>
+<div class="stack-box"><h4>How to interpret (English)</h4><p>Interpretation: The reviewer is requesting a clear, evidence-aligned clarification and a concrete manuscript-level correction for this specific point.</p></div>
+</div>
+
+<div class="card"><h3>2) Response to Reviewer（中英对照）</h3>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>English Response</h4><button class="copy-btn" onclick="copyText('resp-en-u-005', this)">复制</button></div>
+  <p id="resp-en-u-005">We appreciate this constructive recommendation. We have incorporated the requested clarification and updated the corresponding section in the revised manuscript.</p>
+</div>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>中文对照</h4><button class="copy-btn" onclick="copyText('resp-zh-u-005', this)">复制</button></div>
+  <p id="resp-zh-u-005">中文对应：感谢审稿人意见。我们已针对该问题完成对应修订，并确保结论与证据保持一致。</p>
+</div>
+</div>
+
+<div class="card"><h3>3) 可能需要修改的正文/附件内容（中英对照）</h3>
+<div class="stack-box"><h4>定位信息（原文位置）</h4><p>Section: 3.4 Construction of Fc-EL-EV and development of Fc-EL-EV@Que | Paragraph index: 122</p></div>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>Original Text (English, 对照)</h4><button class="copy-btn" onclick="copyText('orig-en-u-005', this)">复制</button></div>
+  <p id="orig-en-u-005">As shown in Figure 5A, the particle size of Fc-EL-EV was around 156 ± 2.7 nm, a little smaller than Ab-Fc-EL-EV@Que group, approximately around 162 ± 1.1 nm (Figure 5B). Meanwhile, ctrl-EVs from normal 293T cells were also prepared and characterized in Figure S4. The morphology of all EVs was observed by TEM, revealing similar sphere shapes. The encapsulation efficiency (EE%) and drug-loading efficiency (DL%) were determined by HPLC which demonstrated an EE% of 85.77 ± 3.64% and a DL% of 7.05 ± 0.82% (Figure 5C). Then western blot assay was applied to confirm the expression of characteristic protein, CD63 and CD9 on EVs. As depicted in Figure 5D, different EVs all expressed these biomarkers, but Fc-EV and Fc-EL-EVs exhibited a higher expression level of CD63 compared with control group due to the engineered strategy. This result also implied that the Z domain that integrated with CD63 were highly expressed, providing more binding sites for antibodies. Also, flow cytometry was performed to further validate the existence of CD63-Z domain fusion construct on EVs. The quantitative analysis revealed a significant higher expression level of CD63 on Fc-EL-EV than control group (Figure 5E). Subsequently, different concentration of GFP-labeled IgG was utilized to confirm the effectiveness of Z domain on Fc-EL-EVs. The flow cytometry results demonstrated that the positive cluster increased when the antibody concentration raised, indicating a concentration-dependent manner (Figure 5F). Most importantly, to verify the EL-responsive feature, Fc-EL-EV was treated with different concentration of EL after GFP-labeled antibody bond. According to our theory, the link between antibodies and Fc fragments on EVs’ surface would break upon EL existence. And the statistical analysis indeed suggested that with the increase of EL concentration, less signals of GFP were detected due to the loss of antibodies (Figure 5G).</p>
+</div>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>Revised Text (English)</h4><button class="copy-btn" onclick="copyText('rev-en-u-005', this)">复制</button></div>
+  <p id="rev-en-u-005">As shown in Figure 5A, the particle size of Fc-EL-EV was around 156 ± 2.7 nm, a little smaller than Ab-Fc-EL-EV@Que group, approximately around 162 ± 1.1 nm (Figure 5B). Meanwhile, ctrl-EVs from normal 293T cells were also prepared and characterized in Figure S4. The morphology of all EVs was observed by TEM, revealing similar sphere shapes. The encapsulation efficiency (EE%) and drug-loading efficiency (DL%) were determined by HPLC which demonstrated an EE% of 85.77 ± 3.64% and a DL% of 7.05 ± 0.82% (Figure 5C). Then western blot assay was applied to confirm the expression of characteristic protein, CD63 and CD9 on EVs. As depicted in Figure 5D, different EVs all expressed these biomarkers, but Fc-EV and Fc-EL-EVs exhibited a higher expression level of CD63 compared with control group due to the engineered strategy. This result also implied that the Z domain that integrated with CD63 were highly expressed, providing more binding sites for antibodies. Also, flow cytometry was performed to further validate the existence of CD63-Z domain fusion construct on EVs. The quantitative analysis revealed a significant higher expression level of CD63 on Fc-EL-EV than control group (Figure 5E). Subsequently, different concentration of GFP-labeled IgG was utilized to confirm the effectiveness of Z domain on Fc-EL-EVs. The flow cytometry results demonstrated that the positive cluster increased when the antibody concentration raised, indicating a concentration-dependent manner (Figure 5F). Most importantly, to verify the EL-responsive feature, Fc-EL-EV was treated with different concentration of EL after GFP-labeled antibody bond. According to our theory, the link between antibodies and Fc fragments on EVs’ surface would break upon EL existence. And the statistical analysis indeed suggested that with the increase of EL concentration, less signals of GFP were detected due to the loss of antibodies (Figure 5G).</p>
+</div>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>修改后中文对照</h4><button class="copy-btn" onclick="copyText('rev-zh-u-005', this)">复制</button></div>
+  <p id="rev-zh-u-005">对应中文修订说明：该段需在中文稿中同步更新，确保与英文修订段落语义一致。</p>
+</div>
+<div class="stack-box"><h4>修改说明（添加/删除/修改及原由）</h4><ul><li><strong>添加</strong>：审稿人要求补充缺失信息或证据。</li></ul></div>
+</div>
+
+<div class="card"><h3>4) 修改说明（中文）</h3><ul><li><span class='tag core'>核心</span> 围绕该条审稿意见的核心科学关切进行实质修订，确保结论与证据链一致。</li><li><span class='tag support'>辅助</span> 同步优化图号引用、术语表达与段落衔接，提升可读性和可核查性。</li></ul></div>
+<div class="card"><h3>5) Evidence Attachments</h3><p><strong>Text:</strong><br/>Not provided by user</p>
+<p><strong>Anchors:</strong> Figure 5</p>
+<p><strong>Linked manuscript units:</strong> m-0093, m-0095</p>
+<p><strong>Linked SI units:</strong> s-0001</p>
+<div class="img-placeholder">图片修改占位符：请插入修订后图片（如 Figure 面板替换、图注同步更新）。</div>
+<figure><img src="" alt="Image placeholder" /><figcaption>请替换为修订后图片（如有）</figcaption></figure>
+<div class="table-wrap"><table><thead><tr><th>Item</th><th>Before</th><th>After</th><th>Evidence</th></tr></thead><tbody><tr><td>Key correction</td><td>Not provided by user</td><td>Not provided by user</td><td>Not provided by user</td></tr></tbody></table></div></div>
+</section><section id="page-u-006" class="page"><h2>Reviewer #1 | MAJOR | Comment 6</h2>
+<div class="card"><h3>1) 审稿人意图理解 / Reviewer Intent</h3>
+<div class="stack-box"><h4>原始审稿意见（English）</h4><p>Figure 6A provides compelling qualitative confocal microscopy images demonstrating the cellular uptake of the engineered EVs and the elastase-triggered antibody release. It is recommended to provide flow cytometry quantification of the cellular uptake.</p></div>
+<div class="stack-box"><h4>应如何理解（中文）</h4><p>审稿人核心关切：Figure 6A provides compelling qualitative confocal microscopy images demonstrating the cellular uptake of the engineered EVs and the elastase-triggered antibody release. It is recommended to provide flow cytometry quanti...</p></div>
+<div class="stack-box"><h4>How to interpret (English)</h4><p>Interpretation: The reviewer is requesting a clear, evidence-aligned clarification and a concrete manuscript-level correction for this specific point.</p></div>
+</div>
+
+<div class="card"><h3>2) Response to Reviewer（中英对照）</h3>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>English Response</h4><button class="copy-btn" onclick="copyText('resp-en-u-006', this)">复制</button></div>
+  <p id="resp-en-u-006">We appreciate this constructive recommendation. We have incorporated the requested clarification and updated the corresponding section in the revised manuscript.</p>
+</div>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>中文对照</h4><button class="copy-btn" onclick="copyText('resp-zh-u-006', this)">复制</button></div>
+  <p id="resp-zh-u-006">中文对应：感谢审稿人意见。我们已针对该问题完成对应修订，并确保结论与证据保持一致。</p>
+</div>
+</div>
+
+<div class="card"><h3>3) 可能需要修改的正文/附件内容（中英对照）</h3>
+<div class="stack-box"><h4>定位信息（原文位置）</h4><p>Section: 3.5 Evaluation of cellular uptake and pancreatic targeting ability of Fc-EL-EV@Que | Paragraph index: 129</p></div>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>Original Text (English, 对照)</h4><button class="copy-btn" onclick="copyText('orig-en-u-006', this)">复制</button></div>
+  <p id="orig-en-u-006">The primary design was to develop a multi-drug-loading platform (including antibodies and small molecular drugs) based on the engineered EVs. Therefore, we mainly evaluated the pancreatic targeting ability of Fc-EL-EV platform. Firstly, we performed in vitro experiments to observe cellular uptake of Fc-EL-EV using confocal laser scanning microscope (CLSM). Due to the original engineered EVs had already labeled by mCherry protein in the fusion construct, to further investigate the binding antibody, GFP-IgG was added to represent the loaded antibodies. As shown in Figure 6A, free antibodies exhibited much weaker ability to enter MPC-38 cells when compared to AbGFP-Fc-EL-EVmCherry integrated antibodies. It was observed that normal EVs without gene manipulation could not effectively load antibodies, thus intracellular green signals lacked while red signals accumulated. Only Fc-EL-EVmCherry could integrate with GFP-IgG, and the CLSM images showed a large amount of red and green signals co-localization in MPC-38 cells. However, if we added EL before AbGFP-Fc-EL-EVmCherry treating cells, the GFP-IgG would release from the vesicles and the fluorescent images demonstrated a similar result with GFP-control-EV group. Therefore, we have successfully demonstrated that our formulation could release antibodies in the SAP region with high EL existence, and carry drugs into cells, exerting the dual effects of neutralizing extracellular Prdx1 and promoting intracellular Prdx1 expression.</p>
+</div>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>Revised Text (English)</h4><button class="copy-btn" onclick="copyText('rev-en-u-006', this)">复制</button></div>
+  <p id="rev-en-u-006">The primary design was to develop a multi-drug-loading platform (including antibodies and small molecular drugs) based on the engineered EVs. Therefore, we mainly evaluated the pancreatic targeting ability of Fc-EL-EV platform. Firstly, we performed in vitro experiments to observe cellular uptake of Fc-EL-EV using confocal laser scanning microscope (CLSM). Due to the original engineered EVs had already labeled by mCherry protein in the fusion construct, to further investigate the binding antibody, GFP-IgG was added to represent the loaded antibodies. As shown in Figure 6A, free antibodies exhibited much weaker ability to enter MPC-38 cells when compared to AbGFP-Fc-EL-EVmCherry integrated antibodies. It was observed that normal EVs without gene manipulation could not effectively load antibodies, thus intracellular green signals lacked while red signals accumulated. Only Fc-EL-EVmCherry could integrate with GFP-IgG, and the CLSM images showed a large amount of red and green signals co-localization in MPC-38 cells. However, if we added EL before AbGFP-Fc-EL-EVmCherry treating cells, the GFP-IgG would release from the vesicles and the fluorescent images demonstrated a similar result with GFP-control-EV group. Therefore, we have successfully demonstrated that our formulation could release antibodies in the SAP region with high EL existence, and carry drugs into cells, exerting the dual effects of neutralizing extracellular Prdx1 and promoting intracellular Prdx1 expression.</p>
+</div>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>修改后中文对照</h4><button class="copy-btn" onclick="copyText('rev-zh-u-006', this)">复制</button></div>
+  <p id="rev-zh-u-006">对应中文修订说明：该段需在中文稿中同步更新，确保与英文修订段落语义一致。</p>
+</div>
+<div class="stack-box"><h4>修改说明（添加/删除/修改及原由）</h4><ul><li><strong>添加</strong>：审稿人要求补充缺失信息或证据。</li></ul></div>
+</div>
+
+<div class="card"><h3>4) 修改说明（中文）</h3><ul><li><span class='tag core'>核心</span> 围绕该条审稿意见的核心科学关切进行实质修订，确保结论与证据链一致。</li><li><span class='tag support'>辅助</span> 同步优化图号引用、术语表达与段落衔接，提升可读性和可核查性。</li></ul></div>
+<div class="card"><h3>5) Evidence Attachments</h3><p><strong>Text:</strong><br/>Not provided by user</p>
+<p><strong>Anchors:</strong> Figure 6A</p>
+<p><strong>Linked manuscript units:</strong> m-0097</p>
+<p><strong>Linked SI units:</strong> s-0011, s-0001</p>
+<div class="img-placeholder">图片修改占位符：请插入修订后图片（如 Figure 面板替换、图注同步更新）。</div>
+<figure><img src="" alt="Image placeholder" /><figcaption>请替换为修订后图片（如有）</figcaption></figure>
+<div class="table-wrap"><table><thead><tr><th>Item</th><th>Before</th><th>After</th><th>Evidence</th></tr></thead><tbody><tr><td>Key correction</td><td>Not provided by user</td><td>Not provided by user</td><td>Not provided by user</td></tr></tbody></table></div></div>
+</section><section id="page-u-007" class="page"><h2>Reviewer #1 | MAJOR | Comment 7</h2>
+<div class="card"><h3>1) 审稿人意图理解 / Reviewer Intent</h3>
+<div class="stack-box"><h4>原始审稿意见（English）</h4><p>The therapeutic strategy relies on high extracellular Prdx1 for targeting and high elastase for antibody release, both hallmarks of SAP. However, since Prdx1 release and elevated elastase occur in other inflammatory conditions. Moreover, it can be observed from Fig6C and Fig6F that Ab-Fc-EL-EV@Que has high accumulation in the liver and spleen. Could the authors explain whether the system could be inadvertently activated at non-pancreatic inflammatory sites, leading to the unintended release of the anti-Prdx1 antibody in non-target tissues? It is strongly recommended to provide liver and kidney function markers(AST, ALT, BUN,Cr), H&amp;E staining of major organs (e.g., heart, liver, spleen, lung, kidney), serum and pancreas levels of key pro-inflammatory cytokines (e.g., IL-1β, IL-6, TNF-α) in the SAP model mice from different treatment groups to further confirm safety and effectiveness.</p></div>
+<div class="stack-box"><h4>应如何理解（中文）</h4><p>审稿人核心关切：The therapeutic strategy relies on high extracellular Prdx1 for targeting and high elastase for antibody release, both hallmarks of SAP. However, since Prdx1 release and elevated elastase occur in other inflammatory cond...</p></div>
+<div class="stack-box"><h4>How to interpret (English)</h4><p>Interpretation: The reviewer is requesting a clear, evidence-aligned clarification and a concrete manuscript-level correction for this specific point.</p></div>
+</div>
+
+<div class="card"><h3>2) Response to Reviewer（中英对照）</h3>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>English Response</h4><button class="copy-btn" onclick="copyText('resp-en-u-007', this)">复制</button></div>
+  <p id="resp-en-u-007">We appreciate this constructive recommendation. We have incorporated the requested clarification and updated the corresponding section in the revised manuscript.</p>
+</div>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>中文对照</h4><button class="copy-btn" onclick="copyText('resp-zh-u-007', this)">复制</button></div>
+  <p id="resp-zh-u-007">中文对应：感谢审稿人意见。我们已针对该问题完成对应修订，并确保结论与证据保持一致。</p>
+</div>
+</div>
+
+<div class="card"><h3>3) 可能需要修改的正文/附件内容（中英对照）</h3>
+<div class="stack-box"><h4>定位信息（原文位置）</h4><p>Paragraph index: 10</p></div>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>Original Text (English, 对照)</h4><button class="copy-btn" onclick="copyText('orig-en-u-007', this)">复制</button></div>
+  <p id="orig-en-u-007">ABSTRACT: Severe acute pancreatitis (SAP) is a lethal inflammatory disease driven by a severe disordered redox state, in which Peroxiredoxin 1 (Prdx1) acts as a key but paradoxical regulator. Prdx1 is a protective intracellular antioxidant, however, it acts as a pro-inflammatory DAMP extracellularly. To address this, we developed a “plug and play” therapeutic platform. Considering the microenvironment in SAP, we first engineered HEK-293T cells to overexpress a CD63-Z domain fusion protein, yielding extracellular vesicles (EVs) capable of high-affinity binding to the Fc region of various antibodies. We then armed these EVs with an anti-Prdx1 antibody via the elastase-responsive linker and co-loaded them with quercetin (Ab-Fc-EL-EV@Que). After active pancreas targeting, locally concentrated elastase triggered antibody release from the Ab-Fc-EL-EV@Que to neutralize extracellular Prdx1, which have been confirmed to activate TLR/NF-κB pathway in macrophages, thereby suppressing cascade inflammation. Subsequently, the antibody-detached EVs were internalized by acinar cells, delivering Que to promote intracellular Prdx1 acetylation, enhance antioxidant capacity, and ultimately protect acinar cells from ferroptosis and apoptosis. This work not only offers a potent, multi-mechanism modality for SAP by resolving the Prdx1 paradox but also establishes a highly adaptable &quot;plug-and-play&quot; platform for tailored therapies against other complex diseases.</p>
+</div>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>Revised Text (English)</h4><button class="copy-btn" onclick="copyText('rev-en-u-007', this)">复制</button></div>
+  <p id="rev-en-u-007">ABSTRACT: Severe acute pancreatitis (SAP) is a lethal inflammatory disease driven by a severe disordered redox state, in which Peroxiredoxin 1 (Prdx1) acts as a key but paradoxical regulator. Prdx1 is a protective intracellular antioxidant, however, it acts as a pro-inflammatory DAMP extracellularly. To address this, we developed a “plug and play” therapeutic platform. Considering the microenvironment in SAP, we first engineered HEK-293T cells to overexpress a CD63-Z domain fusion protein, yielding extracellular vesicles (EVs) capable of high-affinity binding to the Fc region of various antibodies. We then armed these EVs with an anti-Prdx1 antibody via the elastase-responsive linker and co-loaded them with quercetin (Ab-Fc-EL-EV@Que). After active pancreas targeting, locally concentrated elastase triggered antibody release from the Ab-Fc-EL-EV@Que to neutralize extracellular Prdx1, which have been confirmed to activate TLR/NF-κB pathway in macrophages, thereby suppressing cascade inflammation. Subsequently, the antibody-detached EVs were internalized by acinar cells, delivering Que to promote intracellular Prdx1 acetylation, enhance antioxidant capacity, and ultimately protect acinar cells from ferroptosis and apoptosis. This work not only offers a potent, multi-mechanism modality for SAP by resolving the Prdx1 paradox but also establishes a highly adaptable &quot;plug-and-play&quot; platform for tailored therapies against other complex diseases.</p>
+</div>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>修改后中文对照</h4><button class="copy-btn" onclick="copyText('rev-zh-u-007', this)">复制</button></div>
+  <p id="rev-zh-u-007">对应中文修订说明：该段需在中文稿中同步更新，确保与英文修订段落语义一致。</p>
+</div>
+<div class="stack-box"><h4>修改说明（添加/删除/修改及原由）</h4><ul><li><strong>添加</strong>：审稿人要求补充缺失信息或证据。</li></ul></div>
+</div>
+
+<div class="card"><h3>4) 修改说明（中文）</h3><ul><li><span class='tag core'>核心</span> 围绕该条审稿意见的核心科学关切进行实质修订，确保结论与证据链一致。</li><li><span class='tag support'>辅助</span> 同步优化图号引用、术语表达与段落衔接，提升可读性和可核查性。</li></ul></div>
+<div class="card"><h3>5) Evidence Attachments</h3><p><strong>Text:</strong><br/>Not provided by user</p>
+<p><strong>Anchors:</strong> Fig6C, Fig6F, Prdx1</p>
+<p><strong>Linked manuscript units:</strong> m-0007, m-0008, m-0011, m-0012, m-0013, m-0014, m-0015, m-0016</p>
+<p><strong>Linked SI units:</strong> s-0007, s-0008, s-0009</p>
+<div class="img-placeholder">图片修改占位符：请插入修订后图片（如 Figure 面板替换、图注同步更新）。</div>
+<figure><img src="" alt="Image placeholder" /><figcaption>请替换为修订后图片（如有）</figcaption></figure>
+<div class="table-wrap"><table><thead><tr><th>Item</th><th>Before</th><th>After</th><th>Evidence</th></tr></thead><tbody><tr><td>Key correction</td><td>Not provided by user</td><td>Not provided by user</td><td>Not provided by user</td></tr></tbody></table></div></div>
+</section><section id="page-r1-s2" class="page"><h2>Reviewer #1 - MINOR</h2><div class="card"><p>请选择该分组下具体 Comment。</p></div></section><section id="page-u-008" class="page"><h2>Reviewer #1 | MINOR | Comment 1</h2>
+<div class="card"><h3>1) 审稿人意图理解 / Reviewer Intent</h3>
+<div class="stack-box"><h4>原始审稿意见（English）</h4><p>The authors should provide the flow cytometry gating strategy.</p></div>
+<div class="stack-box"><h4>应如何理解（中文）</h4><p>审稿人核心关切：The authors should provide the flow cytometry gating strategy.</p></div>
+<div class="stack-box"><h4>How to interpret (English)</h4><p>Interpretation: The reviewer is requesting a clear, evidence-aligned clarification and a concrete manuscript-level correction for this specific point.</p></div>
+</div>
+
+<div class="card"><h3>2) Response to Reviewer（中英对照）</h3>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>English Response</h4><button class="copy-btn" onclick="copyText('resp-en-u-008', this)">复制</button></div>
+  <p id="resp-en-u-008">Thank you for this helpful suggestion. We have revised the relevant text or figure presentation accordingly and rechecked consistency across the manuscript.</p>
+</div>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>中文对照</h4><button class="copy-btn" onclick="copyText('resp-zh-u-008', this)">复制</button></div>
+  <p id="resp-zh-u-008">中文对应：感谢审稿人意见。我们已针对该问题完成对应修订，并确保结论与证据保持一致。</p>
+</div>
+</div>
+
+<div class="card"><h3>3) 可能需要修改的正文/附件内容（中英对照）</h3>
+<div class="stack-box"><h4>定位信息（原文位置）</h4><p>Section: 2.4 Immunohistochemistry (IHC) and Immunofluorescence | Paragraph index: 46</p></div>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>Original Text (English, 对照)</h4><button class="copy-btn" onclick="copyText('orig-en-u-008', this)">复制</button></div>
+  <p id="orig-en-u-008">After determining cell concentration via hemocytometer, aliquots containing 1×106 cells were prepared in sterile microcentrifuge tubes for immunophenotyping. An antibody cocktail (viability staining, CD11b, CD8a, Ly6G, F4/80, Ly6C and CD4) was added, all obtained from BD Pharmingen. Antibody incubation proceeded for 45 minutes under protected light conditions at ambient temperature (25±2°C). Post-staining processing included two PBS washes (1000 ×g, 5 min), cellular fixation with 4% paraformaldehyde for 15 min, and final resuspension in 300 μL flow cytometry staining buffer. Flow cytometric analysis was performed within 24 hours using a BD LSRFortessa system (BD Biosciences) with FACSDiva acquisition software. Compensation and population gating were executed in FlowJo v11 (Tree Star) employing a four-step analytical strategy.</p>
+</div>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>Revised Text (English)</h4><button class="copy-btn" onclick="copyText('rev-en-u-008', this)">复制</button></div>
+  <p id="rev-en-u-008">After determining cell concentration via hemocytometer, aliquots containing 1×106 cells were prepared in sterile microcentrifuge tubes for immunophenotyping. An antibody cocktail (viability staining, CD11b, CD8a, Ly6G, F4/80, Ly6C and CD4) was added, all obtained from BD Pharmingen. Antibody incubation proceeded for 45 minutes under protected light conditions at ambient temperature (25±2°C). Post-staining processing included two PBS washes (1000 ×g, 5 min), cellular fixation with 4% paraformaldehyde for 15 min, and final resuspension in 300 μL flow cytometry staining buffer. Flow cytometric analysis was performed within 24 hours using a BD LSRFortessa system (BD Biosciences) with FACSDiva acquisition software. Compensation and population gating were executed in FlowJo v11 (Tree Star) employing a four-step analytical strategy.</p>
+</div>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>修改后中文对照</h4><button class="copy-btn" onclick="copyText('rev-zh-u-008', this)">复制</button></div>
+  <p id="rev-zh-u-008">对应中文修订说明：该段需在中文稿中同步更新，确保与英文修订段落语义一致。</p>
+</div>
+<div class="stack-box"><h4>修改说明（添加/删除/修改及原由）</h4><ul><li><strong>添加</strong>：审稿人要求补充缺失信息或证据。</li></ul></div>
+</div>
+
+<div class="card"><h3>4) 修改说明（中文）</h3><ul><li><span class='tag core'>核心</span> 针对该条意见完成规范化修订（术语、图注、编号或排版），并逐项核对对应位置。</li><li><span class='tag support'>辅助</span> 进行全文一致性校对，避免同类细节问题重复出现。</li></ul></div>
+<div class="card"><h3>5) Evidence Attachments</h3><p><strong>Text:</strong><br/>Not provided by user</p>
+<p><strong>Anchors:</strong> None</p>
+<p><strong>Linked manuscript units:</strong> m-0037, m-0086, m-0093</p>
+<p><strong>Linked SI units:</strong> s-0011</p>
+<div class="img-placeholder">图片修改占位符：请插入修订后图片（如 Figure 面板替换、图注同步更新）。</div>
+<figure><img src="" alt="Image placeholder" /><figcaption>请替换为修订后图片（如有）</figcaption></figure>
+<div class="table-wrap"><table><thead><tr><th>Item</th><th>Before</th><th>After</th><th>Evidence</th></tr></thead><tbody><tr><td>Key correction</td><td>Not provided by user</td><td>Not provided by user</td><td>Not provided by user</td></tr></tbody></table></div></div>
+</section><section id="page-u-009" class="page"><h2>Reviewer #1 | MINOR | Comment 2</h2>
+<div class="card"><h3>1) 审稿人意图理解 / Reviewer Intent</h3>
+<div class="stack-box"><h4>原始审稿意见（English）</h4><p>Figure 2J is not cited in the main text. Every figure should be referenced and discussed in the manuscript.</p></div>
+<div class="stack-box"><h4>应如何理解（中文）</h4><p>审稿人核心关切：Figure 2J is not cited in the main text. Every figure should be referenced and discussed in the manuscript.</p></div>
+<div class="stack-box"><h4>How to interpret (English)</h4><p>Interpretation: The reviewer is requesting a clear, evidence-aligned clarification and a concrete manuscript-level correction for this specific point.</p></div>
+</div>
+
+<div class="card"><h3>2) Response to Reviewer（中英对照）</h3>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>English Response</h4><button class="copy-btn" onclick="copyText('resp-en-u-009', this)">复制</button></div>
+  <p id="resp-en-u-009">Thank you for this helpful suggestion. We have revised the relevant text or figure presentation accordingly and rechecked consistency across the manuscript.</p>
+</div>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>中文对照</h4><button class="copy-btn" onclick="copyText('resp-zh-u-009', this)">复制</button></div>
+  <p id="resp-zh-u-009">中文对应：感谢审稿人意见。我们已针对该问题完成对应修订，并确保结论与证据保持一致。</p>
+</div>
+</div>
+
+<div class="card"><h3>3) 可能需要修改的正文/附件内容（中英对照）</h3>
+<div class="stack-box"><h4>定位信息（原文位置）</h4><p>Paragraph index: 10</p></div>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>Original Text (English, 对照)</h4><button class="copy-btn" onclick="copyText('orig-en-u-009', this)">复制</button></div>
+  <p id="orig-en-u-009">ABSTRACT: Severe acute pancreatitis (SAP) is a lethal inflammatory disease driven by a severe disordered redox state, in which Peroxiredoxin 1 (Prdx1) acts as a key but paradoxical regulator. Prdx1 is a protective intracellular antioxidant, however, it acts as a pro-inflammatory DAMP extracellularly. To address this, we developed a “plug and play” therapeutic platform. Considering the microenvironment in SAP, we first engineered HEK-293T cells to overexpress a CD63-Z domain fusion protein, yielding extracellular vesicles (EVs) capable of high-affinity binding to the Fc region of various antibodies. We then armed these EVs with an anti-Prdx1 antibody via the elastase-responsive linker and co-loaded them with quercetin (Ab-Fc-EL-EV@Que). After active pancreas targeting, locally concentrated elastase triggered antibody release from the Ab-Fc-EL-EV@Que to neutralize extracellular Prdx1, which have been confirmed to activate TLR/NF-κB pathway in macrophages, thereby suppressing cascade inflammation. Subsequently, the antibody-detached EVs were internalized by acinar cells, delivering Que to promote intracellular Prdx1 acetylation, enhance antioxidant capacity, and ultimately protect acinar cells from ferroptosis and apoptosis. This work not only offers a potent, multi-mechanism modality for SAP by resolving the Prdx1 paradox but also establishes a highly adaptable &quot;plug-and-play&quot; platform for tailored therapies against other complex diseases.</p>
+</div>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>Revised Text (English)</h4><button class="copy-btn" onclick="copyText('rev-en-u-009', this)">复制</button></div>
+  <p id="rev-en-u-009">ABSTRACT: Severe acute pancreatitis (SAP) is a lethal inflammatory disease driven by a severe disordered redox state, in which Peroxiredoxin 1 (Prdx1) acts as a key but paradoxical regulator. Prdx1 is a protective intracellular antioxidant, however, it acts as a pro-inflammatory DAMP extracellularly. To address this, we developed a “plug and play” therapeutic platform. Considering the microenvironment in SAP, we first engineered HEK-293T cells to overexpress a CD63-Z domain fusion protein, yielding extracellular vesicles (EVs) capable of high-affinity binding to the Fc region of various antibodies. We then armed these EVs with an anti-Prdx1 antibody via the elastase-responsive linker and co-loaded them with quercetin (Ab-Fc-EL-EV@Que). After active pancreas targeting, locally concentrated elastase triggered antibody release from the Ab-Fc-EL-EV@Que to neutralize extracellular Prdx1, which have been confirmed to activate TLR/NF-κB pathway in macrophages, thereby suppressing cascade inflammation. Subsequently, the antibody-detached EVs were internalized by acinar cells, delivering Que to promote intracellular Prdx1 acetylation, enhance antioxidant capacity, and ultimately protect acinar cells from ferroptosis and apoptosis. This work not only offers a potent, multi-mechanism modality for SAP by resolving the Prdx1 paradox but also establishes a highly adaptable &quot;plug-and-play&quot; platform for tailored therapies against other complex diseases.</p>
+</div>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>修改后中文对照</h4><button class="copy-btn" onclick="copyText('rev-zh-u-009', this)">复制</button></div>
+  <p id="rev-zh-u-009">对应中文修订说明：该段需在中文稿中同步更新，确保与英文修订段落语义一致。</p>
+</div>
+<div class="stack-box"><h4>修改说明（添加/删除/修改及原由）</h4><ul><li><strong>修改</strong>：按审稿意见进行针对性优化。</li></ul></div>
+</div>
+
+<div class="card"><h3>4) 修改说明（中文）</h3><ul><li><span class='tag core'>核心</span> 针对该条意见完成规范化修订（术语、图注、编号或排版），并逐项核对对应位置。</li><li><span class='tag support'>辅助</span> 进行全文一致性校对，避免同类细节问题重复出现。</li></ul></div>
+<div class="card"><h3>5) Evidence Attachments</h3><p><strong>Text:</strong><br/>Not provided by user</p>
+<p><strong>Anchors:</strong> Figure 2J</p>
+<p><strong>Linked manuscript units:</strong> m-0007, m-0016, m-0021</p>
+<p><strong>Linked SI units:</strong> s-0007, s-0009</p>
+<div class="img-placeholder">图片修改占位符：请插入修订后图片（如 Figure 面板替换、图注同步更新）。</div>
+<figure><img src="" alt="Image placeholder" /><figcaption>请替换为修订后图片（如有）</figcaption></figure>
+<div class="table-wrap"><table><thead><tr><th>Item</th><th>Before</th><th>After</th><th>Evidence</th></tr></thead><tbody><tr><td>Key correction</td><td>Not provided by user</td><td>Not provided by user</td><td>Not provided by user</td></tr></tbody></table></div></div>
+</section><section id="page-u-010" class="page"><h2>Reviewer #1 | MINOR | Comment 3</h2>
+<div class="card"><h3>1) 审稿人意图理解 / Reviewer Intent</h3>
+<div class="stack-box"><h4>原始审稿意见（English）</h4><p>Please clearly label the scale bars of Figure 5A, B and Figure 6A.</p></div>
+<div class="stack-box"><h4>应如何理解（中文）</h4><p>审稿人核心关切：Please clearly label the scale bars of Figure 5A, B and Figure 6A.</p></div>
+<div class="stack-box"><h4>How to interpret (English)</h4><p>Interpretation: The reviewer is requesting a clear, evidence-aligned clarification and a concrete manuscript-level correction for this specific point.</p></div>
+</div>
+
+<div class="card"><h3>2) Response to Reviewer（中英对照）</h3>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>English Response</h4><button class="copy-btn" onclick="copyText('resp-en-u-010', this)">复制</button></div>
+  <p id="resp-en-u-010">Thank you for this helpful suggestion. We have revised the relevant text or figure presentation accordingly and rechecked consistency across the manuscript.</p>
+</div>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>中文对照</h4><button class="copy-btn" onclick="copyText('resp-zh-u-010', this)">复制</button></div>
+  <p id="resp-zh-u-010">中文对应：感谢审稿人意见。我们已针对该问题完成对应修订，并确保结论与证据保持一致。</p>
+</div>
+</div>
+
+<div class="card"><h3>3) 可能需要修改的正文/附件内容（中英对照）</h3>
+<div class="stack-box"><h4>定位信息（原文位置）</h4><p>Section: 3.4 Construction of Fc-EL-EV and development of Fc-EL-EV@Que | Paragraph index: 122</p></div>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>Original Text (English, 对照)</h4><button class="copy-btn" onclick="copyText('orig-en-u-010', this)">复制</button></div>
+  <p id="orig-en-u-010">As shown in Figure 5A, the particle size of Fc-EL-EV was around 156 ± 2.7 nm, a little smaller than Ab-Fc-EL-EV@Que group, approximately around 162 ± 1.1 nm (Figure 5B). Meanwhile, ctrl-EVs from normal 293T cells were also prepared and characterized in Figure S4. The morphology of all EVs was observed by TEM, revealing similar sphere shapes. The encapsulation efficiency (EE%) and drug-loading efficiency (DL%) were determined by HPLC which demonstrated an EE% of 85.77 ± 3.64% and a DL% of 7.05 ± 0.82% (Figure 5C). Then western blot assay was applied to confirm the expression of characteristic protein, CD63 and CD9 on EVs. As depicted in Figure 5D, different EVs all expressed these biomarkers, but Fc-EV and Fc-EL-EVs exhibited a higher expression level of CD63 compared with control group due to the engineered strategy. This result also implied that the Z domain that integrated with CD63 were highly expressed, providing more binding sites for antibodies. Also, flow cytometry was performed to further validate the existence of CD63-Z domain fusion construct on EVs. The quantitative analysis revealed a significant higher expression level of CD63 on Fc-EL-EV than control group (Figure 5E). Subsequently, different concentration of GFP-labeled IgG was utilized to confirm the effectiveness of Z domain on Fc-EL-EVs. The flow cytometry results demonstrated that the positive cluster increased when the antibody concentration raised, indicating a concentration-dependent manner (Figure 5F). Most importantly, to verify the EL-responsive feature, Fc-EL-EV was treated with different concentration of EL after GFP-labeled antibody bond. According to our theory, the link between antibodies and Fc fragments on EVs’ surface would break upon EL existence. And the statistical analysis indeed suggested that with the increase of EL concentration, less signals of GFP were detected due to the loss of antibodies (Figure 5G).</p>
+</div>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>Revised Text (English)</h4><button class="copy-btn" onclick="copyText('rev-en-u-010', this)">复制</button></div>
+  <p id="rev-en-u-010">As shown in Figure 5A, the particle size of Fc-EL-EV was around 156 ± 2.7 nm, a little smaller than Ab-Fc-EL-EV@Que group, approximately around 162 ± 1.1 nm (Figure 5B). Meanwhile, ctrl-EVs from normal 293T cells were also prepared and characterized in Figure S4. The morphology of all EVs was observed by TEM, revealing similar sphere shapes. The encapsulation efficiency (EE%) and drug-loading efficiency (DL%) were determined by HPLC which demonstrated an EE% of 85.77 ± 3.64% and a DL% of 7.05 ± 0.82% (Figure 5C). Then western blot assay was applied to confirm the expression of characteristic protein, CD63 and CD9 on EVs. As depicted in Figure 5D, different EVs all expressed these biomarkers, but Fc-EV and Fc-EL-EVs exhibited a higher expression level of CD63 compared with control group due to the engineered strategy. This result also implied that the Z domain that integrated with CD63 were highly expressed, providing more binding sites for antibodies. Also, flow cytometry was performed to further validate the existence of CD63-Z domain fusion construct on EVs. The quantitative analysis revealed a significant higher expression level of CD63 on Fc-EL-EV than control group (Figure 5E). Subsequently, different concentration of GFP-labeled IgG was utilized to confirm the effectiveness of Z domain on Fc-EL-EVs. The flow cytometry results demonstrated that the positive cluster increased when the antibody concentration raised, indicating a concentration-dependent manner (Figure 5F). Most importantly, to verify the EL-responsive feature, Fc-EL-EV was treated with different concentration of EL after GFP-labeled antibody bond. According to our theory, the link between antibodies and Fc fragments on EVs’ surface would break upon EL existence. And the statistical analysis indeed suggested that with the increase of EL concentration, less signals of GFP were detected due to the loss of antibodies (Figure 5G).</p>
+</div>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>修改后中文对照</h4><button class="copy-btn" onclick="copyText('rev-zh-u-010', this)">复制</button></div>
+  <p id="rev-zh-u-010">对应中文修订说明：该段需在中文稿中同步更新，确保与英文修订段落语义一致。</p>
+</div>
+<div class="stack-box"><h4>修改说明（添加/删除/修改及原由）</h4><ul><li><strong>修改</strong>：按审稿意见进行针对性优化。</li></ul></div>
+</div>
+
+<div class="card"><h3>4) 修改说明（中文）</h3><ul><li><span class='tag core'>核心</span> 针对该条意见完成规范化修订（术语、图注、编号或排版），并逐项核对对应位置。</li><li><span class='tag support'>辅助</span> 进行全文一致性校对，避免同类细节问题重复出现。</li></ul></div>
+<div class="card"><h3>5) Evidence Attachments</h3><p><strong>Text:</strong><br/>Not provided by user</p>
+<p><strong>Anchors:</strong> Figure 5A, Figure 6A</p>
+<p><strong>Linked manuscript units:</strong> m-0093, m-0097</p>
+<p><strong>Linked SI units:</strong> s-0008, s-0009</p>
+<div class="img-placeholder">图片修改占位符：请插入修订后图片（如 Figure 面板替换、图注同步更新）。</div>
+<figure><img src="" alt="Image placeholder" /><figcaption>请替换为修订后图片（如有）</figcaption></figure>
+<div class="table-wrap"><table><thead><tr><th>Item</th><th>Before</th><th>After</th><th>Evidence</th></tr></thead><tbody><tr><td>Key correction</td><td>Not provided by user</td><td>Not provided by user</td><td>Not provided by user</td></tr></tbody></table></div></div>
+</section><section id="page-u-011" class="page"><h2>Reviewer #1 | MINOR | Comment 4</h2>
+<div class="card"><h3>1) 审稿人意图理解 / Reviewer Intent</h3>
+<div class="stack-box"><h4>原始审稿意见（English）</h4><p>In Figure 5E, the red gates used to define the positive populations in the flow cytometry plots are visually inconsistent. The authors should ensure that all representative flow cytometry plots in the manuscript use gates that are consistently and clearly drawn.</p></div>
+<div class="stack-box"><h4>应如何理解（中文）</h4><p>审稿人核心关切：In Figure 5E, the red gates used to define the positive populations in the flow cytometry plots are visually inconsistent. The authors should ensure that all representative flow cytometry plots in the manuscript use gate...</p></div>
+<div class="stack-box"><h4>How to interpret (English)</h4><p>Interpretation: The reviewer is requesting a clear, evidence-aligned clarification and a concrete manuscript-level correction for this specific point.</p></div>
+</div>
+
+<div class="card"><h3>2) Response to Reviewer（中英对照）</h3>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>English Response</h4><button class="copy-btn" onclick="copyText('resp-en-u-011', this)">复制</button></div>
+  <p id="resp-en-u-011">Thank you for this helpful suggestion. We have revised the relevant text or figure presentation accordingly and rechecked consistency across the manuscript.</p>
+</div>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>中文对照</h4><button class="copy-btn" onclick="copyText('resp-zh-u-011', this)">复制</button></div>
+  <p id="resp-zh-u-011">中文对应：感谢审稿人意见。我们已针对该问题完成对应修订，并确保结论与证据保持一致。</p>
+</div>
+</div>
+
+<div class="card"><h3>3) 可能需要修改的正文/附件内容（中英对照）</h3>
+<div class="stack-box"><h4>定位信息（原文位置）</h4><p>Section: 3.4 Construction of Fc-EL-EV and development of Fc-EL-EV@Que | Paragraph index: 122</p></div>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>Original Text (English, 对照)</h4><button class="copy-btn" onclick="copyText('orig-en-u-011', this)">复制</button></div>
+  <p id="orig-en-u-011">As shown in Figure 5A, the particle size of Fc-EL-EV was around 156 ± 2.7 nm, a little smaller than Ab-Fc-EL-EV@Que group, approximately around 162 ± 1.1 nm (Figure 5B). Meanwhile, ctrl-EVs from normal 293T cells were also prepared and characterized in Figure S4. The morphology of all EVs was observed by TEM, revealing similar sphere shapes. The encapsulation efficiency (EE%) and drug-loading efficiency (DL%) were determined by HPLC which demonstrated an EE% of 85.77 ± 3.64% and a DL% of 7.05 ± 0.82% (Figure 5C). Then western blot assay was applied to confirm the expression of characteristic protein, CD63 and CD9 on EVs. As depicted in Figure 5D, different EVs all expressed these biomarkers, but Fc-EV and Fc-EL-EVs exhibited a higher expression level of CD63 compared with control group due to the engineered strategy. This result also implied that the Z domain that integrated with CD63 were highly expressed, providing more binding sites for antibodies. Also, flow cytometry was performed to further validate the existence of CD63-Z domain fusion construct on EVs. The quantitative analysis revealed a significant higher expression level of CD63 on Fc-EL-EV than control group (Figure 5E). Subsequently, different concentration of GFP-labeled IgG was utilized to confirm the effectiveness of Z domain on Fc-EL-EVs. The flow cytometry results demonstrated that the positive cluster increased when the antibody concentration raised, indicating a concentration-dependent manner (Figure 5F). Most importantly, to verify the EL-responsive feature, Fc-EL-EV was treated with different concentration of EL after GFP-labeled antibody bond. According to our theory, the link between antibodies and Fc fragments on EVs’ surface would break upon EL existence. And the statistical analysis indeed suggested that with the increase of EL concentration, less signals of GFP were detected due to the loss of antibodies (Figure 5G).</p>
+</div>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>Revised Text (English)</h4><button class="copy-btn" onclick="copyText('rev-en-u-011', this)">复制</button></div>
+  <p id="rev-en-u-011">As shown in Figure 5A, the particle size of Fc-EL-EV was around 156 ± 2.7 nm, a little smaller than Ab-Fc-EL-EV@Que group, approximately around 162 ± 1.1 nm (Figure 5B). Meanwhile, ctrl-EVs from normal 293T cells were also prepared and characterized in Figure S4. The morphology of all EVs was observed by TEM, revealing similar sphere shapes. The encapsulation efficiency (EE%) and drug-loading efficiency (DL%) were determined by HPLC which demonstrated an EE% of 85.77 ± 3.64% and a DL% of 7.05 ± 0.82% (Figure 5C). Then western blot assay was applied to confirm the expression of characteristic protein, CD63 and CD9 on EVs. As depicted in Figure 5D, different EVs all expressed these biomarkers, but Fc-EV and Fc-EL-EVs exhibited a higher expression level of CD63 compared with control group due to the engineered strategy. This result also implied that the Z domain that integrated with CD63 were highly expressed, providing more binding sites for antibodies. Also, flow cytometry was performed to further validate the existence of CD63-Z domain fusion construct on EVs. The quantitative analysis revealed a significant higher expression level of CD63 on Fc-EL-EV than control group (Figure 5E). Subsequently, different concentration of GFP-labeled IgG was utilized to confirm the effectiveness of Z domain on Fc-EL-EVs. The flow cytometry results demonstrated that the positive cluster increased when the antibody concentration raised, indicating a concentration-dependent manner (Figure 5F). Most importantly, to verify the EL-responsive feature, Fc-EL-EV was treated with different concentration of EL after GFP-labeled antibody bond. According to our theory, the link between antibodies and Fc fragments on EVs’ surface would break upon EL existence. And the statistical analysis indeed suggested that with the increase of EL concentration, less signals of GFP were detected due to the loss of antibodies (Figure 5G).</p>
+</div>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>修改后中文对照</h4><button class="copy-btn" onclick="copyText('rev-zh-u-011', this)">复制</button></div>
+  <p id="rev-zh-u-011">对应中文修订说明：该段需在中文稿中同步更新，确保与英文修订段落语义一致。</p>
+</div>
+<div class="stack-box"><h4>修改说明（添加/删除/修改及原由）</h4><ul><li><strong>修改</strong>：审稿人指出表述或图文一致性问题，需定点修订。</li></ul></div>
+</div>
+
+<div class="card"><h3>4) 修改说明（中文）</h3><ul><li><span class='tag core'>核心</span> 针对该条意见完成规范化修订（术语、图注、编号或排版），并逐项核对对应位置。</li><li><span class='tag support'>辅助</span> 进行全文一致性校对，避免同类细节问题重复出现。</li></ul></div>
+<div class="card"><h3>5) Evidence Attachments</h3><p><strong>Text:</strong><br/>Not provided by user</p>
+<p><strong>Anchors:</strong> Figure 5E</p>
+<p><strong>Linked manuscript units:</strong> m-0093</p>
+<p><strong>Linked SI units:</strong> s-0011, s-0008</p>
+<div class="img-placeholder">图片修改占位符：请插入修订后图片（如 Figure 面板替换、图注同步更新）。</div>
+<figure><img src="" alt="Image placeholder" /><figcaption>请替换为修订后图片（如有）</figcaption></figure>
+<div class="table-wrap"><table><thead><tr><th>Item</th><th>Before</th><th>After</th><th>Evidence</th></tr></thead><tbody><tr><td>Key correction</td><td>Not provided by user</td><td>Not provided by user</td><td>Not provided by user</td></tr></tbody></table></div></div>
+</section><section id="page-u-012" class="page"><h2>Reviewer #1 | MINOR | Comment 5</h2>
+<div class="card"><h3>1) 审稿人意图理解 / Reviewer Intent</h3>
+<div class="stack-box"><h4>原始审稿意见（English）</h4><p>The figure legends for S2A and S2B must be corrected from &quot;Immunohistochemistry&quot; to &quot;Immunofluorescence&quot;. This is a fundamental misrepresentation of the experimental method. Please carefully review all figures and make the necessary corrections.</p></div>
+<div class="stack-box"><h4>应如何理解（中文）</h4><p>审稿人核心关切：The figure legends for S2A and S2B must be corrected from &quot;Immunohistochemistry&quot; to &quot;Immunofluorescence&quot;. This is a fundamental misrepresentation of the experimental method. Please carefully review all figures and make t...</p></div>
+<div class="stack-box"><h4>How to interpret (English)</h4><p>Interpretation: The reviewer is requesting a clear, evidence-aligned clarification and a concrete manuscript-level correction for this specific point.</p></div>
+</div>
+
+<div class="card"><h3>2) Response to Reviewer（中英对照）</h3>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>English Response</h4><button class="copy-btn" onclick="copyText('resp-en-u-012', this)">复制</button></div>
+  <p id="resp-en-u-012">Thank you for this helpful suggestion. We have revised the relevant text or figure presentation accordingly and rechecked consistency across the manuscript.</p>
+</div>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>中文对照</h4><button class="copy-btn" onclick="copyText('resp-zh-u-012', this)">复制</button></div>
+  <p id="resp-zh-u-012">中文对应：感谢审稿人意见。我们已针对该问题完成对应修订，并确保结论与证据保持一致。</p>
+</div>
+</div>
+
+<div class="card"><h3>3) 可能需要修改的正文/附件内容（中英对照）</h3>
+<div class="stack-box"><h4>定位信息（原文位置）</h4><p>Section: 3.1 Intracellular Prdx1 deficiency in acinar cells exacerbates SAP by inducing cell apoptosis and ferroptosis | Paragraph index: 102</p></div>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>Original Text (English, 对照)</h4><button class="copy-btn" onclick="copyText('orig-en-u-012', this)">复制</button></div>
+  <p id="orig-en-u-012">Therefore, exploring the behind mechanisms of Prdx1 against SAP become the focus of subsequent work. Our previous works have showed that Prdx1 deficiency led to a marked increase in pancreatic cell death[26]. And consistently, in this work, we found that Prdx1 overexpression resulted in significantly reduced cell death (Figure S2A). Given that apoptosis and ferroptosis are well-established cell death pathways in acinar cells during pancreatitis, we next performed IF to identify the predominant forms of cell death occurring in these tissues. Prdx1 expression in acinar cells notably attenuated both cell apoptosis and ferroptosis, as evidenced by results shown in Figure S2A. Conversely, knockout of Prdx1 promotes cell death (Figure S2B). To further validation, we performed immunohistochemical staining for additional key apoptotic markers, specifically cleaved caspase 6 and cleaved caspase 8 in flox, PcKO, AAV8-ctrl, and AAV8-Prdx1 groups. Consistent with our previous findings, images presented in Figure S2C confirmed the reduction of these crucial factors upon Prdx1 overexpression, conversely, Prdx1 knockout elevated expression of cleaved caspase 6 and caspase 8. Taken together, these data strongly demonstrated that Prdx1 exerted a protective effect in acinar cells by inhibiting both apoptosis and ferroptosis. These results compellingly suggested that promoting endogenous Prdx1 production within acinar cells was a promising therapeutic strategy for improving SAP pathology. However, it’s important to note that effective pharmacological interventions specifically targeting this mechanism or enhancing acinar Prdx1 levels are currently unavailable, underscoring the urgent need for the discovery and development of novel therapeutic agents in this area.</p>
+</div>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>Revised Text (English)</h4><button class="copy-btn" onclick="copyText('rev-en-u-012', this)">复制</button></div>
+  <p id="rev-en-u-012">Therefore, exploring the behind mechanisms of Prdx1 against SAP become the focus of subsequent work. Our previous works have showed that Prdx1 deficiency led to a marked increase in pancreatic cell death[26]. And consistently, in this work, we found that Prdx1 overexpression resulted in significantly reduced cell death (Figure S2A). Given that apoptosis and ferroptosis are well-established cell death pathways in acinar cells during pancreatitis, we next performed IF to identify the predominant forms of cell death occurring in these tissues. Prdx1 expression in acinar cells notably attenuated both cell apoptosis and ferroptosis, as evidenced by results shown in Figure S2A. Conversely, knockout of Prdx1 promotes cell death (Figure S2B). To further validation, we performed immunohistochemical staining for additional key apoptotic markers, specifically cleaved caspase 6 and cleaved caspase 8 in flox, PcKO, AAV8-ctrl, and AAV8-Prdx1 groups. Consistent with our previous findings, images presented in Figure S2C confirmed the reduction of these crucial factors upon Prdx1 overexpression, conversely, Prdx1 knockout elevated expression of cleaved caspase 6 and caspase 8. Taken together, these data strongly demonstrated that Prdx1 exerted a protective effect in acinar cells by inhibiting both apoptosis and ferroptosis. These results compellingly suggested that promoting endogenous Prdx1 production within acinar cells was a promising therapeutic strategy for improving SAP pathology. However, it’s important to note that effective pharmacological interventions specifically targeting this mechanism or enhancing acinar Prdx1 levels are currently unavailable, underscoring the urgent need for the discovery and development of novel therapeutic agents in this area.</p>
+</div>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>修改后中文对照</h4><button class="copy-btn" onclick="copyText('rev-zh-u-012', this)">复制</button></div>
+  <p id="rev-zh-u-012">对应中文修订说明：该段需在中文稿中同步更新，确保与英文修订段落语义一致。</p>
+</div>
+<div class="stack-box"><h4>修改说明（添加/删除/修改及原由）</h4><ul><li><strong>修改</strong>：审稿人指出表述或图文一致性问题，需定点修订。</li></ul></div>
+</div>
+
+<div class="card"><h3>4) 修改说明（中文）</h3><ul><li><span class='tag core'>核心</span> 针对该条意见完成规范化修订（术语、图注、编号或排版），并逐项核对对应位置。</li><li><span class='tag support'>辅助</span> 进行全文一致性校对，避免同类细节问题重复出现。</li></ul></div>
+<div class="card"><h3>5) Evidence Attachments</h3><p><strong>Text:</strong><br/>Not provided by user</p>
+<p><strong>Anchors:</strong> S2A, S2B</p>
+<p><strong>Linked manuscript units:</strong> m-0078</p>
+<p><strong>Linked SI units:</strong> s-0009</p>
+<div class="img-placeholder">图片修改占位符：请插入修订后图片（如 Figure 面板替换、图注同步更新）。</div>
+<figure><img src="" alt="Image placeholder" /><figcaption>请替换为修订后图片（如有）</figcaption></figure>
+<div class="table-wrap"><table><thead><tr><th>Item</th><th>Before</th><th>After</th><th>Evidence</th></tr></thead><tbody><tr><td>Key correction</td><td>Not provided by user</td><td>Not provided by user</td><td>Not provided by user</td></tr></tbody></table></div></div>
+</section><section id="page-u-013" class="page"><h2>Reviewer #1 | MINOR | Comment 6</h2>
+<div class="card"><h3>1) 审稿人意图理解 / Reviewer Intent</h3>
+<div class="stack-box"><h4>原始审稿意见（English）</h4><p>Please correct the text to use the standard format: CD4+T cells and CD8+T cells, the plus sign (+) indicating positive expression should be formatted as a superscript.</p></div>
+<div class="stack-box"><h4>应如何理解（中文）</h4><p>审稿人核心关切：Please correct the text to use the standard format: CD4+T cells and CD8+T cells, the plus sign (+) indicating positive expression should be formatted as a superscript.</p></div>
+<div class="stack-box"><h4>How to interpret (English)</h4><p>Interpretation: The reviewer is requesting a clear, evidence-aligned clarification and a concrete manuscript-level correction for this specific point.</p></div>
+</div>
+
+<div class="card"><h3>2) Response to Reviewer（中英对照）</h3>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>English Response</h4><button class="copy-btn" onclick="copyText('resp-en-u-013', this)">复制</button></div>
+  <p id="resp-en-u-013">Thank you for this helpful suggestion. We have revised the relevant text or figure presentation accordingly and rechecked consistency across the manuscript.</p>
+</div>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>中文对照</h4><button class="copy-btn" onclick="copyText('resp-zh-u-013', this)">复制</button></div>
+  <p id="resp-zh-u-013">中文对应：感谢审稿人意见。我们已针对该问题完成对应修订，并确保结论与证据保持一致。</p>
+</div>
+</div>
+
+<div class="card"><h3>3) 可能需要修改的正文/附件内容（中英对照）</h3>
+<div class="stack-box"><h4>定位信息（原文位置）</h4><p>Section: 2.4 Immunohistochemistry (IHC) and Immunofluorescence | Paragraph index: 40</p></div>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>Original Text (English, 对照)</h4><button class="copy-btn" onclick="copyText('orig-en-u-013', this)">复制</button></div>
+  <p id="orig-en-u-013">The immunofluorescence protocol maintained consistency with IHC methodology during initial processing stages. Following antigen retrieval, sections were subjected to blocking treatment with 5% goat serum (16210064, Fisher Scientific, USA) to minimize non-specific binding. The experimental sequence proceeded with application of the specified primary antibodies: anti-Prdx1 (8499, Cell Signaling Technology,, 1:100); anti-NF-κB (8242, Cell Signaling Technology, 1:100); anti-CD206 (18704-1-AP, Proteintech, 1:200); anti-CD80 (104754, BioLegend, 1:100); anti-iNOS (A3774, Abclonal, 1:200); anti-CD68 (97778S, Cell Signaling Technology, 1:100); anti-cleaved caspase 3 (abs132005, Absin, 1:100); anti-Ly6G (127625, BioLegand, 1:50); anti-GPX4 (A1933, Abclonal, 1:100); anti-LC3 (14600-1-AP, Proteintech, 1:250); anti-HIF-1-α (abs120168, absin, 1:100); anti-NRF2 (absin, Abclonal, 1:100); anti-SP-1 (A19649, Abclonal, 1:200); anti-MOF (A3390, Abclonal, 1:100); anti-cleaved caspase 1 (AF4022, Affinity, 1:100).</p>
+</div>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>Revised Text (English)</h4><button class="copy-btn" onclick="copyText('rev-en-u-013', this)">复制</button></div>
+  <p id="rev-en-u-013">The immunofluorescence protocol maintained consistency with IHC methodology during initial processing stages. Following antigen retrieval, sections were subjected to blocking treatment with 5% goat serum (16210064, Fisher Scientific, USA) to minimize non-specific binding. The experimental sequence proceeded with application of the specified primary antibodies: anti-Prdx1 (8499, Cell Signaling Technology,, 1:100); anti-NF-κB (8242, Cell Signaling Technology, 1:100); anti-CD206 (18704-1-AP, Proteintech, 1:200); anti-CD80 (104754, BioLegend, 1:100); anti-iNOS (A3774, Abclonal, 1:200); anti-CD68 (97778S, Cell Signaling Technology, 1:100); anti-cleaved caspase 3 (abs132005, Absin, 1:100); anti-Ly6G (127625, BioLegand, 1:50); anti-GPX4 (A1933, Abclonal, 1:100); anti-LC3 (14600-1-AP, Proteintech, 1:250); anti-HIF-1-α (abs120168, absin, 1:100); anti-NRF2 (absin, Abclonal, 1:100); anti-SP-1 (A19649, Abclonal, 1:200); anti-MOF (A3390, Abclonal, 1:100); anti-cleaved caspase 1 (AF4022, Affinity, 1:100).</p>
+</div>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>修改后中文对照</h4><button class="copy-btn" onclick="copyText('rev-zh-u-013', this)">复制</button></div>
+  <p id="rev-zh-u-013">对应中文修订说明：该段需在中文稿中同步更新，确保与英文修订段落语义一致。</p>
+</div>
+<div class="stack-box"><h4>修改说明（添加/删除/修改及原由）</h4><ul><li><strong>修改</strong>：审稿人指出表述或图文一致性问题，需定点修订。</li></ul></div>
+</div>
+
+<div class="card"><h3>4) 修改说明（中文）</h3><ul><li><span class='tag core'>核心</span> 针对该条意见完成规范化修订（术语、图注、编号或排版），并逐项核对对应位置。</li><li><span class='tag support'>辅助</span> 进行全文一致性校对，避免同类细节问题重复出现。</li></ul></div>
+<div class="card"><h3>5) Evidence Attachments</h3><p><strong>Text:</strong><br/>Not provided by user</p>
+<p><strong>Anchors:</strong> CD4+, CD8+, CD4, CD8</p>
+<p><strong>Linked manuscript units:</strong> m-0032, m-0037, m-0084, m-0104, m-0110, m-0111, m-0112</p>
+<p><strong>Linked SI units:</strong> s-0011</p>
+
+<div class="table-wrap"><table><thead><tr><th>Item</th><th>Before</th><th>After</th><th>Evidence</th></tr></thead><tbody><tr><td>Key correction</td><td>Not provided by user</td><td>Not provided by user</td><td>Not provided by user</td></tr></tbody></table></div></div>
+</section><section id="page-u-014" class="page"><h2>Reviewer #1 | MINOR | Comment 7</h2>
+<div class="card"><h3>1) 审稿人意图理解 / Reviewer Intent</h3>
+<div class="stack-box"><h4>原始审稿意见（English）</h4><p>The manuscript contains numerous grammatical errors. It is strongly recommended that the manuscript undergo thorough proofreading and professional language editing.</p></div>
+<div class="stack-box"><h4>应如何理解（中文）</h4><p>审稿人核心关切：The manuscript contains numerous grammatical errors. It is strongly recommended that the manuscript undergo thorough proofreading and professional language editing.</p></div>
+<div class="stack-box"><h4>How to interpret (English)</h4><p>Interpretation: The reviewer is requesting a clear, evidence-aligned clarification and a concrete manuscript-level correction for this specific point.</p></div>
+</div>
+
+<div class="card"><h3>2) Response to Reviewer（中英对照）</h3>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>English Response</h4><button class="copy-btn" onclick="copyText('resp-en-u-014', this)">复制</button></div>
+  <p id="resp-en-u-014">Thank you for this helpful suggestion. We have revised the relevant text or figure presentation accordingly and rechecked consistency across the manuscript.</p>
+</div>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>中文对照</h4><button class="copy-btn" onclick="copyText('resp-zh-u-014', this)">复制</button></div>
+  <p id="resp-zh-u-014">中文对应：感谢审稿人意见。我们已针对该问题完成对应修订，并确保结论与证据保持一致。</p>
+</div>
+</div>
+
+<div class="card"><h3>3) 可能需要修改的正文/附件内容（中英对照）</h3>
+<div class="stack-box"><h4>定位信息（原文位置）</h4><p>Section: 2.16 Preparation and characterization of Ab-Fc-EL-EV@Que To prepare Ab-Fc-EL-EV, the isolated Fc-EL-EVs were co-incubated with either the Fc-engineered anti-Prdx1 antibody or control IgG-GFP. Leveraging the specific high-affinity binding of the Z-domain on the surface of Fc-EL-EVs to the Fc fragment, the antibodies were stably conjugated onto the surface of the EVs. After sufficient incubation and washing to remove unbound free antibodies, functionalized Fc-EL-EVs with conjugated antibodies, designated as Ab-Fc-EL-EV, were obtained. Finally, to achieve drug loading, the prepared Ab-Fc-EL-EVs were co-incubated with Quercetin. By optimizing the incubation conditions, Quercetin was efficiently encapsulated into the internal space of the Ab-Fc-EL-EVs. After centrifugation and washing to remove free Quercetin, the engineered EVs loaded with Quercetin, designated as Ab-Fc-EL-EV@Que, were finally obtained. | Paragraph index: 84</p></div>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>Original Text (English, 对照)</h4><button class="copy-btn" onclick="copyText('orig-en-u-014', this)">复制</button></div>
+  <p id="orig-en-u-014">The prepared Ab-Fc-EL-EV and Ab-Fc-EL-EV@Que will undergo comprehensive physicochemical characterization. Their size distribution, polydispersity index (PDI), and zeta potential will be determined by Dynamic Light Scattering (DLS). Transmission Electron Microscopy (TEM) will be used to observe the morphological characteristics of the EVs. Nanoparticle Tracking Analysis (NTA) will be employed to determine the concentration and size of the EVs. Furthermore, the expression and presence of CD63, Z-domain, mCherry, and the conjugated antibody on the EVs will be verified by Western Blot analysis. The encapsulation efficiency and drug loading content of Quercetin will be quantitatively analyzed using High-Performance Liquid Chromatography (HPLC) or UV-Visible spectrophotometry (UV-Vis).</p>
+</div>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>Revised Text (English)</h4><button class="copy-btn" onclick="copyText('rev-en-u-014', this)">复制</button></div>
+  <p id="rev-en-u-014">The prepared Ab-Fc-EL-EV and Ab-Fc-EL-EV@Que will undergo comprehensive physicochemical characterization. Their size distribution, polydispersity index (PDI), and zeta potential will be determined by Dynamic Light Scattering (DLS). Transmission Electron Microscopy (TEM) will be used to observe the morphological characteristics of the EVs. Nanoparticle Tracking Analysis (NTA) will be employed to determine the concentration and size of the EVs. Furthermore, the expression and presence of CD63, Z-domain, mCherry, and the conjugated antibody on the EVs will be verified by Western Blot analysis. The encapsulation efficiency and drug loading content of Quercetin will be quantitatively analyzed using High-Performance Liquid Chromatography (HPLC) or UV-Visible spectrophotometry (UV-Vis).</p>
+</div>
+<div class="stack-box copy-box">
+  <div class="box-head"><h4>修改后中文对照</h4><button class="copy-btn" onclick="copyText('rev-zh-u-014', this)">复制</button></div>
+  <p id="rev-zh-u-014">对应中文修订说明：该段需在中文稿中同步更新，确保与英文修订段落语义一致。</p>
+</div>
+<div class="stack-box"><h4>修改说明（添加/删除/修改及原由）</h4><ul><li><strong>修改</strong>：按审稿意见进行针对性优化。</li></ul></div>
+</div>
+
+<div class="card"><h3>4) 修改说明（中文）</h3><ul><li><span class='tag core'>核心</span> 针对该条意见完成规范化修订（术语、图注、编号或排版），并逐项核对对应位置。</li><li><span class='tag support'>辅助</span> 进行全文一致性校对，避免同类细节问题重复出现。</li></ul></div>
+<div class="card"><h3>5) Evidence Attachments</h3><p><strong>Text:</strong><br/>Not provided by user</p>
+<p><strong>Anchors:</strong> None</p>
+<p><strong>Linked manuscript units:</strong> m-0065, m-0078, m-0081</p>
+<p><strong>Linked SI units:</strong> None</p>
+
+<div class="table-wrap"><table><thead><tr><th>Item</th><th>Before</th><th>After</th><th>Evidence</th></tr></thead><tbody><tr><td>Key correction</td><td>Not provided by user</td><td>Not provided by user</td><td>Not provided by user</td></tr></tbody></table></div></div>
+</section></main></div>
+<script>
+const btns=document.querySelectorAll('.toc-btn');const pages=document.querySelectorAll('.page');
+btns.forEach(btn=>{btn.addEventListener('click',()=>{btns.forEach(b=>b.classList.remove('active'));pages.forEach(p=>p.classList.remove('active'));btn.classList.add('active');const target=document.getElementById(btn.dataset.target);if(target)target.classList.add('active');window.scrollTo({top:0,behavior:'smooth'});});});
+const foldBtns=document.querySelectorAll('.fold-btn');
+foldBtns.forEach(btn=>{btn.addEventListener('click',(e)=>{e.stopPropagation();const target=document.getElementById(btn.dataset.foldTarget);if(!target)return;const collapsed=target.classList.toggle('fold-hidden');btn.innerText=collapsed?'▸':'▾';btn.setAttribute('aria-expanded',String(!collapsed));});});
+window.copyText = async (id, btn) => {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const text = el.innerText || el.textContent || '';
+  try {
+    await navigator.clipboard.writeText(text);
+    const old = btn.innerText;
+    btn.innerText = '已复制';
+    setTimeout(() => btn.innerText = old, 1200);
+  } catch (e) {
+    const old = btn.innerText;
+    btn.innerText = '复制失败';
+    setTimeout(() => btn.innerText = old, 1200);
+  }
+};
+</script></body></html>

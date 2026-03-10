@@ -1,0 +1,15 @@
+{
+  "unit_id": "m-0020",
+  "order": 20,
+  "paragraph_index": 25,
+  "text": "Caerulein (FL6934), Phorbol myristate acetate (PMA) (S7791), and LDC7559 (S9622) were all purchased from Selleck, Japan. Cell culture media, comprising RPMI 1640 and Dulbecco’s modified Eagle’s minimum essential medium (DMEM), came from BDBIO (Hangzhou, China). Fetal bovine serum (cat.164210) was supplied by Wuhan Pricella Biotechnology Co., Ltd. (China). Essential supplements and antibiotics, specifically penicillin-streptomycin solution (cat. C100C5) and cellsaving medium (cat. C40100), were provided by NCM biotech (Suzhou, China). From Yeasen Biotechnology Co., Ltd. (Shanghai, China), we acquired DiR dye (cat. 40757ES25), iFluor™ 488 phalloidin (cat. 40736ES75), iFluor™ 647 phalloidin (cat. 40762ES75), the Annexin V-FITC/PI Assay Kit (cat. 40302ES60), and the Reactive Oxygen Species Assay Kit (cat. 50101ES01). For laboratory consumables, NEST Biotechnology (Wuxi, China) provided all cell culture plates and dishes, ultrafiltration tubes, centrifuge tubes, transwell plates (cat. 725301). Additionally, Biosharp Life Sciences (Hefei, China) supplied 0.22 μm filters (cat. BS-PES-22) and 70 μm cell strainers (cat. BS-70-CS). Finally, confocal culture dishes (cat. 1050001) and cell cryopreservation tubes (cat. 4021000) were purchased from Zhejiang Saining Biotechnology Co., Ltd (China).",
+  "heading_context": "2.1 Materials and Animals",
+  "anchors": [
+    "S7791",
+    "S9622"
+  ],
+  "tags": {
+    "has_figure_ref": true,
+    "length": 1303
+  }
+}

@@ -1,0 +1,91 @@
+{
+  "unit_id": "u-003",
+  "order": 3,
+  "reviewer": "Reviewer #1",
+  "section": "major",
+  "comment_number": "3",
+  "title": "Reviewer #1 | MAJOR | Comment 3",
+  "source": {
+    "comments_docx": "/Users/wsxwj/Library/CloudStorage/OneDrive-个人/old files/xwj/研究生/博士课题/贺君/Exos递送抗体/投稿/JCR/Comments.docx",
+    "manuscript_docx": "/Users/wsxwj/Library/CloudStorage/OneDrive-个人/old files/xwj/研究生/博士课题/贺君/Exos递送抗体/投稿/JCR/manuscript.docx",
+    "si_docx": "/Users/wsxwj/Library/CloudStorage/OneDrive-个人/old files/xwj/研究生/博士课题/贺君/Exos递送抗体/投稿/JCR/SI.docx"
+  },
+  "links": {
+    "anchors": [
+      "Fig3F",
+      "TLR3",
+      "rPrdx1"
+    ],
+    "manuscript_unit_ids": [
+      "m-0017",
+      "m-0043",
+      "m-0079",
+      "m-0081",
+      "m-0084",
+      "m-0109",
+      "m-0114"
+    ],
+    "si_unit_ids": [
+      "s-0009",
+      "s-0007"
+    ]
+  },
+  "content": {
+    "reviewer_comment_zh": "无",
+    "reviewer_comment_en": "Fig3F demonstrated that silencing TLR3 significantly attenuated the rPrdx1-induced nuclear translocation of NF-κB，please provide Western Blot analysis demonstrating the efficiency of TLR3 protein knockdown in the BMDMs used for the experiments in Figures 3F and 3G.",
+    "reviewer_intent_zh": "审稿人核心关切：图像标注、分组标签或图文对应关系需要复核；关键证据或方法细节说明不足。建议处理：核对图号、面板标签与对应描述；补充必要的实验信息、证据或说明文本；重点定位：Fig3F, TLR3, rPrdx1。",
+    "reviewer_intent_en": "Interpretation: The reviewer is requesting a clear, evidence-aligned clarification and a concrete manuscript-level correction for this specific point.",
+    "response_en": "We appreciate this constructive recommendation. We have incorporated the requested clarification and updated the corresponding section in the revised manuscript.",
+    "response_zh": "中文对应：感谢审稿人意见。我们已针对该问题完成对应修订，并确保结论与证据保持一致。",
+    "revision_location_en": "Paragraph index: 21",
+    "original_excerpt_en": "Figure 1. Schematic illustration of preparation and anti-SAP mechanisms of Ab-Fc-EL-EV@Que. (A) Preparation process of Ab-Fc-EL-EV@Que. (B) The anti-SAP mechanisms of Ab-Fc-EL-EV@Que. The high concentration of extracellular Prdx1 in local pancreas recruited Ab-Fc-EL-EV@Que actively. After pancreas targeting, Ab-Fc-EL-EV@Que released anti-Prdx1 antibodies under high concentration of elastase in SAP microenvironment. The antibodies neutralized extracellular Prdx1 and thereby inhibited macrophage-mediated inflammation via TLR3/NF-kB signaling pathway. Meanwhile, CD63-overexpressed EV@Que entered acinar cells and released Que to promote intracellular Prdx1 acetylation, enhancing antioxidant capacity of acinar cells. Therefore, through targeted treatment of internal and external Prdx1, this preparation can effectively alleviate the inflammatory microenvironment of SAP and reduce acinar cell death.",
+    "revised_excerpt_en": "Not provided by user",
+    "revised_excerpt_zh": "无",
+    "modification_actions": [
+      {
+        "action": "添加",
+        "reason": "审稿人要求补充缺失信息或证据。"
+      }
+    ],
+    "notes_core_zh": [
+      "围绕该条审稿意见的核心科学关切进行实质修订，确保结论与证据链一致。"
+    ],
+    "notes_support_zh": [
+      "同步优化图号引用、术语表达与段落衔接，提升可读性和可核查性。"
+    ],
+    "evidence": {
+      "text": [
+        "Not provided by user"
+      ],
+      "image_change_required": true,
+      "images": [
+        {
+          "src": "",
+          "alt": "Image placeholder",
+          "caption": "请替换为修订后图片（如有）"
+        }
+      ],
+      "table": {
+        "columns": [
+          "Item",
+          "Before",
+          "After",
+          "Evidence"
+        ],
+        "rows": [
+          [
+            "Key correction",
+            "Not provided by user",
+            "Not provided by user",
+            "Not provided by user"
+          ]
+        ]
+      }
+    }
+  },
+  "status": {
+    "response_state": "draft",
+    "excerpt_state": "needs_manual_revision",
+    "notes_state": "draft"
+  }
+}

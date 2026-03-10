@@ -1,0 +1,12 @@
+{
+  "unit_id": "m-0032",
+  "order": 32,
+  "paragraph_index": 40,
+  "text": "The immunofluorescence protocol maintained consistency with IHC methodology during initial processing stages. Following antigen retrieval, sections were subjected to blocking treatment with 5% goat serum (16210064, Fisher Scientific, USA) to minimize non-specific binding. The experimental sequence proceeded with application of the specified primary antibodies: anti-Prdx1 (8499, Cell Signaling Technology,, 1:100); anti-NF-κB (8242, Cell Signaling Technology, 1:100); anti-CD206 (18704-1-AP, Proteintech, 1:200); anti-CD80 (104754, BioLegend, 1:100); anti-iNOS (A3774, Abclonal, 1:200); anti-CD68 (97778S, Cell Signaling Technology, 1:100); anti-cleaved caspase 3 (abs132005, Absin, 1:100); anti-Ly6G (127625, BioLegand, 1:50); anti-GPX4 (A1933, Abclonal, 1:100); anti-LC3 (14600-1-AP, Proteintech, 1:250); anti-HIF-1-α (abs120168, absin, 1:100); anti-NRF2 (absin, Abclonal, 1:100); anti-SP-1 (A19649, Abclonal, 1:200); anti-MOF (A3390, Abclonal, 1:100); anti-cleaved caspase 1 (AF4022, Affinity, 1:100).",
+  "heading_context": "2.4 Immunohistochemistry (IHC) and Immunofluorescence",
+  "anchors": [],
+  "tags": {
+    "has_figure_ref": false,
+    "length": 1006
+  }
+}

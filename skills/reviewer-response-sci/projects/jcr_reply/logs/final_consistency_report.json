@@ -1,0 +1,18 @@
+{
+  "counts": {
+    "total_units": 15,
+    "comment_units": 14,
+    "toc_leaf_items": 14,
+    "manuscript_units": 165,
+    "si_units": 11
+  },
+  "quality": {
+    "linked_comment_units": 14,
+    "linked_ratio": 1.0,
+    "missing_excerpt_count": 0
+  },
+  "gaps": {
+    "leaf_mismatch": false,
+    "unlinked_comments": 0
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "unit_id": "s-0008",
+  "order": 8,
+  "paragraph_index": 14,
+  "text": "Figure S2. PRDX1 confers protective effects on acinar cells primarily through the inhibition of both apoptosis and ferroptosis. (A) Representative immunohistochemical images of cleaved caspase-3, GPX4, LC3 in the pancreas between AAV8-ctrl and AAV8-Prdx1 group. Scale bar, 50 μm. (B) Representative immunohistochemical images of cleaved caspase-3, GPX4, LC3 in the pancreas between Flox and PcKO group. Scale bar, 50 μm. (C) Representative immunohistochemical images of cleaved caspase 6 and cleaved caspase 8 in pancreatic tissue. Scale bar, 50 μm. Casp3, caspase 3; casp6, caspase 6; casp8, caspase 8.",
+  "heading_context": "",
+  "anchors": [
+    "Figure S2"
+  ],
+  "tags": {
+    "has_figure_ref": true,
+    "length": 603
+  }
+}

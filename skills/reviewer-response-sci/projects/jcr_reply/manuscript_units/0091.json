@@ -1,0 +1,12 @@
+{
+  "unit_id": "m-0091",
+  "order": 91,
+  "paragraph_index": 120,
+  "text": "As summarized above, combining the small molecule drug Que and anti-Prdx1 antibody can effectively achieve extracellular Prdx1 neutralization and intracellular Prdx1 acetylation, thereby fundamentally alleviating the predicament of SAP. Traditional nano-level drug delivery systems such as nanoparticles and viral vectors were significant limited due to their low drug-loading capacity, rapid systemic clearance and biocompatibility in SAP. Extracellular vesicles derived from cells exhibited multiple advantageous characteristics including excellent biocompatibility, low immunogenicity, high drug delivery efficiency and ease to genetic manipulate for interested protein expression, etc. In our experimental design, the inner space of EVs could load Que while Anti-Prdx1 antibody anchored on the surface of EV. To achieve this, HEK-293T cells were engineered to express a fusion construct of a Z domain which showed a high antibody affinity and an EV-anchoring element (CD63), to enable enrichment of the Fc domain of antibodies on the EVs. Herein, we used gene engineering to combine CD63 and Z domain on the surface of EVs for anti-Prdx1 antibody binding (Ab-Fc-EV@Que).",
+  "heading_context": "3.4 Construction of Fc-EL-EV and development of Fc-EL-EV@Que",
+  "anchors": [],
+  "tags": {
+    "has_figure_ref": false,
+    "length": 1174
+  }
+}

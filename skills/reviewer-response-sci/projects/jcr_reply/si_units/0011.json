@@ -1,0 +1,14 @@
+{
+  "unit_id": "s-0011",
+  "order": 11,
+  "paragraph_index": 27,
+  "text": "Figure S5. Flow cytometry analysis of bone marrow and spleen. (A-B) Representative dot plots of CD4, CD8a, CD11b, Ly6C, CD11b, F4/80, CD11b and Ly6G staining in bone marrow illustrate the percentage distribution of various cell subsets, including CD4+ and CD8a+ T cells, Ly6Ghigh and Ly6Glow monocytes, F4/80+ macrophages, and Ly6G+ neutrophil cells (n = 3). (C-D) Representative dot plots of CD4, CD8a, CD11b, Ly6C, CD11b, F4/80, CD11b and Ly6G staining in spleen illustrate the percentage distribution of various cell subsets, including CD4+ and CD8a+ T cells, Ly6Ghigh and Ly6Glow monocytes, F4/80+ macrophages, and Ly6G+ neutrophil cells (n = 3). Data = Mean ± SD (n=3). Statistical analysis was performed by GraphPad Prism (9.5.0). One-way ANOVA using the Tukey’s multiple-comparison test was applied for comparison among three groups. Nc, negative control; ctrl, control; n.s, no statistical significance; *P<0.05; **P<0.01; ***P<0.001. n.s. = not significant.",
+  "heading_context": "",
+  "anchors": [
+    "Figure S5"
+  ],
+  "tags": {
+    "has_figure_ref": true,
+    "length": 966
+  }
+}

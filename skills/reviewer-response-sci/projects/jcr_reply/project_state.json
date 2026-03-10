@@ -1,0 +1,17 @@
+{
+  "project_title": "JCR Reviewer Response Package",
+  "generated_at": "2026-02-28",
+  "counts": {
+    "total_units": 15,
+    "comment_units": 14,
+    "manuscript_units": 165,
+    "si_units": 11
+  },
+  "paths": {
+    "units_dir": "/Users/wsxwj/Desktop/opencode file/reviewer-response-sci/projects/jcr_reply/units",
+    "manuscript_units_dir": "/Users/wsxwj/Desktop/opencode file/reviewer-response-sci/projects/jcr_reply/manuscript_units",
+    "si_units_dir": "/Users/wsxwj/Desktop/opencode file/reviewer-response-sci/projects/jcr_reply/si_units",
+    "index_json": "/Users/wsxwj/Desktop/opencode file/reviewer-response-sci/projects/jcr_reply/index.json",
+    "output_html": "/Users/wsxwj/Desktop/opencode file/reviewer-response-sci/projects/jcr_reply/reviewer_response_full_catalog.html"
+  }
+}

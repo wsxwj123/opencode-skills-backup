@@ -1,0 +1,16 @@
+{
+  "unit_id": "m-0087",
+  "order": 87,
+  "paragraph_index": 114,
+  "text": "According to literatures and our previous research, the antioxidant capacity of Prdx1 closely related to its acetylation modification level[26,28]. Therefore, to thoroughly investigate Que's influence on Prdx1 acetylation level, we first performed the protein structure prediction and drug-target docking virtual screening, and excitingly found that Que could bind to the Prdx1 protein target, which displayed hydrogen bond interactions between the amino acid residues ​​THR18, HIS81 and quercetin​​ (Figure 4E). On the other hand, as the key enzyme in acetylation regulation of Prdx1, lysine acetyltransferase, also known as “males absent on the first” (MOF), showed no increase in expression levels with rising Que concentrations (Figure 4F). These results demonstrate that Que interacts with Prdx1 protein without altering its RNA or protein expression, nor the expression of key enzymes involved in acetylation modification. We then used immunoprecipitation (IP) assay to detect acetylation level of Prdx1 in Figure 4G. The results effectively confirmed that the acetylation level of Prdx1 protein was enhanced by Que in MPC-38 cells. In other words, Que directly binding to Prdx1, increasing its acetylation level, thereby enhancing its antioxidant activity.",
+  "heading_context": "3.3 Quercetin restored Prdx1-mediated antioxidant function in SAP, while extracellular vesicle (EV)-encapsulated quercetin exhibited superior efficacy",
+  "anchors": [
+    "Figure 4E",
+    "Figure 4F",
+    "Figure 4G"
+  ],
+  "tags": {
+    "has_figure_ref": true,
+    "length": 1263
+  }
+}

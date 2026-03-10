@@ -1,0 +1,12 @@
+{
+  "unit_id": "m-0007",
+  "order": 7,
+  "paragraph_index": 10,
+  "text": "ABSTRACT: Severe acute pancreatitis (SAP) is a lethal inflammatory disease driven by a severe disordered redox state, in which Peroxiredoxin 1 (Prdx1) acts as a key but paradoxical regulator. Prdx1 is a protective intracellular antioxidant, however, it acts as a pro-inflammatory DAMP extracellularly. To address this, we developed a “plug and play” therapeutic platform. Considering the microenvironment in SAP, we first engineered HEK-293T cells to overexpress a CD63-Z domain fusion protein, yielding extracellular vesicles (EVs) capable of high-affinity binding to the Fc region of various antibodies. We then armed these EVs with an anti-Prdx1 antibody via the elastase-responsive linker and co-loaded them with quercetin (Ab-Fc-EL-EV@Que). After active pancreas targeting, locally concentrated elastase triggered antibody release from the Ab-Fc-EL-EV@Que to neutralize extracellular Prdx1, which have been confirmed to activate TLR/NF-κB pathway in macrophages, thereby suppressing cascade inflammation. Subsequently, the antibody-detached EVs were internalized by acinar cells, delivering Que to promote intracellular Prdx1 acetylation, enhance antioxidant capacity, and ultimately protect acinar cells from ferroptosis and apoptosis. This work not only offers a potent, multi-mechanism modality for SAP by resolving the Prdx1 paradox but also establishes a highly adaptable \"plug-and-play\" platform for tailored therapies against other complex diseases.",
+  "heading_context": "",
+  "anchors": [],
+  "tags": {
+    "has_figure_ref": false,
+    "length": 1461
+  }
+}

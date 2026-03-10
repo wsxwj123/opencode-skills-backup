@@ -1,0 +1,83 @@
+{
+  "unit_id": "u-012",
+  "order": 12,
+  "reviewer": "Reviewer #1",
+  "section": "minor",
+  "comment_number": "5",
+  "title": "Reviewer #1 | MINOR | Comment 5",
+  "source": {
+    "comments_docx": "/Users/wsxwj/Library/CloudStorage/OneDrive-个人/old files/xwj/研究生/博士课题/贺君/Exos递送抗体/投稿/JCR/Comments.docx",
+    "manuscript_docx": "/Users/wsxwj/Library/CloudStorage/OneDrive-个人/old files/xwj/研究生/博士课题/贺君/Exos递送抗体/投稿/JCR/manuscript.docx",
+    "si_docx": "/Users/wsxwj/Library/CloudStorage/OneDrive-个人/old files/xwj/研究生/博士课题/贺君/Exos递送抗体/投稿/JCR/SI.docx"
+  },
+  "links": {
+    "anchors": [
+      "S2A",
+      "S2B"
+    ],
+    "manuscript_unit_ids": [
+      "m-0078"
+    ],
+    "si_unit_ids": [
+      "s-0009"
+    ]
+  },
+  "content": {
+    "reviewer_comment_zh": "无",
+    "reviewer_comment_en": "The figure legends for S2A and S2B must be corrected from \"Immunohistochemistry\" to \"Immunofluorescence\". This is a fundamental misrepresentation of the experimental method. Please carefully review all figures and make the necessary corrections.",
+    "reviewer_intent_zh": "审稿人核心关切：图像标注、分组标签或图文对应关系需要复核。建议处理：核对图号、面板标签与对应描述；重点定位：S2A, S2B。",
+    "reviewer_intent_en": "Interpretation: The reviewer is requesting a clear, evidence-aligned clarification and a concrete manuscript-level correction for this specific point.",
+    "response_en": "Thank you for this helpful suggestion. We have revised the relevant text or figure presentation accordingly and rechecked consistency across the manuscript.",
+    "response_zh": "中文对应：感谢审稿人意见。我们已针对该问题完成对应修订，并确保结论与证据保持一致。",
+    "revision_location_en": "Section: 3.1 Intracellular Prdx1 deficiency in acinar cells exacerbates SAP by inducing cell apoptosis and ferroptosis | Paragraph index: 102",
+    "original_excerpt_en": "Therefore, exploring the behind mechanisms of Prdx1 against SAP become the focus of subsequent work. Our previous works have showed that Prdx1 deficiency led to a marked increase in pancreatic cell death[26]. And consistently, in this work, we found that Prdx1 overexpression resulted in significantly reduced cell death (Figure S2A). Given that apoptosis and ferroptosis are well-established cell death pathways in acinar cells during pancreatitis, we next performed IF to identify the predominant forms of cell death occurring in these tissues. Prdx1 expression in acinar cells notably attenuated both cell apoptosis and ferroptosis, as evidenced by results shown in Figure S2A. Conversely, knockout of Prdx1 promotes cell death (Figure S2B). To further validation, we performed immunohistochemical staining for additional key apoptotic markers, specifically cleaved caspase 6 and cleaved caspase 8 in flox, PcKO, AAV8-ctrl, and AAV8-Prdx1 groups. Consistent with our previous findings, images presented in Figure S2C confirmed the reduction of these crucial factors upon Prdx1 overexpression, conversely, Prdx1 knockout elevated expression of cleaved caspase 6 and caspase 8. Taken together, these data strongly demonstrated that Prdx1 exerted a protective effect in acinar cells by inhibiting both apoptosis and ferroptosis. These results compellingly suggested that promoting endogenous Prdx1 production within acinar cells was a promising therapeutic strategy for improving SAP pathology. However, it’s important to note that effective pharmacological interventions specifically targeting this mechanism or enhancing acinar Prdx1 levels are currently unavailable, underscoring the urgent need for the discovery and development of novel therapeutic agents in this area.",
+    "revised_excerpt_en": "Not provided by user",
+    "revised_excerpt_zh": "无",
+    "modification_actions": [
+      {
+        "action": "修改",
+        "reason": "审稿人指出表述或图文一致性问题，需定点修订。"
+      }
+    ],
+    "notes_core_zh": [
+      "针对该条意见完成规范化修订（术语、图注、编号或排版），并逐项核对对应位置。"
+    ],
+    "notes_support_zh": [
+      "进行全文一致性校对，避免同类细节问题重复出现。"
+    ],
+    "evidence": {
+      "text": [
+        "Not provided by user"
+      ],
+      "image_change_required": true,
+      "images": [
+        {
+          "src": "",
+          "alt": "Image placeholder",
+          "caption": "请替换为修订后图片（如有）"
+        }
+      ],
+      "table": {
+        "columns": [
+          "Item",
+          "Before",
+          "After",
+          "Evidence"
+        ],
+        "rows": [
+          [
+            "Key correction",
+            "Not provided by user",
+            "Not provided by user",
+            "Not provided by user"
+          ]
+        ]
+      }
+    }
+  },
+  "status": {
+    "response_state": "draft",
+    "excerpt_state": "needs_manual_revision",
+    "notes_state": "draft"
+  }
+}

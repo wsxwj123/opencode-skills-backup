@@ -1,0 +1,12 @@
+{
+  "unit_id": "m-0014",
+  "order": 14,
+  "paragraph_index": 18,
+  "text": "In contrast, extracellular vesicles (EVs), naturally secreted lipid bilayer nanovesicles rich in biomolecules, have emerged as a preferred biological solution to address such complex challenges[19]. Their inherent properties, including excellent biocompatibility, negligible immunogenicity, remarkable stability in biological fluids, and the intrinsic ability to cross biological barriers such as the blood-pancreas barrier, make them ideal biological nanocarriers capable of navigating complex in vivo environments and delivering payloads to typically hard-to-reach sites[20]. Crucially, for precisely neutralizing large macromolecular proteins like extracellular Prdx1, therapeutic antibodies are the preferred agents due to their high specificity and affinity, as well as their potent neutralizing capacity against specific protein epitopes, while EVs happen to provide a robust and versatile platform to efficiently deliver these critical biomolecules. Recent advances in EV engineering have enabled the precise display of targeting molecules or functional proteins (for example, CD63 functional domain) on their surface[21,22]. This surface modification facilitates the flexible and stable anchoring of various therapeutic antibodies while maintaining their activity. Simultaneously, the inherent lipid bilayer structure of EVs and their spacious intraluminal space allow for the efficient and protective encapsulation of multiple small-molecule active drugs[23,24]. This synergistic dual-loading capability uniquely enables EVs to serve as an ideal \"all-in-one\" platform for the co-delivery of antibodies and small-molecule drugs, opening entirely new avenues for precise, multi-modal therapeutic strategies tailored to complex disease mechanisms.",
+  "heading_context": "",
+  "anchors": [],
+  "tags": {
+    "has_figure_ref": false,
+    "length": 1753
+  }
+}

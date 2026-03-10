@@ -1,0 +1,16 @@
+{
+  "unit_id": "m-0073",
+  "order": 73,
+  "paragraph_index": 95,
+  "text": "According to literatures, Prdx1 exhibited effective antioxidant ability in SAP stages. To confirm whether Prdx1 is the key protein in injured pancreas against oxidative stress, we performed the expression level of Prdx1 in pancreas suffering from AP and SAP first. As depicted in Figure 2A, the level of Prdx1 significantly increased in AP. However, no further elevation of it was observed when AP evolved into SAP (Figure S1A). And we found that as AP progressed, the phosphorylation level of Prdx1 gradually increased which implying that its antioxidant capacity gradually decreased. Based on these strange phenomena, we further investigated the content of Prdx1 in different parts of pancreas (Figure S1A). The results showed Prdx1 highly expressed in acinar cells, rather than pancreatic islet or ductal cells in inflammation progress. In other word, Prdx1 may exert effect mainly in acinar cells. Considering the dominant position of acinar cells in pancreas, functions of Prdx1 in acinar cells and SAP process were explored comprehensively subsequently.",
+  "heading_context": "3.1 Intracellular Prdx1 deficiency in acinar cells exacerbates SAP by inducing cell apoptosis and ferroptosis",
+  "anchors": [
+    "Figure 2A",
+    "Figure S1A",
+    "Figure S1A"
+  ],
+  "tags": {
+    "has_figure_ref": true,
+    "length": 1059
+  }
+}
