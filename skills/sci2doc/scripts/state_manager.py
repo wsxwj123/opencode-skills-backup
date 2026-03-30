@@ -1156,7 +1156,7 @@ def postwrite_state(project_root, chapter, status="updated", summary="", create_
         return project_state
 
     update_json_locked(state_path, {}, mutate_project_state)
-    front_matter_payload = _render_front_matter_if_possible(effective_root)
+    front_matter_payload = _render_front_matter_if_possible(project_root)
     updated_files.append(state_path)
 
     # Update context memory + versions
@@ -1643,7 +1643,7 @@ def init_project(
             shutil.copy2(src, dst)
             copied_scripts.append(dst)
 
-    front_matter_payload = _render_front_matter_if_possible(effective_root)
+    front_matter_payload = _render_front_matter_if_possible(project_root)
 
     print(
         json.dumps(
