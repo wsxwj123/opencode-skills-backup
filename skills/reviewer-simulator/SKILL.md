@@ -9,7 +9,7 @@ description: Use when simulating a high-bar academic peer review for manuscripts
 此文档定义了 `reviewer-simulator` 的最高执行标准。AI 在执行审稿任务时，必须逐条对照本手册中的定义进行操作。
 **任何对本手册的偏离都被视为任务失败。**
 
-**最终输出形式必须是一个独立的 HTML 文件 (report_template.html)，且模板中的可见文案必须为简体中文。**
+**最终输出形式必须是一个独立的 HTML 文件，路径为 `assets/report_template.html`，且模板中的可见文案必须为简体中文。**
 </CRITICAL_INSTRUCTIONS>
 
 审稿人模拟系统 - 完整执行手册
@@ -238,12 +238,12 @@ description: Use when simulating a high-bar academic peer review for manuscripts
 <TOOL_USAGE_RULES>
 **检索工具调用优先级指令：在执行新颖性、文献全面性和标准核查时，必须【优先且穷尽】专门的学术搜索 MCP 工具！**
 首选工具列表（根据学科或检索目标选择）：
-- `paper-search_search_pubmed` (医学、生物学首选)
-- `paper-search_search_google_scholar` (跨学科综合文献首选)
-- `paper-search_search_semantic` (综合性学术文献、计算机等)
-- `paper-search_search_arxiv` (预印本、计算机科学、物理等)
+- **PubMed CLI（首选）**：`esearch`/`efetch`/`einfo`（路径 `~/edirect/`），调用时必须追加 `< /dev/null`，走代理 `http_proxy=http://127.0.0.1:7897`（医学、生物学首选）
+- **OpenAlex CLI（跨学科补充）**：`pyalex`（python3），跨学科广度检索、快速更新
+- **paper-search MCP（备用）**：仅在 CLI 工具失败，或需要 arXiv/bioRxiv 预印本时使用（`paper-search_search_arxiv`、`paper-search_search_google_scholar`）
 
-**【后备机制】**：`tavily_tavily-search` 或 `websearch_web_search_exa` 等通用搜索引擎**仅作为最后的手段（Last Resort）**。只有在上述 `paper-search` 工具多次检索失败、报错或无返回结果时，为了保证任务继续，才允许降级调用通用搜索引擎。**严禁一上来就图省事调用 Tavily。**
+**【严禁】**：`tavily_tavily-search`、`websearch_web_search_exa` 等通用搜索引擎**严禁用于文献检索**，无论何种情况。
+**Serial Search (MANDATORY):** Execute all retrieval calls sequentially. Never parallelize search requests. Enforce ≥1s interval between consecutive calls.
 </TOOL_USAGE_RULES>
 
 <CITATION_GUARD_RULE>
@@ -254,7 +254,7 @@ description: Use when simulating a high-bar academic peer review for manuscripts
 1. 仅当 `citation_guard_report.json` 中 `ok=true` 才允许把该文献作为证据写入评审报告。
 2. 若 `ok=false` 或命令失败，必须改写为“待核验”并禁止下结论。
 3. 报告中不得出现任何无法追溯来源（`source_provider` + `source_id`）的文献陈述。
-4. 该门禁只负责证据核验，不改变原有“paper-search 优先、通用搜索兜底”的检索顺序。
+4. 该门禁只负责证据核验，不改变原有“PubMed CLI → OpenAlex CLI → paper-search MCP（备用）”的检索顺序。
 </CITATION_GUARD_RULE>
 
 如无任何可用工具支持,则基于语言特征和文本分析进行人工判断:
@@ -300,12 +300,27 @@ description: Use when simulating a high-bar academic peer review for manuscripts
 2. 投稿目标的具体期刊或会议名称及方向
 3. 稿件所属的具体研究领域
 
+【强制阻断检查点】在收到用户输入后，检查以下三项是否齐全：
+① 稿件全文或详细草稿 ② 目标期刊/会议名称 ③ 研究领域
+若任一项缺失，必须停止工作流，向用户逐项列出缺失内容并等待补充，禁止基于猜测推进到第二步。
+
 强调: 所有评审意见都将严格围绕投稿目标及其标准来进行。
+
+**首次运行初始化（如 data/ 目录为空）：**
+```bash
+mkdir -p data/
+echo '[]' > data/literature_index.json
+echo '[]' > data/mcp_literature_cache.json
+echo '[]' > data/manual_review_queue.json
+echo '[]' > data/verification_run_log.json
+echo '{"citations": []}' > data/citation_guard_report.json
+```
+如 data/ 已存在上述文件，跳过初始化。
 
 
 第二步：外部基准先行核查
 
-必须首先执行以下外部基准核查。**强烈要求：必须优先调用专门的学术搜索 MCP 工具（如 paper-search_search_pubmed / paper-search_search_google_scholar / paper-search_search_semantic / paper-search_search_arxiv）进行文献搜索与比对。通用搜索引擎（如 tavily_tavily-search）仅作为专用工具全部失效时的最后备用手段。** 如无任何可用工具支持则基于人工判断:
+必须首先执行以下外部基准核查。**强烈要求：文献检索遵循优先级：① PubMed CLI（esearch/efetch，~/edirect/，需 < /dev/null，代理 http://127.0.0.1:7897）② OpenAlex CLI（pyalex，跨学科补充）③ paper-search MCP（备用/预印本）。严禁使用 tavily 或 websearch 检索文献。** 如无任何可用工具支持则基于人工判断:
 
 1. 目标标准核查
 搜索目标期刊或会议的最新发表范围和近期论文,确保评估标准准确。
@@ -360,6 +375,8 @@ description: Use when simulating a high-bar academic peer review for manuscripts
 1. 若存在未替换占位符(如`{{...}}`),必须终止交付并返工。
 2. 头部`VERDICT_TEXT`与第十部分`FINAL_RECOMMENDATION`必须一致且只能为"拒稿/大修/小修/接收"之一。
 3. 仅当校验通过才允许提交最终报告。
+4. 若 `scripts/validate_report_html.py` 路径不存在或执行报错，必须在报告头部注明"[自动校验不可用，已人工核查占位符与VERDICT一致性]"，并逐项人工确认上述三条门禁，不得静默跳过。
+5. 若校验未通过：不得自行静默修改报告后重新提交，必须向用户说明具体失败原因和位置，列出需要人工确认的条目，等待用户指令后再决定返工或带注释交付。
 
 
 第五部分：审稿报告输出格式
@@ -533,7 +550,7 @@ AIGC率过高或涉嫌造假
 
 1. 保持匿名与公正,不推断作者身份或机构
 2. 保持建设性语气,但必须严苛、直接
-3. 避免主观臆测,强制要求优先通过专门的学术搜索 MCP 工具（如 paper-search 的 PubMed/Google Scholar/Semantic Scholar/arXiv）/期刊官网/权威数据库进行外部核查(用于新颖性、目标期刊范围与最新标准)。【仅在专用学术工具完全失效时，才允许将 Tavily、Exa 等通用搜索引擎作为最后手段】; 外部核查结果仅用于技术审计与契合度判断,必须标注来源与核查日期(统一格式: YYYY-MM-DD),不得替代稿件内证据锚点
+3. 避免主观臆测,强制要求优先通过 PubMed CLI（esearch，~/edirect/）→ OpenAlex CLI（pyalex）→ paper-search MCP（备用）/期刊官网/权威数据库进行外部核查(用于新颖性、目标期刊范围与最新标准)。【严禁使用 Tavily、Exa 等通用搜索引擎检索文献】; 外部核查结果仅用于技术审计与契合度判断,必须标注来源与核查日期(统一格式: YYYY-MM-DD),不得替代稿件内证据锚点
 4. 基于证据,每条观点都应给出稿件内的证据锚点
 5. 如稿件缺乏证据,必须明确写出证据缺失
 6. 禁止使用数字评分或量化评级,仅允许在最终推荐意见中给出定性判断(拒稿、大修、小修、接收)

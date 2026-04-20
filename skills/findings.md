@@ -10,12 +10,6 @@
 - 当前分支：`main`
 - 远端：`origin -> https://github.com/wsxwj123/opencode-skills-backup`
 - 变更集中在多个 `SKILL.md` 与 `sci2doc` 子目录文件
-- 已新增全局 skill：`pua`（来源：`https://github.com/tanweai/pua`，安装路径：`/Users/wsxwj/.config/opencode/skills/pua`）
-
-## Installation Notes
-- `pua` 已按 OpenCode 全局 skill 方式安装到 `~/.config/opencode/skills/pua`
-- 已同步 `SKILL.md` 及其 `references/` 依赖文件
-- 使用方式：在对话中直接提到“用 pua skill 继续处理/排查这个问题”即可增强主动性与闭环排查
 
 ## Technical Decisions
 | Decision | Rationale |

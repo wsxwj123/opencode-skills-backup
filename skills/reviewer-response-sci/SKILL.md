@@ -1,6 +1,6 @@
 ---
 name: reviewer-response-sci
-description: 使用于 SCI 审稿意见回复（回复审稿人、审稿意见逐条回复、Response to Reviewer）。当用户提到“审稿意见回复/回复审稿人/SCI审稿回复”时优先调用。Supports one-shot hierarchical HTML deliverable with atomic manuscript/SI linking.
+description: 用于 SCI 审稿意见逐条回复的全流程技能。当用户提到「审稿意见回复」「回复审稿人」「Response to Reviewer」时优先调用。输入 manuscript / SI / reviewer comments，输出原子化 JSON 单元 + 单文件层级化 HTML 回复包，支持可拖拽双栏导航与中英文对照。
 ---
 
 # Reviewer Response SCI
@@ -95,6 +95,32 @@ Each leaf page must include:
    - image handling rule:
      - if no image revision required, do not render image placeholder block
      - if image revision is required, render an explicit image placeholder block first
+   - **Figure Prompt Block（图片修改需求时自动生成提示词）：**
+     When a reviewer requires figure revision or addition, generate a structured Figure Prompt immediately after the image placeholder block:
+
+     ```
+     [FIGURE PROMPT — Response to Reviewer #N, Comment K]
+     REVISION TYPE: New figure | Replace existing Figure X | Add panel to Figure X | Revise color/style only
+     REVIEWER REQUEST SUMMARY: <one sentence distilling what the reviewer asked for>
+     TYPE: Data plot | Schematic | Mechanistic pathway | Statistical | Workflow
+     SUBJECT: <specific scientific content required by reviewer>
+     STYLE: BioRender风格, 科研绘图, 最高分辨率, white background (#FFFFFF), publication-quality, consistent with manuscript's existing figure style [默认BioRender风格；如需其他风格（如Cell-style flat icon / Nature手绘风），在启动时告知]
+     COLOR SCHEME: (match manuscript's existing palette; default: Primary #2E86AB | Secondary #A23B72 | Accent #F18F01 | colorblind-safe)
+     ELEMENTS:
+       - <Element 1>: <exact requirement from reviewer comment>
+       - <Element 2>: <additional components needed>
+     LAYOUT: <Single panel | Multi-panel, specifying new panel position relative to existing figure>
+     TYPOGRAPHY: Match existing manuscript figures (Arial/Helvetica, 8-10pt, English labels)
+     STATISTICAL REQUIREMENTS: <if new statistical analysis required: chart type, error bars: SEM/SD, significance markers>
+     KEY MESSAGE: <what this revised figure must now demonstrate to satisfy the reviewer>
+     AVOID: Changes that contradict existing data; adding elements not supported by the underlying experiment
+     ```
+
+     Rules:
+     - Generate Figure Prompt ONLY when reviewer explicitly requests a figure change (not for text-only responses)
+     - If reviewer requests a new experiment's figure: mark as `[NEW EXPERIMENT REQUIRED]` and note `Not provided by user` in evidence area
+     - If revision is cosmetic only (color, font, layout): mark as `[STYLE REVISION ONLY]` and skip ELEMENTS block
+     - Store all figure prompts in the corresponding comment unit JSON under `content.figure_prompt`
 
 ## Atomic JSON Contract
 Project layout:
@@ -121,8 +147,9 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
 - English reviewer responses must be fluent and natural, with low AI-style phrasing.
 - Prefer short sentences; avoid long and complex sentences by default.
 - Short-sentence preference means clear and natural rhythm, not mechanical sentence splitting.
-- If a reviewer comment requires adding references, literature retrieval must use `paper-search` MCP with PubMed only.
-- Do not use any non-PubMed search tool for citation retrieval in this skill.
+- If a reviewer comment requires adding references, literature retrieval follows CLI-first hierarchy: ① PubMed CLI (`esearch`/`efetch`, `~/edirect/`, `< /dev/null`, proxy `http://127.0.0.1:7897`) ② OpenAlex CLI (`pyalex`) ③ `paper-search` MCP (fallback/preprints only).
+- **严禁** 使用 `tavily` 或 `websearch` 进行文献检索。
+- **Serial Search (MANDATORY):** Execute all retrieval calls sequentially. Never parallelize search requests. Enforce ≥1s interval between consecutive calls.
 - Do not create ad-hoc fixer scripts (e.g., `fix_gate_errors.py`, temporary patch scripts) during normal runs.
 - When gate checks fail, directly edit the failing `project_root/units/*.json` fields and re-run checks.
 - Keep one-page-per-comment structure.
@@ -132,11 +159,19 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
   - `revised_excerpt_en` is placeholder/empty (unless explicitly running with a relaxed gate mode)
   - `revised_excerpt_en` is identical to `original_excerpt_en`
   - unit status indicates `needs_manual_revision`
+- If `comments_docx` fails to parse (corrupt file, encoding error), abort immediately and report the exact error; do not proceed to atomization.
+- If a reviewer comment cannot be matched to any manuscript paragraph (location confidence below threshold), set `atomic_location.confidence = "low"` and mark the unit `needs_manual_revision`; do not fabricate a location.
+- Gate fix loop must not exceed **3 iterations**; if gate still fails after 3 direct JSON edits, halt and report remaining failures to the user with a list of unresolved unit IDs.
 
 ## One-Shot Workflow
 1. Parse all reviewer comments from `comments_docx_path`.
-2. If any comment needs additional citations, run PubMed retrieval via `paper-search` MCP only.
+2. If any comment needs additional citations, run retrieval via CLI-first hierarchy (PubMed CLI → OpenAlex CLI → `paper-search` MCP fallback).
 3. Atomize manuscript and SI into section-level units (heading + body + corresponding figure captions).
+3.5. **[User Checkpoint]** Print a summary table:
+   - Total section-level units extracted (manuscript count / SI count)
+   - Any sections that failed to split or produced empty units
+   Ask the user: "Atomization complete. Proceed to build comment units? (yes / abort)"
+   Do not continue to step 4 until user confirms.
 4. Build comment atomic units in `project_root/units/` and attach anchor-based links to manuscript/SI units.
 5. Build `manuscript_edit_plan.md` in `project_root/` **before** final delivery.
    - The plan must be sorted by manuscript original order (ascending `manuscript_paragraph_index`).
@@ -159,6 +194,15 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
      - revised excerpt (EN + ZH)
      - core/support modification notes
      - modification action reasons
+
+   **Step 7 Mini-Gate（填写完成后，进入Step 8前执行）：**
+   - 抽取前3个comment unit，检查以下字段是否已填（非占位符）：
+     - `content.chinese_translation`（非 `待AI` / `AI_FILL_REQUIRED`）
+     - `content.response_zh`（非空、非占位符）
+     - `content.revised_excerpt_en`（非空、非与 `original_excerpt_en` 相同）
+   - 如发现任何占位符或空值，**停止并列出未填字段**，等待修复后再继续
+   - 抽查通过后方可进入Step 8渲染
+
 8. Render single HTML with left hierarchical TOC + right content pane from updated atomic JSON.
 9. Run hard gate checks and HTML checks before delivery.
    - final delivery must pass `final_content_gate.py`:
