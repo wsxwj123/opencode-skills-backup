@@ -128,11 +128,23 @@ You must strictly enforce these 9 rules in every interaction:
 2. Round 2 (Section deep dive): before drafting each section, save retrievable search strategy to JSON (queries, date window, filters, databases) and run cycle with `--search-strategy`; then bind section claims with `python scripts/matrix_manager.py bind-claims --section [SectionID] --claims [claims.json]`.
    - Every round-2 run appends strategy + pre/post index digest hashes into `logs/search_manifest.json` for full reproducibility.
 3. Round 3 (Critical refresh): before finalization, refresh critical claims with newest papers and mark updates using `python scripts/matrix_manager.py mark-round3 --section [SectionID]`.
-4. Gate enforcement: Round 2 is blocked until Round 1 completes; Round 3 is blocked until that section's Round 2 completes.
-5. Quality gate: Round 2 must produce at least one claim binding for the target section; otherwise treat as failure and execute the following recovery sequence:
+4. Gate enforcement: Round 2 is blocked until Round 1 completes; Round 3 is blocked until that section's Round 2 completes. Agent must check `progress.json` field `current_stage` before entering any round — if prerequisite round is incomplete, HALT and inform user.
+5. Quality gate (Round 2): must produce at least one claim binding for the target section; otherwise treat as failure and execute the following recovery sequence:
    a. Broaden query by removing one MeSH/filter constraint and re-run PubMed CLI (same round).
    b. If still zero, expand to OpenAlex CLI with 3 alternative keywords.
    c. If still zero after both, HALT and report to user: "Round 2 failure: no claim bindings found for [SectionID]. Provide revised claims or confirm scope reduction." Do NOT advance to drafting until at least one claim is bound.
+6. Quality gate (Round 1): if total deduplicated papers < 100 after full PubMed + OpenAlex sweep:
+   a. Report shortfall to user with current count and search queries used.
+   b. User chooses: broaden scope / accept reduced pool / provide additional seed papers.
+   c. Do NOT proceed to section tagging until user confirms.
+7. Quality gate (Round 3): if a refreshed claim now contradicts the existing draft narrative:
+   a. Flag the specific claim and contradicting paper to user.
+   b. User chooses: revise draft section / keep original with caveat note / replace source.
+   c. Do NOT auto-revise draft content — contradictions require human judgment.
+8. Network/proxy failure recovery: if PubMed CLI or OpenAlex CLI fails due to network/proxy/timeout error:
+   a. Retry once after 5s.
+   b. If retry fails, fall through to next search tier (PubMed → OpenAlex → paper-search MCP).
+   c. If all three tiers fail, HALT and report: "All search providers unreachable. Check proxy (http://127.0.0.1:7897) and network." Do NOT proceed with cached-only data unless user explicitly confirms.
 
 **Strict Flow:**
 1.  **Load State:** `python scripts/state_manager.py load --section [SectionID] --minimal`.
@@ -145,16 +157,16 @@ You must strictly enforce these 9 rules in every interaction:
 5.  **Draft:** Write the section in `drafts/section_X.md`.
     -   Use **Paragraphs Only** (Rule 6).
     -   Use Global Sequential Numbering `[n]`.
-6.  **Critique:** Run **Reviewer Simulator**. Self-score on four sub-dimensions (each 1-10):
+6.  **Critique:** Run **Reviewer Simulator** (full critique template: `templates/review_critique.md`). Self-score on four sub-dimensions (each 1-10):
 
     | Dimension | Criteria |
     |-----------|----------|
-    | Novelty | Does the section advance beyond existing reviews? |
-    | Evidence Density | Are major claims supported by ≥2 independent sources? |
-    | Flow | Do paragraphs connect causally, not just topically? |
-    | Anti-AI Compliance | Zero banned words; P/B rhythm satisfied? |
+    | Novelty | Does the section advance beyond existing reviews? (critique template §1) |
+    | Evidence Density | Are major claims supported by ≥2 independent sources? (critique template §3) |
+    | Flow | Do paragraphs connect causally, not just topically? (critique template §5) |
+    | Anti-AI Compliance | Zero banned words; P/B rhythm satisfied? (critique template §6) |
 
-    Average score < 8.0 → revise internally before HALT. Report the four sub-scores in the Stop summary.
+    Average score < 8.0 → revise internally and re-score. **Maximum 2 revision attempts.** If still < 8.0 after 2 attempts, HALT and report: "Section [SectionID] failed Reviewer Simulator after 2 revisions. Scores: [N/N/N/N]. Weakest dimension: [X]. Request user guidance." Report the four sub-scores in the Stop summary.
 7.  **STOP:**
     -   Run `python scripts/word_counter.py --file [CurrentDraft]`.
     -   Verify if the section length meets expectations (Key Section > 500 words, Supporting > 200 words). If not, revise.
