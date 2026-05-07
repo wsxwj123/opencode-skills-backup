@@ -94,19 +94,25 @@ Use this file to plan figures and tables.
     # 4. Storyline (Outline)
     outline_content = """# Review Outline & Storyline
 
+<!-- Section Type: Key (>500w) or Supporting (>200w) -->
+
 ## 1. Introduction
+- [Type: Key]
 - [Status: Pending]
 - Key Points:
 
 ## 2. [Section Title]
+- [Type: Key]
 - [Status: Pending]
 - Key Points:
 
 ## 3. [Section Title]
+- [Type: Key]
 - [Status: Pending]
 - Key Points:
 
 ## 4. Conclusion & Perspectives
+- [Type: Supporting]
 - [Status: Pending]
 - Key Points:
 """

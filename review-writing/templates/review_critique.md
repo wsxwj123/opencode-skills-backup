@@ -14,7 +14,7 @@ Transform the draft from a passive summary of literature into an authoritative, 
 *   **Resolving Conflicts:** When Study A and Study B disagree, the text MUST explain *why* (e.g., differences in methodology, model organisms, timescales).
 *   **Taking a Stance:** The author should arbitrate based on the weight of evidence. Do not be neutral if the evidence leans one way. Guide the reader through the ambiguity.
 
-## 3. Evidence Strength
+## 3. Evidence Density
 *   **Specificity Check:** Are the citations specific? Avoid vague phrases like "Recent studies show...". Instead, require specific mechanisms, effect sizes, or conditions.
 *   **Primary Source Validity:** Ensure claims are backed by primary literature, not general knowledge assertions.
 
@@ -22,12 +22,12 @@ Transform the draft from a passive summary of literature into an authoritative, 
 *   **Figure Opportunities:** Identify dense text sections that describe pathways, comparisons, or timelines. These are prime candidates for *Nature*-style figures.
 *   **Conceptual Diagrams:** Suggest where a schematic could replace or enhance a paragraph of complex mechanistic description.
 
-## 5. Structure & Flow Check
+## 5. Flow
 *   **Paragraph Architecture:** STRICTLY enforce the structure: **Topic Sentence -> Evidence (Synthesis) -> Critical Analysis/Arbitration -> Concluding Thought**.
 *   **No Bullet Points:** *Nature Reviews* articles are narrative. Convert any lists or bullet points into cohesive, flowing prose.
 *   **Transitions:** Ensure logical flow between paragraphs. The argument should build, not just jump between topics.
 
-## 6. Turing Test (AI Flavor Check)
+## 6. Anti-AI Compliance
 *   **Vocabulary Red Flags:** Does the text use "Delve", "Landscape", "Tapestry", "Crucial", "Foster", "Underscore"? **Immediate Fail**. These are AI hallmarks.
 *   **Sentence Structure Red Flags:** 
     *   "Not only... but also..." (Overused balancing)

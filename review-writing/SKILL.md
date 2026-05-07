@@ -143,58 +143,62 @@ You must strictly enforce these 9 rules in every interaction:
 ## Phase 2: Iterative Writing Loop (Repeat for each section)
 **Goal:** SYSTEMATICALLY write one section at a time.
 
-**Three-Round Retrieval Model (MANDATORY):**
-1. Round 1 (Global build): finalize search strategy, retrieve 150+ papers, deduplicate, write `data/literature_index.json`, then **must** run section assignment + section-order renumbering (`python scripts/tag_literature_sections.py` then `python scripts/state_manager.py reindex`) before matrix bootstrap (`python scripts/matrix_manager.py bootstrap --round 1`).
-2. Round 2 (Section deep dive): before drafting each section, save retrievable search strategy to JSON (queries, date window, filters, databases) and run cycle with `--search-strategy`; then bind section claims with `python scripts/matrix_manager.py bind-claims --section [SectionID] --claims [claims.json]`.
-   - Every round-2 run appends strategy + pre/post index digest hashes into `logs/search_manifest.json` for full reproducibility.
-3. Round 3 (Critical refresh): before finalization, refresh critical claims with newest papers and mark updates using `python scripts/matrix_manager.py mark-round3 --section [SectionID]`.
-4. Gate enforcement: Round 2 is blocked until Round 1 completes; Round 3 is blocked until that section's Round 2 completes. `run_section_cycle.py` enforces this via `logs/workflow_gates.json` (fields: `round1_complete`, `sections.<SectionID>.round2_complete`). If calling scripts directly without `run_section_cycle.py`, agent must check `logs/workflow_gates.json` before entering any round — if prerequisite round is incomplete, HALT and inform user.
-5. Quality gate (Round 2): must produce at least one claim binding for the target section; otherwise treat as failure and execute the following recovery sequence:
-   a. Broaden query by removing one MeSH/filter constraint and re-run PubMed CLI (same round).
-   b. If still zero, expand to OpenAlex CLI with 3 alternative keywords.
-   c. If still zero after both, HALT and report to user: "Round 2 failure: no claim bindings found for [SectionID]. Provide revised claims or confirm scope reduction." Do NOT advance to drafting until at least one claim is bound.
-6. Quality gate (Round 1): if total deduplicated papers < 100 after full PubMed CLI + paper-search MCP sweep:
-   a. Report shortfall to user with current count and search queries used.
-   b. User chooses: broaden scope / accept reduced pool / provide additional seed papers.
-   c. Do NOT proceed to section tagging until user confirms.
-7. Quality gate (Round 3): if a refreshed claim now contradicts the existing draft narrative:
-   a. Flag the specific claim and contradicting paper to user.
-   b. User chooses: revise draft section / keep original with caveat note / replace source.
-   c. Do NOT auto-revise draft content — contradictions require human judgment.
-8. Network/proxy failure recovery: if PubMed CLI or paper-search MCP fails due to network/proxy/timeout error:
-   a. Retry once after 5s.
-   b. If retry fails, fall through to the other search tier (PubMed CLI ↔ paper-search MCP).
-   c. If both tiers fail, HALT and report: "All search providers unreachable. Check proxy (http://127.0.0.1:7897) and network." Do NOT proceed with cached-only data unless user explicitly confirms.
+### Quick Reference: Primary Path
 
-**Strict Flow:**
-1.  **Load State:** `python scripts/state_manager.py load --section [SectionID] --minimal`.
-2.  **Search:** Execute **Search Logic** (Rule 5). Gather ≥10 relevant papers.
-3.  **Matrix:** Fill `data/synthesis_matrix.json`. Compare methods/results. **Stop** if data is thin.
-    -   Use matrix workflow commands: `bootstrap` (R1), `bind-claims` (R2), `mark-round3` (R3), then `audit`.
-    -   Every cycle must sync IDs via `state_manager.py reindex --sync-apply` to prevent draft citation IDs drifting from index/matrix.
-    -   R1 prerequisite: index must be section-tagged and reindexed by storyline order so early sections keep earlier citation IDs.
-4.  **Figure:** Define the visual anchor. Update `figures/figure_index.md`. Text must support this figure.
-5.  **Draft:** Write the section in `drafts/section_X.md`.
-    -   Use **Paragraphs Only** (Rule 6).
-    -   Use Global Sequential Numbering `[n]`.
-6.  **Critique:** Run **Reviewer Simulator** (full critique template: `templates/review_critique.md`). Self-score on four sub-dimensions (each 1-10):
+```
+Round 1 (全局) ──────────────────────────────────────────────────────
+  检索 150+ 论文 → 去重 → /cycle [SectionID] --round 1
+  ↓ 脚本自动: tag → reindex → bootstrap → 数量检查(≥100)
+  ↓ 数量不足? exit code 3 → 报告用户 → 扩大/接受/补充
+
+Round 2 (逐章节) ────────────────────────────────────────────────────
+  /cycle [SectionID] --round 2 --search-strategy strategy.json --claims claims.json
+  ↓ 脚本自动: bind-claims → audit → reindex
+  ↓ 无 claim binding? exit non-zero → 放宽检索 → 仍无则 HALT
+
+  Agent 手动步骤:
+  检索(≥10篇) → 填 matrix → 定义配图 → 写草稿 → Reviewer Simulator → 字数验证 → HALT
+
+Round 3 (刷新) ──────────────────────────────────────────────────────
+  /cycle [SectionID] --round 3
+  ↓ 脚本自动: mark-round3 → audit → consistency check
+  ↓ 新文献与旧稿矛盾? → 通知用户决策
+```
+
+### Three-Round Retrieval Model
+
+**Gate enforcement:** `run_section_cycle.py` 通过 `logs/workflow_gates.json` 自动阻断。手动调用脚本时必须自行检查该文件。
+
+| Round | 触发 | 脚本自动执行 | 质量门 |
+|-------|------|-------------|--------|
+| 1 (全局) | 一次性 | tag → reindex → bootstrap | 去重后 < 100 篇 → exit 3，用户决策 |
+| 2 (逐章节) | 每个 section | bind-claims → audit → reindex | 零 claim binding → 放宽检索 → paper-search MCP 补充 → 仍无则 HALT |
+| 3 (刷新) | 终稿前 | mark-round3 → audit → consistency | 新文献与旧稿矛盾 → 通知用户决策（不自动改稿） |
+
+**Network failure recovery:** PubMed CLI 失败 → 重试一次 → fallback paper-search MCP（反之亦然）→ 全挂则 HALT 报告。
+
+### Agent 手动步骤（每个 Section，Round 2 后执行）
+
+1.  **Load State:** `python scripts/state_manager.py load --section [SectionID] --minimal`
+2.  **Search:** 按 Rule 5 检索 ≥10 篇相关论文
+3.  **Matrix:** 填充 `data/synthesis_matrix.json`，比较方法/结果
+4.  **Figure:** 定义视觉锚点，更新 `figures/figure_index.md`
+5.  **Draft:** 写入 `drafts/section_X.md`（段落体，全局编号 `[n]`）
+6.  **Critique:** 按 `templates/review_critique.md` 评分（4 维度，各 1-10 分）：
 
     | Dimension | Criteria |
     |-----------|----------|
-    | Novelty | Does the section advance beyond existing reviews? (critique template §1) |
-    | Evidence Density | Are major claims supported by ≥2 independent sources? (critique template §3) |
-    | Flow | Do paragraphs connect causally, not just topically? (critique template §5) |
-    | Anti-AI Compliance | Zero banned words; P/B rhythm satisfied? (critique template §6) |
+    | Novelty | 超越现有综述？(critique §1) |
+    | Evidence Density | 主要论点 ≥2 独立来源？(critique §3) |
+    | Flow | 段落因果连接？(critique §5) |
+    | Anti-AI Compliance | 零禁词 + P/B 节奏？(critique §6) |
 
-    Average score < 8.0 → revise internally and re-score. **Maximum 2 revision attempts.** If still < 8.0 after 2 attempts, HALT and report: "Section [SectionID] failed Reviewer Simulator after 2 revisions. Scores: [N/N/N/N]. Weakest dimension: [X]. Request user guidance." Report the four sub-scores in the Stop summary.
+    均分 < 8.0 → 内部修订（最多 2 次）→ 仍 < 8.0 → HALT 报告最弱维度
 7.  **STOP:**
-    -   Run `python scripts/word_counter.py --file [CurrentDraft]`.
-    -   Verify section length. **Key Sections** (Introduction, main body chapters with original synthesis) > 500 words; **Supporting Sections** (Methods overview, Future Perspectives, Conclusion) > 200 words. Section type is determined by `storyline.md` tagging. If not met, revise.
-    -   **HALT** (Rule 2).
-    -   Output a summary (Content, Logic, Ref Count) including the Word Count Report.
-    -   Wait for "Continue" (Rule 4).
-8.  **References:**
-    -   Ensure `## References` are appended to the draft output (Rule 7).
+    -   Run `python scripts/word_counter.py --file [CurrentDraft]`
+    -   按 `storyline.md` 的 `[Type: Key/Supporting]` 标记验证字数：Key > 500w，Supporting > 200w
+    -   **HALT** → 输出摘要（内容/逻辑/引用数 + 字数报告）→ 等待 "Continue"
+8.  **References:** 草稿末尾追加 `## References`
 
 ## Phase 3: Refinement & Compilation
 1.  **ArXiv Scan:** Search last 6 months preprints for "Future Perspectives".
