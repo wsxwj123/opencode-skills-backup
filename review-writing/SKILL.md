@@ -69,6 +69,7 @@ You must strictly enforce these 9 rules in every interaction:
     -   Only use full `load` when global context is truly needed.
     -   End turn: `python scripts/state_manager.py update [payload_file]` + `python scripts/state_manager.py snapshot`.
     -   If no payload path is provided, `update` defaults to `state_update_payload.json`.
+    -   **Payload format:** JSON object with STATE_FILES keys as top-level keys. Valid keys: `project_info` (string), `storyline` (string), `progress` (object), `literature_index` (array of entries), `synthesis_matrix` (array of entries), `figure_index` (string), `context_memory` (string), `si_database` (array). Only include keys you want to update — omitted keys are unchanged.
     -   `update` defaults to merge mode (history-preserving upsert). Use `--replace` only for intentional full replacement.
     -   After literature updates, run `python scripts/state_manager.py reindex --sync-apply` so index IDs, matrix IDs, and draft citation numbers stay aligned with hard gating.
     -   For failure recovery, resume interrupted section cycles using `python scripts/run_section_cycle.py [SectionID] --round [1|2|3] --resume`.
@@ -128,7 +129,7 @@ You must strictly enforce these 9 rules in every interaction:
 2. Round 2 (Section deep dive): before drafting each section, save retrievable search strategy to JSON (queries, date window, filters, databases) and run cycle with `--search-strategy`; then bind section claims with `python scripts/matrix_manager.py bind-claims --section [SectionID] --claims [claims.json]`.
    - Every round-2 run appends strategy + pre/post index digest hashes into `logs/search_manifest.json` for full reproducibility.
 3. Round 3 (Critical refresh): before finalization, refresh critical claims with newest papers and mark updates using `python scripts/matrix_manager.py mark-round3 --section [SectionID]`.
-4. Gate enforcement: Round 2 is blocked until Round 1 completes; Round 3 is blocked until that section's Round 2 completes. Agent must check `progress.json` field `current_stage` before entering any round — if prerequisite round is incomplete, HALT and inform user.
+4. Gate enforcement: Round 2 is blocked until Round 1 completes; Round 3 is blocked until that section's Round 2 completes. `run_section_cycle.py` enforces this via `logs/workflow_gates.json` (fields: `round1_complete`, `sections.<SectionID>.round2_complete`). If calling scripts directly without `run_section_cycle.py`, agent must check `logs/workflow_gates.json` before entering any round — if prerequisite round is incomplete, HALT and inform user.
 5. Quality gate (Round 2): must produce at least one claim binding for the target section; otherwise treat as failure and execute the following recovery sequence:
    a. Broaden query by removing one MeSH/filter constraint and re-run PubMed CLI (same round).
    b. If still zero, expand to OpenAlex CLI with 3 alternative keywords.
@@ -169,7 +170,7 @@ You must strictly enforce these 9 rules in every interaction:
     Average score < 8.0 → revise internally and re-score. **Maximum 2 revision attempts.** If still < 8.0 after 2 attempts, HALT and report: "Section [SectionID] failed Reviewer Simulator after 2 revisions. Scores: [N/N/N/N]. Weakest dimension: [X]. Request user guidance." Report the four sub-scores in the Stop summary.
 7.  **STOP:**
     -   Run `python scripts/word_counter.py --file [CurrentDraft]`.
-    -   Verify if the section length meets expectations (Key Section > 500 words, Supporting > 200 words). If not, revise.
+    -   Verify section length. **Key Sections** (Introduction, main body chapters with original synthesis) > 500 words; **Supporting Sections** (Methods overview, Future Perspectives, Conclusion) > 200 words. Section type is determined by `storyline.md` tagging. If not met, revise.
     -   **HALT** (Rule 2).
     -   Output a summary (Content, Logic, Ref Count) including the Word Count Report.
     -   Wait for "Continue" (Rule 4).
