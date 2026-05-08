@@ -215,9 +215,17 @@ Round 3 (刷新) ─────────────────────
 1.  **Load State:** `python3 scripts/state_manager.py load --section [SectionID] --minimal`
 2.  🤖 **Search:** 按 Constraint 9 Source Priority 检索 ≥10 篇相关论文 → subagent 可执行批量检索，主 agent 审查结果
 3.  🤖 **Matrix:** 填充 `data/synthesis_matrix.json` → subagent 提取结构化字段，主 agent 比较方法/结果并做综合判断
-4.  **Figure:** 定义视觉锚点，更新 `figures/figure_index.md`（主 agent，需要与叙事配合）
+4.  **Figure:** 定义视觉锚点，更新 `figures/figure_index.md`（主 agent，需要与叙事配合）。每条条目格式：
+    ```
+    ## Figure N: [Title]
+    - **Type:** Schematic | Conceptual overview | Workflow | Mechanistic pathway
+    - **Section:** [对应 SectionID]
+    - **Key Message:** [一句话核心信息]
+    - **Caption:** [初稿图注]
+    ```
 5.  **Draft:** 写入 `drafts/section_X.md`（主 agent，段落体，全局编号 `[n]`）
-6.  **Critique:** 按 `templates/review_critique.md` 评分（5 维度，各 1-10 分）：
+    -   草稿完成后，生成 `state_update_payload.json`，包含本轮变更：`{"literature_index": [新增条目...], "synthesis_matrix": [新增条目...], "progress": {"completed_sections": [...]}}`。此文件供 `/cycle` 的 state_update 步骤消费。
+6.  **Critique:** 按 `templates/review_critique.md` 评分（5 维度，各 1-10 分；§4 Visual Potential 已在 Step 4 Figure 中处理，不纳入此评分表）：
 
     | Dimension | Criteria | critique 对应 |
     |-----------|----------|---------------|

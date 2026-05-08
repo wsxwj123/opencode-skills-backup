@@ -18,7 +18,7 @@ Transform the draft from a passive summary of literature into an authoritative, 
 *   **Specificity Check:** Are the citations specific? Avoid vague phrases like "Recent studies show...". Instead, require specific mechanisms, effect sizes, or conditions.
 *   **Primary Source Validity:** Ensure claims are backed by primary literature, not general knowledge assertions.
 
-## 4. Visual Potential
+## 4. Visual Potential [不纳入评分表——在 Phase 2 Step 4 Figure 中单独处理]
 *   **Figure Opportunities:** Identify dense text sections that describe pathways, comparisons, or timelines. These are prime candidates for *Nature*-style figures.
 *   **Conceptual Diagrams:** Suggest where a schematic could replace or enhance a paragraph of complex mechanistic description.
 
