@@ -31,27 +31,24 @@ You are an expert academic consultant specializing in high-impact literature rev
     - Keep original three-round retrieval unchanged. This guard validates outputs and does not replace Round 1/2/3 search workflow.
     - `MCP` is preferred evidence track but not mandatory by default (to avoid blocking early rounds before cache materialization).
     - For final delivery hard-gate, add `--require-mcp`.
-    - Source provider policy is strict:
-      - **PubMed CLI** (医学/生医主题首选): esearch/efetch/einfo，需 `< /dev/null`。若未安装，自动执行安装（全程无需用户干预）：
+    - **Source Priority (全技能唯一检索规则，其他位置引用此处):**
+      - **医学/生医主题:** PubMed CLI（首选，MeSH 精确检索）→ paper-search MCP（补充预印本+最新文献）。
+      - **纯 CS/AI 或跨学科主题:** paper-search MCP 直接首选（Google Scholar + arXiv）→ 涉及临床/生物内容时补 PubMed CLI。
+      - **PubMed CLI 未安装时:** 自动安装（无需用户干预），安装失败则 fallback 到 paper-search MCP：
         ```bash
-        # 1. 安装 NCBI EDirect
         sh -c "$(curl -fsSL https://ftp.ncbi.nlm.nih.gov/entrez/entrezdirect/install-edirect.sh)"
-        # 2. 添加到 PATH（自动检测 shell 类型）
         if [ -f "$HOME/.zshrc" ]; then
           grep -q 'edirect' "$HOME/.zshrc" || echo 'export PATH="${HOME}/edirect:${PATH}"' >> "$HOME/.zshrc"
         elif [ -f "$HOME/.bashrc" ]; then
           grep -q 'edirect' "$HOME/.bashrc" || echo 'export PATH="${HOME}/edirect:${PATH}"' >> "$HOME/.bashrc"
         fi
-        # Windows (Git Bash / WSL): 同样写入 ~/.bashrc；PowerShell 用户需手动添加
-        # 3. 当前 session 立即生效
-        export PATH="${HOME}/edirect:${PATH}"
-        # 4. 验证安装
-        esearch -version < /dev/null
+        export PATH="${HOME}/edirect:${PATH}" && esearch -version < /dev/null
         ```
-        安装失败时 fallback 到 paper-search MCP 的 PubMed 检索。
-      - **paper-search MCP** (补充+跨学科): 通过 Google Scholar、arXiv、bioRxiv、PubMed 检索。用于：补充预印本和最新文献；纯 CS/AI 主题直接作为首选；跨学科扩展检索。
-      - Forbidden: `websearch`, `tavily`, `openalex-cli` — 均不再使用。
-      - **严禁** 使用 `tavily` 或 `websearch` 查文献，无论有无 DOI/PMID.
+      - **PubMed CLI 调用:** esearch/efetch/einfo，需 `< /dev/null`。
+      - **paper-search MCP:** 通过 Google Scholar、arXiv、bioRxiv、PubMed 检索。
+      - **Forbidden:** websearch, tavily, openalex-cli — 严禁用于文献检索。
+      - **Network failure:** PubMed CLI 失败 → 重试一次 → fallback paper-search MCP（反之亦然）→ 全挂则 HALT。
+      - **Serial Search (PubMed only):** PubMed 通道必须串行 ≥1s 间隔；arXiv/Google Scholar/bioRxiv 可并行。
 8.  **Hard Block:** If `citation_guard` exits non-zero or report `ok=false`, stop writing immediately. Do not cite unverified entries. Resolve `manual_review_queue` first.
 
 ## Anti-AI Writing Style (Strict Humanizer)
@@ -135,11 +132,7 @@ You must strictly enforce these 9 rules in every interaction:
 4.  **Human Supervision:**
     -   No full-auto. Every step requires confirmation.
 
-5.  **Search Logic (按主题自动分层):**
-    -   **医学/生医主题:** PubMed CLI（首选，MeSH 精确检索）→ paper-search MCP（补充预印本+最新文献，通过 Google Scholar/arXiv/bioRxiv）。
-    -   **纯 CS/AI 或跨学科主题:** paper-search MCP 直接首选（Google Scholar + arXiv）→ 涉及临床/生物内容时补 PubMed CLI。
-    -   **PubMed CLI 未安装时:** 按 Constraint 7 的安装脚本自动安装（无需用户参与），安装失败则 fallback 到 paper-search MCP。
-    -   **Forbidden:** websearch, tavily, openalex-cli, Semantic Scholar via web — 仅使用 PubMed CLI 和 paper-search MCP。
+5.  **Search Logic:** See Source Priority in Constraint 7.
 
 6.  **Paragraphs Only:**
     -   **NO BULLET POINTS** in body text. Must flow naturally.
@@ -150,10 +143,7 @@ You must strictly enforce these 9 rules in every interaction:
 8.  **Point-by-Point Reply:**
     -   Address every single user query. Do not skip. Do not summarize.
 
-9.  **Serial Search (PubMed only):**
-    -   **PubMed CLI 和 paper-search MCP 的 PubMed 通道：** 必须串行执行，≥1s 间隔，避免触发速率限制。
-    -   **arXiv / Google Scholar / bioRxiv：** 无速率限制，可并行调用。
-    -   Applies to all rounds (Round 1/2/3) and to `/verify` mode.
+9.  **Serial Search (PubMed only):** See Constraint 7 Source Priority → Serial Search.
 
 ## Phase 1: Setup & Scoping
 **Goal:** Define the project and create the workspace.
@@ -206,8 +196,6 @@ Round 3 (刷新) ─────────────────────
 | 2 (逐章节) | 每个 section | bind-claims → audit → reindex | 零 claim binding → 放宽检索 → paper-search MCP 补充 → 仍无则 HALT |
 | 3 (刷新) | 终稿前 | mark-round3 → audit → consistency | 新文献与旧稿矛盾 → 通知用户决策（不自动改稿） |
 
-**Network failure recovery:** PubMed CLI 失败 → 重试一次 → fallback paper-search MCP（反之亦然）→ 全挂则 HALT 报告。
-
 ### Agent 手动步骤（每个 Section，Round 2 后执行）
 
 > 标记 `🤖` 的步骤可委派 subagent（如已启用）
@@ -226,6 +214,7 @@ Round 3 (刷新) ─────────────────────
     | Flow | 段落因果连接？(critique §5) |
     | Anti-AI Compliance | 零禁词 + P/B 节奏？(critique §6) |
 
+    **评分记录：** 写入 `logs/critique_scores.json`，格式 `{"section": "SectionID", "round": 1, "scores": {"novelty": N, "evidence_density": N, "flow": N, "anti_ai": N}, "mean": N.N}`
     均分 < 8.0 → 内部修订（最多 2 次）→ 仍 < 8.0 → HALT 报告最弱维度
     -   🤖 修订后可委派 subagent 做 Anti-AI 合规扫描（禁词/句长/P-B 检查），主 agent 处理其他维度
 7.  **STOP:**
@@ -289,7 +278,7 @@ Round 3 (刷新) ─────────────────────
 *   `/verify [TEXT]`: Reverse-verification mode.
     1.  Parse TEXT and extract each distinct claim (numbered list).
     2.  Present claim list to user and wait for confirmation before searching.
-    3.  For each claim, search sequentially (Rule 9): PubMed CLI → OpenAlex CLI → paper-search MCP (stop at first source yielding ≥2 refs).
+    3.  For each claim, search sequentially (Rule 9): PubMed CLI → paper-search MCP (stop at first source yielding ≥2 refs).
         -   Focus: past 5 years + foundational classics; target CNS / BMJ / Lancet and sub-journals.
     4.  Output per claim: supporting refs with PMID, DOI, journal, year, and URL.
     5.  Flag claims with zero supporting evidence explicitly. For each flagged claim, present the user with three options:
@@ -311,7 +300,7 @@ Round 3 (刷新) ─────────────────────
 
 - `scripts/setup_review_project.py`: Run FIRST. Creates project workspace with `drafts/`, `data/`, `logs/`, `figures/` and copies `templates/matrix_schema.json` to `data/matrix_schema.json`.
 - `templates/matrix_schema.json`: Schema definition for `data/synthesis_matrix.json` — fields, round semantics, and example entry (see file for full spec).
-- `templates/review_critique.md`: Reviewer Simulator scoring template — defines the 6 critique dimensions used in Phase 2 Step 6.
+- `templates/review_critique.md`: Reviewer Simulator critique checklist — provides detailed sub-checks; Phase 2 Step 6 uses 4 scoring dimensions (Novelty, Evidence Density, Flow, Anti-AI) derived from it.
 - `scripts/state_manager.py`: Run EVERY TURN (prefer `load --section ... --minimal`, merge-update by default).
 - `scripts/state_manager.py reindex --sync-apply`: 5-layer canonical-deduplicate (DOI → PMID → metadata key → exact title → fuzzy title) with conflict detection, metadata merge, matrix/section-order reindex, then hard-gated remap of matrix IDs and draft citations. Optional: `--similarity-threshold` (default 0.93), `--conflict-threshold` (default 0.85), `--allow-conflicts`.
 - Canonical matrix source is `data/synthesis_matrix.json` (legacy `data/literature_matrix.json` is compatibility-only and should be migrated away).
@@ -324,4 +313,4 @@ Round 3 (刷新) ─────────────────────
 - `scripts/final_consistency_check.py --fail-on-gap`: Final delivery consistency gate (section coverage, claim coverage, citation continuity, round3 freshness).
 - `scripts/validate_citations.py --live --live-used-only --fail-on-orphan --retries 2 --retry-backoff 0.6`: Validate local consistency + online DOI/PMID checks for cited entries with transient-failure retry.
 - `scripts/citation_guard.py --index data/literature_index.json --mcp-cache data/mcp_literature_cache.json --mcp-ttl-days 30 --manual-review data/manual_review_queue.json --log data/verification_run_log.json --report data/citation_guard_report.json`: Dual-track anti-hallucination guard with traceability check, TTL, conflict split, and hard gate.
-- 检索优先级：医学/生医 → PubMed CLI（首选）+ paper-search MCP（补充）；CS/AI/跨学科 → paper-search MCP（首选）+ PubMed CLI（临床补充）。**严禁 tavily/websearch/openalex.**
+- 检索优先级：见 Constraint 7 Source Priority。
