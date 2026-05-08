@@ -1,6 +1,19 @@
 ---
 name: review-writing
 description: "Expert assistant for writing high-impact academic literature reviews (Nature/Cell/Lancet level). Use this skill when the user wants to write a comprehensive review article, requiring systematic search, synthesis, critical analysis, and strict adherence to academic standards. Handles the full lifecycle from scoping and outlining to iterative writing and citation management."
+triggers:
+  - "写综述"
+  - "literature review"
+  - "review article"
+  - "写review"
+  - "综述写作"
+  - "写文献综述"
+not_for:
+  - 原始研究论文（Original Research Article）— 用 general-sci-writing
+  - 单篇论文修改/润色 — 用 reviewer-response-sci
+  - 短篇评论/Commentary/Letter（<3000 words）
+  - 非学术写作（科普、博客、新闻稿）
+  - 系统综述/Meta-analysis（需要 PRISMA 流程，本技能不包含）
 ---
 
 # Literature Review Writing Specialist
@@ -106,7 +119,7 @@ You are an expert academic consultant specializing in high-impact literature rev
 
 ## Core Interactive Protocol (MANDATORY)
 
-You must strictly enforce these 9 rules in every interaction:
+You must strictly enforce these 8 rules in every interaction:
 
 1.  **State Persistence:**
     -   Start turn: `python3 scripts/state_manager.py load --section [SectionID] --minimal` for token-safe section work.
@@ -132,7 +145,7 @@ You must strictly enforce these 9 rules in every interaction:
 4.  **Human Supervision:**
     -   No full-auto. Every step requires confirmation.
 
-5.  **Search Logic:** See Constraint 9 Source Priority.
+5.  **Search & Serial Rules:** All search logic, source priority, forbidden tools, and PubMed serial constraints are defined in Constraint 9 Source Priority. Do not duplicate here.
 
 6.  **Paragraphs Only:**
     -   **NO BULLET POINTS** in body text. Must flow naturally.
@@ -142,8 +155,6 @@ You must strictly enforce these 9 rules in every interaction:
 
 8.  **Point-by-Point Reply:**
     -   Address every single user query. Do not skip. Do not summarize.
-
-9.  **Serial Search (PubMed only):** See Constraint 9 Source Priority → Serial Search.
 
 ## Phase 1: Setup & Scoping
 **Goal:** Define the project and create the workspace.
@@ -168,7 +179,8 @@ You must strictly enforce these 9 rules in every interaction:
 
 ```
 Round 1 (全局) ──────────────────────────────────────────────────────
-  广泛检索 → 去重(目标 ≥100 篇入库) → /cycle [SectionID] --round 1
+  广泛检索 → 去重(目标 ≥100 篇入库)
+  → python3 scripts/run_section_cycle.py [SectionID] --round 1
   ↓ 脚本自动: tag → reindex → bootstrap → 数量检查(≥100)
   ↓ 数量不足? exit code 3 → 报告用户 → 扩大/接受/补充
 
@@ -205,16 +217,17 @@ Round 3 (刷新) ─────────────────────
 3.  🤖 **Matrix:** 填充 `data/synthesis_matrix.json` → subagent 提取结构化字段，主 agent 比较方法/结果并做综合判断
 4.  **Figure:** 定义视觉锚点，更新 `figures/figure_index.md`（主 agent，需要与叙事配合）
 5.  **Draft:** 写入 `drafts/section_X.md`（主 agent，段落体，全局编号 `[n]`）
-6.  **Critique:** 按 `templates/review_critique.md` 评分（4 维度，各 1-10 分）：
+6.  **Critique:** 按 `templates/review_critique.md` 评分（5 维度，各 1-10 分）：
 
-    | Dimension | Criteria |
-    |-----------|----------|
-    | Novelty | 超越现有综述？(critique §1) |
-    | Evidence Density | 主要论点 ≥2 独立来源？(critique §3) |
-    | Flow | 段落因果连接？(critique §5) |
-    | Anti-AI Compliance | 零禁词 + P/B 节奏？(critique §6) |
+    | Dimension | Criteria | critique 对应 |
+    |-----------|----------|---------------|
+    | Novelty | 超越现有综述？提出新框架/假设？ | §1 |
+    | Arbitration | 矛盾文献有仲裁？解释了 *why*？ | §2 |
+    | Evidence Density | 主要论点 ≥2 独立来源？ | §3 |
+    | Flow | 段落因果连接？叙事连贯？ | §5 |
+    | Anti-AI Compliance | 零禁词 + P/B 节奏？ | §6 |
 
-    **评分记录：** 写入 `logs/critique_scores.json`，每次追加一条：`{"section": "SectionID", "attempt": 1, "scores": {"novelty": N, "evidence_density": N, "flow": N, "anti_ai": N}, "mean": N.N}`（attempt: 1=初评, 2=第一次修订后, 3=第二次修订后）
+    **评分记录：** 写入 `logs/critique_scores.json`，每次追加一条：`{"section": "SectionID", "attempt": 1, "scores": {"novelty": N, "arbitration": N, "evidence_density": N, "flow": N, "anti_ai": N}, "mean": N.N}`（attempt: 1=初评, 2=第一次修订后, 3=第二次修订后）
     均分 < 8.0 → 内部修订（最多 2 次）→ 仍 < 8.0 → HALT 报告最弱维度
     -   🤖 修订后可委派 subagent 做 Anti-AI 合规扫描（禁词/句长/P-B 检查），主 agent 处理其他维度
 7.  **STOP:**
@@ -270,11 +283,13 @@ Round 3 (刷新) ─────────────────────
 ## Commands
 *   `/write [SectionID]`: Triggers Phase 2 cycle. Enforces Search -> Matrix -> Figure -> Draft -> Critique -> Stop.
 *   `/refactor [File] [Goal]`: Uses `scripts/scope_manager.py` to analyze dependencies before rewriting.
-*   `/cycle [SectionID]`: Runs `python3 scripts/run_section_cycle.py [SectionID]` to automate section-scoped state load/update/compaction/snapshot/validation.
+*   `/cycle [SectionID] --round [1|2|3]`: Runs `python3 scripts/run_section_cycle.py [SectionID] --round N` to automate section-scoped state load/update/compaction/snapshot/validation. **必须显式指定 `--round`**（脚本默认 2，但 Round 1 必须先完成）。
     -   Includes workflow gates + checkpointing + resume.
     -   Includes log retention pruning (`--keep-snapshots`, `--keep-checkpoints`) to prevent log bloat.
-    -   For Round 2, `--search-strategy <file.json>` is mandatory and every run appends a reproducible record to `logs/search_manifest.json`.
     -   For Round 1, cycle automatically runs section tagging + index reindexing before matrix bootstrap.
+    -   For Round 2, `--search-strategy` 和 `--claims` 均为必需参数：
+        -   `--search-strategy <file.json>`: 检索策略，格式 `{"queries": ["query1", ...], "filters": {"date_range": "2020-2025", "article_types": ["Review", "Clinical Trial"]}, "sources": ["PubMed", "Google Scholar"]}`。每次运行追加记录到 `logs/search_manifest.json`。
+        -   `--claims <file.json>`: 章节核心论点，格式 `[{"claim_id": "C1", "section": "SectionID", "text": "claim statement", "evidence_needed": "experimental|clinical|computational"}]`。用于 `matrix_manager.py bind-claims` 绑定证据。
 *   `/verify [TEXT]`: Reverse-verification mode.
     1.  Parse TEXT and extract each distinct claim (numbered list).
     2.  Present claim list to user and wait for confirmation before searching.
@@ -300,7 +315,7 @@ Round 3 (刷新) ─────────────────────
 
 - `scripts/setup_review_project.py`: Run FIRST. Creates project workspace with `drafts/`, `data/`, `logs/`, `figures/` and copies `templates/matrix_schema.json` to `data/matrix_schema.json`.
 - `templates/matrix_schema.json`: Schema definition for `data/synthesis_matrix.json` — fields, round semantics, and example entry (see file for full spec).
-- `templates/review_critique.md`: Reviewer Simulator critique checklist — provides detailed sub-checks; Phase 2 Step 6 uses 4 scoring dimensions (Novelty, Evidence Density, Flow, Anti-AI) derived from it.
+- `templates/review_critique.md`: Reviewer Simulator critique checklist (6 sections) — Phase 2 Step 6 derives 5 scoring dimensions from §1/§2/§3/§5/§6（§4 Visual Potential 在 Phase 2 Step 4 Figure 中单独处理）。
 - `scripts/state_manager.py`: Run EVERY TURN (prefer `load --section ... --minimal`, merge-update by default).
 - `scripts/state_manager.py reindex --sync-apply`: 5-layer canonical-deduplicate (DOI → PMID → metadata key → exact title → fuzzy title) with conflict detection, metadata merge, matrix/section-order reindex, then hard-gated remap of matrix IDs and draft citations. Optional: `--similarity-threshold` (default 0.93), `--conflict-threshold` (default 0.85), `--allow-conflicts`.
 - Canonical matrix source is `data/synthesis_matrix.json` (legacy `data/literature_matrix.json` is compatibility-only and should be migrated away).
