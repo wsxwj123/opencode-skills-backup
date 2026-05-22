@@ -18,10 +18,10 @@ Generate one hierarchical HTML in one shot, while storing each comment page as a
 2. Generate atomic JSON for each block (plus email page JSON).
 3. Atomize manuscript and SI into paragraph-level JSON units.
 4. Link each comment unit to manuscript/SI unit IDs via anchors.
-3. Build `index.json` hierarchical TOC.
-4. Render full HTML from atomic JSON.
-5. Run `strict_gate.py`, `consistency_check.py`, `final_consistency_report.py`, and `html_format_check.py`.
-6. Persist checkpoint + transaction logs under `logs/`.
+5. Build `index.json` hierarchical TOC.
+6. Render full HTML from atomic JSON.
+7. Run `strict_gate.py`, `consistency_check.py`, `final_consistency_report.py`, and `html_format_check.py`.
+8. Persist checkpoint + transaction logs under `logs/`.
 
 ## Incremental Edit
 - Edit one unit JSON only.

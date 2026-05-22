@@ -107,6 +107,7 @@ def main() -> int:
     final_report = script_dir / "final_consistency_report.py"
     html_gate = script_dir / "html_format_check.py"
     final_content_gate = script_dir / "final_content_gate.py"
+    risk_check = script_dir / "risk_check.py"
     state_mgr = script_dir / "state_manager.py"
 
     preflight_cmd = [sys.executable, str(preflight), "--comments", args.comments, "--manuscript", args.manuscript, "--project-root", args.project_root, "--output-html", args.output_html]
@@ -136,6 +137,7 @@ def main() -> int:
         final_content_cmd.append("--allow-placeholder")
 
     html_cmd = [sys.executable, str(html_gate), args.output_html]
+    risk_cmd = [sys.executable, str(risk_check), "--project-root", args.project_root]
     state_sync_cmd = [sys.executable, str(state_mgr), "sync", "--project-root", args.project_root, "--pipeline-status", "pass"]
 
     steps = [
@@ -146,6 +148,7 @@ def main() -> int:
         ("consistency", consistency_cmd),
         ("final_report", report_cmd),
         ("html_gate", html_cmd),
+        ("risk_check", risk_cmd),
         ("state_sync", state_sync_cmd),
     ]
 

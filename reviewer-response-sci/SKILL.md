@@ -37,11 +37,15 @@ Return one complete HTML document (single file) with hierarchical TOC and intera
 TOC hierarchy must be:
 1. `回复审稿人的邮件` (top item)
 2. `Reviewer #N`
-3. `Major` / `Minor`
+3. `Major` / `Minor` / `General`
+   - If a reviewer uses `General Comments` as a section label (not Major/Minor), map it to a Level 2 node named `General`
+   - Treat all `General` items as minor-severity for background color purposes
+   - If a reviewer has no explicit Major/Minor labels, infer severity from comment content; when ambiguous, default to `Minor`
 4. `Comment k` (leaf)
 5. Leaf items must use **background color** to indicate severity:
-   - major comment: major color background
-   - minor comment: minor color background
+   - major comment: `#FEE2E2` (light red) background, left border `3px solid #DC2626`
+   - minor comment: `#FEF3C7` (light amber) background, left border `3px solid #D97706`
+   - general comment: same as minor (light amber)
    - do not rely on symbol markers in TOC to indicate severity
 6. TOC must support hierarchical collapse/expand:
    - `Reviewer #N` level can be collapsed/expanded
@@ -151,7 +155,11 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
 - When gate checks fail, directly edit the failing `project_root/units/*.json` fields and re-run checks.
 - Keep one-page-per-comment structure.
 - All copy buttons in the UI must use Chinese label `复制`.
-- Frontend must be intentionally designed (not default/plain style), with clear hierarchy, strong readability, and responsive layout.
+- Frontend design specifications:
+  - Color palette: primary `#0F4C81` (deep blue), core marker `#B42318` (red), support marker `#B54708` (amber), background `#F4F7FB`, panel `#FFFFFF`, border `#D9E2EC`
+  - Typography: `"Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif`; body 14px/1.6; headings bold; code/path `monospace`
+  - Card spacing: `padding: 14px 16px`, `border-radius: 10px`, `margin-bottom: 12px`
+  - Responsive breakpoint: ≤980px switch to single-column, sidebar becomes top nav
 - Quality gates must fail when:
   - `revised_excerpt_en` is placeholder/empty (unless explicitly running with a relaxed gate mode)
   - `revised_excerpt_en` is identical to `original_excerpt_en`
@@ -160,8 +168,21 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
 - If a reviewer comment cannot be matched to any manuscript paragraph (location confidence below threshold), set `atomic_location.confidence = "low"` and mark the unit `needs_manual_revision`; do not fabricate a location.
 - Gate fix loop must not exceed **3 iterations**; if gate still fails after 3 direct JSON edits, halt and report remaining failures to the user with a list of unresolved unit IDs.
 
+### Domain Edge Cases
+- **Reviewer recommends acceptance without comments** ("I have no major/minor concerns"): create a single email-only response acknowledging the reviewer; do not generate an empty Major/Minor section.
+- **Two reviewers give contradictory suggestions** (e.g., R1 says "remove Section 3" vs R2 says "expand Section 3"): flag the conflict explicitly in both units' `notes_core_zh`; in the English response, acknowledge the divergence and state which direction is adopted with evidence-based justification. Add a `[CONFLICTING ADVICE]` marker in `manuscript_edit_plan.md`.
+- **Reviewer writes comments in a non-English language**: translate the original comment into English first (store in `reviewer_comment_en`), then produce the Chinese translation from the original language (not from the English translation). Note the original language in a `source_language` annotation in the unit JSON.
+- **Manuscript lacks standard section headings** (e.g., Letter/Communication format): atomize by paragraph breaks instead of headings; set `unit_type=paragraph_block` for manuscript units; use paragraph index as the primary location anchor.
+- **Same paragraph targeted by 5+ comments**: in `manuscript_edit_plan.md`, merge all into one block sorted by reviewer priority (Editor > R1 > R2 > R3). If modifications conflict within the same paragraph, flag `[INTRA-PARAGRAPH CONFLICT]` and present alternative revision options for user decision.
+
 ## One-Shot Workflow
 1. Parse all reviewer comments from `comments_docx_path`.
+1.5. **[User Checkpoint]** Print parsed comment summary table:
+   - Reviewer count
+   - Per-reviewer breakdown: Major / Minor / General comment counts
+   - Full list: reviewer × section × comment index × first 20 words of each comment
+   Ask the user: "Comment parsing complete. Does this match the reviewer letter? (yes / abort / correct:N)"
+   Do not continue to step 2 until user confirms.
 2. If any comment needs additional citations, run retrieval via topic-dependent routing (life science → PubMed CLI first; CS/AI → paper-search MCP first; fallback to the other when primary yields no results). See Rules section for full routing spec.
 3. Atomize manuscript and SI into section-level units (heading + body + corresponding figure captions).
 3.5. **[User Checkpoint]** Print a summary table:
@@ -170,6 +191,12 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
    Ask the user: "Atomization complete. Proceed to build comment units? (yes / abort)"
    Do not continue to step 4 until user confirms.
 4. Build comment atomic units in `project_root/units/` and attach anchor-based links to manuscript/SI units.
+   Also build email page JSON at `project_root/units/000_email.json` with the following content:
+   - `subject`: `Response to Reviewers — [Manuscript Title]`
+   - `opening`: thank the editor; state that a point-by-point response and revised manuscript are attached
+   - `change_summary`: one bullet per reviewer, ≤2 sentences per bullet, summarizing major revisions made
+   - `closing`: restate willingness to provide further revisions if needed
+   - Tone: professional, concise, non-defensive; English only; no Chinese in email body
 5. Build `manuscript_edit_plan.md` in `project_root/` **before** final delivery.
    - The plan must be sorted by manuscript original order (ascending `manuscript_paragraph_index`).
    - Each row must include:
@@ -184,21 +211,43 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
    - When multiple comments map to the same paragraph, merge into one ordered block with sub-items.
    - If a comment is global (language polishing, full-figure consistency), put it in a separate `Global edits` section and explicitly mark as non-localized.
 6. Build hierarchical index in `project_root/index.json`.
-7. Let model fill all Chinese translation/Chinese response fields in atomic JSON units.
-   - model must also fill:
-     - reviewer intent understanding
-     - English response to reviewer
-     - revised excerpt (EN + ZH)
-     - core/support modification notes
-     - modification action reasons
+7. Fill all AI-required fields in each comment unit JSON. Execute in sub-steps:
 
-   **Step 7 Mini-Gate（填写完成后，进入Step 8前执行）：**
-   - 抽取前3个comment unit，检查以下字段是否已填（非占位符）：
-     - `content.chinese_translation`（非 `待AI` / `AI_FILL_REQUIRED`）
+   **7a. 排序与分批：**
+   - 按 reviewer 分组，每组内先 major 后 minor 后 general
+   - 如 comment 总数 ≤15，一次性处理；>15 条时分批（每批 ≤10 条），每批完成后写盘再继续下一批
+   - 每条 comment unit 需填写以下 8 组字段（参照 `references/atomic-unit-schema.json`）：
+
+   **7b. 逐条填写（每条 comment unit）：**
+   1. `content.reviewer_comment_zh`：直译审稿意见（中文，不改写不概括）
+   2. `content.reviewer_intent_zh`：理解审稿人真实意图（中文摘要，≤3 句）
+   3. `content.response_en`：英文回复（遵循 `references/decision-rules.md` 的基调选择和句式规范；短句优先，避免 AI 味重的长复合句）
+   4. `content.response_zh`：中文回复（与英文回复对应，非逐字翻译，需自然通顺）
+   5. `content.revised_excerpt_en`：修改后的英文正文段落（如无需修改写 `无`）
+   6. `content.revised_excerpt_zh`：修改后的中文翻译（如无需修改写 `无`）
+   7. `content.modification_actions`：修改动作列表（每条含 `action_type` + `target` + `reason`）
+   8. `content.notes_core_zh` + `content.notes_support_zh`：核心🔴和辅助🟡修改说明
+
+   **7c. 质量标准：**
+   - 英文回复：≥3 句、≤300 词；必须包含致谢 + 具体行动描述
+   - 中文回复：与英文回复信息等价，但措辞独立，不是机械翻译
+   - revised_excerpt：必须与 original_excerpt_en 有实质差异（不能只改标点）
+   - 禁止虚构实验、统计、引用（遵循 Rules 中的红线）
+
+   **Step 7 Mini-Gate（填写完成后，进入 Step 8 前执行）：**
+   - 抽取前 3 个 comment unit，检查以下字段是否已填（非占位符）：
+     - `content.reviewer_comment_zh`（非 `待AI` / `AI_FILL_REQUIRED`）
      - `content.response_zh`（非空、非占位符）
      - `content.revised_excerpt_en`（非空、非与 `original_excerpt_en` 相同）
    - 如发现任何占位符或空值，**停止并列出未填字段**，等待修复后再继续
-   - 抽查通过后方可进入Step 8渲染
+   - 抽查通过后方可进入 Step 7.5
+
+   7.5. **[User Checkpoint — Quality Review]** 展示回复质量摘要供用户审查：
+   - 打印表格：每条 comment 的 unit_id | reviewer | section | response_en 前 50 字 | revised_excerpt 状态（有修改/无/needs_manual）
+   - 标记需人工关注的条目：`needs_manual_revision` 的 unit、`confidence=low` 的定位、revised_excerpt_en 为 `无` 但 comment 明确要求改文的
+   - 问用户："Response content ready for rendering. Review OK? (yes / fix:unit_id / abort)"
+   - 用户可指定修改特定 unit，修改后重新展示该 unit 摘要
+   - 确认后方可进入 Step 8
 
 8. Render single HTML with left hierarchical TOC + right content pane from updated atomic JSON.
 9. Run hard gate checks and HTML checks before delivery.
@@ -219,6 +268,9 @@ After manual editing of any unit JSON:
    - If render fails (script not found / import error): check `scripts/` directory exists and dependencies are installed; fall back to `scripts/run_pipeline.py --allow-placeholder` as last resort.
 3. Sync state using `scripts/state_manager.py sync`.
    - If sync fails: run `scripts/state_manager.py status` to identify out-of-sync units; fix manually, then retry sync.
+4. Run `scripts/final_content_gate.py` and `scripts/html_format_check.py` on the newly rendered HTML.
+   - Gate checks are mandatory even for single-unit edits.
+   - If gate fails, fix the offending `units/*.json` directly and re-run from step 2. Do not skip.
 
 ## Scripts
 - One-shot enforced pipeline: `scripts/run_pipeline.py`
@@ -232,13 +284,15 @@ After manual editing of any unit JSON:
 - Consistency checker: `scripts/consistency_check.py`
 - Final consistency report: `scripts/final_consistency_report.py`
 - HTML validator: `scripts/html_format_check.py`
-- Risk phrase scan: `scripts/risk_check.py`
+- Risk phrase scan: `scripts/risk_check.py` — 支持 `--project-root` 扫描所有 unit JSON，也支持 `file` 参数扫描单文件；已集成到 pipeline
+- ~~Legacy format checker~~: `scripts/format_check.py` — 已废弃（检查旧 3-code-block 格式），被 `html_format_check.py` 完全取代，不在 pipeline 中
+- Full HTML generator: `scripts/generate_full_html.py` — 早期独立 HTML 生成脚本，功能已被 `build_full_package.py` 吸收
 
 ## References
 按需加载，不要全部预加载：
 - Atomic schema: `references/atomic-unit-schema.json` — 单元 JSON 结构定义（原子化构建时参考）
 - Atomic workflow: `references/atomic-workflow.md` — 原子化流程详细说明（首次使用或遇到异常时）
-- HTML full template: `references/html-template-full.html` — 完整 HTML 渲染模板（渲染步骤时）
+- HTML structural skeleton: `references/html-template-full.html` — 布局骨架（grid + sidebar + content 结构）；实际渲染由 `scripts/build_full_package.py` 的 `render_html()` 生成完整 UI（含折叠/展开、拖拽分割线、复制按钮、severity 背景色、localStorage 持久化）
 - Output contract: `references/output-template.md` — 输出规范（核对交付物结构时）
 - Decision rules and sentence patterns: `references/decision-rules.md` — 回复措辞决策规则（撰写英文回复时）
 - HTML filling notes: `references/html-fill-guide.md` — HTML 填写注意事项（渲染异常时）
