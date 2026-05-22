@@ -209,7 +209,8 @@ def _find_collection_by_section(
         if scoped is not None and col["key"] not in scoped:
             continue
         name = col["data"]["name"]
-        if name == section_id or name.startswith(section_id + ".") or name.startswith(section_id + " "):
+        # Use regex word boundary to avoid prefix collisions (e.g. "1.1" matching "1.10")
+        if name == section_id or re.match(rf"^{re.escape(section_id)}(?:\.\s|\s)", name):
             return col["key"]
     return None
 
@@ -229,8 +230,9 @@ def _build_item_template(
                 last, first = last.strip(), first.strip()
             else:
                 parts = a.split()
-                last = parts[0] if parts else a
-                first = " ".join(parts[1:]) if len(parts) > 1 else ""
+                # "First Last" format: last word is surname (Western convention)
+                last = parts[-1] if parts else a
+                first = " ".join(parts[:-1]) if len(parts) > 1 else ""
             authors.append({"creatorType": "author", "firstName": first, "lastName": last})
         elif isinstance(a, dict):
             authors.append({
@@ -311,11 +313,13 @@ def _add_item_to_collection(zot: "zotero.Zotero", item_key: str, col_key: str) -
         time.sleep(0.3)
 
 
-def _fetch_oa_pdf_url(doi: str) -> Optional[str]:
+def _fetch_oa_pdf_url(doi: str, email: Optional[str] = None) -> Optional[str]:
     """Query Unpaywall for OA PDF URL. Returns URL string or None."""
     if not doi:
         return None
-    url = f"https://api.unpaywall.org/v2/{doi}?email=review@tool.local"
+    # Unpaywall requires a real email; fall back to generic if not provided
+    addr = email or os.environ.get("UNPAYWALL_EMAIL", "unpaywall@example.edu")
+    url = f"https://api.unpaywall.org/v2/{doi}?email={addr}"
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "review-tool/1.0"})
         with urllib.request.urlopen(req, timeout=8) as resp:
@@ -547,7 +551,8 @@ def _backfill_existing_metadata(
                 data["DOI"] = paper["doi"]
                 zotero_changed = True
             # PMID lives in `extra` field for journalArticle items (Zotero convention)
-            if paper.get("pmid") and "PMID" not in data.get("extra", ""):
+            # Use word-boundary match to avoid false positive from "PMCID" substring
+            if paper.get("pmid") and not re.search(r'\bPMID:', data.get("extra", "")):
                 extra = data.get("extra", "")
                 pmid_line = f"PMID: {paper['pmid']}"
                 data["extra"] = f"{extra}\n{pmid_line}".strip() if extra else pmid_line

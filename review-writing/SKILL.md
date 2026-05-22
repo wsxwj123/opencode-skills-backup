@@ -965,7 +965,15 @@ AI: substitute `<MESSAGE>` with the checkpoint description. Format: `[review] Ph
 1. **Propose outline structure:** "Funnel" Introduction + "Thematic" Body structure.
 2. **Confirm outline with user** (≤2 hierarchy levels). Update `outline.md`.
 3. **Define RQ/PICO** with user. Write to `outline.md`.
-4. **Initialize Zotero collections (Zotero mode):** `python3 scripts/zotero_manager.py --init --title "[TITLE]" --outline outline.md --lib-id LIB_ID --api-key API_KEY`
+4. **Initialize Zotero collections (Zotero mode):**
+   ```bash
+   # First check if collection tree already exists (idempotent — safe on re-entry):
+   ROOT_KEY=$(python3 scripts/zotero_manager.py --status --find-root-title "[TITLE]" \
+     --lib-id LIB_ID --api-key API_KEY 2>/dev/null) && echo "Root exists: $ROOT_KEY" \
+     || python3 scripts/zotero_manager.py --init --title "[TITLE]" --outline outline.md \
+        --lib-id LIB_ID --api-key API_KEY
+   ```
+   - `--find-root-title` exit 0 → root already exists (reuse key); exit 3 → run `--init` to create.
    - Creates root collection + subcollections matching outline hierarchy.
 5. **Initialize index files (None mode):**
    ```python
@@ -1104,20 +1112,30 @@ print(f'Added {added} papers ({len(new_papers)-added} duplicates merged); total 
 ### Phase 2.5: Dedup + Global ID Assignment
 
 **⚠️ HALT before dedup.** Show user: total papers found, estimated duplicates, sections covered.
-Wait for explicit "Continue" — dedup deletes duplicate Zotero entries and is irreversible.
+Wait for explicit "Continue".
 
 ```
-[Zotero] python3 scripts/zotero_manager.py --dedup --scope ROOT_KEY --lib-id LIB_ID --api-key API_KEY
+[Zotero] ⚠️ --add-batch already deduplicates at write time (DOI exact + title fuzzy ≥0.85).
+         Normal workflow does NOT need --dedup here. Skip this step unless user reports
+         duplicate items in Zotero (manual imports, interrupted runs, etc.).
+         **Repair only (user-requested):**
+           python3 scripts/zotero_manager.py --dedup --scope ROOT_KEY --lib-id LIB_ID --api-key API_KEY
+         ⚠️ WARNING: --dedup reassigns all gid:N tags in Zotero but does NOT update
+         literature_index.json. After running --dedup, you MUST manually sync gids:
+           1. Use --get-section for each section to get new gid assignments
+           2. Update literature_index.json global_id values to match
+         If unsure → do NOT run --dedup; the write-time dedup is sufficient.
+
 [None/EndNote]   python3 scripts/state_manager.py reindex \
            --storyline outline.md --index data/literature_index.json \
            --matrix data/synthesis_matrix.json
 ```
 
-Dedup rules:
+Dedup rules (None/EndNote mode reindex):
 1. Primary key: DOI exact match
 2. Fallback: normalized title (lowercase + strip punctuation) → SequenceMatcher ≥0.85
-3. On duplicate: keep canonical entry, add same Zotero item key to new section collection
-4. `gid:N` assigned in canonical section outline order (1.1 → 1.2 → 2.1 → ...)
+3. On duplicate: keep canonical entry, merge related_sections
+4. `global_id` reassigned in canonical section outline order (1.1 → 1.2 → 2.1 → ...)
 
 Update `state.json` (merge — preserve `mode`/`pending_sections`/`citations_imported` if present):
 ```python
@@ -1383,6 +1401,7 @@ print('✅ state.json: phase=4, completed=true (other fields preserved)')
 | Proxy port varies | Auto-scan 7897/7890/1080/8080/8888; write result to outline.md |
 | API key forgotten (cross-session) | outline.md stores lib_id only; ask api_key at start |
 | Zotero Web API rate limit | PyZotero auto-waits; batch add ≤50 items per call |
+| Zotero --dedup gid 失同步 | --dedup 只改 Zotero 标签，不更新 literature_index.json。正常流程不需要 --dedup（--add-batch 已去重）。如果手动运行了 --dedup，必须用 --get-section 逐节获取新 gid 并手动同步到 literature_index.json |
 | Mid-search crash | state.json `completed_sections` tracks progress; resume skips done |
 | Section <10 papers found | Warn, prompt user to broaden keywords, continue |
 | NCBI_API_KEY set | Auto-use for 10 req/s rate limit |
