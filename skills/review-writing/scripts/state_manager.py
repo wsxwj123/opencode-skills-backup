@@ -67,17 +67,32 @@ def _load_json_list(path):
 
 
 def _extract_storyline_sections(storyline_path):
+    """
+    Extract section identifiers from a markdown outline.
+
+    Returns the **section ID** (e.g. "1.1", "2") when the heading starts with a numeric
+    prefix like `### 1.1 Background` or `## 2. Methods` — this matches the `section_id`
+    field used in literature_index.json and synthesis_matrix.json, so section_rank lookups
+    in `reindex_literature_by_section` succeed.
+
+    If a heading lacks a numeric prefix (e.g. `## Introduction`), the full title text is
+    returned as a fallback — this keeps legacy outlines that used freeform section names
+    from breaking, at the cost of weaker rank alignment.
+    """
     p = Path(storyline_path)
     if not p.exists():
         return []
     sections = []
+    id_pattern = re.compile(r"^(\d+(?:\.\d+)?)\b")  # captures "1" or "1.1" at start of title
     for line in p.read_text(encoding="utf-8").splitlines():
         m = re.match(r"^(##+)\s+(.*)$", line)
         if not m:
             continue
         title = m.group(2).strip()
-        if title:
-            sections.append(title)
+        if not title:
+            continue
+        id_match = id_pattern.match(title)
+        sections.append(id_match.group(1) if id_match else title)
     return sections
 
 

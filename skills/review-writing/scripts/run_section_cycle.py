@@ -390,6 +390,23 @@ def main():
         _write_checkpoint(section, args.round, "failed", step_name, completed_steps, payload_exists_before)
         raise
 
+    # Round 1 quality gate: check literature pool size
+    if args.round == 1:
+        index_path = Path("data") / "literature_index.json"
+        if index_path.exists():
+            try:
+                with open(index_path, "r", encoding="utf-8") as f:
+                    lit_index = json.load(f)
+                count = len(lit_index) if isinstance(lit_index, list) else 0
+                if count < 100:
+                    print(f"[QUALITY GATE] Round 1 literature pool insufficient: {count} papers (minimum 100).")
+                    print("[QUALITY GATE] Action required: broaden search scope, accept reduced pool, or provide seed papers.")
+                    raise SystemExit(3)
+                else:
+                    print(f"[QUALITY GATE] Round 1 literature pool OK: {count} papers.")
+            except (json.JSONDecodeError, OSError) as e:
+                print(f"[QUALITY GATE] Warning: could not read literature index: {e}")
+
     _mark_gate_completed(args.round, section)
     if manifest_entry_id:
         _update_search_manifest_postrun(manifest_entry_id)
