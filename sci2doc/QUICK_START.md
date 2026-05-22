@@ -28,6 +28,58 @@ python3 scripts/state_manager.py --project-root "${save_path}" profile \
   --chapter-target 1:12000 --chapter-target 2:17000
 ```
 
+## 3.1 样式二选一
+
+- `默认设置`：直接使用内置中南大学博士论文格式。
+- `自定义样式`：必须先写入院校、页边距、页眉页脚距离，以及详细文字规范或模板证据。
+
+如果自定义信息不完整，项目状态会自动保持为 `pending_template`，允许继续整理 markdown，但禁止导出 `.docx` 和格式验收。
+
+## 3.2 结构化 JSON 更新
+
+推荐把明确的格式要求写进 `format_profile_json`，把封面/摘要等信息写进 `project_info_json`。
+
+```bash
+python3 scripts/state_manager.py --project-root "${save_path}" profile \
+  --format-profile-json '{
+    "page_margins_cm": {"top": 2.8, "bottom": 2.6, "left": 3.0, "right": 3.1},
+    "header_distance_cm": 1.2,
+    "footer_distance_cm": 1.6,
+    "page_numbering": {
+      "front_matter": {"format": "upperRoman", "start": 1},
+      "body": {"format": "decimal", "start": 1},
+      "back_matter": {"format": "decimal", "start": null}
+    },
+    "style_profile": {
+      "body": {"font_east_asia": "SimSun", "font_size_pt": 12, "line_spacing_pt": 20},
+      "heading1": {"font_east_asia": "SimHei", "font_size_pt": 16}
+    }
+  }' \
+  --project-info-json '{
+    "classification": "R73",
+    "udc": "616-006",
+    "abstract_zh": "这里写中文摘要",
+    "keywords_zh": ["肿瘤学", "人工智能"],
+    "abstract_en": "Write English abstract here",
+    "keywords_en": ["oncology", "artificial intelligence"]
+  }'
+```
+
+限制：
+- `--format-profile-json` 和 `--project-info-json` 只接受 JSON object。
+- 未知字段、错误类型、非法页码格式都会被脚本直接拒绝。
+- 支持的页码格式：`decimal`、`lowerRoman`、`upperRoman`、`lowerLetter`、`upperLetter`。
+
+## 3.3 只有文字要求时怎么映射
+
+如果用户不给 `.docx/.dotx` 模板，只给规则文本，优先映射到这些字段：
+
+- “正文宋体小四，固定值 20 磅，两端对齐，首行缩进 2 字符” -> `style_profile.body`
+- “一级标题黑体三号居中，段前 18 磅，段后 12 磅” -> `style_profile.heading1`
+- “中文摘要标题黑体三号，摘要正文宋体四号 1.5 倍行距” -> `style_profile.front_matter.zh_abstract`
+- “目录前置页用大写罗马数字，正文从 1 开始” -> `page_numbering`
+- “页边距上 2.8 下 2.6 左 3.0 右 3.1，页眉 1.2，页脚 1.6” -> `page_margins_cm` + `header_distance_cm` + `footer_distance_cm`
+
 ## 4. 写前门禁
 
 ```bash

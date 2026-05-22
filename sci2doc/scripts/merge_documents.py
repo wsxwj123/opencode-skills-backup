@@ -28,6 +28,7 @@ try:
         merge_docx_files,
         resolve_merge_order,
     )
+    from front_matter_renderer import render_front_matter
     from docx import Document
 except Exception as e:  # pragma: no cover
     print(f"❌ 依赖加载失败：{e}")
@@ -45,23 +46,26 @@ def _resolve(base_root, value):
 
 
 def _default_front_matter(project_root):
-    """Check atomic_md for front matter markdown files, fallback to legacy 01_前置部分."""
-    # Primary: atomic_md front matter
-    atomic = project_root / "atomic_md"
-    cover_md = atomic / "封面.md"
-    abstract_md = atomic / "中文摘要.md"
-    abstract_en_md = atomic / "英文摘要.md"
+    """Prefer materialized docx front matter, fallback to legacy paths."""
+    chapter_docx_dir = project_root / "02_分章节文档"
+    cover_docx = chapter_docx_dir / "封面.docx"
+    title_page_docx = chapter_docx_dir / "题名页.docx"
+    declaration_docx = chapter_docx_dir / "独创性声明与授权书.docx"
+    abstract_docx = chapter_docx_dir / "中文摘要.docx"
+    abstract_en_docx = chapter_docx_dir / "英文摘要.docx"
 
     # Legacy fallback: 01_前置部分 (no longer created by init, but tolerate existing projects)
     front = project_root / "01_前置部分"
-    cover_docx = front / "封面.docx"
-    abstract_docx = front / "中文摘要.docx"
-    abstract_en_docx = front / "英文摘要.docx"
+    legacy_cover_docx = front / "封面.docx"
+    legacy_abstract_docx = front / "中文摘要.docx"
+    legacy_abstract_en_docx = front / "英文摘要.docx"
 
     return {
-        "cover": str(cover_md) if cover_md.exists() else (str(cover_docx) if cover_docx.exists() else None),
-        "abstract": str(abstract_md) if abstract_md.exists() else (str(abstract_docx) if abstract_docx.exists() else None),
-        "abstract_en": str(abstract_en_md) if abstract_en_md.exists() else (str(abstract_en_docx) if abstract_en_docx.exists() else None),
+        "cover": str(cover_docx) if cover_docx.exists() else (str(legacy_cover_docx) if legacy_cover_docx.exists() else None),
+        "title_page": str(title_page_docx) if title_page_docx.exists() else None,
+        "declaration": str(declaration_docx) if declaration_docx.exists() else None,
+        "abstract": str(abstract_docx) if abstract_docx.exists() else (str(legacy_abstract_docx) if legacy_abstract_docx.exists() else None),
+        "abstract_en": str(abstract_en_docx) if abstract_en_docx.exists() else (str(legacy_abstract_en_docx) if legacy_abstract_en_docx.exists() else None),
     }
 
 
@@ -71,6 +75,8 @@ def parse_args():
     parser.add_argument("--input-dir", help="章节目录，默认 <project_root>/02_分章节文档")
     parser.add_argument("--output", help="输出路径，默认 <project_root>/03_合并文档/完整博士论文.docx")
     parser.add_argument("--cover", help="封面文件路径（可选）")
+    parser.add_argument("--title-page", help="题名页文件路径（可选）")
+    parser.add_argument("--declaration", help="独创性声明/授权书文件路径（可选）")
     parser.add_argument("--abstract", help="中文摘要文件路径（可选）")
     parser.add_argument("--abstract-en", help="英文摘要文件路径（可选）")
     parser.add_argument("--title", default="论文标题", help="论文标题（用于页眉）")
@@ -99,14 +105,19 @@ def main():
         print(f"❌ 章节目录不存在：{input_dir}")
         sys.exit(1)
 
+    render_front_matter(str(project_root), overwrite=False, to_docx=True)
     defaults = _default_front_matter(project_root)
     cover = _resolve(project_root, args.cover) if args.cover else defaults["cover"]
+    title_page = _resolve(project_root, args.title_page) if args.title_page else defaults["title_page"]
+    declaration = _resolve(project_root, args.declaration) if args.declaration else defaults["declaration"]
     abstract = _resolve(project_root, args.abstract) if args.abstract else defaults["abstract"]
     abstract_en = _resolve(project_root, args.abstract_en) if args.abstract_en else defaults["abstract_en"]
 
     file_list = resolve_merge_order(
         input_dir=str(input_dir),
         cover=cover,
+        title_page=title_page,
+        declaration=declaration,
         abstract=abstract,
         abstract_en=abstract_en,
     )
@@ -131,7 +142,7 @@ def main():
         if args.add_toc:
             generate_toc(doc)
         if args.add_header:
-            add_header_footer(doc, args.title)
+            add_header_footer(doc, args.title, project_root=str(project_root))
         doc.save(str(output_path))
 
     print("✅ 合并完成")

@@ -28,12 +28,28 @@ from contextlib import contextmanager, redirect_stdout
 from datetime import datetime
 
 try:
-    from thesis_profile import load_profile, save_profile, parse_chapter_target_spec
+    from thesis_profile import (
+        deep_merge,
+        load_profile,
+        normalize_format_profile,
+        parse_chapter_target_spec,
+        save_profile,
+        validate_format_profile_patch,
+        validate_project_info_patch,
+    )
 except ImportError:  # pragma: no cover
     script_dir = os.path.dirname(os.path.abspath(__file__))
     if script_dir not in sys.path:
         sys.path.insert(0, script_dir)
-    from thesis_profile import load_profile, save_profile, parse_chapter_target_spec
+    from thesis_profile import (
+        deep_merge,
+        load_profile,
+        normalize_format_profile,
+        parse_chapter_target_spec,
+        save_profile,
+        validate_format_profile_patch,
+        validate_project_info_patch,
+    )
 
 try:
     import fcntl
@@ -71,6 +87,129 @@ RESTORE_MANAGED_DIRS = (".state", "02_分章节文档", "02_分章节文档_md",
 GATE_STATE_DIR = ".state"
 GATE_STATE_FILE = os.path.join(GATE_STATE_DIR, "write_gate.json")
 LOAD_CACHE_FILE = os.path.join(GATE_STATE_DIR, "load_cache.json")
+
+
+def _merge_format_profile(
+    base_profile,
+    mode=None,
+    status=None,
+    university_name=None,
+    degree_type=None,
+    template_sources=None,
+    requirements_summary=None,
+    missing_requirements=None,
+    page_margins_cm=None,
+    header_distance_cm=None,
+    footer_distance_cm=None,
+    graduate_school_name=None,
+    declaration_authorization_school_name=None,
+    school_code=None,
+    header_left_text=None,
+    style_profile=None,
+):
+    candidate = dict(base_profile or {})
+    previous_mode = candidate.get("mode")
+    effective_mode = mode if mode is not None else candidate.get("mode")
+    if mode == "custom" and previous_mode != "custom":
+        candidate["page_margins_cm"] = {}
+        candidate["header_distance_cm"] = None
+        candidate["footer_distance_cm"] = None
+        candidate["graduate_school_name"] = ""
+        candidate["declaration_authorization_school_name"] = ""
+        candidate["school_code"] = ""
+        candidate["header_left_text"] = ""
+    if mode is not None:
+        candidate["mode"] = mode
+    if status is not None:
+        candidate["status"] = status
+        if effective_mode == "custom":
+            candidate["allow_docx_generation"] = status == "ready"
+    if university_name is not None:
+        candidate["university_name"] = university_name
+    if degree_type is not None:
+        candidate["degree_type"] = degree_type
+    if template_sources is not None:
+        candidate["source_template_files"] = template_sources
+    if requirements_summary is not None:
+        candidate["requirements_summary"] = requirements_summary
+    if missing_requirements is not None:
+        candidate["missing_requirements"] = missing_requirements
+        if effective_mode == "custom" and status is None and len(missing_requirements) == 0:
+            candidate["status"] = "ready"
+            candidate["allow_docx_generation"] = True
+    if page_margins_cm is not None:
+        merged_margins = dict(candidate.get("page_margins_cm") or {})
+        for key, value in page_margins_cm.items():
+            merged_margins[key] = value
+        candidate["page_margins_cm"] = merged_margins
+    if header_distance_cm is not None:
+        candidate["header_distance_cm"] = header_distance_cm
+    if footer_distance_cm is not None:
+        candidate["footer_distance_cm"] = footer_distance_cm
+    if graduate_school_name is not None:
+        candidate["graduate_school_name"] = graduate_school_name
+    if declaration_authorization_school_name is not None:
+        candidate["declaration_authorization_school_name"] = declaration_authorization_school_name
+    if school_code is not None:
+        candidate["school_code"] = school_code
+    if header_left_text is not None:
+        candidate["header_left_text"] = header_left_text
+    if style_profile is not None:
+        candidate["style_profile"] = deep_merge(candidate.get("style_profile") or {}, style_profile)
+    return normalize_format_profile(candidate)
+
+
+def _sync_project_status_with_format(project_state, format_profile):
+    progress = project_state.setdefault("progress", {})
+    current_status = str(progress.get("status", "") or "").strip()
+    target_status = "pending_template" if format_profile.get("status") == "pending_template" else "idle"
+    if not current_status or current_status in {"idle", "pending_template"}:
+        progress["status"] = target_status
+    elif current_status == "pending_template" and target_status == "idle":
+        progress["status"] = "idle"
+    return project_state
+
+
+def _apply_profile_state_updates(project_state, format_profile, project_info_json=None):
+    state = _sync_project_status_with_format(project_state, format_profile)
+    if project_info_json:
+        info = state.setdefault("project_info", {})
+        info.update(project_info_json)
+    return state
+
+
+def _render_front_matter_if_possible(project_root):
+    try:
+        from front_matter_renderer import render_front_matter
+    except Exception:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        if script_dir not in sys.path:
+            sys.path.insert(0, script_dir)
+        from front_matter_renderer import render_front_matter
+    return render_front_matter(project_root=project_root, overwrite=False, to_docx=True)
+
+
+def _parse_json_argument(value, arg_name):
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return {}
+    source = text
+    if text.startswith("@"):
+        source = text[1:]
+    if os.path.exists(source):
+        with open(source, "r", encoding="utf-8") as f:
+            payload = json.load(f)
+    else:
+        payload = json.loads(text)
+    if not isinstance(payload, dict):
+        raise ValueError(f"{arg_name} must decode to a JSON object")
+    if arg_name == "format-profile-json":
+        validate_format_profile_patch(payload)
+    elif arg_name == "project-info-json":
+        validate_project_info_patch(payload)
+    return payload
 
 
 # ---------------------------------------------------------------------------
@@ -1017,6 +1156,7 @@ def postwrite_state(project_root, chapter, status="updated", summary="", create_
         return project_state
 
     update_json_locked(state_path, {}, mutate_project_state)
+    front_matter_payload = _render_front_matter_if_possible(project_root)
     updated_files.append(state_path)
 
     # Update context memory + versions
@@ -1362,6 +1502,22 @@ def init_project(
     major="",
     source_paper="",
     copy_local_scripts=False,
+    format_mode="default_csu",
+    format_status=None,
+    university_name=None,
+    degree_type=None,
+    template_sources=None,
+    format_requirements=None,
+    missing_requirements=None,
+    page_margins_cm=None,
+    header_distance_cm=None,
+    footer_distance_cm=None,
+    graduate_school_name=None,
+    declaration_authorization_school_name=None,
+    school_code=None,
+    header_left_text=None,
+    format_profile_json=None,
+    project_info_json=None,
 ):
     if save_path is None:
         effective_root = os.path.abspath(project_root)
@@ -1386,6 +1542,29 @@ def init_project(
     for folder in folders:
         os.makedirs(resolve_path(effective_root, folder), exist_ok=True)
 
+    profile, profile_path = load_profile(effective_root)
+    format_profile = _merge_format_profile(
+        profile.get("format_profile"),
+        mode=format_mode,
+        status=format_status,
+        university_name=university_name,
+        degree_type=degree_type,
+        template_sources=template_sources,
+        requirements_summary=format_requirements,
+        missing_requirements=missing_requirements,
+        page_margins_cm=page_margins_cm,
+        header_distance_cm=header_distance_cm,
+        footer_distance_cm=footer_distance_cm,
+        graduate_school_name=graduate_school_name,
+        declaration_authorization_school_name=declaration_authorization_school_name,
+        school_code=school_code,
+        header_left_text=header_left_text,
+    )
+    if format_profile_json:
+        format_profile = normalize_format_profile(deep_merge(format_profile, format_profile_json))
+    profile["format_profile"] = format_profile
+    save_profile(profile_path, profile)
+
     # Base files
     state_path = resolve_path(effective_root, "project_state.json")
 
@@ -1401,9 +1580,10 @@ def init_project(
                     "major": major,
                     "save_path": effective_root,
                     "source_paper": source_paper,
+                    **(project_info_json or {}),
                 },
                 "progress": {
-                    "status": "idle",
+                    "status": "pending_template" if format_profile.get("status") == "pending_template" else "idle",
                     "current_chapter_index": 0,
                     "total_chapters": 0,
                     "completed_files": [],
@@ -1432,7 +1612,9 @@ def init_project(
             info["major"] = major
         if source_paper:
             info["source_paper"] = source_paper
-        return state
+        if project_info_json:
+            info.update(project_info_json)
+        return _sync_project_status_with_format(state, format_profile)
 
     update_json_locked(state_path, {}, mutate_project_state)
 
@@ -1451,9 +1633,6 @@ def init_project(
         else:
             safe_text_dump(path, default_value)
 
-    profile, profile_path = load_profile(effective_root)
-    save_profile(profile_path, profile)
-
     copied_scripts = []
     if copy_local_scripts:
         src_dir = os.path.dirname(os.path.abspath(__file__))
@@ -1463,6 +1642,8 @@ def init_project(
             dst = os.path.join(dst_dir, os.path.basename(src))
             shutil.copy2(src, dst)
             copied_scripts.append(dst)
+
+    front_matter_payload = _render_front_matter_if_possible(project_root)
 
     print(
         json.dumps(
@@ -1490,6 +1671,8 @@ def init_project(
                 ],
                 "copied_scripts_count": len(copied_scripts),
                 "copied_scripts": copied_scripts,
+                "format_profile": format_profile,
+                "front_matter": front_matter_payload,
             },
             ensure_ascii=False,
         )
@@ -1633,11 +1816,28 @@ def profile_manage(
     references_min=None,
     min_chapters=None,
     chapter_target_specs=None,
+    format_mode=None,
+    format_status=None,
+    university_name=None,
+    degree_type=None,
+    template_sources=None,
+    format_requirements=None,
+    missing_requirements=None,
+    page_margins_cm=None,
+    header_distance_cm=None,
+    footer_distance_cm=None,
+    graduate_school_name=None,
+    declaration_authorization_school_name=None,
+    school_code=None,
+    header_left_text=None,
+    format_profile_json=None,
+    project_info_json=None,
     show_only=False,
 ):
     profile, path = load_profile(project_root)
     targets = profile.setdefault("targets", {})
     chapter_targets = profile.setdefault("chapter_targets", {})
+    format_profile = profile.setdefault("format_profile", {})
     if not isinstance(chapter_targets, dict):
         chapter_targets = {}
         profile["chapter_targets"] = chapter_targets
@@ -1663,6 +1863,70 @@ def profile_manage(
             chapter, chars = parse_chapter_target_spec(spec)
             chapter_targets[str(chapter)] = int(chars)
             updated = True
+    if project_info_json:
+        updated = True
+    effective_format_mode = format_mode or format_profile.get("mode")
+    resolved_missing_requirements = missing_requirements
+    if (
+        effective_format_mode == "custom"
+        and missing_requirements is None
+        and (format_requirements is not None or format_status == "ready")
+    ):
+        resolved_missing_requirements = []
+    effective_format_status = format_status
+    if (
+        effective_format_mode == "custom"
+        and effective_format_status is None
+        and resolved_missing_requirements == []
+        and (format_requirements is not None or template_sources is not None)
+    ):
+        effective_format_status = "ready"
+    if any(
+        value is not None
+        for value in (
+            format_mode,
+            format_status,
+            university_name,
+            degree_type,
+            template_sources,
+            format_requirements,
+            missing_requirements,
+            page_margins_cm,
+            header_distance_cm,
+            footer_distance_cm,
+            graduate_school_name,
+            declaration_authorization_school_name,
+            school_code,
+            header_left_text,
+        )
+    ):
+        profile["format_profile"] = _merge_format_profile(
+            format_profile,
+            mode=format_mode,
+            status=effective_format_status,
+            university_name=university_name,
+            degree_type=degree_type,
+            template_sources=template_sources,
+            requirements_summary=format_requirements,
+            missing_requirements=resolved_missing_requirements,
+            page_margins_cm=page_margins_cm,
+            header_distance_cm=header_distance_cm,
+            footer_distance_cm=footer_distance_cm,
+            graduate_school_name=graduate_school_name,
+            declaration_authorization_school_name=declaration_authorization_school_name,
+            school_code=school_code,
+            header_left_text=header_left_text,
+        )
+        if format_profile_json:
+            profile["format_profile"] = normalize_format_profile(
+                deep_merge(profile["format_profile"], format_profile_json)
+            )
+        updated = True
+    elif format_profile_json:
+        profile["format_profile"] = normalize_format_profile(
+            deep_merge(format_profile, format_profile_json)
+        )
+        updated = True
 
     min_chars = targets.get("abstract_min_chars")
     max_chars = targets.get("abstract_max_chars")
@@ -1711,12 +1975,27 @@ def profile_manage(
 
     if updated and not show_only:
         save_profile(path, profile)
+        state_path = resolve_path(project_root, "project_state.json")
+        if os.path.exists(state_path):
+            update_json_locked(
+                state_path,
+                {},
+                lambda state: _apply_profile_state_updates(
+                    state or {},
+                    profile.get("format_profile", {}),
+                    project_info_json,
+                ),
+            )
+        front_matter_payload = _render_front_matter_if_possible(project_root)
+    else:
+        front_matter_payload = None
 
     payload = {
         "ok": True,
         "profile_path": path,
         "updated": bool(updated and not show_only),
         "profile": profile,
+        "front_matter": front_matter_payload,
     }
     print(json.dumps(payload, ensure_ascii=False))
 
@@ -1782,6 +2061,25 @@ def parse_args():
     init_p.add_argument("--major", default="")
     init_p.add_argument("--source-paper", default="")
     init_p.add_argument("--copy-local-scripts", action="store_true")
+    init_p.add_argument("--format-mode", choices=["default_csu", "custom"], default="default_csu")
+    init_p.add_argument("--format-status", choices=["ready", "pending_template"])
+    init_p.add_argument("--university-name", default=None)
+    init_p.add_argument("--degree-type", default=None)
+    init_p.add_argument("--template-source", action="append", default=[])
+    init_p.add_argument("--format-requirement", action="append", default=[])
+    init_p.add_argument("--missing-requirement", action="append", default=[])
+    init_p.add_argument("--top-margin-cm", type=float)
+    init_p.add_argument("--bottom-margin-cm", type=float)
+    init_p.add_argument("--left-margin-cm", type=float)
+    init_p.add_argument("--right-margin-cm", type=float)
+    init_p.add_argument("--header-distance-cm", type=float)
+    init_p.add_argument("--footer-distance-cm", type=float)
+    init_p.add_argument("--graduate-school-name")
+    init_p.add_argument("--declaration-school-name")
+    init_p.add_argument("--school-code")
+    init_p.add_argument("--header-left-text")
+    init_p.add_argument("--format-profile-json", help="JSON object or @file path merged into format_profile")
+    init_p.add_argument("--project-info-json", help="JSON object or @file path merged into project_state.project_info")
 
     wc_p = subparsers.add_parser("word-count", help="Count words from .md file or atomic_md directory")
     wc_p.add_argument("--docx", dest="target_path", help="(deprecated alias for --target)")
@@ -1815,6 +2113,8 @@ def parse_args():
         help="Remove managed current files/dirs before restore for strict mirror rollback",
     )
 
+    subparsers.add_parser("render-front-matter", help="Render managed front matter markdown/docx files")
+
     profile_p = subparsers.add_parser("profile", help="Show or update thesis profile")
     profile_p.add_argument("--show", action="store_true", help="Show profile only")
     profile_p.add_argument("--body-target", type=int, help="Set body target chars, e.g. 80000")
@@ -1828,6 +2128,25 @@ def parse_args():
         default=[],
         help="Set chapter target using '<chapter>:<chars>', repeatable",
     )
+    profile_p.add_argument("--format-mode", choices=["default_csu", "custom"], help="Set style mode")
+    profile_p.add_argument("--format-status", choices=["ready", "pending_template"], help="Set style status")
+    profile_p.add_argument("--university-name", help="Set university name for custom mode")
+    profile_p.add_argument("--degree-type", help="Set degree type for custom mode")
+    profile_p.add_argument("--template-source", action="append", default=[], help="Template evidence path, repeatable")
+    profile_p.add_argument("--format-requirement", action="append", default=[], help="Detailed formatting requirement, repeatable")
+    profile_p.add_argument("--missing-requirement", action="append", default=[], help="Missing custom requirement, repeatable")
+    profile_p.add_argument("--top-margin-cm", type=float, help="Set top margin in cm for custom mode")
+    profile_p.add_argument("--bottom-margin-cm", type=float, help="Set bottom margin in cm for custom mode")
+    profile_p.add_argument("--left-margin-cm", type=float, help="Set left margin in cm for custom mode")
+    profile_p.add_argument("--right-margin-cm", type=float, help="Set right margin in cm for custom mode")
+    profile_p.add_argument("--header-distance-cm", type=float, help="Set header distance in cm for custom mode")
+    profile_p.add_argument("--footer-distance-cm", type=float, help="Set footer distance in cm for custom mode")
+    profile_p.add_argument("--graduate-school-name", help="Override graduate school label for front matter")
+    profile_p.add_argument("--declaration-school-name", help="Override school name in declaration authorization text")
+    profile_p.add_argument("--school-code", help="Override school code in front matter templates")
+    profile_p.add_argument("--header-left-text", help="Override header left text")
+    profile_p.add_argument("--format-profile-json", help="JSON object or @file path merged into format_profile")
+    profile_p.add_argument("--project-info-json", help="JSON object or @file path merged into project_state.project_info")
 
     return parser.parse_args()
 
@@ -1835,6 +2154,30 @@ def parse_args():
 def main():
     args = parse_args()
     project_root = os.path.abspath(args.project_root)
+    page_margins_cm = {
+        "top": getattr(args, "top_margin_cm", None),
+        "bottom": getattr(args, "bottom_margin_cm", None),
+        "left": getattr(args, "left_margin_cm", None),
+        "right": getattr(args, "right_margin_cm", None),
+    }
+    if all(value is None for value in page_margins_cm.values()):
+        page_margins_cm = None
+    try:
+        format_profile_json = _parse_json_argument(getattr(args, "format_profile_json", None), "format-profile-json")
+        project_info_json = _parse_json_argument(getattr(args, "project_info_json", None), "project-info-json")
+    except Exception as exc:
+        print(
+            json.dumps(
+                {
+                    "success": False,
+                    "error": "invalid_json_payload",
+                    "detail": str(exc),
+                    "hint": "Fix the JSON shape or use @file to pass a validated JSON object.",
+                },
+                ensure_ascii=False,
+            )
+        )
+        sys.exit(2)
     try:
         if args.command == "init":
             init_project(
@@ -1848,6 +2191,22 @@ def main():
                 major=args.major,
                 source_paper=args.source_paper,
                 copy_local_scripts=args.copy_local_scripts,
+                format_mode=args.format_mode,
+                format_status=args.format_status,
+                university_name=args.university_name,
+                degree_type=args.degree_type,
+                template_sources=args.template_source or None,
+                format_requirements=args.format_requirement or None,
+                missing_requirements=args.missing_requirement or None,
+                page_margins_cm=page_margins_cm,
+                header_distance_cm=getattr(args, "header_distance_cm", None),
+                footer_distance_cm=getattr(args, "footer_distance_cm", None),
+                graduate_school_name=getattr(args, "graduate_school_name", None),
+                declaration_authorization_school_name=getattr(args, "declaration_school_name", None),
+                school_code=getattr(args, "school_code", None),
+                header_left_text=getattr(args, "header_left_text", None),
+                format_profile_json=format_profile_json,
+                project_info_json=project_info_json,
             )
         elif args.command == "preflight":
             preflight_validate_state(
@@ -1934,6 +2293,9 @@ def main():
                 strict_mirror=args.strict_mirror,
             )
             print(json.dumps(payload, ensure_ascii=False))
+        elif args.command == "render-front-matter":
+            payload = _render_front_matter_if_possible(project_root)
+            print(json.dumps(payload, ensure_ascii=False))
         elif args.command == "profile":
             profile_manage(
                 project_root=project_root,
@@ -1943,6 +2305,22 @@ def main():
                 references_min=args.references_min,
                 min_chapters=args.min_chapters,
                 chapter_target_specs=args.chapter_target,
+                format_mode=args.format_mode,
+                format_status=args.format_status,
+                university_name=args.university_name,
+                degree_type=args.degree_type,
+                template_sources=args.template_source or None,
+                format_requirements=args.format_requirement or None,
+                missing_requirements=args.missing_requirement or None,
+                page_margins_cm=page_margins_cm,
+                header_distance_cm=getattr(args, "header_distance_cm", None),
+                footer_distance_cm=getattr(args, "footer_distance_cm", None),
+                graduate_school_name=getattr(args, "graduate_school_name", None),
+                declaration_authorization_school_name=getattr(args, "declaration_school_name", None),
+                school_code=getattr(args, "school_code", None),
+                header_left_text=getattr(args, "header_left_text", None),
+                format_profile_json=format_profile_json,
+                project_info_json=project_info_json,
                 show_only=args.show,
             )
     except StateFileError as e:
@@ -1953,6 +2331,15 @@ def main():
             "file": os.path.abspath(e.path),
             "detail": e.detail,
             "hint": f"Fix the file or run: python3 scripts/state_manager.py --project-root '{project_root}' rollback --target snapshot",
+        }
+        print(json.dumps(payload, ensure_ascii=False))
+        sys.exit(2)
+    except ValueError as e:
+        payload = {
+            "success": False,
+            "error": "invalid_json_payload",
+            "detail": str(e),
+            "hint": "Fix the JSON shape or use @file to pass a validated JSON object.",
         }
         print(json.dumps(payload, ensure_ascii=False))
         sys.exit(2)

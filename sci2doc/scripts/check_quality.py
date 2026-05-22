@@ -26,12 +26,12 @@ import json
 from datetime import datetime
 
 try:
-    from thesis_profile import load_profile
+    from thesis_profile import build_format_render_context, load_profile
 except Exception:  # pragma: no cover
     script_dir = os.path.dirname(os.path.abspath(__file__))
     if script_dir not in sys.path:
         sys.path.insert(0, script_dir)
-    from thesis_profile import load_profile
+    from thesis_profile import build_format_render_context, load_profile
 
 try:
     from shared_utils import normalize_text, heading_level, classify_heading, infer_project_root_for_profile
@@ -53,6 +53,36 @@ except Exception:  # pragma: no cover
         load_registry = None
         extract_abbreviations = None
         validate_cross_references = None
+
+
+def _pending_template_payload(docx_path):
+    try:
+        project_root = infer_project_root_for_profile(docx_path)
+        profile, _ = load_profile(project_root)
+    except Exception:
+        return None
+    format_profile = profile.get("format_profile", {}) if isinstance(profile, dict) else {}
+    if str(format_profile.get("status", "")).strip() != "pending_template":
+        return None
+    return {
+        "success": False,
+        "error": "pending_template",
+        "file_path": docx_path,
+        "project_root": project_root,
+        "format_profile": format_profile,
+        "message": "当前项目处于 pending_template，禁止执行格式验收。请先补齐自定义院校格式模板要求。",
+    }
+
+
+def _load_render_context_for_docx(docx_path):
+    fallback = build_format_render_context({})
+    try:
+        project_root = infer_project_root_for_profile(docx_path)
+        profile, _ = load_profile(project_root)
+    except Exception:
+        return fallback
+    format_profile = profile.get("format_profile", {}) if isinstance(profile, dict) else {}
+    return build_format_render_context(format_profile)
 
 
 def line_spacing_pt(paragraph):
@@ -140,7 +170,7 @@ def check_heading_levels(doc):
                     'category': '标题层级',
                     'location': f'第 {i+1} 段',
                     'message': f'标题层级过深：{level} 级（{para.text[:30]}...）',
-                    'suggestion': '中南大学要求标题最多三级'
+                    'suggestion': '建议标题层级最多三级'
                 })
             
             # 检查是否跳级（如 1 → 3）
@@ -1133,7 +1163,42 @@ def _get_east_asian_font(run):
     return rFonts.get(qn('w:eastAsia'))
 
 
-def check_word_format_compliance(doc):
+def _align_value(alignment_name):
+    mapping = {
+        "left": 0,
+        "center": 1,
+        "right": 2,
+        "justify": 3,
+    }
+    return mapping.get(str(alignment_name or "").strip().lower())
+
+
+def _style_spec_to_quality_spec(style_spec, label, match):
+    spec = style_spec if isinstance(style_spec, dict) else {}
+    first_indent_cm = spec.get("first_line_indent_cm")
+    indent_tol = 30000
+    quality_spec = {
+        "match": match,
+        "label": label,
+        "font_size_pt": spec.get("font_size_pt"),
+        "bold": spec.get("bold"),
+        "alignment": _align_value(spec.get("alignment")),
+        "line_spacing_pt": spec.get("line_spacing_pt") if spec.get("line_spacing_rule") == "exact" else None,
+        "line_spacing_rule": spec.get("line_spacing_rule"),
+        "space_before_pt": spec.get("space_before_pt"),
+        "space_after_pt": spec.get("space_after_pt"),
+        "font_latin": spec.get("font_latin"),
+        "font_east_asia": spec.get("font_east_asia"),
+    }
+    if first_indent_cm is not None:
+        emu = int(first_indent_cm * 360000)
+        quality_spec["first_indent_emu_min"] = emu
+        quality_spec["first_indent_emu_max"] = emu
+        quality_spec["indent_tol"] = indent_tol
+    return quality_spec
+
+
+def check_word_format_compliance(doc, format_context=None):
     """
     全面检查 Word 文档格式是否符合中南大学博士论文规范。
     检查页面布局、字体、字号、行距、缩进、段前段后间距等。
@@ -1142,10 +1207,15 @@ def check_word_format_compliance(doc):
     EMU_PER_CM = 360000
 
     # ── 1. 页面布局检查 ──
+    format_context = format_context or {}
+    page_margins = format_context.get("page_margins_cm", {})
     expected_page = {
-        'width_cm': 21.0, 'height_cm': 29.7,
-        'top_cm': 2.54, 'bottom_cm': 2.54,
-        'left_cm': 3.17, 'right_cm': 3.17,
+        'width_cm': 21.0,
+        'height_cm': 29.7,
+        'top_cm': page_margins.get("top", 2.54),
+        'bottom_cm': page_margins.get("bottom", 2.54),
+        'left_cm': page_margins.get("left", 3.17),
+        'right_cm': page_margins.get("right", 3.17),
     }
     page_tol = 0.2
     margin_tol = 0.1
@@ -1193,41 +1263,28 @@ def check_word_format_compliance(doc):
             break
 
     # ── 2. 样式规范定义 ──
+    style_profile = format_context.get("style_profile", {}) if isinstance(format_context, dict) else {}
     style_specs = {
-        'heading1': {
-            'match': lambda s: s and ('Heading 1' in s or '标题 1' in s),
-            'label': '一级标题',
-            'font_size_pt': 16.0, 'bold': True,
-            'alignment': 1,  # CENTER
-            'line_spacing_pt': 20.0,
-            'space_before_pt': 18.0, 'space_after_pt': 12.0,
-        },
-        'heading2': {
-            'match': lambda s: s and ('Heading 2' in s or '标题 2' in s),
-            'label': '二级标题',
-            'font_size_pt': 14.0, 'bold': False,
-            'alignment': 0,  # LEFT
-            'line_spacing_pt': 20.0,
-            'space_before_pt': 10.0, 'space_after_pt': 8.0,
-        },
-        'heading3': {
-            'match': lambda s: s and ('Heading 3' in s or '标题 3' in s),
-            'label': '三级标题',
-            'font_size_pt': 12.0, 'bold': False,
-            'alignment': 0,
-            'line_spacing_pt': 20.0,
-            'space_before_pt': 10.0, 'space_after_pt': 8.0,
-        },
-        'normal': {
-            'match': lambda s: s and (s == 'Normal' or s == '正文'),
-            'label': '正文',
-            'font_size_pt': 12.0, 'bold': None,
-            'alignment': 3,  # JUSTIFY (两端对齐)
-            'line_spacing_pt': 20.0,
-            'space_before_pt': None, 'space_after_pt': None,
-            'first_indent_emu_min': 210000, 'first_indent_emu_max': 280000,
-            'indent_tol': 30000,
-        },
+        'heading1': _style_spec_to_quality_spec(
+            style_profile.get("heading1", {}),
+            '一级标题',
+            lambda s: s and ('Heading 1' in s or '标题 1' in s),
+        ),
+        'heading2': _style_spec_to_quality_spec(
+            style_profile.get("heading2", {}),
+            '二级标题',
+            lambda s: s and ('Heading 2' in s or '标题 2' in s),
+        ),
+        'heading3': _style_spec_to_quality_spec(
+            style_profile.get("heading3", {}),
+            '三级标题',
+            lambda s: s and ('Heading 3' in s or '标题 3' in s),
+        ),
+        'normal': _style_spec_to_quality_spec(
+            style_profile.get("body", {}),
+            '正文',
+            lambda s: s and (s == 'Normal' or s == '正文'),
+        ),
     }
 
     FONT_SIZE_TOL = 0.5
@@ -1338,34 +1395,31 @@ def check_word_format_compliance(doc):
                     _report(key, 'font_latin', 'info',
                             f'{label}西文字体不符：{run.font.name}（应为 Times New Roman）',
                             f'请将{label}西文字体设置为 Times New Roman')
-                # 东亚字体：H1 用黑体，H2/H3 用宋体
+                # 东亚字体
                 ea_font = _get_east_asian_font(run)
                 if ea_font is not None:
-                    if key == 'heading1':
-                        if '黑体' not in ea_font and 'SimHei' not in ea_font:
-                            _report(key, 'font_ea', 'info',
-                                    f'{label}中文字体不符：{ea_font}（应为黑体）',
-                                    f'请将{label}中文字体设置为黑体')
-                    else:
-                        if '宋体' not in ea_font and 'SimSun' not in ea_font:
-                            _report(key, 'font_ea', 'info',
-                                    f'{label}中文字体不符：{ea_font}（应为宋体）',
-                                    f'请将{label}中文字体设置为宋体')
+                    expected_ea = spec.get('font_east_asia')
+                    if expected_ea and ea_font != expected_ea:
+                        _report(key, 'font_ea', 'info',
+                                f'{label}中文字体不符：{ea_font}（应为 {expected_ea}）',
+                                f'请将{label}中文字体设置为 {expected_ea}')
 
             # 正文字体名称检查
             if key == 'normal' and para.runs:
                 run = para.runs[0]
                 # 西文字体应为 Times New Roman
-                if run.font.name is not None and run.font.name != 'Times New Roman':
+                expected_latin = spec.get('font_latin') or 'Times New Roman'
+                if run.font.name is not None and run.font.name != expected_latin:
                     _report(key, 'font_latin', 'error',
-                            f'{label}西文字体不符：{run.font.name}（应为 Times New Roman）',
-                            f'请将{label}西文字体设置为 Times New Roman')
-                # 中文字体应为宋体
+                            f'{label}西文字体不符：{run.font.name}（应为 {expected_latin}）',
+                            f'请将{label}西文字体设置为 {expected_latin}')
+                # 中文字体
                 ea_font = _get_east_asian_font(run)
-                if ea_font is not None and '宋体' not in ea_font and 'SimSun' not in ea_font:
+                expected_ea = spec.get('font_east_asia') or 'SimSun'
+                if ea_font is not None and ea_font != expected_ea:
                     _report(key, 'font_ea', 'error',
-                            f'{label}中文字体不符：{ea_font}（应为宋体）',
-                            f'请将{label}中文字体设置为宋体')
+                            f'{label}中文字体不符：{ea_font}（应为 {expected_ea}）',
+                            f'请将{label}中文字体设置为 {expected_ea}')
 
     return issues
 
@@ -1589,7 +1643,7 @@ def check_markdown_quality(md_path):
                     'level': 'warning',
                     'category': '题名长度',
                     'message': f'第 {line_no} 行：一级标题中文字数为 {cn_count}（超过 25 字上限）',
-                    'suggestion': '中南大学规定论文题名一般不超过 25 个汉字',
+                    'suggestion': '建议论文题名一般不超过 25 个汉字',
                 })
             break  # 只检查首个 H1
 
@@ -1622,7 +1676,7 @@ def check_markdown_quality(md_path):
     return issues, stats
 
 
-def check_caption_style(doc):
+def check_caption_style(doc, format_context=None):
     """
     检查图表题注格式是否符合规范：
     - 字体：楷体 (KaiTi)
@@ -1635,6 +1689,7 @@ def check_caption_style(doc):
     reported = set()
     FONT_SIZE_TOL = 0.5
     SPACING_TOL = 1.0
+    format_context = format_context or build_format_render_context({})
 
     caption_re = re.compile(r'^(图|表)\s*\d')
 
@@ -1646,46 +1701,51 @@ def check_caption_style(doc):
             continue
 
         cap_type = '图题注' if text.startswith('图') else '表题注'
+        spec_key = "figure_caption" if text.startswith("图") else "table_caption"
+        spec = format_context.get("style_profile", {}).get(spec_key, {})
 
         # 字号检查
         if para.runs:
             run = para.runs[0]
             if run.font.size is not None and hasattr(run.font.size, 'pt'):
                 actual = run.font.size.pt
-                if abs(actual - 10.5) > FONT_SIZE_TOL:
+                expected_size = spec.get("font_size_pt", 10.5)
+                if abs(actual - expected_size) > FONT_SIZE_TOL:
                     tag = f'caption_font_size'
                     if tag not in reported:
                         reported.add(tag)
                         issues.append({
                             'level': 'error', 'category': '题注格式',
-                            'message': f'{cap_type}字号不符：{actual}pt（应为 10.5pt/五号）',
-                            'suggestion': '图表题注字号应设置为 10.5pt（五号）'
+                            'message': f'{cap_type}字号不符：{actual}pt（应为 {expected_size}pt）',
+                            'suggestion': f'图表题注字号应设置为 {expected_size}pt'
                         })
 
-            # 字体检查（楷体）
+            # 字体检查
             ea_font = _get_east_asian_font(run)
             if ea_font is not None:
                 tag = f'caption_font_ea'
-                if tag not in reported and '楷体' not in ea_font and 'KaiTi' not in ea_font:
+                expected_ea = spec.get("font_east_asia", "KaiTi")
+                if tag not in reported and ea_font != expected_ea:
                     reported.add(tag)
                     issues.append({
                         'level': 'error', 'category': '题注格式',
-                        'message': f'{cap_type}中文字体不符：{ea_font}（应为楷体）',
-                        'suggestion': '图表题注中文字体应设置为楷体'
+                        'message': f'{cap_type}中文字体不符：{ea_font}（应为 {expected_ea}）',
+                        'suggestion': f'图表题注中文字体应设置为 {expected_ea}'
                     })
 
         # 对齐检查（居中）
         actual_align = para.paragraph_format.alignment
         if actual_align is not None:
             align_val = actual_align if isinstance(actual_align, int) else actual_align.value if hasattr(actual_align, 'value') else None
-            if align_val is not None and align_val != 1:  # 1 = CENTER
+            expected_align = _align_value(spec.get("alignment", "center"))
+            if align_val is not None and align_val != expected_align:
                 tag = f'caption_alignment'
                 if tag not in reported:
                     reported.add(tag)
                     issues.append({
                         'level': 'error', 'category': '题注格式',
-                        'message': f'{cap_type}对齐方式不符（应为居中）',
-                        'suggestion': '图表题注应设置为居中对齐'
+                        'message': f'{cap_type}对齐方式不符',
+                        'suggestion': f'图表题注应设置为 {spec.get("alignment", "center")} 对齐'
                     })
 
         # 段前/段后间距检查（图题注：段前0/段后12pt；表题注：段前12pt/段后0）
@@ -1694,51 +1754,55 @@ def check_caption_style(doc):
         sa = para.paragraph_format.space_after
         if is_figure:
             # 图题注：段前0，段后12pt（段后1行）
+            expected_after = spec.get("space_after_pt", 12.0)
             if sa is not None and hasattr(sa, 'pt'):
                 actual_sa = sa.pt
-                if abs(actual_sa - 12.0) > SPACING_TOL:
+                if abs(actual_sa - expected_after) > SPACING_TOL:
                     tag = f'caption_fig_space_after'
                     if tag not in reported:
                         reported.add(tag)
                         issues.append({
                             'level': 'warning', 'category': '题注格式',
-                            'message': f'图题注段后间距不符：{actual_sa:.1f}pt（应为 12pt/段后1行）',
-                            'suggestion': '图题注段后间距应设置为 12pt（段后1行）'
+                            'message': f'图题注段后间距不符：{actual_sa:.1f}pt（应为 {expected_after}pt）',
+                            'suggestion': f'图题注段后间距应设置为 {expected_after}pt'
                         })
+            expected_before = spec.get("space_before_pt", 0.0)
             if sb is not None and hasattr(sb, 'pt'):
                 actual_sb = sb.pt
-                if actual_sb > SPACING_TOL:
+                if abs(actual_sb - expected_before) > SPACING_TOL:
                     tag = f'caption_fig_space_before'
                     if tag not in reported:
                         reported.add(tag)
                         issues.append({
                             'level': 'warning', 'category': '题注格式',
-                            'message': f'图题注段前间距不符：{actual_sb:.1f}pt（应为 0pt）',
-                            'suggestion': '图题注段前间距应设置为 0pt'
+                            'message': f'图题注段前间距不符：{actual_sb:.1f}pt（应为 {expected_before}pt）',
+                            'suggestion': f'图题注段前间距应设置为 {expected_before}pt'
                         })
         else:
             # 表题注：段前12pt（段前1行），段后0
+            expected_before = spec.get("space_before_pt", 12.0)
             if sb is not None and hasattr(sb, 'pt'):
                 actual_sb = sb.pt
-                if abs(actual_sb - 12.0) > SPACING_TOL:
+                if abs(actual_sb - expected_before) > SPACING_TOL:
                     tag = f'caption_tbl_space_before'
                     if tag not in reported:
                         reported.add(tag)
                         issues.append({
                             'level': 'warning', 'category': '题注格式',
-                            'message': f'表题注段前间距不符：{actual_sb:.1f}pt（应为 12pt/段前1行）',
-                            'suggestion': '表题注段前间距应设置为 12pt（段前1行）'
+                            'message': f'表题注段前间距不符：{actual_sb:.1f}pt（应为 {expected_before}pt）',
+                            'suggestion': f'表题注段前间距应设置为 {expected_before}pt'
                         })
+            expected_after = spec.get("space_after_pt", 0.0)
             if sa is not None and hasattr(sa, 'pt'):
                 actual_sa = sa.pt
-                if actual_sa > SPACING_TOL:
+                if abs(actual_sa - expected_after) > SPACING_TOL:
                     tag = f'caption_tbl_space_after'
                     if tag not in reported:
                         reported.add(tag)
                         issues.append({
                             'level': 'warning', 'category': '题注格式',
-                            'message': f'表题注段后间距不符：{actual_sa:.1f}pt（应为 0pt）',
-                            'suggestion': '表题注段后间距应设置为 0pt'
+                            'message': f'表题注段后间距不符：{actual_sa:.1f}pt（应为 {expected_after}pt）',
+                            'suggestion': f'表题注段后间距应设置为 {expected_after}pt'
                         })
 
         # 行距检查（单倍行距 ≈ 12pt for 10.5pt font, or linespacing rule SINGLE）
@@ -1762,7 +1826,7 @@ def check_caption_style(doc):
     return issues
 
 
-def check_table_cell_format(doc):
+def check_table_cell_format(doc, format_context=None):
     """
     检查表格单元格格式：
     - 字体：宋体 (SimSun) 10.5pt（五号）
@@ -1772,6 +1836,9 @@ def check_table_cell_format(doc):
     issues = []
     reported = set()
     FONT_SIZE_TOL = 0.5
+    format_context = format_context or build_format_render_context({})
+    cell_spec = format_context.get("style_profile", {}).get("table_cell", {})
+    expected_align = _align_value(cell_spec.get("alignment", "center"))
 
     for t_idx, table in enumerate(doc.tables):
         num_rows = len(table.rows)
@@ -1791,52 +1858,55 @@ def check_table_cell_format(doc):
                     actual_align = para.paragraph_format.alignment
                     if actual_align is not None:
                         align_val = actual_align if isinstance(actual_align, int) else actual_align.value if hasattr(actual_align, 'value') else None
-                        if align_val is not None and align_val != 1:  # CENTER
+                        if align_val is not None and align_val != expected_align:
                             tag = f'tbl_cell_align_{t_idx}'
                             if tag not in reported:
                                 reported.add(tag)
                                 issues.append({
                                     'level': 'warning', 'category': '表格单元格',
-                                    'message': f'{table_label}：单元格未居中对齐',
-                                    'suggestion': '三线表单元格内容应居中对齐'
+                                    'message': f'{table_label}：单元格对齐方式不符',
+                                    'suggestion': f'三线表单元格内容应设置为 {cell_spec.get("alignment", "center")} 对齐'
                                 })
 
                     for run in para.runs:
                         # 字号检查
                         if run.font.size is not None and hasattr(run.font.size, 'pt'):
                             actual = run.font.size.pt
-                            if abs(actual - 10.5) > FONT_SIZE_TOL:
+                            expected_size = cell_spec.get("font_size_pt", 10.5)
+                            if abs(actual - expected_size) > FONT_SIZE_TOL:
                                 tag = f'tbl_cell_fontsize_{t_idx}'
                                 if tag not in reported:
                                     reported.add(tag)
                                     issues.append({
                                         'level': 'warning', 'category': '表格单元格',
-                                        'message': f'{table_label}：单元格字号不符 {actual}pt（应为 10.5pt）',
-                                        'suggestion': '表格单元格字号应设置为 10.5pt（五号）'
+                                        'message': f'{table_label}：单元格字号不符 {actual}pt（应为 {expected_size}pt）',
+                                        'suggestion': f'表格单元格字号应设置为 {expected_size}pt'
                                     })
 
                         # 中文字体检查
                         ea_font = _get_east_asian_font(run)
-                        if ea_font is not None and '宋体' not in ea_font and 'SimSun' not in ea_font:
+                        expected_ea = cell_spec.get("font_east_asia", "SimSun")
+                        if ea_font is not None and ea_font != expected_ea:
                             tag = f'tbl_cell_fontea_{t_idx}'
                             if tag not in reported:
                                 reported.add(tag)
                                 issues.append({
                                     'level': 'warning', 'category': '表格单元格',
-                                    'message': f'{table_label}：单元格中文字体不符 {ea_font}（应为宋体）',
-                                    'suggestion': '表格单元格中文字体应设置为宋体'
+                                    'message': f'{table_label}：单元格中文字体不符 {ea_font}（应为 {expected_ea}）',
+                                    'suggestion': f'表格单元格中文字体应设置为 {expected_ea}'
                                 })
 
                         # 表头加粗检查
                         if is_header:
-                            if run.font.bold is not None and not run.font.bold:
+                            expected_header_bold = cell_spec.get("header_bold", True)
+                            if run.font.bold is not None and run.font.bold != expected_header_bold:
                                 tag = f'tbl_header_bold_{t_idx}'
                                 if tag not in reported:
                                     reported.add(tag)
                                     issues.append({
                                         'level': 'warning', 'category': '表格单元格',
-                                        'message': f'{table_label}：表头行未加粗',
-                                        'suggestion': '三线表表头行文字应加粗'
+                                        'message': f'{table_label}：表头行加粗属性不符',
+                                        'suggestion': f'三线表表头行文字应设置为 {"加粗" if expected_header_bold else "常规"}'
                                     })
                         break  # 只检查第一个 run
                     break  # 只检查第一个段落
@@ -1894,15 +1964,22 @@ def check_run_level_font_pairing(doc):
     return issues
 
 
-def check_header_footer(doc):
+def check_header_footer(doc, format_context=None):
     """
-    检查页眉页脚格式是否符合中南大学规范：
-    - 页眉：宋体五号(10.5pt)，左侧"中南大学博士学位论文"，距顶端1.5cm
+    检查页眉页脚格式是否符合当前配置：
+    - 页眉：宋体五号(10.5pt)，左侧为配置中的页眉文案，距顶端按配置
     - 页脚：TNR 小五号(9pt)，居中页码，距底端1.75cm
     """
     issues = []
     FONT_SIZE_TOL = 0.5
     DISTANCE_TOL = Cm(0.2)
+    format_context = format_context or {}
+    expected_header_left_text = format_context.get("header_left_text", "中南大学博士学位论文")
+    expected_header_distance_cm = format_context.get("header_distance_cm", 1.5)
+    expected_footer_distance_cm = format_context.get("footer_distance_cm", 1.75)
+    style_profile = format_context.get("style_profile", {}) if isinstance(format_context, dict) else {}
+    header_spec = style_profile.get("header", {})
+    footer_spec = style_profile.get("footer", {})
 
     for sec_idx, section in enumerate(doc.sections):
         sec_label = f'第 {sec_idx + 1} 节'
@@ -1915,37 +1992,38 @@ def check_header_footer(doc):
                 issues.append({
                     'level': 'warning', 'category': '页眉格式',
                     'message': f'{sec_label}：页眉为空',
-                    'suggestion': '页眉应包含"中南大学博士学位论文"（左）和章名（右）',
+                    'suggestion': f'页眉应包含"{expected_header_left_text}"（左）和章名（右）',
                 })
             else:
                 h_text = h_paras[0].text.strip()
-                if '中南大学博士学位论文' not in h_text:
+                if expected_header_left_text not in h_text:
                     issues.append({
                         'level': 'warning', 'category': '页眉格式',
-                        'message': f'{sec_label}：页眉缺少"中南大学博士学位论文"',
-                        'suggestion': '页眉左侧应为"中南大学博士学位论文"',
+                        'message': f'{sec_label}：页眉缺少"{expected_header_left_text}"',
+                        'suggestion': f'页眉左侧应为"{expected_header_left_text}"',
                     })
                 # 字号检查
                 for run in h_paras[0].runs:
                     if run.font.size is not None:
                         actual_pt = run.font.size.pt
-                        if abs(actual_pt - 10.5) > FONT_SIZE_TOL:
+                        expected_header_size = header_spec.get("font_size_pt", 10.5)
+                        if abs(actual_pt - expected_header_size) > FONT_SIZE_TOL:
                             issues.append({
                                 'level': 'warning', 'category': '页眉格式',
-                                'message': f'{sec_label}：页眉字号为 {actual_pt}pt，应为 10.5pt（五号）',
-                                'suggestion': '页眉字号应为宋体五号（10.5pt）',
+                                'message': f'{sec_label}：页眉字号为 {actual_pt}pt，应为 {expected_header_size}pt',
+                                'suggestion': f'页眉字号应为 {expected_header_size}pt',
                             })
                         break
 
         # 页眉距顶端
         if section.header_distance is not None:
-            expected = Cm(1.5)
+            expected = Cm(expected_header_distance_cm)
             if abs(section.header_distance - expected) > DISTANCE_TOL:
                 actual_cm = section.header_distance / Cm(1)
                 issues.append({
                     'level': 'warning', 'category': '页眉格式',
-                    'message': f'{sec_label}：页眉距顶端 {actual_cm:.2f}cm，应为 1.5cm',
-                    'suggestion': '页眉距顶端应设置为 1.5cm',
+                    'message': f'{sec_label}：页眉距顶端 {actual_cm:.2f}cm，应为 {expected_header_distance_cm}cm',
+                    'suggestion': f'页眉距顶端应设置为 {expected_header_distance_cm}cm',
                 })
 
         # ---- 页脚检查 ----
@@ -1972,23 +2050,24 @@ def check_header_footer(doc):
                 for run in p.runs:
                     if run.font.size is not None:
                         actual_pt = run.font.size.pt
-                        if abs(actual_pt - 9) > FONT_SIZE_TOL:
+                        expected_footer_size = footer_spec.get("font_size_pt", 9)
+                        if abs(actual_pt - expected_footer_size) > FONT_SIZE_TOL:
                             issues.append({
                                 'level': 'warning', 'category': '页脚格式',
-                                'message': f'{sec_label}：页脚字号为 {actual_pt}pt，应为 9pt（小五号）',
-                                'suggestion': '页码字号应为 TNR 小五号（9pt）',
+                                'message': f'{sec_label}：页脚字号为 {actual_pt}pt，应为 {expected_footer_size}pt',
+                                'suggestion': f'页码字号应为 {expected_footer_size}pt',
                             })
                         break
 
         # 页脚距底端
         if section.footer_distance is not None:
-            expected = Cm(1.75)
+            expected = Cm(expected_footer_distance_cm)
             if abs(section.footer_distance - expected) > DISTANCE_TOL:
                 actual_cm = section.footer_distance / Cm(1)
                 issues.append({
                     'level': 'warning', 'category': '页脚格式',
-                    'message': f'{sec_label}：页脚距底端 {actual_cm:.2f}cm，应为 1.75cm',
-                    'suggestion': '页脚距底端应设置为 1.75cm',
+                    'message': f'{sec_label}：页脚距底端 {actual_cm:.2f}cm，应为 {expected_footer_distance_cm}cm',
+                    'suggestion': f'页脚距底端应设置为 {expected_footer_distance_cm}cm',
                 })
 
     return issues
@@ -2006,6 +2085,9 @@ def generate_quality_report(
     md_path=None,
 ):
     """生成完整质量报告"""
+    gate_payload = _pending_template_payload(docx_path)
+    if gate_payload is not None:
+        return gate_payload
     try:
         doc = Document(docx_path)
     except Exception as e:
@@ -2013,6 +2095,7 @@ def generate_quality_report(
             'success': False,
             'error': f'无法打开文件：{str(e)}'
         }
+    format_context = _load_render_context_for_docx(docx_path)
     
     all_issues = []
     
@@ -2117,19 +2200,19 @@ def generate_quality_report(
     # 9. Word 格式合规检查（页面布局、字体、字号、行距等）
     if verbose:
         print("🔍 检查 Word 格式合规...")
-    word_format_issues = check_word_format_compliance(doc)
+    word_format_issues = check_word_format_compliance(doc, format_context=format_context)
     all_issues.extend(word_format_issues)
 
     # 9.1 题注格式检查（楷体/10.5pt/居中/单倍行距/段后12pt）
     if verbose:
         print("🔍 检查题注格式...")
-    caption_issues = check_caption_style(doc)
+    caption_issues = check_caption_style(doc, format_context=format_context)
     all_issues.extend(caption_issues)
 
     # 9.2 表格单元格格式检查（宋体10.5pt/表头加粗/居中）
     if verbose:
         print("🔍 检查表格单元格格式...")
-    cell_issues = check_table_cell_format(doc)
+    cell_issues = check_table_cell_format(doc, format_context=format_context)
     all_issues.extend(cell_issues)
 
     # 9.3 Run 级别双字体配对完整性检查
@@ -2141,7 +2224,7 @@ def generate_quality_report(
     # 9.4 页眉页脚格式检查
     if verbose:
         print("🔍 检查页眉页脚格式...")
-    hf_issues = check_header_footer(doc)
+    hf_issues = check_header_footer(doc, format_context=format_context)
     all_issues.extend(hf_issues)
 
     # 10. Markdown 质量检查（如果提供了 md_path）
@@ -2394,7 +2477,7 @@ def main():
         if output_format == 'json':
             print(json.dumps(report, ensure_ascii=False, indent=2))
         else:
-            print(f"❌ 检查失败：{report.get('error')}")
+            print(f"❌ 检查失败：{report.get('message') or report.get('error')}")
         sys.exit(1)
     
     # 输出报告

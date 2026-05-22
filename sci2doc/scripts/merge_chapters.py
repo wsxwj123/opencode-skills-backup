@@ -101,11 +101,44 @@ def _docx_merge_sort_key(filepath):
 
 try:
     from shared_utils import heading_level
+    from thesis_profile import build_format_render_context, load_profile
 except ImportError:  # pragma: no cover
     _script_dir = os.path.dirname(os.path.abspath(__file__))
     if _script_dir not in sys.path:
         sys.path.insert(0, _script_dir)
     from shared_utils import heading_level
+    from thesis_profile import build_format_render_context, load_profile
+
+
+def _load_render_context(project_root=None):
+    fallback = {
+        "page_margins_cm": {"top": 2.54, "bottom": 2.54, "left": 3.17, "right": 3.17},
+        "header_distance_cm": 1.5,
+        "footer_distance_cm": 1.75,
+        "header_left_text": "中南大学博士学位论文",
+        "page_numbering": {
+            "front_matter": {"format": "lowerRoman", "start": 1},
+            "body": {"format": "decimal", "start": 1},
+            "back_matter": {"format": "decimal", "start": None},
+        },
+    }
+    if not project_root:
+        return fallback
+    try:
+        profile, _ = load_profile(project_root)
+    except Exception:
+        return fallback
+    format_profile = profile.get("format_profile", {}) if isinstance(profile, dict) else {}
+    return build_format_render_context(format_profile)
+
+
+def _resolve_zone_page_numbering(render_context, zone):
+    page_numbering = render_context.get("page_numbering", {}) if isinstance(render_context, dict) else {}
+    zone_config = page_numbering.get(zone, {}) if isinstance(page_numbering.get(zone), dict) else {}
+    return {
+        "format": zone_config.get("format", "decimal"),
+        "start": zone_config.get("start"),
+    }
 
 
 def merge_docx_files(file_list, output_path, require_high_fidelity=False):
@@ -381,7 +414,7 @@ def _classify_para_zone(para_text):
     return None
 
 
-def add_header_footer(doc, thesis_title, university_name="中南大学"):
+def add_header_footer(doc, thesis_title, university_name="中南大学", project_root=None):
     """
     添加页眉页脚（中南大学 2022 规范），按章节分节。
 
@@ -393,10 +426,11 @@ def add_header_footer(doc, thesis_title, university_name="中南大学"):
     Args:
         doc: Document 对象
         thesis_title: 论文标题（前置部分页眉右侧备用）
-        university_name: 大学名称（默认：中南大学）
+        university_name: 大学名称（兼容参数，未提供 project_root 时使用）
     """
     from docx.enum.text import WD_TAB_ALIGNMENT
     from shared_utils import heading_level
+    render_context = _load_render_context(project_root)
 
     # ---- 第一步：收集 H1 段落及其章名 ----
     h1_paragraphs = []
@@ -438,7 +472,14 @@ def add_header_footer(doc, thesis_title, university_name="中南大学"):
         section_info.append((thesis_title or '', 'front'))
 
     # ---- 第四步：逐 section 设置页眉页脚和页码格式 ----
-    left_text = f'{university_name}博士学位论文'
+    left_text = (
+        render_context.get("header_left_text")
+        if project_root
+        else f"{university_name}博士学位论文"
+    ) or f"{university_name}博士学位论文"
+    front_numbering = _resolve_zone_page_numbering(render_context, "front_matter")
+    body_numbering = _resolve_zone_page_numbering(render_context, "body")
+    back_numbering = _resolve_zone_page_numbering(render_context, "back_matter")
     body_started = False
 
     for i, section in enumerate(doc.sections):
@@ -448,7 +489,21 @@ def add_header_footer(doc, thesis_title, university_name="中南大学"):
             chapter_name, zone = thesis_title or '', 'body'
 
         # ---- 页眉 ----
-        section.header_distance = Cm(1.5)
+        page_margins = render_context.get("page_margins_cm", {})
+        if section.top_margin is None:
+            section.top_margin = Cm(page_margins.get("top", 2.54))
+        if section.bottom_margin is None:
+            section.bottom_margin = Cm(page_margins.get("bottom", 2.54))
+        if section.left_margin is None:
+            section.left_margin = Cm(page_margins.get("left", 3.17))
+        if section.right_margin is None:
+            section.right_margin = Cm(page_margins.get("right", 3.17))
+        if section.page_width is None:
+            section.page_width = Cm(21.0)
+        if section.page_height is None:
+            section.page_height = Cm(29.7)
+
+        section.header_distance = Cm(render_context.get("header_distance_cm", 1.5))
         header = section.header
         header.is_linked_to_previous = False
         header_para = header.paragraphs[0]
@@ -462,7 +517,7 @@ def add_header_footer(doc, thesis_title, university_name="中南大学"):
         _set_run_font(run_h, latin='Times New Roman', east_asia='SimSun', size_pt=10.5)
 
         # ---- 页脚 ----
-        section.footer_distance = Cm(1.75)
+        section.footer_distance = Cm(render_context.get("footer_distance_cm", 1.75))
         footer = section.footer
         footer.is_linked_to_previous = False
         footer_para = footer.paragraphs[0]
@@ -475,29 +530,40 @@ def add_header_footer(doc, thesis_title, university_name="中南大学"):
 
         # ---- 页码格式 ----
         if zone == 'body' and not body_started:
-            _set_page_number_format(section, fmt='decimal', start_at=1)
+            _set_page_number_format(
+                section,
+                fmt=body_numbering.get("format", "decimal"),
+                start_at=body_numbering.get("start", 1),
+            )
             body_started = True
         elif zone == 'front':
-            if i == 0:
-                _set_page_number_format(section, fmt='lowerRoman', start_at=1)
-            else:
-                _set_page_number_format(section, fmt='lowerRoman')
+            _set_page_number_format(
+                section,
+                fmt=front_numbering.get("format", "lowerRoman"),
+                start_at=front_numbering.get("start", 1) if i == 0 else None,
+            )
+        elif zone == 'back':
+            _set_page_number_format(
+                section,
+                fmt=back_numbering.get("format", "decimal"),
+                start_at=back_numbering.get("start"),
+            )
         else:
             # body 后续章节 / back matter：续前页码
-            _set_page_number_format(section, fmt='decimal')
+            _set_page_number_format(section, fmt=body_numbering.get("format", "decimal"))
 
     print(f"✅ 页眉页脚已添加（{len(doc.sections)} 个分节，正文从第 1 页起用阿拉伯数字）")
 
 
-def resolve_merge_order(input_dir, cover=None, abstract=None, abstract_en=None):
+def resolve_merge_order(input_dir, cover=None, title_page=None, declaration=None, abstract=None, abstract_en=None):
     """
     组装最终合并文件顺序：
-    1) 可选前置文件（cover/abstract/abstract_en）
+    1) 可选前置文件（cover/title_page/declaration/abstract/abstract_en）
     2) input_dir 下章节文件（按第X章排序）
     """
     ordered = []
     seen = set()
-    for p in [cover, abstract, abstract_en]:
+    for p in [cover, title_page, declaration, abstract, abstract_en]:
         if not p:
             continue
         full = p if os.path.isabs(p) else os.path.join(input_dir, p)
@@ -528,9 +594,12 @@ def main():
     parser.add_argument('--input-dir', required=True, help='章节文件所在目录')
     parser.add_argument('--output', required=True, help='输出文件路径')
     parser.add_argument('--title', default='论文标题', help='论文标题（用于页眉）')
+    parser.add_argument('--project-root', help='项目根目录（读取 thesis_profile.json）')
     parser.add_argument('--add-toc', action='store_true', help='生成目录')
     parser.add_argument('--add-header', action='store_true', help='添加页眉页脚')
     parser.add_argument('--cover', help='封面文件（可选，支持绝对路径或相对 input-dir）')
+    parser.add_argument('--title-page', help='题名页文件（可选，支持绝对路径或相对 input-dir）')
+    parser.add_argument('--declaration', help='独创性声明/授权书文件（可选，支持绝对路径或相对 input-dir）')
     parser.add_argument('--abstract', help='中文摘要文件（可选，支持绝对路径或相对 input-dir）')
     parser.add_argument('--abstract-en', help='英文摘要文件（可选，支持绝对路径或相对 input-dir）')
     parser.add_argument('--require-high-fidelity', action='store_true', help='要求使用 docxcompose 高保真合并；不可回退')
@@ -545,6 +614,8 @@ def main():
     file_list = resolve_merge_order(
         input_dir=args.input_dir,
         cover=args.cover,
+        title_page=args.title_page,
+        declaration=args.declaration,
         abstract=args.abstract,
         abstract_en=args.abstract_en,
     )
@@ -585,7 +656,7 @@ def main():
     if args.add_header:
         print(f"\n📋 正在添加页眉页脚...")
         doc = Document(args.output)
-        add_header_footer(doc, args.title)
+        add_header_footer(doc, args.title, project_root=args.project_root)
         doc.save(args.output)
     
     print(f"\n🎉 所有操作完成！")

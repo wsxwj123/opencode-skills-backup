@@ -1,6 +1,6 @@
 # 封面模板
 
-中南大学博士学位论文
+[UNIVERSITY_NAME][DEGREE_TYPE]
 
 ---
 
@@ -22,6 +22,6 @@
 
 ---
 
-中南大学研究生院
+[GRADUATE_SCHOOL_NAME]
 
 [YEAR] 年 [MONTH] 月

@@ -202,6 +202,16 @@ def _provider_family(provider: str) -> str:
         return "paper-search"
     if p.startswith("tavily"):
         return "tavily"
+    # PubMed CLI (edirect: esearch + efetch) and paper-search MCP's search_pubmed
+    # share the same underlying source (NCBI E-utilities) — treat as paper-search family.
+    if p in ("pubmed", "pubmed-cli", "edirect", "ncbi", "esearch"):
+        return "paper-search"
+    # OpenAlex (cross-disciplinary CLI used by CLAUDE.md tool priority)
+    if p in ("openalex", "pyalex"):
+        return "paper-search"
+    # arXiv / bioRxiv / medRxiv via paper-search MCP also map here
+    if p in ("arxiv", "biorxiv", "medrxiv", "google-scholar"):
+        return "paper-search"
     if "websearch" in p or "web-search" in p or "web_search" in p:
         return "websearch"
     return p

@@ -2,12 +2,12 @@
 
 分类号：[CLASSIFICATION]
 UDC：[UDC]
-学校代码：10533
+学校代码：[SCHOOL_CODE]
 学号：[STUDENT_ID]
 
 ---
 
-中南大学博士学位论文
+[UNIVERSITY_NAME][DEGREE_TYPE]
 
 ---
 
@@ -45,6 +45,6 @@ UDC：[UDC]
 
 ---
 
-中南大学研究生院
+[GRADUATE_SCHOOL_NAME]
 
 [YEAR] 年 [MONTH] 月

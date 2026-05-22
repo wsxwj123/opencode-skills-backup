@@ -381,8 +381,13 @@ def merge_full(project_root, input_dir=None, output_md=None, to_docx=False, docx
         print(json.dumps({"ok": False, "error": "input_dir_not_found", "input_dir": str(source_dir)}, ensure_ascii=False))
         return 2
 
+    front_matter_dir = Path(project_root) / "atomic_md"
+    front_matter_files = []
+    if front_matter_dir.exists():
+        front_matter_files = [p for p in front_matter_dir.glob("*.md") if p.is_file()]
+
     chapter_files = [p for p in source_dir.glob("*.md") if p.is_file()]
-    chapter_files = sorted(chapter_files, key=_full_merge_sort_key)
+    chapter_files = sorted(front_matter_files + chapter_files, key=_full_merge_sort_key)
     if not chapter_files:
         print(json.dumps({"ok": False, "error": "no_chapter_md_files", "input_dir": str(source_dir)}, ensure_ascii=False))
         return 2

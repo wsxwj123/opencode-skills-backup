@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Markdown 转 Word 工具（应用中南大学样式）
+Markdown 转 Word 工具（默认应用中南大学样式，支持自定义格式配置）
 
 功能：
 1. 解析 Markdown 文本
 2. 转换为 Word 文档
-3. 自动应用中南大学博士论文样式
+3. 自动应用论文格式配置（默认中南大学博士论文样式）
 4. 处理图表占位符
 
 作者：Sci2Doc Team
@@ -18,19 +18,28 @@ from docx.shared import Pt, Cm, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING, WD_TAB_ALIGNMENT
 from docx.oxml.ns import qn, nsdecls
 from docx.oxml import parse_xml, OxmlElement
+import json
 import re
 import sys
 import os
 
 try:
+    from thesis_profile import build_format_render_context, load_profile, normalize_style_profile
+    from shared_utils import infer_project_root_for_profile
     from abbreviation_registry import load_registry, get_all as get_all_abbreviations
 except Exception:  # pragma: no cover
     _script_dir = os.path.dirname(os.path.abspath(__file__))
     if _script_dir not in sys.path:
         sys.path.insert(0, _script_dir)
     try:
+        from thesis_profile import build_format_render_context, load_profile, normalize_style_profile
+        from shared_utils import infer_project_root_for_profile
         from abbreviation_registry import load_registry, get_all as get_all_abbreviations
     except ImportError:
+        build_format_render_context = None
+        load_profile = None
+        normalize_style_profile = None
+        infer_project_root_for_profile = None
         load_registry = None
         get_all_abbreviations = None
 
@@ -41,6 +50,57 @@ except Exception:  # pragma: no cover
 
 _PIPE_TABLE_RE = re.compile(r'^\|(.+)\|$')
 _SEPARATOR_RE = re.compile(r'^[\|\s\-:]+$')
+
+
+def _resolve_project_root(candidate_project_root, source_path):
+    if candidate_project_root:
+        return os.path.abspath(candidate_project_root)
+    if infer_project_root_for_profile is None:
+        return os.path.abspath(os.path.dirname(source_path))
+    return infer_project_root_for_profile(source_path)
+
+
+def _guard_format_profile(project_root):
+    if load_profile is None:
+        return True, None
+    profile, _ = load_profile(project_root)
+    format_profile = profile.get("format_profile", {}) if isinstance(profile, dict) else {}
+    if str(format_profile.get("status", "")).strip() == "pending_template":
+        payload = {
+            "success": False,
+            "error": "pending_template",
+            "project_root": project_root,
+            "format_profile": format_profile,
+            "message": "当前项目处于 pending_template，禁止执行 Word 导出。请先补齐自定义院校格式模板要求。",
+        }
+        return False, payload
+    return True, None
+
+
+def _load_render_context(project_root):
+    fallback = {
+        "page_margins_cm": {"top": 2.54, "bottom": 2.54, "left": 3.17, "right": 3.17},
+        "header_distance_cm": 1.5,
+        "footer_distance_cm": 1.75,
+        "header_left_text": "中南大学博士学位论文",
+        "style_profile": normalize_style_profile(None) if normalize_style_profile is not None else {},
+    }
+    if load_profile is None or build_format_render_context is None:
+        return fallback
+    try:
+        profile, _ = load_profile(project_root)
+    except Exception:
+        return fallback
+    format_profile = profile.get("format_profile", {}) if isinstance(profile, dict) else {}
+    return build_format_render_context(format_profile)
+
+
+def _resolve_style_profile(render_context=None):
+    if isinstance(render_context, dict) and isinstance(render_context.get("style_profile"), dict):
+        return render_context.get("style_profile")
+    if normalize_style_profile is not None:
+        return normalize_style_profile(None)
+    return {}
 
 
 def _parse_pipe_row(line):
@@ -73,6 +133,8 @@ def parse_markdown_line(line):
     
     # 空行
     if not line.strip():
+        return ('empty', '', 0)
+    if line.strip().startswith('<!--') and line.strip().endswith('-->'):
         return ('empty', '', 0)
     
     # 一级标题 # Title
@@ -117,73 +179,83 @@ def set_run_font(run, latin, east_asia, size_pt, bold=None):
         run.font.bold = bold
 
 
-def apply_csu_heading1_style(paragraph):
+_ALIGNMENT_MAP = {
+    "left": WD_ALIGN_PARAGRAPH.LEFT,
+    "center": WD_ALIGN_PARAGRAPH.CENTER,
+    "right": WD_ALIGN_PARAGRAPH.RIGHT,
+    "justify": WD_ALIGN_PARAGRAPH.JUSTIFY,
+}
+
+_LINE_SPACING_RULE_MAP = {
+    "exact": WD_LINE_SPACING.EXACTLY,
+    "single": WD_LINE_SPACING.SINGLE,
+    "one_point_five": WD_LINE_SPACING.ONE_POINT_FIVE,
+}
+
+
+def _apply_line_spacing(paragraph, spec):
+    rule_name = spec.get("line_spacing_rule")
+    rule = _LINE_SPACING_RULE_MAP.get(rule_name)
+    if rule is not None:
+        paragraph.paragraph_format.line_spacing_rule = rule
+    if rule_name == "exact" and spec.get("line_spacing_pt") is not None:
+        paragraph.paragraph_format.line_spacing = Pt(spec["line_spacing_pt"])
+
+
+def _apply_paragraph_style_from_spec(paragraph, spec, word_style=None, set_text_black=False):
+    if word_style:
+        paragraph.style = word_style
+    alignment = _ALIGNMENT_MAP.get(spec.get("alignment"))
+    if alignment is not None:
+        paragraph.paragraph_format.alignment = alignment
+    _apply_line_spacing(paragraph, spec)
+    if spec.get("space_before_pt") is not None:
+        paragraph.paragraph_format.space_before = Pt(spec["space_before_pt"])
+    if spec.get("space_after_pt") is not None:
+        paragraph.paragraph_format.space_after = Pt(spec["space_after_pt"])
+    if spec.get("first_line_indent_cm") is not None:
+        paragraph.paragraph_format.first_line_indent = Cm(spec["first_line_indent_cm"])
+
+    for run in paragraph.runs:
+        set_run_font(
+            run,
+            latin=spec.get("font_latin", "Times New Roman"),
+            east_asia=spec.get("font_east_asia", "SimSun"),
+            size_pt=spec.get("font_size_pt", 12),
+            bold=spec.get("bold"),
+        )
+        if set_text_black:
+            run.font.color.rgb = RGBColor(0, 0, 0)
+
+
+def apply_csu_heading1_style(paragraph, render_context=None):
     """应用一级标题样式"""
-    paragraph.style = "Heading 1"
-    paragraph.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    paragraph.paragraph_format.space_before = Pt(18)
-    paragraph.paragraph_format.space_after = Pt(12)
-    paragraph.paragraph_format.line_spacing_rule = WD_LINE_SPACING.EXACTLY
-    paragraph.paragraph_format.line_spacing = Pt(20)
-    paragraph.paragraph_format.first_line_indent = Cm(0)
-    
-    for run in paragraph.runs:
-        set_run_font(run, latin='Times New Roman', east_asia='SimHei', size_pt=16, bold=True)
-        run.font.color.rgb = RGBColor(0, 0, 0)
+    spec = _resolve_style_profile(render_context).get("heading1", {})
+    _apply_paragraph_style_from_spec(paragraph, spec, word_style="Heading 1", set_text_black=True)
 
 
-def apply_csu_heading2_style(paragraph):
+def apply_csu_heading2_style(paragraph, render_context=None):
     """应用二级标题样式"""
-    paragraph.style = "Heading 2"
-    paragraph.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.LEFT
-    paragraph.paragraph_format.space_before = Pt(10)
-    paragraph.paragraph_format.space_after = Pt(8)
-    paragraph.paragraph_format.line_spacing_rule = WD_LINE_SPACING.EXACTLY
-    paragraph.paragraph_format.line_spacing = Pt(20)
-    paragraph.paragraph_format.first_line_indent = Cm(0)
-    
-    for run in paragraph.runs:
-        set_run_font(run, latin='Times New Roman', east_asia='SimSun', size_pt=14, bold=False)
+    spec = _resolve_style_profile(render_context).get("heading2", {})
+    _apply_paragraph_style_from_spec(paragraph, spec, word_style="Heading 2")
 
 
-def apply_csu_heading3_style(paragraph):
+def apply_csu_heading3_style(paragraph, render_context=None):
     """应用三级标题样式"""
-    paragraph.style = "Heading 3"
-    paragraph.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.LEFT
-    paragraph.paragraph_format.space_before = Pt(10)
-    paragraph.paragraph_format.space_after = Pt(8)
-    paragraph.paragraph_format.line_spacing_rule = WD_LINE_SPACING.EXACTLY
-    paragraph.paragraph_format.line_spacing = Pt(20)
-    paragraph.paragraph_format.first_line_indent = Cm(0)
-    
-    for run in paragraph.runs:
-        set_run_font(run, latin='Times New Roman', east_asia='SimSun', size_pt=12, bold=False)
+    spec = _resolve_style_profile(render_context).get("heading3", {})
+    _apply_paragraph_style_from_spec(paragraph, spec, word_style="Heading 3")
 
 
-def apply_csu_normal_style(paragraph):
+def apply_csu_normal_style(paragraph, render_context=None):
     """应用正文样式"""
-    paragraph.style = "Normal"
-    paragraph.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-    paragraph.paragraph_format.line_spacing_rule = WD_LINE_SPACING.EXACTLY
-    paragraph.paragraph_format.line_spacing = Pt(20)
-    paragraph.paragraph_format.first_line_indent = Cm(0.74)  # 2字符
-    paragraph.paragraph_format.space_before = Pt(0)
-    paragraph.paragraph_format.space_after = Pt(0)
-    
-    for run in paragraph.runs:
-        set_run_font(run, latin='Times New Roman', east_asia='SimSun', size_pt=12, bold=False)
+    spec = _resolve_style_profile(render_context).get("body", {})
+    _apply_paragraph_style_from_spec(paragraph, spec, word_style="Normal")
 
 
-def apply_csu_caption_style(paragraph):
+def apply_csu_caption_style(paragraph, render_context=None, caption_key="figure_caption"):
     """应用图表题注样式"""
-    paragraph.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    paragraph.paragraph_format.line_spacing_rule = WD_LINE_SPACING.SINGLE
-    paragraph.paragraph_format.space_before = Pt(0)
-    paragraph.paragraph_format.space_after = Pt(12)
-    paragraph.paragraph_format.first_line_indent = Cm(0)
-    
-    for run in paragraph.runs:
-        set_run_font(run, latin='Times New Roman', east_asia='KaiTi', size_pt=10.5, bold=False)
+    spec = _resolve_style_profile(render_context).get(caption_key, {})
+    _apply_paragraph_style_from_spec(paragraph, spec)
 
 
 # ---------------------------------------------------------------------------
@@ -225,12 +297,12 @@ def set_page_number_format(section, fmt='decimal', start_at=None):
         del pgNumType.attrib[qn('w:start')]
 
 
-def setup_header(section, left_text, right_text):
+def setup_header(section, left_text, right_text, distance_cm=1.5, style_spec=None):
     """
     设置页眉：左侧 left_text，右侧 right_text，宋体五号(10.5pt)。
     距顶端 1.5cm。
     """
-    section.header_distance = Cm(1.5)
+    section.header_distance = Cm(distance_cm)
     header = section.header
     header.is_linked_to_previous = False
     p = header.paragraphs[0]
@@ -239,17 +311,29 @@ def setup_header(section, left_text, right_text):
     text_width = section.page_width - section.left_margin - section.right_margin
     p.paragraph_format.tab_stops.add_tab_stop(text_width, WD_TAB_ALIGNMENT.RIGHT)
     run = p.add_run(f"{left_text}\t{right_text}")
-    set_run_font(run, latin='Times New Roman', east_asia='SimSun', size_pt=10.5, bold=False)
+    spec = style_spec or {
+        "font_latin": "Times New Roman",
+        "font_east_asia": "SimSun",
+        "font_size_pt": 10.5,
+        "bold": False,
+    }
+    set_run_font(
+        run,
+        latin=spec.get("font_latin", "Times New Roman"),
+        east_asia=spec.get("font_east_asia", "SimSun"),
+        size_pt=spec.get("font_size_pt", 10.5),
+        bold=spec.get("bold", False),
+    )
 
 
-def setup_footer(section, page_num_fmt='decimal', start_at=None):
+def setup_footer(section, page_num_fmt='decimal', start_at=None, distance_cm=1.75, style_spec=None):
     """
     设置页脚：居中页码，TNR 小五号(9pt)。
     距底端 1.75cm。
     page_num_fmt: 'lowerRoman' (前置部分) | 'decimal' (正文)
     start_at: 起始页码
     """
-    section.footer_distance = Cm(1.75)
+    section.footer_distance = Cm(distance_cm)
     footer = section.footer
     footer.is_linked_to_previous = False
     p = footer.paragraphs[0]
@@ -257,7 +341,19 @@ def setup_footer(section, page_num_fmt='decimal', start_at=None):
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     run = p.add_run()
     _add_page_number_field(run)
-    set_run_font(run, latin='Times New Roman', east_asia='SimSun', size_pt=9, bold=False)
+    spec = style_spec or {
+        "font_latin": "Times New Roman",
+        "font_east_asia": "SimSun",
+        "font_size_pt": 9,
+        "bold": False,
+    }
+    set_run_font(
+        run,
+        latin=spec.get("font_latin", "Times New Roman"),
+        east_asia=spec.get("font_east_asia", "SimSun"),
+        size_pt=spec.get("font_size_pt", 9),
+        bold=spec.get("bold", False),
+    )
     # 设置页码格式
     set_page_number_format(section, fmt=page_num_fmt, start_at=start_at)
 
@@ -266,7 +362,7 @@ def setup_footer(section, page_num_fmt='decimal', start_at=None):
 # 前置部分专用样式：摘要 / 英文摘要 / 目录
 # ---------------------------------------------------------------------------
 
-def add_abstract_section(doc, abstract_body, keywords=None):
+def add_abstract_section(doc, abstract_body, keywords=None, render_context=None):
     """
     添加中文摘要页。
     - 标题"摘  要"：三号黑体加粗，居中
@@ -275,20 +371,15 @@ def add_abstract_section(doc, abstract_body, keywords=None):
     - 关键词：四号黑体加粗"关键词："+ 四号宋体内容，全角分号分隔
     """
     # 标题
+    fm_spec = _resolve_style_profile(render_context).get("front_matter", {}).get("zh_abstract", {})
     title_para = doc.add_paragraph()
-    title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    title_para.paragraph_format.space_before = Pt(0)
-    title_para.paragraph_format.space_after = Pt(0)
-    title_run = title_para.add_run('摘  要')
-    set_run_font(title_run, latin='Times New Roman', east_asia='SimHei', size_pt=16, bold=True)
+    title_run = title_para.add_run(fm_spec.get("title_text", "摘  要"))
+    _apply_paragraph_style_from_spec(title_para, fm_spec.get("title", {}))
 
     # "摘要："标识行
     label_para = doc.add_paragraph()
-    label_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
-    label_para.paragraph_format.first_line_indent = Cm(0)
-    label_para.paragraph_format.line_spacing_rule = WD_LINE_SPACING.ONE_POINT_FIVE
-    label_run = label_para.add_run('摘要：')
-    set_run_font(label_run, latin='Times New Roman', east_asia='SimHei', size_pt=14, bold=True)
+    label_run = label_para.add_run(fm_spec.get("label_text", "摘要："))
+    _apply_paragraph_style_from_spec(label_para, fm_spec.get("label", {}))
 
     # 正文
     if abstract_body:
@@ -297,25 +388,25 @@ def add_abstract_section(doc, abstract_body, keywords=None):
             if not para_text:
                 continue
             body_para = doc.add_paragraph()
-            body_para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-            body_para.paragraph_format.first_line_indent = Cm(0.74)
-            body_para.paragraph_format.line_spacing_rule = WD_LINE_SPACING.ONE_POINT_FIVE
             body_run = body_para.add_run(para_text)
-            set_run_font(body_run, latin='Times New Roman', east_asia='SimSun', size_pt=14, bold=False)
+            _apply_paragraph_style_from_spec(body_para, fm_spec.get("body", {}))
 
     # 关键词
     if keywords:
         kw_para = doc.add_paragraph()
-        kw_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
-        kw_para.paragraph_format.first_line_indent = Cm(0)
-        kw_para.paragraph_format.line_spacing_rule = WD_LINE_SPACING.ONE_POINT_FIVE
-        kw_label = kw_para.add_run('关键词：')
-        set_run_font(kw_label, latin='Times New Roman', east_asia='SimHei', size_pt=14, bold=True)
+        kw_label = kw_para.add_run(fm_spec.get("keywords_label_text", "关键词："))
+        _apply_paragraph_style_from_spec(kw_para, fm_spec.get("keywords_label", {}))
         kw_content = kw_para.add_run(keywords)
-        set_run_font(kw_content, latin='Times New Roman', east_asia='SimSun', size_pt=14, bold=False)
+        set_run_font(
+            kw_content,
+            latin=fm_spec.get("keywords_body", {}).get("font_latin", "Times New Roman"),
+            east_asia=fm_spec.get("keywords_body", {}).get("font_east_asia", "SimSun"),
+            size_pt=fm_spec.get("keywords_body", {}).get("font_size_pt", 14),
+            bold=fm_spec.get("keywords_body", {}).get("bold", False),
+        )
 
 
-def add_english_abstract_section(doc, abstract_body, keywords=None):
+def add_english_abstract_section(doc, abstract_body, keywords=None, render_context=None):
     """
     添加英文摘要页。
     - 标题"ABSTRACT"：三号 TNR 加粗，居中
@@ -324,20 +415,15 @@ def add_english_abstract_section(doc, abstract_body, keywords=None):
     - Keywords：四号 TNR 加粗"Keywords："+ 四号 TNR 内容，半角分号分隔
     """
     # 标题
+    fm_spec = _resolve_style_profile(render_context).get("front_matter", {}).get("en_abstract", {})
     title_para = doc.add_paragraph()
-    title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    title_para.paragraph_format.space_before = Pt(0)
-    title_para.paragraph_format.space_after = Pt(0)
-    title_run = title_para.add_run('ABSTRACT')
-    set_run_font(title_run, latin='Times New Roman', east_asia='Times New Roman', size_pt=16, bold=True)
+    title_run = title_para.add_run(fm_spec.get("title_text", "ABSTRACT"))
+    _apply_paragraph_style_from_spec(title_para, fm_spec.get("title", {}))
 
     # "Abstract："标识行
     label_para = doc.add_paragraph()
-    label_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
-    label_para.paragraph_format.first_line_indent = Cm(0)
-    label_para.paragraph_format.line_spacing_rule = WD_LINE_SPACING.ONE_POINT_FIVE
-    label_run = label_para.add_run('Abstract：')
-    set_run_font(label_run, latin='Times New Roman', east_asia='Times New Roman', size_pt=14, bold=True)
+    label_run = label_para.add_run(fm_spec.get("label_text", "Abstract："))
+    _apply_paragraph_style_from_spec(label_para, fm_spec.get("label", {}))
 
     # 正文
     if abstract_body:
@@ -346,25 +432,25 @@ def add_english_abstract_section(doc, abstract_body, keywords=None):
             if not para_text:
                 continue
             body_para = doc.add_paragraph()
-            body_para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-            body_para.paragraph_format.first_line_indent = Cm(0.74)
-            body_para.paragraph_format.line_spacing_rule = WD_LINE_SPACING.ONE_POINT_FIVE
             body_run = body_para.add_run(para_text)
-            set_run_font(body_run, latin='Times New Roman', east_asia='Times New Roman', size_pt=14, bold=False)
+            _apply_paragraph_style_from_spec(body_para, fm_spec.get("body", {}))
 
     # Keywords
     if keywords:
         kw_para = doc.add_paragraph()
-        kw_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
-        kw_para.paragraph_format.first_line_indent = Cm(0)
-        kw_para.paragraph_format.line_spacing_rule = WD_LINE_SPACING.ONE_POINT_FIVE
-        kw_label = kw_para.add_run('Keywords：')
-        set_run_font(kw_label, latin='Times New Roman', east_asia='Times New Roman', size_pt=14, bold=True)
+        kw_label = kw_para.add_run(fm_spec.get("keywords_label_text", "Keywords："))
+        _apply_paragraph_style_from_spec(kw_para, fm_spec.get("keywords_label", {}))
         kw_content = kw_para.add_run(keywords)
-        set_run_font(kw_content, latin='Times New Roman', east_asia='Times New Roman', size_pt=14, bold=False)
+        set_run_font(
+            kw_content,
+            latin=fm_spec.get("keywords_body", {}).get("font_latin", "Times New Roman"),
+            east_asia=fm_spec.get("keywords_body", {}).get("font_east_asia", "Times New Roman"),
+            size_pt=fm_spec.get("keywords_body", {}).get("font_size_pt", 14),
+            bold=fm_spec.get("keywords_body", {}).get("bold", False),
+        )
 
 
-def add_toc_section(doc, toc_entries=None):
+def add_toc_section(doc, toc_entries=None, render_context=None):
     """
     添加目录页。
     - 标题"目  录"：三号黑体加粗，居中（中间空两格）
@@ -374,12 +460,10 @@ def add_toc_section(doc, toc_entries=None):
     toc_entries 格式：[(level, title, page_str), ...]  level=1 章, level=2 节, level=3 小节
     """
     # 标题
+    toc_spec = _resolve_style_profile(render_context).get("front_matter", {}).get("toc", {})
     title_para = doc.add_paragraph()
-    title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    title_para.paragraph_format.space_before = Pt(0)
-    title_para.paragraph_format.space_after = Pt(12)
-    title_run = title_para.add_run('目  录')
-    set_run_font(title_run, latin='Times New Roman', east_asia='SimHei', size_pt=16, bold=True)
+    title_run = title_para.add_run(toc_spec.get("title_text", "目  录"))
+    _apply_paragraph_style_from_spec(title_para, toc_spec.get("title", {}))
 
     if toc_entries is None:
         # 插入 TOC 域代码，用户在 Word 中按 F9 更新
@@ -401,18 +485,13 @@ def add_toc_section(doc, toc_entries=None):
     else:
         for level, title, page_str in toc_entries:
             entry_para = doc.add_paragraph()
-            entry_para.paragraph_format.line_spacing_rule = WD_LINE_SPACING.ONE_POINT_FIVE
             if level == 1:
-                # 章标题：小四号黑体，无缩进
-                entry_para.paragraph_format.first_line_indent = Cm(0)
                 entry_run = entry_para.add_run(f'{title}{"." * 20}{page_str}')
-                set_run_font(entry_run, latin='Times New Roman', east_asia='SimHei', size_pt=12, bold=False)
+                _apply_paragraph_style_from_spec(entry_para, toc_spec.get("level1", {}))
             else:
-                # 节/小节标题：小四号宋体，缩进
-                indent = Cm(0.74 * (level - 1))
-                entry_para.paragraph_format.first_line_indent = indent
                 entry_run = entry_para.add_run(f'{title}{"." * 20}{page_str}')
-                set_run_font(entry_run, latin='Times New Roman', east_asia='SimSun', size_pt=12, bold=False)
+                level_key = "level2" if level == 2 else "level3"
+                _apply_paragraph_style_from_spec(entry_para, toc_spec.get(level_key, {}))
 
 
 # ---------------------------------------------------------------------------
@@ -569,7 +648,7 @@ def parse_table_rows(lines):
     return headers, rows
 
 
-def create_three_line_table(doc, headers, rows, caption=None):
+def create_three_line_table(doc, headers, rows, caption=None, render_context=None):
     """
     创建三线表格式的 Word 表格。
 
@@ -587,12 +666,7 @@ def create_three_line_table(doc, headers, rows, caption=None):
     # 添加标题（如果有）
     if caption:
         cap_para = doc.add_paragraph(caption)
-        cap_para.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        cap_para.paragraph_format.space_before = Pt(12)  # 表题注：段前1行
-        cap_para.paragraph_format.space_after = Pt(0)   # 表题注：段后0行
-        cap_para.paragraph_format.first_line_indent = Cm(0)
-        for run in cap_para.runs:
-            set_run_font(run, latin='Times New Roman', east_asia='KaiTi', size_pt=10.5, bold=False)
+        apply_csu_caption_style(cap_para, render_context=render_context, caption_key="table_caption")
 
     num_cols = len(headers)
     num_rows = 1 + len(rows)
@@ -604,9 +678,19 @@ def create_three_line_table(doc, headers, rows, caption=None):
         cell = table.rows[0].cells[j]
         cell.text = header_text
         for paragraph in cell.paragraphs:
-            paragraph.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            cell_spec = _resolve_style_profile(render_context).get("table_cell", {})
+            paragraph.paragraph_format.alignment = _ALIGNMENT_MAP.get(
+                cell_spec.get("alignment", "center"),
+                WD_ALIGN_PARAGRAPH.CENTER,
+            )
             for run in paragraph.runs:
-                set_run_font(run, latin='Times New Roman', east_asia='SimSun', size_pt=10.5, bold=True)
+                set_run_font(
+                    run,
+                    latin=cell_spec.get("font_latin", "Times New Roman"),
+                    east_asia=cell_spec.get("font_east_asia", "SimSun"),
+                    size_pt=cell_spec.get("font_size_pt", 10.5),
+                    bold=cell_spec.get("header_bold", True),
+                )
 
     # 填充数据行
     for i, row_data in enumerate(rows):
@@ -615,9 +699,19 @@ def create_three_line_table(doc, headers, rows, caption=None):
                 cell = table.rows[i + 1].cells[j]
                 cell.text = cell_text
                 for paragraph in cell.paragraphs:
-                    paragraph.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    cell_spec = _resolve_style_profile(render_context).get("table_cell", {})
+                    paragraph.paragraph_format.alignment = _ALIGNMENT_MAP.get(
+                        cell_spec.get("alignment", "center"),
+                        WD_ALIGN_PARAGRAPH.CENTER,
+                    )
                     for run in paragraph.runs:
-                        set_run_font(run, latin='Times New Roman', east_asia='SimSun', size_pt=10.5, bold=False)
+                        set_run_font(
+                            run,
+                            latin=cell_spec.get("font_latin", "Times New Roman"),
+                            east_asia=cell_spec.get("font_east_asia", "SimSun"),
+                            size_pt=cell_spec.get("font_size_pt", 10.5),
+                            bold=cell_spec.get("bold", False),
+                        )
 
     # 应用三线表边框
     no = _no_border()
@@ -644,7 +738,7 @@ def create_three_line_table(doc, headers, rows, caption=None):
 # ---------------------------------------------------------------------------
 
 
-def create_abbreviation_table_page(doc, project_root):
+def create_abbreviation_table_page(doc, project_root, render_context=None):
     """
     在文档中插入缩略语对照表页（三线表格式）。
 
@@ -667,8 +761,9 @@ def create_abbreviation_table_page(doc, project_root):
         return False
 
     # 标题
-    heading = doc.add_heading("主要缩略语对照表", level=1)
-    apply_csu_heading1_style(heading)
+    abbr_spec = _resolve_style_profile(render_context).get("front_matter", {}).get("abbreviation_table", {})
+    heading = doc.add_heading(abbr_spec.get("title_text", "主要缩略语对照表"), level=1)
+    _apply_paragraph_style_from_spec(heading, abbr_spec.get("title", {}), word_style="Heading 1", set_text_black=True)
 
     # 构建表格数据
     headers = ["缩略语", "英文全称", "中文全称"]
@@ -678,7 +773,7 @@ def create_abbreviation_table_page(doc, project_root):
         full_cn = info.get("full_cn", "") or ""
         rows.append([abbr, full_en, full_cn])
 
-    create_three_line_table(doc, headers, rows)
+    create_three_line_table(doc, headers, rows, render_context=render_context)
 
     # 分页符
     doc.add_page_break()
@@ -707,15 +802,18 @@ def markdown_to_docx(md_content, output_path, chapter_num=None, project_root=Non
         bool: 转换是否成功
     """
     try:
+        render_context = _load_render_context(project_root)
+
         # 创建文档
         doc = Document()
         
         # 设置页面
         section = doc.sections[0]
-        section.top_margin = Cm(2.54)
-        section.bottom_margin = Cm(2.54)
-        section.left_margin = Cm(3.17)
-        section.right_margin = Cm(3.17)
+        page_margins = render_context.get("page_margins_cm", {})
+        section.top_margin = Cm(page_margins.get("top", 2.54))
+        section.bottom_margin = Cm(page_margins.get("bottom", 2.54))
+        section.left_margin = Cm(page_margins.get("left", 3.17))
+        section.right_margin = Cm(page_margins.get("right", 3.17))
 
         # 自动提取页眉右侧文字（从首个 H1）
         if header_right_text is None:
@@ -728,13 +826,25 @@ def markdown_to_docx(md_content, output_path, chapter_num=None, project_root=Non
                 header_right_text = ""
 
         # 设置页眉
-        setup_header(section, '中南大学博士学位论文', header_right_text)
+        setup_header(
+            section,
+            render_context.get("header_left_text", "中南大学博士学位论文"),
+            header_right_text,
+            distance_cm=render_context.get("header_distance_cm", 1.5),
+            style_spec=_resolve_style_profile(render_context).get("header", {}),
+        )
         # 设置页脚（页码）
-        setup_footer(section, page_num_fmt=page_num_fmt, start_at=page_num_start)
+        setup_footer(
+            section,
+            page_num_fmt=page_num_fmt,
+            start_at=page_num_start,
+            distance_cm=render_context.get("footer_distance_cm", 1.75),
+            style_spec=_resolve_style_profile(render_context).get("footer", {}),
+        )
 
         # 插入缩略语对照表（如果需要）
         if include_abbreviation_table and project_root:
-            create_abbreviation_table_page(doc, project_root)
+            create_abbreviation_table_page(doc, project_root, render_context=render_context)
         
         # 逐行解析，支持表格累积
         lines = md_content.split('\n')
@@ -748,7 +858,7 @@ def markdown_to_docx(md_content, output_path, chapter_num=None, project_root=Non
                 return
             headers, rows = parse_table_rows(table_buffer)
             if headers:
-                create_three_line_table(doc, headers, rows, caption=table_caption)
+                create_three_line_table(doc, headers, rows, caption=table_caption, render_context=render_context)
             table_buffer = []
             table_caption = None
 
@@ -769,7 +879,7 @@ def markdown_to_docx(md_content, output_path, chapter_num=None, project_root=Non
                 if line_type_cur != 'empty':
                     # 非空行且不是表格行 → caption 后面没有紧跟管道表格
                     cap_para = doc.add_paragraph(table_caption)
-                    apply_csu_caption_style(cap_para)
+                    apply_csu_caption_style(cap_para, render_context=render_context, caption_key="table_caption")
                     table_caption = None
                     # 继续处理当前行（不 skip）
 
@@ -780,19 +890,19 @@ def markdown_to_docx(md_content, output_path, chapter_num=None, project_root=Non
             
             elif line_type == 'heading1':
                 para = doc.add_heading(content, level=1)
-                apply_csu_heading1_style(para)
+                apply_csu_heading1_style(para, render_context=render_context)
             
             elif line_type == 'heading2':
                 para = doc.add_heading(content, level=2)
-                apply_csu_heading2_style(para)
+                apply_csu_heading2_style(para, render_context=render_context)
             
             elif line_type == 'heading3':
                 para = doc.add_heading(content, level=3)
-                apply_csu_heading3_style(para)
+                apply_csu_heading3_style(para, render_context=render_context)
             
             elif line_type == 'figure':
                 para = doc.add_paragraph(content)
-                apply_csu_caption_style(para)
+                apply_csu_caption_style(para, render_context=render_context, caption_key="figure_caption")
             
             elif line_type == 'table':
                 # 表格占位符 [表 X-X：标题] — 可能是后续 Markdown 表格的标题
@@ -803,7 +913,7 @@ def markdown_to_docx(md_content, output_path, chapter_num=None, project_root=Non
                 if content:
                     cleaned = strip_bold_markers(content)
                     para = doc.add_paragraph(cleaned)
-                    apply_csu_normal_style(para)
+                    apply_csu_normal_style(para, render_context=render_context)
 
         # 文件末尾：刷新残留的表格
         if table_buffer:
@@ -842,6 +952,13 @@ def convert_markdown_file(md_file_path, output_path=None, project_root=None,
     if not os.path.exists(md_file_path):
         print(f"❌ 文件不存在：{md_file_path}")
         return False
+
+    resolved_project_root = _resolve_project_root(project_root, md_file_path)
+    ok_to_convert, gate_payload = _guard_format_profile(resolved_project_root)
+    if not ok_to_convert:
+        print(f"❌ {gate_payload['message']}")
+        print(f"pending_template: {json.dumps(gate_payload, ensure_ascii=False)}")
+        return False
     
     # 读取 Markdown 文件
     with open(md_file_path, 'r', encoding='utf-8') as f:
@@ -860,7 +977,7 @@ def convert_markdown_file(md_file_path, output_path=None, project_root=None,
     # 执行转换
     return markdown_to_docx(
         md_content, output_path, chapter_num=chapter_num,
-        project_root=project_root,
+        project_root=resolved_project_root,
         include_abbreviation_table=include_abbreviation_table,
         header_right_text=header_right_text,
         page_num_fmt=page_num_fmt,
@@ -872,7 +989,7 @@ def main():
     """命令行入口"""
     import argparse
     
-    parser = argparse.ArgumentParser(description='Markdown 转 Word（中南大学样式）')
+    parser = argparse.ArgumentParser(description='Markdown 转 Word（默认 CSU，可读取自定义格式配置）')
     parser.add_argument('input', help='输入 Markdown 文件路径')
     parser.add_argument('-o', '--output', help='输出 Word 文件路径（可选）')
     parser.add_argument('-c', '--chapter', type=int, help='章节号（可选）')
