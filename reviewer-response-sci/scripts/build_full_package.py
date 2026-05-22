@@ -98,7 +98,12 @@ def split_sections(block: str) -> list[tuple[str, str]]:
 
 def parse_pairs(block: str) -> list[tuple[str, str, str]]:
     pairs: list[tuple[str, str, str]] = []
-    pat = re.compile(r"\n\s*(\d+)\.\s+(.*?)(?=\n\s*\d+\.\s+|\Z)", re.S)
+    # Support multiple numbering formats commonly used in reviewer letters:
+    #   "1. text"  |  "Comment 1: text"  |  "Comment 1. text"  |  "1: text"  |  "1) text"
+    pat = re.compile(
+        r"\n\s*(?:Comment\s+)?(\d+)\s*[.):]\s+(.*?)(?=\n\s*(?:Comment\s+)?\d+\s*[.):]\s+|\Z)",
+        re.S,
+    )
     for m in pat.finditer("\n" + block):
         body = simplify_ws(m.group(2))
         comment, reply = body, ""

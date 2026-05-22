@@ -1,0 +1,423 @@
+name: skill-seekers
+description: 从文档网站、代码库和 GitHub 仓库自动生成 AI Skills - 支持 Claude、OpenCode 等多平台
+version: 2.7.4
+category: productivity
+tags:
+  - skill-generation
+  - documentation
+  - code-analysis
+  - github
+  - automation
+author: Yusuf Karaaslan
+repository: https://github.com/yusufkaraaslan/Skill_Seekers
+license: MIT
+
+# 前置依赖
+dependencies:
+  python: ">=3.10"
+  packages:
+    - skill-seekers
+
+# 可选依赖(按需安装)
+optional_dependencies:
+  all:
+    - skill-seekers[all]
+  gemini:
+    - skill-seekers[gemini]
+  openai:
+    - skill-seekers[openai]
+  mcp:
+    - skill-seekers[mcp]
+
+# 环境变量(可选)
+environment:
+  ANTHROPIC_API_KEY:
+    description: Claude AI API key for enhancement
+    required: false
+  GITHUB_TOKEN:
+    description: GitHub token for higher rate limits
+    required: false
+  GOOGLE_API_KEY:
+    description: Google Gemini API key
+    required: false
+  OPENAI_API_KEY:
+    description: OpenAI API key
+    required: false
+
+# 命令快捷方式
+commands:
+  # 🚀 一键打包命令（新增）
+  pack-github:
+    description: 一键打包 GitHub 仓库为双平台 skill
+    command: ./pack-opencode-skill.sh github {repo} --name {name}
+    args:
+      repo:
+        description: GitHub 仓库 (owner/name)
+        type: string
+        required: true
+      name:
+        description: Skill 名称
+        type: string
+        required: false
+  
+  pack-docs:
+    description: 一键打包文档网站为双平台 skill
+    command: ./pack-opencode-skill.sh docs {url} --name {name}
+    args:
+      url:
+        description: 文档网站 URL
+        type: string
+        required: true
+      name:
+        description: Skill 名称
+        type: string
+        required: false
+      max-pages:
+        description: 最大页数
+        type: integer
+        default: 500
+  
+  pack-codebase:
+    description: 一键打包本地代码库为双平台 skill
+    command: ./pack-opencode-skill.sh codebase {directory} --name {name}
+    args:
+      directory:
+        description: 项目目录路径
+        type: string
+        required: true
+      name:
+        description: Skill 名称
+        type: string
+        required: false
+      depth:
+        description: 分析深度 (surface/deep/full)
+        type: string
+        default: deep
+  
+  pack-pdf:
+    description: 一键打包 PDF 文档为双平台 skill
+    command: ./pack-opencode-skill.sh pdf {pdf_file} --name {name}
+    args:
+      pdf_file:
+        description: PDF 文件路径
+        type: string
+        required: true
+      name:
+        description: Skill 名称
+        type: string
+        required: false
+
+  # 本地代码库分析
+  analyze-local:
+    description: 分析本地代码库
+    command: skill-seekers-codebase --directory {directory} --output {output}
+    args:
+      directory:
+        description: 项目目录路径
+        type: string
+        required: true
+      output:
+        description: 输出目录
+        type: string
+        default: output/my-skill/
+      depth:
+        description: 分析深度(surface/deep/full/c3x)
+        type: string
+        default: deep
+      ai-mode:
+        description: AI 增强模式(none/api/local/auto)
+        type: string
+        default: auto
+
+  # 文档网站抓取
+  scrape-docs:
+    description: 抓取文档网站
+    command: skill-seekers scrape --url {url} --name {name}
+    args:
+      url:
+        description: 文档网站 URL
+        type: string
+        required: true
+      name:
+        description: Skill 名称
+        type: string
+        required: true
+      description:
+        description: Skill 描述
+        type: string
+        required: false
+      max-pages:
+        description: 最大页数
+        type: integer
+        default: 500
+
+  # GitHub 仓库分析
+  analyze-github:
+    description: 分析 GitHub 仓库
+    command: skill-seekers github --repo {repo}
+    args:
+      repo:
+        description: 仓库名(owner/name)
+        type: string
+        required: true
+      include-issues:
+        description: 包含 Issues
+        type: boolean
+        default: false
+      max-issues:
+        description: 最大 Issues 数
+        type: integer
+        default: 50
+      include-changelog:
+        description: 包含 CHANGELOG
+        type: boolean
+        default: false
+      include-releases:
+        description: 包含 Releases
+        type: boolean
+        default: false
+
+  # PDF 提取
+  extract-pdf:
+    description: 从 PDF 提取内容
+    command: skill-seekers pdf --pdf {pdf} --name {name}
+    args:
+      pdf:
+        description: PDF 文件路径
+        type: string
+        required: true
+      name:
+        description: Skill 名称
+        type: string
+        required: true
+      extract-tables:
+        description: 提取表格
+        type: boolean
+        default: false
+      ocr:
+        description: 使用 OCR(扫描件)
+        type: boolean
+        default: false
+      parallel:
+        description: 并行处理
+        type: boolean
+        default: false
+
+  # 打包
+  package:
+    description: 打包 Skill
+    command: skill-seekers package {skill_dir}
+    args:
+      skill_dir:
+        description: Skill 目录
+        type: string
+        required: true
+      target:
+        description: 目标平台(claude/gemini/openai/markdown)
+        type: string
+        default: claude
+      upload:
+        description: 自动上传
+        type: boolean
+        default: false
+
+  # 安装到 AI 代理
+  install-agent:
+    description: 安装到 AI 代理
+    command: skill-seekers install-agent {skill_dir} --agent {agent}
+    args:
+      skill_dir:
+        description: Skill 目录
+        type: string
+        required: true
+      agent:
+        description: 目标代理(opencode/claude/cursor/all)
+        type: string
+        default: opencode
+      force:
+        description: 强制覆盖
+        type: boolean
+        default: false
+
+  # 一键安装
+  install-one-click:
+    description: 一键安装工作流
+    command: skill-seekers install --config {config}
+    args:
+      config:
+        description: 配置名或文件路径
+        type: string
+        required: true
+      no-upload:
+        description: 不上传
+        type: boolean
+        default: false
+      unlimited:
+        description: 无限制抓取
+        type: boolean
+        default: false
+
+  # 配置管理
+  config:
+    description: 配置管理
+    command: skill-seekers config
+    args:
+      github:
+        description: GitHub Token 设置
+        type: boolean
+        default: false
+      show:
+        description: 显示配置
+        type: boolean
+        default: false
+      test:
+        description: 测试连接
+        type: boolean
+        default: false
+
+  # 恢复任务
+  resume:
+    description: 恢复中断的任务
+    command: skill-seekers resume
+    args:
+      list:
+        description: 列出可恢复任务
+        type: boolean
+        default: false
+      task-id:
+        description: 任务 ID
+        type: string
+        required: false
+      cleanup:
+        description: 清理旧任务
+        type: boolean
+        default: false
+
+# 使用场景
+use_cases:
+  - name: 为现有项目创建 Skill
+    description: 分析本地代码库并生成 Skill
+    steps:
+      - "skill-seekers-codebase --directory . --depth full --ai-mode local"
+      - "skill-seekers package output/my-project/"
+      - "skill-seekers install-agent output/my-project/ --agent opencode"
+    
+  - name: 从文档网站创建 Skill
+    description: 抓取在线文档并生成 Skill
+    steps:
+      - "skill-seekers scrape --url https://example.com --name example"
+      - "skill-seekers enhance output/example/ --ai-mode local"
+      - "skill-seekers package output/example/"
+      - "skill-seekers install-agent output/example/ --agent opencode"
+    
+  - name: 从 GitHub 仓库创建 Skill
+    description: 分析 GitHub 仓库代码和文档
+    steps:
+      - "export GITHUB_TOKEN=your_token"
+      - "skill-seekers github --repo owner/repo --include-issues --include-changelog"
+      - "skill-seekers enhance output/repo/ --ai-mode local"
+      - "skill-seekers package output/repo/"
+      - "skill-seekers install-agent output/repo/ --agent all"
+    
+  - name: 统一多源 Skill
+    description: 组合文档、GitHub 和 PDF 为一个 Skill
+    steps:
+      - "创建统一配置文件"
+      - "skill-seekers unified --config configs/unified.json"
+      - "skill-seekers detect-conflicts output/myproject/"
+      - "skill-seekers enhance output/myproject/ --ai-mode local"
+      - "skill-seekers package output/myproject/"
+    
+  - name: 一键生成(最简单)
+    description: 使用预设配置一键完成
+    steps:
+      - "skill-seekers install --config react"
+
+# 常见问题
+faq:
+  - question: 如何选择分析深度?
+    answer: |
+      - surface: 小项目(<1000文件), 快速概览, 1-2分钟
+      - deep: 中型项目(推荐), 平衡质量, 5-10分钟  
+      - full: 大型项目, 完整分析, 20-60分钟
+      - c3x: 超深度, 设计模式+架构, 20-60分钟
+  
+  - question: 本地增强 vs API 增强?
+    answer: |
+      本地增强(推荐):
+      - 免费(使用 Claude Code Max)
+      - 无需 API key
+      - 质量 9/10
+      - 速度稍慢(30-60秒)
+      
+      API 增强:
+      - 需要 API key
+      - 速度快(10-20秒)
+      - 适合批量处理
+      - 适合 CI/CD
+  
+  - question: GitHub 速率限制怎么办?
+    answer: |
+      1. 设置 GitHub Token: 60/小时 → 5000/小时
+      2. 配置多个账户自动切换
+      3. 使用 --rate-limit-strategy wait 自动等待
+  
+  - question: 如何处理超大文档(10K+页)?
+    answer: |
+      1. 先评估: skill-seekers estimate
+      2. 拆分配置: skill-seekers split-config
+      3. 并行抓取所有子配置
+      4. 生成路由 skill 统一访问
+
+# 性能优化
+performance_tips:
+  - 使用异步模式: --async --workers 8 (大型文档)
+  - 利用缓存: --skip-scrape (重建时)
+  - 并行处理: 同时抓取多个配置
+  - 跳过分析: --skip-patterns --skip-test-examples (快速模式)
+
+# 支持的平台
+supported_platforms:
+  - name: Claude AI
+    format: ZIP + YAML
+    upload: auto
+    enhancement: yes
+  - name: OpenCode
+    format: SKILL.md
+    upload: local
+    enhancement: yes
+  - name: Google Gemini
+    format: tar.gz
+    upload: auto
+    enhancement: yes
+  - name: OpenAI ChatGPT
+    format: ZIP + Vector
+    upload: auto
+    enhancement: yes
+  - name: Generic Markdown
+    format: ZIP
+    upload: manual
+    enhancement: no
+
+# 支持的 AI 代理
+supported_agents:
+  - Claude Code
+  - OpenCode
+  - Cursor
+  - Windsurf
+  - VS Code / Copilot
+  - Amp
+  - Goose
+  - Letta
+  - Aide
+  - Neovate Code
+
+# 文档链接
+documentation:
+  main: ./SKILL.md
+  usage: ./USAGE.md
+  official: https://github.com/yusufkaraaslan/Skill_Seekers
+  chinese: https://github.com/yusufkaraaslan/Skill_Seekers/blob/main/README.zh-CN.md
+  quickstart: https://github.com/yusufkaraaslan/Skill_Seekers/blob/main/QUICKSTART.md
+  issues: https://github.com/yusufkaraaslan/Skill_Seekers/issues
+  project_board: https://github.com/users/yusufkaraaslan/projects/2

@@ -44,19 +44,56 @@
       "required": [
         "reviewer_comment_zh",
         "reviewer_comment_en",
+        "reviewer_intent_zh",
         "response_en",
+        "response_zh",
+        "original_excerpt_en",
         "revised_excerpt_en",
+        "revised_excerpt_zh",
+        "atomic_location",
+        "modification_actions",
         "notes_core_zh",
         "notes_support_zh",
         "evidence"
       ],
       "properties": {
-        "reviewer_comment_zh": { "type": "string" },
-        "reviewer_comment_en": { "type": "string" },
-        "response_en": { "type": "string" },
-        "revised_excerpt_en": { "type": "string" },
-        "notes_core_zh": { "type": "array", "items": { "type": "string" } },
-        "notes_support_zh": { "type": "array", "items": { "type": "string" } },
+        "reviewer_comment_zh": { "type": "string", "description": "Chinese translation of reviewer comment (direct/literal)" },
+        "reviewer_comment_en": { "type": "string", "description": "Original reviewer comment in English" },
+        "reviewer_intent_zh": { "type": "string", "description": "Chinese summary of reviewer intent/understanding" },
+        "response_en": { "type": "string", "description": "English response to reviewer" },
+        "response_zh": { "type": "string", "description": "Chinese response to reviewer" },
+        "original_excerpt_en": { "type": "string", "description": "Original manuscript paragraph excerpt for comparison" },
+        "revised_excerpt_en": { "type": "string", "description": "Revised manuscript text in English" },
+        "revised_excerpt_zh": { "type": "string", "description": "Chinese translation of revised manuscript text" },
+        "atomic_location": {
+          "type": "object",
+          "description": "Location anchor linking comment to manuscript/SI units",
+          "required": ["manuscript_unit_id", "manuscript_sentence_index"],
+          "properties": {
+            "manuscript_unit_id": { "type": "string" },
+            "si_unit_id": { "type": "string", "default": "" },
+            "manuscript_paragraph_index": { "type": "integer" },
+            "manuscript_sentence_index": { "type": "integer" },
+            "matched_sentence": { "type": "string" },
+            "confidence": { "type": "string", "enum": ["high", "medium", "low"], "default": "high" }
+          }
+        },
+        "modification_actions": {
+          "type": "array",
+          "description": "List of modification actions with type and reason",
+          "items": {
+            "type": "object",
+            "required": ["action_type", "reason"],
+            "properties": {
+              "action_type": { "type": "string", "enum": ["添加", "删除", "修改"] },
+              "target": { "type": "string", "description": "What is being modified" },
+              "reason": { "type": "string", "description": "Why this modification is needed" }
+            }
+          }
+        },
+        "figure_prompt": { "type": "string", "default": "", "description": "Structured figure revision prompt; empty if no figure change needed" },
+        "notes_core_zh": { "type": "array", "items": { "type": "string" }, "description": "Core modification notes (marked 🔴)" },
+        "notes_support_zh": { "type": "array", "items": { "type": "string" }, "description": "Support modification notes (marked 🟡)" },
         "evidence": {
           "type": "object",
           "required": ["text", "images", "table"],
@@ -94,7 +131,7 @@
       "required": ["response_state", "excerpt_state", "notes_state"],
       "properties": {
         "response_state": { "type": "string", "enum": ["draft", "final"] },
-        "excerpt_state": { "type": "string", "enum": ["draft", "final", "missing"] },
+        "excerpt_state": { "type": "string", "enum": ["draft", "final", "missing", "needs_manual_revision"] },
         "notes_state": { "type": "string", "enum": ["draft", "final"] }
       }
     }

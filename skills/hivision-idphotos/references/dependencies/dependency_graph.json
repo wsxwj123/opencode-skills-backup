@@ -1,0 +1,157 @@
+{
+  "nodes": [
+    {
+      "file": "app.py",
+      "language": "Python"
+    },
+    {
+      "file": "demo/config.py",
+      "language": "Python"
+    },
+    {
+      "file": "demo/locales.py",
+      "language": "Python"
+    },
+    {
+      "file": "demo/processor.py",
+      "language": "Python"
+    },
+    {
+      "file": "demo/ui.py",
+      "language": "Python"
+    },
+    {
+      "file": "demo/utils.py",
+      "language": "Python"
+    },
+    {
+      "file": "deploy_api.py",
+      "language": "Python"
+    },
+    {
+      "file": "hivision/__init__.py",
+      "language": "Python"
+    },
+    {
+      "file": "hivision/creator/__init__.py",
+      "language": "Python"
+    },
+    {
+      "file": "hivision/creator/choose_handler.py",
+      "language": "Python"
+    },
+    {
+      "file": "hivision/creator/context.py",
+      "language": "Python"
+    },
+    {
+      "file": "hivision/creator/face_detector.py",
+      "language": "Python"
+    },
+    {
+      "file": "hivision/creator/human_matting.py",
+      "language": "Python"
+    },
+    {
+      "file": "hivision/creator/layout_calculator.py",
+      "language": "Python"
+    },
+    {
+      "file": "hivision/creator/move_image.py",
+      "language": "Python"
+    },
+    {
+      "file": "hivision/creator/photo_adjuster.py",
+      "language": "Python"
+    },
+    {
+      "file": "hivision/creator/retinaface/__init__.py",
+      "language": "Python"
+    },
+    {
+      "file": "hivision/creator/retinaface/box_utils.py",
+      "language": "Python"
+    },
+    {
+      "file": "hivision/creator/retinaface/inference.py",
+      "language": "Python"
+    },
+    {
+      "file": "hivision/creator/retinaface/prior_box.py",
+      "language": "Python"
+    },
+    {
+      "file": "hivision/creator/rotation_adjust.py",
+      "language": "Python"
+    },
+    {
+      "file": "hivision/creator/tensor2numpy.py",
+      "language": "Python"
+    },
+    {
+      "file": "hivision/creator/utils.py",
+      "language": "Python"
+    },
+    {
+      "file": "hivision/error.py",
+      "language": "Python"
+    },
+    {
+      "file": "hivision/plugin/beauty/__init__.py",
+      "language": "Python"
+    },
+    {
+      "file": "hivision/plugin/beauty/base_adjust.py",
+      "language": "Python"
+    },
+    {
+      "file": "hivision/plugin/beauty/beauty_tools.py",
+      "language": "Python"
+    },
+    {
+      "file": "hivision/plugin/beauty/grind_skin.py",
+      "language": "Python"
+    },
+    {
+      "file": "hivision/plugin/beauty/handler.py",
+      "language": "Python"
+    },
+    {
+      "file": "hivision/plugin/beauty/thin_face.py",
+      "language": "Python"
+    },
+    {
+      "file": "hivision/plugin/beauty/whitening.py",
+      "language": "Python"
+    },
+    {
+      "file": "hivision/plugin/template/template_calculator.py",
+      "language": "Python"
+    },
+    {
+      "file": "hivision/plugin/watermark.py",
+      "language": "Python"
+    },
+    {
+      "file": "hivision/utils.py",
+      "language": "Python"
+    },
+    {
+      "file": "inference.py",
+      "language": "Python"
+    },
+    {
+      "file": "scripts/build_pypi.py",
+      "language": "Python"
+    },
+    {
+      "file": "scripts/download_model.py",
+      "language": "Python"
+    },
+    {
+      "file": "test/create_id_photo.py",
+      "language": "Python"
+    }
+  ],
+  "edges": []
+}

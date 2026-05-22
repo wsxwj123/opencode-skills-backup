@@ -1,0 +1,285 @@
+[
+  {
+    "file_path": "/Users/wsxwj/Desktop/opencode file/.tmp_hivision_repo/demo/processor.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Factory",
+        "category": "Creational",
+        "confidence": 0.9,
+        "location": "/Users/wsxwj/Desktop/opencode file/.tmp_hivision_repo/demo/processor.py",
+        "class_name": "IDPhotoProcessor",
+        "method_name": null,
+        "line_number": 27,
+        "evidence": [
+          "Parameterized factory method: _create_response",
+          "Parameterized factory method: _create_error_response",
+          "Multiple factory methods: _create_response, _create_error_response"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "TemplateMethod",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "/Users/wsxwj/Desktop/opencode file/.tmp_hivision_repo/demo/processor.py",
+        "class_name": "IDPhotoProcessor",
+        "method_name": null,
+        "line_number": 27,
+        "evidence": [
+          "Has hook methods: process, _initialize_idphoto_json, _process_size_mode",
+          "Has abstract methods: _initialize_idphoto_json, _process_size_mode"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "ChainOfResponsibility",
+        "category": "Behavioral",
+        "confidence": 0.6,
+        "location": "/Users/wsxwj/Desktop/opencode file/.tmp_hivision_repo/demo/processor.py",
+        "class_name": "IDPhotoProcessor",
+        "method_name": null,
+        "line_number": 27,
+        "evidence": [
+          "Class name suggests handler chain: IDPhotoProcessor"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Factory": 1,
+      "TemplateMethod": 1,
+      "ChainOfResponsibility": 1
+    }
+  },
+  {
+    "file_path": "/Users/wsxwj/Desktop/opencode file/.tmp_hivision_repo/hivision/creator/__init__.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Command",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "/Users/wsxwj/Desktop/opencode file/.tmp_hivision_repo/hivision/creator/__init__.py",
+        "class_name": "IDCreator",
+        "method_name": null,
+        "line_number": 22,
+        "evidence": [
+          "Has execute method: __call__()"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Command": 1
+    }
+  },
+  {
+    "file_path": "/Users/wsxwj/Desktop/opencode file/.tmp_hivision_repo/hivision/creator/context.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Decorator",
+        "category": "Structural",
+        "confidence": 0.3,
+        "location": "/Users/wsxwj/Desktop/opencode file/.tmp_hivision_repo/hivision/creator/context.py",
+        "class_name": "Params",
+        "method_name": "size",
+        "line_number": 47,
+        "evidence": [
+          "Method uses decorators: ['property']"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 3,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Decorator": 1
+    }
+  },
+  {
+    "file_path": "/Users/wsxwj/Desktop/opencode file/.tmp_hivision_repo/hivision/error.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "/Users/wsxwj/Desktop/opencode file/.tmp_hivision_repo/hivision/error.py",
+        "class_name": "FaceError",
+        "method_name": null,
+        "line_number": 12,
+        "evidence": [
+          "Part of strategy family with: APIError"
+        ],
+        "related_classes": [
+          "Exception"
+        ]
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "/Users/wsxwj/Desktop/opencode file/.tmp_hivision_repo/hivision/error.py",
+        "class_name": "APIError",
+        "method_name": null,
+        "line_number": 24,
+        "evidence": [
+          "Part of strategy family with: FaceError"
+        ],
+        "related_classes": [
+          "Exception"
+        ]
+      }
+    ],
+    "total_classes": 2,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Strategy": 2
+    }
+  },
+  {
+    "file_path": "/Users/wsxwj/Desktop/opencode file/.tmp_hivision_repo/hivision/plugin/beauty/thin_face.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Decorator",
+        "category": "Structural",
+        "confidence": 0.3,
+        "location": "/Users/wsxwj/Desktop/opencode file/.tmp_hivision_repo/hivision/plugin/beauty/thin_face.py",
+        "class_name": "TranslationWarp",
+        "method_name": "localTranslationWarp",
+        "line_number": 26,
+        "evidence": [
+          "Method uses decorators: ['staticmethod']"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/wsxwj/Desktop/opencode file/.tmp_hivision_repo/hivision/plugin/beauty/thin_face.py",
+        "class_name": "TranslationWarp",
+        "method_name": null,
+        "line_number": 16,
+        "evidence": [
+          "Implements interface: object",
+          "Has 3 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 3,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Decorator": 1,
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/wsxwj/Desktop/opencode file/.tmp_hivision_repo/hivision/plugin/beauty/whitening.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Factory",
+        "category": "Creational",
+        "confidence": 0.5,
+        "location": "/Users/wsxwj/Desktop/opencode file/.tmp_hivision_repo/hivision/plugin/beauty/whitening.py",
+        "class_name": "LutWhite",
+        "method_name": null,
+        "line_number": 7,
+        "evidence": [
+          "Parameterized factory method: _create_lut"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Command",
+        "category": "Behavioral",
+        "confidence": 0.7,
+        "location": "/Users/wsxwj/Desktop/opencode file/.tmp_hivision_repo/hivision/plugin/beauty/whitening.py",
+        "class_name": "MakeWhiter",
+        "method_name": null,
+        "line_number": 36,
+        "evidence": [
+          "Has execute method: run()",
+          "Encapsulates receiver/parameters"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 2,
+    "total_functions": 2,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Factory": 1,
+      "Command": 1
+    }
+  },
+  {
+    "file_path": "/Users/wsxwj/Desktop/opencode file/.tmp_hivision_repo/hivision/plugin/watermark.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Decorator",
+        "category": "Structural",
+        "confidence": 0.3,
+        "location": "/Users/wsxwj/Desktop/opencode file/.tmp_hivision_repo/hivision/plugin/watermark.py",
+        "class_name": "Watermarker",
+        "method_name": "set_image_opacity",
+        "line_number": 80,
+        "evidence": [
+          "Method uses decorators: ['staticmethod']"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/wsxwj/Desktop/opencode file/.tmp_hivision_repo/hivision/plugin/watermark.py",
+        "class_name": "Watermarker",
+        "method_name": null,
+        "line_number": 22,
+        "evidence": [
+          "Implements interface: object",
+          "Has 7 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Observer",
+        "category": "Behavioral",
+        "confidence": 0.6,
+        "location": "/Users/wsxwj/Desktop/opencode file/.tmp_hivision_repo/hivision/plugin/watermark.py",
+        "class_name": "Watermarker",
+        "method_name": null,
+        "line_number": 22,
+        "evidence": [
+          "Attach method: _add_mark_striped",
+          "Attach method: _add_mark_central"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 2,
+    "total_functions": 1,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Decorator": 1,
+      "Adapter": 1,
+      "Observer": 1
+    }
+  }
+]

@@ -51,8 +51,11 @@ def main() -> int:
         if not pat.search(html):
             errors.append(f"Missing required class usage: {cls}")
 
-    if "<img" not in html:
-        errors.append("Missing <img> block for image support")
+    # Only require <img> if the HTML contains actual figure prompt blocks or image placeholders.
+    # Mere text references to "Figure 4B" in reviewer comments do not require <img> tags.
+    has_figure_prompt = any(k in html for k in ["FIGURE PROMPT", "figure_prompt", "image placeholder", "Image Placeholder"])
+    if has_figure_prompt and "<img" not in html:
+        errors.append("Missing <img> block despite figure prompt/placeholder present")
 
     if "<table" not in html or "<th" not in html:
         errors.append("Missing table structure (<table>/<th>)")

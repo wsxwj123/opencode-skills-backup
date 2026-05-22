@@ -1,6 +1,6 @@
 ---
 name: reviewer-simulator
-description: Use when simulating a high-bar academic peer review for manuscripts in medical, biological, or pharmaceutical domains, especially when structured forensic checks, target-journal fit assessment, and evidence-anchored critiques are required.
+description: 用于模拟高标准学术同行评审，对医学、生物、药学等领域稿件进行法医式检查、目标期刊契合度评估和证据锚定批评，输出结构化中文审稿报告。当用户提到模拟审稿、帮我审稿、预审、审稿报告、做reviewer、审一下这篇文章、peer review、simulate reviewer、review manuscript 时优先调用。注意与 reviewer-response-sci（用于回复审稿意见）区分：本技能是模拟审稿人写审稿意见，后者是针对已收到的审稿意见撰写回复。
 ---
 
 # Reviewer Simulator: The Unflinching Academic Gatekeeper
@@ -9,7 +9,9 @@ description: Use when simulating a high-bar academic peer review for manuscripts
 此文档定义了 `reviewer-simulator` 的最高执行标准。AI 在执行审稿任务时，必须逐条对照本手册中的定义进行操作。
 **任何对本手册的偏离都被视为任务失败。**
 
-**最终输出形式必须是一个独立的 HTML 文件 (report_template.html)，且模板中的可见文案必须为简体中文。**
+**最终输出形式必须是一个独立的 HTML 文件，可见文案必须为简体中文。**
+- 模板来源（只读）：`assets/report_template.html`
+- 输出路径（每次运行新建）：`assets/report_YYYYMMDD_[稿件题目关键词].html`
 </CRITICAL_INSTRUCTIONS>
 
 审稿人模拟系统 - 完整执行手册
@@ -236,14 +238,16 @@ description: Use when simulating a high-bar academic peer review for manuscripts
 三、外部基准与技术合规审计检查点
 
 <TOOL_USAGE_RULES>
-**检索工具调用优先级指令：在执行新颖性、文献全面性和标准核查时，必须【优先且穷尽】专门的学术搜索 MCP 工具！**
-首选工具列表（根据学科或检索目标选择）：
-- `paper-search_search_pubmed` (医学、生物学首选)
-- `paper-search_search_google_scholar` (跨学科综合文献首选)
-- `paper-search_search_semantic` (综合性学术文献、计算机等)
-- `paper-search_search_arxiv` (预印本、计算机科学、物理等)
+**检索工具调用指令（学科路由，Mandatory）：**
+1. **判断论文所属学科**：
+   - 生命科学 / 医学 / 临床 / 生化 / 药学 → **首选 PubMed CLI**
+   - CS / AI / 工程 / 物理 / 跨学科 → **首选 paper-search MCP**（arXiv/Google Scholar）
+2. **PubMed CLI**（生命科学首选）：`esearch`/`efetch`/`einfo`（路径 `~/edirect/`），调用时必须追加 `< /dev/null`，走代理 `http_proxy=http://127.0.0.1:7897`。
+   可用性检查：若 `~/edirect/esearch` 不存在，自动安装：`sh -c "$(curl -fsSL https://ftp.ncbi.nlm.nih.gov/entrez/entrezdirect/install-edirect.sh)"`
+3. **paper-search MCP**（CS/AI首选 / 预印本 / PubMed无结果时fallback）：`mcp__paper-search-mcp__search_arxiv`、`mcp__paper-search-mcp__search_pubmed` 等。
 
-**【后备机制】**：`tavily_tavily-search` 或 `websearch_web_search_exa` 等通用搜索引擎**仅作为最后的手段（Last Resort）**。只有在上述 `paper-search` 工具多次检索失败、报错或无返回结果时，为了保证任务继续，才允许降级调用通用搜索引擎。**严禁一上来就图省事调用 Tavily。**
+**【严禁】**：`tavily`、`websearch`、`openalex`（pyalex）— **严禁用于文献检索**，无论何种情况。
+**串行执行（MANDATORY）：** 所有检索调用（含 PubMed CLI 与 paper-search MCP）必须串行执行，禁止并行，每次间隔 ≥1s。
 </TOOL_USAGE_RULES>
 
 <CITATION_GUARD_RULE>
@@ -254,7 +258,7 @@ description: Use when simulating a high-bar academic peer review for manuscripts
 1. 仅当 `citation_guard_report.json` 中 `ok=true` 才允许把该文献作为证据写入评审报告。
 2. 若 `ok=false` 或命令失败，必须改写为“待核验”并禁止下结论。
 3. 报告中不得出现任何无法追溯来源（`source_provider` + `source_id`）的文献陈述。
-4. 该门禁只负责证据核验，不改变原有“paper-search 优先、通用搜索兜底”的检索顺序。
+4. 该门禁只负责证据核验，不改变 TOOL_USAGE_RULES 中的学科路由检索顺序。
 </CITATION_GUARD_RULE>
 
 如无任何可用工具支持,则基于语言特征和文本分析进行人工判断:
@@ -300,12 +304,27 @@ description: Use when simulating a high-bar academic peer review for manuscripts
 2. 投稿目标的具体期刊或会议名称及方向
 3. 稿件所属的具体研究领域
 
+【强制阻断检查点】在收到用户输入后，检查以下三项是否齐全：
+① 稿件全文或详细草稿 ② 目标期刊/会议名称 ③ 研究领域
+若任一项缺失，必须停止工作流，向用户逐项列出缺失内容并等待补充，禁止基于猜测推进到第二步。
+
 强调: 所有评审意见都将严格围绕投稿目标及其标准来进行。
+
+**首次运行初始化（如 data/ 目录为空）：**
+```bash
+mkdir -p data/
+echo '[]' > data/literature_index.json
+echo '[]' > data/mcp_literature_cache.json
+echo '[]' > data/manual_review_queue.json
+echo '[]' > data/verification_run_log.json
+echo '{"citations": []}' > data/citation_guard_report.json
+```
+如 data/ 已存在上述文件，跳过初始化。
 
 
 第二步：外部基准先行核查
 
-必须首先执行以下外部基准核查。**强烈要求：必须优先调用专门的学术搜索 MCP 工具（如 paper-search_search_pubmed / paper-search_search_google_scholar / paper-search_search_semantic / paper-search_search_arxiv）进行文献搜索与比对。通用搜索引擎（如 tavily_tavily-search）仅作为专用工具全部失效时的最后备用手段。** 如无任何可用工具支持则基于人工判断:
+检索工具调用遵循第三部分 `TOOL_USAGE_RULES`（学科路由：生命科学→PubMed CLI / CS/AI→paper-search MCP；全串行执行）。如无任何可用工具支持则基于人工判断:
 
 1. 目标标准核查
 搜索目标期刊或会议的最新发表范围和近期论文,确保评估标准准确。
@@ -360,6 +379,8 @@ description: Use when simulating a high-bar academic peer review for manuscripts
 1. 若存在未替换占位符(如`{{...}}`),必须终止交付并返工。
 2. 头部`VERDICT_TEXT`与第十部分`FINAL_RECOMMENDATION`必须一致且只能为"拒稿/大修/小修/接收"之一。
 3. 仅当校验通过才允许提交最终报告。
+4. 若 `scripts/validate_report_html.py` 路径不存在或执行报错，必须在报告头部注明"[自动校验不可用，已人工核查占位符与VERDICT一致性]"，并逐项人工确认上述三条门禁，不得静默跳过。
+5. 若校验未通过：不得自行静默修改报告后重新提交，必须向用户说明具体失败原因和位置，列出需要人工确认的条目，等待用户指令后再决定返工或带注释交付。
 
 
 第五部分：审稿报告输出格式
@@ -393,27 +414,7 @@ description: Use when simulating a high-bar academic peer review for manuscripts
 
 四、18点深度分析(呈现结果)
 
-基于第四步工作流程中的内部分析,将分析结果呈现为审稿报告的一部分。
-按照18个分析点逐一展开,每个点根据其重要性和复杂度调整篇幅,核心点详写(150字以上),次要点精简(80字以上),必须包含现象描述、逻辑推演、潜在后果。
-
-1. 核心论点
-2. 关键证据
-3. 研究定位
-4. 理论贡献
-5. 研究设计
-6. 方法学评估
-7. 统计严谨性
-8. 可复现性
-9. 结果与逻辑
-10. 图文一致性
-11. 结论支持度
-12. 逻辑连贯性
-13. 未来方向
-14. 研究缺口
-15. 横向联系
-16. 纵向意义
-17. 致命缺陷
-18. 灵感火花
+基于第四步工作流程中的内部分析,将分析结果呈现为审稿报告的一部分。按照**第三部分第二条**所列18个分析点逐一展开。核心点详写（≥150字），次要点精简（≥80字），每点必须包含：现象描述、逻辑推演、潜在后果。
 
 
 五、审稿总体评估
@@ -515,6 +516,8 @@ AIGC率过高或涉嫌造假
 
 十二、作者逐条回复审稿意见草案
 
+> 此草案为简版快速参考，适合随审稿报告一并交付。如需完整的原子化回复包（含HTML双栏导航、中英对照、逐段修改定位），请调用 **reviewer-response-sci** 技能。
+
 此部分为投稿系统可直接使用的 Response to Reviewers 草案,必须覆盖第七部分与第八部分的每一条意见,不得遗漏。
 每条必须采用以下格式:
 
@@ -533,7 +536,7 @@ AIGC率过高或涉嫌造假
 
 1. 保持匿名与公正,不推断作者身份或机构
 2. 保持建设性语气,但必须严苛、直接
-3. 避免主观臆测,强制要求优先通过专门的学术搜索 MCP 工具（如 paper-search 的 PubMed/Google Scholar/Semantic Scholar/arXiv）/期刊官网/权威数据库进行外部核查(用于新颖性、目标期刊范围与最新标准)。【仅在专用学术工具完全失效时，才允许将 Tavily、Exa 等通用搜索引擎作为最后手段】; 外部核查结果仅用于技术审计与契合度判断,必须标注来源与核查日期(统一格式: YYYY-MM-DD),不得替代稿件内证据锚点
+3. 避免主观臆测,强制要求外部核查遵循 TOOL_USAGE_RULES 中的学科路由（生命科学→PubMed CLI / CS/AI→paper-search MCP）/期刊官网/权威数据库(用于新颖性、目标期刊范围与最新标准)。【严禁使用 Tavily、Exa、OpenAlex 等查文献】; 外部核查结果仅用于技术审计与契合度判断,必须标注来源与核查日期(统一格式: YYYY-MM-DD),不得替代稿件内证据锚点
 4. 基于证据,每条观点都应给出稿件内的证据锚点
 5. 如稿件缺乏证据,必须明确写出证据缺失
 6. 禁止使用数字评分或量化评级,仅允许在最终推荐意见中给出定性判断(拒稿、大修、小修、接收)
