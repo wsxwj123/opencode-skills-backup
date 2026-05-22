@@ -18,38 +18,32 @@
   "storyline_template": {
     "innovation_core": "",
     "main_hypothesis": "",
-    "sections": {
-      "Introduction": {
-        "para_1": {
-          "claim": "",
-          "evidence_needed": [],
-          "literature_status": "pending",
-          "ref_ids": []
-        }
+    "sections": [
+      {
+        "id": "introduction",
+        "title": "Introduction",
+        "type": "supporting",
+        "figures": [],
+        "hypothesis": "",
+        "key_points": []
       },
-      "Results_Discussion": {
-        "section_3.1": {
-          "title": "",
-          "is_key_section": true,
-          "main_figures": [],
-          "results_data": [],
-          "discussion_points": {
-            "mechanism": "",
-            "comparison": "",
-            "significance": ""
-          },
-          "literature_needed": [],
-          "status": "pending"
-        }
+      {
+        "id": "results_3.1",
+        "title": "",
+        "type": "key",
+        "figures": [],
+        "hypothesis": "",
+        "key_points": []
       },
-      "Conclusion": {
-        "content_points": [
-          "Summary of core findings",
-          "Limitations (Method, Scope, Data)",
-          "Future Outlook"
-        ]
+      {
+        "id": "conclusion",
+        "title": "Conclusion",
+        "type": "supporting",
+        "figures": [],
+        "hypothesis": "",
+        "key_points": []
       }
-    }
+    ]
   },
 
   "writing_progress_template": {
@@ -75,6 +69,9 @@
       "abstract": "",
       "key_finding": "",
       "cited_in_sections": [],
+      "source_provider": "pubmed-cli",
+      "source_id": "",
+      "verified": false,
       "search_query": "",
       "validation_status": "DOI_verified",
       "citation_count": null,
@@ -98,7 +95,8 @@
       "comparison_groups": [],
       "caption_provided_by_user": "",
       "data_status": "pending/confirmed",
-      "screenshot_path": ""
+      "screenshot_path": "",
+      "cited_in_sections": []
     }
   ],
 

@@ -24,8 +24,8 @@ from typing import Any
 DOI_RE = re.compile(r"^10\.\d{4,9}/[-._;()/:A-Z0-9]+$", re.IGNORECASE)
 PMID_RE = re.compile(r"^\d{4,10}$")
 TITLE_TOKEN_RE = re.compile(r"[a-z0-9\u4e00-\u9fff]+")
-ALLOWED_PROVIDER_FAMILIES = {"paper-search", "tavily"}
-FORBIDDEN_PROVIDER_FAMILIES = {"websearch"}
+ALLOWED_PROVIDER_FAMILIES = {"pubmed-cli", "paper-search", "tavily"}
+FORBIDDEN_PROVIDER_FAMILIES = {"websearch", "openalex-cli"}
 
 
 def load_json(path: Path, default: Any) -> Any:
@@ -94,7 +94,7 @@ def _parse_dt(value: str | None) -> datetime | None:
 def _is_mcp_fresh(record: dict[str, Any], ttl_days: int, now_utc: datetime) -> tuple[bool, str | None]:
     if ttl_days <= 0:
         return True, None
-    checked_at = _parse_dt(str(record.get("verified_at") or record.get("checked_at") or ""))
+    checked_at = _parse_dt(str(record.get("verified_at") or record.get("checked_at") or record.get("retrieved_at") or ""))
     if checked_at is None:
         return False, "mcp_timestamp_missing"
     if checked_at < now_utc - timedelta(days=ttl_days):

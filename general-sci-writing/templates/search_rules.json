@@ -42,9 +42,10 @@
     }
   },
   "search_tools_priority": {
-    "primary": "paper-search (PubMed)",
-    "secondary": "paper-search (Semantic Scholar) & arxiv/biorxiv (Preprints)",
-    "fallback": "paper-search (Google Scholar) (仅在需要最新文献补充时使用)"
+    "life_sciences": "PubMed CLI (~/edirect/esearch) → paper-search MCP (fallback)",
+    "cs_ai_engineering": "paper-search MCP (arXiv/Google Scholar) → PubMed CLI (fallback)",
+    "preprints": "paper-search MCP (arXiv/bioRxiv)",
+    "forbidden": "tavily (检索阶段), websearch, openalex-cli"
   },
   "doi_validation_rules": {
     "method": "交叉验证DOI与标题",

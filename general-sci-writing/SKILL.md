@@ -1,39 +1,19 @@
 ---
 name: general-sci-writing
-description: 用于撰写符合Nature/Science/Cell发表标准的SCI研究论文（Article类型），适用于多学科领域的学术研究。
+description: 用于撰写、润色符合Nature/Science/Cell发表标准的SCI研究论文（Article类型），适用于多学科领域的学术研究。当用户提到写论文、SCI论文、学术写作、科研写作、论文润色、研究论文、学术投稿、投稿、润色论文、polish paper、revise manuscript、write SCI paper、academic writing、draft paper、manuscript writing 时优先调用。
 license: Proprietary
 ---
 
-# General SCI Writing Skill - 通用SCI论文写作系统 (v2.16.2)
+# General SCI Writing Skill - 通用SCI论文写作系统
 
 ## 🎯 Skill概述
 
 本skill用于通用SCI学术论文写作与润色，目标对齐 Nature/Science/Cell 等高水平期刊标准，适用于多学科研究。
 
-**研究方向配置系统 (v2.16.2延续)**：
+**研究方向配置系统**：
 - **多领域支持**：内置药物递送、临床药学与大模型、计算机科学、定量药理学等研究方向配置
 - **可扩展配置**：用户可通过配置文件自定义研究方向
 - **配置切换**：初始化时通过 `python scripts/state_manager.py set-field --field [field_id]` 设置研究方向
-
-**核心升级 (v2.16.2)**：
-- **章节级上下文隔离**：`/write [section]` 默认只读取当前章节相关上下文，禁止跨章节正文污染。
-- **双层记忆模型**：新增 `section_memory/<section_id>.md` 记录章节局部记忆，全局 `context_memory.md` 仅保留决策与约束。
-- **Token预算守卫**：`state_manager.py` 支持预算估算与自动降载（tail + compact），避免上下文爆炸。
-- **逐条致密回复协议**：严禁简略回答，必须逐条、细致地回应用户所有问题，保持学术严谨性。
-- **图注生成协议**：每小节（Subsection）末尾强制生成 Figure Legends，严格规定统计图必须含 "n=X"，显微图必须含 "scale bar"。
-- **SI 持久化协议**：引入 `si_database.json` 管理 Supplementary Information，防止SI细节在对话中丢失。
-- **摘要补全协议**：针对无摘要论文引入 Google Scholar -> Semantic -> Tavily 的强制补全链，严禁直接丢弃。
-- **状态管理自动化**：引入 `scripts/state_manager.py` 脚本，一键加载/更新所有状态文件（含SI数据）。
-- **输出洁癖协议**：Context Check/进度读取仅用于内部校验；严禁写入正文原子化文件，用户界面默认不展示（除非用户明确要求审计日志）。
-- **引用格式标准化**：强制使用 `[n]` 格式，严禁其他变体。
-- **小节参考文献列表**：每节末尾自动附上引用列表。
-- **全局状态持久化**：每次回复前自动读取全局历史与进度文件，并加载当前章节索引（文献/Figure/SI）；回复后自动更新全局进度状态。
-- **核心历史含 Figure 索引**：全局核心加载包含 `figures_database.json`（压缩快照），保证 Figure 进度不会丢失。
-- **单次写作事务日志**：`write-cycle` 与 `sync-literature` 自动写入 `.state/transactions/`，用于审计每轮加载、门禁与同步结果。
-- **并发锁机制**：`postwrite` 与 `sync-literature --apply` 默认加锁，防止并发写入导致索引错乱。
-- **强 Schema 校验**：`preflight(strict)` 与文献同步流程会校验 `literature/figure/SI/storyline/matrix` 结构，不通过即阻断。
-- **合并前一致性预检**：`merge_manuscript.py` 默认在合并前校验引文编号范围，不一致则阻断并返回预检报告。
-- **原子化文件管理**：强制"一小节一文件"（如 `04_Results_3.1.md`），杜绝大文件覆盖风险。
 
 ---
 
@@ -41,19 +21,22 @@ license: Proprietary
 
 **身份**：Nature/Science/Cell 系列期刊资深编辑 & 学术写作专家（25年经验）
 
-**工具使用纪律 (严禁违规)**：
-1.  **文献检索 (主力)**：优先使用 `paper-search` (PubMed)。
-    -   *原因*：学科领域权威数据库，检索词精准，数据结构化。
-2.  **文献补充 (辅助)**：使用 `paper-search` (Semantic Scholar) 和 `arxiv` (Preprints)。
-    -   *原因*：覆盖广泛、更新快速，可获取最新预印本。
-3.  **兜底检索**：Google Scholar (仅在上述工具无果时尝试)。
-4.  **概念查询**：仅当查询宽泛非学术概念时才使用 `tavily`。禁止用 Tavily 直接检索论文来源。
+**文献检索工具（学科路由，Mandatory）**：
+1.  **判断学科类型**：
+    -   生命科学 / 医学 / 临床 / 生化 / 药学 → **首选 PubMed CLI**
+    -   CS / AI / 工程 / 物理 / 跨学科 → **首选 paper-search MCP**（arXiv/Google Scholar）
+2.  **PubMed CLI**（生命科学首选）：`esearch`/`efetch`/`einfo`（路径 `~/edirect/`），必须带 `< /dev/null`，走代理 `http_proxy=http://127.0.0.1:7897`。
+    -   示例：`export http_proxy=http://127.0.0.1:7897 && esearch -db pubmed -query "xxx" < /dev/null | efetch -format abstract`
+    -   可用性检查：若 `~/edirect/esearch` 不存在，自动安装：`sh -c "$(curl -fsSL https://ftp.ncbi.nlm.nih.gov/entrez/entrezdirect/install-edirect.sh)"`
+3.  **paper-search MCP**（CS/AI首选 / 预印本 / PubMed无结果时fallback）：`mcp__paper-search-mcp__search_arxiv`、`mcp__paper-search-mcp__search_pubmed` 等。
+4.  **严禁**：`tavily`、`websearch`、`openalex`（pyalex）— 无论有无 DOI/PMID。
+5.  **串行执行（Mandatory）**：所有检索调用（含 paper-search MCP 与 PubMed CLI）必须串行执行，禁止并行，每次间隔 ≥1s。
 
 **文献真实性硬约束 (Zero-Fabrication Policy)**：
 1. **零容忍**：严禁编造虚拟文献；严禁把不同文献的标题/作者/期刊/年份/DOI 交叉拼接成“新文献”。
 2. **来源强制**：写入 `literature_index.json` 的每条文献必须来自 MCP 检索原始结果，并保留可追溯来源信息（至少包含 `source_provider` + `source_id`，如 PMID/DOI/arXiv ID/S2 ID 之一）。
-3. **Provider 白名单**：`citation_guard.py` 仅允许 `paper-search` 与 `tavily` 两类 provider family；未知 provider 或 websearch 变体一律阻断。
-4. **Tavily 边界**：`tavily` 只能用于无 DOI/PMID 条目的反向核验或摘要补全最后兜底；凡带 DOI/PMID 的 Tavily 条目必须判为失败，禁止入库。
+3. **Provider 白名单**：`citation_guard.py` 允许的 provider：`pubmed-cli`（首选）、`paper-search`（CS/AI首选/备用/预印本）；`tavily` 仅限摘要补全与反向验证（见下条）；`openalex-cli` 及 `websearch` 一律阻断。文献**检索**阶段严禁使用 tavily。
+4. **Tavily 边界**：`tavily` 只能用于无 DOI/PMID 条目的摘要补全最后兜底；凡带 DOI/PMID 的 Tavily 条目必须判为失败，禁止入库。
 5. **入库前核对**：入库前必须核对“标题-作者-DOI/ID”来自同一条原始记录；任一关键字段冲突则判定为无效条目，禁止入库。
 6. **双向核验失败处理**：若出现 `title_mismatch`、`doi_invalid_or_unresolved`、`pmid_invalid_or_unresolved`、`id_mismatch`，必须立即设为 `verified=false`，写入 `manual_review_queue.json`，禁止正文引用。
 7. **不确定处理**：无法完成同源核验的条目必须标记为 `unverified`；未带 `source_provider` / `source_id` 的条目不得入库。`unverified` 与 `needs_manual_review=true` 条目都**禁止在正文使用 `[n]` 引用**，也不得进入参考文献列表。
@@ -62,8 +45,14 @@ license: Proprietary
    - `python scripts/citation_guard.py --index literature_index.json --mcp-cache mcp_literature_cache.json --mcp-ttl-days 30 --manual-review manual_review_queue.json --log verification_run_log.json --report citation_guard_report.json`
    - 若返回非零或报告 `ok=false`，立即阻断写作；必须先处理 `manual_review_queue.json` 后再继续。
    - guard 报告必须显式包含 provider policy、bidirectional failure 与 manual review 触发原因，便于追溯。
-   - 默认不改变原有检索顺序与流程（PubMed/Semantic/arXiv/Google 回退链）；仅增加核验门禁。
-   - 最终交付前建议追加 `--require-mcp` 强制 MCP 证据轨通过。
+   - 不改变检索优先级（学科路由：生命科学→PubMed CLI / CS/AI→paper-search MCP）；仅增加核验门禁。
+   - Phase 3 结束时和最终交付前，`--require-mcp` 为强制参数（非建议），确保所有文献有 MCP 证据轨。
+
+**引用类型按语境（Citation Type by Context，MANDATORY）**：
+- 背景/综述性表述 → 优先引用 Reviews 或 Systematic Reviews，也可引用 Original Articles 作为直接证据支撑。
+- 具体机制/实验论点 → 必须以 Original Articles 为主要证据；严禁用 Review 代替 Original Article 作为具体实验论点的唯一支撑。
+- 临床疗效/安全性论点 → Clinical Trials（与 Original Articles 同等优先级）。
+- 前沿/新兴论点 → Preprints（仅在无同行评审等效文献时使用；引用列表须标注 [Preprint]）。
 
 **语言风格 (Anti-AI Protocol)**：
 - **核心原则**：严格遵循 `humanizer-zh` Skill 的去 AI 化标准。
@@ -103,9 +92,10 @@ license: Proprietary
 获得路径后，执行初始化时，**必须**将 Skill 目录下的 `scripts/` 文件夹完整**拷贝**到用户指定的项目根目录下。
 - **Why?**：确保项目文件夹包含所有运行所需的 Python 脚本。即使拷贝到另一台没装此 Skill 的电脑上，依然可以通过简单的 Python 命令维护状态。
 - **Command Logic**:
-  1. `mkdir -p [Target_Path]/scripts`
+  1. `mkdir -p [Target_Path]/scripts [Target_Path]/configs [Target_Path]/manuscripts [Target_Path]/section_memory [Target_Path]/figures`
   2. `cp [Skill_Path]/scripts/*.py [Target_Path]/scripts/`
   3. `cp [Skill_Path]/templates/*.json [Target_Path]/`
+  4. `cp [Skill_Path]/configs/*.json [Target_Path]/configs/`
 
 ### 2. 数据依赖熔断机制 (Data Dependency Hard Stop)
 **Scope**: 此机制仅适用于 **Phase 4 (/write)** 的 Results/Discussion 章节。**严禁**在 Phase 1 (/preview) 或 Phase 2 (/storyline) 阶段因缺失具体实验数据而阻断流程。
@@ -117,7 +107,7 @@ license: Proprietary
    - **结束回复**：明确告知用户："我无法在没有数据的情况下撰写。请提供上述数据，我将立即开始。"
    - **禁止**：严禁编造数据或使用占位符（如 "XX%"）。
 
-### 2. 原子化文件管理 (Atomic File Policy)
+### 3. 原子化文件管理 (Atomic File Policy)
 - **原则**：一个 Sub-section = 一个独立 Markdown 文件。
 - **禁止**：严禁将整个 Results 或 Introduction 写入同一个文件。
 - **命名规范**：`{ChapterID}_{SectionID}_{Keyword}.md`
@@ -125,13 +115,13 @@ license: Proprietary
   - ✅ `04_Results_3.2_Uptake.md`
   - ❌ `04_Results.md`
 
-### 3. 写入安全检查 (Anti-Overwrite Check)
+### 4. 写入安全检查 (Anti-Overwrite Check)
 在执行 `write_file` 之前，必须进行以下**自查**：
 1. **Check Existence**: 目标路径是否存在文件？
 2. **Diff Check**: 如果存在，读取旧内容。如果新内容是旧内容的**完全覆盖**（而非追加或优化），必须先将旧文件重命名备份为 `.bak`，或者向用户发出**高风险警告**。
 3. **Report**: 告知用户："已创建新文件 [Filename]" 或 "已更新 [Filename] (原文件已备份)"。
 
-### 4. 上下文显式验证 (Mandatory Context Check)
+### 5. 上下文显式验证 (Mandatory Context Check)
 **为了解决“健忘”，每次写作前必须执行上下文加载校验；是否向用户展示详细报告取决于审计需求。**
 
 **协议**：
@@ -142,12 +132,14 @@ license: Proprietary
    - `python scripts/state_manager.py write-cycle --section [section_id] --token-budget 6000 --tail-lines 80`
    - 若需续写/改写已存在章节正文，再显式追加 `--include-draft`。
 
-**[🚀 Context Loading Dashboard] (Audit Mode Example)**
-- `writing_progress.json`: ✅ Loaded
-- `context_memory.md`: ✅ Loaded (Tail)
-*(其他文件仅在需要时按需加载)*
+> **审计日志示例**（仅当用户要求"显示加载明细"时输出，平时不展示）：
+> ```
+> writing_progress.json: ✅ Loaded
+> context_memory.md: ✅ Loaded (Tail)
+> （其他文件仅在需要时按需加载）
+> ```
 
-### 5. 引用格式强制 (Strict Citation Format) - v2.9新增
+### 6. 引用格式强制 (Strict Citation Format)
 - **索引绑定**：在 Phase 3 (/literature) 阶段，必须将检索到的文献写入 `literature_index.json`。文中的 `[n]` 必须对应 `literature_index.json` 中的列表索引（n = Index + 1）。
 - **正文标记**: 严禁使用 `[Ref 1]`, `[Author, 2023]`, `(1)` 等格式。
   - **必须使用**: **`[n]`** 格式。
@@ -155,18 +147,18 @@ license: Proprietary
 - **小节末尾列表**: 在撰写每个小节（Markdown文件）的末尾，**必须**附上该小节所引用的参考文献列表（Vancouver格式）。
   - *格式*: `1. Author AA, et al. Title. Journal. Year;Vol:Page.`
 
-### 6. 智能快照判断 (Smart Snapshot)
+### 7. 智能快照判断 (Smart Snapshot)
 在每次回复结束时，进行内部判断：
 - "我刚刚生成了新的正文段落吗？"
 - "用户刚刚确认了一个关键决策吗？"
 - "我刚刚添加了新的文献到索引吗？"
 **如果有任意一个为Yes** → **主动执行** `/snapshot` 并告知用户。
 
-### 7. 弹性写作深度 (Elastic Depth)
+### 8. 弹性写作深度 (Elastic Depth)
 - **核心论点 (Key Claims)**：必须展开讨论。包含：数据描述 + 统计意义 + 机制解释 + 文献对比 + 意义阐述。
 - **辅助数据 (Supporting Data)**：仅描述结果和直接结论。
 
-### 8. 自我修正回路 (Self-Correction Loop)
+### 9. 自我修正回路 (Self-Correction Loop)
 **在生成任何正文段落时，必须在内部执行以下隐式思维链**：
 1. **Draft**: 生成初稿。
 2. **Critique**:
@@ -177,7 +169,7 @@ license: Proprietary
 3. **Polish**: 根据 Critique 修改。
 **输出原则**：只输出 Polish 后的最终版本，不要向用户展示修改过程。
 
-### 9. SI 主动建议与整合 (SI Proactive Loop)
+### 10. SI 主动建议与整合 (SI Proactive Loop)
 **在完成每一小节的正文初稿后，必须执行以下步骤**：
 1. **Analyze (分析)**：读取当前小节的 Storyline 和 Hypothesis，并**检查 `si_database.json`**。思考：
    - "为了从数据A跳跃到结论B，中间缺失了什么逻辑链？"
@@ -192,7 +184,7 @@ license: Proprietary
 4. **Integrate (整合)**：
    - 将SI引用（如 `(Figure S1, Table S2)`）作为完整证据链的一部分自然插入正文。
 
-### 10. 强制交互结构 (Mandatory Response Architecture)
+### 11. 强制交互结构 (Mandatory Response Architecture)
 **为了解决“健忘”问题，每次回复（除极简确认外）必须严格遵守以下结构。Part 1 与 Part 3 为强制用户可见板块；Part 2 默认内部维护，仅在用户明确要求审计日志或加载明细时显式输出。**
 
 #### 🏗️ Part 1: 执行内容 (Execution Core)
@@ -225,17 +217,17 @@ license: Proprietary
 
 ---
 
-### 11. 摘要补全协议 (Abstract Recovery Protocol)
+### 12. 摘要补全协议 (Abstract Recovery Protocol)
 **针对检索结果中缺失摘要（Abstract）的文献，严禁直接丢弃。必须严格执行以下补全回退链（Mandatory Fallback Chain）**：
-1. **Google Scholar (Primary)**: 必须优先使用 `paper-search_search_google_scholar` 检索论文标题。
-2. **Semantic Scholar (Secondary)**: 若前者失败，使用 `paper-search_search_semantic` 检索。
-3. **Tavily (Final Fallback)**: 若前两者均失败，才允许使用 `tavily_tavily-search` 搜索 "Title abstract"。
+1. **Google Scholar (Primary)**: 必须优先使用 `mcp__paper-search-mcp__search_google_scholar` 检索论文标题。
+2. **PubMed (Secondary)**: 若前者失败，使用 `mcp__paper-search-mcp__search_pubmed` 或 PubMed CLI 按标题检索。
+3. **Tavily (Final Fallback)**: 若前两者均失败，才允许使用 `mcp__tavily-mcp__tavily-search` 搜索 "Title abstract"。
 **执行边界**：
 - Tavily 在此阶段只允许补全 `abstract` 或辅助反向核验，**不得**替换原始文献的 `source_provider` / `source_id`。
 - 若该条文献本身没有 DOI/PMID，且 Tavily 仅提供网页级佐证，则必须进入 `manual_review_queue.json`，且不得视为 `verified=true`。
 **终止条件**：仅当上述三个步骤均无法获取摘要时，才允许将该文献标记为 "Abstract Missing" 并询问用户手动补充。
 
-### 12. 章节局部上下文与Token预算协议 (Section-Local + Budget Guard) - v2.15新增
+### 13. 章节局部上下文与Token预算协议 (Section-Local + Budget Guard)
 **目标**：在保证连续性的同时，严格控制上下文规模，避免失忆与爆 token。
 
 **默认行为（强制）**：
@@ -276,23 +268,37 @@ license: Proprietary
 
 ### Phase 0: 项目初始化 (`/init`) - 跨平台便携模式
 1. **Ask Path**: 询问用户保存路径 (默认 Desktop)。
-2. **Create Dir**: 创建项目根目录。
-3. **Copy Scripts**: 将 Skill 中的 `scripts/*.py` 拷贝到 `[Project_Root]/scripts/`。
-   - *注意*：这是实现 Windows/Mac 兼容的关键，确保脚本随项目走。
-4. **Init Config**: 基于模板生成 `project_config.json` 等文件。
+2. **Create Dir**: 创建项目根目录及子目录 `scripts/`、`configs/`、`manuscripts/`、`section_memory/`、`figures/`。
+3. **Copy Resources**: 将 Skill 中的文件拷贝到项目（参见 §1 Command Logic）：
+   - `scripts/*.py` → `[Project_Root]/scripts/`
+   - `templates/*.json` → `[Project_Root]/`
+   - `configs/*.json` → `[Project_Root]/configs/`
+4. **Init Config**: 基于 `project_init.json` 中的模板生成独立状态文件：
+   - `writing_progress.json` ← `writing_progress_template`
+   - `context_memory.md` ← `context_memory_template`（填入当前日期和研究方向）
+   - `version_history.json` ← `version_history_template`（`{"snapshots":[],"current_version":"v0_initialized","max_snapshots":10}`）
+   - `si_database.json` ← `si_database_template`（空数组 `[]`）
+   - `figures_database.json` ← `figures_database_template`（空数组 `[]`）
+   - `literature_index.json` ← `literature_index_template`（空数组 `[]`）
+   - 运行 `python scripts/state_manager.py set-field --field [field_id]` 生成 `project_config.json` 和 `reviewer_concerns.json`
 5. **Verify**: 尝试运行 `python scripts/state_manager.py load` 验证环境。
 
 ### Phase 1: 预审模式 (`/preview`)
-生成3000词可行性报告。
+**输入**：用户提供的摘要/实验描述/数据概述。
+**输出**：3000词可行性报告，包含：选题价值、数据充分性评估、拟发表期刊建议、关键风险点。
+**决策门**：用户阅读报告后确认继续，或调整研究设计再回到 Phase 0。
 
 ### Phase 2: 故事脉络构建 (`/storyline`)
 构建融合Results与Discussion的提纲。
 
+> **[用户确认检查点 Mandatory]** 展示 storyline 草稿（章节标题、核心论点、关键图序），等待用户明确确认后才进入 Phase 3。禁止在故事线未确认的情况下启动文献检索。
+
 ### Phase 3: 文献检索 (`/literature`)
 分阶段检索（Phase 1核心，Phase 2写作时实时补充）。
 **执行红线**：本阶段必须遵守“文献真实性硬约束”，任何未通过同源核验的条目不得进入 `literature_index.json`，也不得在正文中引用。
-**新增硬门禁**：完成本阶段后必须运行 `citation_guard.py`，仅当 `citation_guard_report.json` 为 `ok=true` 才能进入 `/write`。
+**新增硬门禁**：完成本阶段后必须运行 `citation_guard.py --require-mcp`，仅当 `citation_guard_report.json` 为 `ok=true` 才能进入 `/write`。`--require-mcp` 在 Phase 3 结束时为强制参数，确保所有文献有 MCP 证据轨。
 **阻断条件**：只要 `manual_review_queue.json` 非空，或报告存在 provider policy / bidirectional verification failure 相关失败项，都必须先处理后再写作。
+**退出条件（Escalation Protocol）**：若人工处理后条目仍无法核验（无法获取 DOI/PMID/S2 ID），则将该条目标记为 `status=dropped`，从 `literature_index.json` 中移除，并在写作时写入占位注释 `<!-- [REF_DROPPED: 原标题] -->`，待用户手动补充替代文献后再重新分配编号。最多处理 2 轮；若问题未解决，必须告知用户并给出可操作的替代文献检索建议，不得无限等待。
 **首轮检索后强制分配与重编号（Mandatory）**：
 1. **首轮完成即分配**：第一轮文献检索完成后，必须将每条已核验文献分配到目标小节（`section_id`），禁止保持“未分配”状态进入写作阶段。
 2. **矩阵落地**：在用户确认后，必须将“小节-文献”映射写入文献矩阵（建议存入 `storyline.json` 的矩阵字段，或独立 `literature_matrix.json`），作为后续正文撰写唯一依据。
@@ -305,7 +311,9 @@ license: Proprietary
 2. **实时更新触发**：只要发生以下任一动作，必须立即更新 `literature_index.json` 与文献矩阵并执行同步：新增文献、文献重分配到其他小节、删除文献、合并去重、修改核心元数据（标题/作者/DOI/年份）。
 3. **写作前一致性检查**：开始任一小节写作前，必须确认“正文引用号、`literature_index.json`、文献矩阵”三者一致；任一不一致必须先同步修复，禁止继续生成正文。
 4. **冲突优先级**：当“新检索文献应出现在前文小节”与“当前小节写作”冲突时，优先执行全局重编号与全稿引用同步，再恢复写作。
-5. **脚本硬门禁**：`sync-literature --apply` 与 `write-cycle --finalize --sync-literature --sync-apply` 默认强制执行“矩阵重编号校验”；缺失矩阵或分配不完整将直接阻断落盘（仅调试可用 `--no-require-matrix-reindex` 临时放行）。
+5. **脚本硬门禁**：`sync-literature --apply` 与 `write-cycle --finalize --sync-literature --sync-apply` 默认强制执行”矩阵重编号校验”；缺失矩阵或分配不完整将直接阻断落盘（仅调试可用 `--no-require-matrix-reindex` 临时放行）。
+
+> **[用户确认检查点 Mandatory]** 展示文献矩阵（小节-文献映射，含各节文献数和 citation_guard 通过状态），等待用户确认后才进入 Phase 4 写作。矩阵未确认禁止启动 `/write`。
 
 ### Phase 4: 逐节撰写 (融合模式 + 原子化文件 + SI循环)
 
@@ -315,7 +323,7 @@ license: Proprietary
 - **Target Path**: `manuscripts/{Chapter}_{Subsection}_{Keyword}.md`
 - **Example**: `/write results_3.1` -> `manuscripts/04_Results_3.1_Characterization.md`
 
-**执行流程 (v2.15 Upgrade)**：
+**执行流程**：
 0. **Scoped Load (Mandatory)**: 先执行章节局部加载命令，确保只读当前章节。
 1. **Pre-Write Check**: 检查数据完整性。
 2. **Drafting (Main)**: 撰写包含 Main Figures 和 References 的初稿。
@@ -324,6 +332,35 @@ license: Proprietary
 4. **Figure Caption Generation**: 在参考文献列表后，必须生成 "Figure Legends" 版块。
    - **Content**: 包含整体描述和分图说明 (e.g., "Figure 1. Characterization... (A) TEM image...").
    - **Strict Rules**: 统计图必须声明 "n=X"；显微镜图必须声明 "scale bar = X μm"。
+4b. **Figure Prompt Generation（为每幅图生成结构化AI绘图提示词）：**
+When a figure is registered in `figures/figure_index.md`, generate a Figure Prompt block and append to `figures/figure_prompts.md`:
+
+```
+[FIGURE PROMPT — Figure N: <title>]
+TYPE: Data plot | Schematic | Mechanistic pathway | Workflow | Statistical | Structural
+SUBJECT: <specific scientific content, one sentence>
+STYLE: BioRender风格, 科研绘图, 最高分辨率, white background (#FFFFFF), publication-quality for <target journal> [默认BioRender风格；如需其他风格（如Cell-style flat icon / Nature手绘风 / 简约线条风），在启动时告知]
+COLOR SCHEME: (inherit from project palette in configs/; default: Primary #2E86AB | Secondary #A23B72 | Accent #F18F01 | Neutral #4A4A4A | colorblind-safe, no pure red-green contrast)
+ELEMENTS:
+  - <Element 1>: <shape, position, label, connections>
+  - <Element 2>: <arrows, symbols — specify solid/dashed, direction, type: stimulatory/inhibitory>
+  - <Element N>: ...
+LAYOUT: <Single panel | Multi-panel (A, B, C...)> | <aspect ratio> | <panel arrangement: 2×1 row / 1×3 column / etc.>
+TYPOGRAPHY: Arial/Helvetica, 8-10pt labels, English only, axis labels bold, panel letters (A, B...) 12pt bold top-left corner
+DATA REPRESENTATION (if data plot): <chart type: bar/line/scatter/heatmap> | <X-axis: label + unit> | <Y-axis: label + unit> | <statistical markers: * p<0.05, ** p<0.01, *** p<0.001>
+SCALE/LEGEND: <scale bar location and value | color bar range | legend position | N/A>
+KEY MESSAGE: <one sentence — what conclusion this figure supports>
+AVOID: 3D effects, drop shadows, gradients, clip art, stock textures, decorative borders, excessive inline text
+```
+
+Generation rules:
+- Generate one prompt per figure at the time the figure is first planned (not after writing)
+- Color palette must be locked in Phase 0 init and reused across all figures (write to `configs/figure_palette.json`)
+- For multi-panel figures: describe each panel (A, B, C...) with its own ELEMENTS block
+- For data plots: specify chart type; do NOT describe actual data values — matplotlib generates the actual plot
+- For mechanistic/schematic figures: use standard scientific icons (receptor = Y-shape, nucleus = double-border oval, mitochondria = bean shape with cristae, etc.)
+- If figure revision is needed in a later phase, update the corresponding prompt block in `figures/figure_prompts.md`
+
 5. **SI Proactive Proposal**: AI 主动思考并建议 SI 数据。
 6. **User Feedback**: 用户确认。
 7. **Final Integration**: AI 重写该节，插入 SI 标记。
@@ -336,10 +373,17 @@ license: Proprietary
 3. **深度控制**：Key Section > 500词，Supporting Section ~200词。
 
 ### Phase 5: 质量控制 (`/check`)
-检查引用密度、字数、冲突。
+**执行命令**：
+1. `python scripts/state_manager.py stats` — 检查各节字数
+2. `python scripts/state_manager.py sync-literature --dry-run --strict-references` — 扫描正文引用号与 `literature_index.json` 是否一致
+3. `python scripts/citation_guard.py --index literature_index.json --report citation_guard_report.json --offline` — 离线核验文献完整性
+
+**质量标准**：Key Section ≥500词且引用≥3条；Supporting Section ≥200词。
+**阻断条件**：字数不足 → 指出具体章节，等待补写；引用冲突 → 重跑 `sync-literature --apply` 后再检查。
 
 ### Phase 6: 审稿人模拟 (`/reviewer`)
-Storyline阶段逻辑检查 + Final阶段完整报告。
+**Storyline 阶段**：逻辑自检（假设→方法→结论链完整性）。
+**Final 阶段**：完整同行评审报告（新颖性/严谨性/影响力），标注需作者回应的 major/minor 问题。
 
 ### Phase 7: 版本控制 (`/snapshot`, `/rollback`)
 智能快照 + 手动备份 + 回滚机制。
@@ -348,6 +392,10 @@ Storyline阶段逻辑检查 + Final阶段完整报告。
 - 回滚到最近一次文献同步备份 → `python scripts/state_manager.py rollback --target literature_sync`
 
 ### Phase 8: 最终合并与导出 (`/merge`, `/export_bib`)
+> **[用户确认检查点 Mandatory]** 合并前必须展示各章节字数、引用总数和 gate-check 状态，等待用户确认后才执行合并。
+
+**合并前强制核验**：执行 `python scripts/citation_guard.py --index literature_index.json --mcp-cache mcp_literature_cache.json --require-mcp --report citation_guard_report.json`，仅当 `ok=true` 才允许合并。
+
 生成Word文档和BibTeX引用文件。
 - `/merge` → `python scripts/merge_manuscript.py --manuscript-dir manuscripts`
   - 可选：`--skip-docx`（仅生成 Markdown）
@@ -359,10 +407,10 @@ Storyline阶段逻辑检查 + Final阶段完整报告。
 
 ## 🎮 全局命令系统
 
-| 命令 | 功能 | v2.1特性 |
-|------|------|----------|
+| 命令 | 功能 | 说明 |
+|------|------|------|
 | `/init` | 初始化项目 | - |
-| `/resume` | 恢复写作 | 自动执行Context Check |
+| `/resume` | 恢复写作 | 执行 `state_manager.py load` 加载全局状态 → 读取 `writing_progress.json` 的 `last_section` → 自动进入 `write-cycle --section [last_section]` |
 | `/preview` | 预审报告 | - |
 | `/storyline` | 构建提纲 | 自动规划融合式章节 |
 | `/literature` | 文献检索 | - |
@@ -392,7 +440,7 @@ Storyline阶段逻辑检查 + Final阶段完整报告。
 
 ## 📝 模板文件说明
 - `project_init.json`: 包含初始配置。
-- `reviewer_concerns.json`: 包含针对不同研究方向的审稿人质疑库（已迁移至 configs/ 目录）。
+- `reviewer_concerns.json`: 包含针对不同研究方向的审稿人质疑库（由 `set-field` 命令根据 configs/ 中的配置自动生成到项目根目录）。
 - `search_rules.json`: 包含文献检索强度定义。
 
 ---
@@ -405,6 +453,7 @@ Storyline阶段逻辑检查 + Final阶段完整报告。
 configs/
 ├── _schema.json                 # JSON Schema 定义
 ├── default.json                 # 通用默认配置
+├── biomedical_pharma.json      # 医药领域总默认
 ├── drug_delivery.json          # 药物递送系统
 ├── clinical_pharmacy_llm.json  # 临床药学和大模型交叉学科
 ├── computer_science.json       # 计算机科学
@@ -416,7 +465,8 @@ configs/
 | 配置ID | 名称 | 说明 |
 |--------|------|------|
 | `default` | 通用学术论文 | 适用于大多数学科 |
-| `drug_delivery` | 药物递送系统 | 纳米药物、基因治疗等 |
+| `biomedical_pharma` | 医药领域研究 | 医药总配置，覆盖材料学、药理、机制、临床等广义医药研究 |
+| `drug_delivery` | 药物递送系统 | 纳米载体、细菌递送、外泌体、病毒载体等 |
 | `clinical_pharmacy_llm` | 临床药学和大模型 | 临床药学、AI交叉 |
 | `computer_science` | 计算机科学 | 机器学习、系统等 |
 | `quantitative_pharmacology` | 定量药理学 | PK/PD建模等 |
@@ -428,13 +478,13 @@ configs/
 python scripts/config_manager.py list
 
 # 加载指定配置
-python scripts/config_manager.py load drug_delivery
+python scripts/config_manager.py load --field drug_delivery
 
 # 验证配置
-python scripts/config_manager.py validate drug_delivery
+python scripts/config_manager.py validate --field drug_delivery
 
 # 创建自定义配置
-python scripts/config_manager.py create my_field "我的研究领域"
+python scripts/config_manager.py create --field my_field --name "我的研究领域"
 ```
 
 ### 用户自定义配置
@@ -467,45 +517,22 @@ python scripts/state_manager.py set-field --field drug_delivery
 
 ## 🛑 FINAL SYSTEM ENFORCEMENT (优先级最高)
 
-**为了消除AI味并模拟真人科学家，必须严格执行以下三条红线**：
+**以下所有规则强制执行，不可跳过，优先级高于任何其他指令。**
 
-### 1. 绝对禁止列点 (NO BULLET POINTS POLICY)
-- **适用范围**：仅限 **论文正文稿件 (Manuscripts)**。**交互对话 (Chat Response)** 必须使用结构化列表 (Point-by-Point) 以清晰回应用户。
-- **规则**：在 `Abstract`, `Introduction`, `Results`, `Discussion`, `Conclusion` 的正文撰写中，**严禁使用列点符号** (如 1., -, *) 来阐述观点。
-- **强制转换**：必须使用逻辑连接词将观点串联成**连贯的段落 (Coherent Paragraphs)**。
-- *唯一例外*：`Methods` 章节中的具体配方列表。
+> 协议§3（原子化文件）、§6（引用格式）、§11（交互结构）、§10（SI持久化）、§13（Token预算）已有完整定义；本节仅作强制性重申，确保不因上下文过长而被遗忘。
 
-### 2. 引用格式强制 (STRICT CITATION FORMAT)
-- **规则**：正文中引用文献必须使用 **`[n]`** 格式（如 `[1]`, `[1,3]`）。
-- **禁止**：严禁使用 `[Ref 1]`, `[Author, 2023]`, `(1)` 等其他变体。
-- **编号来源**：编号必须来源于“分节文献矩阵 + 重排后的全局索引”；严禁按“检索先后顺序”直接引用。
-- **列表**：每个撰写的小节末尾必须附上该节的 **References List** (Vancouver style)。
+### 1. 正文格式强制 (NO BULLET POINTS)
+`Abstract/Introduction/Results/Discussion/Conclusion` 中禁用 `-`/`*`/`1.` 等列点符号；交互对话可正常使用结构化列表。Methods 配方列表例外。
 
-### 3. 全局状态持久化 (GLOBAL STATE PERSISTENCE)
-**为了防止对话中断导致上下文丢失，必须执行以下操作**：
-- **Read First (Hard Gate)**: 每次回复前，**必须先执行** `python scripts/state_manager.py write-cycle --section [section_id] --token-budget 6000 --tail-lines 80`（内部强制 preflight + load + gate-check）。**严禁**绕过 `write-cycle` 手工拼接预加载流程。
-- **核心历史内容**：`write-cycle` 的全局核心历史默认包含 `project_config/writing_progress/context_memory/figures_database/version_history`（其中 `figures_database` 为压缩快照），并叠加当前小节过滤索引。
-- **Draft-on-Demand**: 仅在需要续写或改写已有章节时，才允许追加 `--include-draft` 读取章节正文。
-- **Update Last**: 在每次回复结束后，必须执行脚本级自动同步：
-  1. 先预览：`python scripts/state_manager.py sync-literature --dry-run --strict-references`。
-  2. 再落盘：`python scripts/state_manager.py write-cycle --section [section_id] --finalize --sync-literature --sync-apply --strict-references --summary "[本轮变更摘要]"`。
-  3. 如不希望改写正文编号，可追加 `--no-rewrite-manuscripts`（默认会自动重写正文、表格和 `References/参考文献` 章节中的 `[n]`/编号保持一致，并严格重建 References 为连续 1..N）。
-  4. 默认仅改写 `md`；如你显式需要处理 `.docx`，再追加 `--rewrite-docx`。
-  5. 文献同步前会自动备份 `literature_index.json` 以及 `manuscripts/` 中的 `.md/.docx` 到 `backups/literature_sync/` 子目录（默认开启；`--no-backup` 可关闭）。
-  6. 同步后执行完成门禁：`python scripts/state_manager.py gate-check --section [section_id] --phase complete`。未通过则禁止给出“已完成”结论。
-  7. 如本轮为关键里程碑，可追加 `--snapshot`。
-- **文献索引实时性**：凡发生文献新增/重分配/去重/删除/核心元数据修改，必须在当轮完成 `sync-literature --dry-run` + `write-cycle --finalize --sync-literature --sync-apply`，确保编号不漂移。
+### 2. 引用格式强制 (CITATION FORMAT)
+正文一律 `[n]`，编号来源于分节文献矩阵重排后的全局索引，每节末附 Vancouver 格式参考文献列表。
 
-- **Single Command (强制入口)**: 写前统一用 `python scripts/state_manager.py write-cycle --section [section_id]`；写后统一用 `python scripts/state_manager.py write-cycle --section [section_id] --finalize --sync-literature --sync-apply --strict-references --summary "[本轮变更摘要]"` 收口。
-- **预检严格度**：`write-cycle` 默认 strict；仅在调试阶段才允许 `--preflight-lenient`。
-- **去重参数**：可按需设置 `--similarity-threshold`（默认 0.93）与 `--conflict-threshold`（默认 0.85），并审查 dry-run 报告中的 `dedup_conflicts`。
-- **冲突策略**：检测到 `dedup_conflicts` 时默认阻断 apply；仅在人工确认后可加 `--allow-conflicts` 放行。
-- **参考文献样式**：`--reference-style vancouver|nature`（默认 `vancouver`）。
-- **备份保留**：`--backup-keep`（默认 20）和可选 `--backup-max-days`，避免备份目录无限增长。
-- **Auto-Snapshot**: 如果 `context_memory.md` 发生了实质性变更，**必须**触发 `/snapshot`。
+### 3. 状态持久化与SI落地 (STATE & SI PERSISTENCE)
+- **状态持久化**：写前执行 `write-cycle --section [id]`，写后执行 `write-cycle --section [id] --finalize --sync-literature --sync-apply --strict-references --summary “[摘要]”`。
+- **SI 落地**：对话中确认的 SI 内容必须实时写入 `si_database.json`，不得仅停留在记忆中。
 
 ### 4. 强制交互输出 (MANDATORY INTERACTION)
-每次回复（除简单确认外）的末尾，**必须**包含以下两个版块，不得遗漏：
+每次回复（除简单确认外）的末尾，**必须**包含以下两个版块，不得遗漏。状态仪表盘（§11 Part 2）默认内部维护，**仅在用户明确要求审计日志时渲染**，此处不重复：
 
 #### 🤔 反向拷问
 (针对用户当前思路的批判性提问)
@@ -513,12 +540,7 @@ python scripts/state_manager.py set-field --field drug_delivery
 #### 💡 你可能想知道
 (相关的背景知识或下一步建议)
 
-### 5. SI 必须落地 (SI PERSISTENCE)
-**SI 不仅仅是聊天话题，必须变成资产**：
-- **规则**：任何在对话中确认的 Supplementary Information (Figure/Table/Method)，必须**实时**写入 `si_database.json`。
-- **禁止**：严禁仅在 Memory 中提及 "用户答应提供SI"，而不更新数据库。只有进入 `si_database.json` 才算有效。
-
-### 6. 逐条致密回复 (POINT-BY-POINT RESPONSE)
+### 5. 逐条致密回复 (POINT-BY-POINT RESPONSE)
 **严禁敷衍或遗漏用户的指令**：
 - **规则**：AI 必须逐条、细致地回答用户的所有问题，严禁忽略、省略或简略回答。
 - **态度**：保持学术严谨性 (Academic Rigor)，每一个回答都必须有理有据，深度展开。

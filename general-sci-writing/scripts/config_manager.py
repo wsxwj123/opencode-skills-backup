@@ -99,7 +99,9 @@ class FieldConfigManager:
                 try:
                     with open(config_file, 'r', encoding='utf-8') as f:
                         config = json.load(f)
-                    field_id = config.get("field_id", config_file.stem)
+                    if "field_id" not in config:
+                        continue
+                    field_id = config["field_id"]
                     if field_id not in seen_ids:
                         seen_ids.add(field_id)
                         fields.append({

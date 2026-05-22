@@ -1,5 +1,5 @@
 {
-  "concerns_by_system": {
+  "by_system": {
     "Nanocarrier": [
       "EPR效应的临床转化争议（引用Danhier 2016 JCO, Wilhelm 2016 Nat Rev Mater）",
       "长期蓄积毒性：纳米材料在肝脾的蓄积及潜在炎症反应",
@@ -41,7 +41,7 @@
       "异质性：不同细胞来源外泌体的功能差异"
     ]
   },
-  "concerns_by_experiment": {
+  "by_experiment": {
     "In_vivo_efficacy": [
       "小鼠模型是否能代表人类肿瘤微环境？",
       "给药剂量是否在临床可行范围？（通常需要换算为人体等效剂量）",

@@ -422,8 +422,9 @@ def compact_figure_item(item):
     if not isinstance(item, dict):
         return item
     keep_keys = {
-        "figure_id", "id", "title", "caption", "section", "data_status",
-        "n", "p_value", "statistical_test", "notes"
+        "fig_id", "figure_id", "id", "title", "caption", "section",
+        "cited_in_sections", "data_status", "n_value", "n",
+        "p_value", "statistical_test", "notes",
     }
     return {k: v for k, v in item.items() if k in keep_keys}
 
@@ -629,7 +630,15 @@ def parse_literature_matrix(payload):
     reserved = {
         "sections", "items", "matrix", "section_map", "section_matrix",
         "literature_matrix", "citation_matrix", "reference_matrix",
-        "section_literature_map", "meta", "metadata", "version"
+        "section_literature_map", "meta", "metadata", "version",
+        "figures", "hypothesis", "title", "type", "id", "section_id",
+        "key_points", "notes", "panels", "data_status", "keywords",
+        "results_data", "discussion_points", "main_figures", "status",
+        "literature_needed", "literature_status", "is_key_section",
+        "content_points", "claim", "evidence_needed", "ref_ids",
+        "innovation_core", "main_hypothesis", "para_1",
+        "literature_refs", "literature_references", "cited_refs",
+        "supporting_refs", "background_refs", "method_refs",
     }
 
     def add(section_id, refs):
@@ -651,6 +660,7 @@ def parse_literature_matrix(payload):
                     refs = (
                         item.get("references") or item.get("refs") or item.get("literature")
                         or item.get("citations") or item.get("items") or item.get("ref_ids")
+                        or item.get("literature_refs") or item.get("literature_references")
                     )
                     if sid is not None and refs is not None:
                         add(sid, refs)
