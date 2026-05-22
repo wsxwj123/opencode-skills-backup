@@ -48,6 +48,17 @@ Expert academic consultant for high-impact literature reviews (Nature Reviews, C
 5. **Truthfulness:** ZERO TOLERANCE for hallucinated citations. Verify every paper via search tools.
 6. **No Bullet Points** in body text. Paragraphs only.
 7. **Local Reference List:** Append `## References` at end of every draft file.
+8. **Journal-Specific Adaptation:** Read `Target Journal` from `outline.md` and apply these differentiators:
+
+| Aspect | Nature Reviews | Cell / Cell Press | Lancet Digital Health |
+|--------|---------------|-------------------|----------------------|
+| Tone | Authoritative, synthesizing | Mechanistic, hypothesis-driven | Clinical, evidence-based |
+| Figure emphasis | Conceptual schematics dominate | Data-rich multi-panel figures | Clinical workflow diagrams |
+| Citation balance | Reviews + seminal papers | Original articles heavy | Clinical trials + guidelines |
+| Unique convention | "Box" sidebars for definitions | "Graphical Abstract" required | "Panel" for sub-analyses |
+| Word budget | 8,000–10,000 | 7,000–9,000 | 5,000–8,000 |
+
+> These are starting heuristics. Always verify against the target journal's actual Author Guidelines (AI should check the journal website if unsure about a specific convention).
 
 ---
 
@@ -150,6 +161,370 @@ Before any **writing / search / import / Zotero-mutating** action, ask exactly *
 > Resume rule: if `state.json` already exists in the project folder, read it first.  
 > If `"mode": "polish"` → skip to Phase 0-P Step 6 (resume pending sections).  
 > If `"phase" ≥ 1` (Write Mode) → jump to the appropriate phase directly.
+>
+> **Project path discovery (cross-session resume):**
+> When user says "继续写综述" / "continue review" without specifying a path:
+> 1. Check CWD for `state.json` → if found, use CWD as project root
+> 2. Check CWD subdirectories (1 level deep) for `state.json` → if exactly 1 found, use it; if multiple, list and ask user
+> 3. If not found → ask user for project path: "请提供综述项目目录路径（包含 state.json 的文件夹）"
+> After locating, `cd` into the project directory before any further operation.
+
+---
+
+## Phase 0: Initialization & Environment Detection
+
+**Principle:** Complete ALL checks once before any other work. Prevent mid-task failures.
+
+### 0.1 Collect Parameters
+
+Ask all parameters at once. State defaults; user may accept silently.
+
+| Parameter | Default | Notes |
+|-----------|---------|-------|
+| Review title/topic | (required) | Used as project folder name |
+| Project location | **current working directory** | Path where `[TITLE]/` folder will be created |
+| Target journal | (required) | Affects word count and citation density |
+| Writing language | **English** | English / Chinese (Chinese: only changes writing language, same search tools) |
+| Discipline | **Medical/Biomedical** | Determines search tool priority |
+| Word count target | EN: 7,000–10,000 words / CN: 15,000–20,000 chars | |
+| Total citations | ≥150 (Original≥80, Review≥50, Preprint≥20) | |
+| Reference manager | **Zotero** | Zotero / None / EndNote |
+| Subagent model | Same as current session | AI scans available models, user confirms |
+
+**If Chinese writing selected**, notify at end of Phase 0:
+> 本技能使用 PubMed/paper-search MCP 检索英文文献。如需补充知网（CNKI）、万方等中文数据库文献：
+> 1. 在知网检索页勾选目标文献 → 导出 → 选择"EndNote"格式 → 下载 .txt 文件
+> 2. 在 Zotero 中：文件 → 导入 → 选择下载的 .txt 文件 → 导入到对应章节集合
+> 3. 手动为导入条目添加 `gid:N` tag（N 从当前最大 gid+1 开始递增）
+> 4. 在 `drafts/section_XX_XX.md` 中用 `[N]` 引用
+>
+> 万方：导出 → 选择"RIS"格式 → 同上步骤导入 Zotero。
+> 建议在初稿完成后统一补充中文文献，避免 gid 编号冲突。
+
+### 0.2 Full Environment Check
+
+Run all checks sequentially. Display ✅/❌ per item. All must be ✅ before proceeding.
+
+**Step 0: Detect OS + Python version (always)**
+```python
+python3 -c "
+import sys, platform
+ver = sys.version_info
+assert ver >= (3, 7), f'Python 3.7+ required — found {ver.major}.{ver.minor}. Upgrade at python.org'
+print(f'✅ Python {ver.major}.{ver.minor}.{ver.micro}')
+print(f'OS: {platform.system()}')  # Darwin | Linux | Windows
+"
+```
+Record `os: Darwin/Linux/Windows` — written to `outline.md` later in Phase 0.5. All subsequent platform-specific commands branch on this value.
+- Python < 3.7 → abort; guide user to upgrade (python.org / `brew install python` / `winget install Python.Python.3`)
+
+**Step 1: Base dependencies (always)**
+```bash
+curl --version      # ❌ → system-level issue (Windows: curl available in PowerShell 5.1+)
+```
+
+**Step 2: Git availability (always — enables auto-checkpoint for rollback)**
+```bash
+git --version 2>/dev/null && echo "✅ git available" || echo "⚠️ git not found (auto-checkpoint disabled; no rollback)"
+```
+Record `git_available: true / false` — written to `outline.md` later in Phase 0.5.
+Git not available → **not blocking** — all checkpoint operations silently skip. Recommend user install git for rollback capability.
+
+**Step 3: Zotero (Zotero mode only)**
+```python
+# Desktop app installed? (cross-platform)
+python3 -c "
+import platform, pathlib, sys
+s = platform.system()
+paths = {
+  'Darwin':  pathlib.Path('/Applications/Zotero.app'),
+  'Linux':   pathlib.Path('/usr/bin/zotero'),
+  'Windows': pathlib.Path(r'C:/Program Files/Zotero/Zotero.exe'),
+}
+p = paths.get(s)
+print('✅ Zotero found' if p and p.exists() else f'❌ Zotero not found at {p}')
+"
+
+# PyZotero library
+python3 -c "import pyzotero; print('✅')" 2>/dev/null || echo "❌ run: pip install pyzotero"
+```
+
+**Step 4: PubMed edirect (Medical/Bio discipline)**
+```python
+# edirect detection (cross-platform)
+python3 -c "
+import shutil, platform
+if shutil.which('esearch'):
+    print('✅ edirect found')
+elif platform.system() == 'Windows':
+    print('❌ edirect not available on native Windows')
+    print('   Options: (1) install WSL then run edirect inside WSL bash')
+    print('            (2) skip edirect → use paper-search MCP as primary tool')
+else:
+    print('❌ edirect not installed')
+"
+```
+If missing (Mac/Linux — run in bash):
+```bash
+sh -c "$(curl -fsSL https://ftp.ncbi.nlm.nih.gov/entrez/entrezdirect/install-edirect.sh)"
+source ~/.bashrc  # or ~/.zshrc
+```
+If missing (Windows) → install WSL (`wsl --install` in PowerShell as Admin), then install edirect inside WSL; or auto-fallback to paper-search MCP (write `search_fallback: paper-search-mcp` to outline.md).
+
+**Step 5: Proxy + PubMed connectivity**
+```bash
+PUBMED_TEST="https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=test"
+DIRECT=$(curl -s --max-time 4 "$PUBMED_TEST" 2>/dev/null | grep -c "Count" || echo 0)
+PROXY_PORT=""
+if [ "$DIRECT" -eq 0 ]; then
+  for port in 7897 7890 1080 8080 8888; do
+    R=$(curl -s --proxy "http://127.0.0.1:$port" --max-time 4 "$PUBMED_TEST" 2>/dev/null | grep -c "Count" || echo 0)
+    if [ "$R" -gt 0 ]; then PROXY_PORT=$port; break; fi
+  done
+fi
+# → write to outline.md: pubmed_proxy: none / http://127.0.0.1:XXXX
+# → if both fail: fallback to paper-search MCP, notify user
+```
+
+**Step 6: NCBI API Key (optional, improves rate limit)**
+```bash
+echo ${NCBI_API_KEY:-"not set (rate limit 3 req/s; recommended to set)"}
+# To set: export NCBI_API_KEY=your_key >> ~/.bashrc
+```
+
+**Step 7: paper-search MCP availability**
+```
+Check if tool list includes search_pubmed / search_arxiv:
+  ✅ → paper-search MCP available
+  ❌ → PubMed CLI only; inform user they may optionally configure paper-search MCP
+```
+
+**Step 8: Required scripts exist (always — verify SKILL_DIR is correct first)**
+```python
+python3 -c "
+import pathlib, sys
+# SKILL_DIR common locations:
+#   Claude Code:  ~/.claude/skills/review-writing/
+#   Cursor:       ~/.cursor/skills/review-writing/  (or project .cursor/skills/)
+#   Windsurf:     ~/.windsurf/skills/review-writing/
+#   Other:        the directory from which this SKILL.md was loaded
+skill_dir = pathlib.Path('[SKILL_DIR]')  # AI substitutes actual path
+required = ['zotero_manager.py','export_bibtex.py',
+            'matrix_manager.py','word_counter.py','citation_guard.py',
+            'validate_citations.py','check_global_citation_sequence.py',
+            'citation_utils.py','state_manager.py']  # keep aligned with Phase 0.5 REQUIRED_SCRIPTS
+missing = [s for s in required if not (skill_dir/'scripts'/s).exists()]
+if missing:
+    print(f'❌ Missing scripts: {missing}')
+    print(f'   Check SKILL_DIR is correct: {skill_dir}')
+    sys.exit(1)
+print(f'✅ All {len(required)} required scripts found in {skill_dir}/scripts/')
+"
+```
+If any script is missing → abort; verify SKILL_DIR path or re-install the skill.
+
+### 0.3 Zotero First-Time Setup (Zotero mode only)
+
+Note: PyZotero uses **Zotero Web API** (cloud). Desktop app does NOT need to run during API operations — but install it for local sync of created items.
+
+**Step-by-step guide (show this to user if they haven't done it before):**
+
+```
+① Register / log in
+   → https://www.zotero.org/user/register  (if no account)
+   → https://www.zotero.org/user/login
+
+② Get your Library ID (numeric user ID)
+   → https://www.zotero.org/settings
+   → Scroll to the bottom of the page
+   → Look for: "Your user ID for use in API calls is: [NUMBER]"
+   → Copy that number — this is your lib_id
+
+③ Create an API key
+   → https://www.zotero.org/settings/keys
+   → Click "Create new private key"
+   → Key Description: e.g. "review-writing-skill"
+   → Permissions — check ALL of the following:
+       ✅ Allow library access
+       ✅ Allow write access           ← required for creating items/collections
+       ✅ Allow notes access           ← required for abstract child notes
+       ✅ Allow file access            ← required for PDF attachments
+   → Click "Save Key"
+   → Copy the generated key immediately (shown only once)
+
+④ Test connection
+   python3 scripts/zotero_manager.py --status --lib-id [NUMBER] --api-key [KEY]
+   Expected output: ✅ Connected to Zotero library ...
+
+⑤ Security rules
+   - Write lib_id to outline.md (safe, not secret)
+   - NEVER write api_key to any file — ask user at each new session start
+   - If 403 Forbidden error: re-ask user for api_key; re-run --status before continuing
+```
+
+If `--status` lists multiple libraries (personal + group), show the list and ask user which to use. Write chosen `lib_id` to `outline.md`.
+
+### 0.4 Subagent Model Detection
+
+```
+1. List all models available in current AI client
+2. Present list to user
+3. Ask: which model for subagent tasks? (default: same as current session)
+4. Write choice to outline.md: subagent_model: <name>
+```
+
+### 0.5 Initialize Project Files
+
+After all checks pass. All file operations use **Python** (cross-platform: Mac/Linux/Windows).
+
+> **Cross-platform shell note:** the `python3 << 'PYEOF' ... PYEOF` block below uses bash
+> heredoc syntax (works in bash/zsh/WSL). On native Windows PowerShell or CMD, save the
+> body between `PYEOF` markers to `_init.py` and run `python _init.py` instead — same effect.
+> The Python code itself is platform-agnostic; only the *how-you-invoke-it* differs.
+
+> **⚠️ AI: resolve placeholders before executing.** Replace `[PROJECT_BASE]` and `[SKILL_DIR]` with actual paths:
+>
+> | Client | `[SKILL_DIR]` (Mac/Linux) | `[SKILL_DIR]` (Windows) |
+> |--------|--------------------------|------------------------|
+> | Claude Code | `~/.claude/skills/review-writing` | `C:\Users\<name>\.claude\skills\review-writing` |
+> | Cursor | `~/.cursor/skills/review-writing` or project `.cursor/skills/review-writing` | `C:\Users\<name>\.cursor\skills\review-writing` |
+> | Windsurf | `~/.windsurf/skills/review-writing` | `C:\Users\<name>\.windsurf\skills\review-writing` |
+> | Other | Auto-detect (run one-liner below) | same |
+>
+**"Other" client — auto-detect SKILL_DIR** (run from anywhere; uses `zotero_manager.py` as a stable cross-mode marker):
+
+```bash
+python3 -c "
+import pathlib
+dirs = [pathlib.Path.home()/p for p in [
+    '.claude/skills/review-writing',
+    '.cursor/skills/review-writing',
+    '.windsurf/skills/review-writing',
+    '.config/opencode/skills/review-writing']]
+found = next((str(d) for d in dirs if (d/'scripts'/'zotero_manager.py').exists()), None)
+print(found if found else 'NOT FOUND — run: find ~ -name zotero_manager.py -path */review-writing/*')
+"
+```
+
+> `[PROJECT_BASE]` = location confirmed in Phase 0.1 (default: current working directory = `pathlib.Path.cwd()`).
+
+```python
+# PROJECT_BASE = project location confirmed in Phase 0.1 (default: current working directory)
+# SKILL_DIR    = directory containing this SKILL.md (see lookup table above)
+#   Claude Code: ~/.claude/skills/review-writing/   (Mac/Linux)
+#                C:\Users\<name>\.claude\skills\review-writing\  (Windows)
+#   Cursor:      ~/.cursor/skills/review-writing/   (Mac/Linux)
+#   Windsurf:    ~/.windsurf/skills/review-writing/ (Mac/Linux)
+#   Other:       the directory from which this SKILL.md was loaded
+
+python3 << 'PYEOF'
+import os, shutil, pathlib, sys, subprocess
+
+TITLE     = "[review title]"         # replace with actual title
+BASE      = pathlib.Path("[PROJECT_BASE]").expanduser().resolve()  # or pathlib.Path.cwd()
+SKILL_DIR = pathlib.Path("[SKILL_DIR]").expanduser().resolve()
+
+proj = BASE / TITLE
+for d in ["drafts", "exports", "scripts", "data", "tmp", "figures"]:
+    (proj / d).mkdir(parents=True, exist_ok=True)
+
+# Initialize figures index (needed by Phase 3 Step 3 in ALL modes)
+fig_index = proj / "figures" / "figure_index.md"
+if not fig_index.exists():
+    fig_index.write_text("# Figure Index\n\n", encoding="utf-8")
+
+# Whitelist: copy ONLY the scripts the SKILL.md workflow actively calls.
+REQUIRED_SCRIPTS = [
+    "zotero_manager.py",
+    "export_bibtex.py",
+    "matrix_manager.py",
+    "word_counter.py",
+    "citation_guard.py",
+    "validate_citations.py",
+    "check_global_citation_sequence.py",
+    "citation_utils.py",
+    "state_manager.py",  # used in Phase 2.5 None Mode (reindex subcommand only)
+]
+missing = []
+for name in REQUIRED_SCRIPTS:
+    src = SKILL_DIR / "scripts" / name
+    if not src.exists():
+        missing.append(name)
+        continue
+    shutil.copy(src, proj / "scripts" / name)
+if missing:
+    sys.exit(f"❌ Missing scripts in SKILL_DIR: {missing}. Verify SKILL_DIR={SKILL_DIR}")
+
+print(f"✅ Project created at: {proj}")
+print(f"   Copied {len(REQUIRED_SCRIPTS)} active scripts")
+
+# Git auto-checkpoint init (skip if git not available)
+if shutil.which('git'):
+    subprocess.run(['git', 'init'], cwd=str(proj), check=True)
+    gitignore = proj / '.gitignore'
+    gitignore.write_text('.DS_Store\nThumbs.db\n__pycache__/\n*.pyc\nlogs/\n*.lock\n', encoding='utf-8')
+    subprocess.run(['git', 'add', '-A'], cwd=str(proj), check=True)
+    subprocess.run(['git', 'commit', '-m', '[review] Phase 0: project initialized'], cwd=str(proj), check=True)
+    print('✅ Git repo initialized with initial commit')
+else:
+    print('ℹ️  Git not found — auto-checkpoint disabled (no rollback)')
+PYEOF
+```
+
+> **⚠️ Working directory rule:** All commands in Phase 1–4 are run from inside `[PROJECT_BASE]/[TITLE]/`.
+> After initialization: `os.chdir(proj)` in Python, or `cd "[PROJECT_BASE]/[TITLE]"` in shell.
+>
+> **Note:** Phase 0.5 only creates folder structure + copies scripts. Zotero collection tree (`--init`) is NOT run here — it runs in Phase 1 (Write Mode) or Phase 0-P Step 5 (Polish Mode).
+
+Write `[TITLE]/state.json`:
+```json
+{"phase": 0, "completed_sections": [], "zotero_root_key": ""}
+```
+
+Write `[TITLE]/outline.md`:
+```markdown
+# Review Configuration (READ THIS FILE at the start of every phase)
+
+## Parameters
+- Title: [user input]
+- Target Journal: [user input]
+- Language: [English / Chinese]
+- Reference Manager: [Zotero / None / EndNote]
+- Word Count Target: [EN: 7,000–10,000 words / CN: 15,000–20,000 chars]
+- Citation Requirements: ≥150 total (Original≥80, Review≥50, Preprint≥20)
+- Discipline: [Medical-Biomedical / CS-AI / Interdisciplinary]
+
+## Environment (filled after detection, read directly in later phases)
+- os: [Darwin / Linux / Windows]
+- git_available: [true / false]
+- pubmed_proxy: [none / http://127.0.0.1:XXXX]
+- zotero_lib_id: [numeric ID]
+- search_fallback: [paper-search-mcp (when edirect unavailable)]
+- subagent_model: [model name / same as main session]
+
+## Research Question
+- RQ / PICO: [filled after user confirms]
+
+## Outline (filled after confirmation)
+### 1. Introduction
+#### 1.1 Background
+#### 1.2 Scope
+...
+
+## Current Status
+- Phase: Phase 0 complete
+- Completed sections: none
+- Zotero root collection key: [filled after Phase 1]
+```
+
+**After writing both files, stage them into git** (so the initial commit captures the full Phase 0 state):
+```bash
+# Only if git was initialized above (git_available: true):
+cd "[PROJECT_BASE]/[TITLE]"
+git add state.json outline.md && git commit --amend --no-edit
+# This amends the "[review] Phase 0: project initialized" commit to include state.json + outline.md.
+# If git is not available → skip silently.
+```
 
 ---
 
@@ -160,14 +535,14 @@ Before any **writing / search / import / Zotero-mutating** action, ask exactly *
 > Phase 0-P begins *after* `outline.md` and `state.json` exist and scripts are copied.
 > If resuming across sessions and `outline.md` already has `os:` field → skip environment detection.
 
-### Step 0: Collect Parameters
+### Step 0: Verify Parameters (already collected in Phase 0.1)
 
-Ask the same parameters as Phase 0.1 (Write Mode):  
-title, project location, journal, language, word count target, citation requirements, reference manager mode.  
-Write to `outline.md` Parameters section.
+Phase 0.1 has already collected all parameters (title, journal, language, etc.) and Phase 0.5 has written them to `outline.md`.
+**Do NOT re-ask parameters.** Read `outline.md` Parameters section and confirm it is complete.
+If any field is missing (e.g., cross-session resume with a partial `outline.md`) → ask only the missing fields.
 
 - If `outline.md` already exists and has `os:` field → skip environment detection (already done).  
-- Otherwise → run Phase 0.2 Steps 0–2 (OS + Python version + Zotero check) before continuing.
+- Otherwise → run Phase 0.2 Steps 0–3 (OS + Python version + Git + Zotero check) before continuing.
 - **Format-specific dependency probes** (run only for the format the user is actually importing). Each probe is **machine-checked, then HALT-on-miss with explicit consent prompt** — never silently degrade:
 
   - `.docx` →
@@ -477,6 +852,8 @@ idx.write_text(json.dumps(exist, ensure_ascii=False, indent=2), encoding='utf-8'
 print(f'Imported {added} references (skipped {skipped_dup} duplicate DOI, {skipped_gid_collision} gid collision)')
 "
 
+   **Git Checkpoint:** `git add -A && git commit -m "[review] Phase 0-P: citations imported"`
+
    [Zotero] **Default: do NOT sync to Zotero yet.** Imported references stay in `data/literature_index.json`
             with original gid preserved. Zotero items will be created **per-section** as each pending section
             gets a confirmed mapping — `--add-batch` is called inside Phase 3 (rewrite/polish branch) with the
@@ -541,10 +918,12 @@ print('✅ state.json initialized for Polish Mode (phase=3)')
 "
 ```
 
+**Git Checkpoint:** `git add -A && git commit -m "[review] Phase 0-P: polish mode initialized"`
+
 Routing after Step 6:
 | Section type | Path |
 |---|---|
-| `missing` | Phase 2 (Round 1 search) → Phase 3 (write from scratch) |
+| `missing` | Phase 3 handles internally: run Phase 2 Round 1 search for this section, then write from scratch (do NOT leave Phase 3 to go back to Phase 2) |
 | `rewrite` | Phase 3 (Round 2 search optional) |
 | `polish` | Phase 3 (skip search; revise existing atomic file) |
 | `keep` | Skip entirely (already in completed_sections) |
@@ -553,329 +932,28 @@ All sections complete → Phase 4 (export + compile).
 
 ---
 
-## Phase 0: Initialization & Environment Detection
 
-**Principle:** Complete ALL checks once before any other work. Prevent mid-task failures.
+## Git Checkpoint (Reusable Pattern)
 
-### 0.1 Collect Parameters
-
-Ask all parameters at once. State defaults; user may accept silently.
-
-| Parameter | Default | Notes |
-|-----------|---------|-------|
-| Review title/topic | (required) | Used as project folder name |
-| Project location | **current working directory** | Path where `[TITLE]/` folder will be created |
-| Target journal | (required) | Affects word count and citation density |
-| Writing language | **English** | English / Chinese (Chinese: only changes writing language, same search tools) |
-| Discipline | **Medical/Biomedical** | Determines search tool priority |
-| Word count target | EN: 7,000–10,000 words / CN: 15,000–20,000 chars | |
-| Total citations | ≥150 (Original≥80, Review≥50, Preprint≥20) | |
-| Reference manager | **Zotero** | Zotero / None / EndNote |
-| Subagent model | Same as current session | AI scans available models, user confirms |
-
-**If Chinese writing selected**, notify at end of Phase 0:
-> 本技能使用 PubMed/paper-search MCP 检索英文文献。如需补充知网（CNKI）、万方等中文数据库文献，请在综述初稿完成后手动添加至 Zotero 对应章节集合（或直接引用），无需在初稿阶段处理。
-
-### 0.2 Full Environment Check
-
-Run all checks sequentially. Display ✅/❌ per item. All must be ✅ before proceeding.
-
-**Step 0: Detect OS + Python version (always — write results to outline.md)**
-```python
-python3 -c "
-import sys, platform
-ver = sys.version_info
-assert ver >= (3, 7), f'Python 3.7+ required — found {ver.major}.{ver.minor}. Upgrade at python.org'
-print(f'✅ Python {ver.major}.{ver.minor}.{ver.micro}')
-print(f'OS: {platform.system()}')  # Darwin | Linux | Windows
-"
-```
-Write `os: Darwin/Linux/Windows` to outline.md. All subsequent platform-specific commands branch on this value.
-- Python < 3.7 → abort; guide user to upgrade (python.org / `brew install python` / `winget install Python.Python.3`)
-
-**Step 1: Base dependencies (always)**
-```bash
-curl --version      # ❌ → system-level issue (Windows: curl available in PowerShell 5.1+)
-```
-
-**Step 2: Zotero (Zotero mode only)**
-```python
-# Desktop app installed? (cross-platform)
-python3 -c "
-import platform, pathlib, sys
-s = platform.system()
-paths = {
-  'Darwin':  pathlib.Path('/Applications/Zotero.app'),
-  'Linux':   pathlib.Path('/usr/bin/zotero'),
-  'Windows': pathlib.Path(r'C:/Program Files/Zotero/Zotero.exe'),
-}
-p = paths.get(s)
-print('✅ Zotero found' if p and p.exists() else f'❌ Zotero not found at {p}')
-"
-
-# PyZotero library
-python3 -c "import pyzotero; print('✅')" 2>/dev/null || echo "❌ run: pip install pyzotero"
-```
-
-**Step 3: PubMed edirect (Medical/Bio discipline)**
-```python
-# edirect detection (cross-platform)
-python3 -c "
-import shutil, platform
-if shutil.which('esearch'):
-    print('✅ edirect found')
-elif platform.system() == 'Windows':
-    print('❌ edirect not available on native Windows')
-    print('   Options: (1) install WSL then run edirect inside WSL bash')
-    print('            (2) skip edirect → use paper-search MCP as primary tool')
-else:
-    print('❌ edirect not installed')
-"
-```
-If missing (Mac/Linux — run in bash):
-```bash
-sh -c "$(curl -fsSL https://ftp.ncbi.nlm.nih.gov/entrez/entrezdirect/install-edirect.sh)"
-source ~/.bashrc  # or ~/.zshrc
-```
-If missing (Windows) → install WSL (`wsl --install` in PowerShell as Admin), then install edirect inside WSL; or auto-fallback to paper-search MCP (write `search_fallback: paper-search-mcp` to outline.md).
-
-**Step 4: Proxy + PubMed connectivity**
-```bash
-PUBMED_TEST="https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=test"
-DIRECT=$(curl -s --max-time 4 "$PUBMED_TEST" 2>/dev/null | grep -c "Count" || echo 0)
-PROXY_PORT=""
-if [ "$DIRECT" -eq 0 ]; then
-  for port in 7897 7890 1080 8080 8888; do
-    R=$(curl -s --proxy "http://127.0.0.1:$port" --max-time 4 "$PUBMED_TEST" 2>/dev/null | grep -c "Count" || echo 0)
-    if [ "$R" -gt 0 ]; then PROXY_PORT=$port; break; fi
-  done
-fi
-# → write to outline.md: pubmed_proxy: none / http://127.0.0.1:XXXX
-# → if both fail: fallback to paper-search MCP, notify user
-```
-
-**Step 5: NCBI API Key (optional, improves rate limit)**
-```bash
-echo ${NCBI_API_KEY:-"not set (rate limit 3 req/s; recommended to set)"}
-# To set: export NCBI_API_KEY=your_key >> ~/.bashrc
-```
-
-**Step 6: paper-search MCP availability**
-```
-Check if tool list includes search_pubmed / search_arxiv:
-  ✅ → paper-search MCP available
-  ❌ → PubMed CLI only; inform user they may optionally configure paper-search MCP
-```
-
-**Step 7: Required scripts exist (always — verify SKILL_DIR is correct first)**
-```python
-python3 -c "
-import pathlib, sys
-# SKILL_DIR common locations:
-#   Claude Code:  ~/.claude/skills/review-writing/
-#   Cursor:       ~/.cursor/skills/review-writing/  (or project .cursor/skills/)
-#   Windsurf:     ~/.windsurf/skills/review-writing/
-#   Other:        the directory from which this SKILL.md was loaded
-skill_dir = pathlib.Path('[SKILL_DIR]')  # AI substitutes actual path
-required = ['zotero_manager.py','export_bibtex.py',
-            'matrix_manager.py','word_counter.py','citation_guard.py',
-            'validate_citations.py','check_global_citation_sequence.py',
-            'citation_utils.py','state_manager.py']  # keep aligned with Phase 0.5 REQUIRED_SCRIPTS
-missing = [s for s in required if not (skill_dir/'scripts'/s).exists()]
-if missing:
-    print(f'❌ Missing scripts: {missing}')
-    print(f'   Check SKILL_DIR is correct: {skill_dir}')
-    sys.exit(1)
-print(f'✅ All {len(required)} required scripts found in {skill_dir}/scripts/')
-"
-```
-If any script is missing → abort; verify SKILL_DIR path or re-install the skill.
-
-### 0.3 Zotero First-Time Setup (Zotero mode only)
-
-Note: PyZotero uses **Zotero Web API** (cloud). Desktop app does NOT need to run during API operations — but install it for local sync of created items.
-
-**Step-by-step guide (show this to user if they haven't done it before):**
-
-```
-① Register / log in
-   → https://www.zotero.org/user/register  (if no account)
-   → https://www.zotero.org/user/login
-
-② Get your Library ID (numeric user ID)
-   → https://www.zotero.org/settings
-   → Scroll to the bottom of the page
-   → Look for: "Your user ID for use in API calls is: [NUMBER]"
-   → Copy that number — this is your lib_id
-
-③ Create an API key
-   → https://www.zotero.org/settings/keys
-   → Click "Create new private key"
-   → Key Description: e.g. "review-writing-skill"
-   → Permissions — check ALL of the following:
-       ✅ Allow library access
-       ✅ Allow write access           ← required for creating items/collections
-       ✅ Allow notes access           ← required for abstract child notes
-       ✅ Allow file access            ← required for PDF attachments
-   → Click "Save Key"
-   → Copy the generated key immediately (shown only once)
-
-④ Test connection
-   python3 scripts/zotero_manager.py --status --lib-id [NUMBER] --api-key [KEY]
-   Expected output: ✅ Connected to Zotero library ...
-
-⑤ Security rules
-   - Write lib_id to outline.md (safe, not secret)
-   - NEVER write api_key to any file — ask user at each new session start
-   - If 403 Forbidden error: re-ask user for api_key; re-run --status before continuing
-```
-
-If `--status` lists multiple libraries (personal + group), show the list and ask user which to use. Write chosen `lib_id` to `outline.md`.
-
-### 0.4 Subagent Model Detection
-
-```
-1. List all models available in current AI client
-2. Present list to user
-3. Ask: which model for subagent tasks? (default: same as current session)
-4. Write choice to outline.md: subagent_model: <name>
-```
-
-### 0.5 Initialize Project Files
-
-After all checks pass. All file operations use **Python** (cross-platform: Mac/Linux/Windows).
-
-> **Cross-platform shell note:** the `python3 << 'PYEOF' ... PYEOF` block below uses bash
-> heredoc syntax (works in bash/zsh/WSL). On native Windows PowerShell or CMD, save the
-> body between `PYEOF` markers to `_init.py` and run `python _init.py` instead — same effect.
-> The Python code itself is platform-agnostic; only the *how-you-invoke-it* differs.
-
-> **⚠️ AI: resolve placeholders before executing.** Replace `[PROJECT_BASE]` and `[SKILL_DIR]` with actual paths:
->
-> | Client | `[SKILL_DIR]` (Mac/Linux) | `[SKILL_DIR]` (Windows) |
-> |--------|--------------------------|------------------------|
-> | Claude Code | `~/.claude/skills/review-writing` | `C:\Users\<name>\.claude\skills\review-writing` |
-> | Cursor | `~/.cursor/skills/review-writing` or project `.cursor/skills/review-writing` | `C:\Users\<name>\.cursor\skills\review-writing` |
-> | Windsurf | `~/.windsurf/skills/review-writing` | `C:\Users\<name>\.windsurf\skills\review-writing` |
-> | Other | Auto-detect (run one-liner below) | same |
->
-**"Other" client — auto-detect SKILL_DIR** (run from anywhere; uses `zotero_manager.py` as a stable cross-mode marker):
+After every `state.json` update, run this block if `git_available: true` in `outline.md`:
 
 ```bash
-python3 -c "
-import pathlib
-dirs = [pathlib.Path.home()/p for p in [
-    '.claude/skills/review-writing',
-    '.cursor/skills/review-writing',
-    '.windsurf/skills/review-writing',
-    '.config/opencode/skills/review-writing']]
-found = next((str(d) for d in dirs if (d/'scripts'/'zotero_manager.py').exists()), None)
-print(found if found else 'NOT FOUND — run: find ~ -name zotero_manager.py -path */review-writing/*')
-"
+git add -A && git commit -m "[review] <MESSAGE>" --allow-empty-message 2>/dev/null || true
 ```
 
-> `[PROJECT_BASE]` = location confirmed in Phase 0.1 (default: current working directory = `pathlib.Path.cwd()`).
+If git not available → skip silently. If nothing to commit (`git status` clean) → skip silently (`|| true` handles this).
+AI: substitute `<MESSAGE>` with the checkpoint description. Format: `[review] Phase X.Step: <description>`.
 
-```python
-# PROJECT_BASE = project location confirmed in Phase 0.1 (default: current working directory)
-# SKILL_DIR    = directory containing this SKILL.md (see lookup table above)
-#   Claude Code: ~/.claude/skills/review-writing/   (Mac/Linux)
-#                C:\Users\<name>\.claude\skills\review-writing\  (Windows)
-#   Cursor:      ~/.cursor/skills/review-writing/   (Mac/Linux)
-#   Windsurf:    ~/.windsurf/skills/review-writing/ (Mac/Linux)
-#   Other:       the directory from which this SKILL.md was loaded
-
-python3 << 'PYEOF'
-import os, shutil, pathlib, sys
-
-TITLE     = "[review title]"         # replace with actual title
-BASE      = pathlib.Path("[PROJECT_BASE]").expanduser().resolve()  # or pathlib.Path.cwd()
-SKILL_DIR = pathlib.Path("[SKILL_DIR]").expanduser().resolve()
-
-proj = BASE / TITLE
-for d in ["drafts", "exports", "scripts", "data", "tmp", "figures"]:
-    (proj / d).mkdir(parents=True, exist_ok=True)
-
-# Initialize figures index (needed by Phase 3 Step 3 in ALL modes)
-fig_index = proj / "figures" / "figure_index.md"
-if not fig_index.exists():
-    fig_index.write_text("# Figure Index\n\n", encoding="utf-8")
-
-# Whitelist: copy ONLY the scripts the SKILL.md workflow actively calls.
-# This avoids polluting the project with legacy/dead scripts (setup_review_project.py,
-# scope_manager.py, tag_literature_sections.py, final_consistency_check.py,
-# preflight_review_project.py, run_section_cycle.py) that reference an older file
-# layout (storyline.md / progress.json / project_info.md) and would mislead users.
-REQUIRED_SCRIPTS = [
-    "zotero_manager.py",
-    "export_bibtex.py",
-    "matrix_manager.py",
-    "word_counter.py",
-    "citation_guard.py",
-    "validate_citations.py",
-    "check_global_citation_sequence.py",
-    "citation_utils.py",
-    "state_manager.py",  # used in Phase 2.5 None Mode (reindex subcommand only)
-]
-missing = []
-for name in REQUIRED_SCRIPTS:
-    src = SKILL_DIR / "scripts" / name
-    if not src.exists():
-        missing.append(name)
-        continue
-    shutil.copy(src, proj / "scripts" / name)
-if missing:
-    sys.exit(f"❌ Missing scripts in SKILL_DIR: {missing}. Verify SKILL_DIR={SKILL_DIR}")
-
-print(f"✅ Project created at: {proj}")
-print(f"   Copied {len(REQUIRED_SCRIPTS)} active scripts (legacy/dead scripts skipped)")
-PYEOF
-```
-
-> **⚠️ Working directory rule:** All commands in Phase 1–4 are run from inside `[PROJECT_BASE]/[TITLE]/`.
-> After initialization: `os.chdir(proj)` in Python, or `cd "[PROJECT_BASE]/[TITLE]"` in shell.
->
-> **Note:** Phase 0.5 only creates folder structure + copies scripts. Zotero collection tree (`--init`) is NOT run here — it runs in Phase 1 (Write Mode) or Phase 0-P Step 5 (Polish Mode).
-
-Write `[TITLE]/state.json`:
-```json
-{"phase": 0, "completed_sections": [], "zotero_root_key": ""}
-```
-
-Write `[TITLE]/outline.md`:
-```markdown
-# Review Configuration (READ THIS FILE at the start of every phase)
-
-## Parameters
-- Title: [user input]
-- Target Journal: [user input]
-- Language: [English / Chinese]
-- Reference Manager: [Zotero / None / EndNote]
-- Word Count Target: [EN: 7,000–10,000 words / CN: 15,000–20,000 chars]
-- Citation Requirements: ≥150 total (Original≥80, Review≥50, Preprint≥20)
-- Discipline: [Medical-Biomedical / CS-AI / Interdisciplinary]
-
-## Environment (filled after detection, read directly in later phases)
-- os: [Darwin / Linux / Windows]
-- pubmed_proxy: [none / http://127.0.0.1:XXXX]
-- zotero_lib_id: [numeric ID]
-- search_fallback: [paper-search-mcp (when edirect unavailable)]
-- subagent_model: [model name / same as main session]
-
-## Research Question
-- RQ / PICO: [filled after user confirms]
-
-## Outline (filled after confirmation)
-### 1. Introduction
-#### 1.1 Background
-#### 1.2 Scope
-...
-
-## Current Status
-- Phase: Phase 0 complete
-- Completed sections: none
-- Zotero root collection key: [filled after Phase 1]
-```
+| Checkpoint location | Commit message |
+|---------------------|----------------|
+| Phase 0.5 (in init script) | `[review] Phase 0: project initialized` |
+| Phase 1 Step 7 | `[review] Phase 1: outline confirmed` |
+| Phase 2 per-section Step 8 | `[review] Phase 2: section X.X search complete` |
+| Phase 2.5 (after dedup) | `[review] Phase 2.5: dedup + global ID assigned` |
+| Phase 3 per-section Step 8 | `[review] Phase 3: section X.X draft complete (score: N.N)` |
+| Phase 4 Step 7 | `[review] Phase 4: export finalized` |
+| Phase 0-P Step 5 (after substep 3) | `[review] Phase 0-P: citations imported` |
+| Phase 0-P Step 6 (after state init) | `[review] Phase 0-P: polish mode initialized` |
 
 ---
 
@@ -884,12 +962,12 @@ Write `[TITLE]/outline.md`:
 **Start: Read `outline.md` + `state.json`. If state.json shows phase≥1, skip.**
 **Polish Mode: if `state.json` contains `"mode": "polish"`, skip Phase 1 entirely — go to Phase 3.**
 
-1. Propose "Funnel" Introduction + "Thematic" Body structure.
-2. Confirm outline with user (≤2 hierarchy levels). Update `outline.md`.
-3. Define RQ/PICO with user. Write to `outline.md`.
-4. **Zotero mode:** `python3 scripts/zotero_manager.py --init --title "[TITLE]" --outline outline.md --lib-id LIB_ID --api-key API_KEY`
+1. **Propose outline structure:** "Funnel" Introduction + "Thematic" Body structure.
+2. **Confirm outline with user** (≤2 hierarchy levels). Update `outline.md`.
+3. **Define RQ/PICO** with user. Write to `outline.md`.
+4. **Initialize Zotero collections (Zotero mode):** `python3 scripts/zotero_manager.py --init --title "[TITLE]" --outline outline.md --lib-id LIB_ID --api-key API_KEY`
    - Creates root collection + subcollections matching outline hierarchy.
-5. **None mode:** Initialize required index files:
+5. **Initialize index files (None mode):**
    ```python
 python3 -c "
 import json, pathlib
@@ -904,7 +982,7 @@ if not fig.exists():
 print('✅ Index files initialized')
 "
    ```
-6. Update `state.json`:
+6. **Update state.json:**
    ```python
 python3 -c "
 import json, pathlib
@@ -915,6 +993,7 @@ s.write_text(json.dumps(state, indent=2), encoding='utf-8')
 print('✅ state.json updated to phase 1')
 "
    ```
+7. **Git Checkpoint:** `git add -A && git commit -m "[review] Phase 1: outline confirmed"`
 
 **HALT. Wait for user to confirm outline before Phase 2.**
 
@@ -950,7 +1029,7 @@ for each section in outline.md (e.g., section ID = "2.1"):
      # Safe: dedup-at-write-time — same paper across sections creates ONE Zotero item,
      # linked to multiple section collections; gid:N assigned at first creation and never changes.
      # --add-batch already writes to --index (literature_index.json); do NOT append separately.
-  5. [None]   Append to data/literature_index.json (auto-increment global_id, dedup by DOI):
+  5. [None/EndNote]   Append to data/literature_index.json (auto-increment global_id, dedup by DOI):
      ```python
 python3 -c "
 import json, pathlib
@@ -991,7 +1070,7 @@ print(f'Added {added} papers ({len(new_papers)-added} duplicates merged); total 
      > `"related_sections": ["2.1", "3.1", "4.1"]`
      > meaning the paper is a mechanistic anchor (2.1), a delivery-platform example (3.1), **and** a disease-mapping case (4.1).
      > Do **not** force a single-section assignment when the paper supports multiple review functions. `--add-batch` appends to `related_sections` on repeat calls (does not overwrite); Zotero side, the same item is linked to multiple section collections.
-  5b. [None] Bootstrap synthesis matrix entry for this section (auto-skips if row exists):
+  5b. [None/EndNote] Bootstrap synthesis matrix entry for this section (auto-skips if row exists):
       ```bash
       python3 scripts/matrix_manager.py bootstrap \
         --index data/literature_index.json \
@@ -1003,8 +1082,19 @@ print(f'Added {added} papers ({len(new_papers)-added} duplicates merged); total 
          --index data/literature_index.json \
          --log data/citation_guard_report.json
      If guard exits non-zero → do NOT continue to next section; fix flagged entries first.
-  7. Confirm write success → update state.json (add section to completed_sections)
-  8. Continue to next section
+  7. Confirm write success → update state.json (add section to completed_sections):
+     python3 -c "
+     import json, pathlib
+     SECTION = 'X.X'   # replace with actual section ID
+     s = pathlib.Path('state.json')
+     state = json.loads(s.read_text(encoding='utf-8'))
+     if SECTION not in state.get('completed_sections', []):
+         state.setdefault('completed_sections', []).append(SECTION)
+     s.write_text(json.dumps(state, indent=2), encoding='utf-8')
+     print(f'✅ state.json: {SECTION} → completed_sections')
+     "
+  8. Git Checkpoint: git add -A && git commit -m "[review] Phase 2: section X.X search complete"
+  9. Continue to next section
 ```
 
 **Global target:** ≥100 papers total (before dedup). If a section yields <10 papers, warn and prompt user to broaden keywords.
@@ -1018,7 +1108,7 @@ Wait for explicit "Continue" — dedup deletes duplicate Zotero entries and is i
 
 ```
 [Zotero] python3 scripts/zotero_manager.py --dedup --scope ROOT_KEY --lib-id LIB_ID --api-key API_KEY
-[None]   python3 scripts/state_manager.py reindex \
+[None/EndNote]   python3 scripts/state_manager.py reindex \
            --storyline outline.md --index data/literature_index.json \
            --matrix data/synthesis_matrix.json
 ```
@@ -1043,16 +1133,32 @@ print('✅ state.json: phase=2 (other fields preserved)')
 "
 ```
 
+**Git Checkpoint:** `git add -A && git commit -m "[review] Phase 2.5: dedup + global ID assigned"`
+
 ---
 
 ## Phase 3: Section-by-Section Writing
 
-**Each section loop: Read `outline.md` + `state.json` first. Skip completed sections.**
+**Entry: Read `outline.md` + `state.json` first. If `state.json` phase < 3 (Write Mode), update to phase=3:**
+```python
+python3 -c "
+import json, pathlib
+s = pathlib.Path('state.json')
+state = json.loads(s.read_text(encoding='utf-8'))
+if state.get('phase', 0) < 3:
+    state['phase'] = 3
+    s.write_text(json.dumps(state, indent=2), encoding='utf-8')
+    print('✅ state.json: phase=3')
+else:
+    print(f'ℹ️  phase already {state[\"phase\"]} — no update needed')
+"
+```
+**Skip completed sections (check `completed_sections` list).**
 
 **Polish Mode branch (if `state.json` contains `"mode": "polish"`):**
 ```
 Before starting any section, read state.json → pending_sections:
-  missing → this section has no draft: run Phase 2 Round 1 search first, THEN proceed to step 1 below
+  missing → no draft exists: run Round 1 search (same as Phase 2 per-section loop Steps 2-6) INLINE here, then proceed to step 1 below. Do NOT navigate back to Phase 2 — all search+write happens within this Phase 3 section loop
   rewrite → existing draft exists in drafts/section_XX_XX.md: read it as context, then fully rewrite
   polish  → existing draft exists in drafts/section_XX_XX.md: read it; fix ONLY AI-flags + thin citations;
             keep structure and arguments intact; do NOT overwrite with fresh draft
@@ -1067,16 +1173,19 @@ If pending_sections is empty → all sections complete; proceed to Phase 4.
    ```
    [Zotero] python3 scripts/zotero_manager.py --get-section "X.X" \
               --root-key ROOT_KEY --lib-id LIB_ID --api-key API_KEY
-   [None]   python3 scripts/matrix_manager.py focus --section X.X
+   [None/EndNote]   python3 scripts/matrix_manager.py focus --section X.X
             # Shows papers + existing claim bindings for this section from synthesis_matrix.json
             # Also read data/literature_index.json filtered by related_sections containing X.X
    [Polish Mode] Also read existing drafts/section_XX_XX.md (rewrite: as reference; polish: as base to edit)
    ```
 
-2. **Optional Round 2 search** (targeted, ≥5 additional papers for specific claims):
+2. **Round 2 search** (targeted, ≥5 additional papers for specific claims):
+   - **Write Mode:** triggered when Phase 2 found <10 papers for this section, or the writer identifies specific claims that lack supporting evidence during Step 4 drafting
+   - **Polish Mode `rewrite`:** RECOMMENDED — run targeted search if diagnosis flagged citations/500w < 2
+   - **Polish Mode `polish`:** only if Phase 0-P Step 3 diagnosis flagged citations/500w < 2
+   - **`keep` sections:** skip
+   - If user explicitly requests Round 2 for any section → execute regardless of above criteria
    - Add new papers same way as Phase 2 (batch add + dedup).
-   - Polish Mode `rewrite` sections: Round 2 search recommended if citation density was thin.
-   - Polish Mode `polish` sections: Round 2 search only if diagnosis flagged citation density <2/500w.
 
 3. **Figure — MANDATORY read then write:**
    a. **Read** `figures/figure_index.md` → find existing entries where `Section: [SectionID]`. If an entry exists, load its Caption and Key Message as writing context for Step 4.
@@ -1132,11 +1241,14 @@ print(f'✅ state.json updated: {SECTION} → completed_sections')
    ```
    A section must never appear in both `completed_sections` and `pending_sections` simultaneously.
 
-8. **HALT:** Output summary (content / logic / citation count / word count). Wait for "Continue".
+8. **Git Checkpoint:** `git add -A && git commit -m "[review] Phase 3: section X.X draft complete (score: N.N)"`
+
+9. **HALT:** Output summary (content / logic / citation count / word count). Wait for "Continue".
 
 ### Figure Prompt Generation
 
-For each figure in `figures/figure_index.md`, generate and save to `figures/figure_prompts.md`:
+**Trigger:** Run ONCE after ALL sections in Phase 3 are complete (all sections in `completed_sections`).
+Generate prompts for every entry in `figures/figure_index.md`. Write output to `figures/figure_prompts.md`.
 
 ```
 [FIGURE PROMPT — Figure N: <title>]
@@ -1207,7 +1319,7 @@ Write Mode has no `pending_sections` field so this gate is a no-op (no key → e
    ```
    [Zotero] python3 scripts/zotero_manager.py --export-bibtex \
               --output exports/references.bib --root-key ROOT_KEY --lib-id LIB_ID --api-key API_KEY
-   [None]   python3 scripts/export_bibtex.py \
+   [None/EndNote]   python3 scripts/export_bibtex.py \
               --input data/literature_index.json \
               --output exports/references.bib \
               --clean
@@ -1233,7 +1345,8 @@ print('✅ state.json: phase=4, completed=true (other fields preserved)')
 "
    ```
    `state.update(...)` only mutates the two listed keys; `completed_sections`, `mode`, `pending_sections`, `zotero_root_key`, `citations_imported` are preserved untouched.
-7. **Update outline.md** current status section (human-readable summary).
+7. **Git Checkpoint:** `git add -A && git commit -m "[review] Phase 4: export finalized"`
+8. **Update outline.md** current status section (human-readable summary).
 
 ---
 
@@ -1277,6 +1390,9 @@ print('✅ state.json: phase=4, completed=true (other fields preserved)')
 | Round 2 new papers | Append + dedup immediately; gid assignments updated |
 | PubMed CLI + paper-search MCP both unavailable | HALT; tell user "literature retrieval tools unavailable"; suggest: (1) install edirect: `sh <(curl https://ftp.ncbi.nlm.nih.gov/entrez/entrezdirect/install-edirect.sh)` or (2) enable paper-search MCP in client settings; do NOT fallback to websearch/tavily |
 | Round 3 / Phase 4 preprint search yields 0 new results | Skip gracefully; record `"round3_papers": 0` in state.json; do not block Phase 4 export |
+| 需要回滚到之前某个阶段 | `git log --oneline` 查看检查点 → `git reset --hard <hash>` 回滚到目标阶段（完整还原文件状态，后续 commit 可通过 `git reflog` 恢复） |
+| 需要推倒重来（reset） | `git log --oneline` 找到 `[review] Phase 0` 的 commit → `git reset --hard <hash>` → 或直接删除项目目录重新 Phase 0 |
+| Git 不可用 | 所有 checkpoint 静默跳过，不影响写作流程；建议安装 git 以获得回滚能力 |
 
 ---
 

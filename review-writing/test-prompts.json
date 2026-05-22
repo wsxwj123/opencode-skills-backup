@@ -1,17 +1,17 @@
 [
   {
     "id": 1,
-    "prompt": "我想写一篇关于「大语言模型在临床诊断决策支持中的应用」的综述，目标期刊是 Lancet Digital Health。请帮我启动项目并制定大纲。",
-    "expected": "触发 Phase 1 Setup：询问 RQ/PICO、项目名称、运行 setup_review_project.py、提出 Funnel 引言 + 主题式正文大纲、更新 storyline.md。不应直接开始写作。"
+    "prompt": "我想写一篇关于「大语言模型在临床诊断决策支持中的应用」的综述，目标期刊是 Lancet Digital Health，使用 Zotero 管理文献。",
+    "expected": "触发 Mode Handshake Gate 询问 Write/Polish Mode → 进入 Phase 0：收集参数（title, journal, language, discipline, word count, citations）→ Phase 0.2 环境检测（Python, curl, git, Zotero, edirect, proxy, MCP）→ Phase 0.5 初始化项目目录 + git init → 写 state.json + outline.md。不应直接开始写作或检索。"
   },
   {
     "id": 2,
-    "prompt": "/verify 以下段落：「多项 RCT 表明 GPT-4 在放射科报告生成中的准确性超过住院医生水平（AUC > 0.90），且在低资源地区的远程诊断中展现出显著的卫生经济学价值。此外，LLM 驱动的临床决策支持系统已被证明能够减少抗生素滥用并降低再入院率。」",
-    "expected": "触发 /verify 模式：拆解为独立论点列表 → 展示给用户确认 → 逐条串行检索（PubMed CLI → OpenAlex → paper-search MCP）→ 每条给出 PMID/DOI/期刊/年份 → 对无证据论点给出三选项（Rephrase/Downgrade/Remove）。绝不并行检索。"
+    "prompt": "我有一篇写了一半的综述草稿（PDF格式），想导入进来诊断并改进。",
+    "expected": "触发 Mode Handshake Gate → 用户选 Polish Mode → Phase 0 参数收集 + 环境检测 → Phase 0-P Step 0 收集参数 + PDF 依赖探测 → Step 1 接受草稿（pdfplumber > pypdf > pdftotext 优先级）→ Step 2 原子拆分（HALT 等用户确认 split map）→ Step 3 诊断报告（words/citations/AI-flags per section）→ Step 4 用户标注 rewrite/polish/keep → Step 5 引用导入 → Step 6 state.json 初始化 + Git Checkpoint。"
   },
   {
     "id": 3,
-    "prompt": "现在写「方法论局限性与未来方向」这一章节（Supporting Section），要求符合 Nature Reviews 风格，不使用任何 AI 常见词汇。",
-    "expected": "触发 Phase 2 写作循环：load state → 检索 ≥10 篇文献 → 填充 synthesis_matrix → 定义配图 → 按段落体写作（无 bullet points）→ Reviewer Simulator 评分 → word_counter → HALT 等待 Continue。应拒绝在一次回复中完成全部内容。"
+    "prompt": "继续写综述。现在写第 2.1 节「Delivery Systems」，要求 Nature Reviews 风格，不用 AI 常见词。",
+    "expected": "读取 outline.md + state.json → 检查 2.1 是否已在 completed_sections → Phase 3 per-section cycle: load context (Zotero/matrix_manager) → 评估是否需要 Round 2 search (citations/500w < 2) → figure_index.md 读+写 → 按段落体写作（无 bullet points, Anti-AI ban words）→ Reviewer Simulator 5维评分 (mean ≥8.0) → word_counter → 更新 state.json + Git Checkpoint → HALT 等待 Continue。"
   }
 ]
