@@ -18,7 +18,7 @@ import sys
 import argparse
 import requests
 import time
-from urllib.parse import urlparse, urljoin
+from urllib.parse import urlparse
 from typing import List, Dict, Optional, Tuple
 import json
 
@@ -50,7 +50,8 @@ class URLConverter:
             raise ValueError(f"无效的URL: {original_url}")
 
         service_url = self.SERVICES[service]
-        return urljoin(service_url, original_url)
+        # urljoin 对绝对 URL 会忽略 base，必须用字符串拼接
+        return service_url + original_url
 
     def batch_convert(self, urls: List[str], service: str = 'markdown.new') -> Dict[str, str]:
         results = {}
