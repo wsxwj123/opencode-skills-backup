@@ -127,6 +127,8 @@ Each leaf page must include:
 Project layout:
 - `project_root/project_state.json`
 - `project_root/index.json` (hierarchical TOC source)
+- `project_root/citation_registry.json` (new references added during response; see Step 2)
+- `project_root/manuscript_edit_plan.md` (ordered revision plan; see Step 5)
 - `project_root/units/000_email.json`
 - `project_root/units/*.json` (one file per comment)
 - `project_root/manuscript_units/*.json` (one section-level block per unit: heading + corresponding body text + corresponding figure captions when present)
@@ -167,6 +169,17 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
 - If `comments_docx` fails to parse (corrupt file, encoding error), abort immediately and report the exact error; do not proceed to atomization.
 - If a reviewer comment cannot be matched to any manuscript paragraph (location confidence below threshold), set `atomic_location.confidence = "low"` and mark the unit `needs_manual_revision`; do not fabricate a location.
 - Gate fix loop must not exceed **3 iterations**; if gate still fails after 3 direct JSON edits, halt and report remaining failures to the user with a list of unresolved unit IDs.
+- **AI Style Control:** English responses must avoid AI-typical phrasing patterns:
+  - Hedging overuse: "it is important to note that", "it should be noted that", "notably", "importantly"
+  - Empty appreciation: "we greatly appreciate your insightful comments", "this is an excellent suggestion"
+  - Filler phrases: "in order to", "we would like to point out that", "as the reviewer rightly noted"
+  - Structural repetition: ≥3 responses must not open with the same template sentence
+  - `risk_check.py` scans for these patterns automatically; WARN-level issues should be fixed before delivery
+- **Track Changes Awareness:**
+  - This skill generates the **response document** (point-by-point reply); it does **not** produce a track-changes version of the manuscript
+  - Track changes (Word `.docx` with revisions marked) must be done **manually** by the user using the `manuscript_edit_plan.md` as a guide
+  - `revised_excerpt_en` in each unit shows the proposed new text; the user applies these edits to the manuscript with Track Changes enabled
+  - If the user asks for a tracked-changes manuscript, explain this limitation and recommend using `manuscript_edit_plan.md` for efficient manual editing
 
 ### Domain Edge Cases
 - **Reviewer recommends acceptance without comments** ("I have no major/minor concerns"): create a single email-only response acknowledging the reviewer; do not generate an empty Major/Minor section.
@@ -182,8 +195,53 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
    - Per-reviewer breakdown: Major / Minor / General comment counts
    - Full list: reviewer × section × comment index × first 20 words of each comment
    Ask the user: "Comment parsing complete. Does this match the reviewer letter? (yes / abort / correct:N)"
-   Do not continue to step 2 until user confirms.
-2. If any comment needs additional citations, run retrieval via topic-dependent routing (life science → PubMed CLI first; CS/AI → paper-search MCP first; fallback to the other when primary yields no results). See Rules section for full routing spec.
+   Do not continue to step 1.7 until user confirms.
+
+1.7. **[Strategy Planning]** Build a rebuttal strategy table before writing any responses:
+   | Reviewer | # | Section | Strategy | Rationale | Data Needed |
+   |----------|---|---------|----------|-----------|-------------|
+   | R1 | 1 | Major | Accept | Valid concern, easy fix | None |
+   | R1 | 2 | Major | Partial | Agree on X, push back on Y | New ref for Y |
+   | R2 | 1 | Minor | Push back | Misunderstanding, cite existing evidence | None |
+
+   Strategy options:
+   - **Accept**: fully agree, will revise as requested
+   - **Partial**: agree on some points, provide evidence/rationale for others
+   - **Push back**: respectfully disagree with evidence-based justification
+   - **Acknowledge**: thank reviewer for the suggestion, explain why not adopted (e.g., scope, data limitation)
+
+   Rules:
+   - Every comment must have a strategy assignment before proceeding
+   - `Push back` requires at least one concrete evidence item (existing data, published precedent, or methodological rationale)
+   - If strategy requires new literature, flag in `Data Needed` column for Step 2
+   - Print the strategy table and ask user: "Strategy plan ready. Approve? (yes / adjust:R1.2 → Accept / abort)"
+   - Do not proceed to Step 2 until user confirms
+
+2. If any comment needs additional citations (identified in Step 1.7 `Data Needed`), run retrieval via topic-dependent routing (life science → PubMed CLI first; CS/AI → paper-search MCP first; fallback to the other when primary yields no results). See Rules section for full routing spec.
+   - After retrieval, build `citation_registry.json` in `project_root/`:
+     ```json
+     {
+       "original_ref_count": 42,
+       "entries": [
+         {
+           "ref_number": 43,
+           "title": "...",
+           "doi": "10.xxxx/...",
+           "pmid": "12345678",
+           "authors": "First A, Second B",
+           "year": 2023,
+           "journal": "...",
+           "source_provider": "pubmed-cli",
+           "source_id": "esearch:query_string",
+           "added_for_units": ["003_R1_major_01"],
+           "retrieved_at": "2024-..."
+         }
+       ]
+     }
+     ```
+   - `original_ref_count`: total references in the original manuscript (count from References section)
+   - New reference numbers must start from `original_ref_count + 1`, sequential, no gaps
+   - Each entry must record `source_provider` (e.g., `pubmed-cli`, `paper-search-mcp`) for traceability
 3. Atomize manuscript and SI into section-level units (heading + body + corresponding figure captions).
 3.5. **[User Checkpoint]** Print a summary table:
    - Total section-level units extracted (manuscript count / SI count)
@@ -250,10 +308,13 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
    - 确认后方可进入 Step 8
 
 8. Render single HTML with left hierarchical TOC + right content pane from updated atomic JSON.
-9. Run hard gate checks and HTML checks before delivery.
-   - final delivery must pass `final_content_gate.py`（**内容完整性门禁**，检查回复内容是否填写完整，与其他技能的 `citation_guard.py` 职责不同——后者做文献溯源，本技能做回复内容质量检查）:
+9. Run hard gate checks, citation checks, and HTML checks before delivery.
+   - final delivery must pass `final_content_gate.py`（**内容完整性门禁**）:
      - if any `待AI` / `AI_FILL_REQUIRED` placeholder remains, gate fails
      - `--allow-placeholder` is only for skeleton/prewrite stage, not final delivery
+   - `citation_guard.py` validates new references in `citation_registry.json`（DOI/PMID 真实性、撤稿检测）
+   - `citation_ref_tracker.py` checks citation number consistency across all units（未定义引用、编号间隙）
+   - `risk_check.py` scans for fabrication patterns + AI style issues
    - if gate fails, fix the listed units by direct JSON edits; do not generate extra fixer scripts
 10. Run final consistency report.
 11. Write checkpoint + transaction logs to `project_root/logs/`.
@@ -284,7 +345,9 @@ After manual editing of any unit JSON:
 - Consistency checker: `scripts/consistency_check.py`
 - Final consistency report: `scripts/final_consistency_report.py`
 - HTML validator: `scripts/html_format_check.py`
-- Risk phrase scan: `scripts/risk_check.py` — 支持 `--project-root` 扫描所有 unit JSON，也支持 `file` 参数扫描单文件；已集成到 pipeline
+- Risk phrase + AI style scan: `scripts/risk_check.py` — 支持 `--project-root` 扫描所有 unit JSON；检测虚构实验/统计、过度承诺、AI 式套话（hedging/appreciation/filler）、跨 unit 结构重复；已集成到 pipeline
+- Citation guard: `scripts/citation_guard.py` — 验证 `citation_registry.json` 中新增引用的真实性（CrossRef DOI 解析、PubMed PMID 验证、标题相似度 ≥0.72、撤稿检测）；`--offline` 跳过在线验证；`--fail-on-unverified` 强制失败；已集成到 pipeline
+- Citation ref tracker: `scripts/citation_ref_tracker.py` — 扫描所有 unit 中的 `[N]` 引用编号，交叉验证 `citation_registry.json` 和原始参考文献数量；检测未定义引用、孤立注册表条目、编号间隙；`--fail-on-undefined` 强制失败；已集成到 pipeline
 - ~~Legacy format checker~~: `scripts/format_check.py` — 已废弃（检查旧 3-code-block 格式），被 `html_format_check.py` 完全取代，不在 pipeline 中
 - Full HTML generator: `scripts/generate_full_html.py` — 早期独立 HTML 生成脚本，功能已被 `build_full_package.py` 吸收
 

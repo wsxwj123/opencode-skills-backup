@@ -24,7 +24,53 @@ RISK_PATTERNS = {
         r"this proves that",
         r"without any doubt",
     ],
+    "ai_hedging": [
+        r"it is important to note that",
+        r"it should be noted that",
+        r"it is worth (noting|mentioning) that",
+        r"importantly,",
+        r"notably,",
+        r"it is crucial to",
+        r"needless to say",
+    ],
+    "ai_appreciation": [
+        r"we (greatly|sincerely|deeply) (appreciate|thank)",
+        r"we are (deeply |truly )?(grateful|thankful) for",
+        r"thank you for (your )?(insightful|valuable|constructive|thoughtful) (comments?|suggestions?|feedback)",
+    ],
+    "ai_filler": [
+        r"in order to\b",
+        r"as a matter of fact",
+        r"it is worth noting that",
+        r"we would like to (point out|emphasize|highlight|note) that",
+        r"as (the reviewer )?(rightly|correctly) (pointed out|noted|observed|suggested)",
+        r"we completely agree with the reviewer",
+        r"this is (indeed )?an excellent (point|suggestion|observation)",
+    ],
 }
+
+
+def _check_structural_repetition(units: list[dict]) -> list[tuple[str, str]]:
+    """Detect cross-unit response opening repetition (>=3 same pattern)."""
+    openings: dict[str, list[str]] = {}
+    for unit in units:
+        uid = unit.get("unit_id", "")
+        response = str(unit.get("content", {}).get("response_en", "")).strip()
+        if not response:
+            continue
+        # Extract first sentence, normalize to pattern
+        first = response.split(".")[0].strip().lower() if "." in response else response[:80].strip().lower()
+        # Remove specific nouns/numbers to get structural template
+        pattern = re.sub(r"\b(figure|table|section|page|line|paragraph)\s*\d+\w*", "REF", first)
+        pattern = re.sub(r"\b(reviewer|comment)\s*#?\d+", "REVIEWER", pattern)
+        pattern = re.sub(r"\d+", "N", pattern)
+        openings.setdefault(pattern, []).append(uid)
+
+    hits: list[tuple[str, str]] = []
+    for pattern, uids in openings.items():
+        if len(uids) >= 3:
+            hits.append(("structural_repetition", f"{len(uids)} units share opening pattern: {uids[:5]}"))
+    return hits
 
 
 def scan_text(text: str) -> list[tuple[str, str]]:
@@ -50,11 +96,13 @@ def main() -> int:
         if not units_dir.exists():
             print(f"RISK_CHECK: SKIP (no units dir: {units_dir})")
             return 0
+        loaded_units = []
         for p in sorted(units_dir.glob("*.json")):
             try:
                 unit = json.loads(p.read_text(encoding="utf-8"))
             except Exception:
                 continue
+            loaded_units.append(unit)
             content = unit.get("content", {})
             combined = " ".join(
                 str(content.get(k, ""))
@@ -62,6 +110,9 @@ def main() -> int:
             )
             for cat, pat in scan_text(combined):
                 all_hits.append((unit.get("unit_id", p.name), cat, pat))
+        # Structural repetition check across units
+        for cat, msg in _check_structural_repetition(loaded_units):
+            all_hits.append(("cross-unit", cat, msg))
     elif args.file:
         text = Path(args.file).read_text(encoding="utf-8")
         for cat, pat in scan_text(text):
