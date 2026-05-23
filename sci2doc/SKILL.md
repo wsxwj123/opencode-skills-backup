@@ -26,9 +26,9 @@ The workflow is built around:
 | **2. 初始化项目** | `state_manager.py init`；验证 profile；协商章节字数目标 | profile 缺字段 → 不允许生成 docx | `### 1) Initialize Project` |
 | **3. 文献检索** | 学科路由（生命科学→PubMed CLI / CS/AI→paper-search MCP）；运行 citation_guard | guard `ok=false` → 停止写作 | `## Citation Zero-Hallucination Gate` |
 | **4. 预写门禁** | `write-cycle --chapter N` 加载跨章记忆 | 每章每节必做，不可跳过 | `### 2) Prewrite Gate` |
-| **5. 原子化写作** | 每节一个 `.md`；写完验证编号+实验映射；更新 `chapter_index.json` | 编号断裂 → 修复后才能继续 | `### 3) Atomic Subsection Writing` |
-| **6. 快照与质量门** | 节后快照；章后 self-check；humanizer 去 AI 化 | self-check 失败 → 修复 | `### 4-6)` |
-| **7. 合并导出** | merge → gate-check → generate Word | format acceptance 未通过 → 不交付 | `### 7+)` |
+| **5. 原子化写作** | 每节一个 `.md`；写完验证编号+实验映射；更新 `chapter_index.json`；原始图不可用时生成 Figure Prompt | 编号断裂 → 修复后才能继续 | `### 3) Atomic Subsection Writing` |
+| **6. 快照与质量门** | 节后快照；章后 self-check；humanizer 去 AI 化 | self-check 失败 → 修复 | `### 4) / ### 5) / ### 6)` |
+| **7. 合并导出** | merge → gate-check → generate Word | format acceptance 未通过 → 不交付 | `### 7) / ### 8) / ### 9)` |
 
 ---
 
@@ -144,6 +144,29 @@ Rules:
 - When bidirectional verification fails (`title_mismatch`|`doi_invalid_or_unresolved`|`pmid_invalid_or_unresolved`|`id_mismatch`), set `verified=false` immediately and route entry to `manual_review_queue` for manual confirmation before正文引用.
 - Unverified references must not be cited in chapter markdown.
 - Every cited entry must carry traceability fields (`source_provider` + `source_id`) and DOI/PMID whenever available.
+
+**`literature_index.json` 必需字段 schema（每条文献一个 JSON 对象，存入顶层数组）：**
+
+```json
+[
+  {
+    "id": "ref001",
+    "title": "文章完整标题（从检索结果复制，勿手写）",
+    "authors": ["Author A", "Author B"],
+    "year": 2023,
+    "journal": "Journal Name",
+    "doi": "10.xxxx/xxxxx",
+    "pmid": "12345678",
+    "source_provider": "pubmed-cli",
+    "source_id": "12345678",
+    "chapter": 2,
+    "verified": false
+  }
+]
+```
+
+字段规则：`source_provider` 只允许 `"pubmed-cli"` 或 `"paper-search"`；`doi`/`pmid` 至少填一个；`verified` 初始为 `false`，citation_guard 通过后由脚本置 `true`；`chapter` 为该文献首次引用的章节号；未知字段填空字符串，**严禁填写推测值**。
+
 - Source provider policy is strict:
   - Allowed: `pubmed-cli` (life science primary, esearch/efetch/einfo，~/edirect/，需 < /dev/null，代理 http://127.0.0.1:7897), `paper-search` (CS/AI primary / fallback / preprints: arXiv/bioRxiv).
   - Forbidden: `websearch`, `openalex-cli` (pyalex), `tavily` provider entries.
@@ -306,6 +329,19 @@ Before initializing any project, verify:
 - User has provided: thesis topic, research chapter count estimate, target university (or explicit consent to use CSU default).
 
 If source materials are missing or inaccessible, **stop and request them**. Do not proceed to Step 1.
+
+**SCI 论文内容提取（必做）：** 确认材料可访问后，在进入 Step 1 前，必须将 SCI 论文内容提取为可读文本：
+
+- **PDF 格式** → 使用 `/pdf` skill（`pdf-viewer:view-pdf`）逐页阅读，或在用户本地运行：
+  ```bash
+  # 使用 pdfminer 提取（无需联网）
+  python3 -c "import pdfminer.high_level; print(pdfminer.high_level.extract_text('paper.pdf'))" > paper_text.txt
+  ```
+  若 pdfminer 未安装：`pip3 install pdfminer.six`
+- **Word 格式** → 使用 `/docx` skill 或直接 Read 工具读取文件内容
+- **网络来源（DOI 可访问）** → 使用 `/fetch-everything` skill 抓取全文
+
+提取完成后，AI 应先通读全文摘要（Abstract）、结果（Results）、方法（Methods）三节，形成对实验内容的基本理解，再进入 Step 1。
 
 ### 1) Initialize Project
 
@@ -563,13 +599,19 @@ python3 scripts/abbreviation_registry.py --project-root "${save_path}" validate
 
 Before finalizing each chapter:
 
-1. Run technical self-check (word count + quality)
-2. Revise style using humanizer-zh principles:
-- avoid templated transitions
-- avoid repetitive rhetorical scaffolding
-- remove empty high-level claims
-- keep evidence-first paragraph logic
-3. Re-check quality
+1. Run technical self-check (word count + quality):
+   ```bash
+   python3 scripts/atomic_md_workflow.py --project-root "${save_path}" self-check --target "${save_path}/02_分章节文档/第N章_自动合并.docx"
+   ```
+2. Invoke the `/humanizer-zh` skill on the chapter's merged markdown. The skill rewrites the text in-place; confirm the output before saving. If `/humanizer-zh` is unavailable, manually apply the following checklist to every paragraph:
+   - [ ] **无模板化过渡句**：删除"综上所述"、"值得注意的是"、"由此可见"等空洞衔接词
+   - [ ] **无重复排比**：连续出现≥3个句式相同的句子→合并或改写
+   - [ ] **无空洞宏观主张**：每段必须有具体数据或实验结果支撑，不允许纯观点段落
+   - [ ] **证据先于结论**：数据/观测在前，解释/结论在后；不允许倒置
+   - [ ] **无破折号（——）**：改用逗号、句号或拆句
+   - [ ] **无修辞疑问/反问**：所有句子必须陈述句
+   - [ ] **无比喻/排比**：删除"如同"、"犹如"、"是…的桥梁"等表达
+3. Re-run self-check to confirm no regressions (特别检查 writing_style 类问题归零)
 4. Finalize snapshot + gate completion
 
 ## Table Contract

@@ -354,11 +354,11 @@ class TestCountWordsUnified(unittest.TestCase):
         self.assertFalse(r["success"])
         self.assertIn("不支持", r["error"])
 
-    def test_docx_rejected(self):
-        # docx 不再支持，应返回"不支持的文件类型"
+    def test_docx_nonexistent_returns_failure(self):
+        # docx 支持已添加；文件不存在时应返回失败（读取错误或依赖缺失）
         r = count_words("/nonexistent/file.docx")
         self.assertFalse(r["success"])
-        self.assertIn("不支持", r.get("error", ""))
+        self.assertTrue(r.get("error", ""), "error 字段不应为空")
 
 
 if __name__ == "__main__":

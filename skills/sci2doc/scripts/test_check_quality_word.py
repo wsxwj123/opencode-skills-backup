@@ -57,8 +57,12 @@ def _make_emu(value):
     return value  # check_word_format_compliance 直接用 int(fi) 和除法
 
 
-def _make_run(font_size_pt=None, bold=None, font_name=None):
-    """构造一个 mock Run。"""
+def _make_run(font_size_pt=None, bold=None, font_name=None, ea_font=None):
+    """构造一个 mock Run。
+
+    ea_font: 若指定，设置 _element XML mock 使 _get_east_asian_font(run) 返回该字符串；
+             若为 None，_get_east_asian_font(run) 返回 None（无东亚字体定义）。
+    """
     run = MagicMock()
     font = MagicMock()
 
@@ -71,9 +75,17 @@ def _make_run(font_size_pt=None, bold=None, font_name=None):
     font.name = font_name
 
     run.font = font
-    # _element 用于 _get_east_asian_font，默认返回 None
+
+    # _element 用于 _get_east_asian_font
     run._element = MagicMock()
-    run._element.find.return_value = None
+    if ea_font is not None:
+        rpr = MagicMock()
+        rfonts = MagicMock()
+        rfonts.get.return_value = ea_font
+        rpr.find.return_value = rfonts
+        run._element.find.return_value = rpr
+    else:
+        run._element.find.return_value = None
     return run
 
 
@@ -152,35 +164,36 @@ def _make_doc(sections=None, paragraphs=None):
 
 def _build_compliant_doc():
     """
-    构造一个完全合规的 mock 文档：
+    构造一个完全合规的 mock 文档（基于 DEFAULT_STYLE_PROFILE / CSU 标准）：
     - A4 页面 + 标准页边距
-    - Heading 1: 16pt, bold, CENTER(1), 行距 20pt, 段前 18pt, 段后 12pt
-    - Heading 2: 14pt, not bold, LEFT(0), 行距 20pt, 段前 10pt, 段后 8pt
-    - Heading 3: 12pt, not bold, LEFT(0), 行距 20pt, 段前 10pt, 段后 8pt
-    - Normal: 12pt, 行距 20pt, 首行缩进 ~240000 EMU
+    - Heading 1: 16pt, bold, CENTER(1), 行距 20pt, 段前 18pt, 段后 12pt, EA=SimHei
+    - Heading 2: 14pt, not bold, LEFT(0), 行距 20pt, 段前 10pt, 段后 8pt, EA=SimSun
+    - Heading 3: 12pt, not bold, LEFT(0), 行距 20pt, 段前 10pt, 段后 8pt, EA=SimSun
+    - Normal: 12pt, 行距 20pt, 首行缩进 ~240000 EMU, EA=SimSun
+    ea_font 参数直接驱动 _element mock，无需 @patch _get_east_asian_font。
     """
-    h1_run = _make_run(font_size_pt=16.0, bold=True, font_name='Times New Roman')
+    h1_run = _make_run(font_size_pt=16.0, bold=True, font_name='Times New Roman', ea_font='SimHei')
     h1_pf = _make_paragraph_format(
         alignment=1, line_spacing_pt_val=20.0,
         space_before_pt=18.0, space_after_pt=12.0,
     )
     h1 = _make_para("第一章 绪论", "Heading 1", runs=[h1_run], paragraph_format=h1_pf)
 
-    h2_run = _make_run(font_size_pt=14.0, bold=False, font_name='Times New Roman')
+    h2_run = _make_run(font_size_pt=14.0, bold=False, font_name='Times New Roman', ea_font='SimSun')
     h2_pf = _make_paragraph_format(
         alignment=0, line_spacing_pt_val=20.0,
         space_before_pt=10.0, space_after_pt=8.0,
     )
     h2 = _make_para("1.1 研究背景", "Heading 2", runs=[h2_run], paragraph_format=h2_pf)
 
-    h3_run = _make_run(font_size_pt=12.0, bold=False, font_name='Times New Roman')
+    h3_run = _make_run(font_size_pt=12.0, bold=False, font_name='Times New Roman', ea_font='SimSun')
     h3_pf = _make_paragraph_format(
         alignment=0, line_spacing_pt_val=20.0,
         space_before_pt=10.0, space_after_pt=8.0,
     )
     h3 = _make_para("1.1.1 国内研究现状", "Heading 3", runs=[h3_run], paragraph_format=h3_pf)
 
-    normal_run = _make_run(font_size_pt=12.0, bold=None, font_name='Times New Roman')
+    normal_run = _make_run(font_size_pt=12.0, bold=None, font_name='Times New Roman', ea_font='SimSun')
     normal_pf = _make_paragraph_format(
         alignment=None, line_spacing_pt_val=20.0,
         first_line_indent=240000,
@@ -200,8 +213,7 @@ def _build_compliant_doc():
 class TestValidDocument(unittest.TestCase):
     """1. 合规文档应零 issue。"""
 
-    @patch('check_quality._get_east_asian_font', return_value='SimHei')
-    def test_compliant_doc_no_issues(self, mock_ea):
+    def test_compliant_doc_no_issues(self):
         doc = _build_compliant_doc()
         issues = check_word_format_compliance(doc)
         self.assertEqual(len(issues), 0, f"Expected 0 issues, got: {issues}")
