@@ -74,6 +74,7 @@ license: Proprietary
   - **句法层 (Syntactic)**：主动/被动语态交替使用，但同一段落内被动不超过 30%。将因果从句拆为独立句，或将并列短句合并为复合句——视上下文节奏需要而定。禁止模板化过渡（"Furthermore, ... In addition, ... Moreover, ..."），改用逻辑内嵌（将因果关系编织进主句而非用连接词外挂）。
   - **结构层 (Structural)**：允许调整同一段落内论点的呈现顺序（在不破坏逻辑链的前提下）。将"先总后分"改为"先证据后结论"，或反之——打破 AI 偏好的固定叙事模板。适度插入作者视角的判断句（如 "This likely reflects..."、"One plausible explanation is..."），模拟真人推理痕迹。
 - **自我审查**：在输出任何段落前，必须在后台隐式运行 `humanizer-zh` 的检查清单 + P/B 节奏自检（句长方差是否足够、段首句式是否重复、被动语态占比是否超标）。
+- **学科语感适配**：各领域配置文件 `configs/*.json` 中的 `writing_style` 字段定义了学科特定的语态偏好、推荐/避免动词、过渡短语和句长范围。写作时必须读取当前研究方向的 `writing_style` 并遵循；若未配置则使用通用 Anti-AI 规则。
 
 ---
 
@@ -291,7 +292,13 @@ license: Proprietary
 ### Phase 2: 故事脉络构建 (`/storyline`)
 构建融合Results与Discussion的提纲。
 
-> **[用户确认检查点 Mandatory]** 展示 storyline 草稿（章节标题、核心论点、关键图序），等待用户明确确认后才进入 Phase 3。禁止在故事线未确认的情况下启动文献检索。
+**引用密度预估（Mandatory）**：storyline 确认前，必须为每个小节标注预估引用数量：
+- Introduction 各段：背景段 1-2 篇，Gap 段 3-5 篇，创新点段 2-3 篇
+- Results+Discussion 融合段：Key Section 3-5 篇，Supporting Section 1-2 篇
+- Methods：0-5 篇（仅方法学原始文献）
+- 预估总数写入 storyline 输出表格，作为 Phase 3 检索目标
+
+> **[用户确认检查点 Mandatory]** 展示 storyline 草稿（章节标题、核心论点、关键图序、**各节预估引用数**），等待用户明确确认后才进入 Phase 3。禁止在故事线未确认的情况下启动文献检索。
 
 ### Phase 3: 文献检索 (`/literature`)
 分阶段检索（Phase 1核心，Phase 2写作时实时补充）。
@@ -314,6 +321,24 @@ license: Proprietary
 5. **脚本硬门禁**：`sync-literature --apply` 与 `write-cycle --finalize --sync-literature --sync-apply` 默认强制执行”矩阵重编号校验”；缺失矩阵或分配不完整将直接阻断落盘（仅调试可用 `--no-require-matrix-reindex` 临时放行）。
 
 > **[用户确认检查点 Mandatory]** 展示文献矩阵（小节-文献映射，含各节文献数和 citation_guard 通过状态），等待用户确认后才进入 Phase 4 写作。矩阵未确认禁止启动 `/write`。
+
+### Phase 3.5: 章节专用写作模板
+
+**Introduction 漏斗结构（Mandatory）**：
+Introduction 必须遵循"宽→窄→缺口→我们"的经典漏斗结构，每层对应一个独立段落：
+1. **Broad Context**（1-2段）：研究领域的宏观背景与临床/社会意义，引用 Reviews/统计报告
+2. **Narrow Focus**（1-2段）：聚焦到具体技术/策略，介绍现有代表性工作，引用 Original Articles
+3. **Gap Statement**（1段）：明确指出现有方案的关键局限，用"However / Despite / remains unclear"等过渡，引用近期文献证明局限确实存在
+4. **Our Approach**（1段）：提出本研究的策略/假设，说明为何能解决上述 Gap
+5. **Overview**（1-2句）：概括全文结构 "Herein, we..."，不展开细节
+
+**Methods 写作规范（Mandatory）**：
+Methods 有独立于 Results/Discussion 的写作要求：
+- **可重复性优先**：所有试剂必须标注厂商和货号（如 "DPPC (Avanti Polar Lipids, #850355)"）
+- **实验参数精确值**：温度、时间、浓度、转速等必须给出精确数值，禁止"适量"/"室温"等模糊表述
+- **伦理声明**：动物实验必须包含 IACUC 批号，临床样本须包含 IRB/伦理批号
+- **统计方法**：在 Methods 末段单独声明统计软件版本、检验方法和显著性阈值
+- **引用**：仅引用方法学原始论文（如 DLS 测定方法原始文献），不限年份
 
 ### Phase 4: 逐节撰写 (融合模式 + 原子化文件 + SI循环)
 
@@ -372,14 +397,25 @@ Generation rules:
 2. **即时讨论 (Discussion)**：机制解释 + 文献对比 + 意义阐述。
 3. **深度控制**：Key Section > 500词，Supporting Section ~200词。
 
+### Phase 4.5: 摘要撰写 (`/abstract`)
+**时机**：全部正文章节完成后、质量控制前。Abstract 是全文的压缩精华，必须最后写。
+**结构**（严格遵循目标期刊 word limit，默认 ≤250 词）：
+1. **Background**（1-2句）：研究背景与未解决问题
+2. **Methods**（1-2句）：核心方法/策略概述
+3. **Results**（3-4句）：关键定量结果（必须含具体数值）
+4. **Conclusion**（1-2句）：核心结论与意义
+**禁止**：不引用文献 `[n]`；不使用缩写（首次出现须全称）；不出现"significantly"等无定量支撑的空话。
+**输出文件**：`manuscripts/01_Abstract.md`
+
 ### Phase 5: 质量控制 (`/check`)
 **执行命令**：
 1. `python scripts/state_manager.py stats` — 检查各节字数
 2. `python scripts/state_manager.py sync-literature --dry-run --strict-references` — 扫描正文引用号与 `literature_index.json` 是否一致
 3. `python scripts/citation_guard.py --index literature_index.json --report citation_guard_report.json --offline` — 离线核验文献完整性
+4. `python scripts/style_checker.py --manuscript-dir manuscripts --report style_check_report.json --threshold 70` — 去AI风格检测（句长方差、被动语态、禁词、段首重复）
 
-**质量标准**：Key Section ≥500词且引用≥3条；Supporting Section ≥200词。
-**阻断条件**：字数不足 → 指出具体章节，等待补写；引用冲突 → 重跑 `sync-literature --apply` 后再检查。
+**质量标准**：Key Section ≥500词且引用≥3条；Supporting Section ≥200词；style_checker 评分 ≥70。
+**阻断条件**：字数不足 → 指出具体章节，等待补写；引用冲突 → 重跑 `sync-literature --apply` 后再检查；style_checker 不达标 → 列出具体问题，逐段修改后重检。
 
 ### Phase 6: 审稿人模拟 (`/reviewer`)
 **Storyline 阶段**：逻辑自检（假设→方法→结论链完整性）。
@@ -415,7 +451,8 @@ Generation rules:
 | `/storyline` | 构建提纲 | 自动规划融合式章节 |
 | `/literature` | 文献检索 | - |
 | `/write` | 撰写章节 | **章节局部读取 + 自我修正 + 智能快照** |
-| `/check` | 质量检查 | - |
+| `/abstract` | 撰写摘要 | 全文完成后最后写，≤250词，含定量结果 |
+| `/check` | 质量检查 | 含 style_checker 去AI检测 |
 | `/reviewer` | 审稿人模拟 | - |
 | `/snapshot` | 手动快照 | AI也会智能触发 |
 | `/rollback` | 版本回滚 | - |
@@ -505,13 +542,16 @@ python scripts/state_manager.py set-field --field drug_delivery
 
 ---
 
-**版本**: 2.16.2
+**版本**: 2.17.0
 **更新**:
-1. **研究方向配置系统**: 延续多领域配置文件支持
-2. **配置管理器**: 保留 config_manager.py 与 set-field 工作流
-3. **文献核验收紧**: 新增 provider 白名单、Tavily no-identifier 人工复核、双向核验失败强制阻断
-4. **协议澄清**: 明确状态仪表盘默认内部维护，只有用户点名要求审计日志时才显式渲染
-5. **文档对齐**: 将 manual_review_queue / provider policy / unverified 禁用规则写入主文档与速查卡
+1. **citation_guard 增强**: DOI→标题/PMID→标题逐源交叉验证，年份合理性校验，防止拼接幻觉
+2. **style_checker.py 新增**: 句长方差/被动语态/禁词/段首重复/列点检测，量化去AI评分
+3. **Introduction 漏斗模板**: 强制 Broad→Narrow→Gap→Our Approach→Overview 五层结构
+4. **Methods 写作规范**: 试剂货号、精确参数、伦理声明、统计方法独立声明
+5. **Phase 4.5 /abstract**: 独立摘要撰写阶段，全文完成后最后写
+6. **Phase 2 引用预估**: storyline 确认前必须标注各节预估引用数量
+7. **学科语感配置**: configs 增加 writing_style 字段（语态/推荐动词/句长范围/领域备注）
+8. **Phase 5 集成 style_checker**: 质量控制增加去AI风格检测，评分≥70方可通过
 
 ---
 

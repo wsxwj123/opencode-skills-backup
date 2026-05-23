@@ -96,5 +96,14 @@
     "results": [2500, 5000],
     "discussion": [1500, 3000],
     "conclusion": [150, 400]
+  },
+  "writing_style": {
+    "voice": "first_person_plural_active",
+    "passive_ratio_max": 0.20,
+    "preferred_verbs": ["propose", "introduce", "evaluate", "outperform", "leverage", "ablate"],
+    "avoid_verbs": ["utilize", "employ"],
+    "transition_patterns": ["To this end,", "Specifically,", "In contrast,", "Empirically,"],
+    "typical_sentence_length_range": [10, 30],
+    "field_specific_notes": "CS领域偏好主动语态和第一人称复数(We propose/We evaluate)；方法描述简洁直接；实验段重视baseline对比和ablation study；避免生物医药式的被动堆砌"
   }
 }
