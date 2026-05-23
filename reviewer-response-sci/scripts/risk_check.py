@@ -9,6 +9,7 @@ import re
 import sys
 from pathlib import Path
 
+# Categories prefixed with "ai_" are only applied to comment units, not email units.
 RISK_PATTERNS = {
     "fabricated_experiment": [
         r"we (have )?conducted additional experiments",
@@ -49,6 +50,9 @@ RISK_PATTERNS = {
     ],
 }
 
+AI_STYLE_CATEGORIES = {"ai_hedging", "ai_appreciation", "ai_filler"}
+FABRICATION_CATEGORIES = {"fabricated_experiment", "fabricated_statistics"}
+
 
 def _check_structural_repetition(units: list[dict]) -> list[tuple[str, str]]:
     """Detect cross-unit response opening repetition (>=3 same pattern)."""
@@ -73,9 +77,11 @@ def _check_structural_repetition(units: list[dict]) -> list[tuple[str, str]]:
     return hits
 
 
-def scan_text(text: str) -> list[tuple[str, str]]:
+def scan_text(text: str, *, skip_ai_style: bool = False) -> list[tuple[str, str]]:
     hits: list[tuple[str, str]] = []
     for category, patterns in RISK_PATTERNS.items():
+        if skip_ai_style and category in AI_STYLE_CATEGORIES:
+            continue
         for pattern in patterns:
             if re.search(pattern, text, flags=re.IGNORECASE):
                 hits.append((category, pattern))
@@ -97,21 +103,28 @@ def main() -> int:
             print(f"RISK_CHECK: SKIP (no units dir: {units_dir})")
             return 0
         loaded_units = []
+        comment_units = []
         for p in sorted(units_dir.glob("*.json")):
             try:
                 unit = json.loads(p.read_text(encoding="utf-8"))
             except Exception:
                 continue
             loaded_units.append(unit)
+            is_email = unit.get("section") == "email" or "email" in str(unit.get("unit_id", "")).lower()
+            if not is_email:
+                comment_units.append(unit)
             content = unit.get("content", {})
-            combined = " ".join(
-                str(content.get(k, ""))
-                for k in ["response_en", "revised_excerpt_en"]
-            )
-            for cat, pat in scan_text(combined):
+            response_en = str(content.get("response_en", ""))
+            revised_en = str(content.get("revised_excerpt_en", ""))
+            # Fabrication patterns only scan response_en (revised_excerpt naturally contains stats from manuscript)
+            for cat, pat in scan_text(response_en, skip_ai_style=is_email):
                 all_hits.append((unit.get("unit_id", p.name), cat, pat))
-        # Structural repetition check across units
-        for cat, msg in _check_structural_repetition(loaded_units):
+            # AI style + overpromise also scan revised_excerpt (but NOT fabrication categories)
+            for cat, pat in scan_text(revised_en, skip_ai_style=is_email):
+                if cat not in FABRICATION_CATEGORIES:
+                    all_hits.append((unit.get("unit_id", p.name), cat, pat))
+        # Structural repetition check across comment units only
+        for cat, msg in _check_structural_repetition(comment_units):
             all_hits.append(("cross-unit", cat, msg))
     elif args.file:
         text = Path(args.file).read_text(encoding="utf-8")
@@ -122,11 +135,26 @@ def main() -> int:
         for cat, pat in scan_text(text):
             all_hits.append(("stdin", cat, pat))
 
-    if all_hits:
-        print("RISK_CHECK: WARN")
-        for source, category, pattern in all_hits:
+    # Separate hard risks (pipeline-blocking) from soft risks (warn-only)
+    HARD_CATEGORIES = {"fabricated_experiment", "fabricated_statistics"}
+    hard_hits = [(s, c, p) for s, c, p in all_hits if c in HARD_CATEGORIES]
+    soft_hits = [(s, c, p) for s, c, p in all_hits if c not in HARD_CATEGORIES]
+
+    if hard_hits:
+        print("RISK_CHECK: FAIL (hard risk detected)")
+        for source, category, pattern in hard_hits:
             print(f"- [{source}] {category}: matched /{pattern}/")
+        if soft_hits:
+            print("Additional warnings:")
+            for source, category, pattern in soft_hits:
+                print(f"- [{source}] {category}: matched /{pattern}/")
         return 1
+
+    if soft_hits:
+        print("RISK_CHECK: WARN (non-blocking)")
+        for source, category, pattern in soft_hits:
+            print(f"- [{source}] {category}: matched /{pattern}/")
+        return 0
 
     print("RISK_CHECK: PASS")
     return 0
