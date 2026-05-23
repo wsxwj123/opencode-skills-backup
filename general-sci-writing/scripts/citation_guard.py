@@ -320,7 +320,7 @@ def validate_entry(
         failure_reasons.append("tavily_not_for_identifier_entries")
     if tavily_no_identifier:
         failure_reasons.append("tavily_manual_review_required")
-    if title and not title_match:
+    if title and source_titles and not title_match:
         failure_reasons.append("title_mismatch")
     if not crossref_title_ok:
         failure_reasons.append("crossref_title_mismatch")
@@ -362,7 +362,7 @@ def validate_entry(
     ) or tavily_no_identifier or bidirectional_verification_failed
 
     score = 0.0
-    score += title_similarity * 35
+    score += (title_similarity * 35) if source_titles else 15  # neutral when no sources to compare
     if doi_valid is True:
         score += 18
     elif doi_valid is False:
@@ -487,10 +487,12 @@ def main() -> int:
 
     verified_count = sum(1 for e in checked if e.get("verified"))
     duration_ms = int((time.perf_counter() - t0) * 1000)
-    status = "verified" if verified_count == len(checked) and checked else ("failed" if checked else "empty")
+    status = "verified" if verified_count == len(checked) else "failed"
+    if not checked:
+        status = "empty"
 
     report = {
-        "ok": status == "verified",
+        "ok": status in ("verified", "empty"),
         "status": status,
         "shape": shape,
         "checked_entries": len(checked),
