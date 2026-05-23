@@ -708,7 +708,7 @@ def atomize_docx_units(docx_path: Path, out_dir: Path, prefix: str) -> list[dict
 
             fig_refs: list[str] = []
             for txt in combined_parts:
-                fig_refs.extend([m.group(0) for m in re.finditer(r"(?:Figure|Fig\\.?)[ ]*S?\\d+[A-Za-z]?|\\bS\\d+[A-Za-z]?\\b", txt, flags=re.IGNORECASE)])
+                fig_refs.extend([m.group(0) for m in re.finditer(r"(?:Figure|Fig\.?)[ ]*S?\d+[A-Za-z]?|\bS\d+[A-Za-z]?\b", txt, flags=re.IGNORECASE)])
 
             seen_refs: set[str] = set()
             anchors: list[str] = []
@@ -920,7 +920,7 @@ def build_comment_unit(order: int, row: CommentPair, src: dict[str, str], m_unit
         )
     )
 
-    actions = [{"action": "修改", "reason": "【待AI填写：添加/删除/修改及原因】"}]
+    actions = [{"action_type": "修改", "target": "", "reason": "【待AI填写：添加/删除/修改及原因】"}]
 
     return {
         "unit_id": f"u-{order:03d}",
@@ -948,6 +948,7 @@ def build_comment_unit(order: int, row: CommentPair, src: dict[str, str], m_unit
             "revised_excerpt_en": "[AI_FILL_REQUIRED] Revised manuscript/SI text in English.",
             "revised_excerpt_zh": "【待AI翻译：修订后英文文本中文对应】",
             "modification_actions": actions,
+            "figure_prompt": "",
             "notes_core_zh": ["【待AI填写：🔴核心修改说明】"],
             "notes_support_zh": ["【待AI填写：🟡辅助修改说明】"],
             "evidence": {
@@ -1147,7 +1148,7 @@ def render_html(project_title: str, index_data: dict[str, Any], units: list[dict
                     anchor_sentence=quick_sentence,
                 )
                 action_list = "".join(
-                    f"<li><strong>{escape(x.get('action','修改'))}</strong>：{escape(x.get('reason',''))}</li>" for x in actions
+                    f"<li><strong>{escape(x.get('action_type', x.get('action','修改')))}</strong>：{escape(x.get('reason',''))}</li>" for x in actions
                 ) or "<li>无</li>"
                 image_required = bool(unit["content"]["evidence"].get("image_change_required", False))
                 image_block = ""
@@ -1183,7 +1184,7 @@ def render_html(project_title: str, index_data: dict[str, Any], units: list[dict
 <p><strong>Step 1 - 小节：</strong>{escape(str(quick_section))}</p>
 <p><strong>Step 2 - 段落索引：</strong>{escape(str(quick_para))}</p>
 <p><strong>Step 3 - Word检索锚句：</strong>{escape(str(quick_sentence))}</p>
-<p><strong>Step 4 - 修改动作：</strong>{escape(' / '.join([x.get('action','修改') for x in actions]) if actions else '修改')}</p>
+<p><strong>Step 4 - 修改动作：</strong>{escape(' / '.join([x.get('action_type', x.get('action','修改')) for x in actions]) if actions else '修改')}</p>
 </div>
 <details class="stack-box"><summary><strong>原子化定位（Atomic Location）</strong>（调试信息）</summary>
 <p><strong>manuscript_unit_id:</strong> {escape(str(atomic_loc.get('manuscript_unit_id') or 'None'))}</p>

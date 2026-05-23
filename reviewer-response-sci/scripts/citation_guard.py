@@ -249,20 +249,22 @@ def main() -> int:
     report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
 
     # Print summary
-    if failed:
-        print("CITATION_GUARD: WARN")
-        for r in failed:
-            print(f"  - [ref {r['ref_number']}] {r['title'][:50]}: {', '.join(r['failures'])}")
-    elif retracted:
-        print("CITATION_GUARD: WARN (retracted references found)")
+    if retracted:
+        print("CITATION_GUARD: FAIL (retracted references — must be removed)")
         for r in retracted:
             print(f"  - [ref {r['ref_number']}] {r['title'][:50]}: RETRACTED")
-    else:
+    if failed:
+        non_retracted_failed = [r for r in failed if not r.get("retracted")]
+        if non_retracted_failed:
+            print("CITATION_GUARD: WARN")
+            for r in non_retracted_failed:
+                print(f"  - [ref {r['ref_number']}] {r['title'][:50]}: {', '.join(r['failures'])}")
+    if not failed and not retracted:
         print(f"CITATION_GUARD: PASS ({verified_count}/{len(results)} verified)")
 
-    if args.fail_on_unverified and failed:
-        return 1
     if retracted:
+        return 1
+    if args.fail_on_unverified and failed:
         return 1
     return 0
 

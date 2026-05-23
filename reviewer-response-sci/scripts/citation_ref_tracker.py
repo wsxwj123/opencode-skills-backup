@@ -72,7 +72,9 @@ def main() -> int:
     registry_path = root / "citation_registry.json"
     registry_refs: set[int] = set()
     original_ref_count = 0
+    has_registry = False
     if registry_path.exists():
+        has_registry = True
         try:
             registry = json.loads(registry_path.read_text(encoding="utf-8"))
             original_ref_count = int(registry.get("original_ref_count", 0))
@@ -107,11 +109,26 @@ def main() -> int:
         print("CITATION_REF_TRACKER: PASS (no citations found in units)")
         return 0
 
+    # If citations found but no registry exists, warn and skip validation
+    if not has_registry:
+        print(f"CITATION_REF_TRACKER: WARN (found {len(all_cited)} citation(s) but no citation_registry.json to validate against)")
+        report = {
+            "status": "warn",
+            "total_citations_found": len(all_cited),
+            "original_ref_count": 0,
+            "note": "no citation_registry.json found; cannot validate references",
+            "cited_numbers": sorted(all_cited),
+        }
+        report_path = root / "logs" / "citation_ref_report.json"
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+        report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+        return 0
+
     # Determine known references: original [1..N] + registry entries
     known_refs = set(range(1, original_ref_count + 1)) | registry_refs
 
-    # Check for issues
-    undefined = all_cited - known_refs if known_refs else set()
+    # Check for issues — known_refs can be empty when original_ref_count=0 and registry has no entries
+    undefined = all_cited - known_refs
     orphaned = registry_refs - all_cited
     max_cited = max(all_cited) if all_cited else 0
 
@@ -126,7 +143,7 @@ def main() -> int:
     # Build per-unit report
     issues: list[dict] = []
     for uid, refs in unit_citations.items():
-        undef_in_unit = refs - known_refs if known_refs else set()
+        undef_in_unit = refs - known_refs
         if undef_in_unit:
             issues.append({
                 "unit_id": uid,
