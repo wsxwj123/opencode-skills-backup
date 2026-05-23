@@ -61,13 +61,17 @@ Do not use generic web search/fetch tools for citation evidence in proposal clai
 **严禁** 使用 `tavily`、`websearch` 或 `openalex`（pyalex），无论有无 DOI/PMID.
 **Serial Search (MANDATORY):** Execute all retrieval calls sequentially (including both PubMed CLI and paper-search MCP). Never parallelize search requests. Enforce ≥1s interval between consecutive calls.
 
-## Non-Conflict Canon (Authoritative)
+## Non-Conflict Canon (Conflict Resolution Rules)
+> These rules resolve specific contradictions discovered during operation. When any instruction in SKILL.md or its references conflicts with a rule here, this section takes precedence.
+
 Apply these resolutions when references conflict:
 1. No-bullet narrative applies to proposal body sections only; diagnostics/review reports may use structured lists.
 2. Interaction extras (reverse questioning, suggested follow-up questions, extended thinking) are optional by context, not mandatory on every response.
 3. Merge order is fixed: references at the end of final merged manuscript.
 4. V-01 consistency validation must not require nonexistent `mapped_to_h` fields on SQ nodes. Validate by traversing H and KSQ links from SQ references.
 5. P2 should not include numbered literature markers; citation numbering is restricted to P1.
+
+*Source: accumulated from operation feedback; last reviewed 2026-05.*
 
 ## Execution Workflow
 
