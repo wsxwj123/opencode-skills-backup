@@ -1,8 +1,7 @@
 ---
-github_url: https://github.com/obra/superpowers
-github_hash: e4a2375cb705ca5800f0833528ce36a3faf9017a
 name: systematic-debugging
 description: Use when encountering any bug, test failure, or unexpected behavior, before proposing fixes
+github_hash: f2cbfbefebbfef77321e4c9abc9e949826bea9d7
 ---
 
 # Systematic Debugging

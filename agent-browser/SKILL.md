@@ -1,6 +1,6 @@
 ---
 github_url: https://github.com/vercel-labs/agent-browser
-github_hash: d9387aae58fbc778b5cacc43ba3d07256f0f9d07
+github_hash: 4ad284890cb59564af603e6de403dd75dd19e832
 name: agent-browser
 description: Browser automation CLI for AI agents. Use when the user needs to interact with websites, including navigating pages, filling forms, clicking buttons, taking screenshots, extracting data, testing web apps, or automating any browser task. Triggers include requests to "open a website", "fill out a form", "click a button", "take a screenshot", "scrape data from a page", "test this web app", "login to a site", "automate browser actions", or any task requiring programmatic web interaction.
 allowed-tools: Bash(npx agent-browser:*), Bash(agent-browser:*)

@@ -1,8 +1,7 @@
 ---
-github_url: https://github.com/obra/superpowers
-github_hash: e4a2375cb705ca5800f0833528ce36a3faf9017a
 name: verification-before-completion
 description: Use when about to claim work is complete, fixed, or passing, before committing or creating PRs - requires running verification commands and confirming output before making any success claims; evidence before assertions always
+github_hash: f2cbfbefebbfef77321e4c9abc9e949826bea9d7
 ---
 
 # Verification Before Completion

@@ -1,10 +1,7 @@
 ---
 name: changelog-generator
 description: Automatically creates user-facing changelogs from git commits by analyzing commit history, categorizing changes, and transforming technical commits into clear, customer-friendly release notes. Turns hours of manual changelog writing into minutes of automated generation.
-
-github_hash: 27904475d1270d8395acf07691966267d5abda2d
-updated_at: 2026-01-27T17:06:55.683804
-github_url: https://github.com/ComposioHQ/awesome-claude-skills
+github_hash: 92568c1edaff1bde5371154f036d959346c145a8
 ---
 
 # Changelog Generator
@@ -105,4 +102,3 @@ guidelines from CHANGELOG_STYLE.md
 - Writing app store update descriptions
 - Generating email updates for users
 - Creating social media announcement posts
-

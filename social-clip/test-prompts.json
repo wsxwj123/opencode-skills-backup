@@ -1,0 +1,17 @@
+[
+  {
+    "id": 1,
+    "prompt": "净水器已避雷！坚决不删，能帮一个是一个 http://xhslink.com/o/4YXLxGKprbK 继续总结这个写到笔记里",
+    "expected": "XHS图文帖：读取desc文字内容 + 逐张读取7张图片 + 完整总结9个要点含具体例子 + 自动存Obsidian House/经验避坑/"
+  },
+  {
+    "id": 2,
+    "prompt": "买窗帘记住这四点，保证没人敢坑你 http://xhslink.com/o/4P0xIodbEpZ 总结一下",
+    "expected": "XHS视频帖：Playwright拦截CDN→ffmpeg提音频→voice-bridge转写→完整总结4个要点→存Obsidian"
+  },
+  {
+    "id": 3,
+    "prompt": "https://www.bilibili.com/video/BV1XRDfB7ExQ/ 这个视频总结一下内容，存到笔记",
+    "expected": "B站视频：yt-dlp提音频→转写→按房间分类整理全屋插座预留指南→存Obsidian"
+  }
+]

@@ -1,10 +1,7 @@
 ---
 name: meeting-insights-analyzer
 description: Analyzes meeting transcripts and recordings to uncover behavioral patterns, communication insights, and actionable feedback. Identifies when you avoid conflict, use filler words, dominate conversations, or miss opportunities to listen. Perfect for professionals seeking to improve their communication and leadership skills.
-
-github_hash: 27904475d1270d8395acf07691966267d5abda2d
-updated_at: 2026-01-27T17:06:55.685443
-github_url: https://github.com/ComposioHQ/awesome-claude-skills
+github_hash: 92568c1edaff1bde5371154f036d959346c145a8
 ---
 
 # Meeting Insights Analyzer
@@ -328,4 +325,3 @@ today."
 - Coaching direct reports on their communication
 - Analyzing customer calls for sales or support patterns
 - Studying negotiation tactics and outcomes
-

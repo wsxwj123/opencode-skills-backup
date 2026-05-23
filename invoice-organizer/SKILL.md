@@ -1,10 +1,7 @@
 ---
 name: invoice-organizer
 description: Automatically organizes invoices and receipts for tax preparation by reading messy files, extracting key information, renaming them consistently, and sorting them into logical folders. Turns hours of manual bookkeeping into minutes of automated organization.
-
-github_hash: 27904475d1270d8395acf07691966267d5abda2d
-updated_at: 2026-01-27T17:06:55.681211
-github_url: https://github.com/ComposioHQ/awesome-claude-skills
+github_hash: 92568c1edaff1bde5371154f036d959346c145a8
 ---
 
 # Invoice Organizer
@@ -447,4 +444,3 @@ For unusual receipt formats:
 - Archiving old financial records
 - Preparing for audits
 - Tracking subscription costs over time
-

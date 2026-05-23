@@ -1,9 +1,32 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Check if all phases in task_plan.md are complete
 # Always exits 0 — uses stdout for status reporting
 # Used by Stop hook to report task completion status
+#
+# Plan-file resolution (v2.40+):
+#   1. $1 (explicit path)
+#   2. resolve-plan-dir.sh: $PLAN_ID env → .planning/.active_plan → newest mtime
+#   3. Legacy ./task_plan.md
+#
+# This restores slug-mode parity: the Stop hook and any caller invoking with
+# zero args now respects the active plan dir instead of silently defaulting to
+# the legacy root path.
 
-PLAN_FILE="${1:-task_plan.md}"
+if [ -n "${1:-}" ]; then
+    PLAN_FILE="$1"
+else
+    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd 2>/dev/null)" || SCRIPT_DIR="."
+    RESOLVER="${SCRIPT_DIR}/resolve-plan-dir.sh"
+    PLAN_DIR=""
+    if [ -f "${RESOLVER}" ]; then
+        PLAN_DIR="$(sh "${RESOLVER}" 2>/dev/null)"
+    fi
+    if [ -n "${PLAN_DIR}" ] && [ -f "${PLAN_DIR}/task_plan.md" ]; then
+        PLAN_FILE="${PLAN_DIR}/task_plan.md"
+    else
+        PLAN_FILE="task_plan.md"
+    fi
+fi
 
 if [ ! -f "$PLAN_FILE" ]; then
     echo "[planning-with-files] No task_plan.md found — no active planning session."
@@ -33,9 +56,9 @@ fi
 
 # Report status (always exit 0 — incomplete task is a normal state)
 if [ "$COMPLETE" -eq "$TOTAL" ] && [ "$TOTAL" -gt 0 ]; then
-    echo "[planning-with-files] ALL PHASES COMPLETE ($COMPLETE/$TOTAL)"
+    echo "[planning-with-files] ALL PHASES COMPLETE ($COMPLETE/$TOTAL). If the user has additional work, add new phases to task_plan.md before starting."
 else
-    echo "[planning-with-files] Task in progress ($COMPLETE/$TOTAL phases complete)"
+    echo "[planning-with-files] Task in progress ($COMPLETE/$TOTAL phases complete). Update progress.md before stopping."
     if [ "$IN_PROGRESS" -gt 0 ]; then
         echo "[planning-with-files] $IN_PROGRESS phase(s) still in progress."
     fi

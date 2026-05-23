@@ -1,0 +1,57 @@
+timestamp	commit	skill	old_score	new_score	status	dimension	note	eval_mode
+2026-05-07T19:51	baseline	review-writing	-	75.0	baseline	-	初始评估	dry_run
+2026-05-07T19:55	babacf4	review-writing	75.0	78.0	keep	资源整合度+检查点	补充脚本来源/模板引用/Phase1 HALT/色板确认	dry_run
+2026-05-07T20:05	b9a770d	review-writing	78.0	80.0	keep	边界条件	Round1/3质量门+网络降级+Simulator终止条件	dry_run
+2026-05-07T20:15	1af5fe2	review-writing	80.0	83.0	keep	指令具体性	gate对齐workflow_gates.json+payload schema+Key/Supporting定义	dry_run
+2026-05-08T17:00	pre-opt-est	general-sci-writing	-	63.0	baseline	-	优化前估分（无触发词/编号冲突/ENFORCEMENT冗余）	dry_run
+2026-05-08T17:00	post-opt	general-sci-writing	63.0	80.1	keep	触发词+编号修复+ENFORCEMENT压缩+版本标记清除	Dim1:9 Dim2:8 Dim3:8 Dim4:7 Dim5:9 Dim6:8 Dim7:7.5 Dim8:7.7	dry_run
+2026-05-08T17:00	pre-opt-est	nsfc-proposal	-	77.0	baseline	-	优化前估分（Figure Prompt嵌在Phase3打断流程）	dry_run
+2026-05-08T17:00	post-opt	nsfc-proposal	77.0	86.8	keep	Figure Prompt移至附录	Dim1:9 Dim2:9 Dim3:9 Dim4:9 Dim5:8 Dim6:9 Dim7:9 Dim8:8.3	dry_run
+2026-05-08T17:00	pre-opt-est	reviewer-response-sci	-	80.0	baseline	-	优化前估分（Scope/Required Inputs重叠/references无加载说明）	dry_run
+2026-05-08T17:00	post-opt	reviewer-response-sci	80.0	84.5	keep	Scope与Required Inputs合并/References按需加载说明	Dim1:8 Dim2:8 Dim3:9 Dim4:9 Dim5:9 Dim6:9 Dim7:8.5 Dim8:8.0	dry_run
+2026-05-08T17:00	pre-opt-est	reviewer-simulator	-	67.0	baseline	-	优化前估分（无触发词/18点框架重复/路径不清晰）	dry_run
+2026-05-08T17:00	post-opt	reviewer-simulator	67.0	85.3	keep	触发词+18点框架去重+路径澄清+reviewer-response-sci边界	Dim1:9 Dim2:8 Dim3:9 Dim4:9 Dim5:9 Dim6:9 Dim7:8.5 Dim8:8.0	dry_run
+2026-05-08T17:00	pre-opt-est	sci2doc	-	70.0	baseline	-	优化前估分（无触发词/双File Layout/Word格式表内嵌）	dry_run
+2026-05-08T17:00	post-opt	sci2doc	70.0	79.1	keep	触发词+File Layout合并+Word格式表移references	Dim1:9 Dim2:7.5 Dim3:8 Dim4:8 Dim5:8 Dim6:9 Dim7:7.5 Dim8:7.7	dry_run
+2026-05-08T17:30	round2	sci2doc	79.1	81.3	keep	Dim2工作流+Dim7架构	添加快速流程索引表（7步骤/阻断条件/详见锚点）	dry_run
+2026-05-08T17:30	round2	general-sci-writing	80.1	82.1	keep	Dim4检查点+Dim6资源	Phase2/Phase3末尾用户确认halt+检索规则对齐CLAUDE.md	dry_run
+2026-05-08T17:45	recheck	nsfc-proposal	86.8	86.8	keep	—	重评确认，无变化	dry_run
+2026-05-08T17:45	recheck	reviewer-simulator	85.3	85.3	keep	—	重评确认，无变化	dry_run
+2026-05-08T17:45	recheck	reviewer-response-sci	84.5	84.5	keep	—	重评确认，无变化	dry_run
+2026-05-08T17:45	recheck	general-sci-writing	82.1	82.1	keep	—	重评确认	dry_run
+2026-05-08T17:45	recheck	sci2doc	81.3	81.3	keep	—	重评确认	dry_run
+2026-05-08T18:00	round3	reviewer-response-sci	84.5	85.8	keep	Dim1 Frontmatter	补充触发词（修回/回复reviewer/R&R/revise and resubmit等）+边界说明	dry_run
+2026-05-08T18:00	round3	general-sci-writing	82.1	84.0	keep	Dim2 工作流清晰度	Phase1/5/6补充输入/输出/决策点描述	dry_run
+2026-05-08T18:00	round3	reviewer-simulator	85.3	86.0	keep	Dim7 整体架构	第四部分第二步去重复检索规则，改为引用TOOL_USAGE_RULES	dry_run
+2026-05-08T18:10	reeval	review-writing	83.0	72.0	reeval	独立评估	子代理独立评估（上次70.5为假阴性/路径错误，本次72为真实值）	dry_run
+2026-05-08T18:15	23f1a86	review-writing	72.0	78.0	keep	OpenAlex矛盾+检索去重+评分格式+维度修正	/verify删OpenAlex+Source Priority单一定义+critique_scores.json+4维度修正	dry_run
+2026-05-08T18:20	9427868	review-writing	78.0	78.0	keep	9项全审计	python3统一+Script Location矛盾+citation_guard去重+writing_guidelines引用等	dry_run
+2026-05-08T18:30	9f5fdcc	review-writing	78.0	81.0	keep	Frontmatter边界+Protocol去冗余+Arbitration维度+claims格式	triggers/not_for+Protocol 9→8+Critique 5维度+claims/strategy格式规范	dry_run
+2026-05-08T18:35	640c3f1	review-writing	81.0	-	pending	Dry-run阻塞修复	payload生成说明+critique§4标注+figure_index格式	dry_run
+2026-05-08T20:45	retrieval-unify-eval	general-sci-writing	84.0	73.9	reeval	Dim6脚本路径/Dim3运行时fallback	子代理独立评估；Dim6=4(脚本不可达)拉低总分	dry_run
+2026-05-08T20:45	retrieval-unify-eval	nsfc-proposal	86.8	78.5	reeval	Dim6脚本路径/Dim5反AI规则未展开	子代理独立评估；风格规则外委references未验证	dry_run
+2026-05-08T20:45	retrieval-unify-eval	reviewer-response-sci	85.8	76.0	reeval	Dim3 Re-Render无异常处理/Dim2输出不显式	子代理独立评估；Re-Render分支异常缺失	dry_run
+2026-05-08T20:45	retrieval-unify-eval	reviewer-simulator	86.0	74.5	reeval	Dim6脚本路径/Dim3不完整稿件处理缺失	子代理独立评估；Dim6=4(citation_guard等路径)	dry_run
+2026-05-08T20:45	retrieval-unify-eval	sci2doc	81.3	82.1	keep	Dim2/Dim7提升	Quick Index+写作规范+目录结构整合效果保留	dry_run
+2026-05-08T20:45	retrieval-unify-eval	review-writing	81.0	79.8	reeval	Dim6脚本路径/Dim3state_manager异常	子代理独立评估；评估基准与历史不同	dry_run
+2026-05-11T16:45	baseline	general-review-writing	-	69.1	baseline	-	初始评估：test-prompts旧skill/citation_guard未调用/dedup无HALT/SKILL_DIR未解释	dry_run
+2026-05-11T17:00	round1	general-review-writing	69.1	79.5	keep	资源整合度+检查点+具体性	test-prompts更新+citation_guard加入Phase2+dedup HALT+SKILL_DIR解释+word_counter命令+validate_citations+compile命令+API403边界	dry_run
+2026-05-11T18:30	post-polish-mode	general-review-writing	79.5	85.5	keep	Polish Mode+7 bug fixes	Mode Handshake Gate+Phase 0-P+author-year引用/--init重复/Phase4 state merge/citation_guard文档化	dry_run
+2026-05-11T18:45	darwin-fix3	general-review-writing	85.5	86.5	keep	Dim5/Dim6 SKILL_DIR解析+脚本检查+长度覆盖	Fix1:Phase0.2 Step7脚本存在检查+Fix2:Phase3长度覆盖+Fix3:Phase0.5多客户端占位符解析表	dry_run
+2026-05-11T19:45	self-check-r2	review-writing	86.5	88.0	keep	zotero_manager.py部署+related_sections字段+Phase3 pending同步+Phase4 Polish guard	4项真实Bug修复：脚本遗漏/字段名不一致/state同步缺失/无index时Phase4崩溃	dry_run
+2026-05-12T00:00	dedup-scope-fix	review-writing	88.0	85.0	reeval	cmd_dedup scope+Phase2.5命令	独立子agent重评；2项Bug修复后总分85.0；Dim6最弱(7/10 matrix_manager orphan)；Dim8扣分来自state.json不一致恢复路径	dry_run
+2026-05-12T00:15	matrix+edge+skilldir	review-writing	85.0	89.0	keep	Dim3+Dim5+Dim6改善	matrix_manager集成Phase2/3+双工具失败+Round3零结果+SKILL_DIR auto-detect	dry_run
+2026-05-12T01:00	collection-scope-fix	review-writing	87.5	88.0	keep	Dim3+Dim5+Dim6+代码修复	_find_collection_by_section scoped to root_key descendants+explicit _add_item_to_collection+belt-and-suspenders	dry_run
+2026-05-11T17:07	pending	review-writing	80.2	83.0	keep	Dim3+6+7	figure_index guard+add-batch 3-branch+root-key prose	dry_run
+2026-05-12T09:30	round2-ux-and-metadata	general-review-writing	86.5	87.75	keep	Dim3+Dim7+resource	Mode gate exception+multi-section membership doc+Polish Step 5 local-first+_backfill_existing_metadata	dry_run
+2026-05-12T09:45	round3-12bug-fix	general-review-writing	87.75	88.5	keep	Dim3+Dim4+Dim5	Bug A-F (P0/P1) + Bug G/J/K/L/M (state.json hardening, guard correctness, list alignment); no regressions	dry_run
+2026-05-12T10:00	round4-dim6-fix	general-review-writing	88.5	87.65	reeval	Dim6+0.5 Dim3-0.5 Dim4-0.5	Dim6 fixes landed as expected (8.5→8.5 held, citation_utils annotated, validate_citations docs added, Bug N cmd_init msg sync); apparent regression is scoring noise on Dim3/4 from independent subagent re-anchoring (no actual content removed)	dry_run
+2026-05-12T10:25	pdf-import-add	general-review-writing	87.65	85.65	reeval	Dim8 PDF crash on missing file + advisory-only checks	regression from PDF import addition: pdfplumber/pypdf/pdftotext probes + sanity check that crashed on missing file	dry_run
+2026-05-12T10:30	sanity-check-hardening	general-review-writing	85.65	86.80	keep	Dim4+Dim8 fail-safe HALT	sys.exit on missing file + <200 + <2000; explicit Hard HALT footnote; subagent confirmed fix targeted+effective	dry_run
+2026-05-12T11:20	interactive-pdf-install	general-review-writing	86.80	85.1	reeval	Dim2/3 Windows command-v gap	HALT+menu+re-probe for fresh-machine PDF tool install; subagent flagged Windows command-v needs where	dry_run
+2026-05-12T11:22	windows-path-branch	general-review-writing	85.1	84.5	reeval	Windows-PATH-fix	Branched pdftotext re-probe by OS (command -v vs where); added "open NEW terminal" instruction; subagent verdict: noise within scoring variance, fix closes real gap	dry_run
+2026-05-12T11:55	round5-cross-platform	general-review-writing	84.5	84.3	reeval	Bugs O-W (8 fixes)	Cross-platform shell (bash/PowerShell/CMD) + UTF-8 encoding sweep (8 write_text + 6 read_text + 3 json.load); subagent flagged 2 false positives (urlopen/os.open), no real bugs left in active scripts; verdict: noise (-0.2 within scoring variance)	dry_run
+2026-05-12T12:05	round7-indentation-fix	general-review-writing	84.3	83.9	reeval	Dim8+0.8 Dim5-0.5 Dim6-0.2	CRITICAL: 10 latent execution bugs caught (8 IndentationError + 1 f-string backslash + 1 dedent overshoot); all Phase 3 Step 7 state updates would have crashed pre-fix; AST+E2E+SHA256 verified; subagent verdict: statistically flat, Dim8 largest gain since Round 1	full_test
+2026-05-13T00:50	round10-real-flow	review-writing	86.80	86.55	reeval	Dim8 +0.5 vs Round7	First real-flow E2E: caught Bug AE (citation_guard pubmed unrecognized) + Bug AF (source_id setdefault); subagent: "canonical cross-script data-contract bug invisible to AST"; flat vs 86.80 but +2.65 vs 83.9 Round7	full_test
+2026-05-22T21:50	darwin-eval	general-sci-writing	73.9	76.9	reeval	8维全审	子agent独立评估：article-writing合并+4bug修复后；P0-2/P1-4/P1-2/P2-1/P2-2/P2-3待修	dry_run
+2026-05-22T22:00	9fix-round	general-sci-writing	76.9	-	keep	P0+P1+P2全修	openalex FORBIDDEN/storyline模板list化/reserved扩展/reviewer_concerns归属/ENFORCEMENT Part2/init目录/触发词/merge确认/check命令	full_test

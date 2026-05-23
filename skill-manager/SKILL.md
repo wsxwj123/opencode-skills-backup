@@ -3,7 +3,7 @@ name: skill-manager
 description: Lifecycle manager for GitHub-based skills. Use this to batch scan your skills directory, check for updates on GitHub, and perform guided upgrades of your skill wrappers.
 license: MIT
 github_url: https://github.com/KKKKhazix/Khazix-Skills
-github_hash: fe15fea6cf7ac216027d11c2c64e87b462cc0427
+github_hash: bab178311a65f93ffd073e4fdebc9911eae35791
 updated_at: 2026-01-27T16:43:37.776256
 ---
 
