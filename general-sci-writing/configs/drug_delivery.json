@@ -106,5 +106,14 @@
     "results": [3000, 5000],
     "discussion": [2000, 4000],
     "conclusion": [200, 500]
+  },
+  "writing_style": {
+    "voice": "third_person_passive_mixed",
+    "passive_ratio_max": 0.30,
+    "preferred_verbs": ["exhibited", "demonstrated", "yielded", "attenuated", "facilitated", "abrogated"],
+    "avoid_verbs": ["showed", "found", "got", "did"],
+    "transition_patterns": ["Collectively,", "In parallel,", "Mechanistically,", "From a translational standpoint,"],
+    "typical_sentence_length_range": [12, 35],
+    "field_specific_notes": "生物医药领域偏好被动语态但需混合主动；数据描述段用主动（We observed/measured），机制讨论段用被动（was attributed to）；避免过度使用significantly，用具体倍数或P值替代"
   }
 }

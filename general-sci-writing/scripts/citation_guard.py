@@ -254,6 +254,22 @@ def validate_entry(
     title_similarity = max((_title_similarity(title, st) for st in source_titles), default=0.0)
     title_match = bool(source_titles) and title_similarity >= 0.72
 
+    # Per-source title cross-validation: detect spliced/fabricated entries
+    crossref_title_sim = _title_similarity(title, crossref["title"]) if (crossref and crossref.get("title") and title) else None
+    pubmed_title_sim = _title_similarity(title, pubmed["title"]) if (pubmed and pubmed.get("title") and title) else None
+    crossref_title_ok = crossref_title_sim is None or crossref_title_sim >= 0.72
+    pubmed_title_ok = pubmed_title_sim is None or pubmed_title_sim >= 0.72
+
+    # Year reasonableness check
+    entry_year = entry.get("year")
+    year_reasonable = True
+    if entry_year is not None:
+        try:
+            yr = int(entry_year)
+            year_reasonable = 1900 <= yr <= now_utc.year + 1
+        except (ValueError, TypeError):
+            year_reasonable = False
+
     doi_valid: bool | None
     if doi:
         if not doi_fmt_ok:
@@ -306,6 +322,12 @@ def validate_entry(
         failure_reasons.append("tavily_manual_review_required")
     if title and not title_match:
         failure_reasons.append("title_mismatch")
+    if not crossref_title_ok:
+        failure_reasons.append("crossref_title_mismatch")
+    if not pubmed_title_ok:
+        failure_reasons.append("pubmed_title_mismatch")
+    if not year_reasonable:
+        failure_reasons.append("year_unreasonable")
     if doi_valid is False:
         failure_reasons.append("doi_invalid_or_unresolved")
     if pmid_match is False:
@@ -327,7 +349,8 @@ def validate_entry(
         failure_reasons.append("source_unreachable")
 
     bidirectional_verification_failed = any(
-        r in {"title_mismatch", "doi_invalid_or_unresolved", "pmid_invalid_or_unresolved", "id_mismatch"}
+        r in {"title_mismatch", "crossref_title_mismatch", "pubmed_title_mismatch",
+              "doi_invalid_or_unresolved", "pmid_invalid_or_unresolved", "id_mismatch"}
         for r in failure_reasons
     )
     if bidirectional_verification_failed:
@@ -360,6 +383,12 @@ def validate_entry(
     if mcp_ok:
         score += 6 if mcp_fresh else -8
     score += (8 if (crossref or pubmed) else -8) if online_check else 4
+    if not crossref_title_ok:
+        score -= 15
+    if not pubmed_title_ok:
+        score -= 15
+    if not year_reasonable:
+        score -= 10
     if retracted:
         score -= 60
     confidence = int(max(0, min(100, round(score))))
@@ -375,6 +404,11 @@ def validate_entry(
             "checked_at": now_utc.isoformat(),
             "title_match": title_match,
             "title_similarity": round(title_similarity, 4),
+            "crossref_title_similarity": round(crossref_title_sim, 4) if crossref_title_sim is not None else None,
+            "pubmed_title_similarity": round(pubmed_title_sim, 4) if pubmed_title_sim is not None else None,
+            "crossref_fetched_title": (crossref["title"] if crossref and crossref.get("title") else None),
+            "pubmed_fetched_title": (pubmed["title"] if pubmed and pubmed.get("title") else None),
+            "year_reasonable": year_reasonable,
             "doi_valid": doi_valid,
             "pmid_match": pmid_match,
             "id_cross_match": id_cross_match,
