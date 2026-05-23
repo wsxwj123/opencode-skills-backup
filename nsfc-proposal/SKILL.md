@@ -86,36 +86,43 @@ Follow phased gates in order:
    - Specific mechanistic/experimental claims (具体科学论点) → Original Articles (mandatory primary evidence).
    - Clinical evidence → Clinical Trials (same priority as Original Articles).
    - Emerging findings → Preprints (label as [Preprint]; use only when no peer-reviewed equivalent exists).
-3. Phase 2: write P2 and enforce strict H/O/RC/KSQ one-to-one mapping.
-   - Input: verified P1; confirmed H/O counts and KSQ list from project profile.
-   - Output: `sections/P2_研究方案.md` + updated `data/consistency_map.json` (all H→O→RC→KSQ links validated).
-4. Phase 3: write 研究方案/技术路线（P3）.
-   - Input: verified P2 + user confirmation; consistency_map.json with H/O/RC/KSQ links.
-   - Output: `sections/P3_研究方案.md` + updated `context_memory.md`.
-   - Each technical route must trace back to at least one RC; include flowcharts or milestones as structured text.
-   - No free-standing methods without corresponding RC linkage.
-
-   **Figure Prompt Generation（AI绘图提示词）：** Phase 3 完成后，为技术路线图、框架图等必要图表生成绘图提示词，保存至 `sections/figure_prompts.md`。提示词模板与生成规则详见文末**附录：Figure Prompt 规范**。
-5. Phase 4: write 可行性分析（P4）.
-   - Input: P3 confirmed; project profile (platform, team, prior data).
-   - Output: `sections/P4_可行性分析.md`.
-   - Cover technical feasibility, team capacity, and equipment/resource availability; cite preliminary data where available.
-   - Must not introduce new hypotheses not already declared in P2.
-6. Phase 5: write 创新性（P5）.
-   - Input: P1 literature_index.json + P2 H/O mapping confirmed.
-   - Output: `sections/P5_创新性.md`.
-   - State innovation points as numbered claims; each claim must contrast explicitly with existing work cited in P1.
-   - Max 3-5 innovation points; avoid vague superlatives.
-7. Phase 6: write 预期成果与研究计划（P6）.
-   - Input: P3 technical route + project duration from project profile.
-   - Output: `sections/P6_预期成果与计划.md`.
-   - Annual milestones must align with RC timeline; deliverables (papers, patents, datasets) tied to specific phases.
-   - Budget allocation narrative must reference methods in P3.
-8. Phase 7: write 研究基础与条件（P7）+ global consistency + merge.
-   - Input: all sections P1-P6 confirmed; team CV and platform data from project profile.
-   - Output: `sections/P7_研究基础.md` + `output/申请书_合并.md` (merged manuscript).
-   - Run `diagnosis_engine.py full-review` and `consistency_mapper.py validate` before merge; fix all ERROR-level issues.
-   - Chinese/English abstracts generated last from merged content; run `humanizer_zh.py scan-all` before final output.
+3. Phase 2: write P2 研究内容（contains all sub-content: H/O/RC/KSQ, methods, innovations, annual plan）.
+   - Input: verified P1; H/O/RC/KSQ mapping counts from Phase 0; consistency_map.json with SQ entries.
+   - Output: `sections/P2_研究内容.md` + updated `data/consistency_map.json` (H→O→RC→KSQ→M→IN all links validated) + `sections/figure_prompts.md`.
+   - Sub-content order: 研究假说(H) → 研究目标(O) → 研究内容(RC) → 关键科学问题(KSQ) → 研究方案与技术路线(M) → 特色与创新之处(IN) → 年度研究计划.
+   - No literature numbers anywhere in P2. Paragraph narrative throughout; annual plan may use year-based paragraphs.
+   - Every M must trace back to a specific RC; every IN must trace to RC and M.
+   - **Figure Prompt Generation（AI绘图提示词）：** Phase 2 完成后，为技术路线图等必要图表生成绘图提示词，保存至 `sections/figure_prompts.md`。详见文末**附录：Figure Prompt 规范**。
+4. Phase 3: write P3 研究基础（4 sub-files）.
+   - Input: P2 confirmed; team CV, platform data, and prior publications from Phase 0 profile.
+   - Output:
+     - `sections/P3_1_研究基础与可行性分析.md` (prior work + feasibility evidence per M + risk mitigation)
+     - `sections/P3_2_工作条件.md` (equipment, facilities, missing conditions and remedies)
+     - `sections/P3_3_正在承担的相关项目.md` (ongoing projects; explain overlap/difference from this project)
+     - `sections/P3_4_完成基金项目情况.md` (completed grants summary ≤500字 + deliverables list)
+   - Each M in consistency_map must have at least one feasibility entry (F) sourced from P3_1 or P3_2.
+   - P3_3 and P3_4 may use list format (tables allowed).
+5. Phase 4: write P4 其他需要说明的情况（≤500字）.
+   - Input: P3 confirmed.
+   - Output: `sections/P4_其他需要说明的情况.md`.
+   - Cover: concurrent grant applications, senior PI prior grants, postdoc status, AI usage declaration, any other required disclosures.
+6. Phase 5: write 预算说明书（B1-B3）.
+   - Input: P2 confirmed (M entries define budget items); project profile (budget_total, duration).
+   - Output:
+     - `sections/B1_预算说明_直接费用.md` (equipment; materials; tests; travel/conference; publications; labor; consulting — three-line tables where required)
+     - `sections/B2_预算说明_合作外拨.md` (co-institution allocation, or "无")
+     - `sections/B3_预算说明_其他来源.md` (other funding sources)
+   - Budget total must equal profile `budget_total`; each major budget item traces to an M entry.
+7. Phase 6: write 中英文摘要（abstract-last, based on full draft）.
+   - Input: all sections P1–P4 confirmed; load --global for full-text summary.
+   - Output: `sections/00_摘要_中文.md` (≤400汉字) + `sections/00_摘要_英文.md` (≤300英文词).
+   - Keywords must align with `consistency_map.keywords_trace`.
+8. Phase 7: 全文自审与终稿 + merge.
+   - Input: all sections (00, B1-B3, P1-P4, REF) confirmed.
+   - Run `diagnosis_engine.py full-review` and `consistency_mapper.py validate`; fix all ERROR-level issues.
+   - Run `word_counter.py summary sections` and `page-estimate`; if >30 pages, trim specific locations.
+   - Run `humanizer_zh.py scan-all` before final output.
+   - Output: `output/申请书_合并.md` (merge order: 00摘要 → B1-B3预算 → P1 → P2 → P3_1~P3_4 → P4 → REF).
 
 At each phase:
 - snapshot
@@ -149,7 +156,7 @@ Maintain and sync after each section edit:
 
 Any missing sync blocks phase progression.
 
-**State Corruption Fallback:** If any required state file is missing or unparseable (JSON decode error), run `python scripts/state_manager.py --root . init --repair` to restore defaults. Do not proceed without valid state files.
+**State Corruption Fallback:** If any required state file is missing or unparseable (JSON decode error), run `python scripts/state_manager.py --root . sync-all --auto-fix` to restore defaults. (`init --repair` does not exist; `sync-all --auto-fix` is the correct repair command.) Do not proceed without valid state files.
 
 ## Quality Gates
 Block progression when any of the following fails:
@@ -186,7 +193,12 @@ Load only what is needed:
 
 ## Output Contract
 Deliverables should include:
-- section files under `sections/`
+- section files under `sections/` (canonical filenames):
+  `P1_立项依据.md`, `P2_研究内容.md`,
+  `P3_1_研究基础与可行性分析.md`, `P3_2_工作条件.md`, `P3_3_正在承担的相关项目.md`, `P3_4_完成基金项目情况.md`,
+  `P4_其他需要说明的情况.md`,
+  `B1_预算说明_直接费用.md`, `B2_预算说明_合作外拨.md`, `B3_预算说明_其他来源.md`,
+  `00_摘要_中文.md`, `00_摘要_英文.md`, `REF_参考文献.md`
 - updated state and data files
 - review reports in `data/`
 - merged manuscript in `output/` (md/docx if requested)
@@ -198,19 +210,40 @@ When reporting to user, state:
 
 ## Script Entry Points
 Use scripts under `scripts/` from proposal project root:
+
+**State management:**
 - `python scripts/state_manager.py --root . init`
-- `python scripts/state_manager.py --root . load --section P1 --minimal`
-- `python scripts/state_manager.py --root . write-cycle --section P1 --token-budget 4000`
 - `python scripts/state_manager.py --root . sync-all --auto-fix`
+- `python scripts/state_manager.py --root . load --section P1 --minimal`
+- `python scripts/state_manager.py --root . load --global`
+
+**Write-cycle (section aliases → actual filenames):**
+- P1 → `P1_立项依据.md`: `python scripts/state_manager.py --root . write-cycle --section P1 --token-budget 4000`
+- P2 → `P2_研究内容.md`: `python scripts/state_manager.py --root . write-cycle --section P2 --token-budget 4000`
+- P3_1 → `P3_1_研究基础与可行性分析.md`: `python scripts/state_manager.py --root . write-cycle --section P3_1 --token-budget 3000`
+- P3_2 → `P3_2_工作条件.md`: `python scripts/state_manager.py --root . write-cycle --section P3_2 --token-budget 2000`
+- P3_3 → `P3_3_正在承担的相关项目.md`: `python scripts/state_manager.py --root . write-cycle --section P3_3 --token-budget 1000`
+- P3_4 → `P3_4_完成基金项目情况.md`: `python scripts/state_manager.py --root . write-cycle --section P3_4 --token-budget 1000`
+- P4 → `P4_其他需要说明的情况.md`: `python scripts/state_manager.py --root . write-cycle --section P4 --token-budget 500`
+
+**Gate check (full, requires MCP):**
 - `python scripts/state_manager.py --root . gate-check --sections-dir sections --index data/literature_index.json --p1 sections/P1_立项依据.md --ref sections/REF_参考文献.md --mcp-cache data/mcp_literature_cache.json --mcp-ttl-days 30 --require-mcp`
+
+**Consistency validation:**
 - `python scripts/consistency_mapper.py --path data/consistency_map.json validate`
 - `python scripts/consistency_mapper.py --path data/consistency_map.json validate-one V-01`
+
+**Citation verification:**
 - `python scripts/citation_validator.py verify-all --index data/literature_index.json --p1 sections/P1_立项依据.md --mcp-cache data/mcp_literature_cache.json --mcp-ttl-days 30 --require-mcp --manual-review data/manual_review_queue.json --log data/verification_run_log.json`
 - `python scripts/citation_validator.py verify-entry --index data/literature_index.json --p1 sections/P1_立项依据.md --ref-number 1 --mcp-cache data/mcp_literature_cache.json --require-mcp`
 - `python scripts/citation_validator.py matrix-check --p1 sections/P1_立项依据.md --index data/literature_index.json --ref sections/REF_参考文献.md`
+
+**Review and style:**
 - `python scripts/humanizer_zh.py scan-all sections`
 - `python scripts/diagnosis_engine.py full-review --sections-dir sections --consistency data/consistency_map.json --index data/literature_index.json --p1 sections/P1_立项依据.md --ref sections/REF_参考文献.md --output data/diagnosis_report.json`
 - `python scripts/diagnosis_engine.py polish-review --sections-dir sections --consistency data/consistency_map.json --index data/literature_index.json --p1 sections/P1_立项依据.md --ref sections/REF_参考文献.md --json-output data/diagnosis_report.json --md-output data/polish_review_report.md`
+
+**Merge and word count:**
 - `python scripts/section_merger.py validate-order --sections-dir sections`
 - `python scripts/section_merger.py merge --sections-dir sections --output output/申请书_合并.md`
 - `python scripts/section_merger.py merge --sections-dir sections --only P1_立项依据.md,P2,REF_参考文献.md --output output/阶段稿_合并.md`
@@ -249,7 +282,7 @@ AVOID: 3D effects, excessive colors (>4 colors), clip art, stock icons, overly c
 ```
 
 **生成规则：**
-- 技术路线图（技术路线 / 研究方案）：Phase 3 必须生成
+- 技术路线图（技术路线 / 研究方案）：Phase 2 必须生成（技术路线属于 P2_研究内容的 M 子节）
 - 研究框架图（总体框架）：Phase 1 推荐生成（研究逻辑适合可视化时）
 - 预期结果示意图：用占位符 `[Preliminary Data Fig N]` 标注
 - 所有图使用统一色板（深蓝=主线索，绿色=创新点，橙色=预期产出）
