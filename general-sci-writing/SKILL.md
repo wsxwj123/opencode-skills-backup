@@ -281,6 +281,7 @@ license: Proprietary
    - `si_database.json` ← `si_database_template`（空数组 `[]`）
    - `figures_database.json` ← `figures_database_template`（空数组 `[]`）
    - `literature_index.json` ← `literature_index_template`（空数组 `[]`）
+   - `literature_matrix.json` ← `literature_matrix_template`（空对象 `{}`）
    - 运行 `python scripts/state_manager.py set-field --field [field_id]` 生成 `project_config.json` 和 `reviewer_concerns.json`
 5. **Verify**: 尝试运行 `python scripts/state_manager.py load` 验证环境。
 
