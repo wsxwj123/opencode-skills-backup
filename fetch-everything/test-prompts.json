@@ -1,0 +1,17 @@
+[
+  {
+    "id": 1,
+    "prompt": "帮我抓取这篇微信公众号文章的正文内容：https://mp.weixin.qq.com/s/abc123xyz",
+    "expected": "触发 Scrapling 优先路线（微信识别）；输出正文 Markdown；说明使用了哪种方法；若验证页则说明原因并建议下一步"
+  },
+  {
+    "id": 2,
+    "prompt": "把这个页面转成 Markdown 给我：https://docs.python.org/3/library/pathlib.html",
+    "expected": "走在线服务（r.jina.ai 或 markdown.new）；输出结构化 Markdown；包含来源 URL 和使用方法"
+  },
+  {
+    "id": 3,
+    "prompt": "这个网页打不开，帮我提取内容，返回了 Access denied：https://example-paywalled.com/article/xxx",
+    "expected": "识别反爬情况；尝试 Scrapling stealthy-fetch；清晰说明失败原因；提供可行的下一步（cookie、人工接力等）"
+  }
+]
