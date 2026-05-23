@@ -216,7 +216,8 @@ These scripts are production-ready workflow utilities for iterative proposal dra
 
 
 ## Regression Tests
-- `python3 -m unittest discover -s tests -p 'test_*.py'`
+`tests/` directory not yet built. Unit test suite is planned but not implemented.
+Run manual verification via `test-prompts.json` test cases instead.
 
 ---
 
