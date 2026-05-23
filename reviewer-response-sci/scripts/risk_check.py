@@ -136,9 +136,8 @@ def main() -> int:
             all_hits.append(("stdin", cat, pat))
 
     # Separate hard risks (pipeline-blocking) from soft risks (warn-only)
-    HARD_CATEGORIES = {"fabricated_experiment", "fabricated_statistics"}
-    hard_hits = [(s, c, p) for s, c, p in all_hits if c in HARD_CATEGORIES]
-    soft_hits = [(s, c, p) for s, c, p in all_hits if c not in HARD_CATEGORIES]
+    hard_hits = [(s, c, p) for s, c, p in all_hits if c in FABRICATION_CATEGORIES]
+    soft_hits = [(s, c, p) for s, c, p in all_hits if c not in FABRICATION_CATEGORIES]
 
     if hard_hits:
         print("RISK_CHECK: FAIL (hard risk detected)")
