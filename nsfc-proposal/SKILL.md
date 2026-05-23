@@ -23,6 +23,20 @@ Hard rules:
 - If the user already explicitly states `Write Mode` or `Polish Mode` in the opening message, do not ask again; proceed directly with the specified mode.
 - After user confirms mode, record it in project state/profile and continue with that mode workflow only.
 
+## Core Terminology
+Four entities form the consistency backbone of every NSFC proposal. All must map 1:1.
+
+| Symbol | Chinese | Role | Example |
+|--------|---------|------|---------|
+| H | 假说 (Hypothesis) | Causal claim derived from SQ | "A蛋白通过B通路调控C过程" |
+| O | 目标 (Objective) | What you **do** (action-oriented) | "阐明XXX的机制" |
+| RC | 研究内容 (Research Content) | Specific investigation; links to methods | "通过ChIP-seq分析A蛋白的结合位点" |
+| KSQ | 关键科学问题 (Key Scientific Question) | What you **answer** (question-oriented) | "XXX如何调控YYY？" |
+
+Mapping constraint: H-n ↔ O-n ↔ RC-n ↔ KSQ-n (strict one-to-one, no cross-linking allowed).
+
+**If user asks a conceptual question about any of H/O/RC/KSQ/SQ/mapping:** load `references/02_核心机制.md` and answer from it before continuing with workflow phases.
+
 ## Inputs Required
 Collect before execution:
 - Project basics: title, discipline code, project type, research attribute, duration, budget.
