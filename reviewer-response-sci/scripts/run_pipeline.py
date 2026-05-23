@@ -108,6 +108,8 @@ def main() -> int:
     html_gate = script_dir / "html_format_check.py"
     final_content_gate = script_dir / "final_content_gate.py"
     risk_check = script_dir / "risk_check.py"
+    citation_guard = script_dir / "citation_guard.py"
+    citation_tracker = script_dir / "citation_ref_tracker.py"
     state_mgr = script_dir / "state_manager.py"
 
     preflight_cmd = [sys.executable, str(preflight), "--comments", args.comments, "--manuscript", args.manuscript, "--project-root", args.project_root, "--output-html", args.output_html]
@@ -138,6 +140,8 @@ def main() -> int:
 
     html_cmd = [sys.executable, str(html_gate), args.output_html]
     risk_cmd = [sys.executable, str(risk_check), "--project-root", args.project_root]
+    citation_guard_cmd = [sys.executable, str(citation_guard), "--project-root", args.project_root]
+    citation_tracker_cmd = [sys.executable, str(citation_tracker), "--project-root", args.project_root]
     state_sync_cmd = [sys.executable, str(state_mgr), "sync", "--project-root", args.project_root, "--pipeline-status", "pass"]
 
     steps = [
@@ -149,6 +153,8 @@ def main() -> int:
         ("final_report", report_cmd),
         ("html_gate", html_cmd),
         ("risk_check", risk_cmd),
+        ("citation_guard", citation_guard_cmd),
+        ("citation_ref_tracker", citation_tracker_cmd),
         ("state_sync", state_sync_cmd),
     ]
 
