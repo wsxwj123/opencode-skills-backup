@@ -1,13 +1,14 @@
 ---
-github_url: https://github.com/obra/superpowers
-github_hash: e4a2375cb705ca5800f0833528ce36a3faf9017a
 name: dispatching-parallel-agents
 description: Use when facing 2+ independent tasks that can be worked on without shared state or sequential dependencies
+github_hash: f2cbfbefebbfef77321e4c9abc9e949826bea9d7
 ---
 
 # Dispatching Parallel Agents
 
 ## Overview
+
+You delegate tasks to specialized agents with isolated context. By precisely crafting their instructions and context, you ensure they stay focused and succeed at their task. They should never inherit your session's context or history — you construct exactly what they need. This also preserves your own context for coordination work.
 
 When you have multiple unrelated failures (different test files, different subsystems, different bugs), investigating them sequentially wastes time. Each investigation is independent and can happen in parallel.
 

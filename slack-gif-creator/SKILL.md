@@ -1,9 +1,8 @@
 ---
-github_url: https://github.com/anthropics/skills
-github_hash: b0cbd3df1533b396d281a6886d5132f623393a9c
 name: slack-gif-creator
 description: Knowledge and utilities for creating animated GIFs optimized for Slack. Provides constraints, validation tools, and animation concepts. Use when users request animated GIFs for Slack like "make me a GIF of X doing Y for Slack."
 license: Complete terms in LICENSE.txt
+github_hash: 690f15cac7f7b4c055c5ab109c79ed9259934081
 ---
 
 # Slack GIF Creator

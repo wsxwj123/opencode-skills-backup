@@ -3,7 +3,7 @@ name: github-to-skills
 description: Automated factory for converting GitHub repositories into specialized AI skills. Use this skill when the user provides a GitHub URL and wants to "package", "wrap", or "create a skill" from it. It automatically fetches repository details, latest commit hashes, and generates a standardized skill structure with enhanced metadata suitable for lifecycle management.
 license: MIT
 github_url: https://github.com/KKKKhazix/Khazix-Skills
-github_hash: fe15fea6cf7ac216027d11c2c64e87b462cc0427
+github_hash: bab178311a65f93ffd073e4fdebc9911eae35791
 updated_at: 2026-01-27T16:43:37.776828
 ---
 
@@ -32,7 +32,7 @@ name: <kebab-case-repo-name>
 description: <concise-description-for-agent-triggering>
 # EXTENDED METADATA (MANDATORY)
 github_url: <original-repo-url>
-github_hash: <latest-commit-hash-at-time-of-creation>
+github_hash: bab178311a65f93ffd073e4fdebc9911eae35791
 version: <tag-or-0.1.0>
 created_at: <ISO-8601-date>
 entry_point: scripts/wrapper.py # or main script

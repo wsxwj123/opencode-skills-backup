@@ -1,8 +1,7 @@
 ---
-github_url: https://github.com/obra/superpowers
-github_hash: e4a2375cb705ca5800f0833528ce36a3faf9017a
 name: receiving-code-review
 description: Use when receiving code review feedback, before implementing suggestions, especially if feedback seems unclear or technically questionable - requires technical rigor and verification, not performative agreement or blind implementation
+github_hash: f2cbfbefebbfef77321e4c9abc9e949826bea9d7
 ---
 
 # Code Review Reception

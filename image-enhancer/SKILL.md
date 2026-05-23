@@ -1,10 +1,7 @@
 ---
 name: image-enhancer
 description: Improves the quality of images, especially screenshots, by enhancing resolution, sharpness, and clarity. Perfect for preparing images for presentations, documentation, or social media posts.
-
-github_hash: 27904475d1270d8395acf07691966267d5abda2d
-updated_at: 2026-01-27T17:06:55.680423
-github_url: https://github.com/ComposioHQ/awesome-claude-skills
+github_hash: 92568c1edaff1bde5371154f036d959346c145a8
 ---
 
 # Image Enhancer
@@ -100,4 +97,3 @@ Original preserved as: screenshot-2024-original.png
 - **Social Media**: Optimize images for Twitter, LinkedIn, Instagram
 - **Presentations**: Upscale images for large screens
 - **Print Materials**: Increase resolution for physical media
-

@@ -1,10 +1,7 @@
 ---
 name: raffle-winner-picker
 description: Picks random winners from lists, spreadsheets, or Google Sheets for giveaways, raffles, and contests. Ensures fair, unbiased selection with transparency.
-
-github_hash: 27904475d1270d8395acf07691966267d5abda2d
-updated_at: 2026-01-27T17:06:55.678447
-github_url: https://github.com/ComposioHQ/awesome-claude-skills
+github_hash: 92568c1edaff1bde5371154f036d959346c145a8
 ---
 
 # Raffle Winner Picker
@@ -160,4 +157,3 @@ Pick 1 winner and 3 runner-ups from the list
 - Beta tester selection
 - Focus group participant selection
 - Random prize distribution at events
-
