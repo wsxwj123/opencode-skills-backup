@@ -137,7 +137,7 @@ def check_file(filepath: str) -> dict[str, Any]:
         "max": max(lengths),
     }
 
-    if cv < 0.25:
+    if cv < 0.25 and len(sentences) >= 5:
         result["issues"].append({
             "type": "low_sentence_variance",
             "severity": "high",
