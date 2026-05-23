@@ -855,7 +855,19 @@ def validate_matrix_schema(
     matrix_map, sources = load_literature_matrix(matrix_file=matrix_file, storyline_file=storyline_file)
     check["sources"] = sources
     check["sections_in_matrix"] = len(matrix_map)
-    if require_matrix_reindex and not matrix_map:
+
+    # Skip matrix requirement when literature_index is empty (Phase 0/1/2)
+    lit_file = STATE_FILES.get("literature_index", "literature_index.json")
+    lit_count = 0
+    if os.path.isfile(lit_file):
+        try:
+            with open(lit_file, "r", encoding="utf-8") as _f:
+                _lit = json.load(_f)
+                lit_count = len(_lit) if isinstance(_lit, list) else 0
+        except Exception:
+            pass
+
+    if require_matrix_reindex and not matrix_map and lit_count > 0:
         check["ok"] = False
         check["errors"].append("matrix is required but no section-literature mapping was found")
         return check
