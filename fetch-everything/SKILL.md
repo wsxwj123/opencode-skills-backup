@@ -65,9 +65,13 @@ python3 scripts/fetch_everything.py “<url>” -o output.md
 - 执行器报错退出（非零返回码）
 - 用户需要调整 UA、等待时间等执行器不支持的参数
 
+> 对 `status=partial` 结果有疑问时，用 `cat output.md | python3 scripts/assess_fetch_quality.py` 获取质量评分（`passed: false` 且 `score < 15` → 需手动介入）。
+
 ### 3. 手动路线参考（执行器降级 / Fallback）
 
 执行器无法解决时，按站点类型手动选路线：
+
+> 各路线的优缺点和分流建议见 `references/web-services.md`。
 
 **A. 普通网页：**
 - 先试 `https://markdown.new/<原始url>`
@@ -87,7 +91,7 @@ python3 scripts/fetch_everything.py “<url>” -o output.md
 
 **D. 动态页面：**
 - 优先 Scrapling DynamicFetcher（`extract fetch`）
-- 需要时增加等待、选择器、自定义 header
+- 需要时增加等待、选择器、自定义 header（参数说明见 `references/scrapling-guide.md`）
 
 ### 4. Markdown 优先，必要时降级
 
