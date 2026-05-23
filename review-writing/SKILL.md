@@ -119,6 +119,21 @@ http_proxy=http://127.0.0.1:PORT esearch -db pubmed -query "QUERY" < /dev/null |
 - **Syntactic:** Alternate active/passive. Embed causality. No templated transitions.
 - **Structural:** Alternate "claim-then-evidence" vs "evidence-then-claim". Insert judgment sentences ("This likely reflects…").
 
+### Abbreviation / Acronym Management
+- **First-use rule (EN):** `Full Name (ABBR)` on first occurrence in the manuscript body. Subsequent uses → ABBR only.
+- **First-use rule (CN):** `中文全称（英文全称, ABBR）` on first occurrence. Example: `光动力疗法（Photodynamic Therapy, PDT）`.
+- **Title & Abstract:** Do NOT use abbreviations in the title. In the abstract, re-define any abbreviation used (abstract is read independently from the body).
+- **Universally known exceptions:** DNA, RNA, PCR, HIV, WHO, FDA — may be used without expansion.
+- **Abbreviation registry:** Maintain `exports/abbreviation_list.md` (auto-generated in Phase 4 Step 4c). Format:
+
+  ```
+  | Abbreviation | Full Name | First Defined In |
+  |---|---|---|
+  | PDT | Photodynamic Therapy | Section 1.1 |
+  | ROS | Reactive Oxygen Species | Section 2.1 |
+  ```
+- **Cross-section consistency:** When writing Section N, check if the abbreviation was already defined in a previous section (via the registry or prior drafts). If yes, use ABBR directly — do NOT re-expand.
+
 ---
 
 ## Subagent Delegation (Optional)
@@ -950,7 +965,7 @@ AI: substitute `<MESSAGE>` with the checkpoint description. Format: `[review] Ph
 | Phase 1 Step 7 | `[review] Phase 1: outline confirmed` |
 | Phase 2 per-section Step 8 | `[review] Phase 2: section X.X search complete` |
 | Phase 2.5 (after dedup) | `[review] Phase 2.5: dedup + global ID assigned` |
-| Phase 3 per-section Step 8 | `[review] Phase 3: section X.X draft complete (score: N.N)` |
+| Phase 3 per-section Step 9 | `[review] Phase 3: section X.X draft complete` |
 | Phase 4 Step 7 | `[review] Phase 4: export finalized` |
 | Phase 0-P Step 5 (after substep 3) | `[review] Phase 0-P: citations imported` |
 | Phase 0-P Step 6 (after state init) | `[review] Phase 0-P: polish mode initialized` |
@@ -1221,27 +1236,66 @@ If pending_sections is empty → all sections complete; proceed to Phase 4.
    - **Reference the figure caption from Step 3a** — the draft must describe and introduce the figure using its planned caption and key message.
    - Apply Anti-AI Writing rules (English or Chinese mode per outline.md).
    - Synthesis not summary; arbitration of contradictions; alternate claim/evidence order.
+   - **Abbreviation rule:** First occurrence of any abbreviation in this section must use "Full Name (ABBR)" format. If the abbreviation was already defined in a previous section, use ABBR directly (check `exports/abbreviation_list.md` if it exists).
 
-5. **Reviewer Simulator** (5 dimensions, 1–10 each):
+5. **Citation spot-check** (lightweight, runs per-section — catches hallucinated `[N]` before Reviewer Simulator):
+   ```bash
+   # Scans all drafts/ but only this section's file matters (previous sections already passed).
+   # --fail-on-orphan exits non-zero if any [N] in draft has no match in literature_index.json.
+   python3 scripts/validate_citations.py --drafts-dir drafts --index data/literature_index.json --fail-on-orphan
+   ```
+   - Checks every `[N]` in drafts exists in `literature_index.json` (or Zotero gid pool).
+   - If any `[N]` is orphan (not in index) → fix immediately: either find the real gid or remove the citation.
+   - Does NOT do online DOI/PMID verification here (that's Phase 4 `citation_guard.py`'s job).
+   - [Zotero mode] Also cross-check against `--get-section` output: every gid used in draft should appear in the section's Zotero collection.
 
-   | Dimension | Criteria |
-   |-----------|----------|
-   | Novelty | Exceeds existing reviews? New framework/hypothesis? |
-   | Arbitration | Contradictions addressed with *why* analysis? |
-   | Evidence Density | Main claims have ≥2 independent sources? |
-   | Flow | Causal paragraph connections? Narrative coherent? |
-   | Anti-AI Compliance | Zero banned words + P/B rhythm? |
+6. **Reviewer Simulator** (checklist-anchored, per reviewer-simulator skill methodology):
 
-   Mean <8.0 → internal revision (max 2 rounds) → still <8.0 → HALT, report weakest dimension.
+   For each dimension, answer every checklist item (Y/N). Dimension passes when ALL items = Y.
 
-6. **Word count check:**
+   **D1 — Novelty & Contribution**
+   - [ ] Proposes at least one new framework, hypothesis, taxonomy, or perspective not in prior reviews
+   - [ ] Clearly states how this section advances beyond existing reviews (explicit "gap → contribution" sentence)
+   - [ ] Does NOT merely summarize existing work without synthesis
+
+   **D2 — Arbitration & Critical Analysis**
+   - [ ] Identifies ≥1 contradiction or debate between cited studies
+   - [ ] Provides *why* analysis for each contradiction (not just "results conflict")
+   - [ ] Takes a position or proposes a reconciling explanation (does not sit on the fence)
+
+   **D3 — Evidence Density & Traceability**
+   - [ ] Every factual claim has ≥1 citation; key claims have ≥2 independent sources
+   - [ ] No citation-free paragraphs (except transition/framing sentences)
+   - [ ] Evidence types match claim types (original article for mechanism, clinical trial for efficacy, review for background context)
+
+   **D4 — Flow & Coherence**
+   - [ ] Opening sentence of each paragraph connects to the previous paragraph's conclusion (causal/contrastive link, not bolted-on transition)
+   - [ ] Section has a clear internal arc: setup → evidence → synthesis → implication
+   - [ ] No orphan paragraphs (paragraphs that could be moved elsewhere without breaking logic)
+
+   **D5 — Anti-AI Compliance**
+   - [ ] Zero banned words/phrases from Anti-AI Writing Style lists
+   - [ ] Sentence length rhythm: no 3+ consecutive sentences within ±5 words of each other
+   - [ ] Passive voice ≤30% of sentences per paragraph (EN mode)
+   - [ ] No templated transitions ("Furthermore", "In addition", "Moreover" as sentence openers)
+
+   **Gate:** Any dimension with ≥1 failed item → internal revision targeting that item (max 2 rounds).
+   After 2 rounds, if any item still fails → **HALT**, output the specific failed checklist items as structured feedback:
+   ```
+   【问题】(failed item description)
+   证据锚点: (paragraph/sentence where the failure occurs)
+   根源分析: (why it fails — e.g., "Paragraph 3 lists 4 studies without comparing their findings")
+   修复方向: (specific action — e.g., "Add a synthesis sentence after the 4th citation contrasting dosage findings")
+   ```
+
+7. **Word count check:**
    ```bash
    python3 scripts/word_counter.py --file drafts/section_01_01.md --language en   # or --language cn for Chinese; read from outline.md
    ```
    Key sections target: >500 words (EN) / >1,500 chars (CN); Supporting: >200 words / >600 chars.
    **If user explicitly requested a shorter length** (e.g., "~800 characters"): defer to user's request; treat the skill's minimums as guidance for quality, not a hard gate. Do not loop-prompt the user to write more if they have already confirmed their target length.
 
-7. **Update state.json — MANDATORY, do not skip:**
+8. **Update state.json — MANDATORY, do not skip:**
    ```python
 python3 -c "
 import json, pathlib
@@ -1259,9 +1313,9 @@ print(f'✅ state.json updated: {SECTION} → completed_sections')
    ```
    A section must never appear in both `completed_sections` and `pending_sections` simultaneously.
 
-8. **Git Checkpoint:** `git add -A && git commit -m "[review] Phase 3: section X.X draft complete (score: N.N)"`
+9. **Git Checkpoint:** `git add -A && git commit -m "[review] Phase 3: section X.X draft complete"`
 
-9. **HALT:** Output summary (content / logic / citation count / word count). Wait for "Continue".
+10. **HALT:** Output summary (content / logic / citation count / word count). Wait for "Continue".
 
 ### Figure Prompt Generation
 
@@ -1350,6 +1404,21 @@ Write Mode has no `pending_sections` field so this gate is a no-op (no key → e
    # If any file uses non-padded name, rename first:
    #   mv drafts/section_1_1.md drafts/section_01_01.md
    ```
+   4b. **Cross-section coherence scan** (on compiled `exports/Final_Review.md`):
+   Read the full compiled text sequentially and check:
+   - **Transition continuity:** The opening of each section/subsection must logically connect to the closing of the previous one. Flag abrupt topic jumps with no bridging sentence.
+   - **Cross-references:** If Section 3.2 discusses a mechanism introduced in Section 2.1, it should contain an explicit reference ("as discussed in Section 2.1" or equivalent). Flag implicit back-references that assume the reader remembers without a pointer.
+   - **Argument arc:** The review's overall narrative should follow the outline's intended logic (e.g., "background → mechanisms → applications → challenges → future"). Flag sections that repeat points already made elsewhere or contradict earlier conclusions without acknowledging the contradiction.
+   - **Introduction funnel check:** Introduction must narrow from broad field → specific gap → this review's contribution. Flag introductions that jump directly to specifics without establishing context.
+   - **Conclusion echo check:** Conclusion must directly address the Research Question(s) from `outline.md` and reference key findings from body sections. Flag conclusions that introduce new claims not supported in the body.
+   - If violations found → AI fixes inline in `exports/Final_Review.md`, adds transition sentences or cross-references, and propagates changes back to source `drafts/section_XX_XX.md`.
+
+   4c. **Abbreviation consistency scan** (on compiled `exports/Final_Review.md`):
+   - Scan for all uppercase sequences ≥2 chars (candidate abbreviations) and parenthetical definitions like `Full Name (ABBR)` or `中文全称（英文全称, ABBR）`.
+   - **Check:** Every abbreviation used bare (without parenthetical definition) in the text must have exactly ONE prior definition. Flag: (a) undefined abbreviations, (b) abbreviations re-defined in multiple sections, (c) abbreviations defined but never used again.
+   - Generate `exports/abbreviation_list.md` table (see format in Anti-AI Writing Style § Abbreviation Management).
+   - Title and abstract must not contain unexpanded abbreviations (except universally known: DNA, RNA, PCR, HIV, WHO, FDA).
+   - If violations found → list them; AI fixes inline in `exports/Final_Review.md` and propagates back to the source `drafts/section_XX_XX.md`.
 5. **Final word count:** Verify total ≥ target in `outline.md`.
 6. **Update state.json — merge, do NOT overwrite:**
    ```python
