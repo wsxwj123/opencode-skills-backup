@@ -55,3 +55,5 @@ timestamp	commit	skill	old_score	new_score	status	dimension	note	eval_mode
 2026-05-13T00:50	round10-real-flow	review-writing	86.80	86.55	reeval	Dim8 +0.5 vs Round7	First real-flow E2E: caught Bug AE (citation_guard pubmed unrecognized) + Bug AF (source_id setdefault); subagent: "canonical cross-script data-contract bug invisible to AST"; flat vs 86.80 but +2.65 vs 83.9 Round7	full_test
 2026-05-22T21:50	darwin-eval	general-sci-writing	73.9	76.9	reeval	8维全审	子agent独立评估：article-writing合并+4bug修复后；P0-2/P1-4/P1-2/P2-1/P2-2/P2-3待修	dry_run
 2026-05-22T22:00	9fix-round	general-sci-writing	76.9	-	keep	P0+P1+P2全修	openalex FORBIDDEN/storyline模板list化/reserved扩展/reviewer_concerns归属/ENFORCEMENT Part2/init目录/触发词/merge确认/check命令	full_test
+2026-05-23T22:51	baseline	fetch-everything	-	68.9	baseline	-	初始评估	dry_run
+2026-05-23T23:01	4540f20	fetch-everything	68.9	83.6	keep	D2+D3+D4+D5+D6+D7+D8全优化	5轮优化：工作流重组/HALT检查点/URL精确/资源交叉引用/降级判定	dry_run

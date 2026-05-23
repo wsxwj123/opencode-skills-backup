@@ -23,13 +23,14 @@ SCRAPLING_COMMANDS = [
     ["scrapling", "extract", "fetch", "--timeout", "45000", "--network-idle"],
 ]
 
-# 需要浏览器渲染的动态站点域名
+# 需要浏览器渲染的动态站点域名（SKILL.md 规定这些站点优先走 Scrapling）
 DYNAMIC_SITE_DOMAINS = [
     "xiaohongshu.com", "xhslink.com",
     "weibo.com", "weibo.cn",
     "douyin.com",
     "bilibili.com",
     "zhihu.com",
+    "mp.weixin.qq.com", "weixin.qq.com",  # 微信公众号：在线服务必然触发风控
 ]
 
 # 短链接域名，需要先解析
@@ -66,15 +67,20 @@ def resolve_short_url(url: str) -> str:
     return url
 
 
+def _strip_www(netloc: str) -> str:
+    lower = netloc.lower()
+    return lower[4:] if lower.startswith("www.") else lower
+
+
 def is_short_link(url: str) -> bool:
     from urllib.parse import urlparse
-    domain = urlparse(url).netloc.lower().lstrip("www.")
+    domain = _strip_www(urlparse(url).netloc)
     return any(domain == d or domain.endswith("." + d) for d in SHORT_LINK_DOMAINS)
 
 
 def is_dynamic_site(url: str) -> bool:
     from urllib.parse import urlparse
-    domain = urlparse(url).netloc.lower().lstrip("www.")
+    domain = _strip_www(urlparse(url).netloc)
     return any(domain == d or domain.endswith("." + d) for d in DYNAMIC_SITE_DOMAINS)
 
 
@@ -102,21 +108,23 @@ def clean_text(text: str) -> str:
     return proc.stdout
 
 
+_SERVICE_BASE_URLS = {
+    "markdown.new": "https://markdown.new/",
+    "defuddle.md": "https://defuddle.md/",
+    "r.jina.ai": "https://r.jina.ai/",
+}
+
+
 def fetch_via_online_services(url: str) -> List[Dict]:
     results: List[Dict] = []
     for service in ONLINE_SERVICES:
-        conv = run_cmd([sys.executable, str(URL_ROUTER), "--url", url, "--service", service])
-        if conv.returncode != 0:
-            continue
-        service_url = conv.stdout.strip()
         content = run_cmd([sys.executable, str(URL_ROUTER), "--url", url, "--service", service, "--get-content"])
         if content.returncode != 0:
             continue
-        text = content.stdout
         results.append({
             "method": f"online:{service}",
-            "service_url": service_url,
-            "content": text,
+            "service_url": _SERVICE_BASE_URLS.get(service, "") + url,
+            "content": content.stdout,
         })
     return results
 
@@ -144,14 +152,19 @@ def fetch_via_scrapling(url: str) -> List[Dict]:
     return results
 
 
+def _assess_candidate(item: Dict) -> None:
+    """原地填充 cleaned_content 和 quality（幂等，已评估则跳过）。"""
+    if "quality" not in item:
+        cleaned = clean_text(item["content"])
+        item["cleaned_content"] = cleaned
+        item["quality"] = assess_text(cleaned)
+
+
 def choose_best(candidates: List[Dict]) -> Optional[Dict]:
     best = None
     for item in candidates:
-        cleaned = clean_text(item["content"])
-        quality = assess_text(cleaned)
-        item["cleaned_content"] = cleaned
-        item["quality"] = quality
-        if best is None or quality["score"] > best["quality"]["score"]:
+        _assess_candidate(item)
+        if best is None or item["quality"]["score"] > best["quality"]["score"]:
             best = item
     return best
 
@@ -176,7 +189,10 @@ def main() -> None:
         # 动态站点：优先浏览器路线，跳过在线服务
         print(f"[info] 检测到动态站点，优先使用 Scrapling 浏览器路线", file=sys.stderr)
         candidates.extend(fetch_via_scrapling(url))
-        if not any(c for c in candidates if assess_text(clean_text(c["content"])).get("passed")):
+        # 预评估 scrapling 结果（缓存到 item，choose_best 不会重复计算）
+        for c in candidates:
+            _assess_candidate(c)
+        if not any(c["quality"].get("passed") for c in candidates):
             candidates.extend(fetch_via_online_services(url))
     else:
         candidates.extend(fetch_via_online_services(url))
