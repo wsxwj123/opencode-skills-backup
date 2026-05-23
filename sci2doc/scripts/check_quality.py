@@ -1207,7 +1207,7 @@ def check_word_format_compliance(doc, format_context=None):
     EMU_PER_CM = 360000
 
     # ── 1. 页面布局检查 ──
-    format_context = format_context or {}
+    format_context = format_context or build_format_render_context({})
     page_margins = format_context.get("page_margins_cm", {})
     expected_page = {
         'width_cm': 21.0,
