@@ -64,13 +64,13 @@ python3 scripts/fetch_everything.py “<url>” -o output.md
 执行器无法解决时，按站点类型手动选路线：
 
 **A. 普通网页：**
-- 先试 `markdown.new/<url>`
-- 再试 `defuddle.md/<url>`
-- 再试 `r.jina.ai/<url>`
+- 先试 `https://markdown.new/<原始url>`
+- 再试 `https://defuddle.md/<原始url>`
+- 再试 `https://r.jina.ai/<原始url>`
 - 必要时 Scrapling HTTP 抓取
 
 **B. 技术文档：**
-- 优先 `r.jina.ai/<url>`
+- 优先 `https://r.jina.ai/<原始url>`
 - 再试 webfetch
 - 必要时 Scrapling HTTP 抓取
 
@@ -169,22 +169,37 @@ scrapling extract fetch "<url>" output.md --timeout 45000 --network-idle
 ## 资源参考
 
 ### references/web-services.md
-在线内容读取服务的定位、优缺点与分流建议。
+**何时用**：手动选路线时查分流建议、各服务优缺点对比。
 
 ### references/scrapling-guide.md
-Scrapling 的安装、CLI 使用、Python API、动态页面与手动调参说明。
+**何时用**：Scrapling 抓取失败、需要调整 UA / 等待策略 / Python API 时查阅；含安装、CLI、动态页面调参说明。
 
 ### scripts/check_fetch_env.py
-环境自检脚本。用于检查 Python、requests、技能脚本和 Scrapling CLI 是否可用，方便在分享给别人后先快速判断环境是否具备抓取能力。
+**何时用**：首次使用或排障时运行，确认 Python / requests / Scrapling CLI 均可用。
+```bash
+python3 scripts/check_fetch_env.py
+```
 
 ### scripts/fetch_everything.py
-统一抓取执行器。输入一个链接后，自动尝试在线服务与本地抓取路线，做质量判定和轻量清洗，并返回最佳结果。
+**何时用**：所有常规抓取场景的默认入口（步骤2）。自动多路线抓取 + 质量判定 + 清洗。
+```bash
+python3 scripts/fetch_everything.py "<url>" --json
+```
 
 ### scripts/assess_fetch_quality.py
-质量判定器。用于识别验证页、异常页、正文过短、结构不足等情况。
+**何时用**：执行器返回 partial / 需要手动判断已有内容质量时；从 stdin 读取文本，输出质量 JSON。
+```bash
+cat output.md | python3 scripts/assess_fetch_quality.py
+```
 
 ### scripts/clean_fetched_markdown.py
-轻量清洗器。用于删除扫码、赞赏、推荐阅读、弹层按钮等高置信噪音。
+**何时用**：Scrapling 抓到正文但混入扫码/赞赏/推荐噪音时手动清洗。
+```bash
+cat output.md | python3 scripts/clean_fetched_markdown.py
+```
 
 ### scripts/url-converter.py
-本地路由脚本。它负责把原始链接转换为各类在线读取服务链接，并测试服务可用性；它不直接替代 Scrapling。
+**何时用**：需要单独测试某个在线服务是否可达，或批量转换 URL 时；不直接替代 Scrapling。
+```bash
+python3 scripts/url-converter.py --url "<url>" --test-all
+```
