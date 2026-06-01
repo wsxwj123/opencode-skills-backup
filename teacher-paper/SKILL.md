@@ -4,7 +4,7 @@ description: "教师智能出题技能 - 覆盖小学一年级到高三的【文
 user-invocable: true
 allowed-tools: "Read Write Edit Bash Agent AskUserQuestion WebFetch WebSearch"
 metadata:
-  version: "3.7.2"
+  version: "3.7.3"
   author: "teacher-paper-skill"
 ---
 
@@ -110,7 +110,9 @@ python3 "<SKILL_DIR>/scripts/setup.py" --install
 
 环境就绪后，**在出题前先问清两件事并写入工程**，避免中途反复打断或自作主张：
 
-### 1. 工作模式（必问，二选一）
+> 🔴 **STOP·开工前必须问清以下 1/2，模式二还须问清 3；未问清不得进入 Phase 1。**
+
+### 1. 工作模式（🔴必问·二选一，不得默认）
 
 用 AskUserQuestion 问用户遇到问题时怎么处理：
 
@@ -119,7 +121,7 @@ python3 "<SKILL_DIR>/scripts/setup.py" --install
 
 > 选模式二时，**必须在开工前把可预见的决策点一次性问清并定好**（见下"决策点清单"），写入工程的 `meta.json`，之后严格据此自动执行，不再逐题打扰。
 
-### 2. 工程位置（必问）
+### 2. 工程位置（🔴必问）
 
 用 AskUserQuestion 问用户：**这份试卷的工程放在哪个文件夹？**
 - 用户给了路径 → 在该路径下新建 `<试卷名>_工程` 子文件夹。
@@ -128,7 +130,7 @@ python3 "<SKILL_DIR>/scripts/setup.py" --install
 
 > 工程是一个独立子文件夹，所有素材、原子题、成卷都在里面，不污染其它位置；断点续作也回到这个文件夹。
 
-### 3. 决策点清单（模式二开工前一次性确定，写入 meta.json 的 `decisions` 字段）
+### 3. 决策点清单（🔴模式二·STOP：开工前一次性问清并写入 meta.json 的 `decisions`，否则不得自动出题）
 
 | 决策点 | 选项示例 |
 |--------|----------|

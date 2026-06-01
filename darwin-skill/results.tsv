@@ -61,3 +61,4 @@ timestamp	commit	skill	old_score	new_score	status	dimension	note	eval_mode
 2026-06-02T00:00	5fd5351	teacher-paper	-	85.4	baseline	-	独立judge评分;dim6 presets冗余/dim8兜底无分值门禁为主短板;runtime_warn=0	dry_run
 2026-06-02T01:00	5fd5351	teacher-paper	85.4	-	keep	dim6+dim8+dim3+dim2+dim7	Top5修复:删6冗余preset+科目别名/兜底分值告警/政史地史实告警/轮次改名/命题理念下沉	dry_run
 2026-06-02T02:00	934186d	teacher-paper	85.4	86.2	keep	盲评复评	独立judge盲评86.2(+0.8);Top5修复确认落地;新修dim6数学示例矛盾;judge#2(manifest推题量)经核为分组行不可推已驳回	dry_run
+2026-06-02T03:00	f002452	teacher-paper	86.2	-	keep	dim4+dim8	盲评剩余短板修复:第二步三必问加🔴STOP标记(dim4);英语含听力(预设+兜底)init即提醒三选一	dry_run
