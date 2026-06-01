@@ -1,6 +1,6 @@
-# teacher-paper skill 依赖（一次性安装即可在任何电脑使用）
-# 安装：pip3 install -r requirements.txt
-python-docx              # 生成 Word 试卷与答案（make_paper.py，必装）；也用于读 .docx 素材
+# teacher-paper skill 依赖（按需安装；先运行 setup.py 扫描能力）
+# 安装全部：pip3 install -r requirements.txt
+python-docx              # 最小稳定 DOCX 兜底后端（make_paper.py）；也用于读 .docx 素材
 pdfplumber               # 读取 .pdf 素材（含表格）；可选，未装时回退 pypdf
 python-pptx              # 读取 .pptx 课件素材
 openpyxl                 # 读取 .xlsx 表格素材
