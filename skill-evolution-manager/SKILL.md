@@ -3,7 +3,7 @@ name: Skill Evolution Manager
 description: 专门用于在对话结束时，根据用户反馈和对话内容总结优化并迭代现有 Skills 的核心工具。它通过吸取对话中的“精华”（如成功的解决方案、失败的教训、特定的代码规范）来持续演进 Skills 库。
 license: MIT
 github_url: https://github.com/KKKKhazix/Khazix-Skills
-github_hash: bab178311a65f93ffd073e4fdebc9911eae35791
+github_hash: 4b8ca7a57407fc764211a7a7bbea9640734bbee8
 updated_at: 2026-01-27T16:43:37.776644
 ---
 
