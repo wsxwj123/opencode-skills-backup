@@ -1,4 +1,6 @@
 ---
+github_url: https://github.com/op7418/Humanizer-zh
+github_hash: 91f3d394db8419c20d67ebe22a96cf8fee0a404b
 name: humanizer-zh
 description: |
   去除文本中的 AI 生成痕迹。适用于编辑或审阅文本，使其听起来更自然、更像人类书写。
@@ -13,10 +15,6 @@ allowed-tools:
 metadata:
   trigger: 编辑或审阅文本，去除 AI 写作痕迹
   source: 翻译自 blader/humanizer，参考 hardikpandya/stop-slop
-github_url: https://github.com/op7418/Humanizer-zh
-github_hash: 91f3d394db8419c20d67ebe22a96cf8fee0a404b
-version: 0.1.0
-created_at: 2026-02-03
 ---
 
 # Humanizer-zh: 去除 AI 写作痕迹

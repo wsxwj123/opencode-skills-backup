@@ -1,7 +1,8 @@
 ---
+github_url: https://github.com/OthmanAdi/langsmith-fetch-skill
+github_hash: 1a995f1e1d0bd10c5cc0e9d6ec3e3be8b0de02d3
 name: langsmith-fetch
 description: Debug LangChain and LangGraph agents by fetching execution traces from LangSmith Studio. Use when debugging agent behavior, investigating errors, analyzing tool calls, checking memory operations, or examining agent performance. Automatically fetches recent traces and analyzes execution patterns. Requires langsmith-fetch CLI installed.
-github_hash: 92568c1edaff1bde5371154f036d959346c145a8
 ---
 
 # LangSmith Fetch - Agent Debugging Skill
