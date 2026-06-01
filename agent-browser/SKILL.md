@@ -1,6 +1,6 @@
 ---
 github_url: https://github.com/vercel-labs/agent-browser
-github_hash: 4ad284890cb59564af603e6de403dd75dd19e832
+github_hash: b4f2f37d7b4f954022bc77f8d6dce70e07072b00
 name: agent-browser
 description: Browser automation CLI for AI agents. Use when the user needs to interact with websites, including navigating pages, filling forms, clicking buttons, taking screenshots, extracting data, testing web apps, or automating any browser task. Triggers include requests to "open a website", "fill out a form", "click a button", "take a screenshot", "scrape data from a page", "test this web app", "login to a site", "automate browser actions", or any task requiring programmatic web interaction.
 allowed-tools: Bash(npx agent-browser:*), Bash(agent-browser:*)
@@ -101,6 +101,31 @@ agent-browser diff url <url1> <url2>                 # Compare two pages
 agent-browser diff url <url1> <url2> --wait-until networkidle  # Custom wait strategy
 agent-browser diff url <url1> <url2> --selector "#main"  # Scope to element
 ```
+
+### Diagnostics & Advanced (added in v0.26–0.27)
+
+```bash
+# Diagnose an install (env, Chrome, daemons, providers, network); auto-cleans stale daemon files
+agent-browser doctor                  # full check
+agent-browser doctor --quick --json   # skip launch test, structured output
+agent-browser doctor --fix            # opt-in repairs (install Chrome, prune stale state)
+
+# Core Web Vitals (LCP, CLS, TTFB, FCP, INP) + React hydration phases for any page
+agent-browser vitals [url]
+
+# Stable tab ids/labels — ids like t1,t2 don't shift when other tabs close
+agent-browser tab new --label login https://example.com   # named tab
+agent-browser tab t1                  # switch by id or label
+agent-browser tab close login         # close by label
+
+# SPA client-side navigation without full page load
+agent-browser pushstate <url>
+
+# Canonical usage guide (renamed core skill; richer than this wrapper for deep dives)
+agent-browser skills get core
+```
+
+> React introspection (`react tree|inspect|renders|suspense`) is also available in v0.27 for React apps — enable via `--enable react-devtools`. See `agent-browser skills get core --full` for details.
 
 ## Common Patterns
 

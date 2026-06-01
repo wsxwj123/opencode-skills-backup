@@ -2,7 +2,7 @@
 name: bettafish
 description: 运行 BettaFish 舆情分析系统（源码初始化、依赖安装、Web 启动、命令行报告与 MindSpider 爬虫）。当用户提到 BettaFish、舆情分析系统部署、报告重生成时使用。
 github_url: https://github.com/666ghj/BettaFish
-github_hash: 53f60e8f4aa038a59ab5e02525634c92d6c849b5
+github_hash: 40327d75b60faaf347bc578f93714b5394079d03
 version: 0.1.0
 created_at: 2026-03-06T23:00:01.499292
 entry_point: scripts/wrapper.py

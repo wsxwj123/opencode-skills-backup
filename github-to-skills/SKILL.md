@@ -3,7 +3,7 @@ name: github-to-skills
 description: Automated factory for converting GitHub repositories into specialized AI skills. Use this skill when the user provides a GitHub URL and wants to "package", "wrap", or "create a skill" from it. It automatically fetches repository details, latest commit hashes, and generates a standardized skill structure with enhanced metadata suitable for lifecycle management.
 license: MIT
 github_url: https://github.com/KKKKhazix/Khazix-Skills
-github_hash: bab178311a65f93ffd073e4fdebc9911eae35791
+github_hash: 4b8ca7a57407fc764211a7a7bbea9640734bbee8
 updated_at: 2026-01-27T16:43:37.776828
 ---
 
