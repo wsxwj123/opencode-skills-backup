@@ -176,9 +176,23 @@ def _normalize_blueprint(d):
     return d
 
 
+# 科目别名：政治/道法 等异名归一到预设的规范名，避免为每个异名复制一份预设文件。
+_SUBJECT_ALIASES = {
+    "政治": "思想政治", "道德与法治": "思想政治", "道法": "思想政治",
+}
+
+
 def _load_preset(stage, subject, region):
-    """按 {stage}_{subject}_{region}.json → {stage}_{subject}.json 查预设。"""
-    names = [f"{stage}_{subject}_{region}.json", f"{stage}_{subject}.json"]
+    """查预设：按 [本名→别名] × [{stage}_{subject}_{region} → {stage}_{subject}] 顺序。
+    region 非"通用"时若无地区专版，自动回退到基名（基名即通用版，无需复制 _通用 文件）。"""
+    subjects = [subject]
+    alias = _SUBJECT_ALIASES.get(subject)
+    if alias and alias not in subjects:
+        subjects.append(alias)
+    names = []
+    for sub in subjects:
+        names.append(f"{stage}_{sub}_{region}.json")
+        names.append(f"{stage}_{sub}.json")
     for d in _PRESET_DIRS:
         for n in names:
             fp = os.path.join(d, n)
@@ -501,7 +515,7 @@ def cmd_build(args):
             if m.get("score") is None:
                 warn.append(f"题{m['num']} 缺 score 字段（未计入总分）")
 
-    # 校验（expected_questions=0 表示题量未知/通用兜底 → 跳过题量与分值校验）
+    # 校验（expected_questions=0 表示题量未知/通用兜底 → 无法做题量/分值门禁校验）
     exp_q = meta.get("expected_questions", 21)
     exp_total = meta.get("total", 120)
     if exp_q:
@@ -509,6 +523,11 @@ def cmd_build(args):
             warn.append(f"题量 {len(nums)} ≠ 期望 {exp_q}（题号：{','.join(nums) or '无'}）")
         if abs(total - exp_total) > 0.01:
             warn.append(f"分值合计 {total:g} ≠ 期望 {exp_total}")
+    else:
+        # 通用兜底/无样卷：题量分值结构未知，门禁无从校验，须人工把关，不能静默放行。
+        warn.append(f"⚠️结构未知（无样卷/预设题量分布），已跳过题量与分值门禁；"
+                    f"当前实得 {len(nums)} 题/合计 {total:g} 分，目标总分 {exp_total}。"
+                    f"请务必向用户确认大题题型与分值分布（或提供样卷 --blueprint-file）再定稿。")
     dup = sorted({n for n in nums if nums.count(n) > 1})
     if dup:
         warn.append(f"题号重复：{','.join(dup)}")
@@ -519,6 +538,13 @@ def cmd_build(args):
     # 默认 1000-1500（九年级语文小说规格）；其他年级/特殊要求由蓝图 meta.novel_len 覆盖。
     # 传 subject：英语等非中文卷按"词"计数，不套用中文字数默认区间。
     _check_novel_length(paper, warn, meta.get("novel_len"), meta.get("subject", ""))
+
+    # —— 政史地史实/数据真实性提醒：溯源门禁只覆盖 material 选文块，题干内嵌的
+    #    史实/年代/数据/地名等不触发门禁，须人工核验，不可编造。——
+    _subj = str(meta.get("subject", ""))
+    if any(k in _subj for k in ("历史", "地理", "政治", "道德与法治", "道法")):
+        warn.append(f"⚠️『{_subj}』题干内嵌的史实/年代/数据/地名不受溯源门禁覆盖，"
+                    f"请人工核验真实性，严禁编造（地图/图表需用户提供）。")
 
     # —— 阅读类素材真实性硬门禁：有违规则拒绝出卷（除非显式 --allow-unsourced）——
     allow_unsourced = "--allow-unsourced" in args
