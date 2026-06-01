@@ -64,8 +64,31 @@
 }
 ```
 - `paper`/`answer` 的 block 类型见 `scripts/make_paper.py` 顶部文档。
-- section 文件示例：`{"meta":{"status":"-"},"paper":[{"type":"section","text":"二、阅读（50分）"}],"answer":[{"type":"section","text":"二、阅读（50分）"}]}`
+- section 文件示例：`{"meta":{"status":"-"},"paper":[{"type":"section","text":"二、阅读（共50分）"}],"answer":[{"type":"section","text":"二、阅读（共50分）"}]}`
 - 共享材料文件：`paper` 放 `material`/`table` 块，`answer` 留空 `[]`。
+
+### 选文 material 块的标题/出处/排版（对标真题，build 有完整性门禁）
+
+阅读题的选文**必须随卷给全文**（缺则 build 拒绝出卷）。material 块按文体写：
+
+```json
+// 非连续性文本：多则材料 + 出处右对齐（出处必标）
+{"type":"material","label":"【材料一】","title":"天气预报中的统计与概率",
+ "paras":["……正文（楷体首行缩进）……"],"source":"（材料均改编自《科学之友》）"}
+
+// 小说/散文：标题+作者+正文（1000-1500字）+出处
+{"type":"material","title":"老街","author":"佚名",
+ "paras":["①……","②……"],"source":"（选自《读者》2024年第6期）"}
+
+// 古诗词：layout=verse → 标题/作者/诗句整体居中（不要合并成一段）
+{"type":"material","title":"柳梢青·春感","author":"〔宋〕刘辰翁","layout":"verse",
+ "paras":["铁马蒙毡，银花洒泪，春入愁城。","那堪独坐青灯，想故国高台月明。"],
+ "source":"（选自《须溪词》）"}
+```
+
+- 选文正文默认**楷体**、首行缩进2字；`title`/`author` 楷体居中；`source` 宋体右对齐（脚本自动，无需手设字体对齐）。
+- **小说选文净字数 1000-1500**，越界 build 告警。
+- 引号会自动规范（`'我的母亲'`→`“我的母亲”`），但应优先正确书写。
 
 ### 🔴 阅读类素材的溯源字段（硬门禁，必填）
 

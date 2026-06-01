@@ -4,7 +4,7 @@ description: "教师智能出题技能 - 根据文本资料（Word/PDF/PPT/Excel
 user-invocable: true
 allowed-tools: "Read Write Edit Bash Agent AskUserQuestion WebFetch WebSearch"
 metadata:
-  version: "3.2.0"
+  version: "3.3.0"
   author: "teacher-paper-skill"
 ---
 
@@ -218,16 +218,16 @@ python3 <SKILL_DIR>/scripts/fetch_web.py "<url>" ...
    4. 仿写·创意命名（4分）
    5. 口语交际·信息提炼（4分，限字数）
    6. 新闻消息·拟标题（4分）
-二、阅读（50分）
-  （一）非文学作品阅读·非连续性文本（8分）
+二、阅读（共50分）
+  （一）非连续性文本阅读（共8分）—— 选文须摘自真实新闻/科普，结尾右对齐标注出处
    7. 信息理解 选择题（2分）
    8. 分析推断 选择题（2分）
    9. 拓展应用 简答题（4分）
-  （二）文学作品阅读·小说（16分）
+  （二）文学作品阅读·小说（共16分）—— 小说选文 1000-1500 字，含标题+作者，随卷给全文
    10. 理解分析 多选题选两项（4分）
    11. 结构/手法 简答题（6分）
    12. 主旨探究 简答题（6分）
-  （三）古诗文阅读（18分）
+  （三）古诗文阅读（共18分）—— 古诗词用居中排版，文言文含篇名+出处
    13. 古诗词 理解赏析 选择题（2分）
    14. 古诗词 手法赏析 简答题（4分）
    15. 文言文 实词理解 选择题（2分）
@@ -240,6 +240,20 @@ python3 <SKILL_DIR>/scripts/fetch_web.py "<url>" ...
 三、写作（50分）
    21. 作文（50分）—— 命题/半命题，不少于600字
 ```
+
+#### 选文与排版铁律（阅读题必守，build 有硬门禁）
+
+| # | 规则 | 落地方式 |
+|---|------|----------|
+| 1 | **选文必须随卷给全文**——任何阅读题，对应选文/材料正文必须写进试卷，否则学生无法作答 | 用 `material` 块且 `paras` 写全文；缺则 build **拒绝出卷** |
+| 2 | **非连续性文本**（不是"非文学文本"）选文末尾**标注出处**，右对齐 | `material.source` 填 `（材料改编自《科学之友》）` 等，脚本自动右对齐 |
+| 3 | **小说/文言/古诗/名著**除正文外，须给**标题 + 作者/朝代或出处标注** | `material.title` + `material.author` + `material.source` |
+| 4 | **小说选文 1000-1500 字**（净字数） | 越界 build 会告警；过短补充情节，过长精简 |
+| 5 | **古诗词整体居中**排版（标题/作者/诗句都居中），不要简单合并成一段 | `material.layout="verse"`，脚本逐句居中 |
+| 6 | 选文正文默认**楷体**、首行缩进2字；标题/作者楷体居中（对标真题原卷版） | make_paper.py 自动处理，无需手动设字体 |
+
+> material 块写法见 `make_paper.py` 顶部文档与 `references/authoring-workflow.md`。
+> **引号自动规范**：成卷时脚本会把 `'我的母亲'`（单引号）等自动修正为中文双引号 `“我的母亲”`，但你仍应优先正确书写，别依赖兜底。
 
 **出题核心规则**：
 
@@ -293,7 +307,7 @@ python3 <SKILL_DIR>/scripts/fetch_web.py "<url>" ...
 **推荐：原子化工作流**（完整流程见 `references/authoring-workflow.md`）。每题独立成 json 文件，最后合并，避免上下文丢失、便于增量改题。
 
 ```bash
-# 1) 建工程脚手架（目录+meta+manifest+大题分隔文件）
+# 1) 建工程脚手架（目录+meta+manifest+大题分隔文件 + 复制脚本副本到 工程/scripts/）
 #    纯工程名→自动建到桌面（跨平台探测）；给绝对路径则建在指定位置；--mode 写入工作模式
 python3 <SKILL_DIR>/scripts/assemble.py init "<试卷名>_工程" --grade 九年级 --type 中考模拟 --mode 全自动
 
@@ -303,10 +317,18 @@ python3 <SKILL_DIR>/scripts/assemble.py init "<试卷名>_工程" --grade 九年
 
 # 2) 抓素材入 materials/，逐题写 items/NN_qXX.json（paper+answer+解析+命题意图）
 
-# 3) 合并校验并出卷（自动校验21题/120分/20-50-50，
-#    生成 content.json、content.md 与两个 Word 到 build/）
-python3 <SKILL_DIR>/scripts/assemble.py build "<试卷名>_工程"
+# 3) 合并校验并出卷 —— init 后改用【工程内脚本副本】，不再碰技能本体脚本！
+#    自动校验21题/120分/20-50-50、选文完整性、小说字数，生成两个 Word 到 build/
+python3 "<工程>/scripts/assemble.py" build "<工程>"
 ```
+
+> **为什么用工程内副本（重要）**：`init` 会把脚本复制一份到 `<工程>/scripts/`。之后的 build 一律用这份副本，
+> 这样即便临场要调脚本，改的也是工程内副本，**永不污染技能本体**，多份试卷工程互不影响。
+
+**出卷后必做（告知位置，不要替用户打开文件）**：build 末尾会打印两个 Word 的**绝对路径**与所在文件夹。
+你要把这两个路径清楚转告用户，然后用 AskUserQuestion 问：**"是否帮你打开成卷所在文件夹？"**
+- 用户同意 → 执行打开**文件夹**的命令（macOS `open "<build目录>"` / Windows `explorer "<build目录>"` / Linux `xdg-open "<build目录>"`）。
+- **只打开文件夹，绝不直接打开 docx 文件**——用户关掉文件后仍能在文件夹里找到，避免"文件在哪"的困惑。
 
 **⚠️ 出卷前确认门禁（必做，不可跳过）**：在运行第3步 `build` 之前，必须先把 `00_manifest.md` 的 21 题清单（题号·题型·考点·分值·难度·选材）完整展示给用户，逐题让用户确认或指出要改的题。**用户明确说"可以出卷"后才运行 build**。避免未经确认直接产出成卷。
 

@@ -22,28 +22,33 @@ import os
 import re
 import json
 import glob
+import shutil
 import subprocess
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 DEFAULT_NOTICE = [
-    "答题前，请将姓名、准考证号填写清楚，并核对条形码信息；",
+    "答题前，请考生先将自己的姓名、准考证号填写清楚，并认真核对条形码上的"
+    "姓名、准考证号；",
     "必须在答题卡上答题，在草稿纸、试题卷上答题无效；",
-    "答题时，请注意各题题号后面的答题要求；",
+    "答题时，请考生注意各题题号后面的答题要求；",
+    "请勿折叠答题卡，保持字体工整、笔迹清晰、卡面清洁；",
+    "答题卡上不准使用涂改液、涂改胶和贴纸；",
     "本学科试卷共21道题目，考试时量120分钟，满分120分。",
 ]
 
 # 长沙中考语文固定骨架：大题/小题分隔（3位前缀，题目/材料插空其间）
+# 板块名与分值括注对标 2025 真题原卷版（一律用"共N分"）。
 SKELETON = [
-    ("100_sec_积累运用", "一、积累运用（20分）"),
+    ("100_sec_积累运用", "一、积累运用（共20分）"),
     ("110_sub_积累", "（一）积累"),
     ("120_sub_运用", "（二）运用"),
-    ("200_sec_阅读", "二、阅读（50分）"),
-    ("210_sub_非连", "（一）非文学作品阅读（8分）"),
-    ("220_sub_小说", "（二）文学作品阅读（16分）"),
-    ("230_sub_古诗文", "（三）古诗文阅读（18分）"),
-    ("240_sub_名著", "（四）名著阅读（8分）"),
-    ("300_sec_写作", "三、写作（50分）"),
+    ("200_sec_阅读", "二、阅读（共50分）"),
+    ("210_sub_非连", "（一）非连续性文本阅读（共8分）"),
+    ("220_sub_小说", "（二）文学作品阅读（共16分）"),
+    ("230_sub_古诗文", "（三）古诗文阅读（共18分）"),
+    ("240_sub_名著", "（四）名著阅读（共8分）"),
+    ("300_sec_写作", "三、写作（共50分）"),
 ]
 SEC_PREFIXES = ("100_sec", "200_sec", "300_sec")
 
@@ -97,6 +102,9 @@ def cmd_init(args):
     for sub in ("", "materials", "items", "build"):
         os.makedirs(os.path.join(proj, sub), exist_ok=True)
 
+    # 把技能脚本复制一份到工程 scripts/，之后在工程内跑，避免误改技能本体脚本。
+    _copy_scripts(proj)
+
     meta = {
         "school": school, "year": "", "term": "",
         "grade": grade, "subject": "语文", "exam_type": etype,
@@ -124,10 +132,33 @@ def cmd_init(args):
                 {"meta": {"note": "本文件不会被合并（无下划线开头排除规则除外）；"
                                   "原子题命名 NN_qXX_描述.json，见 authoring-workflow.md"},
                  "paper": [], "answer": []})
+    proj_scripts = os.path.join(proj, "scripts")
     print(f"[完成] 工程已初始化：{proj}")
     print(f"  - meta.json / 00_manifest.md 已生成")
     print(f"  - items/ 已含 {len(SKELETON)} 个大题·小题分隔文件")
+    if os.path.isdir(proj_scripts):
+        print(f"  - scripts/ 已复制技能脚本副本（之后在工程内运行，"
+              f"不改技能本体）")
+        print(f"  之后请用工程内副本出卷："
+              f"\n    python3 \"{os.path.join(proj_scripts, 'assemble.py')}\" "
+              f"build \"{proj}\"")
     print(f"  下一步：抓素材到 materials/，逐题写 items/NN_qXX.json，再 build。")
+
+
+def _copy_scripts(proj):
+    """把技能 scripts/ 下的 .py 与 requirements.txt 复制到 工程/scripts/，
+    使 AI 在工程内运行、修改脚本时都不触及技能本体。__pycache__ 不复制。"""
+    dst = os.path.join(proj, "scripts")
+    os.makedirs(dst, exist_ok=True)
+    copied = 0
+    for fn in os.listdir(HERE):
+        if fn.endswith(".py") or fn == "requirements.txt":
+            try:
+                shutil.copy2(os.path.join(HERE, fn), os.path.join(dst, fn))
+                copied += 1
+            except OSError as e:
+                print(f"[警告] 复制脚本 {fn} 失败：{e}")
+    return copied
 
 
 def _write_manifest(proj, meta):
@@ -246,8 +277,24 @@ def cmd_build(args):
     if dup:
         warn.append(f"题号重复：{','.join(dup)}")
 
+    # —— 选文完整性硬门禁：阅读板块有题却无选文正文 → 学生无法作答，拒绝出卷 ——
+    completeness_errors = _check_materials_present(paper)
+    # —— 小说选文字数检查（1000-1500 字），越界仅告警不阻断 ——
+    _check_novel_length(paper, warn)
+
     # —— 阅读类素材真实性硬门禁：有违规则拒绝出卷（除非显式 --allow-unsourced）——
     allow_unsourced = "--allow-unsourced" in args
+    if completeness_errors:
+        print(f"[合并] 已读 {len(files)} 个原子文件，题量 {len(nums)}，分值合计 {total:g}")
+        print("\n🔴 [选文完整性门禁] 以下阅读板块有题目却没有选文材料，学生无法作答：")
+        for e in completeness_errors:
+            print("   - " + e)
+        print("\n  阅读题的选文/材料必须随卷给出（material 块且含 paras 正文）。")
+        print("  请在该板块补上 material 选文原子文件后重跑 build。")
+        if not allow_unsourced:
+            print("\n  已拒绝出卷。补齐选文后重跑；如确需强制出卷，加 --allow-unsourced。")
+            sys.exit(2)
+        print("\n  ⚠️ 你使用了 --allow-unsourced，跳过完整性门禁强制出卷（风险自负）。")
     if source_errors:
         print(f"[合并] 已读 {len(files)} 个原子文件，题量 {len(nums)}，分值合计 {total:g}")
         print("\n🔴 [素材溯源门禁] 以下阅读类素材未通过真实性校验：")
@@ -291,6 +338,153 @@ def cmd_build(args):
     if r.returncode != 0:
         print("[make_paper 失败]\n" + r.stderr.strip())
         sys.exit(1)
+
+    # 明确告知成卷位置（绝对路径），方便 AI 转告用户并询问是否打开所在文件夹。
+    build_dir = os.path.abspath(os.path.join(proj, "build"))
+    print("\n[文件位置] 两份成卷已生成在：")
+    print("  目录： " + build_dir)
+    print("  试卷： " + os.path.abspath(content["paper_path"]))
+    print("  答案： " + os.path.abspath(content["answer_path"]))
+    print("  打开所在文件夹（按系统选其一，勿直接打开文件）：")
+    print(f"    macOS:   open \"{build_dir}\"")
+    print(f"    Windows: explorer \"{build_dir}\"")
+    print(f"    Linux:   xdg-open \"{build_dir}\"")
+
+
+def _write_markdown_bundle(path, paper_blocks, answer_blocks):
+    """Export a readable Markdown mirror for Pandoc/MCP/Office fallback paths."""
+    parts = [
+        "# 学生试卷",
+        "",
+        _blocks_to_markdown(paper_blocks),
+        "",
+        "\\pagebreak",
+        "",
+        "# 参考答案及解析",
+        "",
+        _blocks_to_markdown(answer_blocks),
+        "",
+    ]
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("\n".join(parts))
+
+
+def _blocks_to_markdown(blocks):
+    lines = []
+    for b in blocks:
+        if not isinstance(b, dict):
+            continue
+        t = b.get("type")
+        if t == "title":
+            lines += ["# " + str(b.get("text", "")), ""]
+        elif t == "subtitle":
+            lines += [str(b.get("text", "")), ""]
+        elif t == "info":
+            lines += ["学校__________ 班级__________ 姓名__________ 考号__________", ""]
+        elif t == "notice":
+            lines += ["**注意事项：**"]
+            for i, item in enumerate(b.get("items", []), 1):
+                lines.append(f"{i}. {item}")
+            lines.append("")
+        elif t == "section":
+            lines += ["## " + str(b.get("text", "")), ""]
+        elif t == "sub":
+            lines += ["### " + str(b.get("text", "")), ""]
+        elif t == "para":
+            lines += [str(b.get("text", "")), ""]
+        elif t == "material":
+            if b.get("label"):
+                lines += ["**" + str(b.get("label")) + "**", ""]
+            if b.get("title"):
+                lines += ["#### " + str(b.get("title")), ""]
+            if b.get("author"):
+                lines += [str(b.get("author")), ""]
+            for para in b.get("paras", []):
+                lines += [str(para), ""]
+        elif t == "table":
+            lines.extend(_table_to_markdown(b.get("rows", [])))
+            lines.append("")
+        elif t == "question":
+            num = b.get("num", "")
+            score = b.get("score", "")
+            head = f"{num}. " if num else ""
+            lines += [f"{head}{b.get('text', '')}{score}", ""]
+        elif t == "options":
+            for opt in b.get("items", []):
+                lines.append(str(opt))
+            lines.append("")
+        elif t == "blank_lines":
+            for _ in range(int(b.get("count", 3) or 3)):
+                lines.append("____________________________________________")
+            lines.append("")
+        elif t == "essay_grid":
+            lines += [str(b.get("note", "请在作文格内作答。")), "",
+                      "> 作文方格纸请以 Word 版为准。", ""]
+        elif t == "answer":
+            num = b.get("num", "")
+            score = b.get("score", "")
+            head = f"{num}. " if num else ""
+            lines += [f"**{head}{score}** {b.get('text', '')}", ""]
+        elif t == "analysis":
+            lines += [str(b.get("text", "")), ""]
+        elif t == "pagebreak":
+            lines += ["\\pagebreak", ""]
+        elif t == "spacer":
+            lines.append("")
+    return "\n".join(lines).strip()
+
+
+def _table_to_markdown(rows):
+    rows = [r for r in (rows or []) if r]
+    if not rows:
+        return []
+    width = max(len(r) for r in rows)
+    normalized = [[str(row[i]) if i < len(row) else "" for i in range(width)]
+                  for row in rows]
+    out = ["| " + " | ".join(normalized[0]) + " |",
+           "| " + " | ".join(["---"] * width) + " |"]
+    for row in normalized[1:]:
+        out.append("| " + " | ".join(row) + " |")
+    return out
+
+
+def _python_cmd_with_module(module):
+    candidates = [[sys.executable]]
+    for name in ("python3", "python"):
+        p = _which(name)
+        if p:
+            candidates.append([p])
+    if os.name == "nt":
+        py = _which("py")
+        if py:
+            candidates.append([py, "-3"])
+    seen = set()
+    for cmd in candidates:
+        key = tuple(cmd)
+        if key in seen:
+            continue
+        seen.add(key)
+        try:
+            r = subprocess.run(cmd + ["-c", f"import {module}"],
+                               capture_output=True, timeout=8)
+        except Exception:
+            continue
+        if r.returncode == 0:
+            return cmd
+    return [sys.executable]
+
+
+def _which(name):
+    for folder in os.environ.get("PATH", "").split(os.pathsep):
+        path = os.path.join(folder, name)
+        if os.name == "nt":
+            for suffix in ("", ".exe", ".bat", ".cmd"):
+                p = path + suffix
+                if os.path.isfile(p) and os.access(p, os.X_OK):
+                    return p
+        elif os.path.isfile(path) and os.access(path, os.X_OK):
+            return path
+    return None
 
 
 def _write_markdown_bundle(path, paper_blocks, answer_blocks):
@@ -454,6 +648,65 @@ def _parse_opts(args):
         else:
             i += 1
     return opt
+
+
+# 阅读板块小标题关键词（这些板块必须随卷给出选文，否则学生无法作答）
+_READING_SUBS = ("非连", "非文学", "文学作品", "小说", "散文", "古诗文",
+                 "诗歌", "文言", "名著")
+
+
+def _check_materials_present(paper):
+    """遍历成卷 paper：每个阅读类小标题(sub)区间内，若有题目(question)却没有任何
+    带正文(paras)的选文(material)，判为'有题无文'，返回违规板块列表（阻断出卷）。
+    古诗文板块常含古诗词+文言文两篇选文，只要该区间至少有一篇选文即视为通过。"""
+    errors = []
+    region, has_mat, has_q = None, False, False
+
+    def _flush():
+        if region and any(k in region for k in _READING_SUBS) and has_q \
+                and not has_mat:
+            errors.append(f"{region}：有题目但缺选文材料（material 含 paras 正文）")
+
+    for b in paper:
+        if not isinstance(b, dict):
+            continue
+        t = b.get("type")
+        if t == "sub":
+            _flush()
+            region, has_mat, has_q = b.get("text", ""), False, False
+        elif t == "section":
+            _flush()
+            region, has_mat, has_q = None, False, False
+        elif t == "material" and b.get("paras"):
+            has_mat = True
+        elif t == "question":
+            has_q = True
+    _flush()
+    return errors
+
+
+def _novel_text_len(paras):
+    """统计选文正文净字数（去空白/换行）。"""
+    return sum(len(re.sub(r"\s", "", str(p))) for p in (paras or []))
+
+
+def _check_novel_length(paper, warn):
+    """小说(文学作品)选文字数应在 1000-1500；越界加入告警（不阻断）。
+    识别：处于'小说/文学作品'小标题区间内、layout 非 verse 的 material 选文。"""
+    region = None
+    for b in paper:
+        if not isinstance(b, dict):
+            continue
+        t = b.get("type")
+        if t in ("sub", "section"):
+            region = b.get("text", "") if t == "sub" else None
+        elif t == "material" and b.get("paras") and region \
+                and ("小说" in region or "文学作品" in region) \
+                and b.get("layout") != "verse":
+            n = _novel_text_len(b.get("paras"))
+            if n < 1000 or n > 1500:
+                warn.append(f"小说选文约 {n} 字，建议 1000-1500 字"
+                            f"（{'偏短' if n < 1000 else '偏长'}）")
 
 
 def _needs_source(meta, paper_blocks):

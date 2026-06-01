@@ -24,8 +24,13 @@ block 类型（type 字段）——试卷与答案通用：
   {"type":"section","text":"一、积累运用（20分）"}        大题标题（黑体四号）
   {"type":"sub","text":"（一）积累"}                      小标题（黑体五号）
   {"type":"para","text":"...","indent":true}             正文段落,indent=首行缩进
-  {"type":"material","label":"【材料一】","title":"老街",
-   "author":"","paras":["...","..."]}                    阅读材料（缩进区块）
+  {"type":"material","label":"【材料一】","title":"老街","author":"",
+   "paras":["...","..."],"source":"（选自《读者》2024年第6期）",
+   "layout":"prose","font":"楷体"}                        阅读选文（楷体正文）
+        - title/author 楷体居中；paras 楷体首行缩进2字（prose）
+        - layout="verse" → 古诗词，paras 整体居中（不缩进）
+        - source → 出处标注，右对齐宋体（非连/小说/古诗文/名著必标）
+        - 选文正文默认楷体，可用 font 覆盖
   {"type":"table","rows":[["a","b"],["c","d"]],"header":true}  表格
   {"type":"question","num":"1","score":"（2分）","text":"..."}  题干
   {"type":"options","items":["A. ...","B. ...","C. ...","D. ..."]}  选项（每项一行）
@@ -38,6 +43,7 @@ block 类型（type 字段）——试卷与答案通用：
 """
 import sys
 import os
+import re
 import json
 
 try:
@@ -50,8 +56,47 @@ except ImportError:
     sys.exit(1)
 
 
+# 字体常量（对标 2025 长沙中考真题原卷版排版）：
+# 标题/大题/小题用宋体加粗，正文题干用宋体，阅读选文正文用楷体。
 SONGTI = "宋体"
 HEITI = "黑体"
+KAITI = "楷体"
+
+_CJK = re.compile(r"[一-鿿]")
+
+
+def normalize_quotes(text):
+    """规范中文引号，修正部分模型（如 deepseek）把书名/称谓写成单引号 '我的母亲'
+    的问题。规则（保守，避免破坏正确的引号嵌套与英文缩写）：
+    1. ASCII 直双引号 " → 交替成中文弯双引号 “ ”；
+    2. 含中文、且成对（偶数个）的 ASCII 直单引号 ' → 交替成中文双引号（命题里
+       单引号包中文基本都是该用双引号的误写）；
+    3. 文本只有中文单引号 ‘ ’ 而无中文双引号时，单引号被误当主引号 → 升级为双引号。
+    正确的双内嵌单（如 “他说‘好’”）因双引号已存在而被原样保留。"""
+    if not text or not _CJK.search(text):
+        return text  # 不含中文的纯英文/数字文本不动，避免误伤英文撇号
+    if '"' in text:                                   # 1) ASCII 直双引号交替
+        out, open_d = [], True
+        for ch in text:
+            if ch == '"':
+                out.append("“" if open_d else "”")
+                open_d = not open_d
+            else:
+                out.append(ch)
+        text = "".join(out)
+    sgl = text.count("'")                              # 2) 成对 ASCII 直单引号
+    if sgl >= 2 and sgl % 2 == 0:
+        out, open_d = [], True
+        for ch in text:
+            if ch == "'":
+                out.append("“" if open_d else "”")
+                open_d = not open_d
+            else:
+                out.append(ch)
+        text = "".join(out)
+    if ("‘" in text or "’" in text) and ("“" not in text and "”" not in text):
+        text = text.replace("‘", "“").replace("’", "”")  # 3) 单引号误当主引号
+    return text
 
 
 def set_font(run, name=SONGTI, size=10.5, bold=False):
@@ -69,11 +114,13 @@ def add_para(doc, text="", align=None, indent_chars=0, size=10.5,
     p.paragraph_format.line_spacing = 1.5
     if align == "center":
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    elif align == "right":
+        p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
     if indent_chars:
         p.paragraph_format.first_line_indent = Pt(size * indent_chars)
     if text:
-        # 保留文本内的换行符：拆成多行，行间插软换行，避免 \n 被吞成空格
-        parts = str(text).split("\n")
+        # 先规范中文引号，再保留文本内换行：拆成多行，行间插软换行，避免 \n 被吞成空格
+        parts = normalize_quotes(str(text)).split("\n")
         r = p.add_run(parts[0])
         set_font(r, name=name, size=size, bold=bold)
         for seg in parts[1:]:
@@ -127,7 +174,8 @@ def render(doc, blocks):
     for b in blocks:
         t = b.get("type")
         if t == "title":
-            add_para(doc, b["text"], align="center", size=18, name=HEITI,
+            # 真题：大标题 宋体三号(16)加粗居中
+            add_para(doc, b["text"], align="center", size=16, name=SONGTI,
                      bold=True, space_after=6)
         elif t == "subtitle":
             add_para(doc, b["text"], align="center", size=12, space_after=8)
@@ -137,31 +185,44 @@ def render(doc, blocks):
                      "姓名__________ 考号__________",
                      align="center", size=10.5, space_after=10)
         elif t == "notice":
-            add_para(doc, "注意事项：", size=10.5, name=HEITI, bold=True,
+            # 真题：注意事项 宋体小四(12)加粗
+            add_para(doc, "注意事项：", size=12, name=SONGTI, bold=True,
                      space_after=2)
             for i, it in enumerate(b.get("items", []), 1):
-                add_para(doc, f"{i}.{it}", size=9, space_after=1)
+                add_para(doc, f"{i}.{it}", size=10.5, space_after=1)
         elif t == "section":
-            add_para(doc, b["text"], size=14, name=HEITI, bold=True,
+            # 真题：大题标题 宋体小四(12)加粗
+            add_para(doc, b["text"], size=12, name=SONGTI, bold=True,
                      space_after=4)
         elif t == "sub":
-            add_para(doc, b["text"], size=10.5, name=HEITI, bold=True,
+            # 真题：小标题 宋体小四(12)加粗
+            add_para(doc, b["text"], size=12, name=SONGTI, bold=True,
                      space_after=3)
         elif t == "para":
             add_para(doc, b["text"], indent_chars=2 if b.get("indent") else 0)
         elif t == "material":
+            # 真题排版：选文标题/作者楷体居中；正文楷体首行缩进2字；
+            # 古诗词(layout=verse)整体居中；出处右对齐宋体。
+            layout = b.get("layout", "prose")     # prose 散文/记叙/说明 | verse 古诗词
+            pfont = b.get("font", KAITI)          # 选文正文字体，默认楷体
             label = b.get("label", "")
             if label:
-                add_para(doc, label, size=10.5, name=HEITI, bold=True,
-                         space_after=2)
+                add_para(doc, label, size=10.5, name=SONGTI, space_after=2)
             if b.get("title"):
-                add_para(doc, b["title"], align="center", size=12, name=HEITI,
-                         bold=True, space_after=1)
+                add_para(doc, b["title"], align="center", size=10.5, name=pfont,
+                         space_after=1)
             if b.get("author"):
-                add_para(doc, b["author"], align="center", size=10.5,
-                         space_after=3)
+                add_para(doc, b["author"], align="center", size=10.5, name=pfont,
+                         space_after=2)
             for para in b.get("paras", []):
-                add_para(doc, para, indent_chars=2)
+                if layout == "verse":
+                    add_para(doc, para, align="center", size=10.5, name=pfont)
+                else:
+                    add_para(doc, para, indent_chars=2, size=10.5, name=pfont)
+            if b.get("source"):
+                # 出处标注：右对齐宋体（如"（材料均改编自《科学之友》）"）
+                add_para(doc, b["source"], align="right", size=10.5,
+                         name=SONGTI, space_after=4)
         elif t == "table":
             add_table(doc, b.get("rows", []), header=b.get("header", False))
             add_para(doc, "", space_after=2)
@@ -201,10 +262,11 @@ def render(doc, blocks):
 def new_doc():
     doc = Document()
     sec = doc.sections[0]
-    sec.top_margin = Cm(2.5)
-    sec.bottom_margin = Cm(2.5)
-    sec.left_margin = Cm(2.0)
-    sec.right_margin = Cm(2.0)
+    # 页边距对标 2025 长沙中考真题原卷版（上1.61/下2.54/左右1.91 cm）
+    sec.top_margin = Cm(1.61)
+    sec.bottom_margin = Cm(2.54)
+    sec.left_margin = Cm(1.91)
+    sec.right_margin = Cm(1.91)
     # 默认正文字体
     style = doc.styles["Normal"]
     style.font.name = SONGTI
