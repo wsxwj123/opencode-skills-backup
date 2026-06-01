@@ -266,9 +266,10 @@ FIG_DIR = None
 
 
 def _render_figure(doc, spec):
-    """插入配图。本轮支持：① spec.src 指向已有图片(用户提供/已渲染) → 直接插入；
-    ② 若同目录有 make_figure.py 则调用它按 spec 渲染；③ 都不行 → 降级为
-    "［图：alt］" 文字占位，绝不阻断出卷。理科自动配图(matplotlib等)下一轮接入。"""
+    """插入配图。本技能聚焦文科纯文字卷，不自动生成图形；此块仅用于偶发的
+    用户提供图片（如历史地图/地理图表）：① spec.src 指向已有图片 → 直接插入；
+    ② 否则降级为 "［图：alt］" 文字占位，绝不阻断出卷。
+    （理科自动配图不在范围；保留 make_figure 钩子仅为向前兼容，缺失即降级。）"""
     src = spec.get("src")
     width = spec.get("width_cm", 6.0)
     png = None
