@@ -30,8 +30,15 @@ import subprocess
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
-# 注意事项前 5 条通用，第 6 条按本卷题量/时长/满分动态生成。
-_NOTICE_BASE = [
+# 注意事项：分"卷面直接作答"（本技能默认，因不生成答题卡）与"用答题卡"两套，
+# 避免出现"卷面没答题卡却让在答题卡上答题"的自相矛盾。末条按题量/时长/满分动态生成。
+_NOTICE_PAPER = [  # 卷面直接作答（默认）
+    "答题前，请将自己的姓名、班级、考号等信息填写在试卷密封线内的指定位置；",
+    "请用黑色字迹的签字笔或钢笔，在试卷上对应题目处作答，字迹工整、卷面清洁；",
+    "答题时请注意各题题号后面的答题要求；",
+    "不得使用涂改液、涂改胶；如需修改，可划去后在旁边订正。",
+]
+_NOTICE_SHEET = [  # 配套答题卡（仅当用户明确使用答题卡时）
     "答题前，请考生先将自己的姓名、准考证号填写清楚，并认真核对条形码上的"
     "姓名、准考证号；",
     "必须在答题卡上答题，在草稿纸、试题卷上答题无效；",
@@ -41,12 +48,14 @@ _NOTICE_BASE = [
 ]
 
 
-def _default_notice(questions, duration, total):
+def _default_notice(questions, duration, total, answer_method="卷面作答"):
+    base = _NOTICE_SHEET if str(answer_method).strip() in ("答题卡", "涂卡") \
+        else _NOTICE_PAPER
     last = "本学科试卷"
     if questions:
         last += f"共{questions}道题目，"
     last += f"考试时量{duration}分钟，满分{total}分。"
-    return _NOTICE_BASE + [last]
+    return base + [last]
 
 
 # 长沙中考语文固定骨架（内置默认，对标 2025 真题原卷版，板块用"共N分"）
@@ -212,6 +221,8 @@ def cmd_init(args):
               "      [--total 总分] [--duration 时长分钟] [--questions 题量]\n"
               "      [--title ..] [--blueprint-file <样卷解析出的结构json>]\n"
               "      [--mode 全程确认|全自动] [--on-desktop] [--decisions '<json>']\n"
+              "      [--answer-method 卷面作答|答题卡] [--sealing-line true]\n"
+              "      [--page-number false] [--scope 范围] [--textbook 版本] [--answer-detail 详细|简略]\n"
               "  说明：结构来源优先级 = 样卷蓝图文件 > presets/预设 > 内置长沙九年级语文 > 通用兜底。\n"
               "       不带参数即默认九年级语文·长沙中考模拟（21题/120分/120分钟）。")
         sys.exit(1)
@@ -283,7 +294,10 @@ def cmd_init(args):
         or f"{stage}{subject}（{etype}）试卷"
     subtitle = opt.get("subtitle") or bp.get("subtitle") \
         or f"（满分：{total}分　时间：{duration}分钟）"
-    notice = bp.get("notice") or _default_notice(questions, duration, total)
+    # 作答方式：默认"卷面作答"（本技能不生成答题卡）；用户用答题卡时传 --answer-method 答题卡
+    answer_method = opt.get("answer-method") or bp.get("answer_method") or "卷面作答"
+    notice = bp.get("notice") or _default_notice(questions, duration, total,
+                                                 answer_method)
 
     for sub in ("", "materials", "items", "build"):
         os.makedirs(os.path.join(proj, sub), exist_ok=True)
@@ -302,6 +316,13 @@ def cmd_init(args):
         "blueprint_source": bp.get("source", ""),
         "work_mode": mode,          # 工作模式：全程确认 / 全自动
         "decisions": decisions,     # 开工前一次性确定的决策点（作业指导书）
+        "answer_method": answer_method,   # 卷面作答（默认）/ 答题卡
+        # 卷面工程项（AI 可按用户需求改）：页码默认开；密封线默认关；
+        "page_number": _opt_bool(opt.get("page-number"), True),
+        "sealing_line": _opt_bool(opt.get("sealing-line"), False),
+        "exam_scope": opt.get("scope", ""),       # 考试范围/单元/课次
+        "textbook": opt.get("textbook", ""),      # 教材版本/册次
+        "answer_detail": opt.get("answer-detail", "详细"),  # 答案解析详略：详细/简略/含采分点
     }
     # 小说选文字数区间：蓝图指定则带上，build 校验按此；默认（不写）即 1000-1500。
     if bp.get("novel_len"):
@@ -380,6 +401,41 @@ def _write_manifest(proj, meta, rows, summary=None):
         f.write("\n".join(lines))
 
 
+def _find_soffice():
+    """找 LibreOffice/soffice 可执行文件（docx→pdf 转换器）。"""
+    for name in ("soffice", "libreoffice"):
+        p = shutil.which(name)
+        if p:
+            return p
+    mac = "/Applications/LibreOffice.app/Contents/MacOS/soffice"
+    return mac if os.path.exists(mac) else None
+
+
+def _export_pdf(docx_paths, out_dir):
+    """把 docx 批量转 PDF。优先 LibreOffice；没有则提示用户用 Word/WPS 手动导出。"""
+    soffice = _find_soffice()
+    if not soffice:
+        print("[PDF] 未找到 LibreOffice/soffice，无法自动转 PDF。"
+              "可用 Word/WPS/Pages 打开 docx 后『另存为/导出 PDF』。")
+        return
+    ok = 0
+    for dp in docx_paths:
+        try:
+            r = subprocess.run(
+                [soffice, "--headless", "--convert-to", "pdf",
+                 "--outdir", out_dir, dp],
+                capture_output=True, text=True, timeout=120)
+            pdf = os.path.splitext(dp)[0] + ".pdf"
+            if r.returncode == 0 and os.path.exists(pdf):
+                print(f"[PDF] 已生成：{pdf}")
+                ok += 1
+            else:
+                print(f"[PDF] 转换失败：{os.path.basename(dp)}　{r.stderr.strip()[:200]}")
+        except (subprocess.TimeoutExpired, OSError) as e:
+            print(f"[PDF] 转换异常：{os.path.basename(dp)}　{e}")
+    return ok
+
+
 def cmd_build(args):
     if not args:
         print("用法：assemble.py build <工程目录>")
@@ -400,6 +456,8 @@ def cmd_build(args):
         {"type": "subtitle", "text": meta.get("subtitle", "")},
         {"type": "info"},
     ]
+    if meta.get("sealing_line"):       # 密封线（仅试卷，紧跟填写区）
+        paper.append({"type": "sealing"})
     if meta.get("notice"):
         paper.append({"type": "notice", "items": meta["notice"]})
     answers = [
@@ -459,7 +517,8 @@ def cmd_build(args):
     completeness_errors = _check_materials_present(paper)
     # —— 小说选文字数检查，越界仅告警不阻断 ——
     # 默认 1000-1500（九年级语文小说规格）；其他年级/特殊要求由蓝图 meta.novel_len 覆盖。
-    _check_novel_length(paper, warn, meta.get("novel_len"))
+    # 传 subject：英语等非中文卷按"词"计数，不套用中文字数默认区间。
+    _check_novel_length(paper, warn, meta.get("novel_len"), meta.get("subject", ""))
 
     # —— 阅读类素材真实性硬门禁：有违规则拒绝出卷（除非显式 --allow-unsourced）——
     allow_unsourced = "--allow-unsourced" in args
@@ -494,6 +553,7 @@ def cmd_build(args):
         "answer_path": os.path.join(proj, "build",
                                     meta.get("title", "试卷") + "_参考答案及解析.docx"),
         "paper": paper, "answers": answers,
+        "meta": meta,   # 透传页码/密封线等渲染选项给 make_paper
     }
     cpath = os.path.join(proj, "build", "content.json")
     os.makedirs(os.path.dirname(cpath), exist_ok=True)  # build/ 可能被删
@@ -517,6 +577,12 @@ def cmd_build(args):
     if r.returncode != 0:
         print("[make_paper 失败]\n" + r.stderr.strip())
         sys.exit(1)
+
+    # 可选：导出 PDF（--pdf）。需本机有 LibreOffice/soffice，否则提示手动导出。
+    if "--pdf" in args or meta.get("output_pdf"):
+        _export_pdf([os.path.abspath(content["paper_path"]),
+                     os.path.abspath(content["answer_path"])],
+                    os.path.abspath(os.path.join(proj, "build")))
 
     # 明确告知成卷位置（绝对路径），方便 AI 转告用户并询问是否打开所在文件夹。
     build_dir = os.path.abspath(os.path.join(proj, "build"))
@@ -672,7 +738,16 @@ def _which(name):
 
 
 # 无值布尔开关：出现即为 True，不吞掉后一个参数
-_BOOL_FLAGS = {"on-desktop", "allow-unsourced"}
+_BOOL_FLAGS = {"on-desktop", "allow-unsourced", "pdf"}
+
+
+def _opt_bool(val, default):
+    """把命令行字符串/None 解析成布尔；None→default，false/0/no/off→False，其余→True。"""
+    if val is None:
+        return default
+    if isinstance(val, bool):
+        return val
+    return str(val).strip().lower() not in ("false", "0", "no", "off", "否", "关")
 
 
 def _parse_opts(args):
@@ -733,20 +808,28 @@ def _check_materials_present(paper):
     return errors
 
 
-def _novel_text_len(paras):
-    """统计选文正文净字数（去空白/换行）。"""
+def _novel_text_len(paras, is_english=False):
+    """统计选文正文长度：中文按净字数（去空白），英文按单词数。"""
+    if is_english:
+        return sum(len(re.findall(r"[A-Za-z]+(?:'[A-Za-z]+)?", str(p)))
+                   for p in (paras or []))
     return sum(len(re.sub(r"\s", "", str(p))) for p in (paras or []))
 
 
-def _check_novel_length(paper, warn, bounds=None):
+def _check_novel_length(paper, warn, bounds=None, subject=""):
     """小说(文学作品)选文字数越界加入告警（不阻断）。
-    默认区间 1000-1500（九年级语文小说规格）；bounds=[lo,hi] 时按蓝图给定区间。
+    默认区间 1000-1500（九年级语文小说规格，按中文字）；bounds=[lo,hi] 时按蓝图给定区间。
+    英语等非中文卷：按"词"计数；未显式给 bounds 则不校验（中文默认区间不适用）。
     识别：处于'小说/文学作品'小标题区间内、layout 非 verse 的 material 选文。"""
+    is_english = "英语" in str(subject)
+    if is_english and not bounds:
+        return
     try:
         lo, hi = (bounds or [1000, 1500])
         lo, hi = int(lo), int(hi)
     except (TypeError, ValueError):
         lo, hi = 1000, 1500
+    unit = "词" if is_english else "字"
     region = None
     for b in paper:
         if not isinstance(b, dict):
@@ -757,9 +840,9 @@ def _check_novel_length(paper, warn, bounds=None):
         elif t == "material" and b.get("paras") and region \
                 and ("小说" in region or "文学作品" in region) \
                 and b.get("layout") != "verse":
-            n = _novel_text_len(b.get("paras"))
+            n = _novel_text_len(b.get("paras"), is_english)
             if n < lo or n > hi:
-                warn.append(f"小说选文约 {n} 字，建议 {lo}-{hi} 字"
+                warn.append(f"小说选文约 {n} {unit}，建议 {lo}-{hi} {unit}"
                             f"（{'偏短' if n < lo else '偏长'}）")
 
 

@@ -13,13 +13,15 @@ JSON 结构：
   "paper_path":  "九年级语文试卷.docx",          # 试卷输出文件名
   "answer_path": "九年级语文参考答案及解析.docx",  # 答案输出文件名
   "paper":   [ <block>, ... ],   # 学生试卷的有序内容块
-  "answers": [ <block>, ... ]    # 参考答案及解析的有序内容块
+  "answers": [ <block>, ... ],   # 参考答案及解析的有序内容块
+  "meta":    { "page_number": true, ... }  # 可选；page_number=false 关闭页码
 }
 
 block 类型（type 字段）——试卷与答案通用：
   {"type":"title","text":"..."}                          大标题（居中,黑体小二）
   {"type":"subtitle","text":"（满分120分 时间120分钟）"}  副标题（居中,小四）
-  {"type":"info"}                                         学校/班级/姓名/考号 填写行
+  {"type":"info"}                                         学校/班级/姓名/考号/座位号 填写行
+  {"type":"sealing"}                                      密封线（印刷版横排虚线，仅试卷）
   {"type":"notice","items":["...","..."]}                注意事项编号列表
   {"type":"section","text":"一、积累运用（20分）"}        大题标题（黑体四号）
   {"type":"sub","text":"（一）积累"}                      小标题（黑体五号）
@@ -51,6 +53,7 @@ try:
     from docx.shared import Pt, Cm
     from docx.enum.text import WD_ALIGN_PARAGRAPH
     from docx.oxml.ns import qn
+    from docx.oxml import OxmlElement
 except ImportError:
     print("[缺少依赖] 需要 python-docx。请运行：pip3 install python-docx")
     sys.exit(1)
@@ -181,9 +184,11 @@ def render(doc, blocks):
             add_para(doc, b["text"], align="center", size=12, space_after=8)
         elif t == "info":
             add_para(doc,
-                     "学校__________ 班级__________ "
-                     "姓名__________ 考号__________",
+                     "学校__________ 班级__________ 姓名__________ "
+                     "考号__________ 座位号______",
                      align="center", size=10.5, space_after=10)
+        elif t == "sealing":
+            _add_sealing_line(doc)
         elif t == "notice":
             # 真题：注意事项 宋体小四(12)加粗
             add_para(doc, "注意事项：", size=12, name=SONGTI, bold=True,
@@ -300,6 +305,49 @@ def _render_figure(doc, spec):
     add_para(doc, f"［图：{alt}］", align="center", size=9, space_after=4)
 
 
+def _add_sealing_line(doc):
+    """密封线（横排印刷版）：填写区下方一条带提示的虚线，提示密封线内不要答题。
+    真考卷的竖排左边距密封线在 Word 里实现脆弱，这里用可靠的横排印刷版替代。"""
+    add_para(doc,
+             "…………………………密封…………线…………内…………不…………要…………"
+             "答…………题…………………………",
+             align="center", size=9, name=SONGTI, space_after=2)
+
+
+def _add_page_footer(doc):
+    """给每个 section 的页脚加居中页码「第 X 页　共 Y 页」（用 Word 域，打开自动更新）。"""
+    for section in doc.sections:
+        footer = section.footer
+        footer.is_linked_to_previous = False
+        p = footer.paragraphs[0] if footer.paragraphs else footer.add_paragraph()
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        for r in list(p.runs):                       # 清空已有内容
+            r._element.getparent().remove(r._element)
+
+        def _field(instr):
+            run = p.add_run()
+            set_font(run, size=9)
+            begin = OxmlElement("w:fldChar")
+            begin.set(qn("w:fldCharType"), "begin")
+            instr_el = OxmlElement("w:instrText")
+            instr_el.set(qn("xml:space"), "preserve")
+            instr_el.text = instr
+            end = OxmlElement("w:fldChar")
+            end.set(qn("w:fldCharType"), "end")
+            run._r.append(begin)
+            run._r.append(instr_el)
+            run._r.append(end)
+
+        r1 = p.add_run("第 ")
+        set_font(r1, size=9)
+        _field("PAGE")
+        r2 = p.add_run(" 页　共 ")
+        set_font(r2, size=9)
+        _field("NUMPAGES")
+        r3 = p.add_run(" 页")
+        set_font(r3, size=9)
+
+
 def new_doc():
     doc = Document()
     sec = doc.sections[0]
@@ -341,14 +389,21 @@ def main():
     FIG_DIR = os.path.join(
         os.path.dirname(os.path.abspath(data.get("paper_path", "."))), "figures")
 
+    meta = data.get("meta", {}) if isinstance(data.get("meta"), dict) else {}
+    want_page_num = meta.get("page_number", True)  # 默认加页码
+
     paper = new_doc()
     render(paper, data.get("paper", []))
+    if want_page_num:
+        _add_page_footer(paper)
     paper_path = data.get("paper_path", "试卷.docx")
     _ensure_dir(paper_path)
     paper.save(paper_path)
 
     ans = new_doc()
     render(ans, data.get("answers", []))
+    if want_page_num:
+        _add_page_footer(ans)
     ans_path = data.get("answer_path", "参考答案及解析.docx")
     _ensure_dir(ans_path)
     ans.save(ans_path)
