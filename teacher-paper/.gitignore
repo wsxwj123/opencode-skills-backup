@@ -1,0 +1,6 @@
+# Python 缓存
+scripts/__pycache__/
+*.pyc
+
+# 出卷工程产物（用户在工作目录生成，不应进 skill 仓库）
+*_工程/

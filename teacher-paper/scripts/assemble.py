@@ -1,0 +1,424 @@
+#!/usr/bin/env python3
+"""
+原子化组卷器 —— teacher-paper skill 自包含组件
+把"每题一个 json 文件"的原子化内容合并成整卷，并调用 make_paper.py 出 Word。
+解决资料多时上下文易丢、改一题要重排全卷的问题。详见 references/authoring-workflow.md。
+
+用法：
+    # 1) 建工程脚手架（目录 + meta.json + manifest + 大题/小题分隔文件）
+    python3 assemble.py init "<工程目录>" [--grade 九年级] [--type 中考模拟]
+            [--title "九年级语文（中考模拟）试卷"] [--school ""] [--region 长沙]
+
+    # 2) 合并 items/ 下所有原子文件 → build/content.json → 生成两个 Word
+    python3 assemble.py build "<工程目录>"
+
+原子文件（items/NN_*.json）格式：
+    {"meta":{"num":"7","score":2,"status":"已出", ...}, "paper":[...], "answer":[...]}
+  - NN 为序号前缀（建议3位），控制全卷顺序；section/sub/material 文件可无 num/score。
+  - paper/answer 的 block 类型见 make_paper.py 顶部文档。
+"""
+import sys
+import os
+import re
+import json
+import glob
+import subprocess
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+
+DEFAULT_NOTICE = [
+    "答题前，请将姓名、准考证号填写清楚，并核对条形码信息；",
+    "必须在答题卡上答题，在草稿纸、试题卷上答题无效；",
+    "答题时，请注意各题题号后面的答题要求；",
+    "本学科试卷共21道题目，考试时量120分钟，满分120分。",
+]
+
+# 长沙中考语文固定骨架：大题/小题分隔（3位前缀，题目/材料插空其间）
+SKELETON = [
+    ("100_sec_积累运用", "一、积累运用（20分）"),
+    ("110_sub_积累", "（一）积累"),
+    ("120_sub_运用", "（二）运用"),
+    ("200_sec_阅读", "二、阅读（50分）"),
+    ("210_sub_非连", "（一）非文学作品阅读（8分）"),
+    ("220_sub_小说", "（二）文学作品阅读（16分）"),
+    ("230_sub_古诗文", "（三）古诗文阅读（18分）"),
+    ("240_sub_名著", "（四）名著阅读（8分）"),
+    ("300_sec_写作", "三、写作（50分）"),
+]
+SEC_PREFIXES = ("100_sec", "200_sec", "300_sec")
+
+# 阅读类素材真实性硬门禁：含选文正文的材料文件禁止编造，
+# meta 必须声明 source（来源URL 或 "原创-已声明"）+ source_file（materials/ 下真实文件）。
+
+
+def cmd_init(args):
+    if not args:
+        print("用法：assemble.py init <工程目录|工程名> [--grade ..] [--type ..]\n"
+              "          [--title ..] [--region ..] [--mode 全程确认|全自动]\n"
+              "          [--on-desktop] [--decisions '<json>']")
+        sys.exit(1)
+    proj = args[0]
+    opt = _parse_opts(args[1:])
+
+    # 工程位置：传入纯工程名（不含任何路径分隔符）或显式 --on-desktop → 建到桌面
+    # 同时判断 / 和 \：Windows 上用户也可能用正斜杠，os.sep 只有 \ 会漏判
+    has_sep = ("/" in proj) or ("\\" in proj)
+    if not os.path.isabs(proj) and ("--on-desktop" in args or not has_sep):
+        desktop = _detect_desktop()
+        if desktop:
+            proj = os.path.join(desktop, proj)
+            print(f"[位置] 未指定项目文件夹，工程建在桌面：{proj}")
+        else:
+            print(f"[位置] 未探测到桌面目录，工程建在当前目录：{os.path.abspath(proj)}")
+
+    if os.path.exists(os.path.join(proj, "meta.json")):
+        print(f"[提示] {proj} 已是工程目录，init 将覆盖 meta.json 与 00_manifest.md "
+              f"及 9 个大题分隔文件；items/ 下你写的题目文件不受影响。")
+    grade = opt.get("grade", "九年级")
+    etype = opt.get("type", "中考模拟")
+    title = opt.get("title", f"{grade}语文（{etype}）试卷")
+    school = opt.get("school", "")
+    region = opt.get("region", "长沙")
+    mode = opt.get("mode", "全自动")  # 全程确认 / 全自动
+    # 决策点：优先从文件读（跨平台稳妥，避免命令行传 JSON 在 Windows 引号问题），
+    # 其次从 --decisions 直接传 JSON 字符串（mac/Linux 方便）。
+    decisions = {}
+    if opt.get("decisions-file"):
+        try:
+            decisions = _read_json(opt["decisions-file"])
+        except (json.JSONDecodeError, FileNotFoundError, OSError) as e:
+            print(f"[警告] --decisions-file 读取失败（{e}），已忽略")
+    elif opt.get("decisions"):
+        try:
+            decisions = json.loads(opt["decisions"])
+        except json.JSONDecodeError:
+            print("[警告] --decisions 不是合法 JSON，已忽略")
+
+    for sub in ("", "materials", "items", "build"):
+        os.makedirs(os.path.join(proj, sub), exist_ok=True)
+
+    meta = {
+        "school": school, "year": "", "term": "",
+        "grade": grade, "subject": "语文", "exam_type": etype,
+        "region": region, "total": 120, "duration": 120,
+        "expected_questions": 21,
+        "title": title,
+        "subtitle": "（满分：120分　时间：120分钟）",
+        "notice": DEFAULT_NOTICE,
+        "work_mode": mode,          # 工作模式：全程确认 / 全自动
+        "decisions": decisions,     # 开工前一次性确定的决策点（作业指导书）
+    }
+    _write_json(os.path.join(proj, "meta.json"), meta)
+
+    # 写大题/小题分隔文件
+    is_sec = lambda name: name.startswith(SEC_PREFIXES)
+    for name, text in SKELETON:
+        btype = "section" if is_sec(name) else "sub"
+        block = {"type": btype, "text": text}
+        atom = {"meta": {"status": "-"}, "paper": [block],
+                "answer": [block] if btype == "section" else []}
+        _write_json(os.path.join(proj, "items", name + ".json"), atom)
+
+    _write_manifest(proj, meta)
+    _write_json(os.path.join(proj, "items", "_README.json"),
+                {"meta": {"note": "本文件不会被合并（无下划线开头排除规则除外）；"
+                                  "原子题命名 NN_qXX_描述.json，见 authoring-workflow.md"},
+                 "paper": [], "answer": []})
+    print(f"[完成] 工程已初始化：{proj}")
+    print(f"  - meta.json / 00_manifest.md 已生成")
+    print(f"  - items/ 已含 {len(SKELETON)} 个大题·小题分隔文件")
+    print(f"  下一步：抓素材到 materials/，逐题写 items/NN_qXX.json，再 build。")
+
+
+def _write_manifest(proj, meta):
+    rows = [
+        ("111", "q01", "成语·字音·字形 选择", 2, "字音字形", "0.85"),
+        ("112", "q02", "古诗文名句默写", 4, "情境默写", "0.85"),
+        ("121", "q03", "病句修改 选择", 2, "语病辨析", "0.7"),
+        ("122", "q04", "仿写·创意命名", 4, "语言运用", "0.65"),
+        ("123", "q05", "口语交际·信息提炼", 4, "口语交际", "0.65"),
+        ("124", "q06", "新闻消息·拟标题", 4, "概括", "0.6"),
+        ("212", "q07", "非连·信息理解 选择", 2, "信息筛选", "0.7"),
+        ("213", "q08", "非连·分析推断 选择", 2, "推断", "0.65"),
+        ("214", "q09", "非连·拓展应用 简答", 4, "迁移应用", "0.55"),
+        ("222", "q10", "小说·理解分析 多选", 4, "综合理解", "0.6"),
+        ("223", "q11", "小说·结构/手法 简答", 6, "手法分析", "0.5"),
+        ("224", "q12", "小说·主旨探究 简答", 6, "探究", "0.45"),
+        ("232", "q13", "古诗词·理解赏析 选择", 2, "诗词鉴赏", "0.6"),
+        ("233", "q14", "古诗词·手法赏析 简答", 4, "鉴赏", "0.5"),
+        ("235", "q15", "文言·实词理解 选择", 2, "文言实词", "0.65"),
+        ("236", "q16", "文言·断句 选择", 2, "文言断句", "0.6"),
+        ("237", "q17", "文言·翻译", 4, "文言翻译", "0.55"),
+        ("238", "q18", "文言·形象/内容 分析", 4, "内容分析", "0.55"),
+        ("242", "q19", "名著·理解分析 选择", 2, "名著识记", "0.6"),
+        ("243", "q20", "名著·创意探究 简答", 6, "探究", "0.45"),
+        ("301", "q21", "作文", 50, "写作", "—"),
+    ]
+    lines = [
+        f"# {meta['title']} —— 命题进度索引（manifest）",
+        "",
+        "> 状态：待出 / 已出 / 已审 / 定稿。改某题只动对应 items/NN_qXX.json。",
+        "",
+        f"- 学段：{meta['grade']}　类型：{meta['exam_type']}　地区：{meta['region']}",
+        f"- 规格：{meta['expected_questions']}题 / {meta['total']}分 / {meta['duration']}分钟",
+        "",
+        "| 文件前缀 | 题号 | 题型 | 分值 | 考点 | 难度 | 拟用素材 | 状态 |",
+        "|------|------|------|------|------|------|----------|------|",
+    ]
+    for pre, q, typ, score, kp, diff in rows:
+        lines.append(f"| {pre} | {q[1:]} | {typ} | {score} | {kp} | {diff} |  | 待出 |")
+    lines += ["", "合计：21题 / 120分（一20·二50·三50）", ""]
+    with open(os.path.join(proj, "00_manifest.md"), "w", encoding="utf-8") as f:
+        f.write("\n".join(lines))
+
+
+def cmd_build(args):
+    if not args:
+        print("用法：assemble.py build <工程目录>")
+        sys.exit(1)
+    proj = args[0]
+    meta_path = os.path.join(proj, "meta.json")
+    if not os.path.exists(meta_path):
+        print(f"[错误] 找不到 {meta_path}；请先运行：assemble.py init <工程目录>")
+        sys.exit(1)
+    try:
+        meta = _read_json(meta_path)
+    except json.JSONDecodeError as e:
+        print(f"[错误] meta.json 不是合法 JSON：{e}")
+        sys.exit(1)
+
+    paper = [
+        {"type": "title", "text": meta.get("title", "试卷")},
+        {"type": "subtitle", "text": meta.get("subtitle", "")},
+        {"type": "info"},
+    ]
+    if meta.get("notice"):
+        paper.append({"type": "notice", "items": meta["notice"]})
+    answers = [
+        {"type": "title", "text": meta.get("title", "试卷") + "　参考答案及解析"},
+    ]
+
+    files = glob.glob(os.path.join(proj, "items", "*.json"))
+    files = [f for f in files if not os.path.basename(f).startswith("_")]
+    files = sorted(files, key=_sort_key)  # 自然数排序，避免字典序把"100"排到"90"前
+
+    total = 0
+    nums = []
+    warn = []
+    source_errors = []  # 阅读类素材真实性硬门禁的违规项
+    materials_dir = os.path.join(proj, "materials")
+    for fp in files:
+        try:
+            atom = _read_json(fp)
+        except json.JSONDecodeError as e:
+            warn.append(f"{os.path.basename(fp)} 非合法JSON已跳过（{e}）")
+            continue
+        p_blocks = atom.get("paper", [])
+        a_blocks = atom.get("answer", [])
+        if not isinstance(p_blocks, list) or not isinstance(a_blocks, list):
+            warn.append(f"{os.path.basename(fp)} 的 paper/answer 不是列表，已跳过（避免内容被逐字符拆散）")
+            continue
+        paper.extend(p_blocks)
+        answers.extend(a_blocks)
+        m = atom.get("meta", {})
+
+        # —— 阅读类素材真实性硬门禁 ——
+        _check_source(fp, m, p_blocks, materials_dir, source_errors)
+
+        if m.get("score") is not None and str(m.get("status", "")) != "-":
+            try:
+                total += float(m["score"])
+            except (TypeError, ValueError):
+                pass
+        if m.get("num"):
+            nums.append(str(m["num"]))
+            if m.get("score") is None:
+                warn.append(f"题{m['num']} 缺 score 字段（未计入总分）")
+
+    # 校验
+    exp_q = meta.get("expected_questions", 21)
+    exp_total = meta.get("total", 120)
+    if len(nums) != exp_q:
+        warn.append(f"题量 {len(nums)} ≠ 期望 {exp_q}（题号：{','.join(nums) or '无'}）")
+    if abs(total - exp_total) > 0.01:
+        warn.append(f"分值合计 {total:g} ≠ 期望 {exp_total}")
+    dup = sorted({n for n in nums if nums.count(n) > 1})
+    if dup:
+        warn.append(f"题号重复：{','.join(dup)}")
+
+    # —— 阅读类素材真实性硬门禁：有违规则拒绝出卷（除非显式 --allow-unsourced）——
+    allow_unsourced = "--allow-unsourced" in args
+    if source_errors:
+        print(f"[合并] 已读 {len(files)} 个原子文件，题量 {len(nums)}，分值合计 {total:g}")
+        print("\n🔴 [素材溯源门禁] 以下阅读类素材未通过真实性校验：")
+        for e in source_errors:
+            print("   - " + e)
+        print("\n  阅读材料（非连/小说/古诗文/名著）禁止编造，必须：")
+        print("  ① 用 fetch_web.py 抓取真实新闻/科普/古籍原文，落盘到 工程/materials/；")
+        print("  ② 在该题 meta 写 source（来源URL/出处）与 source_file（materials/下文件名）；")
+        print("  ③ 确属教师原创的现代文，meta.source 显式写 '原创-已声明' 方可放行。")
+        if not allow_unsourced:
+            print("\n  已拒绝出卷。修正后重跑；如确需强制出卷，加 --allow-unsourced。")
+            sys.exit(2)
+        print("\n  ⚠️ 你使用了 --allow-unsourced，跳过门禁强制出卷（风险自负）。")
+
+    content = {
+        "paper_path": os.path.join(proj, "build",
+                                   meta.get("title", "试卷") + ".docx"),
+        "answer_path": os.path.join(proj, "build",
+                                    meta.get("title", "试卷") + "_参考答案及解析.docx"),
+        "paper": paper, "answers": answers,
+    }
+    cpath = os.path.join(proj, "build", "content.json")
+    os.makedirs(os.path.dirname(cpath), exist_ok=True)  # build/ 可能被删
+    _write_json(cpath, content)
+
+    print(f"[合并] 已读 {len(files)} 个原子文件，题量 {len(nums)}，分值合计 {total:g}")
+    if warn:
+        print("[校验告警] " + "；".join(warn))
+    else:
+        print("[校验通过] 题量与分值符合期望")
+
+    r = subprocess.run(
+        [sys.executable, os.path.join(HERE, "make_paper.py"), cpath],
+        capture_output=True, text=True)
+    print(r.stdout.strip())
+    if r.returncode != 0:
+        print("[make_paper 失败]\n" + r.stderr.strip())
+        sys.exit(1)
+
+
+# 无值布尔开关：出现即为 True，不吞掉后一个参数
+_BOOL_FLAGS = {"on-desktop", "allow-unsourced"}
+
+
+def _parse_opts(args):
+    opt = {}
+    i = 0
+    while i < len(args):
+        a = args[i]
+        if a.startswith("--"):
+            key = a[2:]
+            if "=" in key:                      # 支持 --key=value 写法
+                k, v = key.split("=", 1)
+                opt[k] = v
+                i += 1
+            elif key in _BOOL_FLAGS:             # 布尔开关，不取值
+                opt[key] = True
+                i += 1
+            else:
+                val = args[i + 1] if i + 1 < len(args) else ""
+                opt[key] = val
+                i += 2
+        else:
+            i += 1
+    return opt
+
+
+def _needs_source(meta, paper_blocks):
+    """判断该原子文件是否承载'阅读选文/材料'，需强制溯源。
+    只对真正含选文正文的文件把关（共享材料文件，或题目自带 material 正文块），
+    不牵连同篇选文下只有题干/选项的小题文件——那些选文真实性由材料文件负责。"""
+    for b in paper_blocks:
+        if isinstance(b, dict) and b.get("type") == "material":
+            if b.get("paras") or b.get("title"):  # 带实质正文才算选文
+                return True
+    return False
+
+
+def _check_source(fp, meta, paper_blocks, materials_dir, errors):
+    """阅读类素材必须声明 source + source_file，且 source_file 真实存在。
+    source 允许两类：来源URL/出处，或显式标注 '原创-已声明'（教师自知并担责）。"""
+    if not _needs_source(meta, paper_blocks):
+        return
+    name = os.path.basename(fp)
+    source = str(meta.get("source", "")).strip()
+    sfile = str(meta.get("source_file", "")).strip()
+    if not source:
+        errors.append(f"{name}：阅读类素材缺 meta.source（须填来源URL/出处，"
+                      f"或显式写 '原创-已声明'）")
+    is_original = "原创" in source
+    if not is_original:
+        # 非原创（即取自真实文献/新闻）必须有落盘原文佐证
+        if not sfile:
+            errors.append(f"{name}：缺 meta.source_file（真实素材须把抓取原文落盘 "
+                          f"materials/ 并在此指向该文件）")
+        elif not os.path.exists(os.path.join(materials_dir, sfile)):
+            errors.append(f"{name}：source_file 指向的 materials/{sfile} 不存在"
+                          f"（禁止凭空编造真实素材）")
+
+
+def _detect_desktop():
+    """跨平台探测真实桌面目录，返回绝对路径或 None。
+    Windows：先查注册库的 Desktop 项（兼容中文'桌面'/OneDrive 重定向），再回退常见名。
+    macOS/Linux：~/Desktop，再回退 XDG 的 Desktop。"""
+    home = os.path.expanduser("~")
+    # Windows：注册表 Shell Folders 里的 Desktop 才是真实路径
+    if os.name == "nt":
+        try:
+            import winreg
+            key = winreg.OpenKey(
+                winreg.HKEY_CURRENT_USER,
+                r"Software\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders")
+            val, _ = winreg.QueryValueEx(key, "Desktop")
+            winreg.CloseKey(key)
+            val = os.path.expandvars(val)
+            if os.path.isdir(val):
+                return val
+        except Exception:
+            pass
+    # 常见候选（含中文桌面、OneDrive 下的桌面）
+    candidates = [
+        os.path.join(home, "Desktop"),
+        os.path.join(home, "桌面"),
+        os.path.join(home, "OneDrive", "Desktop"),
+        os.path.join(home, "OneDrive", "桌面"),
+    ]
+    # Linux XDG
+    xdg = os.path.join(home, ".config", "user-dirs.dirs")
+    if os.path.isfile(xdg):
+        try:
+            with open(xdg, encoding="utf-8") as f:
+                for line in f:
+                    if line.strip().startswith("XDG_DESKTOP_DIR"):
+                        raw = line.split("=", 1)[1].strip().strip('"')
+                        raw = raw.replace("$HOME", home)
+                        if os.path.isdir(raw):
+                            return raw
+        except Exception:
+            pass
+    for c in candidates:
+        if os.path.isdir(c):
+            return c
+    return None
+
+
+def _sort_key(path):
+    """按文件名前缀数字自然排序，无数字前缀的排到最后。"""
+    name = os.path.basename(path)
+    m = re.match(r"(\d+)", name)
+    return (int(m.group(1)) if m else 10 ** 9, name)
+
+
+def _read_json(path):
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _write_json(path, obj):
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(obj, f, ensure_ascii=False, indent=2)
+
+
+def main():
+    if len(sys.argv) < 2 or sys.argv[1] not in ("init", "build"):
+        print(__doc__)
+        sys.exit(1)
+    if sys.argv[1] == "init":
+        cmd_init(sys.argv[2:])
+    else:
+        cmd_build(sys.argv[2:])
+
+
+if __name__ == "__main__":
+    main()
