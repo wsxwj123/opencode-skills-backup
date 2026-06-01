@@ -233,10 +233,15 @@ def cmd_init(args):
         print(f"[提示] {proj} 已是工程目录，init 将覆盖 meta.json 与 00_manifest.md "
               f"及 9 个大题分隔文件；items/ 下你写的题目文件不受影响。")
     # 学段/科目/类型/地区：stage 兼容旧 --grade；subject 默认语文
-    stage = opt.get("stage", opt.get("grade", "九年级"))
-    subject = opt.get("subject", "语文")
-    etype = opt.get("type", opt.get("exam-type", "中考模拟"))
-    region = opt.get("region", "长沙")
+    # 先记下"CLI 是否显式给了值"，未给的稍后用蓝图自带字段回填（蓝图自描述）
+    stage_cli = opt.get("stage", opt.get("grade"))
+    subject_cli = opt.get("subject")
+    etype_cli = opt.get("type", opt.get("exam-type"))
+    region_cli = opt.get("region")
+    stage = stage_cli or "九年级"
+    subject = subject_cli or "语文"
+    etype = etype_cli or "中考模拟"
+    region = region_cli or "长沙"
     school = opt.get("school", "")
     mode = opt.get("mode", "全自动")  # 全程确认 / 全自动
     # 决策点：优先从文件读（跨平台稳妥，避免命令行传 JSON 在 Windows 引号问题），
@@ -255,6 +260,16 @@ def cmd_init(args):
 
     # —— 解析本卷蓝图：样卷蓝图 > 预设 > 内置长沙语文 > 通用兜底 ——
     bp = _resolve_blueprint(stage, subject, region, etype, opt)
+    # 蓝图（样卷/预设）自带学段·科目·地区·类型时，CLI 未显式指定则以蓝图为准，
+    # 避免「样卷是七年级北京，却被默认成九年级长沙」的张冠李戴。
+    if not stage_cli and bp.get("stage"):
+        stage = bp["stage"]
+    if not subject_cli and bp.get("subject"):
+        subject = bp["subject"]
+    if not etype_cli and bp.get("exam_type"):
+        etype = bp["exam_type"]
+    if not region_cli and bp.get("region"):
+        region = bp["region"]
 
     def _ovr_int(key, default):
         try:
@@ -288,6 +303,9 @@ def cmd_init(args):
         "work_mode": mode,          # 工作模式：全程确认 / 全自动
         "decisions": decisions,     # 开工前一次性确定的决策点（作业指导书）
     }
+    # 小说选文字数区间：蓝图指定则带上，build 校验按此；默认（不写）即 1000-1500。
+    if bp.get("novel_len"):
+        meta["novel_len"] = bp["novel_len"]
     _write_json(os.path.join(proj, "meta.json"), meta)
 
     # 写大题/小题分隔文件（按蓝图骨架，大题数不写死）
@@ -439,8 +457,9 @@ def cmd_build(args):
 
     # —— 选文完整性硬门禁：阅读板块有题却无选文正文 → 学生无法作答，拒绝出卷 ——
     completeness_errors = _check_materials_present(paper)
-    # —— 小说选文字数检查（1000-1500 字），越界仅告警不阻断 ——
-    _check_novel_length(paper, warn)
+    # —— 小说选文字数检查，越界仅告警不阻断 ——
+    # 默认 1000-1500（九年级语文小说规格）；其他年级/特殊要求由蓝图 meta.novel_len 覆盖。
+    _check_novel_length(paper, warn, meta.get("novel_len"))
 
     # —— 阅读类素材真实性硬门禁：有违规则拒绝出卷（除非显式 --allow-unsourced）——
     allow_unsourced = "--allow-unsourced" in args
@@ -561,6 +580,11 @@ def _blocks_to_markdown(blocks):
                 lines += [str(b.get("author")), ""]
             for para in b.get("paras", []):
                 lines += [str(para), ""]
+            if b.get("source"):
+                lines += [str(b.get("source")), ""]
+        elif t == "figure":
+            spec = b.get("spec", b)
+            lines += [f"［图：{spec.get('alt', '此处应有配图，请手动补充')}］", ""]
         elif t == "table":
             lines.extend(_table_to_markdown(b.get("rows", [])))
             lines.append("")
@@ -714,9 +738,15 @@ def _novel_text_len(paras):
     return sum(len(re.sub(r"\s", "", str(p))) for p in (paras or []))
 
 
-def _check_novel_length(paper, warn):
-    """小说(文学作品)选文字数应在 1000-1500；越界加入告警（不阻断）。
+def _check_novel_length(paper, warn, bounds=None):
+    """小说(文学作品)选文字数越界加入告警（不阻断）。
+    默认区间 1000-1500（九年级语文小说规格）；bounds=[lo,hi] 时按蓝图给定区间。
     识别：处于'小说/文学作品'小标题区间内、layout 非 verse 的 material 选文。"""
+    try:
+        lo, hi = (bounds or [1000, 1500])
+        lo, hi = int(lo), int(hi)
+    except (TypeError, ValueError):
+        lo, hi = 1000, 1500
     region = None
     for b in paper:
         if not isinstance(b, dict):
@@ -728,9 +758,9 @@ def _check_novel_length(paper, warn):
                 and ("小说" in region or "文学作品" in region) \
                 and b.get("layout") != "verse":
             n = _novel_text_len(b.get("paras"))
-            if n < 1000 or n > 1500:
-                warn.append(f"小说选文约 {n} 字，建议 1000-1500 字"
-                            f"（{'偏短' if n < 1000 else '偏长'}）")
+            if n < lo or n > hi:
+                warn.append(f"小说选文约 {n} 字，建议 {lo}-{hi} 字"
+                            f"（{'偏短' if n < lo else '偏长'}）")
 
 
 def _needs_source(meta, paper_blocks):

@@ -254,7 +254,9 @@ def render(doc, blocks):
         elif t == "analysis":
             add_para(doc, b["text"], size=10.5, space_after=4)
         elif t == "figure":
-            _render_figure(doc, b.get("spec", {}))
+            # figure 块的 alt/src/caption/width_cm 直接写在块顶层（见文档与 SKILL.md）；
+            # 兼容历史上可能的 spec 嵌套写法。
+            _render_figure(doc, b.get("spec", b))
         elif t == "spacer":
             add_para(doc, "", space_after=4)
         elif t == "pagebreak":
