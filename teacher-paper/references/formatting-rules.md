@@ -109,8 +109,9 @@ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
     {材料内容/题目要求}
 
-    要求：①{要求一}；②{要求二}；③{要求三}；④不少于600字。
+    要求：①{要求一}；②{要求二}；③{要求三}；④不少于{字数下限}字。
 ```
+> 字数下限**按学段缩放**，不是一律 600：小学中年级 300-400 / 小学高年级 400-500 / 初中 500-600 / 中考·高中 ≥600；英语作文按词（如高考 ≥100 词）。`essay_grid` 行列数应与字数下限匹配。
 
 ## 参考答案排版
 
@@ -136,7 +137,9 @@ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 ## Word 输出注意事项
 
 - 使用 A4 纸张，纵向
-- 页码居中，格式："第 X 页 共 X 页"
-- 试卷页和答案页分开（不同文件或分节）
+- 页码居中，格式："第 X 页　共 Y 页"——**已由 make_paper.py 用 Word 域自动生成**（默认开，meta.page_number=false 可关）
+- 密封线·座位号：meta.sealing_line=true 时在填写区下方加印刷版密封线，info 行含座位号
+- 试卷页和答案页分开（不同文件）
 - 避免题目跨页断裂（尤其是阅读材料和对应题目）
 - 选择题选项排列整齐，使用制表位对齐
+- 注意事项默认"卷面作答"版（本技能不生成答题卡）；用户用答题卡时 meta.answer_method=答题卡 切换
