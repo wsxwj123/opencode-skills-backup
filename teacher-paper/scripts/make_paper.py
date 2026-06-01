@@ -253,10 +253,48 @@ def render(doc, blocks):
                      space_after=3)
         elif t == "analysis":
             add_para(doc, b["text"], size=10.5, space_after=4)
+        elif t == "figure":
+            _render_figure(doc, b.get("spec", {}))
         elif t == "spacer":
             add_para(doc, "", space_after=4)
         elif t == "pagebreak":
             doc.add_page_break()
+
+
+# 配图输出目录（main 按输出路径设定；理科配图渲染器 make_figure.py 后续接入）
+FIG_DIR = None
+
+
+def _render_figure(doc, spec):
+    """插入配图。本轮支持：① spec.src 指向已有图片(用户提供/已渲染) → 直接插入；
+    ② 若同目录有 make_figure.py 则调用它按 spec 渲染；③ 都不行 → 降级为
+    "［图：alt］" 文字占位，绝不阻断出卷。理科自动配图(matplotlib等)下一轮接入。"""
+    src = spec.get("src")
+    width = spec.get("width_cm", 6.0)
+    png = None
+    if src and os.path.exists(src):
+        png = src
+    else:
+        try:
+            from make_figure import render_figure  # 下一轮才有；现在通常 ImportError
+            out_dir = FIG_DIR or os.getcwd()
+            os.makedirs(out_dir, exist_ok=True)
+            png = render_figure(spec, out_dir)
+        except Exception:
+            png = None
+    if png and os.path.exists(png):
+        try:
+            doc.add_picture(png, width=Cm(width))
+            doc.paragraphs[-1].alignment = WD_ALIGN_PARAGRAPH.CENTER
+            if spec.get("caption"):
+                add_para(doc, spec["caption"], align="center", size=9,
+                         space_after=4)
+            return
+        except Exception:
+            pass
+    # 降级：占位 + alt 文字（无障碍/可手动补图）
+    alt = spec.get("alt", "此处应有配图，请手动补充")
+    add_para(doc, f"［图：{alt}］", align="center", size=9, space_after=4)
 
 
 def new_doc():
@@ -294,6 +332,11 @@ def main():
         d = os.path.dirname(os.path.abspath(path))
         if d:
             os.makedirs(d, exist_ok=True)
+
+    # 配图缓存目录：输出目录下的 figures/
+    global FIG_DIR
+    FIG_DIR = os.path.join(
+        os.path.dirname(os.path.abspath(data.get("paper_path", "."))), "figures")
 
     paper = new_doc()
     render(paper, data.get("paper", []))
