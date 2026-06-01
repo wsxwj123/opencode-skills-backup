@@ -4,7 +4,7 @@ description: "教师智能出题技能 - 根据文本资料（Word/PDF/PPT/Excel
 user-invocable: true
 allowed-tools: "Read Write Edit Bash Agent AskUserQuestion WebFetch WebSearch"
 metadata:
-  version: "3.1.0"
+  version: "3.2.0"
   author: "teacher-paper-skill"
 ---
 
@@ -23,7 +23,7 @@ metadata:
 
 > "以命题促教学，用原创提素养"
 
-本技能**完全自包含、可移植、与具体 AI 工具无关**：资料读取、网页抓取、原子化组卷、Word 生成全部在本 skill 的 `scripts/` 目录内，不依赖任何其它 skill。任何 AI agent、任何电脑上，准备好依赖后即可使用。
+本技能以**自包含脚本作为稳定底座**，同时会优先复用当前电脑/当前 AI agent 已有的 Office、MCP、Pandoc、OCR 等能力。任何 AI agent、任何电脑上，都先扫描能力，再选择最稳路径；只有没有稳定 Word 生成后端时，才安装最小兜底依赖。
 
 六个自包含脚本：`setup.py`（环境自检/装依赖）、`read_material.py`（读文档）、`fetch_web.py`（抓网页）、`ocr_image.py`（图片OCR兜底，无识图能力时用）、`assemble.py`（原子化组卷·init/build）、`make_paper.py`（生成 Word）。
 
@@ -61,22 +61,41 @@ metadata:
 
 ## 启动第一步：环境自检（每次开始前必做）
 
-不要假设依赖齐全、不要假设有任何特定工具。**开始任何出卷工作前，先跑环境自检脚本**——它会自解析 skill 路径、核对自带脚本是否齐全、检查依赖、全盘探测可选外部工具，并指出缺什么。
+不要假设依赖齐全、不要假设有任何特定工具。**开始任何出卷工作前，先完成两层能力探测**：
+
+1. **Agent 工具探测**：检查当前 AI 客户端是否暴露 Word/Document/Office/Pandoc/Markdown/Spreadsheet/PPT/OCR 相关 MCP、插件或内置工具。
+2. **本机能力探测**：运行 `setup.py`，扫描多个 Python 解释器、Python 包、Pandoc、LibreOffice/Office/WPS、OCR、macOS/Windows 系统转换工具。
+
+> MCP / 插件是当前 agent 的会话能力，Python 脚本无法可靠枚举；因此先由 agent 看自己当前有哪些工具，再用 `setup.py` 看本机有什么。
 
 ```bash
 # 体检（只看不装）：
 python3 "<SKILL_DIR>/scripts/setup.py"
-# 体检并自动安装缺失的"必需依赖"：
+# 机器可读体检报告（推荐）：
+python3 "<SKILL_DIR>/scripts/setup.py" --json
+# 仅当报告显示没有稳定 DOCX 后端，且用户同意时，安装最小兜底依赖：
 python3 "<SKILL_DIR>/scripts/setup.py" --install
 ```
 
 处理规则：
-- **必需依赖**（python-docx，生成试卷必须）若缺 → 用 `--install` 自动装；装不上则告知用户手动 `pip3 install python-docx`，**装好再继续**。
+- **不要把当前 `python3` 缺包等同于整台电脑没有能力**：`setup.py` 会扫描多个 Python 解释器；agent 也可能有 Word/Pandoc/文档 MCP。
+- **python-docx 是最小稳定兜底，不是唯一方案**：已有可用 `docx` Python 后端时，优先用 `make_paper.py`；没有时再看 Pandoc、Office/MCP、系统转换工具。
 - **可选依赖**（PDF/PPT/Excel 读取、网页提取增强、图片OCR）缺哪个、只在用到对应素材类型时才需，按需安装。
-- **外部工具**（如内容转换/抓取增强工具、OCR程序）全盘探测，有就用、没有不强求。
+- **外部工具**（Pandoc、LibreOffice、Word/WPS、OCR、系统转换工具）有就用、没有不强求。
 - 自带脚本若缺失 → 说明 skill 文件不完整，请用户重新获取完整 skill。
 
-> 脚本均设计为缺库时给出明确 pip 提示而非崩溃；网页抓取首选在线转换服务，无需本地依赖。
+### DOCX 后端选择顺序
+
+| 顺序 | 后端 | 使用条件 | 定位 |
+|------|------|----------|------|
+| 1 | `python-docx` + `make_paper.py` | 任一 Python 解释器可 import `docx` | 最稳定、离线、版式可控的主路径 |
+| 2 | Pandoc + `build/content.md` | 有 Pandoc CLI 或 Pandoc MCP | Markdown 中间产物转 DOCX，可配 reference.docx |
+| 3 | Word/Document/Office MCP 或内置文档插件 | 当前 agent 暴露相关工具 | 后处理、局部编辑、补图片、转 PDF、复杂文档操作 |
+| 4 | LibreOffice / Microsoft Word / WPS | 本机安装且可被 agent 调用 | 格式转换、渲染校验、PDF 输出 |
+| 5 | macOS `textutil` / Windows PowerShell | 只有系统自带工具可用 | 低保真 DOCX 兜底 |
+| 6 | 安装 `python-docx` | 上述稳定路径都不可用 | 经用户确认后安装最小兜底依赖 |
+
+> 输出仍以 `assemble.py build` 生成的 `build/content.json` 为唯一结构源；`build/content.md` 是给 Pandoc/MCP/Office 后端复用的中间产物。不要让不同后端各自重新组织题目内容。
 
 ---
 
@@ -284,7 +303,8 @@ python3 <SKILL_DIR>/scripts/assemble.py init "<试卷名>_工程" --grade 九年
 
 # 2) 抓素材入 materials/，逐题写 items/NN_qXX.json（paper+answer+解析+命题意图）
 
-# 3) 合并校验并出卷（自动校验21题/120分/20-50-50，生成两个Word到 build/）
+# 3) 合并校验并出卷（自动校验21题/120分/20-50-50，
+#    生成 content.json、content.md 与两个 Word 到 build/）
 python3 <SKILL_DIR>/scripts/assemble.py build "<试卷名>_工程"
 ```
 
@@ -295,6 +315,7 @@ python3 <SKILL_DIR>/scripts/assemble.py build "<试卷名>_工程"
 输出（缺一不可，落在 `build/`）：
 1. **学生试卷.docx**——A4，可直接打印，排版按 `references/formatting-rules.md`
 2. **参考答案及解析.docx**——含每题答案 + 详细解析 + 评分标准/采分点
+3. **content.json / content.md**——结构化源文件与 Markdown 镜像；当 python-docx 不可用时，供 Pandoc、Word MCP、Documents 插件或其它 Office 工具生成/修复 Word。
 
 > 答案解析要包含：客观题答案+错因，主观题采分点（"答出X点给X分"），作文评分等级标准，命题意图与教材关联。
 > 单题快速生成也可直接用 `make_paper.py content.json`（不走工程目录），但多资料/需迭代时一律用 assemble 原子化流程。

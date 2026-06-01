@@ -272,6 +272,8 @@ def cmd_build(args):
     cpath = os.path.join(proj, "build", "content.json")
     os.makedirs(os.path.dirname(cpath), exist_ok=True)  # build/ 可能被删
     _write_json(cpath, content)
+    md_path = os.path.join(proj, "build", "content.md")
+    _write_markdown_bundle(md_path, paper, answers)
 
     print(f"[合并] 已读 {len(files)} 个原子文件，题量 {len(nums)}，分值合计 {total:g}")
     if warn:
@@ -279,13 +281,152 @@ def cmd_build(args):
     else:
         print("[校验通过] 题量与分值符合期望")
 
+    python_cmd = _python_cmd_with_module("docx")
+    if python_cmd != [sys.executable]:
+        print("[后端] 当前 Python 缺少 docx，改用：" + " ".join(python_cmd))
     r = subprocess.run(
-        [sys.executable, os.path.join(HERE, "make_paper.py"), cpath],
+        python_cmd + [os.path.join(HERE, "make_paper.py"), cpath],
         capture_output=True, text=True)
     print(r.stdout.strip())
     if r.returncode != 0:
         print("[make_paper 失败]\n" + r.stderr.strip())
         sys.exit(1)
+
+
+def _write_markdown_bundle(path, paper_blocks, answer_blocks):
+    """Export a readable Markdown mirror for Pandoc/MCP/Office fallback paths."""
+    parts = [
+        "# 学生试卷",
+        "",
+        _blocks_to_markdown(paper_blocks),
+        "",
+        "\\pagebreak",
+        "",
+        "# 参考答案及解析",
+        "",
+        _blocks_to_markdown(answer_blocks),
+        "",
+    ]
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("\n".join(parts))
+
+
+def _blocks_to_markdown(blocks):
+    lines = []
+    for b in blocks:
+        if not isinstance(b, dict):
+            continue
+        t = b.get("type")
+        if t == "title":
+            lines += ["# " + str(b.get("text", "")), ""]
+        elif t == "subtitle":
+            lines += [str(b.get("text", "")), ""]
+        elif t == "info":
+            lines += ["学校__________ 班级__________ 姓名__________ 考号__________", ""]
+        elif t == "notice":
+            lines += ["**注意事项：**"]
+            for i, item in enumerate(b.get("items", []), 1):
+                lines.append(f"{i}. {item}")
+            lines.append("")
+        elif t == "section":
+            lines += ["## " + str(b.get("text", "")), ""]
+        elif t == "sub":
+            lines += ["### " + str(b.get("text", "")), ""]
+        elif t == "para":
+            lines += [str(b.get("text", "")), ""]
+        elif t == "material":
+            if b.get("label"):
+                lines += ["**" + str(b.get("label")) + "**", ""]
+            if b.get("title"):
+                lines += ["#### " + str(b.get("title")), ""]
+            if b.get("author"):
+                lines += [str(b.get("author")), ""]
+            for para in b.get("paras", []):
+                lines += [str(para), ""]
+        elif t == "table":
+            lines.extend(_table_to_markdown(b.get("rows", [])))
+            lines.append("")
+        elif t == "question":
+            num = b.get("num", "")
+            score = b.get("score", "")
+            head = f"{num}. " if num else ""
+            lines += [f"{head}{b.get('text', '')}{score}", ""]
+        elif t == "options":
+            for opt in b.get("items", []):
+                lines.append(str(opt))
+            lines.append("")
+        elif t == "blank_lines":
+            for _ in range(int(b.get("count", 3) or 3)):
+                lines.append("____________________________________________")
+            lines.append("")
+        elif t == "essay_grid":
+            lines += [str(b.get("note", "请在作文格内作答。")), "",
+                      "> 作文方格纸请以 Word 版为准。", ""]
+        elif t == "answer":
+            num = b.get("num", "")
+            score = b.get("score", "")
+            head = f"{num}. " if num else ""
+            lines += [f"**{head}{score}** {b.get('text', '')}", ""]
+        elif t == "analysis":
+            lines += [str(b.get("text", "")), ""]
+        elif t == "pagebreak":
+            lines += ["\\pagebreak", ""]
+        elif t == "spacer":
+            lines.append("")
+    return "\n".join(lines).strip()
+
+
+def _table_to_markdown(rows):
+    rows = [r for r in (rows or []) if r]
+    if not rows:
+        return []
+    width = max(len(r) for r in rows)
+    normalized = [[str(row[i]) if i < len(row) else "" for i in range(width)]
+                  for row in rows]
+    out = ["| " + " | ".join(normalized[0]) + " |",
+           "| " + " | ".join(["---"] * width) + " |"]
+    for row in normalized[1:]:
+        out.append("| " + " | ".join(row) + " |")
+    return out
+
+
+def _python_cmd_with_module(module):
+    candidates = [[sys.executable]]
+    for name in ("python3", "python"):
+        p = _which(name)
+        if p:
+            candidates.append([p])
+    if os.name == "nt":
+        py = _which("py")
+        if py:
+            candidates.append([py, "-3"])
+    seen = set()
+    for cmd in candidates:
+        key = tuple(cmd)
+        if key in seen:
+            continue
+        seen.add(key)
+        try:
+            r = subprocess.run(cmd + ["-c", f"import {module}"],
+                               capture_output=True, timeout=8)
+        except Exception:
+            continue
+        if r.returncode == 0:
+            return cmd
+    return [sys.executable]
+
+
+def _which(name):
+    for folder in os.environ.get("PATH", "").split(os.pathsep):
+        path = os.path.join(folder, name)
+        if os.name == "nt":
+            for suffix in ("", ".exe", ".bat", ".cmd"):
+                p = path + suffix
+                if os.path.isfile(p) and os.access(p, os.X_OK):
+                    return p
+        elif os.path.isfile(path) and os.access(path, os.X_OK):
+            return path
+    return None
 
 
 # 无值布尔开关：出现即为 True，不吞掉后一个参数
