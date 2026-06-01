@@ -57,3 +57,6 @@ timestamp	commit	skill	old_score	new_score	status	dimension	note	eval_mode
 2026-05-22T22:00	9fix-round	general-sci-writing	76.9	-	keep	P0+P1+P2全修	openalex FORBIDDEN/storyline模板list化/reserved扩展/reviewer_concerns归属/ENFORCEMENT Part2/init目录/触发词/merge确认/check命令	full_test
 2026-05-23T22:51	baseline	fetch-everything	-	68.9	baseline	-	初始评估	dry_run
 2026-05-23T23:01	4540f20	fetch-everything	68.9	83.6	keep	D2+D3+D4+D5+D6+D7+D8全优化	5轮优化：工作流重组/HALT检查点/URL精确/资源交叉引用/降级判定	dry_run
+2026-06-01T12:45	baseline	fetch-everything	-	73.2	baseline	-	初始评估；D9无反例黑名单(-24pt)·D4检查点无🔴标记·D8 Python docs有UI噪音	full_test
+2026-06-02T00:00	5fd5351	teacher-paper	-	85.4	baseline	-	独立judge评分;dim6 presets冗余/dim8兜底无分值门禁为主短板;runtime_warn=0	dry_run
+2026-06-02T01:00	5fd5351	teacher-paper	85.4	-	keep	dim6+dim8+dim3+dim2+dim7	Top5修复:删6冗余preset+科目别名/兜底分值告警/政史地史实告警/轮次改名/命题理念下沉	dry_run
