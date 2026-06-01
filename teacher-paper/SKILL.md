@@ -224,7 +224,7 @@ python3 <SKILL_DIR>/scripts/fetch_web.py "<url>" ...
 
 **样卷优先（强烈推荐，尤其中小学）**：用户给了样卷时——
 1. 用 `read_material.py`/识图读样卷全文；
-2. 解析出结构写成 JSON：`{"stage","subject","total","duration","questions","subtitle","skeleton":[["100_sec_x","一、..."],...],"manifest":[["101","q01","题型",分值,"考点","难度"],...]}`（字段见 `make_paper.py`/`authoring-workflow.md`）；
+2. 解析出结构写成 JSON：`{"stage","subject","total","duration","questions","subtitle","skeleton":[["100_sec_x","一、..."],...],"manifest":[["101","q01","题型",分值,"考点","难度"],...]}`（字段见 `make_paper.py`/`authoring-workflow.md`）。`stage/subject/region/exam_type` 写进蓝图即生效（CLI 未显式指定时以蓝图为准）；非九年级的小说选文字数可加 `"novel_len":[下限,上限]`（默认九年级 1000-1500）；
 3. 存为 `工程父目录/结构.json`，`init` 时 `--blueprint-file 结构.json` 即按样卷出卷。
 4. 这样满分/题型/分值完全贴合用户的本地卷，不依赖内置默认。
 
