@@ -296,6 +296,12 @@ def cmd_init(args):
     if not region_cli and bp.get("region"):
         region = bp["region"]
 
+    # 英语含听力大题时（预设或兜底皆可能）：纯文字卷无音频，须先与用户三选一。
+    if subject == "英语" and any("听力" in str(t) for _, t in bp.get("skeleton", [])):
+        print("[提示] 本卷英语含『听力』大题，但本技能出纯文字卷无音频。"
+              "请先与用户三选一：①省略听力(分值并入其它板块) ②附听力文字稿当阅读 "
+              "③用户自备音频(本卷只出题干选项)；据此再决定是否保留听力大题。")
+
     def _ovr_int(key, default):
         try:
             return int(opt[key]) if opt.get(key) else default
