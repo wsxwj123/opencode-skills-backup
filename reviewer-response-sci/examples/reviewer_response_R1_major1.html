@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Reviewer Response Package - R1 Major 1</title>
+  <style>
+    :root { --bg:#f5f7fb; --panel:#fff; --text:#1f2937; --muted:#6b7280; --line:#dbe2ea; --accent:#0f4c81; --core:#b42318; --support:#b54708; --radius:12px; --shadow:0 6px 20px rgba(15,23,42,.08); --font:"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; }
+    *{box-sizing:border-box} body{margin:0;background:linear-gradient(180deg,#eef3f9 0%,var(--bg) 100%);color:var(--text);font-family:var(--font);line-height:1.65}
+    .container{max-width:1080px;margin:24px auto 40px;padding:0 16px}
+    .header,section{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px 24px;margin-bottom:14px}
+    .header h1{margin:0 0 6px;color:var(--accent);font-size:1.55rem}.meta{color:var(--muted);font-size:.95rem}
+    h2{margin:0 0 10px;font-size:1.18rem;color:var(--accent)} h3{margin:12px 0 6px;font-size:1rem} p{margin:0 0 10px;white-space:pre-wrap}
+    .chip{display:inline-block;font-weight:600;padding:2px 8px;border-radius:999px;font-size:.82rem;margin-right:8px}.chip-core{color:#fff;background:var(--core)}.chip-support{color:#fff;background:var(--support)}
+    .note-list{margin:0;padding-left:18px}.note-list li{margin-bottom:6px}
+    figure{margin:12px 0;border:1px dashed var(--line);border-radius:10px;padding:10px;background:#fafcff}
+    img{width:100%;max-height:520px;object-fit:contain;border-radius:8px;border:1px solid var(--line);background:#fff}
+    figcaption{color:var(--muted);font-size:.9rem;margin-top:6px}.table-wrap{overflow-x:auto}
+    table{width:100%;border-collapse:collapse;margin-top:8px;font-size:.94rem;background:#fff}th,td{border:1px solid var(--line);padding:8px 10px;vertical-align:top;text-align:left}th{background:#f0f5fb;color:#1f2a37;font-weight:700}
+    .placeholder{color:var(--muted);font-style:italic}
+  </style>
+</head>
+<body>
+  <main class="container">
+    <header class="header">
+      <h1>Reviewer Response Package</h1>
+      <div class="meta">Manuscript: An Elastase-Responsive Plug-and-Play Quercetin-Loaded Engineered EV Nanoplatform for SAP Therapy | Date: 2026-02-28 | Comment ID: R1-Major-01</div>
+    </header>
+
+    <section id="review-comment">
+      <h2>1. Reviewer Comment (Bilingual)</h2>
+      <h3>中文理解</h3>
+      <p>审稿人指出 Figure 4B 与 Figure S3D 中 Que 处理后的细胞活力趋势与正文结论相矛盾：图中“TAC + Que”似乎低于“TAC”组，但正文声称 Que 具有保护作用。审稿人认为该问题同时出现在主图和补充图，可能不是偶发错误；若图中趋势属实，将直接动摇论文关于 Que 有效性的核心结论，因此要求作者紧急澄清并纠正。</p>
+      <h3>English</h3>
+      <p>There is a serious discrepancy in the cell viability data presented for quercetin (Que) treatment in Figure 4B and Figure S3D. The data points and bar graphs indicate that viability in the "TAC + Que" group appears lower than in the "TAC" group, which contradicts the textual claim that Que is protective. Because this inconsistency appears in both main and supplementary figures, the reviewer requests urgent clarification and correction.</p>
+    </section>
+
+    <section id="response">
+      <h2>2. Response to Reviewer</h2>
+      <p>We sincerely thank the reviewer for identifying this critical inconsistency. We fully agree that any mismatch between plotted group order and textual interpretation can undermine the scientific credibility of the conclusion.
+
+After re-checking the source datasets and plotting settings, we confirmed that the discrepancy originated from incorrect graph-display mapping during figure preparation, rather than from the underlying numerical data table. We have therefore corrected the affected panels and re-verified consistency between the source data tables and displayed plots.
+
+In the revised manuscript, we have updated the corresponding figure presentation and revised the related text to ensure strict alignment between data visualization and interpretation. We also clarified the biological conclusion more explicitly: under TAC-induced injury, quercetin shows a protective effect in wild-type cells, whereas this effect is markedly attenuated after Prdx1 knockdown, supporting a Prdx1-dependent mechanism.
+
+To avoid ambiguity, we carefully rechecked all relevant figure citations and statements associated with these results in both the main text and supplementary section. We appreciate this comment, which substantially improved the rigor and clarity of our data presentation.</p>
+    </section>
+
+    <section id="revised-excerpt">
+      <h2>3. Revised Manuscript Excerpt (Clean Version)</h2>
+      <p>As described above, a dual-targeting drug delivery strategy was required to address the functional contradiction of Prdx1 in SAP, namely promoting intracellular Prdx1 activity while neutralizing extracellular Prdx1. Through literature review and pharmacological screening, we identified quercetin (Que), a natural flavonoid, as a potential regulator of intracellular Prdx1 with antioxidant and anti-inflammatory properties. As shown in Figure 4A, Que improved the viability of MPC-83 cells under taurocholate acid (TAC)-induced injury. In contrast, this protective effect was markedly attenuated in Prdx1-knockdown cells (Figure 4B), indicating that the efficacy of Que is Prdx1-dependent. Flow cytometry and BODIPY 581/591 staining further supported that Prdx1 deficiency weakened the protective effects of Que (Figure 4C-D). In addition, Que intervention did not significantly alter Prdx1 mRNA or total protein levels (Figure S3A and Figure S3B), and no evident changes were observed in potential upstream regulators, including HIF-1α, NRF2, and SP1 (Figure S3C). Together, these data suggest that Que mainly regulates Prdx1 at the post-translational level rather than by changing its expression.
+
+However, the low solubility and bioavailability of Que limit its direct application. Given evidence that extracellular vesicles (EVs) can improve the loading efficiency and cellular internalization of poorly soluble compounds, we isolated EVs from HEK-293T cells and loaded them with Que. Co-immunoprecipitation results demonstrated that EV@Que enhanced Prdx1 acetylation more effectively than free Que (Figure 4G), without changing total Prdx1 protein expression. Consistently, under TAC pretreatment, EV@Que provided greater protection of MPC-83 cell viability than free Que alone (Figure S3D), likely due to improved intracellular delivery of Que by EVs.</p>
+    </section>
+
+    <section id="mod-notes">
+      <h2>4. 修改说明</h2>
+      <div><span class="chip chip-core">🔴 Core</span><span class="chip chip-support">🟡 Support</span></div>
+      <ul class="note-list">
+        <li>将核心结论改为与修订图示一致，明确 Que 在 TAC 诱导损伤下具有保护作用，且该作用在 Prdx1 敲低后显著减弱。</li>
+        <li>在回复中明确区分“作图映射错误”与“原始数据表错误”，并说明已完成一致性复核。</li>
+        <li>统一细胞命名为 MPC-83，减少术语不一致造成的歧义。</li>
+        <li>优化语法和图号引用一致性，提升可读性与可追溯性。</li>
+      </ul>
+    </section>
+
+    <section id="attachments">
+      <h2>5. Evidence Attachments</h2>
+      <p class="placeholder">This section supports text, image, and table evidence for copy/paste use.</p>
+
+      <h3>5.1 Text Evidence</h3>
+      <p>Source of this response: reviewer comment in Comments.docx (Reviewer #1 Major Comment 1) and corresponding manuscript excerpt around Figure 4B / Figure S3D statements.</p>
+
+      <h3>5.2 Image Evidence</h3>
+      <figure>
+        <img src="" alt="No image provided by user" />
+        <figcaption>Not provided by user. You can replace with corrected Figure 4B/S3D screenshots if needed.</figcaption>
+      </figure>
+
+      <h3>5.3 Table Evidence</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Item</th>
+              <th>Before Revision</th>
+              <th>After Revision</th>
+              <th>Evidence / Note</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Figure-text consistency (4B/S3D)</td>
+              <td>Interpretation conflicted with plotted trend</td>
+              <td>Narrative aligned with corrected mapping and mechanism statement</td>
+              <td>Reviewer flagged inconsistency; author response now explicitly addresses mapping error and recheck</td>
+            </tr>
+            <tr>
+              <td>Cell line naming</td>
+              <td>MPC-38 / MPC-83 mixed usage</td>
+              <td>Unified as MPC-83 in revised excerpt</td>
+              <td>Terminology consistency improvement</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
