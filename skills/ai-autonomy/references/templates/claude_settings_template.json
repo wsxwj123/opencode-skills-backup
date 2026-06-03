@@ -1,9 +1,0 @@
-{
-  "_comment": "Claude Code settings.json - 放到 ~/.claude/settings.json 开启 Agent Team",
-  "experimental": {
-    "agent_team": true
-  },
-  "permissions": {
-    "auto_approve_tools": ["TeamCreate"]
-  }
-}
