@@ -20,6 +20,14 @@
   - NN 为序号前缀（建议3位），控制全卷顺序；section/sub/material 文件可无 num/score。
   - paper/answer 的 block 类型见 make_paper.py 顶部文档。
 """
+
+# Windows 控制台默认 GBK：强制 stdout/stderr 用 UTF-8，避免中文 print 乱码（幂等，mac/Linux 无副作用）
+import sys as _sys
+for _stream in (_sys.stdout, _sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8")
+    except (AttributeError, ValueError):
+        pass
 import sys
 import os
 import re
