@@ -4,7 +4,7 @@ description: "教师智能出题技能 - 覆盖小学一年级到高三的【文
 user-invocable: true
 allowed-tools: "Read Write Edit Bash Agent AskUserQuestion WebFetch WebSearch"
 metadata:
-  version: "3.7.3"
+  version: "3.7.4"
   author: "teacher-paper-skill"
 ---
 

@@ -19,6 +19,14 @@
 - python-docx 是最小稳定兜底，不是唯一 Word 方案；已有 Pandoc / Office
   转换工具时先报告可用路径，不抢先安装。
 """
+
+# Windows 控制台默认 GBK：强制 stdout/stderr 用 UTF-8，避免中文 print 乱码（幂等，mac/Linux 无副作用）
+import sys as _sys
+for _stream in (_sys.stdout, _sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8")
+    except (AttributeError, ValueError):
+        pass
 import sys
 import os
 import json

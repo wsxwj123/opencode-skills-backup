@@ -13,6 +13,14 @@
 反爬站点（学科网、组卷网、希沃白板、小红书登录态内容等）可能全部失败；
 此时脚本会明确提示："该网站有访问限制，请截图相关内容，由助手多模态识别。"
 """
+
+# Windows 控制台默认 GBK：强制 stdout/stderr 用 UTF-8，避免中文 print 乱码（幂等，mac/Linux 无副作用）
+import sys as _sys
+for _stream in (_sys.stdout, _sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8")
+    except (AttributeError, ValueError):
+        pass
 import sys
 import urllib.request
 

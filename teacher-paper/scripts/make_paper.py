@@ -43,6 +43,14 @@ block 类型（type 字段）——试卷与答案通用：
   {"type":"spacer"}                                      空行
   {"type":"pagebreak"}                                   分页
 """
+
+# Windows 控制台默认 GBK：强制 stdout/stderr 用 UTF-8，避免中文 print 乱码（幂等，mac/Linux 无副作用）
+import sys as _sys
+for _stream in (_sys.stdout, _sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8")
+    except (AttributeError, ValueError):
+        pass
 import sys
 import os
 import re
