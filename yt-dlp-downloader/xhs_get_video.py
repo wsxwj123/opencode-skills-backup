@@ -21,19 +21,31 @@ async def main():
             user_data_dir="/Users/wsxwj/Library/Application Support/Google/Chrome/Profile 5",
             headless=True,
             args=["--no-sandbox"],
-            proxy={"server": "http://127.0.0.1:7897"},
         )
         page = browser.pages[0] if browser.pages else await browser.new_page()
         video_urls = []
 
         def on_request(request):
             url = request.url
-            if any(x in url for x in ["sns-video", ".mp4", "xhscdn.com/note"]):
+            if any(x in url.lower() for x in ["sns-video", ".mp4", ".m3u8"]):
                 video_urls.append(url)
 
         page.on("request", on_request)
-        await page.goto(XHS_URL, wait_until="networkidle", timeout=30000)
-        await asyncio.sleep(3)
+        resp = await page.goto(XHS_URL, wait_until="domcontentloaded", timeout=60000)
+        await page.wait_for_timeout(12000)
+
+        # DOM fallback
+        if not video_urls:
+            try:
+                vid = await page.evaluate("""() => {
+                    const v = document.querySelector('video source[src]') || document.querySelector('video[src]');
+                    return v ? (v.src || v.getAttribute('src')) : null;
+                }""")
+                if vid:
+                    video_urls.append(vid)
+            except Exception:
+                pass
+
         await browser.close()
 
     for u in video_urls:
