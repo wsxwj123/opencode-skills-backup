@@ -4,7 +4,7 @@ description: "教师智能出题技能 - 覆盖小学一年级到高三的【文
 user-invocable: true
 allowed-tools: "Read Write Edit Bash Agent AskUserQuestion WebFetch WebSearch"
 metadata:
-  version: "3.7.4"
+  version: "3.7.5"
   author: "teacher-paper-skill"
 ---
 
@@ -45,7 +45,7 @@ metadata:
 本技能可出**小学一年级到高三、上述文科科目**的卷。试卷结构按以下优先级解析（`assemble.py` 自动处理）：
 
 1. **样卷蓝图（最优先）**：用户给一份本地真题/样卷 → 你读它（`read_material.py`/识图）→ 解析出"大题/题型/分值/时长"写成结构 JSON → `init --blueprint-file <结构.json>`。**中小学无统一标准卷，本地样卷最贴合,优先走这条。**
-2. **内置预设**：`presets/` 下已备核心预设（`高三_语文/英语/历史/地理/思想政治`），按 `学段_科目[_地区]` 命中即用；科目别名（政治/道法→思想政治）与地区缺省自动回退基名。
+2. **内置预设**：`presets/` 下已备核心预设（覆盖**高三的 语文/英语/历史/地理/思想政治**），按 `学段_科目[_地区]` 自动命中；科目别名（政治/道法→思想政治）与地区缺省自动回退。**注**：预设文件名用 ASCII（如 `g12_chinese.json`，避免中文文件名跨平台乱码），你只管传中文 `--stage --subject`，脚本内部映射，不用关心文件名。
 3. **内置默认**：九年级语文 → 长沙中考标准（不传任何参数即此）。
 4. **通用兜底**：以上都没有时，按科目给通用大题骨架（选择/填空/解答…），并提示按样卷补全。
 
@@ -376,7 +376,7 @@ python3 <SKILL_DIR>/scripts/fetch_web.py "<url>" ...
 #    纯工程名→自动建到桌面（跨平台探测）；给绝对路径则建在指定位置；--mode 写入工作模式
 #    默认(不传参)=九年级语文长沙；其它学段科目用 --stage/--subject/--region/--type/--total/--duration/--questions
 python3 <SKILL_DIR>/scripts/assemble.py init "<试卷名>_工程" --stage 九年级 --subject 语文 --type 中考模拟 --mode 全自动
-#    文科示例：--stage 高三 --subject 英语 --type 高考   （命中 presets/高三_英语.json）
+#    文科示例：--stage 高三 --subject 英语 --type 高考   （命中预设 g12_english.json）
 #    卷面/范围可选参数：--answer-method 卷面作答|答题卡  --sealing-line true  --page-number false
 #                       --scope "第一~三单元"  --textbook 统编版  --answer-detail 详细|简略
 #    样卷驱动：先把样卷解析成结构 JSON，再 --blueprint-file "<工程父目录>/结构.json"
