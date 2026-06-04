@@ -93,7 +93,7 @@ license: Proprietary
 获得路径后，执行初始化时，**必须**将 Skill 目录下的 `scripts/` 文件夹完整**拷贝**到用户指定的项目根目录下。
 - **Why?**：确保项目文件夹包含所有运行所需的 Python 脚本。即使拷贝到另一台没装此 Skill 的电脑上，依然可以通过简单的 Python 命令维护状态。
 - **Command Logic**:
-  1. `mkdir -p [Target_Path]/scripts [Target_Path]/configs [Target_Path]/manuscripts [Target_Path]/section_memory [Target_Path]/figures`
+  1. `mkdir -p [Target_Path]/scripts [Target_Path]/configs [Target_Path]/manuscripts [Target_Path]/section_memory [Target_Path]/figures [Target_Path]/figure_analysis`
   2. `cp [Skill_Path]/scripts/*.py [Target_Path]/scripts/`
   3. `cp [Skill_Path]/templates/*.json [Target_Path]/`
   4. `cp [Skill_Path]/configs/*.json [Target_Path]/configs/`
@@ -102,11 +102,10 @@ license: Proprietary
 **Scope**: 此机制仅适用于 **Phase 4 (/write)** 的 Results/Discussion 章节。**严禁**在 Phase 1 (/preview) 或 Phase 2 (/storyline) 阶段因缺失具体实验数据而阻断流程。
 **在执行 `/write` 撰写 Results/Discussion 章节前，必须执行以下检查**：
 1. **Check Data Status**: 检查 `figures_database.json` 中该章节涉及的 Figure 的 `data_status`。
-2. **If Pending**:
-   - **立即停止** 撰写流程。
-   - **输出数据收集表**：列出缺失的 Figure ID 和需要的数据项（如图注、P值、n值）。
-   - **结束回复**：明确告知用户："我无法在没有数据的情况下撰写。请提供上述数据，我将立即开始。"
-   - **禁止**：严禁编造数据或使用占位符（如 "XX%"）。
+2. **按缺失粒度判定（Core vs Auxiliary）**：
+   - **核心定量缺失**（支撑组间结论的数值 / 统计检验 / 显著性，如 P 值、关键 n、效应量数值）→ `data_status=pending`：**立即停止**撰写，**输出数据收集表**（缺失的 Figure ID + 数据项），告知用户："我无法在没有核心数据的情况下撰写。请提供上述数据，我将立即开始。"
+   - **辅助元数据缺失**（误差棒类型 SD/SEM、非关键 n、量纲细节等不改变结论方向的项）→ **不阻断**写作，但必须在正文/图注以 `<!-- [DATA_PENDING: 项目] -->` 标注待补，交付前清零。
+   - **禁止**：无论哪种，严禁编造数据或使用占位符（如 "XX%"）填充缺失值。
 
 ### 3. 原子化文件管理 (Atomic File Policy)
 - **原则**：一个 Sub-section = 一个独立 Markdown 文件。
@@ -244,6 +243,7 @@ license: Proprietary
 4. `literature_index.json`（仅当前 section 过滤结果）
 5. （默认不读）`manuscripts/` 下匹配当前 section 的原子化文件，仅在 `--include-draft` 时加载
 6. `section_memory/[section_id].md`
+7. `figure_analysis/figure_{N}.md`（撰写对应 Results 小节时，由 `/write` 在 write-cycle 之外**显式 `Read` 加载**；write-cycle 不自动加载它，须手动读取，作为该节结果与讨论的事实依据）
 
 **预算熔断策略**：
 1. 若估算 token 超出预算，先裁剪当前章节正文到 tail。
@@ -269,7 +269,7 @@ license: Proprietary
 
 ### Phase 0: 项目初始化 (`/init`) - 跨平台便携模式
 1. **Ask Path**: 询问用户保存路径 (默认 Desktop)。
-2. **Create Dir**: 创建项目根目录及子目录 `scripts/`、`configs/`、`manuscripts/`、`section_memory/`、`figures/`。
+2. **Create Dir**: 创建项目根目录及子目录 `scripts/`、`configs/`、`manuscripts/`、`section_memory/`、`figures/`、`figure_analysis/`。
 3. **Copy Resources**: 将 Skill 中的文件拷贝到项目（参见 §1 Command Logic）：
    - `scripts/*.py` → `[Project_Root]/scripts/`
    - `templates/*.json` → `[Project_Root]/`
@@ -340,6 +340,70 @@ Methods 有独立于 Results/Discussion 的写作要求：
 - **伦理声明**：动物实验必须包含 IACUC 批号，临床样本须包含 IRB/伦理批号
 - **统计方法**：在 Methods 末段单独声明统计软件版本、检验方法和显著性阈值
 - **引用**：仅引用方法学原始论文（如 DLS 测定方法原始文献），不限年份
+
+### Phase 3.6: Figure 识图与讨论 (`/figure`)
+
+**定位**：固化"用户逐张发实验图 → AI 读图产出结果与讨论草稿 → 存为写作依据"这一步。产物 `figure_analysis/figure_{N}.md` 是 Phase 4 撰写对应 Results/Discussion 小节的**上游素材**，非正文，不参与 `/merge` 合并。
+
+**前置**：必须在 `/storyline`（Phase 2）确定全文结构与"小节↔figure"对应之后运行。结构由 storyline 决定（融合式 / Results 与 Discussion 分离 / 方法学后置均可），本阶段只产素材、不假设结构。文献已在 Phase 3（Introduction 阶段）基本完成，**本阶段不检索文献**。**与 Phase 4 逐节交替**：不是先识完所有 figure 再统一写，而是每写一个 Results 小节前先对该节对应 figure 跑 `/figure`，再 `/write` 该节。
+
+**🔴 读图红线 (Zero-Hallucination on Images，最高优先级)**：
+1. **只读已符号化/已印出的信息**：分组标签、坐标轴文字与量纲、星号数量(`*/**/***`)、图面或图注印出的 P 值数字、误差棒有无、组间高低**方向**与趋势。
+2. **严禁视觉定量与判读**：不得从像素估算条带灰度、荧光/CLSM 强度、阳性率、共定位、转移灶/肿瘤数目等任何**未标注**的定量值；不得对 WB/HE/IHC/荧光/CLSM/拍照图做病理或表型**判读**；不得反推未印出的数值或 P 值。
+3. **不数散点**：散点图只读趋势与组间比较结果，**不清点数据点估算 n**。
+4. **读不到 = 问，不猜**：误差棒类型(SD/SEM/CI)、各组 n、星号阈值定义、看不清的小字——一律列入"❓待确认"问用户，严禁脑补。
+5. **讨论不脑补背景**：讨论草稿只写"基于用户提供的实验设计/假设、以及本图数据本身成立的推理"；需外部文献佐证处（段落首背景句、尾意义句）用占位注释 `<!-- [CITE_PENDING: 关键词] -->` 标记，留待 Phase 4/最终补引时按"文献真实性硬约束"真检索填充，补不到则问用户或转 `REF_DROPPED`。严禁用知识库充当已检索文献。
+6. **中文确认 → 英文写入**：每张小图读完，先用**中文**贴出"结果 + 讨论草稿"（含读到的分组 / 比较 / 趋势 + ❓待确认项）给用户核对；经用户确认 / 修正后，再翻译为**英文**写入 `figure_X.md`（文档落盘正文为英文，确认环节用中文）。
+
+**流程 (逐图循环)**：
+1. **进入（含自然语言触发）**：用户提到"分析 / 解读 figureN"、"写 XX 结果章节"、"这几个图是什么结果"等——**即使没打 `/figure` 命令、即使只发了图没说命令**——都应进入本流程，**不要跳过识图直接 `/write`**。进入后询问用户：该小节对应的 **Figure 编号** 与 **小图数量**（如 "Figure 2，共 A–E 五图"）。
+2. **建档（含中途续接）**：确保 `figure_analysis/` 存在（无则 `mkdir -p figure_analysis`）；创建/打开 `figure_analysis/figure_{N}.md`，进度行记录声明的小图总数（如 `[0/5]`）。**若文件已存在且进度未满**（如 `[3/5]`）→ 读已写入的 Panel，从**下一个未完成 Panel** 续接，不重复识别已写的（沿用 §4 Anti-Overwrite，增量追加、禁止整体覆盖）。
+3. **逐张索取**：请用户发送 Panel A 图片。**若用户只用文字描述图、未上传图片** → 不进入读图，转"口述数据"模式：要求用户直接给分组 + 数值 + 统计结果；AI **严禁**从图类型关键词（CCK8 / 流式等）脑补典型结果，并明确告知"我没看到图、仅凭你给的文字写，发图能核对得更准"。
+4. **读图 → 中文草稿**：用中文贴出该 Panel 的图类型 / 分组 / 坐标轴与量纲(标注是否 log 轴) / 组间比较结果(含星号) / 趋势方向，并给出**中文结果 + 讨论草稿**；**❓待确认**：误差棒类型、n、星号阈值、看不清项。
+5. **确认 → 英文写入**：用户确认或修正后，将草稿翻译为英文、按**结果块 + 讨论块分离**写入文档（模板见下），讨论需引文处置 `[CITE_PENDING]`。
+6. **自检**：每张图写入时触发 §11 的 **Design / Reliability** 检查（对照设置、n、统计方法是否合理）。**Consistency（跨图一致性）不在逐图时做**——逐图时其他图尚未读取、无从比对；留到本大 figure 全部小图读完后（收口前）统一比对一次（如 Fig A 结论是否与 Fig C 矛盾），发现问题写入"❓待确认"提示用户。
+7. **下一张**：索取 Panel B，重复 4–6，直至全部小图完成。
+8. **收口（每完成一个大 Figure 更新一次状态）**：
+   - **同步到 `figures_database.json`（用 `add-figure` 安全合并，单条即可）**：把本 figure 写成**单个** JSON 对象（`figure_id` 必需、`section` = storyline 的 section_id；外加 `declared_panels`（可选，命令会比对实际 panels 数、不符则警告防漏识别）/ `panels` / 比较对 / `p_value` / `n` / `data_status`，格式见下方「条目示例」），执行 `python scripts/state_manager.py add-figure <one_figure.json>`。该命令在 `FileLock` 下读-合并-写、按 `figure_id` 去重（已存在则更新、不存在则追加），**不会覆盖其他 figure**——从脚本层根除了 `update` 整体覆盖的隐患；误传数组或缺 `figure_id` 会被拒。核心定量读不到的项 `data_status="pending"`，对接 §2 数据熔断。
+   - **备份状态**：执行 `python scripts/state_manager.py snapshot`（→ `backup_project_state()`，无 gate 的全项目备份）。**不要用 `postwrite`**——它开头有 prewrite gate（要求 `last_*_origin == write-cycle`，state_manager.py:2403），识图阶段没跑过 write-cycle，会 `sys.exit(2)` 必然失败。`writing_progress` 的写作进度更新留给 `/write` 阶段，识图阶段不做。
+   - 告知用户：`figure_analysis/figure_{N}.md` 就绪，将作为 `/write {section}` 的结果与讨论依据。
+
+**`figure_analysis/figure_{N}.md` 模板**（落盘正文用英文；下方字段中文仅为说明）：
+```markdown
+# Figure {N}: <大图主题>   <!-- section: <section_id> -->
+> 进度: [3/5 识别中 | 完成]
+
+## Panel A — <图类型: 散点/WB/HE/荧光/CLSM/流式/拍照…>
+- **分组**: <组1, 组2, …>
+- **坐标/量纲**: <Y轴指标(单位); 线性/log>
+- **组间比较**: <组1 vs 组2 = ***>   <!-- source: star_on_graph -->
+- **❓待确认**: 误差棒类型? n=? 星号阈值?
+- **结果(Results)**: <客观描述方向与比较结果，不解释>
+- **讨论(Discussion)**: <基于设计/假设/本图数据的推理> <!-- [CITE_PENDING: 机制关键词] -->
+
+## Panel B — …
+```
+
+**`figures_database.json` 条目示例**（收口 `add-figure` 用；传**单个** figure 对象，命令按 `figure_id` 自动安全合并）：
+```json
+{
+  "figure_id": "Figure 2",
+  "section": "results_3.2",
+  "title": "Cytotoxicity of nanoparticles",
+  "data_status": "ready",
+  "panels": [
+    {"panel": "A", "assay": "CCK-8",
+     "groups": ["Control", "NP-L", "NP-H"],
+     "comparisons": [{"pair": ["NP-H", "Control"], "sig": "***", "p": null, "source": "star_on_graph"}],
+     "error_bar": "SD", "stat_test": "one-way ANOVA + Tukey", "n": 3}
+  ]
+}
+```
+（`data_status`：核心定量齐全=`ready`，缺核心项=`pending`；`section` 值必须 = storyline 的 section_id，代码里 `section`/`section_id` 混用，统一写 `section`。）
+
+**与 Phase 4 衔接（关键）**：write-cycle **不会**自动加载 `figure_analysis/`（其白名单见 §13），故 `/write {section}` 必须在 write-cycle 之后**显式 `Read` 本节对应的 `figure_analysis/figure_{N}.md`**（已列入 §13 白名单第 7 项）作为该小节 Results/Discussion 的事实依据。**写 Results 小节前的 gate（提示词级）**：若该 `figure_analysis/figure_{N}.md` 不存在、或仍有核心定量的 ❓待确认 → 不开写，先回到 `/figure` 补全再 `/write`。正文按 storyline 既定结构组织（融合则结果讨论同段，分离则结果块入 Results、讨论块入 Discussion）。`[CITE_PENDING]` 在此阶段或最终补引时按"文献真实性硬约束"真检索替换。
+
+**红线重申**：本阶段严禁任何"AI 看像素得出的定量或诊断结论"。定量以用户数据 / 图面印出数字 / 图注为准；外部背景以真检索文献为准；二者缺一即停下问用户。
 
 ### Phase 4: 逐节撰写 (融合模式 + 原子化文件 + SI循环)
 
@@ -414,9 +478,10 @@ Generation rules:
 2. `python scripts/state_manager.py sync-literature --dry-run --strict-references` — 扫描正文引用号与 `literature_index.json` 是否一致
 3. `python scripts/citation_guard.py --index literature_index.json --report citation_guard_report.json --offline` — 离线核验文献完整性
 4. `python scripts/style_checker.py --manuscript-dir manuscripts --report style_check_report.json --threshold 70` — 去AI风格检测（句长方差、被动语态、禁词、段首重复）
+5. `grep -rn "CITE_PENDING\|DATA_PENDING" manuscripts/ figure_analysis/ 2>/dev/null` — 扫描 Phase 3.6 留下的未清零占位（待补文献 / 待补数据）
 
 **质量标准**：Key Section ≥500词且引用≥3条；Supporting Section ≥200词；style_checker 评分 ≥70。
-**阻断条件**：字数不足 → 指出具体章节，等待补写；引用冲突 → 重跑 `sync-literature --apply` 后再检查；style_checker 不达标 → 列出具体问题，逐段修改后重检。
+**阻断条件**：字数不足 → 指出具体章节，等待补写；引用冲突 → 重跑 `sync-literature --apply` 后再检查；style_checker 不达标 → 列出具体问题，逐段修改后重检；**占位残留**（`CITE_PENDING` / `DATA_PENDING` 非空）→ 先补全真检索文献 / 缺失数据再交付，严禁带占位合并。
 
 ### Phase 6: 审稿人模拟 (`/reviewer`)
 **Storyline 阶段**：逻辑自检（假设→方法→结论链完整性）。
@@ -451,6 +516,7 @@ Generation rules:
 | `/preview` | 预审报告 | - |
 | `/storyline` | 构建提纲 | 自动规划融合式章节 |
 | `/literature` | 文献检索 | - |
+| `/figure` | Figure 识图与讨论 | 逐张读图→读图清单确认→存 `figure_analysis/figure_{N}.md` 作正文依据；只读符号化信息，读不到问用户（见 Phase 3.6） |
 | `/write` | 撰写章节 | **章节局部读取 + 自我修正 + 智能快照** |
 | `/abstract` | 撰写摘要 | 全文完成后最后写，≤250词，含定量结果 |
 | `/check` | 质量检查 | 含 style_checker 去AI检测 |
@@ -543,7 +609,7 @@ python scripts/state_manager.py set-field --field drug_delivery
 
 ---
 
-**版本**: 2.17.0
+**版本**: 2.18.0
 **更新**:
 1. **citation_guard 增强**: DOI→标题/PMID→标题逐源交叉验证，年份合理性校验，防止拼接幻觉
 2. **style_checker.py 新增**: 句长方差/被动语态/禁词/段首重复/列点检测，量化去AI评分
@@ -553,6 +619,7 @@ python scripts/state_manager.py set-field --field drug_delivery
 6. **Phase 2 引用预估**: storyline 确认前必须标注各节预估引用数量
 7. **学科语感配置**: configs 增加 writing_style 字段（语态/推荐动词/句长范围/领域备注）
 8. **Phase 5 集成 style_checker**: 质量控制增加去AI风格检测，评分≥70方可通过
+9. **Phase 3.6 `/figure` 识图与讨论**: 逐张读图→读图清单确认→存 `figure_analysis/`，护栏禁止像素定量/数散点/脑补背景，读不到即问用户，对接 §2 熔断与文献真实性硬约束
 
 ---
 

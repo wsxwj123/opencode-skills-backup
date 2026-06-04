@@ -2737,6 +2737,61 @@ def update_state(payload_path):
     except:
         pass
 
+def add_figure_state(payload_path):
+    """Safely merge ONE figure entry into figures_database.json.
+    Unlike `update` (whole-file overwrite), this reads-merges-writes under a lock,
+    dedups by figure_id, and never drops existing figures."""
+    if not os.path.exists(payload_path):
+        print(json.dumps({"ok": False, "error": f"payload not found: {payload_path}"}, ensure_ascii=False))
+        sys.exit(1)
+    try:
+        with open(payload_path, "r", encoding="utf-8") as f:
+            entry = json.load(f)
+    except json.JSONDecodeError as e:
+        print(json.dumps({"ok": False, "error": f"invalid JSON: {e}"}, ensure_ascii=False))
+        sys.exit(1)
+    if isinstance(entry, list):
+        print(json.dumps({"ok": False, "error": "payload must be ONE figure object, not an array (call once per figure)"}, ensure_ascii=False))
+        sys.exit(1)
+    if not isinstance(entry, dict):
+        print(json.dumps({"ok": False, "error": "payload must be a figure object"}, ensure_ascii=False))
+        sys.exit(1)
+    fid = entry.get("figure_id") or entry.get("id")
+    if not fid:
+        print(json.dumps({"ok": False, "error": "figure entry must contain 'figure_id'"}, ensure_ascii=False))
+        sys.exit(1)
+    warnings = []
+    if not entry.get("section"):
+        warnings.append("entry has no 'section'; /write section filtering will miss it")
+    declared = entry.get("declared_panels")
+    panels = entry.get("panels") if isinstance(entry.get("panels"), list) else []
+    if isinstance(declared, int) and declared != len(panels):
+        warnings.append(f"declared_panels={declared} but panels={len(panels)} (possible missed panel)")
+    filename = STATE_FILES["figures_database"]
+    with FileLock("state_update"):
+        data = read_json_file(filename) if os.path.exists(filename) else []
+        if not isinstance(data, list):
+            data = []
+        idx = next((i for i, x in enumerate(data)
+                    if isinstance(x, dict) and (x.get("figure_id") or x.get("id")) == fid), None)
+        if idx is not None:
+            data[idx] = entry
+            action = "updated"
+        else:
+            data.append(entry)
+            action = "added"
+        with open(filename, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+    result = {"ok": True, "action": action, "figure_id": fid,
+              "total_figures": len(data), "panels": len(panels)}
+    if warnings:
+        result["warnings"] = warnings
+    print(json.dumps(result, ensure_ascii=False))
+    try:
+        os.remove(payload_path)
+    except Exception:
+        pass
+
 def set_field_config(
     field_id,
     project_config_file=STATE_FILES["project_config"],
@@ -3038,6 +3093,10 @@ def main():
     update_parser = subparsers.add_parser("update", help="Update state files from a payload")
     update_parser.add_argument("payload_file", help="Path to the JSON file containing updates")
 
+    # Add-figure command (safe single-entry merge into figures_database)
+    add_figure_parser = subparsers.add_parser("add-figure", help="Safely merge ONE figure entry into figures_database.json (dedup by figure_id, no overwrite)")
+    add_figure_parser.add_argument("payload_file", help="Path to a JSON file containing ONE figure object")
+
     # Postwrite command
     postwrite_parser = subparsers.add_parser("postwrite", help="Auto-sync global progress/context after a writing turn")
     postwrite_parser.add_argument("--section", required=True, help="Current section id, e.g. 'results_3.1'")
@@ -3173,6 +3232,8 @@ def main():
         )
     elif args.command == "update":
         update_state(args.payload_file)
+    elif args.command == "add-figure":
+        add_figure_state(args.payload_file)
     elif args.command == "postwrite":
         postwrite_state(
             section=args.section,
