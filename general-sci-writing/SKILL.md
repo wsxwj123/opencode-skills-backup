@@ -114,6 +114,12 @@ license: Proprietary
   - ✅ `04_Results_3.1_Characterization.md`
   - ✅ `04_Results_3.2_Uptake.md`
   - ❌ `04_Results.md`
+- **🔴 修改/润色的唯一合法目标（铁律）**：任何对正文的修改、润色、改写、重组——**只能改 `manuscripts/*.md` 原子化文件**。**严禁修改**以下"派生/合并产物"（它们由脚本自动生成，下次 `/merge` 会覆盖你的修改、工作丢失）：
+  - `manuscripts/Full_Manuscript.md`（`/merge` 合并稿）
+  - `*.docx`（pandoc 转出物）
+  - `figure_analysis/figure_*.md` 之外的拼接稿
+- **润色 workflow（强制）**：用户给你一段需修改的文本 → ① 先 `grep -rn "<原文片段前 8-15 字>" manuscripts/` 定位它在**哪个原子化文件**；② 命中 `Full_Manuscript.md` 等派生物 → **不要改它**，回到对应的原子化源文件改；③ 同一片段在多个原子化文件命中 → 停下问用户改哪个，不要猜；④ 改完提醒用户重跑 `/merge` 才能在合并稿/docx 中看到更新。
+- **自检（写入前必答）**：在 `Edit`/`Write` 任何 `.md` 前，自问"这是 `manuscripts/` 下的原子化源文件吗？还是合并稿/派生物？"——后者一律拒绝写入。
 
 ### 4. 写入安全检查 (Anti-Overwrite Check)
 在执行 `write_file` 之前，必须进行以下**自查**：
@@ -303,6 +309,19 @@ license: Proprietary
 
 ### Phase 3: 文献检索 (`/literature`)
 分阶段检索（Phase 1核心，Phase 2写作时实时补充）。
+
+**中文文献支线（Chinese Literature Manual Track，按需触发）**：
+SCI 论文通常只在少数场景需引中文文献（中药/中医、临床路径、地方流行病学、政策文献等）。中文期刊普遍**无 DOI、无 PMID**，`citation_guard` 双向核验跑不通，故走"AI 发现 → 用户人工取证 → 责任标记"的合规通道，绝不绕过护栏自动入库。
+1. **检索（AI 自动）**：用 `mcp__paper-search-mcp__search_google_scholar` 检索中文关键词（Google Scholar 覆盖中文核心期刊，免费可调；**不要**用知网/万方/维普——无开放 API，反爬严，无法自动调用）。
+2. **AI 仅返回候选清单**：标题 / 作者 / 期刊 / 年份 / Scholar 链接。**严禁直接入库**，因为缺 DOI/PMID 无法过 `citation_guard`。
+3. **用户人工取证**（必选其一）：
+   - **路径 A（推荐）**：去 CNKI / 万方 / 维普 / 期刊官网搜该篇，记下 **DOI** 或 **CSTR**（中科院中文 DOI）→ AI 用此 ID 走 `citation_guard` 双向核验入库（与英文文献同流程）。
+   - **路径 B**：用户提供原文 PDF + 完整元数据 → AI 入库，但条目必须带 `verified=false`、`needs_manual_review=true`、`requires_human_attest=true`（用户书面确认"我对这条负责"才允许在正文 `[n]` 引用）→ 进入 `manual_review_queue.json`。
+   - **路径 C**：以上都做不到 → **不引该条**，找等价英文文献替代。
+4. **正文引用规则**：路径 A 与英文条目同等；路径 B 入库的条目，每次在正文写 `[n]` 前 AI 必须主动提醒"该条为人工背书条目，是否仍要引用"，用户确认后才写入。
+5. **导出**：`/export_bib` 时路径 B 条目在 .bib 中加 note 字段标注 `[CN-Manual]`，方便投稿前人工复核。
+
+
 **执行红线**：本阶段必须遵守“文献真实性硬约束”，任何未通过同源核验的条目不得进入 `literature_index.json`，也不得在正文中引用。
 **新增硬门禁**：完成本阶段后必须运行 `citation_guard.py --require-mcp`，仅当 `citation_guard_report.json` 为 `ok=true` 才能进入 `/write`。`--require-mcp` 在 Phase 3 结束时为强制参数，确保所有文献有 MCP 证据轨。
 **阻断条件**：只要 `manual_review_queue.json` 非空，或报告存在 provider policy / bidirectional verification failure 相关失败项，都必须先处理后再写作。
@@ -483,6 +502,7 @@ Generation rules:
 3. `python scripts/citation_guard.py --index literature_index.json --report citation_guard_report.json --offline` — 离线核验文献完整性
 4. `python scripts/style_checker.py --manuscript-dir manuscripts --report style_check_report.json --threshold 70` — 去AI风格检测（句长方差、被动语态、禁词、段首重复）
 5. `grep -rn "CITE_PENDING\|DATA_PENDING" manuscripts/ figure_analysis/ 2>/dev/null` — 扫描 Phase 3.6 留下的未清零占位（待补文献 / 待补数据）
+6. `[ ! -f manuscripts/Full_Manuscript.md ] || ! grep -q "AUTO-GENERATED" manuscripts/Full_Manuscript.md && echo "WARN: 合并稿缺自动生成警告头，可能被手动改写过"` — 防误改合并稿门禁
 
 **质量标准**：Key Section ≥500词且引用≥3条；Supporting Section ≥200词；style_checker 评分 ≥70。
 **阻断条件**：字数不足 → 指出具体章节，等待补写；引用冲突 → 重跑 `sync-literature --apply` 后再检查；style_checker 不达标 → 列出具体问题，逐段修改后重检；**占位残留**（`CITE_PENDING` / `DATA_PENDING` 非空）→ 先补全真检索文献 / 缺失数据再交付，严禁带占位合并。
