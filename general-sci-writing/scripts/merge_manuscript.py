@@ -301,8 +301,14 @@ def run_merge(
     if reference_lines:
         merged = merged.rstrip() + "\n\n# References\n\n" + "\n".join(reference_lines) + "\n"
     os.makedirs(os.path.dirname(output_md) or ".", exist_ok=True)
+    auto_gen_banner = (
+        "<!-- AUTO-GENERATED · DO NOT EDIT ·\n"
+        "     Source: manuscripts/*.md (atomic section files)\n"
+        "     Any edits here will be OVERWRITTEN on the next `/merge` run.\n"
+        "     Edit the corresponding atomic file under manuscripts/, then re-run /merge. -->\n\n"
+    )
     with open(output_md, "w", encoding="utf-8") as f:
-        f.write(merged)
+        f.write(auto_gen_banner + merged)
 
     result = {
         "ok": True,
