@@ -184,30 +184,42 @@ def _normalize_blueprint(d):
     return d
 
 
-# 科目别名：政治/道法 等异名归一到预设的规范名，避免为每个异名复制一份预设文件。
-_SUBJECT_ALIASES = {
-    "政治": "思想政治", "道德与法治": "思想政治", "道法": "思想政治",
+# 预设文件名一律用 ASCII slug（中文文件名在 macOS↔Windows↔Git 间同步会乱码）。
+# 用户仍传中文学段/科目，这里映射成 ASCII 文件名；政治/道法等异名归一到 politics。
+_STAGE_SLUG = {
+    "一年级": "g1", "二年级": "g2", "三年级": "g3", "四年级": "g4",
+    "五年级": "g5", "六年级": "g6",
+    "七年级": "g7", "初一": "g7", "八年级": "g8", "初二": "g8",
+    "九年级": "g9", "初三": "g9",
+    "高一": "g10", "高二": "g11", "高三": "g12",
 }
+_SUBJECT_SLUG = {
+    "语文": "chinese", "英语": "english", "历史": "history", "地理": "geography",
+    "思想政治": "politics", "政治": "politics", "道德与法治": "politics", "道法": "politics",
+}
+_REGION_SLUG = {"长沙": "changsha", "北京": "beijing", "上海": "shanghai"}
 
 
 def _load_preset(stage, subject, region):
-    """查预设：按 [本名→别名] × [{stage}_{subject}_{region} → {stage}_{subject}] 顺序。
-    region 非"通用"时若无地区专版，自动回退到基名（基名即通用版，无需复制 _通用 文件）。"""
-    subjects = [subject]
-    alias = _SUBJECT_ALIASES.get(subject)
-    if alias and alias not in subjects:
-        subjects.append(alias)
+    """查预设（ASCII 文件名）：先 {stage}_{subject}_{region} 再回退基名 {stage}_{subject}。
+    地区无专版自动回退基名（基名即通用版）；无 ASCII 映射的学段/科目视为无预设。"""
+    st = _STAGE_SLUG.get(str(stage))
+    sj = _SUBJECT_SLUG.get(str(subject))
+    if not st or not sj:
+        return None  # 该学段/科目无预设，交由内置默认/通用兜底
     names = []
-    for sub in subjects:
-        names.append(f"{stage}_{sub}_{region}.json")
-        names.append(f"{stage}_{sub}.json")
+    rg = _REGION_SLUG.get(str(region))
+    if rg:
+        names.append(f"{st}_{sj}_{rg}.json")
+    names.append(f"{st}_{sj}.json")
     for d in _PRESET_DIRS:
         for n in names:
             fp = os.path.join(d, n)
             if os.path.isfile(fp):
                 try:
                     bp = _normalize_blueprint(_read_json(fp))
-                    bp["source"] = f"预设 {n}"
+                    # source 用中文学段科目（仅打印，可读）；文件名保持 ASCII
+                    bp["source"] = f"预设 {stage}{subject}（{n}）"
                     return bp
                 except (json.JSONDecodeError, OSError) as e:
                     print(f"[警告] 预设 {n} 读取失败（{e}），跳过")
