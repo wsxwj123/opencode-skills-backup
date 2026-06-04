@@ -10,7 +10,9 @@
   - number_line 数轴：刻度、实心/空心点、区间
   - bar/line/pie/scatter 统计图
   - vector     受力/矢量箭头图（物理）
-画不了的（电路图/化学结构式/复杂装置/立体几何）：返回 None，由调用方降级为
+  - climate    气候类型图（地理）：气温折线 + 降水柱状双轴
+  - pyramid    人口金字塔（地理）：左男右女对称水平条形
+画不了的（电路图/化学结构式/复杂装置/立体几何/政区图/真实地图）：返回 None，由调用方降级为
 用户提供图片或 ［图：alt］ 占位。绝不假装能画。
 
 另提供 render_formula：把 LaTeX 公式用 matplotlib mathtext 渲成 PNG（复杂公式用）。
@@ -233,6 +235,55 @@ def _fig_vector(spec, out_dir):
     return _save(fig, _out_path(out_dir, spec))
 
 
+def _fig_climate(spec, out_dir):
+    """气候类型图（地理高频）：气温折线(左轴,红) + 降水柱状(右轴,蓝)，x 为 12 个月。
+    temp=[12 个月气温], prec=[12 个月降水]，长度须为 12。"""
+    temp = spec.get("temp")
+    prec = spec.get("prec")
+    if not temp or not prec:
+        return None
+    months = spec.get("months") or [str(i) for i in range(1, 13)]
+    fig, ax1 = plt.subplots(figsize=(spec.get("w", 5.5), spec.get("h", 4)))
+    ax2 = ax1.twinx()
+    ax2.bar(months, prec, color="steelblue", alpha=0.75, width=0.6)
+    ax2.set_ylabel(spec.get("prec_label", "降水量 / mm"))
+    ax1.plot(months, temp, color="firebrick", marker="o", linewidth=1.8)
+    ax1.set_ylabel(spec.get("temp_label", "气温 / ℃"))
+    ax1.set_xlabel(spec.get("xlabel", "月份"))
+    ax1.set_zorder(ax2.get_zorder() + 1)  # 折线压在柱状之上
+    ax1.patch.set_visible(False)
+    if spec.get("title"):
+        ax1.set_title(spec["title"])
+    return _save(fig, _out_path(out_dir, spec))
+
+
+def _fig_pyramid(spec, out_dir):
+    """人口金字塔（地理高频）：左男右女对称水平条形，y 为年龄组。
+    ages=["0-14",...], male=[...], female=[...]，三者等长。"""
+    ages = spec.get("ages")
+    male = spec.get("male")
+    female = spec.get("female")
+    if not ages or not male or not female:
+        return None
+    import matplotlib.ticker as mticker
+    fig, ax = plt.subplots(figsize=(spec.get("w", 5.5), spec.get("h", 4.5)))
+    y = list(range(len(ages)))
+    ax.barh(y, [-abs(v) for v in male], color="steelblue",
+            label=spec.get("male_label", "男"))
+    ax.barh(y, [abs(v) for v in female], color="indianred",
+            label=spec.get("female_label", "女"))
+    ax.set_yticks(y)
+    ax.set_yticklabels(ages)
+    ax.axvline(0, color="black", linewidth=0.8)
+    ax.xaxis.set_major_formatter(
+        mticker.FuncFormatter(lambda v, _: f"{abs(v):g}"))
+    ax.set_xlabel(spec.get("xlabel", "人口 / %"))
+    ax.legend()
+    if spec.get("title"):
+        ax.set_title(spec["title"])
+    return _save(fig, _out_path(out_dir, spec))
+
+
 _DISPATCH = {
     "function": _fig_function, "plot": _fig_function,
     "geometry": _fig_geometry,
@@ -240,6 +291,8 @@ _DISPATCH = {
     "bar": _fig_stats, "line": _fig_stats, "pie": _fig_stats,
     "scatter": _fig_stats,
     "vector": _fig_vector, "force": _fig_vector,
+    "climate": _fig_climate,
+    "pyramid": _fig_pyramid, "population_pyramid": _fig_pyramid,
 }
 
 
@@ -297,6 +350,13 @@ def _selftest(out_dir):
          "vectors": [{"start": [0, 0], "end": [3, 0], "label": "F₁"},
                      {"start": [0, 0], "end": [0, 2], "label": "F₂"}],
          "title": "受力分析"},
+        {"kind": "climate",
+         "temp": [3, 5, 10, 16, 21, 25, 28, 27, 22, 16, 9, 4],
+         "prec": [40, 45, 60, 80, 100, 140, 180, 160, 90, 60, 50, 40],
+         "title": "某地气候"},
+        {"kind": "pyramid", "ages": ["0-14", "15-64", "65+"],
+         "male": [20, 55, 8], "female": [18, 53, 12],
+         "title": "人口金字塔"},
     ]
     ok = 0
     for s in samples:
