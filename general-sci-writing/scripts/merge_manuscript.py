@@ -300,9 +300,41 @@ def run_merge(
 
     if reference_lines:
         merged = merged.rstrip() + "\n\n# References\n\n" + "\n".join(reference_lines) + "\n"
+
+    # Append Abbreviations table if abbreviations.json exists and is non-empty
+    # 项目根而非 manuscripts/ 下；优先 CWD,fallback 到 output_md 同目录
+    abbr_file = "abbreviations.json"
+    if not os.path.exists(abbr_file):
+        abbr_file = os.path.join(os.path.dirname(output_md) or ".", "abbreviations.json")
+    if os.path.exists(abbr_file):
+        try:
+            with open(abbr_file, "r", encoding="utf-8") as f:
+                abbr_data = json.loads(f.read() or "[]")
+            if isinstance(abbr_data, list) and abbr_data:
+                sorted_abbr = sorted(abbr_data, key=lambda x: (x.get("abbr") or "").upper())
+                table_lines = ["", "# Abbreviations", "",
+                               "| Abbreviation | Full Name | First Defined In |",
+                               "|---|---|---|"]
+                for x in sorted_abbr:
+                    if not isinstance(x, dict): continue
+                    a = (x.get("abbr") or "").strip()
+                    fn = (x.get("full_name") or "").strip()
+                    fd = (x.get("first_defined_in") or "—").strip()
+                    if a and fn:
+                        table_lines.append(f"| {a} | {fn} | {fd} |")
+                merged = merged.rstrip() + "\n\n" + "\n".join(table_lines) + "\n"
+        except Exception:
+            pass  # 缩略词表生成失败不阻断主流程
+
     os.makedirs(os.path.dirname(output_md) or ".", exist_ok=True)
+    auto_gen_banner = (
+        "<!-- AUTO-GENERATED · DO NOT EDIT ·\n"
+        "     Source: manuscripts/*.md (atomic section files)\n"
+        "     Any edits here will be OVERWRITTEN on the next `/merge` run.\n"
+        "     Edit the corresponding atomic file under manuscripts/, then re-run /merge. -->\n\n"
+    )
     with open(output_md, "w", encoding="utf-8") as f:
-        f.write(merged)
+        f.write(auto_gen_banner + merged)
 
     result = {
         "ok": True,
