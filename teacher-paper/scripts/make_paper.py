@@ -39,7 +39,7 @@ block 类型（type 字段）——试卷与答案通用：
   {"type":"blank_lines","count":3}                       答题横线 N 行
   {"type":"essay_grid","note":"...","cols":20,"rows":30}  作文方格纸(真格子,默认20×30=600格)
   {"type":"figure","kind":"function","funcs":["x**2-2*x-3"],"xrange":[-3,5],"alt":"..."}
-        理科配图：kind=function/geometry/number_line/bar/line/pie/scatter/vector → matplotlib自动画；
+        理科/地理配图：kind=function/geometry/number_line/bar/line/pie/scatter/vector/climate/pyramid → matplotlib自动画；
         或给 "src":"图片路径"(用户提供的电路/化学结构/装置图)直接插入；都没有则降级［图：alt］占位。
   {"type":"formula","latex":"\\int_0^1 x^2\\,dx=\\frac13","alt":"..."}  复杂公式(mathtext渲图);简单公式直接Unicode写题干
   {"type":"answer","num":"1","score":"（2分）","text":"..."}    答案条目
@@ -237,7 +237,7 @@ def render(doc, blocks):
                 else:
                     add_para(doc, para, indent_chars=2, size=10.5, name=pfont)
             if b.get("source"):
-                # 出处标注：右对齐宋体（如"（材料均改编自《科学之友》）"）
+                # 出处标注：右对齐宋体（如"（节选自《科学之友》2024年第6期）"）
                 add_para(doc, b["source"], align="right", size=10.5,
                          name=SONGTI, space_after=4)
         elif t == "table":
@@ -314,8 +314,11 @@ def _render_figure(doc, spec):
             return
         except Exception:
             pass
-    # 降级：占位 + alt 文字（无障碍/可手动补图）
+    # 降级：占位 + alt 文字（无障碍/可手动补图）；同时向 stderr 出声，避免"静默没图"
     alt = spec.get("alt", "此处应有配图，请手动补充")
+    print(f"[配图降级] 『{alt}』未渲染为图片，已用文字占位 ［图：{alt}］——"
+          f"请确认已装 matplotlib 且 kind 受支持，或提供 src 图片后重跑。",
+          file=sys.stderr)
     add_para(doc, f"［图：{alt}］", align="center", size=9, space_after=4)
 
 

@@ -362,11 +362,12 @@ def cmd_init(args):
         "decisions": decisions,     # 开工前一次性确定的决策点（作业指导书）
         "answer_method": answer_method,   # 卷面作答（默认）/ 答题卡
         # 卷面工程项（AI 可按用户需求改）：页码默认开；密封线默认关；
-        "page_number": _opt_bool(opt.get("page-number"), True),
-        "sealing_line": _opt_bool(opt.get("sealing-line"), False),
-        "exam_scope": opt.get("scope", ""),       # 考试范围/单元/课次
-        "textbook": opt.get("textbook", ""),      # 教材版本/册次
-        "answer_detail": opt.get("answer-detail", "详细"),  # 答案解析详略：详细/简略/含采分点
+        # 以下排版/范围项：CLI 显式参数优先，其次取样卷蓝图解析出的值，最后默认。
+        "page_number": _opt_bool(opt.get("page-number"), bp.get("page_number", True)),
+        "sealing_line": _opt_bool(opt.get("sealing-line"), bp.get("sealing_line", False)),
+        "exam_scope": opt.get("scope") or bp.get("exam_scope", ""),     # 考试范围/单元/课次
+        "textbook": opt.get("textbook") or bp.get("textbook", ""),      # 教材版本/册次
+        "answer_detail": opt.get("answer-detail") or bp.get("answer_detail", "详细"),  # 详细/简略
     }
     # 小说选文字数区间：蓝图指定则带上，build 校验按此；默认（不写）即 1000-1500。
     if bp.get("novel_len"):
@@ -533,7 +534,7 @@ def cmd_build(args):
         m = atom.get("meta", {})
 
         # —— 阅读类素材真实性硬门禁 ——
-        _check_source(fp, m, p_blocks, materials_dir, source_errors)
+        _check_source(fp, m, p_blocks, materials_dir, source_errors, warn)
 
         if m.get("score") is not None and str(m.get("status", "")) != "-":
             try:
@@ -568,6 +569,9 @@ def cmd_build(args):
     # 默认 1000-1500（九年级语文小说规格）；其他年级/特殊要求由蓝图 meta.novel_len 覆盖。
     # 传 subject：英语等非中文卷按"词"计数，不套用中文字数默认区间。
     _check_novel_length(paper, warn, meta.get("novel_len"), meta.get("subject", ""))
+
+    # —— 选文出处措辞：真实性铁律要求忠实节选，标注应为'节选自'而非'改编自' ——
+    _check_material_wording(paper, warn)
 
     # —— 政史地史实/数据真实性提醒：溯源门禁只覆盖 material 选文块，题干内嵌的
     #    史实/年代/数据/地名等不触发门禁，须人工核验，不可编造。——
@@ -902,6 +906,22 @@ def _check_novel_length(paper, warn, bounds=None, subject=""):
                             f"（{'偏短' if n < lo else '偏长'}）")
 
 
+_WORDING_BAD = ("改编", "改写", "编译", "整理自", "据原文改", "综合整理", "编写自")
+
+
+def _check_material_wording(paper, warn):
+    """选文出处标注措辞校验（软提醒）：material.source 出现'改编/改写/编译/整理自…'等
+    暗示二次创作的措辞时提醒改'节选自'。真实性铁律要求忠实节选——逐字、可删减，
+    禁重排/改写/编造，故标注应为'节选自'。"""
+    for b in paper:
+        if isinstance(b, dict) and b.get("type") == "material":
+            src = str(b.get("source", ""))
+            hit = [w for w in _WORDING_BAD if w in src]
+            if hit:
+                warn.append(f"选文出处『{src}』含{'/'.join(hit)}——按真实性铁律须忠实节选"
+                            f"（逐字可删减、禁重排改写编造），标注请改为'节选自…'。")
+
+
 def _needs_source(meta, paper_blocks):
     """判断该原子文件是否承载'阅读选文/材料'，需强制溯源。
     只对真正含选文正文的文件把关（共享材料文件，或题目自带 material 正文块），
@@ -913,26 +933,103 @@ def _needs_source(meta, paper_blocks):
     return False
 
 
-def _check_source(fp, meta, paper_blocks, materials_dir, errors):
-    """阅读类素材必须声明 source + source_file，且 source_file 真实存在。
-    source 允许两类：来源URL/出处，或显式标注 '原创-已声明'（教师自知并担责）。"""
+_USER_SRC_HINTS = ("用户提供", "用户提交", "用户给", "截图", "誊录", "手抄",
+                   "扫描件", "纸质")
+_FETCH_CRED_MARK = "teacher-paper:fetched"
+
+
+def _has_fetch_credential(text):
+    """materials 文件是否带 fetch_web.py --save 写入的脚本抓取凭证头。"""
+    return _FETCH_CRED_MARK in (text or "")
+
+
+def _norm_text(s):
+    """归一化：去掉空白与标点，只留汉字/字母/数字，用于'选文是否为原文子串'的
+    忠实节选校验——忽略标点风格差异（弯/直引号、句读不同），但改字/缺字仍会落空。"""
+    return re.sub(r"\W+", "", str(s or ""), flags=re.UNICODE)
+
+
+def _check_source(fp, meta, paper_blocks, materials_dir, errors, warn):
+    """阅读类素材真实性门禁，分级把关（errors=硬拒绝，warn=软提醒）：
+    - 缺 source：拒绝。
+    - 标'原创'：堵死「meta标原创、卷面却印外部出处」自相矛盾；古诗词标原创直接拒绝。
+    - 非原创且 source 是 URL：materials 原文必须带 fetch_web.py 抓取凭证头，
+      否则判为「凭记忆默写+补假URL」拒绝（除非显式标 '用户提供-…'）。
+    - 非原创、非URL的纯出处（纸质书/杂志）：程序无法核验，放行但 warn 提示人工核对。
+    - 忠实节选子串校验：选文每段去空白后须为原文连续子串，改写/重排会落空 → warn。"""
     if not _needs_source(meta, paper_blocks):
         return
     name = os.path.basename(fp)
     source = str(meta.get("source", "")).strip()
     sfile = str(meta.get("source_file", "")).strip()
+    mats = [b for b in paper_blocks
+            if isinstance(b, dict) and b.get("type") == "material"
+            and (b.get("paras") or b.get("title"))]
     if not source:
         errors.append(f"{name}：阅读类素材缺 meta.source（须填来源URL/出处，"
-                      f"或显式写 '原创-已声明'）")
+                      f"或显式写 '原创-已声明' / '用户提供-<出处>'）")
+        return
+
     is_original = "原创" in source
-    if not is_original:
-        # 非原创（即取自真实文献/新闻）必须有落盘原文佐证
-        if not sfile:
-            errors.append(f"{name}：缺 meta.source_file（真实素材须把抓取原文落盘 "
-                          f"materials/ 并在此指向该文件）")
-        elif not os.path.exists(os.path.join(materials_dir, sfile)):
-            errors.append(f"{name}：source_file 指向的 materials/{sfile} 不存在"
-                          f"（禁止凭空编造真实素材）")
+    is_user = any(k in source for k in _USER_SRC_HINTS)
+    is_url = "http" in source.lower()
+
+    # —— 原创逃逸收口：堵死「meta 标原创、卷面却印外部出处」自相矛盾 ——
+    if is_original:
+        for b in mats:
+            msrc = str(b.get("source", ""))
+            if any(k in msrc for k in ("节选自", "选自", "出自", "摘自", "改编自")):
+                errors.append(f"{name}：meta.source 标'原创'，但选文出处却写『{msrc}』"
+                              f"——自相矛盾。原创素材不应有外部出处；若确为真实节选，"
+                              f"请把 meta.source 改为真实来源并落盘原文佐证。")
+            if b.get("layout") == "verse":
+                errors.append(f"{name}：古诗词标'原创'不合理——古诗词须取真实公版作品"
+                              f"并溯源（ctext/古诗文网），不可原创。")
+        return
+
+    # —— 非原创：必须有落盘原文佐证 ——
+    if not sfile:
+        errors.append(f"{name}：缺 meta.source_file（真实素材须把原文落盘 "
+                      f"materials/ 并在此指向该文件）")
+        return
+    fpath = os.path.join(materials_dir, sfile)
+    if not os.path.exists(fpath):
+        errors.append(f"{name}：source_file 指向的 materials/{sfile} 不存在"
+                      f"（禁止凭空编造真实素材）")
+        return
+    try:
+        with open(fpath, encoding="utf-8") as f:
+            src_doc = f.read()
+    except (OSError, UnicodeDecodeError):
+        src_doc = ""
+
+    # —— 抓取凭证分级：URL 来源本可脚本抓取，必须带凭证头，堵死「凭记忆默写+补假URL」——
+    if is_url and not is_user:
+        if not _has_fetch_credential(src_doc):
+            errors.append(f"{name}：meta.source 是网络链接，但 materials/{sfile} 没有 "
+                          f"fetch_web.py 抓取凭证头——疑似凭记忆默写后补假来源。请用 "
+                          f"`fetch_web.py \"<url>\" --save materials/{sfile}` 重新抓取；"
+                          f"若确为用户手工提供，请把 meta.source 标为 '用户提供-<出处>'。")
+            return
+    elif not is_user:
+        warn.append(f"{name}：素材来源『{source}』非网络链接、无法用抓取凭证核验，"
+                    f"请人工核对该选文是否逐字属实。")
+
+    # —— 忠实节选·子串校验（软提醒，格式差异可能误报故不阻断）——
+    src_norm = _norm_text(src_doc)
+    if src_norm:
+        for b in mats:
+            hit_miss = False
+            for para in (b.get("paras") or []):
+                p = _norm_text(para)
+                if len(p) >= 12 and p not in src_norm:
+                    warn.append(f"{name}：选文有段落未在 materials/{sfile} 原文中逐字"
+                                f"找到（『{str(para)[:18]}…』）——可能被改写/重排，"
+                                f"请核对是否忠实节选。")
+                    hit_miss = True
+                    break
+            if hit_miss:
+                break
 
 
 def _detect_desktop():
