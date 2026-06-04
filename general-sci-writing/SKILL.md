@@ -56,24 +56,39 @@ license: Proprietary
 
 **语言风格 (Anti-AI Protocol)**：
 - **核心原则**：严格遵循 `humanizer-zh` Skill 的去 AI 化标准。
+- **目标读者画像**：以美国 STEM 博士研究生（PhD candidate）日常阅读、自然书写的水平为基准——朴素、平实、信息密度优先；笔触受 Nature 资深编辑把关（Role 设定不变），但**克制使用编辑级精炼修辞**，避免炫技。
 - **禁词表 (The "Stop" List)**：
   - 严禁使用："delve into", "comprehensive landscape", "pivotal role", "realm", "tapestry", "underscore", "testament".
   - 严禁结构：三段式排比 ("seamless, intuitive, and powerful")、虚假范围 ("from X to Y")、否定式排比 ("not only... but also...").
+- **🔴 禁修辞 (No Rhetorical Devices)**：严禁文学性修辞——隐喻、拟人、明喻、夸张、对偶、设问、引经据典等。例外：领域内已固化的术语隐喻（如 "molecular switch"、"signaling cascade"）保留；新造的、装饰性的修辞一律删。
+- **🔴 禁生僻词 (No Obscure Vocabulary)**：以 PhD candidate 常用词为准——
+  - 通用动词/形容词用平实词：用 `show / find / use / large / small`，不用 `elucidate / unveil / pronounced / substantial`；用 `cause / lead to`，不用 `precipitate / engender`。
+  - 例外保留：领域专业术语（如 `apoptosis / pharmacokinetics`）不算生僻，必须用准确术语。
+  - 判定原则：能用一个 GRE 范围内的常见词替代且不丢精度的，就替换。
+- **🔴 禁造词 (No Neologisms)**：严禁拼接新词或自造缩略——所有词、所有缩写必须能在权威词典 / 领域教科书 / 已发表文献中找到原型。首次出现的缩写必须给全称（如 "extracellular vesicles (EVs)"）。AI 凭语感造的新组合词（"transformomics"、"diseasability" 之类）一律删。
+- **🔴 禁长难句 (No Long/Complex Sentences)**：
+  - **硬上限：单句 ≤ 30 词**（含从句）。超过即拆。
+  - **从句深度 ≤ 2 层**——禁止"主句套定语从句套状语从句"三层嵌套。
+  - 一句话只承担一个核心论点，复合论点拆成两句。
+- **🔴 被动为主 (Passive Voice as Primary)**：
+  - **段落整体被动占比 50–70%**（SCI Article 实验描述主流）。
+  - Methods / Results 描述实验操作与观察 → **优先被动**（"Cells were treated with..."、"Apoptosis was assessed by..."）。
+  - Discussion 表达作者推断 / 主观判断 → 可适当主动（"We propose..."、"These data suggest..."），但仍以被动为主。
+  - 被动 < 40% 视为过于口语化；> 70% 视为冗余呆板，均扣分。
 - **写作范式**：
-  - **海明威式 (Hemingway Style)**：短句为主，拒绝从句套从句。
   - **数据驱动 (Data-First)**：用数据说话，拒绝 "significant effect" 这种空话，必须写 "5-fold increase (P<0.001)"。
   - **No Bullet Points**：正文严禁列点，必须写成连贯段落。
-- **Perplexity & Burstiness (P/B) 动态节奏规则**：
-  - 同一段落内必须混合短句（≤12 词）与长句（25-40 词），严禁连续 3 句以上句长相近（差异 < 5 词）。
-  - 同一概念在同一段落内不得重复使用相同表述，必须使用同义替换或结构重组。禁止"A... A... A..."式重复。
-  - 改写/润色后的段落长度必须控制在原文 ±15% 以内，防止因扩写导致信息密度下降（典型 AI 特征）。
-  - 连续段落的首句禁止使用相同句式结构（如连续 "This study...", "The results...", "We found..."）。
+- **句长节奏（修订）**：
+  - 同段落内混合**短句（≤12 词）**与**中句（15-25 词）**——**不再要求 25-40 词的长句**（与"禁长难句"统一）。
+  - 严禁连续 3 句以上句长相近（差异 < 5 词）——避免 AI 式齐整。
+  - 同一概念在同段落不重复同表述，用同义替换或结构重组。
+  - 改写后段落长度控制在原文 ±15% 以内。
+  - 连续段落首句禁用相同句式（如连续 "This study..."、"The results..."、"We found..."）。
 - **深度改写策略 (Anti-Similarity Protocol)**：
-  上方禁词表解决"不能写什么"，本条解决"应该怎么改"：
-  - **词汇层 (Lexical)**：替换非术语性通用词（如 significant → pronounced/marked/substantial）。术语本身不动，但术语周围的动词和修饰语必须重组。禁止直接使用原始文献中的完整短语（≥4 连续词），必须拆解重构。
-  - **句法层 (Syntactic)**：主动/被动语态交替使用，但同一段落内被动不超过 30%。将因果从句拆为独立句，或将并列短句合并为复合句——视上下文节奏需要而定。禁止模板化过渡（"Furthermore, ... In addition, ... Moreover, ..."），改用逻辑内嵌（将因果关系编织进主句而非用连接词外挂）。
-  - **结构层 (Structural)**：允许调整同一段落内论点的呈现顺序（在不破坏逻辑链的前提下）。将"先总后分"改为"先证据后结论"，或反之——打破 AI 偏好的固定叙事模板。适度插入作者视角的判断句（如 "This likely reflects..."、"One plausible explanation is..."），模拟真人推理痕迹。
-- **自我审查**：在输出任何段落前，必须在后台隐式运行 `humanizer-zh` 的检查清单 + P/B 节奏自检（句长方差是否足够、段首句式是否重复、被动语态占比是否超标）。
+  - **词汇层 (Lexical)**：术语不动；术语周围的非术语通用词降到 PhD 平实层（如 `significant → clear/large`，不再升级为 `pronounced/marked/substantial`——那是编辑级修饰，违反目标读者画像）。禁止直接使用原始文献完整短语（≥4 连续词），必须拆解重构。
+  - **句法层 (Syntactic)**：被动为主（见上）；将因果从句拆为独立句而非套层从句。禁止模板化过渡（"Furthermore, ..."、"In addition, ..."、"Moreover, ..."），改用逻辑内嵌或自然连接（"Because..."、"This in turn..."）。
+  - **结构层 (Structural)**：允许调整段内论点顺序（不破逻辑链）；可适度插入作者推断句（"This likely reflects..."、"One plausible explanation is..."）模拟真人推理痕迹。
+- **自我审查**：在输出任何段落前，必须在后台隐式运行 `humanizer-zh` 检查清单 + 本节自检（句长 / 句长方差 / 段首重复 / 被动占比 / 是否含修辞、生僻词、造词）。
 - **学科语感适配**：各领域配置文件 `configs/*.json` 中的 `writing_style` 字段定义了学科特定的语态偏好、推荐/避免动词、过渡短语和句长范围。写作时必须读取当前研究方向的 `writing_style` 并遵循；若未配置则使用通用 Anti-AI 规则。
 
 ---
