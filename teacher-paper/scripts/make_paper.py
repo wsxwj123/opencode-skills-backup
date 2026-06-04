@@ -29,9 +29,11 @@ block 类型（type 字段）——试卷与答案通用：
   {"type":"material","label":"【材料一】","title":"老街","author":"",
    "paras":["...","..."],"source":"（选自《读者》2024年第6期）",
    "layout":"prose","font":"楷体"}                        阅读选文（楷体正文）
-        - title/author 楷体居中；paras 楷体两端对齐 + 首行缩进2字（prose）
-        - layout="verse"     → 古诗词，整段居中（每行 5/7 字整齐）
-        - layout="classical" → 文言文/古籍节录，整段居中
+        - label "【材料一】" 左对齐顶格（宋体）
+        - title/author 楷体居中（所有材料一律居中——文言文/小说/散文/古诗词都如此）
+        - paras 正文：
+            layout="verse"   → 古诗词，整段居中（每行 5/7 字整齐）
+            其它/默认/classical → 楷体两端对齐 + 首行缩进2字（更易读）
         - source → 出处标注，右对齐宋体（非连/小说/古诗文/名著必标）
         - 选文正文默认楷体，可用 font 覆盖
   {"type":"table","rows":[["a","b"],["c","d"]],"header":true}  表格
@@ -246,28 +248,32 @@ def render(doc, blocks):
         elif t == "para":
             add_para(doc, b.get("text", ""), indent_chars=2 if b.get("indent") else 0)
         elif t == "material":
-            # 真题排版：选文标题/作者楷体居中；出处右对齐宋体。
-            # layout：
-            #   prose     现代文/非连续性文本：楷体两端对齐 + 首行缩进 2 字
-            #   verse     古诗词：楷体整段居中（每行 5/7 字整齐）
-            #   classical 文言文/古籍：楷体整段居中（按教师要求；段长视觉若参差，
-            #             可改回 prose 走两端对齐+缩进）
+            # 真题排版（按教师约定）：
+            #   - 所有材料的 label/title/author 一律居中（无论文体）
+            #   - 正文：
+            #       layout="verse"  古诗词 → 整段居中（每行 5/7 字整齐）
+            #       其它（prose/classical/默认）→ 楷体两端对齐 + 首行缩进 2 字
+            #     文言文/小说/散文/非连/作文材料统一走两端对齐，长段更易读。
+            #   - 出处：右对齐宋体（独立段）
+            # layout 兼容旧 "classical"——按 prose 渲染（不再让文言文整段居中）。
             layout = b.get("layout", "prose")
             pfont = b.get("font", KAITI)
             label = b.get("label", "")
             if label:
-                add_para(doc, label, size=10.5, name=SONGTI, space_after=2)
+                # 【材料一】这类标签：左对齐顶格（不居中，对标真题）
+                add_para(doc, label, align="left", size=10.5, name=SONGTI,
+                         space_after=2)
             if b.get("title"):
                 add_para(doc, b["title"], align="center", size=10.5, name=pfont,
                          space_after=1)
             if b.get("author"):
                 add_para(doc, b["author"], align="center", size=10.5, name=pfont,
                          space_after=2)
-            centered = layout in ("verse", "classical")
             for para in b.get("paras", []):
-                if centered:
+                if layout == "verse":
                     add_para(doc, para, align="center", size=10.5, name=pfont)
                 else:
+                    # prose / classical / 其它 → 楷体两端对齐 + 首行缩进 2 字
                     add_para(doc, para, indent_chars=2, size=10.5, name=pfont)
             if b.get("source"):
                 # 出处标注：右对齐宋体（如"（节选自《科学之友》2024年第6期）"）
