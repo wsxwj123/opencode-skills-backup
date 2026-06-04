@@ -2782,6 +2782,47 @@ def add_figure_state(payload_path):
             action = "added"
         with open(filename, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
+
+        # 状态及时同步（识图阶段不能用有 gate 的 postwrite，故在此锁内顺带更新）
+        ts = datetime.now().isoformat(timespec="seconds")
+        sec = entry.get("section")
+        # (a) writing_progress: 追加 figure 事件，不动 last_section（/write 专属）
+        prog_file = STATE_FILES["writing_progress"]
+        prog = read_json_file(prog_file) if os.path.exists(prog_file) else {}
+        if not isinstance(prog, dict):
+            prog = {}
+        hist = prog.get("update_history")
+        if not isinstance(hist, list):
+            hist = []
+        hist.append({"ts": ts, "event": "figure_analyzed", "figure_id": fid,
+                     "section": sec, "panels": len(panels), "data_status": entry.get("data_status")})
+        prog["update_history"] = hist[-50:]
+        prog["last_figure_analyzed"] = fid
+        prog["last_figure_ts"] = ts
+        with open(prog_file, "w", encoding="utf-8") as pf:
+            json.dump(prog, pf, indent=2, ensure_ascii=False)
+        # (b) context_memory: 追加一行识图记录（追加模式，版本轮转留给 postwrite）
+        ctx_file = STATE_FILES["context_memory"]
+        ctx_note = f"[{ts}] event=figure_analyzed; figure_id={fid}; section={sec}; panels={len(panels)}; data_status={entry.get('data_status')}"
+        with open(ctx_file, "a", encoding="utf-8") as cf:
+            print(ctx_note, file=cf)
+        # (c) storyline.sections[].figures: 回写对应 section（仅当不含本 fid）
+        sl_file = STATE_FILES["storyline"]
+        if sec and os.path.exists(sl_file):
+            try:
+                sl = read_json_file(sl_file)
+                if isinstance(sl, dict):
+                    for s in (sl.get("sections") or []):
+                        if isinstance(s, dict) and s.get("id") == sec:
+                            figs = s.get("figures") if isinstance(s.get("figures"), list) else []
+                            if fid not in figs:
+                                figs.append(fid)
+                            s["figures"] = figs
+                            break
+                    with open(sl_file, "w", encoding="utf-8") as sf:
+                        json.dump(sl, sf, indent=2, ensure_ascii=False)
+            except Exception:
+                pass
     result = {"ok": True, "action": action, "figure_id": fid,
               "total_figures": len(data), "panels": len(panels)}
     if warnings:
@@ -2886,6 +2927,29 @@ def backup_project_state(backup_dir="backups"):
     # 3. Backup section-level memory (if available)
     if os.path.exists("section_memory"):
         shutil.copytree("section_memory", os.path.join(snapshot_dir, "section_memory"))
+
+    # 4. Backup figure analysis (识图产物，与正文同等重要，rollback 不能丢)
+    if os.path.exists("figure_analysis"):
+        shutil.copytree("figure_analysis", os.path.join(snapshot_dir, "figure_analysis"))
+
+    # 5. Record this snapshot into version_history.json (此前从不写入的全局 bug)
+    version_file = STATE_FILES.get("version_history")
+    if version_file:
+        try:
+            vh = read_json_file(version_file) if os.path.exists(version_file) else {}
+            if not isinstance(vh, dict):
+                vh = {}
+            snaps = vh.get("snapshots")
+            if not isinstance(snaps, list):
+                snaps = []
+            max_keep = vh.get("max_snapshots") if isinstance(vh.get("max_snapshots"), int) else 10
+            snaps.append({"version": f"v_snapshot_{timestamp}", "dir": snapshot_dir, "ts": timestamp})
+            vh["snapshots"] = snaps[-max_keep:]
+            vh["current_version"] = f"v_snapshot_{timestamp}"
+            with open(version_file, "w", encoding="utf-8") as vf:
+                json.dump(vh, vf, indent=2, ensure_ascii=False)
+        except Exception:
+            pass
         
     print(f"✅ Full project snapshot created at: {snapshot_dir}")
     return snapshot_dir
@@ -2928,6 +2992,15 @@ def restore_project_snapshot(snapshot_dir):
         os.makedirs("section_memory", exist_ok=True)
         for src in glob.glob(os.path.join(src_memory, "*")):
             dst = os.path.join("section_memory", os.path.basename(src))
+            shutil.copy2(src, dst)
+            restored_files.append(dst)
+
+    # Restore figure analysis (对称于 backup 的 figure_analysis 备份).
+    src_figs = os.path.join(snapshot_dir, "figure_analysis")
+    if os.path.exists(src_figs):
+        os.makedirs("figure_analysis", exist_ok=True)
+        for src in glob.glob(os.path.join(src_figs, "*")):
+            dst = os.path.join("figure_analysis", os.path.basename(src))
             shutil.copy2(src, dst)
             restored_files.append(dst)
 
