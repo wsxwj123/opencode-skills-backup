@@ -440,6 +440,25 @@ Methods 有独立于 Results/Discussion 的写作要求：
 
 **红线重申**：本阶段严禁任何"AI 看像素得出的定量或诊断结论"。定量以用户数据 / 图面印出数字 / 图注为准；外部背景以真检索文献为准；二者缺一即停下问用户。
 
+### Phase 3.7: 缩略词表管理 (`add-abbreviation`)
+**定位**：跨小节维护缩略词一致性，防止同一缩写 ROS 在 5 个章节各定义一次、或后半段直接用未定义缩写。
+
+**首次出现规则（Mandatory）**：
+- **EN**：`Full Name (ABBR)` —— 例：`reactive oxygen species (ROS)`
+- **CN**：`中文全称（英文全称, ABBR）` —— 例：`光动力疗法（Photodynamic Therapy, PDT）`
+- **后续使用**：直接用 ABBR，**严禁重复定义**。
+- **Title 严禁缩写**；**Abstract 独立**——即使正文已定义，Abstract 首次出现仍须重新展开（Abstract 通常独立阅读）。
+- **通用免定义白名单**（脚本同步）：DNA / RNA / PCR / HIV / WHO / FDA / NIH / ATP / pH / ELISA / qPCR / SD / SEM / CI 等——直接使用不展开。详见 `state_manager.py` 的 `UNIVERSAL_ABBREVIATIONS`。
+
+**写作时实时入库**：每节 `/write` 写完时，对该节首次定义的每个缩写，执行：
+```bash
+python scripts/state_manager.py add-abbreviation <one.json>
+# payload: {"abbr":"ROS","full_name":"reactive oxygen species","first_defined_in":"results_3.2","notes":"optional"}
+```
+该命令在 `FileLock` 下按 `abbr` 去重合并；**冲突拒绝**：同 abbr 但不同 full_name 直接 `sys.exit(2)` 报错（属科学错误，必须人工解决）。
+
+**写新节前查表**：开始 `/write` 任何小节前，先 `Read abbreviations.json` 拿已定义清单——已存在的缩写**直接用 ABBR，严禁重新展开**。
+
 ### Phase 4: 逐节撰写 (融合模式 + 原子化文件 + SI循环)
 
 **核心指令**：`/write [section]`
@@ -507,7 +526,7 @@ Generation rules:
 2. **Methods**（1-2句）：核心方法/策略概述
 3. **Results**（3-4句）：关键定量结果（必须含具体数值）
 4. **Conclusion**（1-2句）：核心结论与意义
-**禁止**：不引用文献 `[n]`；不使用缩写（首次出现须全称）；不出现"significantly"等无定量支撑的空话。
+**禁止**：不引用文献 `[n]`；**Abstract 独立**——即使正文已在 `abbreviations.json` 定义过，Abstract 首次出现仍须重新展开为 `Full Name (ABBR)`（投稿规范，Abstract 独立阅读）；不出现"significantly"等无定量支撑的空话。
 **输出文件**：`manuscripts/01_Abstract.md`
 
 ### Phase 5: 质量控制 (`/check`)
@@ -518,6 +537,11 @@ Generation rules:
 4. `python scripts/style_checker.py --manuscript-dir manuscripts --report style_check_report.json --threshold 70` — 去AI风格检测（句长方差、被动语态、禁词、段首重复）
 5. `grep -rn "CITE_PENDING\|DATA_PENDING" manuscripts/ figure_analysis/ 2>/dev/null` — 扫描 Phase 3.6 留下的未清零占位（待补文献 / 待补数据）
 6. `[ ! -f manuscripts/Full_Manuscript.md ] || ! grep -q "AUTO-GENERATED" manuscripts/Full_Manuscript.md && echo "WARN: 合并稿缺自动生成警告头，可能被手动改写过"` — 防误改合并稿门禁
+7. **缩略词一致性扫描**（在合并稿上）：
+   - 提取所有 `Full Name (ABBR)` 定义模式；扫描所有大写≥2 字符的裸缩写。
+   - **3 类违规**：(a) 裸用但未定义的缩写；(b) 同一缩写在多个章节重复展开；(c) 已定义但全文未使用。
+   - 与 `abbreviations.json` 交叉比对——库中无 / 库中有但正文未用 / 多次展开，均报告。
+   - 通用缩写（DNA/RNA/PCR 等，见 SKILL §Phase 3.7 白名单）跳过检测。
 
 **质量标准**：Key Section ≥500词且引用≥3条；Supporting Section ≥200词；style_checker 评分 ≥70。
 **阻断条件**：字数不足 → 指出具体章节，等待补写；引用冲突 → 重跑 `sync-literature --apply` 后再检查；style_checker 不达标 → 列出具体问题，逐段修改后重检；**占位残留**（`CITE_PENDING` / `DATA_PENDING` 非空）→ 先补全真检索文献 / 缺失数据再交付，严禁带占位合并。

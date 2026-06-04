@@ -24,7 +24,8 @@ STATE_FILES = {
     "figures_database": "figures_database.json",
     "reviewer_concerns": "reviewer_concerns.json",
     "version_history": "version_history.json",
-    "si_database": "si_database.json"
+    "si_database": "si_database.json",
+    "abbreviations": "abbreviations.json"
 }
 
 TOKEN_CHAR_RATIO = 4
@@ -2833,6 +2834,89 @@ def add_figure_state(payload_path):
     except Exception:
         pass
 
+# Universally known abbreviations — exempt from first-use definition
+UNIVERSAL_ABBREVIATIONS = {
+    "DNA", "RNA", "PCR", "HIV", "WHO", "FDA", "NIH", "USA", "UK", "EU",
+    "AI", "ML", "API", "URL", "PDF", "HTML", "JSON", "XML", "CSV",
+    "ATP", "ADP", "GTP", "NADH", "NADPH", "CO2", "H2O", "NaCl",
+    "pH", "RNA-seq", "DNA-seq", "ChIP-seq", "RT-PCR", "qPCR", "ELISA",
+    "FACS", "FISH", "GFP", "RFP", "BSA", "PBS", "DMSO", "EDTA",
+    "SD", "SEM", "CI", "OD", "MW", "kDa", "bp", "kb",
+}
+
+def add_abbreviation_state(payload_path):
+    """Safely merge ONE abbreviation entry into abbreviations.json.
+    Dedup by ABBR (uppercase key). Conflict detection on full_name."""
+    if not os.path.exists(payload_path):
+        print(json.dumps({"ok": False, "error": f"payload not found: {payload_path}"}, ensure_ascii=False))
+        sys.exit(1)
+    try:
+        with open(payload_path, "r", encoding="utf-8") as f:
+            entry = json.load(f)
+    except json.JSONDecodeError as e:
+        print(json.dumps({"ok": False, "error": f"invalid JSON: {e}"}, ensure_ascii=False))
+        sys.exit(1)
+    if isinstance(entry, list):
+        print(json.dumps({"ok": False, "error": "payload must be ONE abbreviation object, not an array"}, ensure_ascii=False))
+        sys.exit(1)
+    if not isinstance(entry, dict):
+        print(json.dumps({"ok": False, "error": "payload must be an abbreviation object"}, ensure_ascii=False))
+        sys.exit(1)
+    abbr = (entry.get("abbr") or "").strip()
+    full_name = (entry.get("full_name") or "").strip()
+    section = (entry.get("first_defined_in") or entry.get("section") or "").strip()
+    if not abbr:
+        print(json.dumps({"ok": False, "error": "entry must contain 'abbr'"}, ensure_ascii=False))
+        sys.exit(1)
+    if not full_name:
+        print(json.dumps({"ok": False, "error": "entry must contain 'full_name'"}, ensure_ascii=False))
+        sys.exit(1)
+    abbr_key = abbr.upper()
+    warnings = []
+    if abbr_key in UNIVERSAL_ABBREVIATIONS:
+        warnings.append(f"'{abbr}' is universally known; defining it may be redundant per Anti-AI Protocol")
+    if not section:
+        warnings.append("entry has no 'first_defined_in'; cross-section consistency check will be weakened")
+
+    filename = STATE_FILES["abbreviations"]
+    with FileLock("state_update"):
+        data = read_json_file(filename) if os.path.exists(filename) else []
+        if not isinstance(data, list):
+            data = []
+        idx = next((i for i, x in enumerate(data)
+                    if isinstance(x, dict) and (x.get("abbr") or "").upper() == abbr_key), None)
+        if idx is not None:
+            existing_full = (data[idx].get("full_name") or "").strip()
+            if existing_full and existing_full.lower() != full_name.lower():
+                # 冲突:同一缩写两个不同全称 - 严重错误,拒绝写入
+                print(json.dumps({
+                    "ok": False,
+                    "error": f"abbreviation conflict: '{abbr}' already defined as '{existing_full}', refusing to overwrite with '{full_name}'",
+                    "hint": "manual review required"
+                }, ensure_ascii=False))
+                sys.exit(2)
+            # 同一缩写、相同全称 - 幂等,标记 already_defined
+            entry["first_defined_in"] = data[idx].get("first_defined_in") or section
+            data[idx] = {**data[idx], **entry}
+            action = "already_defined"
+        else:
+            entry["abbr"] = abbr
+            entry["full_name"] = full_name
+            entry["first_defined_in"] = section or "unknown"
+            data.append(entry)
+            action = "added"
+        with open(filename, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+    result = {"ok": True, "action": action, "abbr": abbr,
+              "full_name": full_name, "total_abbreviations": len(data)}
+    if warnings:
+        result["warnings"] = warnings
+    print(json.dumps(result, ensure_ascii=False))
+    try:
+        os.remove(payload_path)
+    except Exception:
+        pass
+
 def set_field_config(
     field_id,
     project_config_file=STATE_FILES["project_config"],
@@ -3170,6 +3254,10 @@ def main():
     add_figure_parser = subparsers.add_parser("add-figure", help="Safely merge ONE figure entry into figures_database.json (dedup by figure_id, no overwrite)")
     add_figure_parser.add_argument("payload_file", help="Path to a JSON file containing ONE figure object")
 
+    # Add-abbreviation command (safe single-entry merge into abbreviations.json)
+    add_abbr_parser = subparsers.add_parser("add-abbreviation", help="Safely merge ONE abbreviation entry into abbreviations.json (dedup by ABBR, conflict-detect on full_name)")
+    add_abbr_parser.add_argument("payload_file", help="Path to a JSON file containing ONE abbreviation object")
+
     # Postwrite command
     postwrite_parser = subparsers.add_parser("postwrite", help="Auto-sync global progress/context after a writing turn")
     postwrite_parser.add_argument("--section", required=True, help="Current section id, e.g. 'results_3.1'")
@@ -3307,6 +3395,8 @@ def main():
         update_state(args.payload_file)
     elif args.command == "add-figure":
         add_figure_state(args.payload_file)
+    elif args.command == "add-abbreviation":
+        add_abbreviation_state(args.payload_file)
     elif args.command == "postwrite":
         postwrite_state(
             section=args.section,
