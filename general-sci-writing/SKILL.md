@@ -338,7 +338,7 @@ Methods 有独立于 Results/Discussion 的写作要求：
 - **可重复性优先**：所有试剂必须标注厂商和货号（如 "DPPC (Avanti Polar Lipids, #850355)"）
 - **实验参数精确值**：温度、时间、浓度、转速等必须给出精确数值，禁止"适量"/"室温"等模糊表述
 - **伦理声明**：动物实验必须包含 IACUC 批号，临床样本须包含 IRB/伦理批号
-- **统计方法**：在 Methods 末段单独声明统计软件版本、检验方法和显著性阈值
+- **统计方法**：在 Methods 末段单独声明统计软件版本、检验方法和显著性阈值。**与 figure 识图联动**：写统计方法前，先汇总 `figures_database.json` 各 panel 的 `stat_test` 字段（识图阶段已录入，如 "one-way ANOVA + Tukey"），确保 Methods 声明覆盖各 figure 实际所用检验，不重不漏
 - **引用**：仅引用方法学原始论文（如 DLS 测定方法原始文献），不限年份
 
 ### Phase 3.6: Figure 识图与讨论 (`/figure`)
@@ -364,8 +364,9 @@ Methods 有独立于 Results/Discussion 的写作要求：
 6. **自检**：每张图写入时触发 §11 的 **Design / Reliability** 检查（对照设置、n、统计方法是否合理）。**Consistency（跨图一致性）不在逐图时做**——逐图时其他图尚未读取、无从比对；留到本大 figure 全部小图读完后（收口前）统一比对一次（如 Fig A 结论是否与 Fig C 矛盾），发现问题写入"❓待确认"提示用户。
 7. **下一张**：索取 Panel B，重复 4–6，直至全部小图完成。
 8. **收口（每完成一个大 Figure 更新一次状态）**：
-   - **同步到 `figures_database.json`（用 `add-figure` 安全合并，单条即可）**：把本 figure 写成**单个** JSON 对象（`figure_id` 必需、`section` = storyline 的 section_id；外加 `declared_panels`（可选，命令会比对实际 panels 数、不符则警告防漏识别）/ `panels` / 比较对 / `p_value` / `n` / `data_status`，格式见下方「条目示例」），执行 `python scripts/state_manager.py add-figure <one_figure.json>`。该命令在 `FileLock` 下读-合并-写、按 `figure_id` 去重（已存在则更新、不存在则追加），**不会覆盖其他 figure**——从脚本层根除了 `update` 整体覆盖的隐患；误传数组或缺 `figure_id` 会被拒。核心定量读不到的项 `data_status="pending"`，对接 §2 数据熔断。
-   - **备份状态**：执行 `python scripts/state_manager.py snapshot`（→ `backup_project_state()`，无 gate 的全项目备份）。**不要用 `postwrite`**——它开头有 prewrite gate（要求 `last_*_origin == write-cycle`，state_manager.py:2403），识图阶段没跑过 write-cycle，会 `sys.exit(2)` 必然失败。`writing_progress` 的写作进度更新留给 `/write` 阶段，识图阶段不做。
+   - **同步到 `figures_database.json`（用 `add-figure`，单条即可）**：把本 figure 写成**单个** JSON 对象（`figure_id` 必需、`section` = storyline 的 section_id；外加 `declared_panels`（可选，命令比对实际 panels 数、不符警告）/ `panels` / 比较对 / `p_value` / `n` / `stat_test`（供 Methods 联动）/ `data_status`，格式见下方「条目示例」），执行 `python scripts/state_manager.py add-figure <one_figure.json>`。该命令在 `FileLock` 下：① 按 `figure_id` 去重合并进 figures_database（**不覆盖其他 figure**）；② **顺带同步** `writing_progress`（追加 figure 事件）、`context_memory`（追加识图记录）、回写 `storyline.sections[].figures`——一次锁内全办，无需再调有 gate 的 `postwrite`。误传数组或缺 `figure_id` 会被拒；核心定量读不到的项 `data_status="pending"`，对接 §2 熔断。
+   - **记识图确认到 section_memory**：执行 `python scripts/state_manager.py update <payload.json>`，payload 形如 `{"section_memory":{"section":"results_3.2","content":"Figure 2 A–E 已识别；用户确认 n=6、误差棒=SEM；Panel C 留 CITE_PENDING"}}`——让 `/write --include-draft` 写该节时能读到识图确认细节。
+   - **备份**：执行 `python scripts/state_manager.py snapshot`（无 gate；现已备份 `figure_analysis/` 并写入 `version_history`）。**勿用 `postwrite`**——它有 prewrite gate（state_manager.py:2403），识图阶段没跑 write-cycle 会 `sys.exit(2)`。
    - 告知用户：`figure_analysis/figure_{N}.md` 就绪，将作为 `/write {section}` 的结果与讨论依据。
 
 **`figure_analysis/figure_{N}.md` 模板**（落盘正文用英文；下方字段中文仅为说明）：
@@ -401,13 +402,15 @@ Methods 有独立于 Results/Discussion 的写作要求：
 ```
 （`data_status`：核心定量齐全=`ready`，缺核心项=`pending`；`section` 值必须 = storyline 的 section_id，代码里 `section`/`section_id` 混用，统一写 `section`。）
 
-**与 Phase 4 衔接（关键）**：write-cycle **不会**自动加载 `figure_analysis/`（其白名单见 §13），故 `/write {section}` 必须在 write-cycle 之后**显式 `Read` 本节对应的 `figure_analysis/figure_{N}.md`**（已列入 §13 白名单第 7 项）作为该小节 Results/Discussion 的事实依据。**写 Results 小节前的 gate（提示词级）**：若该 `figure_analysis/figure_{N}.md` 不存在、或仍有核心定量的 ❓待确认 → 不开写，先回到 `/figure` 补全再 `/write`。正文按 storyline 既定结构组织（融合则结果讨论同段，分离则结果块入 Results、讨论块入 Discussion）。`[CITE_PENDING]` 在此阶段或最终补引时按"文献真实性硬约束"真检索替换。
+**与 Phase 4 衔接（关键）**：write-cycle **不会**自动加载 `figure_analysis/`（其白名单见 §13），故 `/write {section}` 必须在 write-cycle 之后**显式 `Read` 本节对应的 `figure_analysis/figure_{N}.md`**（已列入 §13 白名单第 7 项）作为该小节 Results/Discussion 的事实依据。**写 Results 小节前的 gate（提示词级）**：若该 `figure_analysis/figure_{N}.md` 不存在、或仍有核心定量的 ❓待确认 → 不开写，先回到 `/figure` 补全再 `/write`。正文按 storyline 既定结构组织：融合则结果讨论同段；**分离结构下，写 Discussion 小节前同样必须显式 `Read` 对应 figure_X.md 的讨论块**（与上面 Results 的 gate 同等，否则 Discussion 丢失识图讨论草稿）。`[CITE_PENDING]` 处理时机：**每节 `/write` 收口（postwrite）前应尽量真检索清零本节占位**，Phase 5 `/check` 的占位扫描作为最终兜底。
 
 **红线重申**：本阶段严禁任何"AI 看像素得出的定量或诊断结论"。定量以用户数据 / 图面印出数字 / 图注为准；外部背景以真检索文献为准；二者缺一即停下问用户。
 
 ### Phase 4: 逐节撰写 (融合模式 + 原子化文件 + SI循环)
 
 **核心指令**：`/write [section]`
+
+> **Methods 写作时机（门控）**：Methods 建议在**所有 Results 小节写完后、`/abstract` 前**用 `/write methods` 撰写——此时 `figures_database.json` 的 `stat_test`/`n`/试剂参数已随识图齐全，可一次性联动汇总（见 Phase 3.5 Methods 规范）。不要在 Results 之前写 Methods（统计方法尚不全）。
 
 **原子化文件策略**：
 - **Target Path**: `manuscripts/{Chapter}_{Subsection}_{Keyword}.md`
@@ -423,6 +426,7 @@ Methods 有独立于 Results/Discussion 的写作要求：
    - **Content**: 包含整体描述和分图说明 (e.g., "Figure 1. Characterization... (A) TEM image...").
    - **Strict Rules**: 统计图必须声明 "n=X"；显微镜图必须声明 "scale bar = X μm"。
 4b. **Figure Prompt Generation（为每幅图生成结构化AI绘图提示词）：**
+> **双轨澄清**：`figures_database.json`（via `/figure` + `add-figure`）存的是**用户已有实验图的识图数据**（WB/HE/统计图等，用于写正文）；本节的 `figures/figure_index.md` + `figure_prompts.md` 是**让 AI 帮画的图**（示意图/机制图的绘图提示词）。二者用途不同、不冲突；若同一 figure 既有实验数据又需重绘，以 `figures_database` 为数据源。
 When a figure is registered in `figures/figure_index.md`, generate a Figure Prompt block and append to `figures/figure_prompts.md`:
 
 ```
