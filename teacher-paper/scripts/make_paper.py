@@ -80,6 +80,14 @@ KAITI = "楷体"
 _CJK = re.compile(r"[一-鿿]")
 
 
+def _num(v, default):
+    """把可能是字符串/None 的数值安全转 float，失败回退 default（防 Cm(非数值) 崩）。"""
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return default
+
+
 def normalize_quotes(text):
     """规范中文引号，修正部分模型（如 deepseek）把书名/称谓写成单引号 '我的母亲'
     的问题。规则（保守，避免破坏正确的引号嵌套与英文缩写）：
@@ -185,15 +193,33 @@ def add_essay_grid(doc, cols=20, rows=30):
             cell.paragraphs[0].paragraph_format.line_spacing = 1.0
 
 
+_KNOWN_TYPES = {"title", "subtitle", "info", "sealing", "notice", "section",
+                "sub", "para", "material", "table", "question", "options",
+                "blank_lines", "essay_grid", "answer", "analysis", "figure",
+                "formula", "spacer", "pagebreak"}
+
+
 def render(doc, blocks):
     for b in blocks:
+        if not isinstance(b, dict):
+            print(f"[make_paper 警告] 跳过非 dict 脏块：{type(b).__name__}={b!r}"[:120],
+                  file=sys.stderr)
+            continue
         t = b.get("type")
+        if t not in _KNOWN_TYPES:
+            # 未知 type 静默丢弃会让题目「凭空消失」却 build 报成功——必须明确报。
+            preview = (b.get("text") or b.get("title")
+                       or str(b.get("spec", "")) or "")[:60]
+            print(f"[make_paper 警告] 未知 block type={t!r}（已忽略，内容：{preview}）。"
+                  f"合法 type 见 make_paper.py 顶部文档；"
+                  f"常见错用：stem→question, choice→options。", file=sys.stderr)
+            continue
         if t == "title":
             # 真题：大标题 宋体三号(16)加粗居中
-            add_para(doc, b["text"], align="center", size=16, name=SONGTI,
+            add_para(doc, b.get("text", ""), align="center", size=16, name=SONGTI,
                      bold=True, space_after=6)
         elif t == "subtitle":
-            add_para(doc, b["text"], align="center", size=12, space_after=8)
+            add_para(doc, b.get("text", ""), align="center", size=12, space_after=8)
         elif t == "info":
             add_para(doc,
                      "学校__________ 班级__________ 姓名__________ "
@@ -209,14 +235,14 @@ def render(doc, blocks):
                 add_para(doc, f"{i}.{it}", size=10.5, space_after=1)
         elif t == "section":
             # 真题：大题标题 宋体小四(12)加粗
-            add_para(doc, b["text"], size=12, name=SONGTI, bold=True,
+            add_para(doc, b.get("text", ""), size=12, name=SONGTI, bold=True,
                      space_after=4)
         elif t == "sub":
             # 真题：小标题 宋体小四(12)加粗
-            add_para(doc, b["text"], size=12, name=SONGTI, bold=True,
+            add_para(doc, b.get("text", ""), size=12, name=SONGTI, bold=True,
                      space_after=3)
         elif t == "para":
-            add_para(doc, b["text"], indent_chars=2 if b.get("indent") else 0)
+            add_para(doc, b.get("text", ""), indent_chars=2 if b.get("indent") else 0)
         elif t == "material":
             # 真题排版：选文标题/作者楷体居中；正文楷体首行缩进2字；
             # 古诗词(layout=verse)整体居中；出处右对齐宋体。
@@ -269,7 +295,7 @@ def render(doc, blocks):
             add_para(doc, f"{head}{score}{b.get('text','')}", size=10.5,
                      space_after=3)
         elif t == "analysis":
-            add_para(doc, b["text"], size=10.5, space_after=4)
+            add_para(doc, b.get("text", ""), size=10.5, space_after=4)
         elif t == "figure":
             # figure 块的 alt/src/caption/width_cm/kind 直接写在块顶层（见文档与 SKILL.md）；
             # 兼容历史上可能的 spec 嵌套写法。
@@ -292,7 +318,7 @@ def _render_figure(doc, spec):
     数轴/统计/受力）→ matplotlib 自动渲染；③ 都不行 → "［图：alt］" 文字占位，
     绝不阻断出卷。"""
     src = spec.get("src")
-    width = spec.get("width_cm", 6.0)
+    width = _num(spec.get("width_cm"), 6.0)   # 字符串/None 宽度回退默认，不致好图被降级
     png = None
     if src and os.path.exists(src):
         png = src
@@ -302,7 +328,13 @@ def _render_figure(doc, spec):
             out_dir = FIG_DIR or os.getcwd()
             os.makedirs(out_dir, exist_ok=True)
             png = render_figure(spec, out_dir)
-        except Exception:
+        except Exception as ex:
+            # spec 字段错（如 geometry 的 points 应是 dict 却写成 list）会在此抛错
+            # ——必须把异常透传，否则用户只看到无图，找不到原因。
+            print(f"[make_figure 异常] kind={spec.get('kind')!r} spec 字段不符："
+                  f"{type(ex).__name__}: {ex}。spec 示例见 SKILL.md 配图块小节"
+                  f"（如 geometry 的 points 必须是 dict {{\"A\":[x,y]}}）。",
+                  file=sys.stderr)
             png = None
     if png and os.path.exists(png):
         try:
@@ -337,7 +369,8 @@ def _render_formula(doc, b):
         png = None
     if png and os.path.exists(png):
         try:
-            kw = {"width": Cm(b["width_cm"])} if b.get("width_cm") else {}
+            w = _num(b.get("width_cm"), 0)
+            kw = {"width": Cm(w)} if w > 0 else {}
             doc.add_picture(png, **kw)  # 不指定则按 PNG 内嵌 dpi 取自然尺寸
             doc.paragraphs[-1].alignment = WD_ALIGN_PARAGRAPH.CENTER
             return

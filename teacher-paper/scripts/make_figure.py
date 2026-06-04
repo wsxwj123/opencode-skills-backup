@@ -35,7 +35,9 @@ for _stream in (_sys.stdout, _sys.stderr):
 
 import sys
 import os
+import re
 import hashlib
+import math
 
 try:
     import matplotlib
@@ -54,10 +56,20 @@ matplotlib.rcParams["font.sans-serif"] = _CJK_FONTS
 matplotlib.rcParams["axes.unicode_minus"] = False  # 负号正常显示
 
 
+def _stable_key(obj):
+    """规整成与 dict 键顺序无关的字符串，避免逻辑相同的 spec 因键序不同算出不同哈希。"""
+    if isinstance(obj, dict):
+        return "{" + ",".join(f"{k!r}:{_stable_key(v)}"
+                              for k, v in sorted(obj.items())) + "}"
+    if isinstance(obj, (list, tuple)):
+        return "[" + ",".join(_stable_key(x) for x in obj) + "]"
+    return repr(obj)
+
+
 def _out_path(out_dir, spec_or_text):
-    """按内容算稳定文件名，避免重复渲染、便于缓存。"""
+    """按内容算稳定文件名，避免重复渲染、便于缓存。哈希键序无关。"""
     os.makedirs(out_dir, exist_ok=True)
-    key = repr(spec_or_text).encode("utf-8")
+    key = _stable_key(spec_or_text).encode("utf-8")
     h = hashlib.md5(key).hexdigest()[:12]
     return os.path.join(out_dir, f"fig_{h}.png")
 
@@ -70,24 +82,37 @@ def _save(fig, path):
 
 
 # ---- 安全的一元函数解析（禁用任意 eval；只允许数学表达式） ----
+_EXPR_RE = re.compile(r"^[\w\s\.\+\-\*\/\(\)\^,]+$")  # 仅允许数学字符
+
+
 def _make_func(expr):
     """把 'x**2-2*x-3' 这类字符串编译成可对 numpy 数组求值的函数。
-    用 sympy 解析→lambdify(numpy)，避免任意代码执行。sympy 不可用时退回
-    受限 eval（仅暴露 numpy 数学函数与符号 x）。"""
-    try:
-        import sympy
-        x = sympy.symbols("x")
-        e = sympy.sympify(expr)
-        f = sympy.lambdify(x, e, "numpy")
-        return f
-    except Exception:
-        safe = {k: getattr(np, k) for k in
-                ("sin", "cos", "tan", "exp", "log", "sqrt", "abs",
-                 "pi", "e", "arcsin", "arccos", "arctan", "sinh", "cosh")}
-
-        def f(xv):
-            return eval(expr, {"__builtins__": {}}, dict(safe, x=xv))  # noqa: S307
-        return f
+    用 sympy parse_expr（带 transformations 但不 eval）解析→lambdify(numpy)。
+    并把自由符号限定为 {x}、函数调用限定为数学白名单，封堵 __import__/系统调用
+    等 RCE 路径。表达式只能包含字母/数字/数学符号字符。"""
+    if not isinstance(expr, str) or not _EXPR_RE.match(expr):
+        raise ValueError(
+            f"非法函数表达式：{expr!r}（仅允许字母/数字/.+-*/()^, 字符；"
+            f"合法示例：'x**2-2*x-3'、'sin(x)+cos(x)'、'sqrt(x**2+1)'）")
+    import sympy
+    from sympy.parsing.sympy_parser import (
+        parse_expr, standard_transformations, implicit_multiplication_application)
+    x = sympy.symbols("x")
+    transformations = standard_transformations + (
+        implicit_multiplication_application,)
+    e = parse_expr(expr, local_dict={"x": x}, transformations=transformations,
+                   evaluate=True)
+    # 自由符号白名单
+    if not (e.free_symbols <= {x}):
+        raise ValueError(f"表达式含未声明符号：{e.free_symbols - {x}}")
+    # 函数调用白名单（按 sympy 类名比对，禁止 __import__/getattr 等）
+    allowed_func_names = {"sin", "cos", "tan", "asin", "acos", "atan",
+                          "sinh", "cosh", "tanh", "exp", "log", "ln",
+                          "sqrt", "Abs", "Pow", "Min", "Max"}
+    for fn in e.atoms(sympy.Function):
+        if fn.func.__name__ not in allowed_func_names:
+            raise ValueError(f"表达式含禁用函数：{fn.func.__name__}")
+    return sympy.lambdify(x, e, "numpy")
 
 
 def _fig_function(spec, out_dir):
@@ -98,15 +123,27 @@ def _fig_function(spec, out_dir):
     xs = np.linspace(float(xr[0]), float(xr[1]), 400)
     fig, ax = plt.subplots(figsize=(spec.get("w", 5), spec.get("h", 4)))
     legends = spec.get("legends") or []
+    drew_with_label = False
+    drew_any_curve = False
     for i, expr in enumerate(funcs):
         try:
             ys = _make_func(expr)(xs)
-        except Exception:
+        except Exception as ex:
+            print(f"[make_figure] 函数 {expr!r} 解析失败：{ex}", file=sys.stderr)
             continue
-        ys = np.asarray(ys, dtype=float)
+        ys = np.broadcast_to(np.asarray(ys, dtype=float), xs.shape).copy()
         ys[~np.isfinite(ys)] = np.nan  # 去掉除零/溢出点
-        ax.plot(xs, ys, label=legends[i] if i < len(legends) else None,
-                linewidth=1.8)
+        lbl = legends[i] if i < len(legends) and legends[i] else None
+        ax.plot(xs, ys, label=lbl, linewidth=1.8)
+        drew_any_curve = True
+        if lbl:
+            drew_with_label = True
+    if not drew_any_curve:
+        # 所有 funcs 都解析失败 → 不出空白坐标轴图占位，返回 None 让上游降级
+        plt.close(fig)
+        print(f"[make_figure] funcs 全部解析失败，已放弃生成函数图：{funcs!r}",
+              file=sys.stderr)
+        return None
     if spec.get("yrange"):
         ax.set_ylim(float(spec["yrange"][0]), float(spec["yrange"][1]))
     # 坐标轴过原点（中学函数图像习惯）
@@ -117,7 +154,7 @@ def _fig_function(spec, out_dir):
     ax.set_ylabel(spec.get("ylabel", "y"))
     if spec.get("title"):
         ax.set_title(spec["title"])
-    if any(legends):
+    if drew_with_label:
         ax.legend()
     return _save(fig, _out_path(out_dir, spec))
 
@@ -156,7 +193,13 @@ def _fig_geometry(spec, out_dir):
 
 def _fig_number_line(spec, out_dir):
     lo, hi = float(spec.get("min", -5)), float(spec.get("max", 5))
+    if hi < lo:
+        lo, hi = hi, lo
     step = float(spec.get("ticks", 1))
+    if step <= 0 or not math.isfinite(step):  # 防 ticks=0/负/NaN 死循环
+        step = 1
+    if (hi - lo) / step > 200:                # 防 range 过大 artist 爆炸
+        step = (hi - lo) / 200 or 1
     fig, ax = plt.subplots(figsize=(spec.get("w", 6), spec.get("h", 1.2)))
     ax.axhline(0, color="black", linewidth=1.2)
     t = lo
