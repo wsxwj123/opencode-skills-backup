@@ -1,6 +1,6 @@
 ---
 name: teacher-paper
-description: "教师智能出题技能 - 覆盖小学一年级到高三全科目（语文、英语、政治/道法、历史、地理、数学、物理、化学、生物）、全题型，按用户提供的材料/真题样卷/题型分值分布参数化出卷；文科结合本地资料与在线真实素材（新闻/科普/公版古籍/英语分级读物）出阅读类题，理科按知识点原创出题并自动配图（函数/几何/数轴/统计/受力图由 matplotlib 生成，电路图/化学结构等复杂图由用户提供），公式 Unicode 或 mathtext 渲染；产出可直接打印的 Word 试卷 + Word 参考答案及解析。默认九年级语文·长沙中考。Use when: 用户要求出题、组卷、制作试卷、生成练习题、制作考试卷，或提到'出题''组卷''试卷''考试卷''练习题'等关键词。"
+description: "教师智能出题技能（出卷/出题/组卷/命题/出卷子） - 覆盖小学一年级到高三全科目（语文、英语、政治/道法、历史、地理、数学、物理、化学、生物）、全题型，按用户提供的材料/真题样卷/题型分值分布参数化出卷；文科结合本地资料与在线真实素材（新闻/科普/公版古籍/英语分级读物）出阅读类题，理科按知识点原创出题并自动配图（函数/几何/数轴/统计/受力图由 matplotlib 生成，电路图/化学结构等复杂图由用户提供），公式 Unicode 或 mathtext 渲染；产出可直接打印的 Word 试卷 + Word 参考答案及解析。默认九年级语文·长沙中考。Use when: 用户说『出个卷子/出张卷/出份卷/出一套题/出题/出卷/组卷/命题/做卷/编卷/制卷』，或要求生成『试卷/卷子/考卷/考试卷/练习题/练习卷/测试卷/测验卷/模拟卷/真题卷/月考卷/周测/单元测试/期中卷/期末卷/中考模拟/高考模拟』，或提到关键词『出题/出卷/卷子/试卷/考卷/考试卷/练习题/模拟卷/月考/期中/期末/单元测试/命题』中任意一个，都触发本 skill。例：『给我出个卷子』『出张九年级数学卷』『帮我做份期末模拟』『编一份语文练习卷』。"
 user-invocable: true
 allowed-tools: "Read Write Edit Bash Agent AskUserQuestion WebFetch WebSearch"
 metadata:
@@ -428,11 +428,11 @@ python3 <SKILL_DIR>/scripts/assemble.py init "<试卷名>_工程" --stage 九年
 
 # 3) 合并校验并出卷 —— init 后改用【工程内脚本副本】，不再碰技能本体脚本！
 #    自动校验题量/分值、选文完整性、小说字数；生成两个 Word 到 build/（默认带页码）
-#    需同时出 PDF 加 --pdf（需本机 LibreOffice，否则提示手动导出）
-python3 "<工程>/scripts/assemble.py" build "<工程>" [--pdf]
+#    如需 PDF：用 Word/WPS/Pages 打开 docx 后『另存为/导出 PDF』即可（v3.12.0 已移除 --pdf）
+python3 "<工程>/scripts/assemble.py" build "<工程>"
 ```
 
-> **务必把 build 的所有 `[校验告警]`/`[PDF]`/`[后端]`/figure 降级等输出如实转告用户**——
+> **务必把 build 的所有 `[校验告警]`/`[后端]`/figure 降级等输出如实转告用户**——
 > 例如小说字数偏短、题量分值不符、抓取替代源、配图降级为占位、用了 `--allow-unsourced` 等，
 > 不要只看到"已生成"就报喜，告警与降级都要让用户知情。
 
@@ -452,7 +452,8 @@ python3 "<工程>/scripts/assemble.py" build "<工程>" [--pdf]
 1. **学生试卷.docx**——A4，可直接打印，默认带页脚页码「第X页 共Y页」；按 `meta.sealing_line` 可加密封线与座位号；排版按 `references/formatting-rules.md`
 2. **参考答案及解析.docx**——含每题答案 + 详细解析 + 评分标准/采分点
 3. **content.json / content.md**——结构化源文件与 Markdown 镜像；当 python-docx 不可用时，供 Pandoc、Word MCP、Documents 插件或其它 Office 工具生成/修复 Word。
-4. **（可选）PDF**——build 加 `--pdf` 且本机有 LibreOffice 时同时导出两份 PDF。
+
+> 如需 PDF：用 Word/WPS/Pages 打开 docx，"另存为/导出 PDF" 即可——v3.12.0 起本技能不再内置 LibreOffice 转换（兼容性差、字体丢失常见，外部工具更可靠）。
 
 > 答案解析要包含：客观题答案+错因，主观题采分点（"答出X点给X分"），作文评分等级标准，命题意图与教材关联。
 > 单题快速生成也可直接用 `make_paper.py content.json`（不走工程目录），但多资料/需迭代时一律用 assemble 原子化流程。
