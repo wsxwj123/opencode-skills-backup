@@ -102,18 +102,28 @@
 }
 ```
 
-`assemble.py build` 校验：非原创素材若缺 `source_file` 或其指向的 `materials/` 文件不存在，**拒绝出卷**（exit 2）。
-正确流程：先 `fetch_web.py "<URL>" > 工程/materials/非连_新闻-种子库.md`，再据真实原文命题、回填 source/source_file。
-确需绕过（极少数情况）才加 `--allow-unsourced`，风险自负。
+`assemble.py build` 校验（v3.11.0+）多道门禁，任一不过即 exit 2：
+- 缺 `source` / 非原创缺 `source_file` / source_file 指向不存在 → 拒
+- source 是 URL 但 materials 原文无 `fetch_web.py --save` 凭证头（或凭证 URL/字节数与 meta 不符）→ 拒
+- meta 标"原创"+卷面 material 出处写"节选自《…》" → 拒（自相矛盾）
+- 古诗词标"原创" → 拒（须真作）
+- items/ 无任何 num+score 题目 → 拒（避免空白卷）
+
+正确流程：先 `fetch_web.py "<URL>" --save 工程/materials/非连_新闻-种子库.md`（自动写凭证），再据真实原文命题、回填 source/source_file。
+逃逸口（仅在用户明确知情时加）：`--allow-unsourced` 跳门禁、`--allow-empty` 允许空卷、`--accept-fallback` 允许兜底、`--listening-mode` 处理英语听力。**AI 不得自行加任一。**
 
 ## 端到端八步
 
 ### 1. 建工程
 ```bash
 python3 scripts/assemble.py init "九年级中考模拟语文_工程" \
-  --grade 九年级 --type 中考模拟 --title "九年级语文（中考模拟）试卷"
+  --stage 九年级 --type 中考模拟 --title "九年级语文（中考模拟）试卷"
 ```
 生成目录骨架、`meta.json`、`00_manifest.md`、`items/` 内的 section/sub 占位文件。
+
+> v3.x 起参数用 `--stage`（学段，如 七年级/九年级/高三），旧 `--grade` 兼容保留。
+> 兜底门禁：学段+科目既无样卷又无预设时 init 会拒绝，须 AskUserQuestion 问清地区/卷型，确认后加 `--accept-fallback` 重跑；
+> 英语含听力时 init 也会拒，须三选一后加 `--listening-mode omit|as-reading|user-audio` 重跑。
 
 ### 2. 选材（联网 + 本地）
 按 `references/material-sources.md`：
@@ -122,9 +132,12 @@ python3 scripts/assemble.py init "九年级中考模拟语文_工程" \
 - 作文素材：抓《作文周刊》《意林·作文素材》或时文 → `materials/作文素材_*.md`
 - 非连：抓科普+数据图表
 ```bash
-python3 scripts/fetch_web.py "<url>" > "九年级..._工程/materials/文言文_世说新语-管宁割席.md"
+# v3.10.0 起：网络素材必须用 --save 落盘，脚本会自动写抓取凭证头（url/字节/sha256）
+python3 scripts/fetch_web.py "<url>" --save "九年级..._工程/materials/文言文_世说新语-管宁割席.md"
 ```
-抓不到 → 提示用户截图/给 PDF，用 `read_material.py` 读本地。**每份素材都落盘**，后续命题只读相关素材文件，上下文不膨胀。
+> **凭证机制**：build 校验素材时会读凭证头校对 URL 与字节数。**用 shell `>` 重定向落盘的素材无凭证，build 会拒**——一律走 `--save`。
+> 抓不到 → 提示用户截图/给 PDF，用 `read_material.py` 读本地。**每份素材都落盘**，后续命题只读相关素材文件，上下文不膨胀。
+> 扫描版 PDF（无文字层）会自动走 OCR 兜底（v3.12.0），需本机装 rapidocr-onnxruntime / paddleocr / pytesseract 任一。
 
 ### 3. 规划蓝图（写 manifest）
 对照 `references/exam-templates.md` 的 21 题结构，在 `00_manifest.md` 列出每题：题号·题型·考点·分值·难度·拟用素材·状态（待出）。这是全卷"地图"。
@@ -142,7 +155,9 @@ python3 scripts/fetch_web.py "<url>" > "九年级..._工程/materials/文言文_
 python3 scripts/assemble.py build "九年级中考模拟语文_工程"
 ```
 脚本：读 meta.json 生成头部 → 按文件名排序合并所有 items → 写 `build/content.json` → 调 make_paper.py 生成 `build/试卷.docx` 与 `build/参考答案及解析.docx`。
-- build 时自动校验：题量=21、总分=120、分值=20/50/50，不符则告警。
+- build 时按 `meta.expected_questions` 与 `meta.total` 校验题量/分值（长沙九年级语文为 21 题/120 分/20-50-50，其它科目按其样卷或预设的 expected_questions）；缺字段或不符仅 warn 不阻断。
+- 阅读类素材溯源/凭证/完整性、空卷、未知 block type 走硬门禁（见上节）。
+- make_paper 渲染时未知 block type 会 stderr warn（防 stem/choice 等错写被静默丢弃）。
 
 ### 7. 审题迭代
 分板块展示给用户。用户要改哪题 → **只改对应 `items/NN_qXX.json`** → 重跑 `assemble.py build`。其余题零改动、零风险。
