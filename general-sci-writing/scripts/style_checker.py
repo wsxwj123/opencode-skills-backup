@@ -33,7 +33,51 @@ FORBIDDEN_EXACT = {
     "plays a crucial role", "a plethora of", "myriad of",
     "in the context of", "shed light on", "pave the way",
     "of paramount importance", "a key player",
+    # PhD-level 平实化：以下"编辑级炫技动词/形容词"对 PhD candidate 而言过于雕琢
+    "elucidate", "unveil", "illuminate", "underpin", "epitomize",
+    "precipitate", "engender", "pronounced", "substantial",
+    "paramount", "salient", "germane",
 }
+
+# 启发式生僻词检测：词长 ≥13 且非已知领域术语 / 缩写 / 专名 → 疑似生僻或造词
+# (PhD 常用词大多 ≤12 字符；专业术语虽长但通常用首字母大写或带 - / _)
+RARE_WORD_RE = re.compile(r"\b[a-z]{13,}\b")
+# 已知合法长词白名单(领域术语、词缀派生)——按需扩展
+RARE_WHITELIST = {
+    "pharmacokinetics", "pharmacodynamics", "biocompatibility",
+    "nanotechnology", "immunohistochemistry", "biodistribution",
+    "internalization", "characterization", "functionalization",
+    "encapsulation", "transfection", "fluorescence", "concentration",
+    "investigation", "experimental", "statistical", "significantly",
+    "demonstrated", "representative", "corresponding", "respectively",
+    "approximately", "subsequently", "consistently", "additionally",
+    "specifically", "particularly", "comparatively", "ultrastructural",
+    "transcriptomic", "proteomics", "metabolomics", "immunogenicity",
+    "pharmacokinetic", "pharmacodynamic", "characterized",
+    "characterize", "investigated", "investigation", "investigations",
+    "evaluated", "performed", "manuscripts", "observations",
+}
+
+# 编造词启发式：含罕见词缀组合 (如 -omics 之外的造词 / -ability 滥用 / 两个根拼接)
+NEOLOGISM_PATTERNS = [
+    re.compile(r"\b\w+omics\b", re.IGNORECASE),  # 排除已知后会再过滤
+    re.compile(r"\b\w{6,}ability\b", re.IGNORECASE),  # 长根+ability,如 diseasability
+]
+NEOLOGISM_WHITELIST = {
+    "genomics", "proteomics", "metabolomics", "transcriptomics",
+    "epigenomics", "lipidomics", "microbiomics", "phenomics",
+    "ability", "capability", "availability", "stability",
+    "permeability", "scalability", "applicability", "reliability",
+    "reproducibility", "feasibility", "biocompatibility",
+    "compatibility", "susceptibility", "accessibility",
+}
+
+# 修辞检测：明喻 (like a... / as ... as) / 拟人 (cells decide / molecules know)
+RHETORIC_PATTERNS = [
+    re.compile(r"\b(?:like|as if|as though)\s+a?\s+\w+", re.IGNORECASE),  # 明喻
+    re.compile(r"\b(?:cells?|molecules?|proteins?|genes?)\s+(?:decide|know|want|believe|think|wish|hope|feel)\b", re.IGNORECASE),  # 拟人
+    re.compile(r"\b(?:dance|symphony|orchestra|theater|battle|war)\s+of\b", re.IGNORECASE),  # 装饰隐喻
+]
 FORBIDDEN_PATTERNS = [
     re.compile(r"not only\b.*?\bbut also\b", re.IGNORECASE),
     re.compile(r"seamless[,\s]+intuitive[,\s]+and\s+powerful", re.IGNORECASE),
@@ -166,11 +210,65 @@ def check_file(filepath: str) -> dict[str, Any]:
     passive_ratio = passive_count / len(sentences) if sentences else 0
     result["passive_ratio"] = round(passive_ratio, 3)
 
-    if passive_ratio > 0.35:
+    # 被动占比目标 50-70%(SCI Article 实验描述主流被动为主);<40% 过口语化, >70% 过冗余
+    if passive_ratio < 0.40:
+        result["issues"].append({
+            "type": "insufficient_passive_voice",
+            "severity": "medium",
+            "detail": f"Passive ratio {passive_ratio:.1%} (target: 50-70% for SCI Article). Too active/informal — use more passive in Methods/Results.",
+        })
+    elif passive_ratio > 0.70:
         result["issues"].append({
             "type": "excessive_passive_voice",
+            "severity": "low",
+            "detail": f"Passive ratio {passive_ratio:.1%} (target: 50-70%). Slightly heavy on passive; allow active for author judgments in Discussion.",
+        })
+
+    # ── 3b. 长难句检测(单句 >30 词即扣) ──────────────────────────────────────
+    long_sentences = [(i, ln) for i, ln in enumerate(lengths) if ln > 30]
+    if long_sentences:
+        result["issues"].append({
+            "type": "long_complex_sentence",
+            "severity": "high",
+            "detail": f"{len(long_sentences)} sentence(s) >30 words (e.g., {long_sentences[0][1]}w). Split into shorter ones.",
+        })
+
+    # ── 3c. 修辞/拟人/明喻检测 ────────────────────────────────────────────────
+    rhetoric_hits = []
+    for pat in RHETORIC_PATTERNS:
+        for m in pat.finditer(prose):
+            rhetoric_hits.append(m.group(0)[:60])
+    if rhetoric_hits:
+        result["issues"].append({
+            "type": "rhetorical_devices",
             "severity": "medium",
-            "detail": f"Passive ratio {passive_ratio:.1%} (target: ≤30%). Reduce passive constructions.",
+            "detail": f"{len(rhetoric_hits)} rhetorical/personification hit(s): {', '.join(rhetoric_hits[:3])}",
+        })
+
+    # ── 3d. 生僻词检测(≥13 字符且不在白名单) ──────────────────────────────────
+    rare_hits = sorted({
+        m.group(0) for m in RARE_WORD_RE.finditer(prose.lower())
+        if m.group(0) not in RARE_WHITELIST
+    })
+    if rare_hits:
+        result["issues"].append({
+            "type": "obscure_vocabulary",
+            "severity": "medium",
+            "detail": f"{len(rare_hits)} possibly obscure/long word(s): {', '.join(rare_hits[:5])}",
+        })
+
+    # ── 3e. 编造词检测 ─────────────────────────────────────────────────────────
+    neologism_hits = []
+    for pat in NEOLOGISM_PATTERNS:
+        for m in pat.finditer(prose.lower()):
+            w = m.group(0).lower()
+            if w not in NEOLOGISM_WHITELIST:
+                neologism_hits.append(w)
+    if neologism_hits:
+        result["issues"].append({
+            "type": "neologism_suspected",
+            "severity": "high",
+            "detail": f"{len(neologism_hits)} suspected fabricated word(s): {', '.join(set(neologism_hits))[:80]}",
         })
 
     # ── 4. Forbidden words/phrases ────────────────────────────────────────────
