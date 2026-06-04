@@ -90,6 +90,21 @@ def via_raw(url):
     return "\n".join(lines)
 
 
+_ERROR_PAGE_SIGNATURES = (
+    "感谢您的浏览", "404 Not Found", "页面不存在", "页面已不存在",
+    "您访问的页面", "未找到该页", "Page Not Found", "找不到您要访问的页",
+    "页面找不到了", "内容已被删除", "文章已删除", "this page could not be found",
+    "the requested url was not found",
+)
+
+
+def _looks_like_error_page(text):
+    """识别"抓回了 404/失效提示页"——chars/url 真实但内容无效。
+    匹配中英文常见错误页特征（不区分大小写）。"""
+    low = text.lower()[:2000]   # 只看前 2KB，错误页特征都在头部
+    return any(s.lower() in low for s in _ERROR_PAGE_SIGNATURES)
+
+
 def fetch(url):
     """返回 (ok, strategy, text)：ok=False 时 text 为失败提示。"""
     errors = []
@@ -98,9 +113,15 @@ def fetch(url):
                      ("raw", via_raw)):
         try:
             out = fn(url)
-            if out and len(out.strip()) > 120:
-                return True, name, out.strip()
-            errors.append(f"{name}:内容过短")
+            if not out or len(out.strip()) <= 120:
+                errors.append(f"{name}:内容过短")
+                continue
+            if _looks_like_error_page(out):
+                # 抓回的是 404/失效提示页：URL 真实、字节真实，但内容无效；
+                # 若直接落盘+写凭证会误导 build 校验为"真材料"。强制视为失败。
+                errors.append(f"{name}:抓到错误页（404/页面不存在）")
+                continue
+            return True, name, out.strip()
         except Exception as e:
             errors.append(f"{name}:{e}")
     return False, "", f"{BLOCK_HINT}\n\n（已尝试：{'; '.join(errors)}）"
