@@ -70,6 +70,40 @@ def read_docx(path):
     return "\n".join(out) + note
 
 
+def _ocr_pdf_pages(path):
+    """扫描版 PDF（无文字层）兜底：用 PyMuPDF 渲染每页为 PNG → 调 ocr_image.ocr_one。
+    无 PyMuPDF/PIL/任何 OCR 引擎时返回带安装提示的字符串，不崩溃。"""
+    try:
+        import fitz
+    except ImportError:
+        return ("\n[扫描版 PDF·OCR 兜底失败] 需要 PyMuPDF 渲染页面：\n"
+                "  pip3 install pymupdf\n"
+                "（不装就只能改用支持识图的多模态模型直接读 PDF 截图。）")
+    try:
+        import ocr_image
+    except ImportError:
+        # 同目录有 ocr_image.py 但当前路径未加入 sys.path
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        try:
+            import ocr_image
+        except ImportError:
+            return ("\n[扫描版 PDF·OCR 兜底失败] 找不到 ocr_image.py。"
+                    "请确认 scripts/ 下含此脚本。")
+    import tempfile
+    out = []
+    with fitz.open(path) as doc:
+        with tempfile.TemporaryDirectory() as td:
+            for i, page in enumerate(doc, 1):
+                # 200 DPI 渲染（清晰度足够 OCR，体积可控）
+                mat = fitz.Matrix(200 / 72, 200 / 72)
+                pix = page.get_pixmap(matrix=mat, alpha=False)
+                img_path = os.path.join(td, f"page_{i}.png")
+                pix.save(img_path)
+                txt = ocr_image.ocr_one(img_path)
+                out.append(f"\n--- 第{i}页（OCR） ---\n{txt}")
+    return "\n".join(out)
+
+
 def read_pdf(path):
     try:
         import pdfplumber
@@ -81,14 +115,23 @@ def read_pdf(path):
         except ImportError:
             return _need("pdfplumber") + "\n（或 pip3 install pypdf）"
     out = []
+    total_chars = 0
     with pdfplumber.open(path) as pdf:
         for i, page in enumerate(pdf.pages, 1):
             out.append(f"\n--- 第{i}页 ---")
             txt = page.extract_text() or ""
             out.append(txt)
+            total_chars += len(txt.strip())
             for tbl in page.extract_tables():
                 for row in tbl:
                     out.append(" | ".join((c or "") for c in row))
+    # 文字层基本为空（每页平均 <20 字符）→ 判定为扫描版 PDF，走 OCR 兜底。
+    with pdfplumber.open(path) as pdf:
+        n_pages = len(pdf.pages)
+    if n_pages > 0 and total_chars < 20 * n_pages:
+        print(f"[read_pdf] 文字层近似为空（{total_chars} 字符 / {n_pages} 页），"
+              f"判定为扫描版 PDF，自动转走 OCR 兜底……", file=sys.stderr)
+        return _ocr_pdf_pages(path)
     return "\n".join(out)
 
 

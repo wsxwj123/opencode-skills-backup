@@ -353,11 +353,22 @@ def cmd_init(args):
     if not region_cli and bp.get("region"):
         region = bp["region"]
 
-    # 英语含听力大题时（预设或兜底皆可能）：纯文字卷无音频，须先与用户三选一。
+    # 英语含听力大题时：纯文字卷无音频，必须三选一处理；
+    # 默认硬拒，逼 AI 用 AskUserQuestion 问清楚后用 --listening-mode 显式指定。
     if subject == "英语" and any("听力" in str(t) for _, t in bp.get("skeleton", [])):
-        print("[提示] 本卷英语含『听力』大题，但本技能出纯文字卷无音频。"
-              "请先与用户三选一：①省略听力(分值并入其它板块) ②附听力文字稿当阅读 "
-              "③用户自备音频(本卷只出题干选项)；据此再决定是否保留听力大题。")
+        mode = opt.get("listening-mode")
+        if mode not in ("omit", "as-reading", "user-audio"):
+            print("\n🔴 [听力门禁] 本卷英语含『听力』大题，但本技能产出纯文字卷无音频。"
+                  "必须先与用户三选一：", file=sys.stderr)
+            print("  ① omit       省略听力（分值并入阅读/作文，需告知用户改后总分组成）", file=sys.stderr)
+            print("  ② as-reading 附听力文字稿当阅读题（保留分值，文字稿来源须真实）", file=sys.stderr)
+            print("  ③ user-audio 用户自备音频（本卷只出题干选项，提醒用户另发音频）", file=sys.stderr)
+            print("\n  AI 须用 AskUserQuestion 反问，用户确认后传："
+                  "--listening-mode omit | as-reading | user-audio 重跑 init。", file=sys.stderr)
+            sys.exit(2)
+        meta_listening = mode
+    else:
+        meta_listening = None
 
     def _ovr_int(key, default):
         try:
@@ -401,6 +412,7 @@ def cmd_init(args):
         "exam_scope": opt.get("scope") or bp.get("exam_scope", ""),     # 考试范围/单元/课次
         "textbook": opt.get("textbook") or bp.get("textbook", ""),      # 教材版本/册次
         "answer_detail": opt.get("answer-detail") or bp.get("answer_detail", "详细"),  # 详细/简略
+        "listening_mode": meta_listening,  # 仅英语听力卷：omit/as-reading/user-audio
     }
     # 小说选文字数区间：蓝图指定则带上，build 校验按此；默认（不写）即 1000-1500。
     if bp.get("novel_len"):
@@ -483,39 +495,8 @@ def _write_manifest(proj, meta, rows, summary=None):
         f.write("\n".join(lines))
 
 
-def _find_soffice():
-    """找 LibreOffice/soffice 可执行文件（docx→pdf 转换器）。"""
-    for name in ("soffice", "libreoffice"):
-        p = shutil.which(name)
-        if p:
-            return p
-    mac = "/Applications/LibreOffice.app/Contents/MacOS/soffice"
-    return mac if os.path.exists(mac) else None
-
-
-def _export_pdf(docx_paths, out_dir):
-    """把 docx 批量转 PDF。优先 LibreOffice；没有则提示用户用 Word/WPS 手动导出。"""
-    soffice = _find_soffice()
-    if not soffice:
-        print("[PDF] 未找到 LibreOffice/soffice，无法自动转 PDF。"
-              "可用 Word/WPS/Pages 打开 docx 后『另存为/导出 PDF』。")
-        return
-    ok = 0
-    for dp in docx_paths:
-        try:
-            r = subprocess.run(
-                [soffice, "--headless", "--convert-to", "pdf",
-                 "--outdir", out_dir, dp],
-                capture_output=True, text=True, timeout=120)
-            pdf = os.path.splitext(dp)[0] + ".pdf"
-            if r.returncode == 0 and os.path.exists(pdf):
-                print(f"[PDF] 已生成：{pdf}")
-                ok += 1
-            else:
-                print(f"[PDF] 转换失败：{os.path.basename(dp)}　{r.stderr.strip()[:200]}")
-        except (subprocess.TimeoutExpired, OSError) as e:
-            print(f"[PDF] 转换异常：{os.path.basename(dp)}　{e}")
-    return ok
+# PDF 导出能力已移除：Word/WPS/Pages 都自带"另存为 PDF"，不必内置；
+# 之前的 LibreOffice 调用维护成本高（兼容性差、字体丢失常见）。
 
 
 def cmd_build(args):
@@ -689,13 +670,8 @@ def cmd_build(args):
     if r.returncode != 0:
         sys.exit(1)
 
-    # 可选：导出 PDF（--pdf）。需本机有 LibreOffice/soffice，否则提示手动导出。
-    if "--pdf" in args or meta.get("output_pdf"):
-        _export_pdf([os.path.abspath(content["paper_path"]),
-                     os.path.abspath(content["answer_path"])],
-                    os.path.abspath(os.path.join(proj, "build")))
-
     # 明确告知成卷位置（绝对路径），方便 AI 转告用户并询问是否打开所在文件夹。
+    # 如需 PDF：用 Word/WPS/Pages 打开 docx 后『另存为/导出 PDF』即可。
     build_dir = os.path.abspath(os.path.join(proj, "build"))
     print("\n[文件位置] 两份成卷已生成在：")
     print("  目录： " + build_dir)
@@ -849,7 +825,7 @@ def _which(name):
 
 
 # 无值布尔开关：出现即为 True，不吞掉后一个参数
-_BOOL_FLAGS = {"on-desktop", "allow-unsourced", "pdf",
+_BOOL_FLAGS = {"on-desktop", "allow-unsourced",
                "accept-fallback", "allow-empty"}
 
 

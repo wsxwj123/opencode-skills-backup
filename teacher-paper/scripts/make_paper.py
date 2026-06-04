@@ -29,8 +29,9 @@ block 类型（type 字段）——试卷与答案通用：
   {"type":"material","label":"【材料一】","title":"老街","author":"",
    "paras":["...","..."],"source":"（选自《读者》2024年第6期）",
    "layout":"prose","font":"楷体"}                        阅读选文（楷体正文）
-        - title/author 楷体居中；paras 楷体首行缩进2字（prose）
-        - layout="verse" → 古诗词，paras 整体居中（不缩进）
+        - title/author 楷体居中；paras 楷体两端对齐 + 首行缩进2字（prose）
+        - layout="verse"     → 古诗词，整段居中（每行 5/7 字整齐）
+        - layout="classical" → 文言文/古籍节录，整段居中
         - source → 出处标注，右对齐宋体（非连/小说/古诗文/名著必标）
         - 选文正文默认楷体，可用 font 覆盖
   {"type":"table","rows":[["a","b"],["c","d"]],"header":true}  表格
@@ -132,6 +133,8 @@ def set_font(run, name=SONGTI, size=10.5, bold=False):
 
 def add_para(doc, text="", align=None, indent_chars=0, size=10.5,
              name=SONGTI, bold=False, space_after=4):
+    """段落输出。align 默认 None → 两端对齐（justify），符合中文试卷惯例；
+    指定 'center'/'right' 用于标题/出处；'left' 显式左对齐（极少用）。"""
     p = doc.add_paragraph()
     p.paragraph_format.space_after = Pt(space_after)
     p.paragraph_format.line_spacing = 1.5
@@ -139,6 +142,11 @@ def add_para(doc, text="", align=None, indent_chars=0, size=10.5,
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     elif align == "right":
         p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    elif align == "left":
+        p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    else:
+        # 默认两端对齐：中文试卷的题干/选项/解析都按 justify 排版才整齐
+        p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
     if indent_chars:
         p.paragraph_format.first_line_indent = Pt(size * indent_chars)
     if text:
@@ -170,27 +178,21 @@ def add_table(doc, rows, header=False):
             set_font(run, size=10.5, bold=(header and ri == 0))
 
 
-def add_essay_grid(doc, cols=20, rows=30):
-    """生成作文方格纸：cols×rows 的正方格表格，每格供写一字。
-    对异常入参做夹紧：列 8-30、行 1-60，避免 0/负数报错或超大表卡死。"""
+def add_essay_lines(doc, line_count=30):
+    """生成作文横线作答区：line_count 行下划线，每行约一行字宽。
+    替代方格纸——按教师反馈，方格纸排版易错且打印后学生未必受用；
+    Word 横线作答更通用。line_count 夹紧到 1-80 行，避免异常输入卡死。"""
     try:
-        cols = int(cols)
-        rows = int(rows)
+        n = int(line_count)
     except (TypeError, ValueError):
-        cols, rows = 20, 30
-    cols = max(8, min(cols, 30))
-    rows = max(1, min(rows, 60))
-    t = doc.add_table(rows=rows, cols=cols)
-    t.style = "Table Grid"
-    t.autofit = False
-    cell_w = Cm(0.75)  # 每格边长，20列约15cm，适配A4正文宽
-    for row in t.rows:
-        row.height = cell_w
-        for cell in row.cells:
-            cell.width = cell_w
-            # 收紧单元格内边距，让格子接近正方形
-            cell.paragraphs[0].paragraph_format.space_after = Pt(0)
-            cell.paragraphs[0].paragraph_format.line_spacing = 1.0
+        n = 30
+    n = max(1, min(n, 80))
+    for _ in range(n):
+        p = doc.add_paragraph()
+        p.paragraph_format.space_after = Pt(6)
+        p.paragraph_format.line_spacing = 2.0   # 行距留出书写空间
+        r = p.add_run("_" * 46)
+        set_font(r, size=10.5)
 
 
 _KNOWN_TYPES = {"title", "subtitle", "info", "sealing", "notice", "section",
@@ -244,10 +246,14 @@ def render(doc, blocks):
         elif t == "para":
             add_para(doc, b.get("text", ""), indent_chars=2 if b.get("indent") else 0)
         elif t == "material":
-            # 真题排版：选文标题/作者楷体居中；正文楷体首行缩进2字；
-            # 古诗词(layout=verse)整体居中；出处右对齐宋体。
-            layout = b.get("layout", "prose")     # prose 散文/记叙/说明 | verse 古诗词
-            pfont = b.get("font", KAITI)          # 选文正文字体，默认楷体
+            # 真题排版：选文标题/作者楷体居中；出处右对齐宋体。
+            # layout：
+            #   prose     现代文/非连续性文本：楷体两端对齐 + 首行缩进 2 字
+            #   verse     古诗词：楷体整段居中（每行 5/7 字整齐）
+            #   classical 文言文/古籍：楷体整段居中（按教师要求；段长视觉若参差，
+            #             可改回 prose 走两端对齐+缩进）
+            layout = b.get("layout", "prose")
+            pfont = b.get("font", KAITI)
             label = b.get("label", "")
             if label:
                 add_para(doc, label, size=10.5, name=SONGTI, space_after=2)
@@ -257,8 +263,9 @@ def render(doc, blocks):
             if b.get("author"):
                 add_para(doc, b["author"], align="center", size=10.5, name=pfont,
                          space_after=2)
+            centered = layout in ("verse", "classical")
             for para in b.get("paras", []):
-                if layout == "verse":
+                if centered:
                     add_para(doc, para, align="center", size=10.5, name=pfont)
                 else:
                     add_para(doc, para, indent_chars=2, size=10.5, name=pfont)
@@ -282,12 +289,13 @@ def render(doc, blocks):
             for _ in range(b.get("count", 3)):
                 add_para(doc, "_" * 46, size=10.5, space_after=6)
         elif t == "essay_grid":
-            note = b.get("note", "请在作文格内作答。")
+            # 历史 block 名保留以兼容；现统一按"横线作答"渲染（替代方格纸）。
+            # 字段：line_count（行数，默认 30，按字数下限折算：约 600 字→ 30 行）；
+            # 也接受老字段 rows 作为别名；cols 已无意义，忽略。
+            note = b.get("note", "请在下面横线上作答。")
             add_para(doc, note, size=10.5, space_after=4)
-            # 真作文方格纸：cols 列 × rows 行的网格表格（每格写一字）
-            cols = b.get("cols", 20)
-            rows = b.get("rows", 30)
-            add_essay_grid(doc, cols=cols, rows=rows)
+            n = b.get("line_count") or b.get("rows") or 30
+            add_essay_lines(doc, line_count=n)
         elif t == "answer":
             num = b.get("num", "")
             score = b.get("score", "")
