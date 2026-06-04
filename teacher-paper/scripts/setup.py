@@ -51,10 +51,13 @@ OPTIONAL = [
     ("readability", "readability-lxml", "网页正文提取（抓取第2策略）"),
     ("rapidocr_onnxruntime", "rapidocr-onnxruntime",
      "图片OCR兜底（仅当模型不能直接识图时需要）"),
+    ("matplotlib", "matplotlib", "理科配图（函数/几何/数轴/统计/受力）与复杂公式渲染"),
+    ("numpy", "numpy", "理科配图数值计算（matplotlib 依赖）"),
+    ("sympy", "sympy", "理科函数式安全解析（无则退回受限 eval）"),
 ]
 # 本 skill 自带的脚本，逐个核对是否齐全（防止文件缺失）
 SELF_SCRIPTS = ["read_material.py", "fetch_web.py", "ocr_image.py",
-                "assemble.py", "make_paper.py"]
+                "assemble.py", "make_paper.py", "make_figure.py"]
 # 可选的外部命令行工具（增强能力，有就用没有不强求）
 CLI_TOOL_GROUPS = [
     ("pandoc", ["pandoc"], "Markdown/HTML 转 DOCX，可配 reference.docx 模板"),

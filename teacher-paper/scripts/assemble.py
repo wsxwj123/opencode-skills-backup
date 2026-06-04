@@ -105,8 +105,9 @@ _CHANGSHA_MANIFEST = [
 ]
 
 # 通用学科大题骨架（样卷/预设都缺时的兜底；只给大题分隔，细目靠样卷或人工补）
-# 本技能聚焦【文科·纯文字、不配图】：语文/英语/政治·道法/历史/地理。
-# 数学·物理·化学·生物（需大量配图）暂不在范围内。
+# 覆盖文科（语文/英语/政治·道法/历史/地理）与理科（数学/物理/化学/生物）。
+# 理科配图：matplotlib 可画的(函数/几何/数轴/统计/受力)自动生成，其余(电路/化学
+# 结构/复杂装置)由用户提供图片，见 make_figure.py 与 SKILL.md。
 _GENERIC_SECTIONS = {
     "语文": ["一、积累与运用", "二、阅读", "三、写作"],
     "英语": ["一、听力", "二、单项选择", "三、完形填空", "四、阅读理解", "五、书面表达"],
@@ -115,11 +116,13 @@ _GENERIC_SECTIONS = {
     "思想政治": ["一、选择题", "二、非选择题（材料分析）"],
     "历史": ["一、选择题", "二、非选择题（材料解析）"],
     "地理": ["一、选择题", "二、综合题（材料分析）"],
+    "数学": ["一、选择题", "二、填空题", "三、解答题"],
+    "物理": ["一、选择题", "二、实验题", "三、计算题"],
+    "化学": ["一、选择题", "二、填空与简答题", "三、实验探究题", "四、计算题"],
+    "生物": ["一、选择题", "二、非选择题"],
 }
-# 未列科目按文科兜底（选择 + 非选择）
+# 未列科目兜底（选择 + 非选择）
 _GENERIC_DEFAULT = ["一、选择题", "二、非选择题"]
-# 不支持的理科（需配图），命中时给出明确提示
-_UNSUPPORTED_SUBJECTS = ("数学", "物理", "化学", "生物")
 
 # 预设目录（init 通常从技能 scripts/ 运行，预设在技能根 presets/）
 _PRESET_DIRS = [
@@ -145,11 +148,11 @@ def _changsha_chinese_blueprint():
 
 
 def _generic_blueprint(stage, subject, etype):
-    if subject in _UNSUPPORTED_SUBJECTS:
-        print(f"[提示] 本技能聚焦文科（语文/英语/政治·道法/历史/地理），"
-              f"『{subject}』属理科、题目多需配图，暂不在支持范围。\n"
-              f"        如确需出『{subject}』文字卷，请提供样卷用 --blueprint-file "
-              f"指定结构，且题目避免依赖图形。")
+    if subject in ("数学", "物理", "化学", "生物"):
+        print(f"[提示] 『{subject}』为理科：可画的图（函数/几何/数轴/统计/受力）由 "
+              f"make_figure.py 自动生成；电路图/化学结构式/复杂装置图需用户提供图片"
+              f"（figure 块 src）。公式简单用 Unicode、复杂用 formula 块。"
+              f"强烈建议提供样卷 --blueprint-file 以贴合本地卷结构与分值。")
     secs = _GENERIC_SECTIONS.get(subject, _GENERIC_DEFAULT)
     skeleton = []
     for i, text in enumerate(secs, 1):
@@ -196,6 +199,7 @@ _STAGE_SLUG = {
 _SUBJECT_SLUG = {
     "语文": "chinese", "英语": "english", "历史": "history", "地理": "geography",
     "思想政治": "politics", "政治": "politics", "道德与法治": "politics", "道法": "politics",
+    "数学": "math", "物理": "physics", "化学": "chemistry", "生物": "biology",
 }
 _REGION_SLUG = {"长沙": "changsha", "北京": "beijing", "上海": "shanghai"}
 

@@ -38,6 +38,10 @@ block 类型（type 字段）——试卷与答案通用：
   {"type":"options","items":["A. ...","B. ...","C. ...","D. ..."]}  选项（每项一行）
   {"type":"blank_lines","count":3}                       答题横线 N 行
   {"type":"essay_grid","note":"...","cols":20,"rows":30}  作文方格纸(真格子,默认20×30=600格)
+  {"type":"figure","kind":"function","funcs":["x**2-2*x-3"],"xrange":[-3,5],"alt":"..."}
+        理科配图：kind=function/geometry/number_line/bar/line/pie/scatter/vector → matplotlib自动画；
+        或给 "src":"图片路径"(用户提供的电路/化学结构/装置图)直接插入；都没有则降级［图：alt］占位。
+  {"type":"formula","latex":"\\int_0^1 x^2\\,dx=\\frac13","alt":"..."}  复杂公式(mathtext渲图);简单公式直接Unicode写题干
   {"type":"answer","num":"1","score":"（2分）","text":"..."}    答案条目
   {"type":"analysis","text":"..."}                       解析/评分说明
   {"type":"spacer"}                                      空行
@@ -267,9 +271,11 @@ def render(doc, blocks):
         elif t == "analysis":
             add_para(doc, b["text"], size=10.5, space_after=4)
         elif t == "figure":
-            # figure 块的 alt/src/caption/width_cm 直接写在块顶层（见文档与 SKILL.md）；
+            # figure 块的 alt/src/caption/width_cm/kind 直接写在块顶层（见文档与 SKILL.md）；
             # 兼容历史上可能的 spec 嵌套写法。
             _render_figure(doc, b.get("spec", b))
+        elif t == "formula":
+            _render_formula(doc, b)
         elif t == "spacer":
             add_para(doc, "", space_after=4)
         elif t == "pagebreak":
@@ -281,10 +287,10 @@ FIG_DIR = None
 
 
 def _render_figure(doc, spec):
-    """插入配图。本技能聚焦文科纯文字卷，不自动生成图形；此块仅用于偶发的
-    用户提供图片（如历史地图/地理图表）：① spec.src 指向已有图片 → 直接插入；
-    ② 否则降级为 "［图：alt］" 文字占位，绝不阻断出卷。
-    （理科自动配图不在范围；保留 make_figure 钩子仅为向前兼容，缺失即降级。）"""
+    """插入配图，三级优先：① spec.src 指向已有图片（用户提供，如电路图/化学结构/
+    历史地图）→ 直接插入；② 否则若 spec.kind 在 make_figure 可画范围（函数/几何/
+    数轴/统计/受力）→ matplotlib 自动渲染；③ 都不行 → "［图：alt］" 文字占位，
+    绝不阻断出卷。"""
     src = spec.get("src")
     width = spec.get("width_cm", 6.0)
     png = None
@@ -292,7 +298,7 @@ def _render_figure(doc, spec):
         png = src
     else:
         try:
-            from make_figure import render_figure  # 下一轮才有；现在通常 ImportError
+            from make_figure import render_figure
             out_dir = FIG_DIR or os.getcwd()
             os.makedirs(out_dir, exist_ok=True)
             png = render_figure(spec, out_dir)
@@ -311,6 +317,30 @@ def _render_figure(doc, spec):
     # 降级：占位 + alt 文字（无障碍/可手动补图）
     alt = spec.get("alt", "此处应有配图，请手动补充")
     add_para(doc, f"［图：{alt}］", align="center", size=9, space_after=4)
+
+
+def _render_formula(doc, b):
+    """渲染数学/理科公式：复杂公式用 make_figure.render_formula（matplotlib mathtext）
+    渲成图片居中插入；渲染不可用时降级为 alt 或 latex 原文文字。
+    简单公式应直接用 Unicode 写进题干文本，不必走本块。"""
+    latex = b.get("latex") or b.get("text", "")
+    png = None
+    try:
+        from make_figure import render_formula
+        out_dir = FIG_DIR or os.getcwd()
+        os.makedirs(out_dir, exist_ok=True)
+        png = render_formula(latex, out_dir)
+    except Exception:
+        png = None
+    if png and os.path.exists(png):
+        try:
+            kw = {"width": Cm(b["width_cm"])} if b.get("width_cm") else {}
+            doc.add_picture(png, **kw)  # 不指定则按 PNG 内嵌 dpi 取自然尺寸
+            doc.paragraphs[-1].alignment = WD_ALIGN_PARAGRAPH.CENTER
+            return
+        except Exception:
+            pass
+    add_para(doc, b.get("alt") or latex, align="center", size=10.5)
 
 
 def _add_sealing_line(doc):
