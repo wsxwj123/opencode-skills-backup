@@ -185,7 +185,84 @@ skill 自带的 `fetch_web.py` 只负责"抓取一个已知 URL"，不负责"发
 - **忠实节选铁律**：只能逐字摘录、删减控篇幅（多则材料每则须是某真实来源的连续节选），**禁止重排重组、改写、编造**；事实/数据/出处必须真实，卷末标注"节选自…"（**严禁写"改编自"**——那等于承认已改动原文）。
 - 抓不到 → 请用户提供新闻链接或截图，绝不编造。
 
-## 五、抓取失败时的统一回退
+## 五、免费开源素材源补充清单（v3.13.0 新增，已实测可抓）
+
+> 全部**版权干净**（公版或 CC 授权）、**零成本**、**fetch_web.py 可直接抓**。
+> 用前请按本表的"用途"对应场景,不要张冠李戴。
+
+### A. 百科 / 中文古籍（公版+CC-BY-SA）
+
+| 来源 | URL | 版权 | 用途 |
+|------|-----|------|------|
+| **中文维基百科** | https://zh.wikipedia.org/zh-cn/<词条> | CC-BY-SA | **非连续性文本天然素材**——百科条目结构化、有数据、可裁切;科普/历史/地理/生物条目尤其适合 |
+| **维基文库（中文）** | https://zh.wikisource.org/wiki/<篇目> | 公版 | 《史记》《资治通鉴》《二十四史》《唐诗三百首》《古文观止》全文,与 ctext/古诗文网互补 |
+
+```bash
+# 例：抓《史记·项羽本纪》原文
+python3 scripts/fetch_web.py "https://zh.wikisource.org/wiki/史記/卷007" --save "<工程>/materials/文言_史记-项羽本纪.md"
+# 例：抓维基百科"光合作用"做生物非连
+python3 scripts/fetch_web.py "https://zh.wikipedia.org/zh-cn/光合作用" --save "<工程>/materials/科普_光合作用.md"
+```
+
+### B. 英语阅读补充（公版+免费）
+
+| 来源 | URL | 版权 | 用途 |
+|------|-----|------|------|
+| **Project Gutenberg** | https://www.gutenberg.org/ | 公版 | 英文经典文学全本——简·奥斯汀/狄更斯/马克·吐温/莎士比亚,高中读后续写/小说节选取材 |
+| **News in Levels** | https://www.newsinlevels.com/ | 站内免费 | 三级分级英语新闻,补充 VOA Learning English |
+
+```bash
+# 例：抓《傲慢与偏见》全文做高中英语小说节选
+python3 scripts/fetch_web.py "https://www.gutenberg.org/files/1342/1342-0.txt" --save "<工程>/materials/eng_pride_prejudice.md"
+```
+
+### C. 图片素材（公版/CC，覆盖历史地图/地理/天文/科学插图）
+
+> **直接解决"历史地图/地理图/科学插图必须用户提供"的痛点**：从这两个站找图片直链,落盘到 `<工程>/materials/`,figure 块 `src` 引用即可。
+
+| 来源 | URL | 版权 | 适用场景 |
+|------|-----|------|----------|
+| **维基共享资源 (Wikimedia Commons)** | https://commons.wikimedia.org/ | 多数 CC/公版 | 历史地图(各朝代疆域/战役)、地理地图(中国政区/世界地理)、文物图、动植物插图、人物像、科学示意图 |
+| **NASA Image Library** | https://images.nasa.gov/ + https://apod.nasa.gov/ | 公版 | 天文照片、地球科学/卫星图,地理/物理拓展素材 |
+
+```bash
+# 例：抓维基共享的"汉朝疆域图"做历史地图素材(注意图片直链以 .jpg/.png/.svg 结尾)
+# 1) 先访问 commons 找到图片页 URL → 复制"原始文件" 直链
+# 2) 用 curl/wget 下到 materials/
+curl -L "https://upload.wikimedia.org/wikipedia/commons/<...>.jpg" -o "<工程>/materials/历史_汉朝疆域.jpg"
+# 3) figure 块引用：{"type":"figure","src":"materials/历史_汉朝疆域.jpg","alt":"汉朝疆域图","width_cm":10}
+```
+
+> **维基共享资源的版权要看具体每张图**——首页声明是 CC/公版,但单张图详情页会标精确许可(CC0 / CC-BY-SA / 公版三种最多)。**用前看一眼图片页底部的 Licensing 段,出处一律标"出自 Wikimedia Commons,<作者/上传者>"**。
+
+### D. 数据源（统计图/非连数据来源）
+
+| 来源 | URL | 版权 | 用途 |
+|------|-----|------|------|
+| **世界银行开放数据 API** | https://api.worldbank.org/v2/ | CC-BY-4.0 | 各国 GDP/人口/教育/能源/碳排放等指标,JSON 格式,做地理/政治非连数据题 |
+| **国家统计局** | https://www.stats.gov.cn/ | 公开发布 | 中国宏观数据,做地方/国情数据题（已在第四节列出）|
+
+```bash
+# 例：抓中国近 5 年 GDP(JSON 自动解析)
+curl -s "https://api.worldbank.org/v2/country/cn/indicator/NY.GDP.MKTP.CD?format=json&per_page=5" > "<工程>/materials/数据_中国GDP.json"
+# 然后让 AI 据 JSON 出"统计图阅读+数据推断"非连题,统计图用 figure kind=bar/line 自动画
+```
+
+### E. 优先级建议
+
+- **🔴 必装**：中文维基百科、维基文库、维基共享资源——百科条目/古籍/图片三件套,覆盖语文/政史地最多场景
+- **🟡 加分**：Project Gutenberg(高中英语真用得到)、世界银行 API(地理/政治数据题)
+- **🟢 可选**：NASA(物理/地理拓展)、News in Levels(英语分级补充)
+
+### F. 维基百科条目作非连素材的注意事项
+
+维基百科是 CC-BY-SA,**可用但须按规则标出处**:
+- meta.source 必须写完整 URL（如 `https://zh.wikipedia.org/zh-cn/光合作用`）
+- 卷面出处一律 `节选自维基百科「光合作用」条目（2026-06-05 访问）`
+- **不要把多个条目拼接成一段**——多则材料每则独立一个条目
+- 词条编辑过程中可能含错误,**事实/数据必须二次核对**(查权威出处)
+
+## 六、抓取失败时的统一回退
 
 `fetch_web.py` 任一来源失败会输出明确提示。此时：
 1. 反爬站点（学科网/组卷网/希沃白板/登录态小红书）→ 请用户**截图**，用多模态 Read 识别。
