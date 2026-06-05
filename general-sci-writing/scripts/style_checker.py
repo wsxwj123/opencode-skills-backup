@@ -210,12 +210,19 @@ def check_file(filepath: str) -> dict[str, Any]:
     passive_ratio = passive_count / len(sentences) if sentences else 0
     result["passive_ratio"] = round(passive_ratio, 3)
 
-    # 被动占比目标 50-70%(SCI Article 实验描述主流被动为主);<40% 过口语化, >70% 过冗余
+    # 被动占比目标 50-70%(SCI Article 实验描述主流被动为主);<40% 过口语化, 40-49% 偏低, >70% 过冗余
     if passive_ratio < 0.40:
         result["issues"].append({
             "type": "insufficient_passive_voice",
             "severity": "medium",
             "detail": f"Passive ratio {passive_ratio:.1%} (target: 50-70% for SCI Article). Too active/informal — use more passive in Methods/Results.",
+        })
+    elif passive_ratio < 0.50:
+        # Bug B 修复:40-49% 灰区 — 不达标但不严重,给 low 提醒
+        result["issues"].append({
+            "type": "below_passive_target",
+            "severity": "low",
+            "detail": f"Passive ratio {passive_ratio:.1%} (target: 50-70%). Slightly below target — consider more passive in experimental descriptions.",
         })
     elif passive_ratio > 0.70:
         result["issues"].append({
