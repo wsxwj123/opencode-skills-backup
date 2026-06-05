@@ -30,7 +30,11 @@ MISSPELLINGS = {
     "neccessary": "necessary", "neccesary": "necessary",
     "succesful": "successful", "succesfully": "successfully",
     "tommorow": "tomorrow", "infered": "inferred",
-    "behaviuor": "behavior",
+    "behaviuor": "behavior", "colour": "color (or 'colour' if BrE consistent)",
+    "analyse": "analyze (or 'analyse' if BrE consistent)",
+    "modelling": "modeling (or 'modelling' if BrE consistent)",
+    "labelled": "labeled (or 'labelled' if BrE consistent)",
+    "centre": "center (or 'centre' if BrE consistent)",
     "experiement": "experiment", "experiments": None,
     "phenotpye": "phenotype", "phenotype": None,
     "morpholgy": "morphology", "morphology": None,
@@ -45,18 +49,6 @@ MISSPELLINGS = {
 }
 # 移除 None 值(占位)
 MISSPELLINGS = {k: v for k, v in MISSPELLINGS.items() if v is not None}
-
-# ── BrE/AmE pairs (only flag when MIXED within same file) ────────────────────
-# 单用一种不报;两种混用才提示风格不一致
-BRE_AME_PAIRS = [
-    ("colour", "color"), ("analyse", "analyze"), ("modelling", "modeling"),
-    ("labelled", "labeled"), ("centre", "center"), ("behaviour", "behavior"),
-    ("organise", "organize"), ("organisation", "organization"),
-    ("favour", "favor"), ("optimise", "optimize"), ("characterise", "characterize"),
-    ("recognise", "recognize"), ("utilise", "utilize"), ("emphasise", "emphasize"),
-    ("hypothesise", "hypothesize"),
-]
-
 
 # ── Chinese punctuation that leaked into English text ────────────────────────
 CHINESE_PUNCT = {
@@ -126,9 +118,7 @@ def check_misspellings(text):
     issues = []
     lower = text.lower()
     for wrong, right in MISSPELLINGS.items():
-        # 允许后缀(-ed/-ing/-s 等),用 \w* 而非 \b 收尾
-        # 但词头必须是 \b 防止 'recieve' 误匹配 'irrecieve' 之类
-        pattern = re.compile(rf"\b{re.escape(wrong)}\w*\b", re.IGNORECASE)
+        pattern = re.compile(rf"\b{re.escape(wrong)}\b", re.IGNORECASE)
         for m in pattern.finditer(text):
             issues.append({
                 "type": "misspelling",
@@ -192,34 +182,6 @@ def check_number_consistency(text):
     return issues
 
 
-def check_bre_ame_mixed(text):
-    """BrE 与 AmE 混用才报警;单用一种不报(任由作者选).
-    判定:跨所有对统计 BrE 系列总命中数与 AmE 系列总命中数,两者都 > 0 = 混用."""
-    bre_total = 0
-    ame_total = 0
-    bre_examples = []
-    ame_examples = []
-    for bre, ame in BRE_AME_PAIRS:
-        bre_re = re.compile(rf"\b{bre}\w*\b", re.IGNORECASE)
-        ame_re = re.compile(rf"\b{ame}\w*\b", re.IGNORECASE)
-        # 关键:必须包含 BrE/AmE 词根的字面字符 — 否则 'analyse' 模式会误匹配 'analyzed'(无 's')
-        bre_hits = [h for h in bre_re.findall(text) if bre.lower() in h.lower()]
-        ame_hits = [h for h in ame_re.findall(text) if ame.lower() in h.lower()]
-        if bre_hits:
-            bre_total += len(bre_hits)
-            bre_examples.append(bre_hits[0])
-        if ame_hits:
-            ame_total += len(ame_hits)
-            ame_examples.append(ame_hits[0])
-    if bre_total > 0 and ame_total > 0:
-        return [{
-            "type": "bre_ame_mixed",
-            "severity": "low",
-            "detail": f"BrE/AmE mixed: BrE={bre_total} (e.g. {', '.join(bre_examples[:3])}), AmE={ame_total} (e.g. {', '.join(ame_examples[:3])})",
-        }]
-    return []
-
-
 def check_term_consistency(text):
     issues = []
     for variants in TERM_VARIANTS:
@@ -267,7 +229,6 @@ def check_file(filepath):
     all_issues.extend(check_chinese_punct(text))
     all_issues.extend(check_units(text))
     all_issues.extend(check_number_consistency(text))
-    all_issues.extend(check_bre_ame_mixed(text))
     all_issues.extend(check_term_consistency(text))
     all_issues.extend(check_methods_tense(text, fn))
     # 计分:high 扣 5/medium 扣 2/low 扣 1,起点 100

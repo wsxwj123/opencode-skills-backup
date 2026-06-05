@@ -332,7 +332,13 @@ license: Proprietary
 - Methods：0-5 篇（仅方法学原始文献）
 - 预估总数写入 storyline 输出表格，作为 Phase 3 检索目标
 
-> **[用户确认检查点 Mandatory]** 展示 storyline 草稿（章节标题、核心论点、关键图序、**各节预估引用数**），等待用户明确确认后才进入 Phase 3。禁止在故事线未确认的情况下启动文献检索。
+**Title 写法规范（Mandatory）**：title 是论文命门、审稿决策强相关。storyline 阶段必须给至少 3 个 title 候选让用户选。
+- **结构选**：① **Declarative**（"X improves Y in Z"——Nature 系偏好，最高接收率）② **Mechanism-flavored**（"X regulates Y via Z pathway"——Cell 系偏好）③ **Question form**（"Does X drive Y?"——较少用，仅 Perspective/Opinion 类）
+- **硬约束**：≤ 期刊 title word limit（Nature ≤15 词；Cell ≤17 词；多数 ≤25 词）；**严禁**缩写（除 DNA/RNA/PCR 等极通用词）；**严禁** 'A study of / An investigation into / Studies on' 等老式开头（信号弱、明显学生气）；**严禁** 'Novel / First / Comprehensive' 等 self-promoting 词（编辑反感）。
+- **强制包含**：核心实体（具体到化合物/分子/疾病模型）+ 核心动作（improves/inhibits/activates/links）+ 必要语境（细胞类型 / 物种 / 临床场景）。
+- **核对**：选定后必须 cross-check storyline 主线（创新点）—— title 必须能从一句话浓缩主线得到，不能有"title 没体现的 Results"或"Results 没支撑的 title 承诺"。
+
+> **[用户确认检查点 Mandatory]** 展示 storyline 草稿（章节标题、核心论点、关键图序、**各节预估引用数**、**3 个 title 候选**），等待用户明确确认后才进入 Phase 3。禁止在故事线未确认的情况下启动文献检索。
 
 ### Phase 3: 文献检索 (`/literature`)
 分阶段检索（Phase 1核心，Phase 2写作时实时补充）。
@@ -565,6 +571,18 @@ Generation rules:
 9. **Safety Write**: 检查文件差异 -> 写入文件 -> 智能快照。
 10. **🔴 节末用户确认检查点 (Mandatory)**：写完该节后展示 ① 字数 ② 引用条数 ③ 已引用的 figure_id 列表 ④ 本节新增缩略词列表 ⑤ 残留 `CITE_PENDING`/`DATA_PENDING`/`REF_DROPPED` 数；等待用户明确确认（"OK 继续下一节" 或 "需修改 X"）后才进入下一节 `/write`。**禁止连续自动写多节而不停**。
 
+**Discussion 段落结构（Mandatory，分离式 Discussion 章节专用；融合式则按 Results 各小节内嵌讨论）**：
+1. **Para 1 — 主要发现总结**（≤150 词）：用 2-3 句概括本工作的关键发现。**严禁简单复述 Results 数字** —— 提取的是"我们发现了什么生物学现象"而非"数值是多少"。错误示例："Our results showed a 5-fold increase in apoptosis."；正确："Our work establishes Sb9 as a key suppressor of collagen deposition in lung fibrosis."
+2. **Para 2-3（可多段）— 与文献对比 + 机制讨论**：每个核心 finding 一段。结构：① 先重述发现 ② 与已有文献对比（一致/不一致）③ 机制层面的解读（why does this happen）。**必须真引文献**（走 citation_guard，禁脑补）。
+3. **倒数第二段 — Limitations（强制）**：⚠️ **缺 limitations 是退稿高频原因**。必须有 3-5 个明确的局限性陈述，包含：① 样本量 / 模型局限 ② 技术局限（如 only in vitro / single cell line）③ 未解决的机制问题 ④ 临床转化障碍。**不要写虚假谦虚的 limitations**（"future studies are needed" 是废话），写具体可验证的。
+4. **末段 — Outlook / Significance**（≤100 词）：本研究对领域的推进 + 直接的下一步问题。**不要写"我们这工作有重要意义"，要写"this opens X new line of inquiry"**。
+
+**Online Methods vs Main Methods（Nature 系列必须区分，Cell 系列用 STAR Methods）**：
+- **Nature / Nature 子刊**：正文最末"Methods"是**精简版**（≤2000 词），含核心方法概览；完整 Methods 放 **Online Methods** / **Supplementary Information**（不限词数）。
+- **Cell / Cell 子刊**：用 **STAR Methods**（Structured, Transparent, Accessible Reporting），强制分章节：① Key Resources Table（试剂表，含 RRID）② Experimental Model and Subject Details ③ Method Details ④ Quantification and Statistical Analysis ⑤ Data and Code Availability。
+- **其他期刊**：Methods 一般放在 Results 后或文末，完整即可。
+- **写作策略**：识图阶段 `add-figure` 录入的 `stat_test` / 试剂参数全部进 Methods；按目标期刊在 `/write methods` 时**自动选模板**（在 Phase 0 `/init` 时根据 `target_journal` 提示用户）。
+
 **融合写作策略**：
 1. **数据呈现 (Results)**：描述Figure结果 + 统计数据。
 2. **即时讨论 (Discussion)**：机制解释 + 文献对比 + 意义阐述。
@@ -602,9 +620,52 @@ Generation rules:
 5. **运行投稿 checklist**：对 `submission_checklist` 数组逐项 ✅/❌，不适用标 N/A 加说明；缺项必须补到全 ✅ 才允许 `/check` 进入 Phase 5。
 6. **目标期刊适配（按需读取）**：从 `project_config.json` 读 `target_journal`，挑出该期刊的 `required_by` 项强制；如 Nature 必给 one-sentence summary 与 DAS，Cell 必给 highlights + graphical abstract。
 6b. **报告规范 checklist（强制）**：`Read templates/reporting_checklists.json` → 按 `project_config.json` 的 `research_field` 自动挂对应 checklist（如 `drug_delivery`→ARRIVE，`clinical_pharmacy_llm`→CONSORT/STROBE/TRIPOD，CS→ML reproducibility）。再叠加 `target_journal` 特定要求（Nature Reporting Summary、Cell STAR Methods 等）。逐项核查 Methods 与 Results 是否齐全，缺项必须补到 Methods 后才能 `/merge`。**动物实验 ARRIVE 不全 = 多数期刊编辑桌面拒**。
-7. **输出**：`submission/submission_checklist.md`（含逐项 status + 报告 checklist 状态）+ 上述 markdown 模板。
+7. **Source Data .xlsx 准备**（Nature/Cell 强制，其他多数期刊 strongly preferred）：
+   - **格式**：一个 `submission/source_data.xlsx`，**每张主图一个 sheet**（Sheet 命名 `Figure 1A`、`Figure 1B`...）。
+   - **内容**：每个 sheet 含**该 panel 的全部原始数值**（n 个独立实验、每个数据点的原始值，而非只是 mean ± SD）。
+   - **行列规范**：第一列为分组/时间点；其后各列为各重复（n=1, n=2, ...）；最末行可放 mean / SEM / P 值汇总。
+   - **不能藏数据**：审稿人会比对 source data 与图表，**数值对不上 = 学术不端嫌疑**。
+   - 用户自己准备 .xlsx（脚本生成出错率高），AI 给规范 + 检查 sheet 命名与 figures_database 的 figure_id 是否对应。
+8. **Acknowledgments 模板**（投稿必备但常忘）：必须含以下类别，无则写 N/A：
+   - **非作者贡献者**（提供试剂/样本/技术指导但不达 authorship 标准的人）
+   - **技术平台**（核心设施、共享仪器、生物信息平台）
+   - **样本/资源来源**（biobank、动物中心、临床中心）
+   - **预印本/讨论致谢**（在会议或 bioRxiv 收到的有用反馈）
+   - **Funding 不放 Acks**（独立 funding 章节，见 Phase 4.8 步骤 4）
+9. **CRediT 角色分配指南**（学生常犯困）—— 11 类对应到典型角色：
+   - **Conceptualization** → 通常 PI + 提出 idea 的核心学生
+   - **Methodology** → 设计实验方案的人（学生 + PI）
+   - **Investigation** → 真正做实验的学生（**博士生主体**）
+   - **Formal analysis** → 跑统计 / 数据处理的人
+   - **Resources** → 提供独家试剂 / 样本 / 设备的人
+   - **Writing – original draft** → 写初稿的人（**博士生主体**）
+   - **Writing – review & editing** → 改稿的人（PI + 共同作者）
+   - **Visualization** → 出图的人
+   - **Supervision** → 直接指导的 PI
+   - **Project administration** → 协调多 lab 的负责人
+   - **Funding acquisition** → 拿钱的 PI
+   - **规则**：① 每个 role 至少一位作者，全员覆盖 11 类（无人对应的写"N/A"并解释）② 一位作者可承担多个 role ③ 通讯作者通常 ≥ 4 个 role（含 Supervision/Funding）。
 
-**红线**：① 严禁 `{{VAR}}` 残留 ② 严禁伪造 reviewer 邮箱 ③ COI 已有需主动声明严禁瞒报 ④ Funding 无则写 "This work received no specific external funding"，**不留空**。
+10. **输出**：`submission/submission_checklist.md`（含逐项 status + 报告 checklist 状态 + Source Data sheet 命名核对）+ 上述 markdown 模板。
+
+**红线**：① 严禁 `{{VAR}}` 残留 ② 严禁伪造 reviewer 邮箱 ③ COI 已有需主动声明严禁瞒报 ④ Funding 无则写 "This work received no specific external funding"，**不留空** ⑤ **Source Data 数值必须与图对应** —— 不一致即学术不端嫌疑 ⑥ Acks 不能空，无则各类写 N/A。
+
+### Phase 4.9: Presubmission Inquiry（仅 Nature/Cell/Science 系列，可选但强烈建议）
+
+**为什么做**：Nature 系列 desk reject 率 60-80%，编辑预审一次 inquiry 通常 1-2 周内回复"是否感兴趣"，若不感兴趣可省 4-6 周等审稿。Cell 系列同理。
+
+**何时触发**：用户表态"投 Nature/Cell/Science 子刊"且 `/submission-pack` 完成后、正式提交前。
+
+**Inquiry 格式**（≤1 页 / ≤500 词）：
+1. **Subject 行**："Presubmission inquiry: [Working title]"
+2. **段 1（≤80 词）**：本工作 1-2 句概括 + 为何适合该期刊。
+3. **段 2（200-250 词）**：核心发现 + 关键证据（≤4 个 key findings + 关键定量结果）。
+4. **段 3（≤80 词）**：与该刊已发表近期论文的 differentiation（"advances over Smith et al, 2024"）。
+5. **段 4（≤50 词）**：简短作者承诺（"manuscript draft ready; 5 main figures + SI; ~5000 words"）。
+6. **附件**：**仅** title + abstract + 1-2 key figures（不发全文）。
+
+**输出**：`submission/presubmission_inquiry.md` + `submission/presubmission_figures/`（精选 1-2 张主图）。
+**红线**：① 不要在 inquiry 里提"submitted elsewhere" ② 不要承诺超出现有结果 ③ 一次只发一家期刊，等回复（≤2 周无回则发下一家）。
 
 ### Phase 5: 质量控制 (`/check`)
 **执行命令**：
@@ -617,6 +678,7 @@ Generation rules:
 3. `python scripts/citation_guard.py --index literature_index.json --report citation_guard_report.json --offline` — 离线核验文献完整性
 4. `python scripts/style_checker.py --manuscript-dir manuscripts --report style_check_report.json --threshold 70` — 去AI风格检测（句长方差、被动语态、禁词、段首重复）
 4b. `python scripts/style_checker.py --manuscript-dir figure_analysis --report figure_analysis_style.json --threshold 70` — 识图阶段写入的英文草稿也跑一遍风格检测（Bug 11 修复：原 /check 只扫 manuscripts/）
+4c. `python scripts/proofread.py --manuscript-dir manuscripts --report proofread_report.json --threshold 70` — **机械错误最终校对**：常见拼写错（teh/recieve/occured）、中文标点混入（，；：（）"" 等）、单位规范（um→μm、degC→°C、x g→×g）、术语一致性（nano-particle vs nanoparticle）、数字格式（10000 vs 10,000）、Methods 时态（present→past）。投稿前必跑。
 5. `grep -rn "CITE_PENDING\|DATA_PENDING\|REF_DROPPED" manuscripts/ figure_analysis/ 2>/dev/null` — 扫描 Phase 3 / 3.6 留下的未清零占位（待补文献 / 待补数据 / 文献核验失败的丢弃句）
 6. `[ ! -f manuscripts/Full_Manuscript.md ] || ! grep -q "AUTO-GENERATED" manuscripts/Full_Manuscript.md && echo "WARN: 合并稿缺自动生成警告头，可能被手动改写过"` — 防误改合并稿门禁
 7. **缩略词一致性扫描**（在合并稿上）：
@@ -697,7 +759,9 @@ Generation rules:
 | `/rename-figure` | 重整 figure 编号 | 全局改名 + 同步 figures_database/storyline/正文/识图文件，支持 --dry-run（脚本 rename-figure） |
 | `/write` | 撰写章节 | **章节局部读取 + 自我修正 + 智能快照** |
 | `/abstract` | 撰写摘要 | 全文完成后最后写，≤250词，含定量结果 |
-| `/submission-pack` | 投稿包准备 | Cover letter+DAS+CRediT+COI+Funding+Highlights+eTOC+Graphical Abstract+checklist（见 Phase 4.8） |
+| `/submission-pack` | 投稿包准备 | Cover letter+DAS+CRediT+COI+Funding+Highlights+eTOC+Graphical Abstract+Source Data+Acks+checklist（见 Phase 4.8） |
+| `/presubmission-inquiry` | Nature/Cell 系预审询函 | ≤1 页 inquiry,省 4-6 周等审稿（见 Phase 4.9） |
+| `/proofread` | 机械错误最终校对 | 拼写/中文标点/单位/术语一致性/数字格式/Methods 时态(脚本 proofread.py) |
 | `/mentor-review` | 导师批注循环 | 录入批注→逐条执行→改动追踪→重审准备→轮次管理（见 Phase 6.6） |
 | `/check` | 质量检查 | 含 style_checker 去AI检测 |
 | `/reviewer` | 审稿人模拟 | - |
