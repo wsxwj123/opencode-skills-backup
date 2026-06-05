@@ -306,6 +306,12 @@ license: Proprietary
    - 运行 `python scripts/state_manager.py set-field --field [field_id]` 生成 `project_config.json` 和 `reviewer_concerns.json`
 5. **Verify**: 尝试运行 `python scripts/state_manager.py load` 验证环境。
 
+**`/upgrade-scripts` 升级脚本（Bug ⑫ 修复——版本漂移）**：项目 init 后 scripts/ 是该时点 skill 的快照副本；skill 后续更新（如新增 `add-figure` / `add-abbreviation` / `add-stat-method` / `rename-figure` / `proofread` 等命令）后，旧项目用不到新功能。触发：用户说"升级脚本"/"项目脚本是旧的"。流程：
+1. 提示用户备份：`cp -r scripts scripts.bak.$(date +%Y%m%d)`
+2. 从 skill 源拷贝最新版：`cp ~/.claude/skills/general-sci-writing/scripts/*.py ./scripts/`（路径按用户实际 skill 安装位置调整）
+3. 验证：`python scripts/state_manager.py --help` 看是否含 `add-figure` / `add-abbreviation` / `add-stat-method` / `rename-figure` 等新子命令；`ls scripts/` 看是否含 `proofread.py`。
+4. 若有不兼容的 STATE_FILES 字段（如旧项目缺新 key），新版脚本会自动按 `get(..., default)` 兼容，无需手动迁移。
+
 ### Phase 1: 预审模式 (`/preview`)
 **输入**：用户提供的摘要/实验描述/数据概述。
 **输出**：3000词可行性报告，包含：选题价值、数据充分性评估、拟发表期刊建议、关键风险点。
@@ -326,13 +332,20 @@ license: Proprietary
 
 不在表内的期刊由 AI 上 journal 官网查 author guideline 后告知用户、写入 `project_config.word_limits`。Storyline 必须在期刊上限内编排，**严禁先写超 30% 再砍**——浪费的成本极高。
 
+**`/change-journal` 中途转投流程（Bug ⑪ 修复）**：写完一半想转投另一家期刊（如 Nature 退稿→投 Nat Commun）触发：
+1. 询问新 target_journal 名称 → 上面表查或官网查新 word_limits / Abstract 结构 / Methods 位置。
+2. 用 `update` 命令改 `project_config.json` 的 `target_journal` + `word_limits` 字段。
+3. 立即跑 `/check` 1-2 步看正文字数是否需要砍（或新刊允许更长，可保留）。
+4. 重跑 `/submission-pack`——它会 Read `submission_state.json`，仅问"哪些字段需要因转投而改"（如 cover letter 编辑名、suggested reviewer 是否变），不重新问全部。
+5. 若新刊 Methods 结构不同（如 STAR Methods vs Online Methods），需重新组织 `manuscripts/05_Methods*.md`。
+
 **引用密度预估（Mandatory）**：storyline 确认前，必须为每个小节标注预估引用数量：
 - Introduction 各段：背景段 1-2 篇，Gap 段 3-5 篇，创新点段 2-3 篇
 - Results+Discussion 融合段：Key Section 3-5 篇，Supporting Section 1-2 篇
 - Methods：0-5 篇（仅方法学原始文献）
 - 预估总数写入 storyline 输出表格，作为 Phase 3 检索目标
 
-**Title 写法规范（Mandatory）**：title 是论文命门、审稿决策强相关。storyline 阶段必须给至少 3 个 title 候选让用户选。
+**Title 写法规范（Mandatory，两阶段 — Bug ⑧ 修复）**：title 是论文命门。storyline 阶段先出 **3 个工作 title 候选**（working titles，基于 storyline 主线，**允许后续调整**）；Phase 3 文献检索完成、知道领域 gap 后，在 Phase 4 写完 Discussion 时**回头精修 title**——此时才能体现真正的创新点定位。
 - **结构选**：① **Declarative**（"X improves Y in Z"——Nature 系偏好，最高接收率）② **Mechanism-flavored**（"X regulates Y via Z pathway"——Cell 系偏好）③ **Question form**（"Does X drive Y?"——较少用，仅 Perspective/Opinion 类）
 - **硬约束**：≤ 期刊 title word limit（Nature ≤15 词；Cell ≤17 词；多数 ≤25 词）；**严禁**缩写（除 DNA/RNA/PCR 等极通用词）；**严禁** 'A study of / An investigation into / Studies on' 等老式开头（信号弱、明显学生气）；**严禁** 'Novel / First / Comprehensive' 等 self-promoting 词（编辑反感）。
 - **强制包含**：核心实体（具体到化合物/分子/疾病模型）+ 核心动作（improves/inhibits/activates/links）+ 必要语境（细胞类型 / 物种 / 临床场景）。
@@ -568,8 +581,8 @@ Generation rules:
 6. **User Feedback**: 用户确认。
 7. **Final Integration**: AI 重写该节，插入 SI 标记。
 8. **Global Literature Sync**: 写完当前节后，通过脚本执行全局文献去重与编号同步（含正文 `[n]` 自动重写）。
-9. **Safety Write**: 检查文件差异 -> 写入文件 -> 智能快照。
-10. **🔴 节末用户确认检查点 (Mandatory)**：写完该节后展示 ① 字数 ② 引用条数 ③ 已引用的 figure_id 列表 ④ 本节新增缩略词列表 ⑤ 残留 `CITE_PENDING`/`DATA_PENDING`/`REF_DROPPED` 数；等待用户明确确认（"OK 继续下一节" 或 "需修改 X"）后才进入下一节 `/write`。**禁止连续自动写多节而不停**。
+9. **🔴 节末用户确认检查点（Mandatory，先确认再落盘 — Bug ② 修复）**：在 Safety Write 之前展示给用户：① 字数 ② 引用条数 ③ 已引用的 figure_id 列表 ④ 本节新增缩略词列表 ⑤ 残留 `CITE_PENDING`/`DATA_PENDING`/`REF_DROPPED` 数；等待用户明确确认（"OK 继续" 或 "需修改 X"）。**OK 才进 step 10 落盘**；用户说改 → 在内存里改后重新展示确认；连续自动写多节禁止。
+10. **Safety Write**: 用户 OK 后写入文件 → 智能快照。回退手段：若落盘后用户反悔，`/rollback` 到上一个 snapshot 或直接 Edit 改原子化文件（参见 §3 润色 workflow）。
 
 **Discussion 段落结构（Mandatory，分离式 Discussion 章节专用；融合式则按 Results 各小节内嵌讨论）**：
 1. **Para 1 — 主要发现总结**（≤150 词）：用 2-3 句概括本工作的关键发现。**严禁简单复述 Results 数字** —— 提取的是"我们发现了什么生物学现象"而非"数值是多少"。错误示例："Our results showed a 5-fold increase in apoptosis."；正确："Our work establishes Sb9 as a key suppressor of collagen deposition in lung fibrosis."
@@ -598,8 +611,27 @@ Generation rules:
 **禁止**：不引用文献 `[n]`；**Abstract 独立**——即使正文已在 `abbreviations.json` 定义过，Abstract 首次出现仍须重新展开为 `Full Name (ABBR)`（投稿规范，Abstract 独立阅读）；不出现"significantly"等无定量支撑的空话。
 **输出文件**：`manuscripts/01_Abstract.md`
 
-### Phase 4.8: 投稿包准备 (`/submission-pack`)
-**时机**：全文 + Abstract 完成后、`/check` 前。投稿包不全 → 编辑桌面拒（desk reject），白写。
+### Phase 5: 质量控制 (`/check`)（顺序前置 — Bug ① 修复：投稿包必须在质检后）
+
+**为什么前置**：投稿包要从已质检的稿子里取材（cover letter 的 key findings 必须是已校对版、Source Data 必须与已校对的图表对应）。先 /check → 通过 → 再 /submission-pack。
+
+**执行命令（有序，每步阻断条件明确 — Bug ⑨ 修复）**：
+1. `python scripts/state_manager.py stats` — 字数检查。**字数预算分类**：手动汇总 `02_Abstract*.md + 03_Intro*.md + 04_Results*.md + 06_Discussion*.md` 为"正文字数"（Methods/Refs/Legends 多数期刊不计入），对比 `project_config.word_limits`。**阻断**：超 10% 必砍；超 5% 警告。
+2. `python scripts/state_manager.py sync-literature --dry-run --strict-references` — 引用号一致性。**阻断**：dry-run 报冲突 → 跑 `--apply` 后重检。
+3. `python scripts/citation_guard.py --index literature_index.json --report citation_guard_report.json --offline` — 文献完整性。**阻断**：`ok=false` → 处理 `manual_review_queue.json` 后重跑。
+4. `python scripts/style_checker.py --manuscript-dir manuscripts --report style_check_report.json --threshold 70` — 去 AI 风格检测。**阻断**：avg_score<70 → 列具体段落修改后重跑。
+4b. `python scripts/style_checker.py --manuscript-dir figure_analysis --report figure_analysis_style.json --threshold 70` — 识图阶段写入的英文草稿也检测。**阻断**同 4。
+4c. `python scripts/proofread.py --manuscript-dir manuscripts --report proofread_report.json --threshold 70` — 机械错误。**阻断**：avg_score<70 → 按 report 中 `issues` 字段逐条修后重跑。
+5. `grep -rn "CITE_PENDING\|DATA_PENDING\|REF_DROPPED" manuscripts/ figure_analysis/ 2>/dev/null` — 占位扫描。**阻断**：非空 → 必须按 §REF_DROPPED 三种处置补齐。
+6. 防误改合并稿门禁：`[ ! -f manuscripts/Full_Manuscript.md ] || grep -q "AUTO-GENERATED" manuscripts/Full_Manuscript.md` — **阻断**：banner 不在 → 合并稿被手改过，需 `/merge` 重生成。
+7. **缩略词一致性扫描**（在合并稿上）：① 裸用但未定义的缩写 ② 同一缩写在多个章节重复展开 ③ 已定义但全文未使用。与 `abbreviations.json` 交叉比对。通用缩写（DNA/RNA/PCR 等）跳过。**阻断**：① ② 类违规必修。
+
+**全部通过 → 进 Phase 4.8 投稿包**；任一阻断 → 修复后重跑该步及之后步骤。
+
+### Phase 4.8: 投稿包准备 (`/submission-pack`)（移到 Phase 5 之后 — Bug ① 修复）
+**时机**：`/check` **全部通过**后；投稿包内容必须基于已质检的稿子。投稿包不全 → 编辑桌面拒（desk reject），白写。
+
+**结构化持久化（Bug ⑥ 修复）**：所有问答结果（cover letter 编辑名 / 建议 reviewer / CRediT 分配 / funding / COI / highlights / one-sentence summary）都写入 `submission/submission_state.json`（已加入 STATE_FILES，snapshot 备份+rollback 恢复）。重跑 `/submission-pack`（如改投另一家期刊）时先 Read 该文件，仅问"变化项"，不重新问全部。写入命令：`python scripts/state_manager.py update <payload.json>` payload 形如 `{"submission_state": {"target_journal":"...", "cover_letter_data":{...}, "credit_data":{...}, ...}}`。
 
 **触发**：用户说"准备投稿"/"提交"/"submission"/"准备投递材料" 即进入。
 
@@ -667,29 +699,6 @@ Generation rules:
 **输出**：`submission/presubmission_inquiry.md` + `submission/presubmission_figures/`（精选 1-2 张主图）。
 **红线**：① 不要在 inquiry 里提"submitted elsewhere" ② 不要承诺超出现有结果 ③ 一次只发一家期刊，等回复（≤2 周无回则发下一家）。
 
-### Phase 5: 质量控制 (`/check`)
-**执行命令**：
-1. `python scripts/state_manager.py stats` — 检查各节字数。**字数预算分类核查**（按 Phase 2 目标期刊适配表）：
-   - **正文字数**（Abstract + Intro + Results + Discussion）：必须 ≤ 期刊 Article 上限。这是硬约束。
-   - **不计入字数**：Methods / References / Figure Legends / Tables —— 大多数期刊单独计算或不限。stats 当前输出含全部 .md，需手动按文件名前缀分类（如 `05_Methods_*.md` 不计入正文字数）。
-   - 检查方法：用 `python scripts/state_manager.py stats` 后，手动汇总 `02_Abstract*.md + 03_Intro*.md + 04_Results*.md + 06_Discussion*.md` 为"正文字数"，对比 `project_config.word_limits`。
-   - 超 5% 警告；超 10% 必须砍，**不要等 /merge 才发现**。
-2. `python scripts/state_manager.py sync-literature --dry-run --strict-references` — 扫描正文引用号与 `literature_index.json` 是否一致
-3. `python scripts/citation_guard.py --index literature_index.json --report citation_guard_report.json --offline` — 离线核验文献完整性
-4. `python scripts/style_checker.py --manuscript-dir manuscripts --report style_check_report.json --threshold 70` — 去AI风格检测（句长方差、被动语态、禁词、段首重复）
-4b. `python scripts/style_checker.py --manuscript-dir figure_analysis --report figure_analysis_style.json --threshold 70` — 识图阶段写入的英文草稿也跑一遍风格检测（Bug 11 修复：原 /check 只扫 manuscripts/）
-4c. `python scripts/proofread.py --manuscript-dir manuscripts --report proofread_report.json --threshold 70` — **机械错误最终校对**：常见拼写错（teh/recieve/occured）、中文标点混入（，；：（）"" 等）、单位规范（um→μm、degC→°C、x g→×g）、术语一致性（nano-particle vs nanoparticle）、数字格式（10000 vs 10,000）、Methods 时态（present→past）。投稿前必跑。
-5. `grep -rn "CITE_PENDING\|DATA_PENDING\|REF_DROPPED" manuscripts/ figure_analysis/ 2>/dev/null` — 扫描 Phase 3 / 3.6 留下的未清零占位（待补文献 / 待补数据 / 文献核验失败的丢弃句）
-6. `[ ! -f manuscripts/Full_Manuscript.md ] || ! grep -q "AUTO-GENERATED" manuscripts/Full_Manuscript.md && echo "WARN: 合并稿缺自动生成警告头，可能被手动改写过"` — 防误改合并稿门禁
-7. **缩略词一致性扫描**（在合并稿上）：
-   - 提取所有 `Full Name (ABBR)` 定义模式；扫描所有大写≥2 字符的裸缩写。
-   - **3 类违规**：(a) 裸用但未定义的缩写；(b) 同一缩写在多个章节重复展开；(c) 已定义但全文未使用。
-   - 与 `abbreviations.json` 交叉比对——库中无 / 库中有但正文未用 / 多次展开，均报告。
-   - 通用缩写（DNA/RNA/PCR 等，见 SKILL §Phase 3.7 白名单）跳过检测。
-
-**质量标准**：Key Section ≥500词且引用≥3条；Supporting Section ≥200词；style_checker 评分 ≥70。
-**阻断条件**：字数不足 → 指出具体章节，等待补写；引用冲突 → 重跑 `sync-literature --apply` 后再检查；style_checker 不达标 → 列出具体问题，逐段修改后重检；**占位残留**（`CITE_PENDING` / `DATA_PENDING` 非空）→ 先补全真检索文献 / 缺失数据再交付，严禁带占位合并。
-
 ### Phase 6: 审稿人模拟 / 退稿改进 (`/reviewer`)
 
 **6A. 内部审稿模拟（投稿前）**：
@@ -714,14 +723,15 @@ Generation rules:
 - **形式 C**：用户口述导师意见 → 你记录后让用户校对存盘
 
 **流程**：
-1. **录入批注**：每条意见结构化存 `reviews/mentor_plan_round{N}.json`：
+1. **录入批注（Bug ⑤ 修复——用 STATE_FILES["mentor_plan"]）**：所有 round 集中在 `reviews/mentor_plan.json`（已加进 STATE_FILES，snapshot 备份+rollback 恢复），通过 `update` 子命令写入；结构：
    ```json
-   {"round": 1, "items": [{"id":1, "comment":"原文摘录或位置", "type":"data|logic|wording|reference|figure", "severity":"major|minor", "target_section":"results_3.2", "action":"补图|改写|引文献|拆段", "status":"open"}]}
+   {"current_round": 1, "rounds": {"1": {"items": [{"id":1, "comment":"原文摘录", "type":"data|logic|wording|reference|figure", "severity":"major|minor", "target_section":"results_3.2", "action":"补图|改写|引文献|拆段", "status":"open|addressed|not_addressed"}]}}}
    ```
+   写入命令：`python scripts/state_manager.py update <payload.json>` payload 形如 `{"mentor_plan": {...}}`。
 2. **逐条执行**：按严重度（major 先做）+ target_section 顺序处理，每条改完 `status` 设 `addressed` 并写明改动出处。
 3. **改动追踪**：每条 `addressed` 后必须主动告知用户"改动 X 在 manuscripts/Y.md 第 Z 段"，方便导师重审定位。
-4. **重审准备**：所有 major 处理完 → 导出当前稿 `/merge` 给导师看；同时生成 `reviews/response_to_mentor_round{N}.md`（"上轮 N 条意见，X 条已改、Y 条暂未做（理由：…）"）。
-5. **轮次管理**：进入新一轮（round 2/3/…），旧 round 文件不动（作为修改史）；当前 round 编号在 `writing_progress.json` 写入 `current_mentor_round`。
+4. **重审准备**：所有 major 处理完 → `/merge --intermediate` 导出当前稿给导师（参见 Phase 8 中间版本约定）；同时生成 `reviews/response_to_mentor_round{N}.md`。
+5. **轮次管理**：进入新一轮（round 2/3/…），旧 round 数据保留在 `mentor_plan.json` 的 `rounds` 字段下作修改史；`current_round` 字段同步更新。
 
 **与 Phase 6B 退稿改进的区分**：6.6 是**写作期间**的导师反馈循环（友好、内部）；6B 是**退稿后**的官方审稿意见回复（正式、对外）。结构化方式相似，但 6.6 不出 response letter，6B 必须出。
 
@@ -737,7 +747,9 @@ Generation rules:
 **合并前强制核验**：执行 `python scripts/citation_guard.py --index literature_index.json --mcp-cache mcp_literature_cache.json --require-mcp --report citation_guard_report.json`，仅当 `ok=true` 才允许合并。
 
 生成Word文档和BibTeX引用文件。
-- `/merge` → `python scripts/merge_manuscript.py --manuscript-dir manuscripts`
+- **`/merge` 中间版本 vs 最终版本（Bug ⑩ 修复）**：
+  - **中间版本（给导师 / 自己核对）**：`python scripts/merge_manuscript.py --manuscript-dir manuscripts --output-md manuscripts/Draft_Round{N}_Manuscript.md --skip-docx`，文件名带 round 编号，不覆盖 Full_Manuscript.md。
+  - **最终版本（投稿用）**：`python scripts/merge_manuscript.py --manuscript-dir manuscripts`（默认输出 `manuscripts/Full_Manuscript.md` + .docx）。**只在 `/check` 全过 + `/submission-pack` 已生成后才允许跑最终版**；否则视为中间稿。
   - 可选：`--skip-docx`（仅生成 Markdown）
   - 可选：`--patterns "01_Abstract*.md,02_Introduction*.md,04_Results*.md,*.md"`（自定义合并顺序与兜底匹配）
 - `/export_bib` → `python scripts/export_bibtex.py --index-file literature_index.json --output-file references.bib`
@@ -755,6 +767,9 @@ Generation rules:
 | `/storyline` | 构建提纲 | 自动规划融合式章节 |
 | `/literature` | 文献检索 | - |
 | `/stat-helper` | 统计方法选择助手 | 不知道用 t-test/ANOVA/非参时触发，按决策树询问（见 Phase 3.55） |
+| `add-stat-method` | 注入统计方法到 figure panel | /stat-helper 输出后落地用：`add-stat-method --figure-id "Figure 2" --panel A --stat-test "one-way ANOVA + Tukey" --n 6 --error-bar SEM --software "GraphPad Prism v10.1"` |
+| `/change-journal` | 中途转投另一家期刊 | 改 word_limits→重查投稿包变化项（见 Phase 2） |
+| `/upgrade-scripts` | 升级项目内的 scripts/ 到最新版 | 项目用了几个月技能更新后,补 add-figure 等新命令（见 Phase 0） |
 | `/figure` | Figure 识图与讨论 | 逐张读图→读图清单确认→存 `figure_analysis/figure_{N}.md` 作正文依据；只读符号化信息，读不到问用户（见 Phase 3.6） |
 | `/rename-figure` | 重整 figure 编号 | 全局改名 + 同步 figures_database/storyline/正文/识图文件，支持 --dry-run（脚本 rename-figure） |
 | `/write` | 撰写章节 | **章节局部读取 + 自我修正 + 智能快照** |

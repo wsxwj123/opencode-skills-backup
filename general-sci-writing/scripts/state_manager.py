@@ -26,7 +26,9 @@ STATE_FILES = {
     "version_history": "version_history.json",
     "si_database": "si_database.json",
     "abbreviations": "abbreviations.json",
-    "revision_plan": "reviews/revision_plan.json"
+    "revision_plan": "reviews/revision_plan.json",
+    "mentor_plan": "reviews/mentor_plan.json",
+    "submission_state": "submission/submission_state.json"
 }
 
 TOKEN_CHAR_RATIO = 4
@@ -2707,20 +2709,25 @@ def update_state(payload_path):
         filename = STATE_FILES[key]
         
         try:
+            # Bug ③ 修复:STATE_FILES 路径含子目录(如 reviews/revision_plan.json)时先建目录
+            parent_dir = os.path.dirname(filename)
+            if parent_dir:
+                os.makedirs(parent_dir, exist_ok=True)
+
             # Special handling for context_memory versioning
             if key == "context_memory":
                 # Only rotate if content actually changed or if file exists
                 if os.path.exists(filename):
                      rotate_context_memory_versions()
-                
+
                 with open(filename, 'w', encoding='utf-8') as f:
                     f.write(str(content))
-            
+
             # JSON files
             elif filename.endswith(".json"):
                 with open(filename, 'w', encoding='utf-8') as f:
                     json.dump(content, f, indent=2, ensure_ascii=False)
-            
+
             # Text/Markdown files
             else:
                 with open(filename, 'w', encoding='utf-8') as f:
@@ -2802,6 +2809,9 @@ def add_figure_state(payload_path):
         else:
             data.append(entry)
             action = "added"
+        parent_dir = os.path.dirname(filename)
+        if parent_dir:
+            os.makedirs(parent_dir, exist_ok=True)
         with open(filename, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
 
@@ -2930,6 +2940,9 @@ def add_abbreviation_state(payload_path):
             entry["first_defined_in"] = section or "unknown"
             data.append(entry)
             action = "added"
+        parent_dir = os.path.dirname(filename)
+        if parent_dir:
+            os.makedirs(parent_dir, exist_ok=True)
         with open(filename, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
     result = {"ok": True, "action": action, "abbr": abbr,
@@ -2941,6 +2954,54 @@ def add_abbreviation_state(payload_path):
         os.remove(payload_path)
     except Exception:
         pass
+
+def add_stat_method_state(figure_id, panel_key, stat_test, n=None, error_bar=None, software=None):
+    """Bug ④ 修复:/stat-helper → figures_database 钩子.
+    把统计方法直接落到指定 figure 的指定 panel 上;若 figure 不存在则报错引导用户先 add-figure."""
+    if not figure_id or not panel_key or not stat_test:
+        print(json.dumps({"ok": False, "error": "figure_id, panel, and stat_test are required"}, ensure_ascii=False))
+        sys.exit(1)
+    filename = STATE_FILES["figures_database"]
+    with FileLock("state_update"):
+        data = read_json_file(filename) if os.path.exists(filename) else []
+        if not isinstance(data, list):
+            data = []
+        fig_idx = next((i for i, x in enumerate(data)
+                        if isinstance(x, dict) and (x.get("figure_id") or x.get("id")) == figure_id), None)
+        if fig_idx is None:
+            print(json.dumps({
+                "ok": False,
+                "error": f"figure_id '{figure_id}' not found in figures_database",
+                "hint": "run add-figure first to register the figure",
+            }, ensure_ascii=False))
+            sys.exit(2)
+        figure = data[fig_idx]
+        panels = figure.get("panels") if isinstance(figure.get("panels"), list) else []
+        pan_idx = next((i for i, p in enumerate(panels)
+                        if isinstance(p, dict) and p.get("panel") == panel_key), None)
+        if pan_idx is None:
+            # 新增 panel 条目
+            panels.append({"panel": panel_key, "stat_test": stat_test,
+                           "n": n, "error_bar": error_bar, "software": software})
+            action = "panel_added_with_stat"
+        else:
+            panels[pan_idx]["stat_test"] = stat_test
+            if n is not None:
+                panels[pan_idx]["n"] = n
+            if error_bar:
+                panels[pan_idx]["error_bar"] = error_bar
+            if software:
+                panels[pan_idx]["software"] = software
+            action = "stat_updated"
+        figure["panels"] = panels
+        data[fig_idx] = figure
+        parent_dir = os.path.dirname(filename)
+        if parent_dir:
+            os.makedirs(parent_dir, exist_ok=True)
+        with open(filename, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+    print(json.dumps({"ok": True, "action": action, "figure_id": figure_id,
+                      "panel": panel_key, "stat_test": stat_test}, ensure_ascii=False))
 
 def rename_figure_state(old_fid, new_fid, dry_run=False):
     """Bug 9 修复 + 投稿前图编号重整工具.
@@ -3093,10 +3154,12 @@ def backup_project_state(backup_dir="backups"):
     if not os.path.exists(snapshot_dir):
         os.makedirs(snapshot_dir)
         
-    # 1. Backup State Files
+    # 1. Backup State Files (Bug ③ 配套修复:含子目录路径保留结构)
     for key, filename in STATE_FILES.items():
         if os.path.exists(filename):
-            shutil.copy2(filename, snapshot_dir)
+            dst = os.path.join(snapshot_dir, filename)
+            os.makedirs(os.path.dirname(dst) or ".", exist_ok=True)
+            shutil.copy2(filename, dst)
             
     # 2. Backup Manuscripts
     manuscript_dir = "manuscripts"
@@ -3150,10 +3213,13 @@ def restore_project_snapshot(snapshot_dir):
 
     restored_files = []
 
-    # Restore state files.
+    # Restore state files. (含子目录的也要 mkdir 目标父目录)
     for _, filename in STATE_FILES.items():
         src = os.path.join(snapshot_dir, filename)
         if os.path.exists(src):
+            parent = os.path.dirname(filename)
+            if parent:
+                os.makedirs(parent, exist_ok=True)
             shutil.copy2(src, filename)
             restored_files.append(filename)
 
@@ -3362,6 +3428,15 @@ def main():
     rename_fig_parser.add_argument("--new", required=True, help="New figure_id (e.g. 'Figure S5')")
     rename_fig_parser.add_argument("--dry-run", action="store_true", help="Preview changes without writing")
 
+    # Add-stat-method command (Bug ④ /stat-helper → figures_database 钩子)
+    add_stat_parser = subparsers.add_parser("add-stat-method", help="Inject statistical method into a figure panel (called after /stat-helper)")
+    add_stat_parser.add_argument("--figure-id", required=True, help="Target figure_id (must exist in figures_database)")
+    add_stat_parser.add_argument("--panel", required=True, help="Panel key (e.g. 'A', 'B')")
+    add_stat_parser.add_argument("--stat-test", required=True, help="Statistical test name (e.g. 'one-way ANOVA + Tukey')")
+    add_stat_parser.add_argument("--n", type=int, default=None, help="Sample size")
+    add_stat_parser.add_argument("--error-bar", default=None, help="Error bar type (SD/SEM/95%% CI)")
+    add_stat_parser.add_argument("--software", default=None, help="Statistical software (e.g. 'GraphPad Prism v10.1')")
+
     # Postwrite command
     postwrite_parser = subparsers.add_parser("postwrite", help="Auto-sync global progress/context after a writing turn")
     postwrite_parser.add_argument("--section", required=True, help="Current section id, e.g. 'results_3.1'")
@@ -3503,6 +3578,9 @@ def main():
         add_abbreviation_state(args.payload_file)
     elif args.command == "rename-figure":
         rename_figure_state(args.old, args.new, dry_run=args.dry_run)
+    elif args.command == "add-stat-method":
+        add_stat_method_state(args.figure_id, args.panel, args.stat_test,
+                              n=args.n, error_bar=args.error_bar, software=args.software)
     elif args.command == "postwrite":
         postwrite_state(
             section=args.section,
