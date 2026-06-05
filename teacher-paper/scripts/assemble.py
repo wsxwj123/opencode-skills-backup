@@ -288,16 +288,31 @@ def cmd_init(args):
     proj = args[0]
     opt = _parse_opts(args[1:])
 
-    # 工程位置：传入纯工程名（不含任何路径分隔符）或显式 --on-desktop → 建到桌面
-    # 同时判断 / 和 \：Windows 上用户也可能用正斜杠，os.sep 只有 \ 会漏判
-    has_sep = ("/" in proj) or ("\\" in proj)
-    if not os.path.isabs(proj) and ("--on-desktop" in args or not has_sep):
-        desktop = _detect_desktop()
-        if desktop:
-            proj = os.path.join(desktop, proj)
-            print(f"[位置] 未指定项目文件夹，工程建在桌面：{proj}")
+    # 工程位置（v3.13.0 起加严，杜绝"AI 没问位置就建到桌面"）：
+    # - 绝对路径 → 直接用
+    # - 显式 --on-desktop → 建到桌面（兼容旧行为，但须 AI 确认用户同意）
+    # - 显式 --here → 建到当前 cwd 下
+    # - 否则（只给了工程名）→ 硬拒。要求 AI 先 AskUserQuestion 问用户工程位置。
+    if not os.path.isabs(proj):
+        if "--on-desktop" in args:
+            desktop = _detect_desktop()
+            if desktop:
+                proj = os.path.join(desktop, proj)
+                print(f"[位置] --on-desktop：工程建在桌面 {proj}")
+            else:
+                print("[警告] 未探测到桌面目录，回退当前目录")
+                proj = os.path.abspath(proj)
+        elif "--here" in args:
+            proj = os.path.abspath(proj)
+            print(f"[位置] --here：工程建在当前目录 {proj}")
         else:
-            print(f"[位置] 未探测到桌面目录，工程建在当前目录：{os.path.abspath(proj)}")
+            print("\n🔴 [工程位置门禁] 必须显式指定工程位置，不再默认建到桌面。", file=sys.stderr)
+            print(f"  你传的 \"{proj}\" 不是绝对路径，AI 必须先 AskUserQuestion 问用户：", file=sys.stderr)
+            print("    ① 建在当前项目目录的某子文件夹下（推荐，给绝对路径）", file=sys.stderr)
+            print("    ② 建在当前终端工作目录下（加 --here）", file=sys.stderr)
+            print("    ③ 建在桌面（加 --on-desktop）", file=sys.stderr)
+            print("\n  得到答复后用对应形式重跑 init。", file=sys.stderr)
+            sys.exit(2)
 
     if os.path.exists(os.path.join(proj, "meta.json")):
         print(f"[提示] {proj} 已是工程目录，init 将覆盖 meta.json 与 00_manifest.md "
@@ -534,8 +549,16 @@ def cmd_build(args):
     total = 0
     nums = []
     warn = []
-    source_errors = []  # 阅读类素材真实性硬门禁的违规项
+    source_errors = []   # 阅读类素材真实性硬门禁的违规项
+    figure_errors = []   # 缺图硬门禁（v3.13.0）：题干含"如图"但无 figure block
     materials_dir = os.path.join(proj, "materials")
+
+    # v3.13.0：题号静默自动重排——按文件名排序后的出现顺序，从 1 递增分配。
+    # 只对"实质题"分配（meta.status != "-" 且 meta.score 不为 None），
+    # section/sub/material 等结构块不参与。重排同步覆盖 meta.num 与
+    # paper/answer 块里所有 question/answer 块的 num 字段。
+    allow_missing_fig = "--allow-missing-figure" in args
+    auto_num = 0
     for fp in files:
         try:
             atom = _read_json(fp)
@@ -547,22 +570,39 @@ def cmd_build(args):
         if not isinstance(p_blocks, list) or not isinstance(a_blocks, list):
             warn.append(f"{os.path.basename(fp)} 的 paper/answer 不是列表，已跳过（避免内容被逐字符拆散）")
             continue
+        m = atom.get("meta", {})
+
+        # —— 题号自动重排（静默覆盖）——
+        is_question = (m.get("score") is not None and str(m.get("status", "")) != "-")
+        if is_question:
+            auto_num += 1
+            new_num = str(auto_num)
+            if m.get("num") and str(m["num"]) != new_num:
+                warn.append(f"{os.path.basename(fp)} 原 num={m['num']} → 自动重排为 {new_num}")
+            m["num"] = new_num
+            # 同步 paper/answer 里所有 question/answer 块的 num
+            for blk in p_blocks + a_blocks:
+                if isinstance(blk, dict) and blk.get("type") in ("question", "answer"):
+                    blk["num"] = new_num
+
+        # —— 缺图硬门禁：题干含"如图/如下图/根据图/图中/图所示"但 paper 无 figure ——
+        if is_question:
+            _check_missing_figure(fp, p_blocks, figure_errors)
+
         paper.extend(p_blocks)
         answers.extend(a_blocks)
-        m = atom.get("meta", {})
 
         # —— 阅读类素材真实性硬门禁 ——
         _check_source(fp, m, p_blocks, materials_dir, source_errors, warn)
 
-        if m.get("score") is not None and str(m.get("status", "")) != "-":
+        if is_question:
             try:
                 total += float(m["score"])
             except (TypeError, ValueError):
                 pass
-        if m.get("num"):
-            nums.append(str(m["num"]))
+            nums.append(new_num)
             if m.get("score") is None:
-                warn.append(f"题{m['num']} 缺 score 字段（未计入总分）")
+                warn.append(f"题{new_num} 缺 score 字段（未计入总分）")
 
     # 校验（expected_questions=0 表示题量未知/通用兜底 → 无法做题量/分值门禁校验）
     # 缺字段默认 0，避免被错按"21题/120分"硬校验产生满屏假告警
@@ -635,6 +675,22 @@ def cmd_build(args):
             print("\n  已拒绝出卷。修正后重跑；如确需强制出卷，加 --allow-unsourced。")
             sys.exit(2)
         print("\n  ⚠️ 你使用了 --allow-unsourced，跳过门禁强制出卷（风险自负）。")
+
+    # —— 缺图硬门禁（v3.13.0）：题干含"如图"但 paper 无 figure block ——
+    if figure_errors:
+        print(f"[合并] 已读 {len(files)} 个原子文件，题量 {len(nums)}，分值合计 {total:g}",
+              file=sys.stderr)
+        print("\n🔴 [缺图门禁] 以下题目题干引用了图，但 paper 块里没有 figure 块：", file=sys.stderr)
+        for e in figure_errors:
+            print("   - " + e, file=sys.stderr)
+        print("\n  数理几何/函数图：写 figure 块 kind=function/geometry/svg/bar/...，自动渲染；", file=sys.stderr)
+        print("  电路图/化学结构/历史地图：figure 块写 src=用户提供的图片路径。", file=sys.stderr)
+        if not allow_missing_fig:
+            print("\n  已拒绝出卷。补图后重跑；如确需带 ［图：alt］ 占位强制出卷，加 --allow-missing-figure。",
+                  file=sys.stderr)
+            sys.exit(2)
+        print("\n  ⚠️ 你使用了 --allow-missing-figure，缺图位置将留 ［图：alt］ 文字占位（学生可能看不懂题）。",
+              file=sys.stderr)
 
     content = {
         "paper_path": os.path.join(proj, "build",
@@ -825,8 +881,9 @@ def _which(name):
 
 
 # 无值布尔开关：出现即为 True，不吞掉后一个参数
-_BOOL_FLAGS = {"on-desktop", "allow-unsourced",
-               "accept-fallback", "allow-empty"}
+_BOOL_FLAGS = {"on-desktop", "here", "allow-unsourced",
+               "accept-fallback", "allow-empty",
+               "allow-missing-figure"}
 
 
 def _opt_bool(val, default):
@@ -948,6 +1005,29 @@ def _check_material_wording(paper, warn):
             if hit:
                 warn.append(f"选文出处『{src}』含{'/'.join(hit)}——按真实性铁律须忠实节选"
                             f"（逐字可删减、禁重排改写编造），标注请改为'节选自…'。")
+
+
+_FIG_CUES = ("如图", "如下图", "下图", "图中", "图所示", "根据图", "看图",
+             "观察图", "请看图", "依据图")
+
+
+def _check_missing_figure(fp, paper_blocks, errors):
+    """题干含'如图/如下图/图中/图所示'等图引用字样，但 paper 块里没有 figure block
+    （也没有 src 提供的图）→ 拒绝出卷。AI 不能写出"如图所示"却不给图。"""
+    has_fig = any(isinstance(b, dict) and b.get("type") == "figure" for b in paper_blocks)
+    if has_fig:
+        return
+    for b in paper_blocks:
+        if not isinstance(b, dict):
+            continue
+        text = str(b.get("text", "")) + str(b.get("stem", ""))
+        for opt in (b.get("options") or b.get("items") or []):
+            text += str(opt)
+        if any(cue in text for cue in _FIG_CUES):
+            errors.append(f"{os.path.basename(fp)}：题干含『{next(c for c in _FIG_CUES if c in text)}』"
+                          f"等图引用字样，但 paper 块里没有 figure 块——必须补图"
+                          f"（自动画 kind=function/svg/geometry... 或用户提供 src=...）。")
+            return
 
 
 def _needs_source(meta, paper_blocks):

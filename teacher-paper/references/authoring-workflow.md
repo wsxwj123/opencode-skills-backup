@@ -116,8 +116,11 @@
 
 ### 1. 建工程
 ```bash
-python3 scripts/assemble.py init "九年级中考模拟语文_工程" \
+# v3.13.0 起必须显式指定工程位置——绝对路径 或 --here(当前 cwd) 或 --on-desktop
+# AI 必须先 AskUserQuestion 问用户工程位置,绝不可只给工程名让脚本默认建桌面
+python3 scripts/assemble.py init "/Users/xxx/Documents/我的卷子/九年级中考模拟语文_工程" \
   --stage 九年级 --type 中考模拟 --title "九年级语文（中考模拟）试卷"
+# 或者: --here(建到当前终端 cwd 下); --on-desktop(显式建桌面)
 ```
 生成目录骨架、`meta.json`、`00_manifest.md`、`items/` 内的 section/sub 占位文件。
 
