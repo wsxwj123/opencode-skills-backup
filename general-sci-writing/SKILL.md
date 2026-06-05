@@ -108,7 +108,7 @@ license: Proprietary
 获得路径后，执行初始化时，**必须**将 Skill 目录下的 `scripts/` 文件夹完整**拷贝**到用户指定的项目根目录下。
 - **Why?**：确保项目文件夹包含所有运行所需的 Python 脚本。即使拷贝到另一台没装此 Skill 的电脑上，依然可以通过简单的 Python 命令维护状态。
 - **Command Logic**:
-  1. `mkdir -p [Target_Path]/scripts [Target_Path]/configs [Target_Path]/manuscripts [Target_Path]/section_memory [Target_Path]/figures [Target_Path]/figure_analysis`
+  1. `mkdir -p [Target_Path]/scripts [Target_Path]/configs [Target_Path]/manuscripts [Target_Path]/section_memory [Target_Path]/figures [Target_Path]/figure_analysis [Target_Path]/reviews [Target_Path]/submission`
   2. `cp [Skill_Path]/scripts/*.py [Target_Path]/scripts/`
   3. `cp [Skill_Path]/templates/*.json [Target_Path]/`
   4. `cp [Skill_Path]/configs/*.json [Target_Path]/configs/`
@@ -290,7 +290,7 @@ license: Proprietary
 
 ### Phase 0: 项目初始化 (`/init`) - 跨平台便携模式
 1. **Ask Path**: 询问用户保存路径 (默认 Desktop)。
-2. **Create Dir**: 创建项目根目录及子目录 `scripts/`、`configs/`、`manuscripts/`、`section_memory/`、`figures/`、`figure_analysis/`。
+2. **Create Dir**: 创建项目根目录及子目录 `scripts/`、`configs/`、`manuscripts/`、`section_memory/`、`figures/`、`figure_analysis/`、`reviews/`、`submission/`。
 3. **Copy Resources**: 将 Skill 中的文件拷贝到项目（参见 §1 Command Logic）：
    - `scripts/*.py` → `[Project_Root]/scripts/`
    - `templates/*.json` → `[Project_Root]/`
@@ -313,6 +313,18 @@ license: Proprietary
 
 ### Phase 2: 故事脉络构建 (`/storyline`)
 构建融合Results与Discussion的提纲。
+
+**目标期刊适配（Mandatory）**：先读 `project_config.json` 的 `target_journal`，按下表硬约束 storyline：
+
+| 期刊家族 | Abstract | Article 正文（不含 Methods/Refs/Legends） | 主图上限 | Methods 位置 |
+|---|---|---|---|---|
+| Nature / Nature 子刊 | ≤200 词，**unstructured** | 4500-5000 词 | 4-6 主图 + SI 不限 | 文末（Online Methods） |
+| Cell / Cell 子刊 | ~150 词，可 structured | 5000-7500 词 | 7 主图（含 GA） | **STAR Methods 结构化**（Key Resources Table + Method Details） |
+| Science | ≤125 词 | 2500 词 + 30 refs（Research Article 不限）| 4 主图 | 文末 |
+| NEJM / Lancet / JAMA | 250 词 **structured**（Background/Methods/Results/Conclusions）| 3000-3500 词 | 5 主图 + 5 表 | 文中（Methods 在 Results 前） |
+| BMC / PLOS ONE / Scientific Reports | 350 词 structured | 不限 | 不限 | 文中 |
+
+不在表内的期刊由 AI 上 journal 官网查 author guideline 后告知用户、写入 `project_config.word_limits`。Storyline 必须在期刊上限内编排，**严禁先写超 30% 再砍**——浪费的成本极高。
 
 **引用密度预估（Mandatory）**：storyline 确认前，必须为每个小节标注预估引用数量：
 - Introduction 各段：背景段 1-2 篇，Gap 段 3-5 篇，创新点段 2-3 篇
@@ -596,7 +608,11 @@ Generation rules:
 
 ### Phase 5: 质量控制 (`/check`)
 **执行命令**：
-1. `python scripts/state_manager.py stats` — 检查各节字数
+1. `python scripts/state_manager.py stats` — 检查各节字数。**字数预算分类核查**（按 Phase 2 目标期刊适配表）：
+   - **正文字数**（Abstract + Intro + Results + Discussion）：必须 ≤ 期刊 Article 上限。这是硬约束。
+   - **不计入字数**：Methods / References / Figure Legends / Tables —— 大多数期刊单独计算或不限。stats 当前输出含全部 .md，需手动按文件名前缀分类（如 `05_Methods_*.md` 不计入正文字数）。
+   - 检查方法：用 `python scripts/state_manager.py stats` 后，手动汇总 `02_Abstract*.md + 03_Intro*.md + 04_Results*.md + 06_Discussion*.md` 为"正文字数"，对比 `project_config.word_limits`。
+   - 超 5% 警告；超 10% 必须砍，**不要等 /merge 才发现**。
 2. `python scripts/state_manager.py sync-literature --dry-run --strict-references` — 扫描正文引用号与 `literature_index.json` 是否一致
 3. `python scripts/citation_guard.py --index literature_index.json --report citation_guard_report.json --offline` — 离线核验文献完整性
 4. `python scripts/style_checker.py --manuscript-dir manuscripts --report style_check_report.json --threshold 70` — 去AI风格检测（句长方差、被动语态、禁词、段首重复）
@@ -625,6 +641,27 @@ Generation rules:
 3. **修改执行**：按 plan 逐条改原子化文件（走 §3 润色 workflow，不改合并稿）；每条改完 `status` 设 `addressed` 并写明改动出处（如 "Results 3.2 加入 Figure 2F 增补 n=10 重复实验"）。
 4. **Response letter 生成**：`reviews/response_letter.md`，对每条意见用结构化模板回复："Reviewer X comment N: <原文摘要>. **Response:** <说明修改/反驳/承认局限>. **Changes in manuscript:** <文件:行号或段落锚点>"。
 5. **重投门禁**：`revision_plan.json` 所有 `status` 必须 `addressed` 或带书面理由的 `not_addressed`（如审稿人提议越界）才允许 `/merge` 重投稿。
+
+### Phase 6.6: 导师批注循环 (`/mentor-review`)
+
+**触发场景**：博士生写作真实工作流——写一节 → 给导师看 → 批注 → 改 → 再给 → 再改，循环 5-10 轮。本 phase 把这个循环结构化。
+
+**输入形式**：
+- **形式 A**：导师在 Word 上开 track changes 标注 → 用户导出 `.docx` 或截图 → 你需要 `Read` 后转 `reviews/mentor_comments_round{N}.md`
+- **形式 B**：导师邮件给批注文本 → 用户粘贴 → 直接存 `reviews/mentor_comments_round{N}.md`
+- **形式 C**：用户口述导师意见 → 你记录后让用户校对存盘
+
+**流程**：
+1. **录入批注**：每条意见结构化存 `reviews/mentor_plan_round{N}.json`：
+   ```json
+   {"round": 1, "items": [{"id":1, "comment":"原文摘录或位置", "type":"data|logic|wording|reference|figure", "severity":"major|minor", "target_section":"results_3.2", "action":"补图|改写|引文献|拆段", "status":"open"}]}
+   ```
+2. **逐条执行**：按严重度（major 先做）+ target_section 顺序处理，每条改完 `status` 设 `addressed` 并写明改动出处。
+3. **改动追踪**：每条 `addressed` 后必须主动告知用户"改动 X 在 manuscripts/Y.md 第 Z 段"，方便导师重审定位。
+4. **重审准备**：所有 major 处理完 → 导出当前稿 `/merge` 给导师看；同时生成 `reviews/response_to_mentor_round{N}.md`（"上轮 N 条意见，X 条已改、Y 条暂未做（理由：…）"）。
+5. **轮次管理**：进入新一轮（round 2/3/…），旧 round 文件不动（作为修改史）；当前 round 编号在 `writing_progress.json` 写入 `current_mentor_round`。
+
+**与 Phase 6B 退稿改进的区分**：6.6 是**写作期间**的导师反馈循环（友好、内部）；6B 是**退稿后**的官方审稿意见回复（正式、对外）。结构化方式相似，但 6.6 不出 response letter，6B 必须出。
 
 ### Phase 7: 版本控制 (`/snapshot`, `/rollback`)
 智能快照 + 手动备份 + 回滚机制。
@@ -661,6 +698,7 @@ Generation rules:
 | `/write` | 撰写章节 | **章节局部读取 + 自我修正 + 智能快照** |
 | `/abstract` | 撰写摘要 | 全文完成后最后写，≤250词，含定量结果 |
 | `/submission-pack` | 投稿包准备 | Cover letter+DAS+CRediT+COI+Funding+Highlights+eTOC+Graphical Abstract+checklist（见 Phase 4.8） |
+| `/mentor-review` | 导师批注循环 | 录入批注→逐条执行→改动追踪→重审准备→轮次管理（见 Phase 6.6） |
 | `/check` | 质量检查 | 含 style_checker 去AI检测 |
 | `/reviewer` | 审稿人模拟 | - |
 | `/snapshot` | 手动快照 | AI也会智能触发 |
