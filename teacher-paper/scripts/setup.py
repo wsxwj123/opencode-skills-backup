@@ -10,7 +10,6 @@
 用法：
     python3 <本脚本所在目录>/setup.py            # 只体检，不自动装
     python3 <本脚本所在目录>/setup.py --install   # 仅当没有稳定后端时安装兜底依赖
-    python3 <本脚本所在目录>/setup.py --install-science  # 出理科卷前：装齐 matplotlib/numpy/sympy（配图/公式）
     python3 <本脚本所在目录>/setup.py --json       # 机器可读输出，供 agent 解析
 
 设计要点：
@@ -20,14 +19,6 @@
 - python-docx 是最小稳定兜底，不是唯一 Word 方案；已有 Pandoc / Office
   转换工具时先报告可用路径，不抢先安装。
 """
-
-# Windows 控制台默认 GBK：强制 stdout/stderr 用 UTF-8，避免中文 print 乱码（幂等，mac/Linux 无副作用）
-import sys as _sys
-for _stream in (_sys.stdout, _sys.stderr):
-    try:
-        _stream.reconfigure(encoding="utf-8")
-    except (AttributeError, ValueError):
-        pass
 import sys
 import os
 import json
@@ -52,16 +43,10 @@ OPTIONAL = [
     ("readability", "readability-lxml", "网页正文提取（抓取第2策略）"),
     ("rapidocr_onnxruntime", "rapidocr-onnxruntime",
      "图片OCR兜底（仅当模型不能直接识图时需要）"),
-    ("matplotlib", "matplotlib", "理科配图（函数/几何/数轴/统计/受力）与复杂公式渲染"),
-    ("numpy", "numpy", "理科配图数值计算（matplotlib 依赖）"),
-    ("sympy", "sympy", "理科函数式安全解析（无则退回受限 eval）"),
 ]
-# 理科出题（数/理/化/生）需要的渲染依赖：确认出理科卷时用 --install-science 一次性装齐
-# （模块名与 pip 包名一致，可直接 import 探测 + pip 安装）
-SCIENCE_DEPS = ["matplotlib", "numpy", "sympy"]
 # 本 skill 自带的脚本，逐个核对是否齐全（防止文件缺失）
 SELF_SCRIPTS = ["read_material.py", "fetch_web.py", "ocr_image.py",
-                "assemble.py", "make_paper.py", "make_figure.py"]
+                "assemble.py", "make_paper.py"]
 # 可选的外部命令行工具（增强能力，有就用没有不强求）
 CLI_TOOL_GROUPS = [
     ("pandoc", ["pandoc"], "Markdown/HTML 转 DOCX，可配 reference.docx 模板"),
@@ -322,7 +307,7 @@ def _detect_desktop():
     return None
 
 
-def run(install=False, install_science=False):
+def run(install=False):
     report = {"skill_dir": SKILL_DIR, "scripts_dir": SCRIPTS_DIR,
               "os": {"name": platform.system(), "platform": platform.platform()},
               "python": sys.version.split()[0],
@@ -362,13 +347,6 @@ def run(install=False, install_science=False):
         report["optional"].append({"module": mod, "package": pkg,
                                    "desc": desc, "installed": ok})
 
-    # 3b) 理科库状态（出数/理/化/生卷的自动配图与公式渲染所需）
-    sci_missing = [m for m in SCIENCE_DEPS
-                   if not (bool(current_modules.get(m)) if current_modules
-                           else _importable(m))]
-    report["science"] = {"deps": list(SCIENCE_DEPS), "missing": sci_missing,
-                         "required_for": "理科（数/理/化/生）自动配图与公式渲染"}
-
     # 4) 探测 CLI / Office 应用
     report["external_tools"] = _scan_cli_tools()
     report["office_apps"] = _detect_office_apps()
@@ -402,20 +380,6 @@ def run(install=False, install_science=False):
                     "command": sys.executable,
                     "install_required": False,
                 }
-
-    # 6) 理科库按需安装：确认出理科卷时一次性装齐 matplotlib/numpy/sympy
-    if install_science and sci_missing:
-        ok, log = _pip_install(sci_missing)
-        report["actions"].append(
-            {"action": "pip install (理科库)", "packages": sci_missing,
-             "success": ok, "log_tail": log})
-        if ok:
-            import importlib
-            importlib.invalidate_caches()
-            still = [m for m in sci_missing
-                     if subprocess.run([sys.executable, "-c", f"import {m}"],
-                                       capture_output=True).returncode != 0]
-            report["science"]["missing"] = still
 
     return report
 
@@ -481,15 +445,6 @@ def _print_human(rep):
         print("   或手动：" + rep["install_plan"][0]["command"])
     else:
         print("\n✅ 已找到可用出卷后端，可以开始出卷。")
-    # 理科库提示（出数/理/化/生卷需自动配图/公式渲染）
-    sci = rep.get("science", {})
-    if sci.get("missing"):
-        print("\n📐 出理科卷（数/理/化/生）尚缺：" + ", ".join(sci["missing"])
-              + "（仅出理科卷时需要，文科可忽略）")
-        print("   出理科卷前运行：python3 \"%s\" --install-science"
-              % os.path.join(rep["scripts_dir"], "setup.py"))
-    elif sci.get("deps"):
-        print("\n📐 理科配图/公式库（matplotlib/numpy/sympy）已就绪。")
     # 缺失的自带脚本提示
     miss_self = [s["name"] for s in rep["self_scripts"] if not s["present"]]
     if miss_self:
@@ -498,9 +453,8 @@ def _print_human(rep):
 
 def main():
     install = "--install" in sys.argv
-    install_science = "--install-science" in sys.argv
     as_json = "--json" in sys.argv
-    rep = run(install=install, install_science=install_science)
+    rep = run(install=install)
     if as_json:
         print(json.dumps(rep, ensure_ascii=False, indent=2))
     else:

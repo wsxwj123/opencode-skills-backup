@@ -6,6 +6,3 @@ python-pptx              # 读取 .pptx 课件素材
 openpyxl                 # 读取 .xlsx 表格素材
 readability-lxml         # 网页正文提取（fetch_web.py 第2策略）；可选
 rapidocr-onnxruntime     # 图片OCR兜底（ocr_image.py）；仅纯文本模型/无多模态识图时才需，离线可用
-matplotlib               # 理科配图（函数/几何/数轴/统计/受力图）与复杂公式渲染（make_figure.py）；出理科卷需
-numpy                    # 理科配图数值计算（matplotlib 依赖）
-sympy                    # 理科函数式安全解析（make_figure.py）；无则退回受限 eval

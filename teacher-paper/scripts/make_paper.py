@@ -29,11 +29,8 @@ block 类型（type 字段）——试卷与答案通用：
   {"type":"material","label":"【材料一】","title":"老街","author":"",
    "paras":["...","..."],"source":"（选自《读者》2024年第6期）",
    "layout":"prose","font":"楷体"}                        阅读选文（楷体正文）
-        - label "【材料一】" 左对齐顶格（宋体）
-        - title/author 楷体居中（所有材料一律居中——文言文/小说/散文/古诗词都如此）
-        - paras 正文：
-            layout="verse"   → 古诗词，整段居中（每行 5/7 字整齐）
-            其它/默认/classical → 楷体两端对齐 + 首行缩进2字（更易读）
+        - title/author 楷体居中；paras 楷体首行缩进2字（prose）
+        - layout="verse" → 古诗词，paras 整体居中（不缩进）
         - source → 出处标注，右对齐宋体（非连/小说/古诗文/名著必标）
         - 选文正文默认楷体，可用 font 覆盖
   {"type":"table","rows":[["a","b"],["c","d"]],"header":true}  表格
@@ -41,23 +38,11 @@ block 类型（type 字段）——试卷与答案通用：
   {"type":"options","items":["A. ...","B. ...","C. ...","D. ..."]}  选项（每项一行）
   {"type":"blank_lines","count":3}                       答题横线 N 行
   {"type":"essay_grid","note":"...","cols":20,"rows":30}  作文方格纸(真格子,默认20×30=600格)
-  {"type":"figure","kind":"function","funcs":["x**2-2*x-3"],"xrange":[-3,5],"alt":"..."}
-        理科/地理配图：kind=function/geometry/number_line/bar/line/pie/scatter/vector/climate/pyramid → matplotlib自动画；
-        或给 "src":"图片路径"(用户提供的电路/化学结构/装置图)直接插入；都没有则降级［图：alt］占位。
-  {"type":"formula","latex":"\\int_0^1 x^2\\,dx=\\frac13","alt":"..."}  复杂公式(mathtext渲图);简单公式直接Unicode写题干
   {"type":"answer","num":"1","score":"（2分）","text":"..."}    答案条目
   {"type":"analysis","text":"..."}                       解析/评分说明
   {"type":"spacer"}                                      空行
   {"type":"pagebreak"}                                   分页
 """
-
-# Windows 控制台默认 GBK：强制 stdout/stderr 用 UTF-8，避免中文 print 乱码（幂等，mac/Linux 无副作用）
-import sys as _sys
-for _stream in (_sys.stdout, _sys.stderr):
-    try:
-        _stream.reconfigure(encoding="utf-8")
-    except (AttributeError, ValueError):
-        pass
 import sys
 import os
 import re
@@ -81,14 +66,6 @@ HEITI = "黑体"
 KAITI = "楷体"
 
 _CJK = re.compile(r"[一-鿿]")
-
-
-def _num(v, default):
-    """把可能是字符串/None 的数值安全转 float，失败回退 default（防 Cm(非数值) 崩）。"""
-    try:
-        return float(v)
-    except (TypeError, ValueError):
-        return default
 
 
 def normalize_quotes(text):
@@ -135,8 +112,6 @@ def set_font(run, name=SONGTI, size=10.5, bold=False):
 
 def add_para(doc, text="", align=None, indent_chars=0, size=10.5,
              name=SONGTI, bold=False, space_after=4):
-    """段落输出。align 默认 None → 两端对齐（justify），符合中文试卷惯例；
-    指定 'center'/'right' 用于标题/出处；'left' 显式左对齐（极少用）。"""
     p = doc.add_paragraph()
     p.paragraph_format.space_after = Pt(space_after)
     p.paragraph_format.line_spacing = 1.5
@@ -144,11 +119,6 @@ def add_para(doc, text="", align=None, indent_chars=0, size=10.5,
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     elif align == "right":
         p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-    elif align == "left":
-        p.alignment = WD_ALIGN_PARAGRAPH.LEFT
-    else:
-        # 默认两端对齐：中文试卷的题干/选项/解析都按 justify 排版才整齐
-        p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
     if indent_chars:
         p.paragraph_format.first_line_indent = Pt(size * indent_chars)
     if text:
@@ -180,50 +150,38 @@ def add_table(doc, rows, header=False):
             set_font(run, size=10.5, bold=(header and ri == 0))
 
 
-def add_essay_lines(doc, line_count=30):
-    """生成作文横线作答区：line_count 行下划线，每行约一行字宽。
-    替代方格纸——按教师反馈，方格纸排版易错且打印后学生未必受用；
-    Word 横线作答更通用。line_count 夹紧到 1-80 行，避免异常输入卡死。"""
+def add_essay_grid(doc, cols=20, rows=30):
+    """生成作文方格纸：cols×rows 的正方格表格，每格供写一字。
+    对异常入参做夹紧：列 8-30、行 1-60，避免 0/负数报错或超大表卡死。"""
     try:
-        n = int(line_count)
+        cols = int(cols)
+        rows = int(rows)
     except (TypeError, ValueError):
-        n = 30
-    n = max(1, min(n, 80))
-    for _ in range(n):
-        p = doc.add_paragraph()
-        p.paragraph_format.space_after = Pt(6)
-        p.paragraph_format.line_spacing = 2.0   # 行距留出书写空间
-        r = p.add_run("_" * 46)
-        set_font(r, size=10.5)
-
-
-_KNOWN_TYPES = {"title", "subtitle", "info", "sealing", "notice", "section",
-                "sub", "para", "material", "table", "question", "options",
-                "blank_lines", "essay_grid", "answer", "analysis", "figure",
-                "formula", "spacer", "pagebreak"}
+        cols, rows = 20, 30
+    cols = max(8, min(cols, 30))
+    rows = max(1, min(rows, 60))
+    t = doc.add_table(rows=rows, cols=cols)
+    t.style = "Table Grid"
+    t.autofit = False
+    cell_w = Cm(0.75)  # 每格边长，20列约15cm，适配A4正文宽
+    for row in t.rows:
+        row.height = cell_w
+        for cell in row.cells:
+            cell.width = cell_w
+            # 收紧单元格内边距，让格子接近正方形
+            cell.paragraphs[0].paragraph_format.space_after = Pt(0)
+            cell.paragraphs[0].paragraph_format.line_spacing = 1.0
 
 
 def render(doc, blocks):
     for b in blocks:
-        if not isinstance(b, dict):
-            print(f"[make_paper 警告] 跳过非 dict 脏块：{type(b).__name__}={b!r}"[:120],
-                  file=sys.stderr)
-            continue
         t = b.get("type")
-        if t not in _KNOWN_TYPES:
-            # 未知 type 静默丢弃会让题目「凭空消失」却 build 报成功——必须明确报。
-            preview = (b.get("text") or b.get("title")
-                       or str(b.get("spec", "")) or "")[:60]
-            print(f"[make_paper 警告] 未知 block type={t!r}（已忽略，内容：{preview}）。"
-                  f"合法 type 见 make_paper.py 顶部文档；"
-                  f"常见错用：stem→question, choice→options。", file=sys.stderr)
-            continue
         if t == "title":
             # 真题：大标题 宋体三号(16)加粗居中
-            add_para(doc, b.get("text", ""), align="center", size=16, name=SONGTI,
+            add_para(doc, b["text"], align="center", size=16, name=SONGTI,
                      bold=True, space_after=6)
         elif t == "subtitle":
-            add_para(doc, b.get("text", ""), align="center", size=12, space_after=8)
+            add_para(doc, b["text"], align="center", size=12, space_after=8)
         elif t == "info":
             add_para(doc,
                      "学校__________ 班级__________ 姓名__________ "
@@ -239,30 +197,22 @@ def render(doc, blocks):
                 add_para(doc, f"{i}.{it}", size=10.5, space_after=1)
         elif t == "section":
             # 真题：大题标题 宋体小四(12)加粗
-            add_para(doc, b.get("text", ""), size=12, name=SONGTI, bold=True,
+            add_para(doc, b["text"], size=12, name=SONGTI, bold=True,
                      space_after=4)
         elif t == "sub":
             # 真题：小标题 宋体小四(12)加粗
-            add_para(doc, b.get("text", ""), size=12, name=SONGTI, bold=True,
+            add_para(doc, b["text"], size=12, name=SONGTI, bold=True,
                      space_after=3)
         elif t == "para":
-            add_para(doc, b.get("text", ""), indent_chars=2 if b.get("indent") else 0)
+            add_para(doc, b["text"], indent_chars=2 if b.get("indent") else 0)
         elif t == "material":
-            # 真题排版（按教师约定）：
-            #   - 所有材料的 label/title/author 一律居中（无论文体）
-            #   - 正文：
-            #       layout="verse"  古诗词 → 整段居中（每行 5/7 字整齐）
-            #       其它（prose/classical/默认）→ 楷体两端对齐 + 首行缩进 2 字
-            #     文言文/小说/散文/非连/作文材料统一走两端对齐，长段更易读。
-            #   - 出处：右对齐宋体（独立段）
-            # layout 兼容旧 "classical"——按 prose 渲染（不再让文言文整段居中）。
-            layout = b.get("layout", "prose")
-            pfont = b.get("font", KAITI)
+            # 真题排版：选文标题/作者楷体居中；正文楷体首行缩进2字；
+            # 古诗词(layout=verse)整体居中；出处右对齐宋体。
+            layout = b.get("layout", "prose")     # prose 散文/记叙/说明 | verse 古诗词
+            pfont = b.get("font", KAITI)          # 选文正文字体，默认楷体
             label = b.get("label", "")
             if label:
-                # 【材料一】这类标签：左对齐顶格（不居中，对标真题）
-                add_para(doc, label, align="left", size=10.5, name=SONGTI,
-                         space_after=2)
+                add_para(doc, label, size=10.5, name=SONGTI, space_after=2)
             if b.get("title"):
                 add_para(doc, b["title"], align="center", size=10.5, name=pfont,
                          space_after=1)
@@ -273,10 +223,9 @@ def render(doc, blocks):
                 if layout == "verse":
                     add_para(doc, para, align="center", size=10.5, name=pfont)
                 else:
-                    # prose / classical / 其它 → 楷体两端对齐 + 首行缩进 2 字
                     add_para(doc, para, indent_chars=2, size=10.5, name=pfont)
             if b.get("source"):
-                # 出处标注：右对齐宋体（如"（节选自《科学之友》2024年第6期）"）
+                # 出处标注：右对齐宋体（如"（材料均改编自《科学之友》）"）
                 add_para(doc, b["source"], align="right", size=10.5,
                          name=SONGTI, space_after=4)
         elif t == "table":
@@ -295,13 +244,12 @@ def render(doc, blocks):
             for _ in range(b.get("count", 3)):
                 add_para(doc, "_" * 46, size=10.5, space_after=6)
         elif t == "essay_grid":
-            # 历史 block 名保留以兼容；现统一按"横线作答"渲染（替代方格纸）。
-            # 字段：line_count（行数，默认 30，按字数下限折算：约 600 字→ 30 行）；
-            # 也接受老字段 rows 作为别名；cols 已无意义，忽略。
-            note = b.get("note", "请在下面横线上作答。")
+            note = b.get("note", "请在作文格内作答。")
             add_para(doc, note, size=10.5, space_after=4)
-            n = b.get("line_count") or b.get("rows") or 30
-            add_essay_lines(doc, line_count=n)
+            # 真作文方格纸：cols 列 × rows 行的网格表格（每格写一字）
+            cols = b.get("cols", 20)
+            rows = b.get("rows", 30)
+            add_essay_grid(doc, cols=cols, rows=rows)
         elif t == "answer":
             num = b.get("num", "")
             score = b.get("score", "")
@@ -309,13 +257,11 @@ def render(doc, blocks):
             add_para(doc, f"{head}{score}{b.get('text','')}", size=10.5,
                      space_after=3)
         elif t == "analysis":
-            add_para(doc, b.get("text", ""), size=10.5, space_after=4)
+            add_para(doc, b["text"], size=10.5, space_after=4)
         elif t == "figure":
-            # figure 块的 alt/src/caption/width_cm/kind 直接写在块顶层（见文档与 SKILL.md）；
+            # figure 块的 alt/src/caption/width_cm 直接写在块顶层（见文档与 SKILL.md）；
             # 兼容历史上可能的 spec 嵌套写法。
             _render_figure(doc, b.get("spec", b))
-        elif t == "formula":
-            _render_formula(doc, b)
         elif t == "spacer":
             add_para(doc, "", space_after=4)
         elif t == "pagebreak":
@@ -327,28 +273,22 @@ FIG_DIR = None
 
 
 def _render_figure(doc, spec):
-    """插入配图，三级优先：① spec.src 指向已有图片（用户提供，如电路图/化学结构/
-    历史地图）→ 直接插入；② 否则若 spec.kind 在 make_figure 可画范围（函数/几何/
-    数轴/统计/受力）→ matplotlib 自动渲染；③ 都不行 → "［图：alt］" 文字占位，
-    绝不阻断出卷。"""
+    """插入配图。本技能聚焦文科纯文字卷，不自动生成图形；此块仅用于偶发的
+    用户提供图片（如历史地图/地理图表）：① spec.src 指向已有图片 → 直接插入；
+    ② 否则降级为 "［图：alt］" 文字占位，绝不阻断出卷。
+    （理科自动配图不在范围；保留 make_figure 钩子仅为向前兼容，缺失即降级。）"""
     src = spec.get("src")
-    width = _num(spec.get("width_cm"), 6.0)   # 字符串/None 宽度回退默认，不致好图被降级
+    width = spec.get("width_cm", 6.0)
     png = None
     if src and os.path.exists(src):
         png = src
     else:
         try:
-            from make_figure import render_figure
+            from make_figure import render_figure  # 下一轮才有；现在通常 ImportError
             out_dir = FIG_DIR or os.getcwd()
             os.makedirs(out_dir, exist_ok=True)
             png = render_figure(spec, out_dir)
-        except Exception as ex:
-            # spec 字段错（如 geometry 的 points 应是 dict 却写成 list）会在此抛错
-            # ——必须把异常透传，否则用户只看到无图，找不到原因。
-            print(f"[make_figure 异常] kind={spec.get('kind')!r} spec 字段不符："
-                  f"{type(ex).__name__}: {ex}。spec 示例见 SKILL.md 配图块小节"
-                  f"（如 geometry 的 points 必须是 dict {{\"A\":[x,y]}}）。",
-                  file=sys.stderr)
+        except Exception:
             png = None
     if png and os.path.exists(png):
         try:
@@ -360,37 +300,9 @@ def _render_figure(doc, spec):
             return
         except Exception:
             pass
-    # 降级：占位 + alt 文字（无障碍/可手动补图）；同时向 stderr 出声，避免"静默没图"
+    # 降级：占位 + alt 文字（无障碍/可手动补图）
     alt = spec.get("alt", "此处应有配图，请手动补充")
-    print(f"[配图降级] 『{alt}』未渲染为图片，已用文字占位 ［图：{alt}］——"
-          f"请确认已装 matplotlib 且 kind 受支持，或提供 src 图片后重跑。",
-          file=sys.stderr)
     add_para(doc, f"［图：{alt}］", align="center", size=9, space_after=4)
-
-
-def _render_formula(doc, b):
-    """渲染数学/理科公式：复杂公式用 make_figure.render_formula（matplotlib mathtext）
-    渲成图片居中插入；渲染不可用时降级为 alt 或 latex 原文文字。
-    简单公式应直接用 Unicode 写进题干文本，不必走本块。"""
-    latex = b.get("latex") or b.get("text", "")
-    png = None
-    try:
-        from make_figure import render_formula
-        out_dir = FIG_DIR or os.getcwd()
-        os.makedirs(out_dir, exist_ok=True)
-        png = render_formula(latex, out_dir)
-    except Exception:
-        png = None
-    if png and os.path.exists(png):
-        try:
-            w = _num(b.get("width_cm"), 0)
-            kw = {"width": Cm(w)} if w > 0 else {}
-            doc.add_picture(png, **kw)  # 不指定则按 PNG 内嵌 dpi 取自然尺寸
-            doc.paragraphs[-1].alignment = WD_ALIGN_PARAGRAPH.CENTER
-            return
-        except Exception:
-            pass
-    add_para(doc, b.get("alt") or latex, align="center", size=10.5)
 
 
 def _add_sealing_line(doc):

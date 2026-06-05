@@ -7,26 +7,11 @@
   {
     "id": 2,
     "prompt": "帮我润色一下这段Discussion，让它更符合Cell大子刊的风格：'In conclusion, our results suggest that the nanoparticles can effectively kill cancer cells. The mechanism may be related to apoptosis. Future studies are needed to confirm these findings.'",
-    "expected": "skill应触发：识别文本弱点（过度模糊/缺乏机制深度/被动措辞），按P/B节奏规则改写，避免AI写作特征（去掉'In conclusion'开头、强化机制声索、增加证据锚点）。新规则：被动为主、PhD平实档、禁修辞/生僻词/造词、单句≤30词。修改时必须先 grep 定位到 manuscripts/*.md 原子化源文件，禁改 Full_Manuscript.md"
+    "expected": "skill应触发：识别文本弱点（过度模糊/缺乏机制深度/被动措辞），按P/B节奏规则改写，避免AI写作特征（去掉'In conclusion'开头、强化机制声索、增加证据锚点）"
   },
   {
     "id": 3,
     "prompt": "我的论文被Biomaterials退稿了，审稿人说我的机制研究不够深入，数据量不足以支撑结论。帮我分析这篇论文并提出修改方案",
     "expected": "skill应触发：要求看审稿意见全文+论文，然后做gap analysis（哪些数据缺失），提供补实验策略建议，避免只做文字修饰"
-  },
-  {
-    "id": 4,
-    "prompt": "写结果章节，figure 2 细胞毒性有 A-E 五个小图(CCK8/活死细胞染色/流式凋亡)，帮我分析每个图的结果和讨论",
-    "expected": "skill应触发 Phase 3.6 /figure：问 figure 编号+小图数 → 建 figure_analysis/figure_2.md → 逐张索取图片(用户没发图时转口述模式，严禁脑补 CCK8/流式典型结果) → 中文结果+讨论草稿+❓待确认项给用户核 → 翻译英文写入 → 收口用 add-figure 入库(单条安全合并不丢、figure_id 必需) + snapshot 备份(不要用 postwrite，有 gate 会失败)"
-  },
-  {
-    "id": 5,
-    "prompt": "我在 results_3.1 已经用过 ROS 这个缩写，写到 results_3.3 还要不要再写一遍 reactive oxygen species (ROS)？",
-    "expected": "skill应触发 Phase 3.7 缩略词管理：写新节前 Read abbreviations.json 查已定义清单 → ROS 已存在 → 直接用 ABBR 不重复展开 → 但 Abstract 独立须重定义。引导用户用 add-abbreviation 子命令实时入库(冲突拒绝/幂等/通用词警告)。Title 严禁缩写。merge 时自动生成 # Abbreviations 表附录"
-  },
-  {
-    "id": 6,
-    "prompt": "我们这个药学研究要引一篇中药复方治疗肺癌的中文文献(2023 年中药杂志)，怎么加进去？",
-    "expected": "skill应触发 Phase 3 中文文献支线：用 Google Scholar 检索(不用知网/万方，无 API)，AI 给候选清单但不直接入库 → 让用户提供 DOI/CSTR(路径A，走 citation_guard 双向核验) 或 PDF+元数据(路径B，标 verified=false/needs_manual_review=true/requires_human_attest=true 进 manual_review_queue) 或找等价英文替代(路径C)。绝不绕过零幻觉护栏"
   }
 ]
