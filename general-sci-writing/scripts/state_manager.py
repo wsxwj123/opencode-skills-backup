@@ -2762,8 +2762,12 @@ def add_figure_state(payload_path):
         print(json.dumps({"ok": False, "error": "figure entry must contain 'figure_id'"}, ensure_ascii=False))
         sys.exit(1)
     warnings = []
+    # Bug D 修复:兼容 section_id 字段名;两者都没才报警
+    if not entry.get("section") and entry.get("section_id"):
+        entry["section"] = entry["section_id"]  # 标准化:统一存为 section
+        warnings.append("normalized 'section_id' to 'section' field")
     if not entry.get("section"):
-        warnings.append("entry has no 'section'; /write section filtering will miss it")
+        warnings.append("entry has no 'section' nor 'section_id'; /write section filtering will miss it")
     declared = entry.get("declared_panels")
     panels = entry.get("panels") if isinstance(entry.get("panels"), list) else []
     if isinstance(declared, int) and declared != len(panels):
@@ -2776,7 +2780,23 @@ def add_figure_state(payload_path):
         idx = next((i for i, x in enumerate(data)
                     if isinstance(x, dict) and (x.get("figure_id") or x.get("id")) == fid), None)
         if idx is not None:
-            data[idx] = entry
+            # Bug C 修复:续接场景 panel 按 panel-key 合并,而非全量替换丢失已有 A-C
+            existing = data[idx]
+            existing_panels = existing.get("panels") if isinstance(existing.get("panels"), list) else []
+            if existing_panels and panels:
+                # 按 panel 字段去重 merge:新条目内的 panel 覆盖同名旧 panel,缺失的旧 panel 保留
+                new_panel_keys = {p.get("panel") for p in panels if isinstance(p, dict) and p.get("panel")}
+                merged_panels = [p for p in existing_panels
+                                 if isinstance(p, dict) and p.get("panel") not in new_panel_keys]
+                merged_panels.extend(panels)
+                entry["panels"] = merged_panels
+                warnings.append(f"panels merged: {len(existing_panels)} existing + {len(panels)} new → {len(merged_panels)} total (dedup by panel key)")
+            elif existing_panels and not panels:
+                # 新条目没带 panels — 保留旧 panels,避免误清空
+                entry["panels"] = existing_panels
+                warnings.append(f"new entry has no 'panels'; kept {len(existing_panels)} existing panels")
+            # 其他字段以新条目为准(标题/data_status/section 等都可以更新)
+            data[idx] = {**existing, **entry}
             action = "updated"
         else:
             data.append(entry)
@@ -3079,14 +3099,16 @@ def restore_project_snapshot(snapshot_dir):
             shutil.copy2(src, dst)
             restored_files.append(dst)
 
-    # Restore figure analysis (对称于 backup 的 figure_analysis 备份).
+    # Restore figure analysis (对称于 backup 用 copytree —— 递归恢复含子目录).
     src_figs = os.path.join(snapshot_dir, "figure_analysis")
     if os.path.exists(src_figs):
-        os.makedirs("figure_analysis", exist_ok=True)
-        for src in glob.glob(os.path.join(src_figs, "*")):
-            dst = os.path.join("figure_analysis", os.path.basename(src))
-            shutil.copy2(src, dst)
-            restored_files.append(dst)
+        dst_figs = "figure_analysis"
+        if os.path.exists(dst_figs):
+            shutil.rmtree(dst_figs)  # 避免 copytree 报 FileExistsError
+        shutil.copytree(src_figs, dst_figs)
+        for root, _, files in os.walk(dst_figs):
+            for fn in files:
+                restored_files.append(os.path.join(root, fn))
 
     return {
         "restored": True,
