@@ -589,7 +589,8 @@ Generation rules:
 4. **替换占位符**：所有 `{{VAR}}` 必须替换成实际值；**严禁保留 `{{}}` 占位**就交付。
 5. **运行投稿 checklist**：对 `submission_checklist` 数组逐项 ✅/❌，不适用标 N/A 加说明；缺项必须补到全 ✅ 才允许 `/check` 进入 Phase 5。
 6. **目标期刊适配（按需读取）**：从 `project_config.json` 读 `target_journal`，挑出该期刊的 `required_by` 项强制；如 Nature 必给 one-sentence summary 与 DAS，Cell 必给 highlights + graphical abstract。
-7. **输出**：`submission/submission_checklist.md`（含逐项 status）+ 上述 markdown 模板。
+6b. **报告规范 checklist（强制）**：`Read templates/reporting_checklists.json` → 按 `project_config.json` 的 `research_field` 自动挂对应 checklist（如 `drug_delivery`→ARRIVE，`clinical_pharmacy_llm`→CONSORT/STROBE/TRIPOD，CS→ML reproducibility）。再叠加 `target_journal` 特定要求（Nature Reporting Summary、Cell STAR Methods 等）。逐项核查 Methods 与 Results 是否齐全，缺项必须补到 Methods 后才能 `/merge`。**动物实验 ARRIVE 不全 = 多数期刊编辑桌面拒**。
+7. **输出**：`submission/submission_checklist.md`（含逐项 status + 报告 checklist 状态）+ 上述 markdown 模板。
 
 **红线**：① 严禁 `{{VAR}}` 残留 ② 严禁伪造 reviewer 邮箱 ③ COI 已有需主动声明严禁瞒报 ④ Funding 无则写 "This work received no specific external funding"，**不留空**。
 
