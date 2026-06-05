@@ -25,7 +25,10 @@ STATE_FILES = {
     "reviewer_concerns": "reviewer_concerns.json",
     "version_history": "version_history.json",
     "si_database": "si_database.json",
-    "abbreviations": "abbreviations.json"
+    "abbreviations": "abbreviations.json",
+    "revision_plan": "reviews/revision_plan.json",
+    "mentor_plan": "reviews/mentor_plan.json",
+    "submission_state": "submission/submission_state.json"
 }
 
 TOKEN_CHAR_RATIO = 4
@@ -2706,20 +2709,25 @@ def update_state(payload_path):
         filename = STATE_FILES[key]
         
         try:
+            # Bug ③ 修复:STATE_FILES 路径含子目录(如 reviews/revision_plan.json)时先建目录
+            parent_dir = os.path.dirname(filename)
+            if parent_dir:
+                os.makedirs(parent_dir, exist_ok=True)
+
             # Special handling for context_memory versioning
             if key == "context_memory":
                 # Only rotate if content actually changed or if file exists
                 if os.path.exists(filename):
                      rotate_context_memory_versions()
-                
+
                 with open(filename, 'w', encoding='utf-8') as f:
                     f.write(str(content))
-            
+
             # JSON files
             elif filename.endswith(".json"):
                 with open(filename, 'w', encoding='utf-8') as f:
                     json.dump(content, f, indent=2, ensure_ascii=False)
-            
+
             # Text/Markdown files
             else:
                 with open(filename, 'w', encoding='utf-8') as f:
@@ -2801,6 +2809,9 @@ def add_figure_state(payload_path):
         else:
             data.append(entry)
             action = "added"
+        parent_dir = os.path.dirname(filename)
+        if parent_dir:
+            os.makedirs(parent_dir, exist_ok=True)
         with open(filename, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
 
@@ -2916,15 +2927,22 @@ def add_abbreviation_state(payload_path):
                 }, ensure_ascii=False))
                 sys.exit(2)
             # 同一缩写、相同全称 - 幂等,标记 already_defined
-            entry["first_defined_in"] = data[idx].get("first_defined_in") or section
+            existing_section = data[idx].get("first_defined_in") or ""
+            entry["first_defined_in"] = existing_section or section
             data[idx] = {**data[idx], **entry}
             action = "already_defined"
+            # Bug 10:同节内重复定义检测 — 既已定义又再次写在同一 section 通常意味着段内重复展开
+            if existing_section and section and existing_section == section:
+                warnings.append(f"'{abbr}' already defined in same section '{section}'; possible in-section re-expansion, consider using ABBR directly")
         else:
             entry["abbr"] = abbr
             entry["full_name"] = full_name
             entry["first_defined_in"] = section or "unknown"
             data.append(entry)
             action = "added"
+        parent_dir = os.path.dirname(filename)
+        if parent_dir:
+            os.makedirs(parent_dir, exist_ok=True)
         with open(filename, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
     result = {"ok": True, "action": action, "abbr": abbr,
@@ -2936,6 +2954,125 @@ def add_abbreviation_state(payload_path):
         os.remove(payload_path)
     except Exception:
         pass
+
+def add_stat_method_state(figure_id, panel_key, stat_test, n=None, error_bar=None, software=None):
+    """Bug ④ 修复:/stat-helper → figures_database 钩子.
+    把统计方法直接落到指定 figure 的指定 panel 上;若 figure 不存在则报错引导用户先 add-figure."""
+    if not figure_id or not panel_key or not stat_test:
+        print(json.dumps({"ok": False, "error": "figure_id, panel, and stat_test are required"}, ensure_ascii=False))
+        sys.exit(1)
+    filename = STATE_FILES["figures_database"]
+    with FileLock("state_update"):
+        data = read_json_file(filename) if os.path.exists(filename) else []
+        if not isinstance(data, list):
+            data = []
+        fig_idx = next((i for i, x in enumerate(data)
+                        if isinstance(x, dict) and (x.get("figure_id") or x.get("id")) == figure_id), None)
+        if fig_idx is None:
+            print(json.dumps({
+                "ok": False,
+                "error": f"figure_id '{figure_id}' not found in figures_database",
+                "hint": "run add-figure first to register the figure",
+            }, ensure_ascii=False))
+            sys.exit(2)
+        figure = data[fig_idx]
+        panels = figure.get("panels") if isinstance(figure.get("panels"), list) else []
+        pan_idx = next((i for i, p in enumerate(panels)
+                        if isinstance(p, dict) and p.get("panel") == panel_key), None)
+        if pan_idx is None:
+            # 新增 panel 条目
+            panels.append({"panel": panel_key, "stat_test": stat_test,
+                           "n": n, "error_bar": error_bar, "software": software})
+            action = "panel_added_with_stat"
+        else:
+            panels[pan_idx]["stat_test"] = stat_test
+            if n is not None:
+                panels[pan_idx]["n"] = n
+            if error_bar:
+                panels[pan_idx]["error_bar"] = error_bar
+            if software:
+                panels[pan_idx]["software"] = software
+            action = "stat_updated"
+        figure["panels"] = panels
+        data[fig_idx] = figure
+        parent_dir = os.path.dirname(filename)
+        if parent_dir:
+            os.makedirs(parent_dir, exist_ok=True)
+        with open(filename, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+    print(json.dumps({"ok": True, "action": action, "figure_id": figure_id,
+                      "panel": panel_key, "stat_test": stat_test}, ensure_ascii=False))
+
+def rename_figure_state(old_fid, new_fid, dry_run=False):
+    """Bug 9 修复 + 投稿前图编号重整工具.
+    清旧 figure_id → 新 figure_id;同步:
+    - figures_database.json 条目 figure_id 字段
+    - storyline.sections[].figures 列表清旧值+加新值
+    - manuscripts/*.md 与 figure_analysis/*.md 正文中所有 'Figure N' / '(Figure N)' / 'Fig. N' 替换
+    - 文件名 figure_analysis/figure_N.md 不动(保持文件链稳定;旧名仍可读)
+    - 不动 storyline.id(section_id 不变);不动 abbreviations(无 figure 字段).
+    """
+    if not old_fid or not new_fid:
+        print(json.dumps({"ok": False, "error": "both old_id and new_id required"}, ensure_ascii=False))
+        sys.exit(1)
+    if old_fid == new_fid:
+        print(json.dumps({"ok": False, "error": "old_id == new_id, nothing to do"}, ensure_ascii=False))
+        sys.exit(1)
+    changes = {"figures_database": 0, "storyline": 0, "manuscripts": [], "figure_analysis": []}
+    with FileLock("state_update"):
+        # 1. figures_database
+        fdb_file = STATE_FILES["figures_database"]
+        if os.path.exists(fdb_file):
+            fdb = read_json_file(fdb_file)
+            if isinstance(fdb, list):
+                for x in fdb:
+                    if isinstance(x, dict) and (x.get("figure_id") or x.get("id")) == old_fid:
+                        x["figure_id"] = new_fid
+                        if "id" in x:
+                            x["id"] = new_fid
+                        changes["figures_database"] += 1
+                if not dry_run and changes["figures_database"]:
+                    with open(fdb_file, "w", encoding="utf-8") as f:
+                        json.dump(fdb, f, indent=2, ensure_ascii=False)
+        # 2. storyline.sections[].figures
+        sl_file = STATE_FILES["storyline"]
+        if os.path.exists(sl_file):
+            sl = read_json_file(sl_file)
+            if isinstance(sl, dict):
+                for s in (sl.get("sections") or []):
+                    if isinstance(s, dict) and isinstance(s.get("figures"), list):
+                        if old_fid in s["figures"]:
+                            s["figures"] = [new_fid if x == old_fid else x for x in s["figures"]]
+                            changes["storyline"] += 1
+                if not dry_run and changes["storyline"]:
+                    with open(sl_file, "w", encoding="utf-8") as f:
+                        json.dump(sl, f, indent=2, ensure_ascii=False)
+        # 3. 正文/识图文件:替换 'Figure N' / '(Figure N)' / 'Fig. N' / 'Fig N'
+        # 提取 Figure/Fig 后面的标签(支持 "3"/"3A"/"S5"/"S5A")
+        old_label_match = re.search(r"(?:Figure|Fig\.?)\s+([A-Za-z0-9]+)", old_fid)
+        new_label_match = re.search(r"(?:Figure|Fig\.?)\s+([A-Za-z0-9]+)", new_fid)
+        if old_label_match and new_label_match:
+            old_label, new_label = old_label_match.group(1), new_label_match.group(1)
+            # 严格匹配 Figure/Fig 前缀 + 完整 label,避免误伤其他数字
+            pattern = re.compile(rf"\b(Figure|Fig\.?)\s+{re.escape(old_label)}\b")
+            for sub_dir, change_key in [("manuscripts", "manuscripts"), ("figure_analysis", "figure_analysis")]:
+                if not os.path.isdir(sub_dir):
+                    continue
+                for path in glob.glob(os.path.join(sub_dir, "*.md")):
+                    try:
+                        with open(path, "r", encoding="utf-8") as f:
+                            text = f.read()
+                        new_text, n = pattern.subn(lambda m: f"{m.group(1)} {new_label}", text)
+                        if n > 0:
+                            changes[change_key].append({"file": path, "hits": n})
+                            if not dry_run:
+                                with open(path, "w", encoding="utf-8") as f:
+                                    f.write(new_text)
+                    except Exception:
+                        pass
+    result = {"ok": True, "old_id": old_fid, "new_id": new_fid,
+              "dry_run": dry_run, "changes": changes}
+    print(json.dumps(result, ensure_ascii=False))
 
 def set_field_config(
     field_id,
@@ -3017,10 +3154,12 @@ def backup_project_state(backup_dir="backups"):
     if not os.path.exists(snapshot_dir):
         os.makedirs(snapshot_dir)
         
-    # 1. Backup State Files
+    # 1. Backup State Files (Bug ③ 配套修复:含子目录路径保留结构)
     for key, filename in STATE_FILES.items():
         if os.path.exists(filename):
-            shutil.copy2(filename, snapshot_dir)
+            dst = os.path.join(snapshot_dir, filename)
+            os.makedirs(os.path.dirname(dst) or ".", exist_ok=True)
+            shutil.copy2(filename, dst)
             
     # 2. Backup Manuscripts
     manuscript_dir = "manuscripts"
@@ -3074,10 +3213,13 @@ def restore_project_snapshot(snapshot_dir):
 
     restored_files = []
 
-    # Restore state files.
+    # Restore state files. (含子目录的也要 mkdir 目标父目录)
     for _, filename in STATE_FILES.items():
         src = os.path.join(snapshot_dir, filename)
         if os.path.exists(src):
+            parent = os.path.dirname(filename)
+            if parent:
+                os.makedirs(parent, exist_ok=True)
             shutil.copy2(src, filename)
             restored_files.append(filename)
 
@@ -3280,6 +3422,21 @@ def main():
     add_abbr_parser = subparsers.add_parser("add-abbreviation", help="Safely merge ONE abbreviation entry into abbreviations.json (dedup by ABBR, conflict-detect on full_name)")
     add_abbr_parser.add_argument("payload_file", help="Path to a JSON file containing ONE abbreviation object")
 
+    # Rename-figure command (重整 figure 编号 + 全局同步:figures_database + storyline + manuscripts + figure_analysis)
+    rename_fig_parser = subparsers.add_parser("rename-figure", help="Rename a figure_id globally (figures_database + storyline + manuscripts/*.md + figure_analysis/*.md); supports --dry-run preview")
+    rename_fig_parser.add_argument("--old", required=True, help="Old figure_id (e.g. 'Figure 3')")
+    rename_fig_parser.add_argument("--new", required=True, help="New figure_id (e.g. 'Figure S5')")
+    rename_fig_parser.add_argument("--dry-run", action="store_true", help="Preview changes without writing")
+
+    # Add-stat-method command (Bug ④ /stat-helper → figures_database 钩子)
+    add_stat_parser = subparsers.add_parser("add-stat-method", help="Inject statistical method into a figure panel (called after /stat-helper)")
+    add_stat_parser.add_argument("--figure-id", required=True, help="Target figure_id (must exist in figures_database)")
+    add_stat_parser.add_argument("--panel", required=True, help="Panel key (e.g. 'A', 'B')")
+    add_stat_parser.add_argument("--stat-test", required=True, help="Statistical test name (e.g. 'one-way ANOVA + Tukey')")
+    add_stat_parser.add_argument("--n", type=int, default=None, help="Sample size")
+    add_stat_parser.add_argument("--error-bar", default=None, help="Error bar type (SD/SEM/95%% CI)")
+    add_stat_parser.add_argument("--software", default=None, help="Statistical software (e.g. 'GraphPad Prism v10.1')")
+
     # Postwrite command
     postwrite_parser = subparsers.add_parser("postwrite", help="Auto-sync global progress/context after a writing turn")
     postwrite_parser.add_argument("--section", required=True, help="Current section id, e.g. 'results_3.1'")
@@ -3419,6 +3576,11 @@ def main():
         add_figure_state(args.payload_file)
     elif args.command == "add-abbreviation":
         add_abbreviation_state(args.payload_file)
+    elif args.command == "rename-figure":
+        rename_figure_state(args.old, args.new, dry_run=args.dry_run)
+    elif args.command == "add-stat-method":
+        add_stat_method_state(args.figure_id, args.panel, args.stat_test,
+                              n=args.n, error_bar=args.error_bar, software=args.software)
     elif args.command == "postwrite":
         postwrite_state(
             section=args.section,
