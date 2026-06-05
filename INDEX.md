@@ -2,7 +2,6 @@
 
 ## 🧪 Scientific Writing
 - `general-sci-writing` - General SCI manuscript writing workflow with section-level state, citation guard, literature sync, and field configuration (`set-field`)
-- `article-writing` - Legacy article writing workflow (kept for compatibility)
 
 ## 🎯 Video & Media
 - `yt-dlp-downloader` - Download videos from YouTube, Bilibili, and 1000+ other sites
