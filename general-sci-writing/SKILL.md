@@ -568,6 +568,31 @@ Generation rules:
 **禁止**：不引用文献 `[n]`；**Abstract 独立**——即使正文已在 `abbreviations.json` 定义过，Abstract 首次出现仍须重新展开为 `Full Name (ABBR)`（投稿规范，Abstract 独立阅读）；不出现"significantly"等无定量支撑的空话。
 **输出文件**：`manuscripts/01_Abstract.md`
 
+### Phase 4.8: 投稿包准备 (`/submission-pack`)
+**时机**：全文 + Abstract 完成后、`/check` 前。投稿包不全 → 编辑桌面拒（desk reject），白写。
+
+**触发**：用户说"准备投稿"/"提交"/"submission"/"准备投递材料" 即进入。
+
+**流程**：
+1. **Read 模板**：`Read templates/submission_package.json`——获取 8 类模板与投稿 checklist。
+2. **建目录**：`mkdir -p submission/` 存放最终材料；下分 `cover_letter.md`、`statements.md`（DAS+Code+CRediT+COI+Funding 合并）、`highlights.md`、`graphical_abstract/`。
+3. **逐项询问 → 填模板**（必须主动问，不要静默用空白）：
+   - **Cover letter**：目标期刊编辑姓名 / 核心 significance 一句话 / 3 个 key findings / 适配期刊的理由 / 3 位 suggested reviewer 名字与邮箱 / 是否有 opposed reviewer / 通讯作者信息+ORCID
+   - **Data Availability**：原始数据是否 deposit？哪个 repository？accession number？源数据 Supp Data 编号？
+   - **Code Availability**：是否有自定义代码？GitHub URL？license？Zenodo DOI？
+   - **CRediT**：每位作者承担哪些 role（11 类），用作者首字母缩写
+   - **COI**：所有作者有无 competing interests（专利、咨询、股权）
+   - **Funding**：每个 funder + grant number + 受资助 PI
+   - **Highlights**（Cell 系强制）：3-5 条 ≤85 字符，写完后必须 `wc -L` 确认
+   - **One-sentence summary / eTOC**：Nature 系 ~150 字符，Cell ~125 字符
+   - **Graphical abstract**：按 `submission_package.json.graphical_abstract_spec` 出，用户自己画或交付 BioRender，本流程不画
+4. **替换占位符**：所有 `{{VAR}}` 必须替换成实际值；**严禁保留 `{{}}` 占位**就交付。
+5. **运行投稿 checklist**：对 `submission_checklist` 数组逐项 ✅/❌，不适用标 N/A 加说明；缺项必须补到全 ✅ 才允许 `/check` 进入 Phase 5。
+6. **目标期刊适配（按需读取）**：从 `project_config.json` 读 `target_journal`，挑出该期刊的 `required_by` 项强制；如 Nature 必给 one-sentence summary 与 DAS，Cell 必给 highlights + graphical abstract。
+7. **输出**：`submission/submission_checklist.md`（含逐项 status）+ 上述 markdown 模板。
+
+**红线**：① 严禁 `{{VAR}}` 残留 ② 严禁伪造 reviewer 邮箱 ③ COI 已有需主动声明严禁瞒报 ④ Funding 无则写 "This work received no specific external funding"，**不留空**。
+
 ### Phase 5: 质量控制 (`/check`)
 **执行命令**：
 1. `python scripts/state_manager.py stats` — 检查各节字数
@@ -634,6 +659,7 @@ Generation rules:
 | `/rename-figure` | 重整 figure 编号 | 全局改名 + 同步 figures_database/storyline/正文/识图文件，支持 --dry-run（脚本 rename-figure） |
 | `/write` | 撰写章节 | **章节局部读取 + 自我修正 + 智能快照** |
 | `/abstract` | 撰写摘要 | 全文完成后最后写，≤250词，含定量结果 |
+| `/submission-pack` | 投稿包准备 | Cover letter+DAS+CRediT+COI+Funding+Highlights+eTOC+Graphical Abstract+checklist（见 Phase 4.8） |
 | `/check` | 质量检查 | 含 style_checker 去AI检测 |
 | `/reviewer` | 审稿人模拟 | - |
 | `/snapshot` | 手动快照 | AI也会智能触发 |
