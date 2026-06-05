@@ -422,9 +422,8 @@ def compact_figure_item(item):
     if not isinstance(item, dict):
         return item
     keep_keys = {
-        "fig_id", "figure_id", "id", "title", "caption", "section",
-        "cited_in_sections", "data_status", "n_value", "n",
-        "p_value", "statistical_test", "notes",
+        "figure_id", "id", "title", "caption", "section", "data_status",
+        "n", "p_value", "statistical_test", "notes"
     }
     return {k: v for k, v in item.items() if k in keep_keys}
 
@@ -630,15 +629,7 @@ def parse_literature_matrix(payload):
     reserved = {
         "sections", "items", "matrix", "section_map", "section_matrix",
         "literature_matrix", "citation_matrix", "reference_matrix",
-        "section_literature_map", "meta", "metadata", "version",
-        "figures", "hypothesis", "title", "type", "id", "section_id",
-        "key_points", "notes", "panels", "data_status", "keywords",
-        "results_data", "discussion_points", "main_figures", "status",
-        "literature_needed", "literature_status", "is_key_section",
-        "content_points", "claim", "evidence_needed", "ref_ids",
-        "innovation_core", "main_hypothesis", "para_1",
-        "literature_refs", "literature_references", "cited_refs",
-        "supporting_refs", "background_refs", "method_refs",
+        "section_literature_map", "meta", "metadata", "version"
     }
 
     def add(section_id, refs):
@@ -660,7 +651,6 @@ def parse_literature_matrix(payload):
                     refs = (
                         item.get("references") or item.get("refs") or item.get("literature")
                         or item.get("citations") or item.get("items") or item.get("ref_ids")
-                        or item.get("literature_refs") or item.get("literature_references")
                     )
                     if sid is not None and refs is not None:
                         add(sid, refs)
@@ -855,19 +845,7 @@ def validate_matrix_schema(
     matrix_map, sources = load_literature_matrix(matrix_file=matrix_file, storyline_file=storyline_file)
     check["sources"] = sources
     check["sections_in_matrix"] = len(matrix_map)
-
-    # Skip matrix requirement when literature_index is empty (Phase 0/1/2)
-    lit_file = STATE_FILES.get("literature_index", "literature_index.json")
-    lit_count = 0
-    if os.path.isfile(lit_file):
-        try:
-            with open(lit_file, "r", encoding="utf-8") as _f:
-                _lit = json.load(_f)
-                lit_count = len(_lit) if isinstance(_lit, list) else 0
-        except Exception:
-            pass
-
-    if require_matrix_reindex and not matrix_map and lit_count > 0:
+    if require_matrix_reindex and not matrix_map:
         check["ok"] = False
         check["errors"].append("matrix is required but no section-literature mapping was found")
         return check
@@ -2737,6 +2715,7 @@ def update_state(payload_path):
     except:
         pass
 
+
 def set_field_config(
     field_id,
     project_config_file=STATE_FILES["project_config"],
@@ -3013,7 +2992,7 @@ def stats(section=None, include_history=False, backup_dir="backups"):
     print(json.dumps(payload, ensure_ascii=False))
 
 def main():
-    parser = argparse.ArgumentParser(description="Manage state files for General SCI Writing Skill")
+    parser = argparse.ArgumentParser(description="Manage state files for Article Writing Skill")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     # Load command

@@ -1040,15 +1040,9 @@ for each section in outline.md (e.g., section ID = "2.1"):
   SECTION_FILE="tmp/papers_2_1.json"   # replace dots with underscores in section ID
 
   1. Check state.json → if section in completed_sections, SKIP
-  2. Search ≥10 papers → collect metadata: title, authors, year, doi, abstract, source, citations_count (if available)
+  2. Search ≥10 papers → collect metadata: title, authors, year, doi, abstract, source
      - Every paper must have abstract; if missing → re-fetch via efetch or paper-search
      - Still no abstract after retry → mark abstract:missing, skip for now
-     - **High-impact priority:** When search returns >20 results, prefer papers by this order:
-       a. Tier 1 journals (Nature, Science, Cell, NEJM, Lancet, JAMA, PNAS) + high citation count
-       b. Tier 2 journals (IF>10 or top conferences like NeurIPS/ICML for CS) + citation count >100
-       c. Recent papers (<3 years) with rapid citation growth (>20 citations)
-       d. Remaining peer-reviewed papers sorted by relevance
-     - This is a soft preference, not a hard filter — include lower-tier papers when they contain unique findings not covered by higher-tier ones
   3. Save metadata to tmp/papers_X_X.json  (e.g., section 1.1 → tmp/papers_1_1.json)
   4. [Zotero] python3 scripts/zotero_manager.py --add-batch \
        --section "X.X" --papers tmp/papers_X_X.json \
@@ -1111,16 +1105,6 @@ print(f'Added {added} papers ({len(new_papers)-added} duplicates merged); total 
          --index data/literature_index.json \
          --log data/citation_guard_report.json
      If guard exits non-zero → do NOT continue to next section; fix flagged entries first.
-  6b. **Citation chaining** (optional, recommended for key sections):
-     For the top 2-3 highest-cited papers found in Step 2, expand coverage via:
-     - **Forward citations** ("who cited this paper?"): use `search_google_scholar` or
-       `search_pubmed` with the paper title as query to find newer work building on it.
-     - **Backward citations** (references from the paper): read the paper's abstract/intro
-       to identify frequently co-cited foundational works not yet in the index.
-     - Add discovered papers through the same Step 4/5 pipeline (batch add + dedup).
-     - **Skip conditions:** section already has ≥15 papers; or user explicitly says "skip chaining".
-     - This step catches important papers that keyword search misses (e.g., a seminal paper
-       whose title uses different terminology than the search query).
   7. Confirm write success → update state.json (add section to completed_sections):
      python3 -c "
      import json, pathlib
@@ -1142,19 +1126,7 @@ print(f'Added {added} papers ({len(new_papers)-added} duplicates merged); total 
 
 ### Phase 2.5: Dedup + Global ID Assignment
 
-**⚠️ HALT before dedup.** Show user a **PRISMA-style search summary** (append to `outline.md` Current Status):
-
-```markdown
-## Literature Search Summary (PRISMA)
-- **Initial search hits (all sections combined):** N papers
-- **After cross-section dedup (DOI + title fuzzy ≥0.85):** M papers
-- **Citation chaining additions:** K papers
-- **Final unique papers in index:** M + K = T papers
-- **Per-section distribution:** 1.1: X papers | 2.1: Y papers | ...
-- **Source breakdown:** PubMed: A | arXiv: B | bioRxiv: C | Google Scholar: D
-- **High-impact papers (Tier 1-2 journals):** H papers (P% of total)
-```
-
+**⚠️ HALT before dedup.** Show user: total papers found, estimated duplicates, sections covered.
 Wait for explicit "Continue".
 
 ```
@@ -1264,7 +1236,6 @@ If pending_sections is empty → all sections complete; proceed to Phase 4.
    - **Reference the figure caption from Step 3a** — the draft must describe and introduce the figure using its planned caption and key message.
    - Apply Anti-AI Writing rules (English or Chinese mode per outline.md).
    - Synthesis not summary; arbitration of contradictions; alternate claim/evidence order.
-   - **Citation quality rule:** For core claims (mechanisms, efficacy, causation), prefer citing original research from Tier 1-2 journals. Use reviews only for background/overview context. Use preprints only for emerging findings and always label `[Preprint]`. When multiple sources support the same claim, cite ≥2 independent studies from different research groups.
    - **Abbreviation rule:** First occurrence of any abbreviation in this section must use "Full Name (ABBR)" format. If the abbreviation was already defined in a previous section, use ABBR directly (check `exports/abbreviation_list.md` if it exists).
 
 5. **Citation spot-check** (lightweight, runs per-section — catches hallucinated `[N]` before Reviewer Simulator):

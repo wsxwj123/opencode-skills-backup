@@ -20,14 +20,6 @@
   - NN 为序号前缀（建议3位），控制全卷顺序；section/sub/material 文件可无 num/score。
   - paper/answer 的 block 类型见 make_paper.py 顶部文档。
 """
-
-# Windows 控制台默认 GBK：强制 stdout/stderr 用 UTF-8，避免中文 print 乱码（幂等，mac/Linux 无副作用）
-import sys as _sys
-for _stream in (_sys.stdout, _sys.stderr):
-    try:
-        _stream.reconfigure(encoding="utf-8")
-    except (AttributeError, ValueError):
-        pass
 import sys
 import os
 import re
@@ -105,9 +97,8 @@ _CHANGSHA_MANIFEST = [
 ]
 
 # 通用学科大题骨架（样卷/预设都缺时的兜底；只给大题分隔，细目靠样卷或人工补）
-# 覆盖文科（语文/英语/政治·道法/历史/地理）与理科（数学/物理/化学/生物）。
-# 理科配图：matplotlib 可画的(函数/几何/数轴/统计/受力)自动生成，其余(电路/化学
-# 结构/复杂装置)由用户提供图片，见 make_figure.py 与 SKILL.md。
+# 本技能聚焦【文科·纯文字、不配图】：语文/英语/政治·道法/历史/地理。
+# 数学·物理·化学·生物（需大量配图）暂不在范围内。
 _GENERIC_SECTIONS = {
     "语文": ["一、积累与运用", "二、阅读", "三、写作"],
     "英语": ["一、听力", "二、单项选择", "三、完形填空", "四、阅读理解", "五、书面表达"],
@@ -116,13 +107,11 @@ _GENERIC_SECTIONS = {
     "思想政治": ["一、选择题", "二、非选择题（材料分析）"],
     "历史": ["一、选择题", "二、非选择题（材料解析）"],
     "地理": ["一、选择题", "二、综合题（材料分析）"],
-    "数学": ["一、选择题", "二、填空题", "三、解答题"],
-    "物理": ["一、选择题", "二、实验题", "三、计算题"],
-    "化学": ["一、选择题", "二、填空与简答题", "三、实验探究题", "四、计算题"],
-    "生物": ["一、选择题", "二、非选择题"],
 }
-# 未列科目兜底（选择 + 非选择）
+# 未列科目按文科兜底（选择 + 非选择）
 _GENERIC_DEFAULT = ["一、选择题", "二、非选择题"]
+# 不支持的理科（需配图），命中时给出明确提示
+_UNSUPPORTED_SUBJECTS = ("数学", "物理", "化学", "生物")
 
 # 预设目录（init 通常从技能 scripts/ 运行，预设在技能根 presets/）
 _PRESET_DIRS = [
@@ -148,11 +137,11 @@ def _changsha_chinese_blueprint():
 
 
 def _generic_blueprint(stage, subject, etype):
-    if subject in ("数学", "物理", "化学", "生物"):
-        print(f"[提示] 『{subject}』为理科：可画的图（函数/几何/数轴/统计/受力）由 "
-              f"make_figure.py 自动生成；电路图/化学结构式/复杂装置图需用户提供图片"
-              f"（figure 块 src）。公式简单用 Unicode、复杂用 formula 块。"
-              f"强烈建议提供样卷 --blueprint-file 以贴合本地卷结构与分值。")
+    if subject in _UNSUPPORTED_SUBJECTS:
+        print(f"[提示] 本技能聚焦文科（语文/英语/政治·道法/历史/地理），"
+              f"『{subject}』属理科、题目多需配图，暂不在支持范围。\n"
+              f"        如确需出『{subject}』文字卷，请提供样卷用 --blueprint-file "
+              f"指定结构，且题目避免依赖图形。")
     secs = _GENERIC_SECTIONS.get(subject, _GENERIC_DEFAULT)
     skeleton = []
     for i, text in enumerate(secs, 1):
@@ -175,74 +164,42 @@ def _generic_blueprint(stage, subject, etype):
 
 
 def _normalize_blueprint(d):
-    """把外部蓝图/预设 JSON 补齐字段并统一类型。skeleton/manifest 转成元组列表。
-    严格校验元素形状：skeleton 须为 [id, text] 二元；manifest 须为 [pre,q,type,score,kp,diff]
-    六元。形状不符的行打印警告并丢弃，避免拆字符/解包崩溃。"""
+    """把外部蓝图/预设 JSON 补齐字段并统一类型。skeleton/manifest 转成元组列表。"""
     d.setdefault("source", "外部蓝图")
     d.setdefault("total", 120)
     d.setdefault("duration", 120)
     d.setdefault("questions", 0)
     for k in ("title", "subtitle", "notice", "summary"):
         d.setdefault(k, None)
-    skel = []
-    for x in d.get("skeleton", []) or []:
-        if isinstance(x, (list, tuple)) and len(x) == 2:
-            skel.append(tuple(x))
-        else:
-            print(f"[蓝图警告] skeleton 行格式不符 [id,text]，已跳过：{x!r}",
-                  file=sys.stderr)
-    mani = []
-    for x in d.get("manifest", []) or []:
-        if isinstance(x, (list, tuple)) and len(x) == 6:
-            mani.append(tuple(x))
-        elif isinstance(x, (list, tuple)) and 4 <= len(x) <= 7:
-            row = list(x) + ["", "", ""]            # 4/5/7 列容错补齐
-            mani.append(tuple(row[:6]))
-        else:
-            print(f"[蓝图警告] manifest 行格式不符 6 列，已跳过：{x!r}",
-                  file=sys.stderr)
-    d["skeleton"] = skel
-    d["manifest"] = mani
+    d["skeleton"] = [tuple(x) for x in d.get("skeleton", [])]
+    d["manifest"] = [tuple(x) for x in d.get("manifest", [])]
     return d
 
 
-# 预设文件名一律用 ASCII slug（中文文件名在 macOS↔Windows↔Git 间同步会乱码）。
-# 用户仍传中文学段/科目，这里映射成 ASCII 文件名；政治/道法等异名归一到 politics。
-_STAGE_SLUG = {
-    "一年级": "g1", "二年级": "g2", "三年级": "g3", "四年级": "g4",
-    "五年级": "g5", "六年级": "g6",
-    "七年级": "g7", "初一": "g7", "八年级": "g8", "初二": "g8",
-    "九年级": "g9", "初三": "g9",
-    "高一": "g10", "高二": "g11", "高三": "g12",
+# 科目别名：政治/道法 等异名归一到预设的规范名，避免为每个异名复制一份预设文件。
+_SUBJECT_ALIASES = {
+    "政治": "思想政治", "道德与法治": "思想政治", "道法": "思想政治",
 }
-_SUBJECT_SLUG = {
-    "语文": "chinese", "英语": "english", "历史": "history", "地理": "geography",
-    "思想政治": "politics", "政治": "politics", "道德与法治": "politics", "道法": "politics",
-    "数学": "math", "物理": "physics", "化学": "chemistry", "生物": "biology",
-}
-_REGION_SLUG = {"长沙": "changsha", "北京": "beijing", "上海": "shanghai"}
 
 
 def _load_preset(stage, subject, region):
-    """查预设（ASCII 文件名）：先 {stage}_{subject}_{region} 再回退基名 {stage}_{subject}。
-    地区无专版自动回退基名（基名即通用版）；无 ASCII 映射的学段/科目视为无预设。"""
-    st = _STAGE_SLUG.get(str(stage))
-    sj = _SUBJECT_SLUG.get(str(subject))
-    if not st or not sj:
-        return None  # 该学段/科目无预设，交由内置默认/通用兜底
+    """查预设：按 [本名→别名] × [{stage}_{subject}_{region} → {stage}_{subject}] 顺序。
+    region 非"通用"时若无地区专版，自动回退到基名（基名即通用版，无需复制 _通用 文件）。"""
+    subjects = [subject]
+    alias = _SUBJECT_ALIASES.get(subject)
+    if alias and alias not in subjects:
+        subjects.append(alias)
     names = []
-    rg = _REGION_SLUG.get(str(region))
-    if rg:
-        names.append(f"{st}_{sj}_{rg}.json")
-    names.append(f"{st}_{sj}.json")
+    for sub in subjects:
+        names.append(f"{stage}_{sub}_{region}.json")
+        names.append(f"{stage}_{sub}.json")
     for d in _PRESET_DIRS:
         for n in names:
             fp = os.path.join(d, n)
             if os.path.isfile(fp):
                 try:
                     bp = _normalize_blueprint(_read_json(fp))
-                    # source 用中文学段科目（仅打印，可读）；文件名保持 ASCII
-                    bp["source"] = f"预设 {stage}{subject}（{n}）"
+                    bp["source"] = f"预设 {n}"
                     return bp
                 except (json.JSONDecodeError, OSError) as e:
                     print(f"[警告] 预设 {n} 读取失败（{e}），跳过")
@@ -250,23 +207,21 @@ def _load_preset(stage, subject, region):
 
 
 def _resolve_blueprint(stage, subject, region, etype, opt):
-    """蓝图解析优先级：样卷蓝图文件 > 预设 > 内置长沙语文 > 通用兜底。
-    返回二元组 (bp, source_tier)：tier ∈ {'blueprint','preset','builtin','fallback'}。
-    fallback = 通用兜底（无任何依据），调用方据此决定是否拒/反问。"""
+    """蓝图解析优先级：样卷蓝图文件 > 预设 > 内置长沙语文 > 通用兜底。"""
     bf = opt.get("blueprint-file")
     if bf:
         try:
             bp = _normalize_blueprint(_read_json(bf))
             bp["source"] = f"样卷蓝图 {os.path.basename(bf)}"
-            return bp, "blueprint"
+            return bp
         except (json.JSONDecodeError, FileNotFoundError, OSError) as e:
             print(f"[警告] --blueprint-file 读取失败（{e}），改用预设/兜底")
     p = _load_preset(stage, subject, region)
     if p:
-        return p, "preset"
+        return p
     if subject == "语文" and stage in ("九年级", "初三"):
-        return _changsha_chinese_blueprint(), "builtin"
-    return _generic_blueprint(stage, subject, etype), "fallback"
+        return _changsha_chinese_blueprint()
+    return _generic_blueprint(stage, subject, etype)
 
 
 # 阅读类素材真实性硬门禁：含选文正文的材料文件禁止编造，
@@ -288,31 +243,16 @@ def cmd_init(args):
     proj = args[0]
     opt = _parse_opts(args[1:])
 
-    # 工程位置（v3.13.0 起加严，杜绝"AI 没问位置就建到桌面"）：
-    # - 绝对路径 → 直接用
-    # - 显式 --on-desktop → 建到桌面（兼容旧行为，但须 AI 确认用户同意）
-    # - 显式 --here → 建到当前 cwd 下
-    # - 否则（只给了工程名）→ 硬拒。要求 AI 先 AskUserQuestion 问用户工程位置。
-    if not os.path.isabs(proj):
-        if "--on-desktop" in args:
-            desktop = _detect_desktop()
-            if desktop:
-                proj = os.path.join(desktop, proj)
-                print(f"[位置] --on-desktop：工程建在桌面 {proj}")
-            else:
-                print("[警告] 未探测到桌面目录，回退当前目录")
-                proj = os.path.abspath(proj)
-        elif "--here" in args:
-            proj = os.path.abspath(proj)
-            print(f"[位置] --here：工程建在当前目录 {proj}")
+    # 工程位置：传入纯工程名（不含任何路径分隔符）或显式 --on-desktop → 建到桌面
+    # 同时判断 / 和 \：Windows 上用户也可能用正斜杠，os.sep 只有 \ 会漏判
+    has_sep = ("/" in proj) or ("\\" in proj)
+    if not os.path.isabs(proj) and ("--on-desktop" in args or not has_sep):
+        desktop = _detect_desktop()
+        if desktop:
+            proj = os.path.join(desktop, proj)
+            print(f"[位置] 未指定项目文件夹，工程建在桌面：{proj}")
         else:
-            print("\n🔴 [工程位置门禁] 必须显式指定工程位置，不再默认建到桌面。", file=sys.stderr)
-            print(f"  你传的 \"{proj}\" 不是绝对路径，AI 必须先 AskUserQuestion 问用户：", file=sys.stderr)
-            print("    ① 建在当前项目目录的某子文件夹下（推荐，给绝对路径）", file=sys.stderr)
-            print("    ② 建在当前终端工作目录下（加 --here）", file=sys.stderr)
-            print("    ③ 建在桌面（加 --on-desktop）", file=sys.stderr)
-            print("\n  得到答复后用对应形式重跑 init。", file=sys.stderr)
-            sys.exit(2)
+            print(f"[位置] 未探测到桌面目录，工程建在当前目录：{os.path.abspath(proj)}")
 
     if os.path.exists(os.path.join(proj, "meta.json")):
         print(f"[提示] {proj} 已是工程目录，init 将覆盖 meta.json 与 00_manifest.md "
@@ -344,19 +284,7 @@ def cmd_init(args):
             print("[警告] --decisions 不是合法 JSON，已忽略")
 
     # —— 解析本卷蓝图：样卷蓝图 > 预设 > 内置长沙语文 > 通用兜底 ——
-    bp, tier = _resolve_blueprint(stage, subject, region, etype, opt)
-    # 走到通用兜底（无样卷、无预设、不是默认长沙语文）时，强制反问门禁：
-    # 既无样卷又无预设的学段/科目（如七年级数学），脚本无法保证题型分值贴合本地卷型，
-    # 必须由 AI 先用 AskUserQuestion 问到样卷/地区/卷型再调用 init，
-    # 否则会得到"region=长沙、100分120分钟"的瞎兜底卷，误导用户。
-    if tier == "fallback" and "--accept-fallback" not in args:
-        print(f"\n🔴 [兜底门禁] {stage}{subject} 既无样卷蓝图（--blueprint-file）"
-              f"也无内置预设。兜底骨架仅为占位，题型/分值/题量与本地卷可能严重不符。", file=sys.stderr)
-        print(f"  请先反问用户：①能否提供一份本地真题/样卷？②如不能，地区/卷型是？\n"
-              f"  得到答复后：①有样卷 → 用 read_material/识图解析为 blueprint JSON，\n"
-              f"             加 --blueprint-file 重跑；\n"
-              f"             ②确认走兜底骨架（自担风险）→ 加 --accept-fallback 重跑。", file=sys.stderr)
-        sys.exit(2)
+    bp = _resolve_blueprint(stage, subject, region, etype, opt)
     # 蓝图（样卷/预设）自带学段·科目·地区·类型时，CLI 未显式指定则以蓝图为准，
     # 避免「样卷是七年级北京，却被默认成九年级长沙」的张冠李戴。
     if not stage_cli and bp.get("stage"):
@@ -368,22 +296,11 @@ def cmd_init(args):
     if not region_cli and bp.get("region"):
         region = bp["region"]
 
-    # 英语含听力大题时：纯文字卷无音频，必须三选一处理；
-    # 默认硬拒，逼 AI 用 AskUserQuestion 问清楚后用 --listening-mode 显式指定。
+    # 英语含听力大题时（预设或兜底皆可能）：纯文字卷无音频，须先与用户三选一。
     if subject == "英语" and any("听力" in str(t) for _, t in bp.get("skeleton", [])):
-        mode = opt.get("listening-mode")
-        if mode not in ("omit", "as-reading", "user-audio"):
-            print("\n🔴 [听力门禁] 本卷英语含『听力』大题，但本技能产出纯文字卷无音频。"
-                  "必须先与用户三选一：", file=sys.stderr)
-            print("  ① omit       省略听力（分值并入阅读/作文，需告知用户改后总分组成）", file=sys.stderr)
-            print("  ② as-reading 附听力文字稿当阅读题（保留分值，文字稿来源须真实）", file=sys.stderr)
-            print("  ③ user-audio 用户自备音频（本卷只出题干选项，提醒用户另发音频）", file=sys.stderr)
-            print("\n  AI 须用 AskUserQuestion 反问，用户确认后传："
-                  "--listening-mode omit | as-reading | user-audio 重跑 init。", file=sys.stderr)
-            sys.exit(2)
-        meta_listening = mode
-    else:
-        meta_listening = None
+        print("[提示] 本卷英语含『听力』大题，但本技能出纯文字卷无音频。"
+              "请先与用户三选一：①省略听力(分值并入其它板块) ②附听力文字稿当阅读 "
+              "③用户自备音频(本卷只出题干选项)；据此再决定是否保留听力大题。")
 
     def _ovr_int(key, default):
         try:
@@ -421,13 +338,11 @@ def cmd_init(args):
         "decisions": decisions,     # 开工前一次性确定的决策点（作业指导书）
         "answer_method": answer_method,   # 卷面作答（默认）/ 答题卡
         # 卷面工程项（AI 可按用户需求改）：页码默认开；密封线默认关；
-        # 以下排版/范围项：CLI 显式参数优先，其次取样卷蓝图解析出的值，最后默认。
-        "page_number": _opt_bool(opt.get("page-number"), bp.get("page_number", True)),
-        "sealing_line": _opt_bool(opt.get("sealing-line"), bp.get("sealing_line", False)),
-        "exam_scope": opt.get("scope") or bp.get("exam_scope", ""),     # 考试范围/单元/课次
-        "textbook": opt.get("textbook") or bp.get("textbook", ""),      # 教材版本/册次
-        "answer_detail": opt.get("answer-detail") or bp.get("answer_detail", "详细"),  # 详细/简略
-        "listening_mode": meta_listening,  # 仅英语听力卷：omit/as-reading/user-audio
+        "page_number": _opt_bool(opt.get("page-number"), True),
+        "sealing_line": _opt_bool(opt.get("sealing-line"), False),
+        "exam_scope": opt.get("scope", ""),       # 考试范围/单元/课次
+        "textbook": opt.get("textbook", ""),      # 教材版本/册次
+        "answer_detail": opt.get("answer-detail", "详细"),  # 答案解析详略：详细/简略/含采分点
     }
     # 小说选文字数区间：蓝图指定则带上，build 校验按此；默认（不写）即 1000-1500。
     if bp.get("novel_len"):
@@ -450,8 +365,7 @@ def cmd_init(args):
     proj_scripts = os.path.join(proj, "scripts")
     print(f"[完成] 工程已初始化：{proj}")
     print(f"  - 规格：{stage}{subject}·{etype}·{region}　"
-          f"{total}分 / {duration}分钟 / "
-          f"{f'{questions}题' if questions else '题量待定'}")
+          f"{total}分 / {duration}分钟 / {questions or '题量待定'}题")
     print(f"  - 结构来源：{bp.get('source', '')}")
     print(f"  - meta.json / 00_manifest.md 已生成")
     print(f"  - items/ 已含 {len(bp['skeleton'])} 个大题·小题分隔文件")
@@ -497,10 +411,7 @@ def _write_manifest(proj, meta, rows, summary=None):
         "| 文件前缀 | 题号 | 题型 | 分值 | 考点 | 难度 | 拟用素材 | 状态 |",
         "|------|------|------|------|------|------|----------|------|",
     ]
-    for row in rows:
-        # 容错：列数不足/超出时补齐/截断到 6 列（_normalize_blueprint 已过过滤，这里二次防御）
-        r = list(row) + ["", "", "", "", "", ""]
-        pre, q, typ, score, kp, diff = r[:6]
+    for pre, q, typ, score, kp, diff in rows:
         qnum = q[1:] if isinstance(q, str) and q[:1] == "q" else q
         lines.append(f"| {pre} | {qnum} | {typ} | {score} | {kp} | {diff} |  | 待出 |")
     if not rows:
@@ -510,8 +421,39 @@ def _write_manifest(proj, meta, rows, summary=None):
         f.write("\n".join(lines))
 
 
-# PDF 导出能力已移除：Word/WPS/Pages 都自带"另存为 PDF"，不必内置；
-# 之前的 LibreOffice 调用维护成本高（兼容性差、字体丢失常见）。
+def _find_soffice():
+    """找 LibreOffice/soffice 可执行文件（docx→pdf 转换器）。"""
+    for name in ("soffice", "libreoffice"):
+        p = shutil.which(name)
+        if p:
+            return p
+    mac = "/Applications/LibreOffice.app/Contents/MacOS/soffice"
+    return mac if os.path.exists(mac) else None
+
+
+def _export_pdf(docx_paths, out_dir):
+    """把 docx 批量转 PDF。优先 LibreOffice；没有则提示用户用 Word/WPS 手动导出。"""
+    soffice = _find_soffice()
+    if not soffice:
+        print("[PDF] 未找到 LibreOffice/soffice，无法自动转 PDF。"
+              "可用 Word/WPS/Pages 打开 docx 后『另存为/导出 PDF』。")
+        return
+    ok = 0
+    for dp in docx_paths:
+        try:
+            r = subprocess.run(
+                [soffice, "--headless", "--convert-to", "pdf",
+                 "--outdir", out_dir, dp],
+                capture_output=True, text=True, timeout=120)
+            pdf = os.path.splitext(dp)[0] + ".pdf"
+            if r.returncode == 0 and os.path.exists(pdf):
+                print(f"[PDF] 已生成：{pdf}")
+                ok += 1
+            else:
+                print(f"[PDF] 转换失败：{os.path.basename(dp)}　{r.stderr.strip()[:200]}")
+        except (subprocess.TimeoutExpired, OSError) as e:
+            print(f"[PDF] 转换异常：{os.path.basename(dp)}　{e}")
+    return ok
 
 
 def cmd_build(args):
@@ -549,16 +491,8 @@ def cmd_build(args):
     total = 0
     nums = []
     warn = []
-    source_errors = []   # 阅读类素材真实性硬门禁的违规项
-    figure_errors = []   # 缺图硬门禁（v3.13.0）：题干含"如图"但无 figure block
+    source_errors = []  # 阅读类素材真实性硬门禁的违规项
     materials_dir = os.path.join(proj, "materials")
-
-    # v3.13.0：题号静默自动重排——按文件名排序后的出现顺序，从 1 递增分配。
-    # 只对"实质题"分配（meta.status != "-" 且 meta.score 不为 None），
-    # section/sub/material 等结构块不参与。重排同步覆盖 meta.num 与
-    # paper/answer 块里所有 question/answer 块的 num 字段。
-    allow_missing_fig = "--allow-missing-figure" in args
-    auto_num = 0
     for fp in files:
         try:
             atom = _read_json(fp)
@@ -570,52 +504,26 @@ def cmd_build(args):
         if not isinstance(p_blocks, list) or not isinstance(a_blocks, list):
             warn.append(f"{os.path.basename(fp)} 的 paper/answer 不是列表，已跳过（避免内容被逐字符拆散）")
             continue
-        m = atom.get("meta", {})
-
-        # —— 题号自动重排（静默覆盖）——
-        is_question = (m.get("score") is not None and str(m.get("status", "")) != "-")
-        if is_question:
-            auto_num += 1
-            new_num = str(auto_num)
-            if m.get("num") and str(m["num"]) != new_num:
-                warn.append(f"{os.path.basename(fp)} 原 num={m['num']} → 自动重排为 {new_num}")
-            m["num"] = new_num
-            # 同步 paper/answer 里所有 question/answer 块的 num
-            for blk in p_blocks + a_blocks:
-                if isinstance(blk, dict) and blk.get("type") in ("question", "answer"):
-                    blk["num"] = new_num
-
-        # —— 缺图硬门禁：题干含"如图/如下图/根据图/图中/图所示"但 paper 无 figure ——
-        if is_question:
-            _check_missing_figure(fp, p_blocks, figure_errors)
-
         paper.extend(p_blocks)
         answers.extend(a_blocks)
+        m = atom.get("meta", {})
 
         # —— 阅读类素材真实性硬门禁 ——
-        _check_source(fp, m, p_blocks, materials_dir, source_errors, warn)
+        _check_source(fp, m, p_blocks, materials_dir, source_errors)
 
-        if is_question:
+        if m.get("score") is not None and str(m.get("status", "")) != "-":
             try:
                 total += float(m["score"])
             except (TypeError, ValueError):
                 pass
-            nums.append(new_num)
+        if m.get("num"):
+            nums.append(str(m["num"]))
             if m.get("score") is None:
-                warn.append(f"题{new_num} 缺 score 字段（未计入总分）")
+                warn.append(f"题{m['num']} 缺 score 字段（未计入总分）")
 
     # 校验（expected_questions=0 表示题量未知/通用兜底 → 无法做题量/分值门禁校验）
-    # 缺字段默认 0，避免被错按"21题/120分"硬校验产生满屏假告警
-    exp_q = meta.get("expected_questions") or 0
-    exp_total = meta.get("total") or 0
-    # 题量为 0（item 文件全是分隔/未填）时，build 出来是空卷——硬拒，避免误导用户。
-    # 仅当 --allow-empty 显式承认（如刚 init 想跑通路径）才放行。
-    if len(nums) == 0 and "--allow-empty" not in args:
-        print(f"[合并] 已读 {len(files)} 个原子文件，题量 0，分值合计 0", file=sys.stderr)
-        print(f"\n🔴 [空卷门禁] 工程内尚未写入任何带 num+score 的原子题文件，"
-              f"build 会产出空白卷。请先在 items/ 写题再 build；"
-              f"如确需空跑路径，加 --allow-empty。", file=sys.stderr)
-        sys.exit(2)
+    exp_q = meta.get("expected_questions", 21)
+    exp_total = meta.get("total", 120)
     if exp_q:
         if len(nums) != exp_q:
             warn.append(f"题量 {len(nums)} ≠ 期望 {exp_q}（题号：{','.join(nums) or '无'}）")
@@ -626,9 +534,7 @@ def cmd_build(args):
         warn.append(f"⚠️结构未知（无样卷/预设题量分布），已跳过题量与分值门禁；"
                     f"当前实得 {len(nums)} 题/合计 {total:g} 分，目标总分 {exp_total}。"
                     f"请务必向用户确认大题题型与分值分布（或提供样卷 --blueprint-file）再定稿。")
-    # 题号判重：归一化去前导零，避免 "7" 和 "07" 漏判为不同题
-    nums_norm = [n.lstrip("0") or "0" for n in nums]
-    dup = sorted({n for n in nums_norm if nums_norm.count(n) > 1})
+    dup = sorted({n for n in nums if nums.count(n) > 1})
     if dup:
         warn.append(f"题号重复：{','.join(dup)}")
 
@@ -638,9 +544,6 @@ def cmd_build(args):
     # 默认 1000-1500（九年级语文小说规格）；其他年级/特殊要求由蓝图 meta.novel_len 覆盖。
     # 传 subject：英语等非中文卷按"词"计数，不套用中文字数默认区间。
     _check_novel_length(paper, warn, meta.get("novel_len"), meta.get("subject", ""))
-
-    # —— 选文出处措辞：真实性铁律要求忠实节选，标注应为'节选自'而非'改编自' ——
-    _check_material_wording(paper, warn)
 
     # —— 政史地史实/数据真实性提醒：溯源门禁只覆盖 material 选文块，题干内嵌的
     #    史实/年代/数据/地名等不触发门禁，须人工核验，不可编造。——
@@ -676,22 +579,6 @@ def cmd_build(args):
             sys.exit(2)
         print("\n  ⚠️ 你使用了 --allow-unsourced，跳过门禁强制出卷（风险自负）。")
 
-    # —— 缺图硬门禁（v3.13.0）：题干含"如图"但 paper 无 figure block ——
-    if figure_errors:
-        print(f"[合并] 已读 {len(files)} 个原子文件，题量 {len(nums)}，分值合计 {total:g}",
-              file=sys.stderr)
-        print("\n🔴 [缺图门禁] 以下题目题干引用了图，但 paper 块里没有 figure 块：", file=sys.stderr)
-        for e in figure_errors:
-            print("   - " + e, file=sys.stderr)
-        print("\n  数理几何/函数图：写 figure 块 kind=function/geometry/svg/bar/...，自动渲染；", file=sys.stderr)
-        print("  电路图/化学结构/历史地图：figure 块写 src=用户提供的图片路径。", file=sys.stderr)
-        if not allow_missing_fig:
-            print("\n  已拒绝出卷。补图后重跑；如确需带 ［图：alt］ 占位强制出卷，加 --allow-missing-figure。",
-                  file=sys.stderr)
-            sys.exit(2)
-        print("\n  ⚠️ 你使用了 --allow-missing-figure，缺图位置将留 ［图：alt］ 文字占位（学生可能看不懂题）。",
-              file=sys.stderr)
-
     content = {
         "paper_path": os.path.join(proj, "build",
                                    meta.get("title", "试卷") + ".docx"),
@@ -719,15 +606,17 @@ def cmd_build(args):
         python_cmd + [os.path.join(HERE, "make_paper.py"), cpath],
         capture_output=True, text=True)
     print(r.stdout.strip())
-    # 即便成功，make_paper 的 stderr 警告（未知 type、figure 失败等）也须透传，
-    # 否则错块被静默丢弃用户不知情。
-    if r.stderr.strip():
-        print(r.stderr.strip(), file=sys.stderr)
     if r.returncode != 0:
+        print("[make_paper 失败]\n" + r.stderr.strip())
         sys.exit(1)
 
+    # 可选：导出 PDF（--pdf）。需本机有 LibreOffice/soffice，否则提示手动导出。
+    if "--pdf" in args or meta.get("output_pdf"):
+        _export_pdf([os.path.abspath(content["paper_path"]),
+                     os.path.abspath(content["answer_path"])],
+                    os.path.abspath(os.path.join(proj, "build")))
+
     # 明确告知成卷位置（绝对路径），方便 AI 转告用户并询问是否打开所在文件夹。
-    # 如需 PDF：用 Word/WPS/Pages 打开 docx 后『另存为/导出 PDF』即可。
     build_dir = os.path.abspath(os.path.join(proj, "build"))
     print("\n[文件位置] 两份成卷已生成在：")
     print("  目录： " + build_dir)
@@ -881,9 +770,7 @@ def _which(name):
 
 
 # 无值布尔开关：出现即为 True，不吞掉后一个参数
-_BOOL_FLAGS = {"on-desktop", "here", "allow-unsourced",
-               "accept-fallback", "allow-empty",
-               "allow-missing-figure"}
+_BOOL_FLAGS = {"on-desktop", "allow-unsourced", "pdf"}
 
 
 def _opt_bool(val, default):
@@ -991,45 +878,6 @@ def _check_novel_length(paper, warn, bounds=None, subject=""):
                             f"（{'偏短' if n < lo else '偏长'}）")
 
 
-_WORDING_BAD = ("改编", "改写", "编译", "整理自", "据原文改", "综合整理", "编写自")
-
-
-def _check_material_wording(paper, warn):
-    """选文出处标注措辞校验（软提醒）：material.source 出现'改编/改写/编译/整理自…'等
-    暗示二次创作的措辞时提醒改'节选自'。真实性铁律要求忠实节选——逐字、可删减，
-    禁重排/改写/编造，故标注应为'节选自'。"""
-    for b in paper:
-        if isinstance(b, dict) and b.get("type") == "material":
-            src = str(b.get("source", ""))
-            hit = [w for w in _WORDING_BAD if w in src]
-            if hit:
-                warn.append(f"选文出处『{src}』含{'/'.join(hit)}——按真实性铁律须忠实节选"
-                            f"（逐字可删减、禁重排改写编造），标注请改为'节选自…'。")
-
-
-_FIG_CUES = ("如图", "如下图", "下图", "图中", "图所示", "根据图", "看图",
-             "观察图", "请看图", "依据图")
-
-
-def _check_missing_figure(fp, paper_blocks, errors):
-    """题干含'如图/如下图/图中/图所示'等图引用字样，但 paper 块里没有 figure block
-    （也没有 src 提供的图）→ 拒绝出卷。AI 不能写出"如图所示"却不给图。"""
-    has_fig = any(isinstance(b, dict) and b.get("type") == "figure" for b in paper_blocks)
-    if has_fig:
-        return
-    for b in paper_blocks:
-        if not isinstance(b, dict):
-            continue
-        text = str(b.get("text", "")) + str(b.get("stem", ""))
-        for opt in (b.get("options") or b.get("items") or []):
-            text += str(opt)
-        if any(cue in text for cue in _FIG_CUES):
-            errors.append(f"{os.path.basename(fp)}：题干含『{next(c for c in _FIG_CUES if c in text)}』"
-                          f"等图引用字样，但 paper 块里没有 figure 块——必须补图"
-                          f"（自动画 kind=function/svg/geometry... 或用户提供 src=...）。")
-            return
-
-
 def _needs_source(meta, paper_blocks):
     """判断该原子文件是否承载'阅读选文/材料'，需强制溯源。
     只对真正含选文正文的文件把关（共享材料文件，或题目自带 material 正文块），
@@ -1041,160 +889,26 @@ def _needs_source(meta, paper_blocks):
     return False
 
 
-_USER_SRC_HINTS = ("用户提供", "用户提交", "用户给", "截图", "誊录", "手抄",
-                   "扫描件", "纸质")
-_FETCH_CRED_MARK = "teacher-paper:fetched"
-
-
-def _parse_fetch_credential(text):
-    """解析 materials 文件抓取凭证头。返回 dict(url=..., chars=..., sha256=...) 或 None。
-    凭证头由 fetch_web.py --save 写入，结构：
-        <!-- teacher-paper:fetched
-        url: <真实 URL>
-        strategy: jina/readability/raw
-        chars: <字节数>
-        sha256: <内容哈希>
-        fetched_at: <时间戳>
-        -->
-    """
-    if not text or _FETCH_CRED_MARK not in text:
-        return None
-    head = text[:1500]                # 凭证须在文件头，不在文末手补
-    if _FETCH_CRED_MARK not in head:
-        return None
-    info = {}
-    for line in head.splitlines():
-        line = line.strip()
-        for key in ("url", "chars", "sha256", "strategy"):
-            if line.startswith(key + ":"):
-                info[key] = line[len(key) + 1:].strip()
-    return info if info.get("url") else None
-
-
-def _credential_matches_url(text, source_url):
-    """凭证头里的 URL 必须与 meta.source 一致——防止"复制别处凭证 + 改 meta.source"伪造。
-    chars 也要与文件实际内容长度匹配，防止"加凭证头 + 篡改正文"。"""
-    info = _parse_fetch_credential(text)
-    if not info:
-        return False, "无凭证头"
-    if info["url"].strip() != source_url.strip():
-        return False, f"凭证 URL ({info['url']}) ≠ meta.source ({source_url})"
-    try:
-        declared = int(info.get("chars", "0"))
-        # 文件正文 = 全文 - 凭证头(到第一个 "-->\n" 之后)；以"来源："行后视为正文起点
-        body_start = text.find("-->")
-        body = text[body_start + 3:].strip() if body_start >= 0 else text
-        # 去掉自动写入的"来源/抓取日期"两行
-        body_lines = body.splitlines()
-        while body_lines and (body_lines[0].startswith("来源：")
-                              or body_lines[0].startswith("抓取日期：")
-                              or not body_lines[0].strip()):
-            body_lines.pop(0)
-        actual = len("\n".join(body_lines))
-        # 允许 ±20% 偏差（编辑器换行/末尾空行可能差几字节）
-        if declared > 0 and abs(actual - declared) > max(50, declared * 0.2):
-            return False, f"凭证声明 {declared} 字，实测 {actual} 字（差异>20%）"
-    except (ValueError, KeyError):
-        pass
-    return True, ""
-
-
-def _norm_text(s):
-    """归一化：去掉空白与标点，只留汉字/字母/数字，用于'选文是否为原文子串'的
-    忠实节选校验——忽略标点风格差异（弯/直引号、句读不同），但改字/缺字仍会落空。"""
-    return re.sub(r"\W+", "", str(s or ""), flags=re.UNICODE)
-
-
-def _check_source(fp, meta, paper_blocks, materials_dir, errors, warn):
-    """阅读类素材真实性门禁，分级把关（errors=硬拒绝，warn=软提醒）：
-    - 缺 source：拒绝。
-    - 标'原创'：堵死「meta标原创、卷面却印外部出处」自相矛盾；古诗词标原创直接拒绝。
-    - 非原创且 source 是 URL：materials 原文必须带 fetch_web.py 抓取凭证头，
-      否则判为「凭记忆默写+补假URL」拒绝（除非显式标 '用户提供-…'）。
-    - 非原创、非URL的纯出处（纸质书/杂志）：程序无法核验，放行但 warn 提示人工核对。
-    - 忠实节选子串校验：选文每段去空白后须为原文连续子串，改写/重排会落空 → warn。"""
+def _check_source(fp, meta, paper_blocks, materials_dir, errors):
+    """阅读类素材必须声明 source + source_file，且 source_file 真实存在。
+    source 允许两类：来源URL/出处，或显式标注 '原创-已声明'（教师自知并担责）。"""
     if not _needs_source(meta, paper_blocks):
         return
     name = os.path.basename(fp)
     source = str(meta.get("source", "")).strip()
     sfile = str(meta.get("source_file", "")).strip()
-    mats = [b for b in paper_blocks
-            if isinstance(b, dict) and b.get("type") == "material"
-            and (b.get("paras") or b.get("title"))]
     if not source:
         errors.append(f"{name}：阅读类素材缺 meta.source（须填来源URL/出处，"
-                      f"或显式写 '原创-已声明' / '用户提供-<出处>'）")
-        return
-
+                      f"或显式写 '原创-已声明'）")
     is_original = "原创" in source
-    is_url = "http" in source.lower()
-    # is_user 仅当 source 不含 URL 时生效：URL 既然给了就应可核验，不许用"截图"二字降级
-    is_user = (not is_url) and any(k in source for k in _USER_SRC_HINTS)
-
-    # —— 原创逃逸收口：堵死「meta 标原创、卷面却印外部出处」自相矛盾 ——
-    if is_original:
-        for b in mats:
-            msrc = str(b.get("source", ""))
-            if any(k in msrc for k in ("节选自", "选自", "出自", "摘自", "改编自")):
-                errors.append(f"{name}：meta.source 标'原创'，但选文出处却写『{msrc}』"
-                              f"——自相矛盾。原创素材不应有外部出处；若确为真实节选，"
-                              f"请把 meta.source 改为真实来源并落盘原文佐证。")
-            if b.get("layout") == "verse":
-                errors.append(f"{name}：古诗词标'原创'不合理——古诗词须取真实公版作品"
-                              f"并溯源（ctext/古诗文网），不可原创。")
-        return
-
-    # —— 非原创：必须有落盘原文佐证 ——
-    if not sfile:
-        errors.append(f"{name}：缺 meta.source_file（真实素材须把原文落盘 "
-                      f"materials/ 并在此指向该文件）")
-        return
-    fpath = os.path.join(materials_dir, sfile)
-    if not os.path.exists(fpath):
-        errors.append(f"{name}：source_file 指向的 materials/{sfile} 不存在"
-                      f"（禁止凭空编造真实素材）")
-        return
-    try:
-        with open(fpath, encoding="utf-8") as f:
-            src_doc = f.read()
-    except (OSError, UnicodeDecodeError):
-        src_doc = ""
-
-    # —— 抓取凭证分级：URL 来源本可脚本抓取，必须带凭证头且 URL/字节数与 meta 一致——
-    #    堵死「凭记忆默写+补假URL」「复制别处凭证头+换 meta.source」「带凭证头但篡改正文」
-    if is_url:
-        ok, why = _credential_matches_url(src_doc, source)
-        if not ok:
-            errors.append(f"{name}：meta.source 是网络链接，但 materials/{sfile} "
-                          f"凭证校验未过（{why}）——疑似凭记忆默写后补假来源或篡改正文。"
-                          f"请用 `fetch_web.py \"<url>\" --save materials/{sfile}` 重新抓取；"
-                          f"若确为用户手工提供，请把 meta.source 标为 '用户提供-<出处>'（去掉 URL）。")
-            return
-    elif not is_user:
-        warn.append(f"{name}：素材来源『{source}』非网络链接、无法用抓取凭证核验，"
-                    f"请人工核对该选文是否逐字属实。")
-
-    # —— 忠实节选·子串校验（软提醒，汇总所有 miss）——
-    src_norm = _norm_text(src_doc)
-    if not src_norm:
-        warn.append(f"{name}：materials/{sfile} 内容为空或无法读取，无法校验"
-                    f"选文是否忠实节选。")
-        return
-    for b in mats:
-        # title-only 块（无 paras）无法校验正文——必须 warn,不能静默放行
-        if not b.get("paras"):
-            warn.append(f"{name}：material 块仅有 title 无 paras 正文，"
-                        f"无法校验选文是否忠实节选，请人工核对。")
-            continue
-        miss_paras = []
-        for para in b.get("paras") or []:
-            p = _norm_text(para)
-            if len(p) >= 12 and p not in src_norm:
-                miss_paras.append(str(para)[:18])
-        if miss_paras:
-            warn.append(f"{name}：选文有 {len(miss_paras)} 段未在 materials/{sfile} "
-                        f"原文中逐字找到（如『{miss_paras[0]}…』）"
-                        f"——可能被改写/重排，请核对是否忠实节选。")
+    if not is_original:
+        # 非原创（即取自真实文献/新闻）必须有落盘原文佐证
+        if not sfile:
+            errors.append(f"{name}：缺 meta.source_file（真实素材须把抓取原文落盘 "
+                          f"materials/ 并在此指向该文件）")
+        elif not os.path.exists(os.path.join(materials_dir, sfile)):
+            errors.append(f"{name}：source_file 指向的 materials/{sfile} 不存在"
+                          f"（禁止凭空编造真实素材）")
 
 
 def _detect_desktop():
