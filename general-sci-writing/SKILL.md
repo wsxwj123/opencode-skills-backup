@@ -1,6 +1,6 @@
 ---
 name: general-sci-writing
-description: 用于撰写、润色符合Nature/Science/Cell发表标准的SCI研究论文（Article类型），适用于多学科领域的学术研究。当用户提到写论文、SCI论文、学术写作、科研写作、论文润色、研究论文、学术投稿、投稿、润色论文、polish paper、revise manuscript、write SCI paper、academic writing、draft paper、manuscript writing 时优先调用。
+description: 用于撰写、润色、退稿改进符合Nature/Science/Cell发表标准的SCI研究论文（Article类型），适用于多学科领域的学术研究。当用户提到写论文、SCI论文、学术写作、科研写作、论文润色、研究论文、学术投稿、投稿、润色论文、退稿、退稿改进、回复审稿意见、response letter、major revision、minor revision、polish paper、revise manuscript、write SCI paper、academic writing、draft paper、manuscript writing 时优先调用。
 license: Proprietary
 ---
 
@@ -55,26 +55,41 @@ license: Proprietary
 - 前沿/新兴论点 → Preprints（仅在无同行评审等效文献时使用；引用列表须标注 [Preprint]）。
 
 **语言风格 (Anti-AI Protocol)**：
-- **核心原则**：严格遵循 `humanizer-zh` Skill 的去 AI 化标准。
-- **禁词表 (The "Stop" List)**：
-  - 严禁使用："delve into", "comprehensive landscape", "pivotal role", "realm", "tapestry", "underscore", "testament".
+- **核心原则**：本节规则即去 AI 化标准（自包含）；如本机已安装 `humanizer-zh` skill 可作为辅助参考但**非强制依赖**，无此 skill 时按本节规则即可。
+- **目标读者画像**：以美国 STEM 博士研究生（PhD candidate）日常阅读、自然书写的水平为基准——朴素、平实、信息密度优先；笔触受 Nature 资深编辑把关（Role 设定不变），但**克制使用编辑级精炼修辞**，避免炫技。
+- **禁词表 (The "Stop" List)** — 完整清单以 `scripts/style_checker.py` 的 `FORBIDDEN_EXACT` 为准（约 30 词，写作前可 `grep FORBIDDEN_EXACT scripts/style_checker.py` 查全），下方为高频代表：
+  - 严禁使用："delve into", "comprehensive landscape", "pivotal role", "realm", "tapestry", "underscore", "testament", "elucidate", "unveil", "pronounced", "substantial"；首句套话："It is well known", "It is worth noting", "Interestingly", "Remarkably", "In recent years"。
   - 严禁结构：三段式排比 ("seamless, intuitive, and powerful")、虚假范围 ("from X to Y")、否定式排比 ("not only... but also...").
+- **🔴 禁修辞 (No Rhetorical Devices)**：严禁文学性修辞——隐喻、拟人、明喻、夸张、对偶、设问、引经据典等。例外：领域内已固化的术语隐喻（如 "molecular switch"、"signaling cascade"）保留；新造的、装饰性的修辞一律删。
+- **🔴 禁生僻词 (No Obscure Vocabulary)**：以 PhD candidate 常用词为准——
+  - 通用动词/形容词用平实词：用 `show / find / use / large / small`，不用 `elucidate / unveil / pronounced / substantial`；用 `cause / lead to`，不用 `precipitate / engender`。
+  - 例外保留：领域专业术语（如 `apoptosis / pharmacokinetics`）不算生僻，必须用准确术语。
+  - 判定原则：能用一个 GRE 范围内的常见词替代且不丢精度的，就替换。
+- **🔴 禁造词 (No Neologisms)**：严禁拼接新词或自造缩略——所有词、所有缩写必须能在权威词典 / 领域教科书 / 已发表文献中找到原型。首次出现的缩写必须给全称（如 "extracellular vesicles (EVs)"）。AI 凭语感造的新组合词（"transformomics"、"diseasability" 之类）一律删。
+- **🔴 禁长难句 (No Long/Complex Sentences)**：
+  - **硬上限：单句 ≤ 30 词**（含从句）。超过即拆。
+  - **从句深度 ≤ 2 层**——禁止"主句套定语从句套状语从句"三层嵌套。
+  - 一句话只承担一个核心论点，复合论点拆成两句。
+- **🔴 被动为主 (Passive Voice as Primary)**：
+  - **段落整体被动占比 50–70%**（SCI Article 实验描述主流）。
+  - Methods / Results 描述实验操作与观察 → **优先被动**（"Cells were treated with..."、"Apoptosis was assessed by..."）。
+  - Discussion 表达作者推断 / 主观判断 → 可适当主动（"We propose..."、"These data suggest..."），但仍以被动为主。
+  - 被动 < 40% 视为过于口语化；> 70% 视为冗余呆板，均扣分。
 - **写作范式**：
-  - **海明威式 (Hemingway Style)**：短句为主，拒绝从句套从句。
   - **数据驱动 (Data-First)**：用数据说话，拒绝 "significant effect" 这种空话，必须写 "5-fold increase (P<0.001)"。
   - **No Bullet Points**：正文严禁列点，必须写成连贯段落。
-- **Perplexity & Burstiness (P/B) 动态节奏规则**：
-  - 同一段落内必须混合短句（≤12 词）与长句（25-40 词），严禁连续 3 句以上句长相近（差异 < 5 词）。
-  - 同一概念在同一段落内不得重复使用相同表述，必须使用同义替换或结构重组。禁止"A... A... A..."式重复。
-  - 改写/润色后的段落长度必须控制在原文 ±15% 以内，防止因扩写导致信息密度下降（典型 AI 特征）。
-  - 连续段落的首句禁止使用相同句式结构（如连续 "This study...", "The results...", "We found..."）。
+- **句长节奏（修订）**：
+  - 同段落内混合**短句（≤12 词）**与**中句（15-25 词）**——**不再要求 25-40 词的长句**（与"禁长难句"统一）。
+  - 严禁连续 3 句以上句长相近（差异 < 5 词）——避免 AI 式齐整。
+  - 同一概念在同段落不重复同表述，用同义替换或结构重组。
+  - 改写后段落长度控制在原文 ±15% 以内。
+  - 连续段落首句禁用相同句式（如连续 "This study..."、"The results..."、"We found..."）。
 - **深度改写策略 (Anti-Similarity Protocol)**：
-  上方禁词表解决"不能写什么"，本条解决"应该怎么改"：
-  - **词汇层 (Lexical)**：替换非术语性通用词（如 significant → pronounced/marked/substantial）。术语本身不动，但术语周围的动词和修饰语必须重组。禁止直接使用原始文献中的完整短语（≥4 连续词），必须拆解重构。
-  - **句法层 (Syntactic)**：主动/被动语态交替使用，但同一段落内被动不超过 30%。将因果从句拆为独立句，或将并列短句合并为复合句——视上下文节奏需要而定。禁止模板化过渡（"Furthermore, ... In addition, ... Moreover, ..."），改用逻辑内嵌（将因果关系编织进主句而非用连接词外挂）。
-  - **结构层 (Structural)**：允许调整同一段落内论点的呈现顺序（在不破坏逻辑链的前提下）。将"先总后分"改为"先证据后结论"，或反之——打破 AI 偏好的固定叙事模板。适度插入作者视角的判断句（如 "This likely reflects..."、"One plausible explanation is..."），模拟真人推理痕迹。
-- **自我审查**：在输出任何段落前，必须在后台隐式运行 `humanizer-zh` 的检查清单 + P/B 节奏自检（句长方差是否足够、段首句式是否重复、被动语态占比是否超标）。
-- **学科语感适配**：各领域配置文件 `configs/*.json` 中的 `writing_style` 字段定义了学科特定的语态偏好、推荐/避免动词、过渡短语和句长范围。写作时必须读取当前研究方向的 `writing_style` 并遵循；若未配置则使用通用 Anti-AI 规则。
+  - **词汇层 (Lexical)**：术语不动；术语周围的非术语通用词降到 PhD 平实层（如 `significant → clear/large`，不再升级为 `pronounced/marked/substantial`——那是编辑级修饰，违反目标读者画像）。禁止直接使用原始文献完整短语（≥4 连续词），必须拆解重构。
+  - **句法层 (Syntactic)**：被动为主（见上）；将因果从句拆为独立句而非套层从句。禁止模板化过渡（"Furthermore, ..."、"In addition, ..."、"Moreover, ..."），改用逻辑内嵌或自然连接（"Because..."、"This in turn..."）。
+  - **结构层 (Structural)**：允许调整段内论点顺序（不破逻辑链）；可适度插入作者推断句（"This likely reflects..."、"One plausible explanation is..."）模拟真人推理痕迹。
+- **自我审查**：输出任何段落前，必须运行本节自检（句长 / 句长方差 / 段首重复 / 被动占比 / 是否含修辞、生僻词、造词）；`/check` 阶段会跑 `style_checker.py` 量化打分作为客观兜底。
+- **学科语感适配（可选）**：如当前研究方向的 `configs/*.json` 含 `writing_style` 字段（目前 `drug_delivery` / `computer_science` 有），写作时优先读取并遵循其语态偏好、推荐/避免动词、过渡短语和句长范围；**未配置该字段时使用本节通用 Anti-AI 规则即可，不报错**——本节规则已自给自足。
 
 ---
 
@@ -93,7 +108,7 @@ license: Proprietary
 获得路径后，执行初始化时，**必须**将 Skill 目录下的 `scripts/` 文件夹完整**拷贝**到用户指定的项目根目录下。
 - **Why?**：确保项目文件夹包含所有运行所需的 Python 脚本。即使拷贝到另一台没装此 Skill 的电脑上，依然可以通过简单的 Python 命令维护状态。
 - **Command Logic**:
-  1. `mkdir -p [Target_Path]/scripts [Target_Path]/configs [Target_Path]/manuscripts [Target_Path]/section_memory [Target_Path]/figures`
+  1. `mkdir -p [Target_Path]/scripts [Target_Path]/configs [Target_Path]/manuscripts [Target_Path]/section_memory [Target_Path]/figures [Target_Path]/figure_analysis`
   2. `cp [Skill_Path]/scripts/*.py [Target_Path]/scripts/`
   3. `cp [Skill_Path]/templates/*.json [Target_Path]/`
   4. `cp [Skill_Path]/configs/*.json [Target_Path]/configs/`
@@ -102,11 +117,10 @@ license: Proprietary
 **Scope**: 此机制仅适用于 **Phase 4 (/write)** 的 Results/Discussion 章节。**严禁**在 Phase 1 (/preview) 或 Phase 2 (/storyline) 阶段因缺失具体实验数据而阻断流程。
 **在执行 `/write` 撰写 Results/Discussion 章节前，必须执行以下检查**：
 1. **Check Data Status**: 检查 `figures_database.json` 中该章节涉及的 Figure 的 `data_status`。
-2. **If Pending**:
-   - **立即停止** 撰写流程。
-   - **输出数据收集表**：列出缺失的 Figure ID 和需要的数据项（如图注、P值、n值）。
-   - **结束回复**：明确告知用户："我无法在没有数据的情况下撰写。请提供上述数据，我将立即开始。"
-   - **禁止**：严禁编造数据或使用占位符（如 "XX%"）。
+2. **按缺失粒度判定（Core vs Auxiliary）**：
+   - **核心定量缺失**（支撑组间结论的数值 / 统计检验 / 显著性，如 P 值、关键 n、效应量数值）→ `data_status=pending`：**立即停止**撰写，**输出数据收集表**（缺失的 Figure ID + 数据项），告知用户："我无法在没有核心数据的情况下撰写。请提供上述数据，我将立即开始。"
+   - **辅助元数据缺失**（误差棒类型 SD/SEM、非关键 n、量纲细节等不改变结论方向的项）→ **不阻断**写作，但必须在正文/图注以 `<!-- [DATA_PENDING: 项目] -->` 标注待补，交付前清零。
+   - **禁止**：无论哪种，严禁编造数据或使用占位符（如 "XX%"）填充缺失值。
 
 ### 3. 原子化文件管理 (Atomic File Policy)
 - **原则**：一个 Sub-section = 一个独立 Markdown 文件。
@@ -115,6 +129,12 @@ license: Proprietary
   - ✅ `04_Results_3.1_Characterization.md`
   - ✅ `04_Results_3.2_Uptake.md`
   - ❌ `04_Results.md`
+- **🔴 修改/润色的唯一合法目标（铁律）**：任何对正文的修改、润色、改写、重组——**只能改 `manuscripts/*.md` 原子化文件**。**严禁修改**以下"派生/合并产物"（它们由脚本自动生成，下次 `/merge` 会覆盖你的修改、工作丢失）：
+  - `manuscripts/Full_Manuscript.md`（`/merge` 合并稿）
+  - `*.docx`（pandoc 转出物）
+  - `figure_analysis/figure_*.md` 之外的拼接稿
+- **润色 workflow（强制）**：用户给你一段需修改的文本 → ① 先 `grep -rn "<原文片段前 8-15 字>" manuscripts/` 定位它在**哪个原子化文件**；② 命中 `Full_Manuscript.md` 等派生物 → **不要改它**，回到对应的原子化源文件改；③ 同一片段在多个原子化文件命中 → 停下问用户改哪个，不要猜；④ **grep 0 命中（项目未初始化或文本不在项目中）→ 进入「standalone 润色模式」**：明确告知用户"该文本未在当前项目找到，将做无状态润色（不写文件、不打快照），结果直接贴回；如需持久化请先 `/init` 后将文本写入对应 `manuscripts/0X_*.md`"——绝不静默写入新文件、绝不猜测归属；⑤ 改完提醒用户重跑 `/merge` 才能在合并稿/docx 中看到更新。
+- **自检（写入前必答）**：在 `Edit`/`Write` 任何 `.md` 前，自问"这是 `manuscripts/` 下的原子化源文件吗？还是合并稿/派生物？"——后者一律拒绝写入。
 
 ### 4. 写入安全检查 (Anti-Overwrite Check)
 在执行 `write_file` 之前，必须进行以下**自查**：
@@ -222,7 +242,7 @@ license: Proprietary
 **针对检索结果中缺失摘要（Abstract）的文献，严禁直接丢弃。必须严格执行以下补全回退链（Mandatory Fallback Chain）**：
 1. **Google Scholar (Primary)**: 必须优先使用 `mcp__paper-search-mcp__search_google_scholar` 检索论文标题。
 2. **PubMed (Secondary)**: 若前者失败，使用 `mcp__paper-search-mcp__search_pubmed` 或 PubMed CLI 按标题检索。
-3. **Tavily (Final Fallback)**: 若前两者均失败，才允许使用 `mcp__tavily-mcp__tavily-search` 搜索 "Title abstract"。
+3. **Tavily (Final Fallback)**: 若前两者均失败，才允许使用 `mcp__tavily__tavily-search` 搜索 "Title abstract"。
 **执行边界**：
 - Tavily 在此阶段只允许补全 `abstract` 或辅助反向核验，**不得**替换原始文献的 `source_provider` / `source_id`。
 - 若该条文献本身没有 DOI/PMID，且 Tavily 仅提供网页级佐证，则必须进入 `manual_review_queue.json`，且不得视为 `verified=true`。
@@ -244,6 +264,7 @@ license: Proprietary
 4. `literature_index.json`（仅当前 section 过滤结果）
 5. （默认不读）`manuscripts/` 下匹配当前 section 的原子化文件，仅在 `--include-draft` 时加载
 6. `section_memory/[section_id].md`
+7. `figure_analysis/figure_{N}.md`（撰写对应 Results 小节时，由 `/write` 在 write-cycle 之外**显式 `Read` 加载**；write-cycle 不自动加载它，须手动读取，作为该节结果与讨论的事实依据）
 
 **预算熔断策略**：
 1. 若估算 token 超出预算，先裁剪当前章节正文到 tail。
@@ -269,7 +290,7 @@ license: Proprietary
 
 ### Phase 0: 项目初始化 (`/init`) - 跨平台便携模式
 1. **Ask Path**: 询问用户保存路径 (默认 Desktop)。
-2. **Create Dir**: 创建项目根目录及子目录 `scripts/`、`configs/`、`manuscripts/`、`section_memory/`、`figures/`。
+2. **Create Dir**: 创建项目根目录及子目录 `scripts/`、`configs/`、`manuscripts/`、`section_memory/`、`figures/`、`figure_analysis/`。
 3. **Copy Resources**: 将 Skill 中的文件拷贝到项目（参见 §1 Command Logic）：
    - `scripts/*.py` → `[Project_Root]/scripts/`
    - `templates/*.json` → `[Project_Root]/`
@@ -303,10 +324,25 @@ license: Proprietary
 
 ### Phase 3: 文献检索 (`/literature`)
 分阶段检索（Phase 1核心，Phase 2写作时实时补充）。
+
+**中文文献支线（Chinese Literature Manual Track，按需触发）**：
+SCI 论文通常只在少数场景需引中文文献（中药/中医、临床路径、地方流行病学、政策文献等）。中文期刊普遍**无 DOI、无 PMID**，`citation_guard` 双向核验跑不通，故走"AI 发现 → 用户人工取证 → 责任标记"的合规通道，绝不绕过护栏自动入库。
+1. **检索（AI 自动）**：用 `mcp__paper-search-mcp__search_google_scholar` 检索中文关键词（Google Scholar 覆盖中文核心期刊，免费可调；**不要**用知网/万方/维普——无开放 API，反爬严，无法自动调用）。
+2. **AI 仅返回候选清单**：标题 / 作者 / 期刊 / 年份 / Scholar 链接。**严禁直接入库**，因为缺 DOI/PMID 无法过 `citation_guard`。
+3. **用户人工取证**（必选其一）：
+   - **路径 A（推荐）**：去 CNKI / 万方 / 维普 / 期刊官网搜该篇，记下 **DOI** 或 **CSTR**（中科院中文 DOI）→ AI 用此 ID 走 `citation_guard` 双向核验入库（与英文文献同流程）。
+   - **路径 B**：用户提供原文 PDF + 完整元数据 → AI 入库，但条目必须带 `verified=false`、`needs_manual_review=true`、`requires_human_attest=true`（用户书面确认"我对这条负责"才允许在正文 `[n]` 引用）→ 进入 `manual_review_queue.json`。
+   - **路径 C**：以上都做不到 → **不引该条**，找等价英文文献替代。
+4. **正文引用规则**：路径 A 与英文条目同等；路径 B 入库的条目，每次在正文写 `[n]` 前 AI 必须主动提醒"该条为人工背书条目，是否仍要引用"，用户确认后才写入。
+5. **导出**：`/export_bib` 时路径 B 条目在 .bib 中加 note 字段标注 `[CN-Manual]`，方便投稿前人工复核。
+
+
 **执行红线**：本阶段必须遵守“文献真实性硬约束”，任何未通过同源核验的条目不得进入 `literature_index.json`，也不得在正文中引用。
 **新增硬门禁**：完成本阶段后必须运行 `citation_guard.py --require-mcp`，仅当 `citation_guard_report.json` 为 `ok=true` 才能进入 `/write`。`--require-mcp` 在 Phase 3 结束时为强制参数，确保所有文献有 MCP 证据轨。
 **阻断条件**：只要 `manual_review_queue.json` 非空，或报告存在 provider policy / bidirectional verification failure 相关失败项，都必须先处理后再写作。
 **退出条件（Escalation Protocol）**：若人工处理后条目仍无法核验（无法获取 DOI/PMID/S2 ID），则将该条目标记为 `status=dropped`，从 `literature_index.json` 中移除，并在写作时写入占位注释 `<!-- [REF_DROPPED: 原标题] -->`，待用户手动补充替代文献后再重新分配编号。最多处理 2 轮；若问题未解决，必须告知用户并给出可操作的替代文献检索建议，不得无限等待。
+
+**`REF_DROPPED` 占位的最终处置（Bug 12 修复）**：含 `REF_DROPPED` 占位的句子在 Phase 5 `/check` 阶段必须**单独列出**让用户决定 → ① 用户补替代文献 → 删占位 + 改正常 `[n]`；② 用户决定删该句 → 整句删除并检查上下文逻辑连贯；③ 用户决定弱化论点 → 删占位 + 改写为不依赖文献的描述性表述。**严禁带 `REF_DROPPED` 占位 `/merge`** —— 已纳入 Phase 5 占位扫描门禁（grep CITE_PENDING|DATA_PENDING|REF_DROPPED）。
 **首轮检索后强制分配与重编号（Mandatory）**：
 1. **首轮完成即分配**：第一轮文献检索完成后，必须将每条已核验文献分配到目标小节（`section_id`），禁止保持“未分配”状态进入写作阶段。
 2. **矩阵落地**：在用户确认后，必须将“小节-文献”映射写入文献矩阵（建议存入 `storyline.json` 的矩阵字段，或独立 `literature_matrix.json`），作为后续正文撰写唯一依据。
@@ -338,12 +374,99 @@ Methods 有独立于 Results/Discussion 的写作要求：
 - **可重复性优先**：所有试剂必须标注厂商和货号（如 "DPPC (Avanti Polar Lipids, #850355)"）
 - **实验参数精确值**：温度、时间、浓度、转速等必须给出精确数值，禁止"适量"/"室温"等模糊表述
 - **伦理声明**：动物实验必须包含 IACUC 批号，临床样本须包含 IRB/伦理批号
-- **统计方法**：在 Methods 末段单独声明统计软件版本、检验方法和显著性阈值
+- **统计方法**：在 Methods 末段单独声明统计软件版本、检验方法和显著性阈值。**与 figure 识图联动**：写统计方法前，先汇总 `figures_database.json` 各 panel 的 `stat_test` 字段（识图阶段已录入，如 "one-way ANOVA + Tukey"），确保 Methods 声明覆盖各 figure 实际所用检验，不重不漏
 - **引用**：仅引用方法学原始论文（如 DLS 测定方法原始文献），不限年份
+
+### Phase 3.6: Figure 识图与讨论 (`/figure`)
+
+**定位**：固化"用户逐张发实验图 → AI 读图产出结果与讨论草稿 → 存为写作依据"这一步。产物 `figure_analysis/figure_{N}.md` 是 Phase 4 撰写对应 Results/Discussion 小节的**上游素材**，非正文，不参与 `/merge` 合并。
+
+**前置**：必须在 `/storyline`（Phase 2）确定全文结构与"小节↔figure"对应之后运行。结构由 storyline 决定（融合式 / Results 与 Discussion 分离 / 方法学后置均可），本阶段只产素材、不假设结构。文献已在 Phase 3（Introduction 阶段）基本完成，**本阶段不检索文献**。**与 Phase 4 逐节交替**：不是先识完所有 figure 再统一写，而是每写一个 Results 小节前先对该节对应 figure 跑 `/figure`，再 `/write` 该节。
+
+**🔴 读图红线 (Zero-Hallucination on Images，最高优先级)**：
+1. **只读已符号化/已印出的信息**：分组标签、坐标轴文字与量纲、星号数量(`*/**/***`)、图面或图注印出的 P 值数字、误差棒有无、组间高低**方向**与趋势。
+2. **严禁视觉定量与判读**：不得从像素估算条带灰度、荧光/CLSM 强度、阳性率、共定位、转移灶/肿瘤数目等任何**未标注**的定量值；不得对 WB/HE/IHC/荧光/CLSM/拍照图做病理或表型**判读**；不得反推未印出的数值或 P 值。
+3. **不数散点**：散点图只读趋势与组间比较结果，**不清点数据点估算 n**。
+4. **读不到 = 问，不猜**：误差棒类型(SD/SEM/CI)、各组 n、星号阈值定义、看不清的小字——一律列入"❓待确认"问用户，严禁脑补。
+5. **讨论不脑补背景**：讨论草稿只写"基于用户提供的实验设计/假设、以及本图数据本身成立的推理"；需外部文献佐证处（段落首背景句、尾意义句）用占位注释 `<!-- [CITE_PENDING: 关键词] -->` 标记，留待 Phase 4/最终补引时按"文献真实性硬约束"真检索填充，补不到则问用户或转 `REF_DROPPED`。严禁用知识库充当已检索文献。
+6. **中文确认 → 英文写入**：每张小图读完，先用**中文**贴出"结果 + 讨论草稿"（含读到的分组 / 比较 / 趋势 + ❓待确认项）给用户核对；经用户确认 / 修正后，再翻译为**英文**写入 `figure_X.md`（文档落盘正文为英文，确认环节用中文）。
+
+**流程 (逐图循环)**：
+1. **进入（含自然语言触发）**：用户提到"分析 / 解读 figureN"、"写 XX 结果章节"、"这几个图是什么结果"等——**即使没打 `/figure` 命令、即使只发了图没说命令**——都应进入本流程，**不要跳过识图直接 `/write`**。进入后询问用户：该小节对应的 **Figure 编号** 与 **小图数量**（如 "Figure 2，共 A–E 五图"）。
+2. **建档（含中途续接）**：确保 `figure_analysis/` 存在（无则 `mkdir -p figure_analysis`）；创建/打开 `figure_analysis/figure_{N}.md`，进度行记录声明的小图总数（如 `[0/5]`）。**若文件已存在且进度未满**（如 `[3/5]`）→ 读已写入的 Panel，从**下一个未完成 Panel** 续接，不重复识别已写的（沿用 §4 Anti-Overwrite，增量追加、禁止整体覆盖）。
+3. **逐张索取**：请用户发送 Panel A 图片。**若用户只用文字描述图、未上传图片** → 不进入读图，转"口述数据"模式：要求用户直接给分组 + 数值 + 统计结果；AI **严禁**从图类型关键词（CCK8 / 流式等）脑补典型结果，并明确告知"我没看到图、仅凭你给的文字写，发图能核对得更准"。
+4. **读图 → 中文草稿**：用中文贴出该 Panel 的图类型 / 分组 / 坐标轴与量纲(标注是否 log 轴) / 组间比较结果(含星号) / 趋势方向，并给出**中文结果 + 讨论草稿**；**❓待确认**：误差棒类型、n、星号阈值、看不清项。
+5. **确认 → 英文写入**：用户确认或修正后，将草稿翻译为英文、按**结果块 + 讨论块分离**写入文档（模板见下），讨论需引文处置 `[CITE_PENDING]`。
+6. **自检**：每张图写入时触发 §11 的 **Design / Reliability** 检查（对照设置、n、统计方法是否合理）。**Consistency（跨图一致性）不在逐图时做**——逐图时其他图尚未读取、无从比对；留到本大 figure 全部小图读完后（收口前）统一比对一次（如 Fig A 结论是否与 Fig C 矛盾），发现问题写入"❓待确认"提示用户。
+7. **下一张**：索取 Panel B，重复 4–6，直至全部小图完成。
+8. **收口（每完成一个大 Figure 更新一次状态）**：
+   - **同步到 `figures_database.json`（用 `add-figure`，单条即可）**：把本 figure 写成**单个** JSON 对象（`figure_id` 必需、`section` = storyline 的 section_id；外加 `declared_panels`（可选，命令比对实际 panels 数、不符警告）/ `panels` / 比较对 / `p_value` / `n` / `stat_test`（供 Methods 联动）/ `data_status`，格式见下方「条目示例」），执行 `python scripts/state_manager.py add-figure <one_figure.json>`。该命令在 `FileLock` 下：① 按 `figure_id` 去重合并进 figures_database（**不覆盖其他 figure**）；② **顺带同步** `writing_progress`（追加 figure 事件）、`context_memory`（追加识图记录）、回写 `storyline.sections[].figures`——一次锁内全办，无需再调有 gate 的 `postwrite`。误传数组或缺 `figure_id` 会被拒；核心定量读不到的项 `data_status="pending"`，对接 §2 熔断。
+   - **记识图确认到 section_memory**：执行 `python scripts/state_manager.py update <payload.json>`，payload 形如 `{"section_memory":{"section":"results_3.2","content":"Figure 2 A–E 已识别；用户确认 n=6、误差棒=SEM；Panel C 留 CITE_PENDING"}}`——让 `/write --include-draft` 写该节时能读到识图确认细节。
+   - **备份**：执行 `python scripts/state_manager.py snapshot`（无 gate；现已备份 `figure_analysis/` 并写入 `version_history`）。**勿用 `postwrite`**——它有 prewrite gate（state_manager.py:2403），识图阶段没跑 write-cycle 会 `sys.exit(2)`。
+   - **缩略词扫描（与 Phase 3.7 联动）**：扫描本 figure_{N}.md 新引入的 `Full Name (ABBR)` 模式，对每个未在 `abbreviations.json` 的缩写执行 `add-abbreviation`（first_defined_in 填本 figure 对应的 section_id）。**否则 `/write` 写正文时查表查不到、会重复展开**——这是 figure 与 §Phase 3.7 跨阶段集成的必经一步。
+   - 告知用户：`figure_analysis/figure_{N}.md` 就绪，将作为 `/write {section}` 的结果与讨论依据。
+
+**`figure_analysis/figure_{N}.md` 模板**（落盘正文用英文；下方字段中文仅为说明）：
+```markdown
+# Figure {N}: <大图主题>   <!-- section: <section_id> -->
+> 进度: [3/5 识别中 | 完成]
+
+## Panel A — <图类型: 散点/WB/HE/荧光/CLSM/流式/拍照…>
+- **分组**: <组1, 组2, …>
+- **坐标/量纲**: <Y轴指标(单位); 线性/log>
+- **组间比较**: <组1 vs 组2 = ***>   <!-- source: star_on_graph -->
+- **❓待确认**: 误差棒类型? n=? 星号阈值?
+- **结果(Results)**: <客观描述方向与比较结果，不解释>
+- **讨论(Discussion)**: <基于设计/假设/本图数据的推理> <!-- [CITE_PENDING: 机制关键词] -->
+
+## Panel B — …
+```
+
+**`figures_database.json` 条目示例**（收口 `add-figure` 用；传**单个** figure 对象，命令按 `figure_id` 自动安全合并）：
+```json
+{
+  "figure_id": "Figure 2",
+  "section": "results_3.2",
+  "title": "Cytotoxicity of nanoparticles",
+  "data_status": "ready",
+  "panels": [
+    {"panel": "A", "assay": "CCK-8",
+     "groups": ["Control", "NP-L", "NP-H"],
+     "comparisons": [{"pair": ["NP-H", "Control"], "sig": "***", "p": null, "source": "star_on_graph"}],
+     "error_bar": "SD", "stat_test": "one-way ANOVA + Tukey", "n": 3}
+  ]
+}
+```
+（`data_status`：核心定量齐全=`ready`，缺核心项=`pending`；`section` 值必须 = storyline 的 section_id，代码里 `section`/`section_id` 混用，统一写 `section`。）
+
+**与 Phase 4 衔接（关键）**：write-cycle **不会**自动加载 `figure_analysis/`（其白名单见 §13），故 `/write {section}` 必须在 write-cycle 之后**显式 `Read` 本节对应的 `figure_analysis/figure_{N}.md`**（已列入 §13 白名单第 7 项）作为该小节 Results/Discussion 的事实依据。**写 Results 小节前的 gate（提示词级）**：若该 `figure_analysis/figure_{N}.md` 不存在、或仍有核心定量的 ❓待确认 → 不开写，先回到 `/figure` 补全再 `/write`。正文按 storyline 既定结构组织：融合则结果讨论同段；**分离结构下，写 Discussion 小节前同样必须显式 `Read` 对应 figure_X.md 的讨论块**（与上面 Results 的 gate 同等，否则 Discussion 丢失识图讨论草稿）。`[CITE_PENDING]` 处理时机：**每节 `/write` 收口（postwrite）前应尽量真检索清零本节占位**，Phase 5 `/check` 的占位扫描作为最终兜底。
+
+**红线重申**：本阶段严禁任何"AI 看像素得出的定量或诊断结论"。定量以用户数据 / 图面印出数字 / 图注为准；外部背景以真检索文献为准；二者缺一即停下问用户。
+
+### Phase 3.7: 缩略词表管理 (`add-abbreviation`)
+**定位**：跨小节维护缩略词一致性，防止同一缩写 ROS 在 5 个章节各定义一次、或后半段直接用未定义缩写。
+
+**首次出现规则（Mandatory）**：
+- **EN**：`Full Name (ABBR)` —— 例：`reactive oxygen species (ROS)`
+- **CN**：`中文全称（英文全称, ABBR）` —— 例：`光动力疗法（Photodynamic Therapy, PDT）`
+- **后续使用**：直接用 ABBR，**严禁重复定义**。
+- **Title 严禁缩写**；**Abstract 独立**——即使正文已定义，Abstract 首次出现仍须重新展开（Abstract 通常独立阅读）。
+- **通用免定义白名单**（脚本同步）：DNA / RNA / PCR / HIV / WHO / FDA / NIH / ATP / pH / ELISA / qPCR / SD / SEM / CI 等——直接使用不展开。详见 `state_manager.py` 的 `UNIVERSAL_ABBREVIATIONS`。
+
+**写作时实时入库**：每节 `/write` 写完时，对该节首次定义的每个缩写，执行：
+```bash
+python scripts/state_manager.py add-abbreviation <one.json>
+# payload: {"abbr":"ROS","full_name":"reactive oxygen species","first_defined_in":"results_3.2","notes":"optional"}
+```
+该命令在 `FileLock` 下按 `abbr` 去重合并；**冲突拒绝**：同 abbr 但不同 full_name 直接 `sys.exit(2)` 报错（属科学错误，必须人工解决）。
+
+**写新节前查表**：开始 `/write` 任何小节前，先 `Read abbreviations.json` 拿已定义清单——已存在的缩写**直接用 ABBR，严禁重新展开**。
 
 ### Phase 4: 逐节撰写 (融合模式 + 原子化文件 + SI循环)
 
 **核心指令**：`/write [section]`
+
+> **Methods 写作时机（门控）**：Methods 建议在**所有 Results 小节写完后、`/abstract` 前**用 `/write methods` 撰写——此时 `figures_database.json` 的 `stat_test`/`n`/试剂参数已随识图齐全，可一次性联动汇总（见 Phase 3.5 Methods 规范）。不要在 Results 之前写 Methods（统计方法尚不全）。
 
 **原子化文件策略**：
 - **Target Path**: `manuscripts/{Chapter}_{Subsection}_{Keyword}.md`
@@ -359,6 +482,7 @@ Methods 有独立于 Results/Discussion 的写作要求：
    - **Content**: 包含整体描述和分图说明 (e.g., "Figure 1. Characterization... (A) TEM image...").
    - **Strict Rules**: 统计图必须声明 "n=X"；显微镜图必须声明 "scale bar = X μm"。
 4b. **Figure Prompt Generation（为每幅图生成结构化AI绘图提示词）：**
+> **双轨澄清**：`figures_database.json`（via `/figure` + `add-figure`）存的是**用户已有实验图的识图数据**（WB/HE/统计图等，用于写正文）；本节的 `figures/figure_index.md` + `figure_prompts.md` 是**让 AI 帮画的图**（示意图/机制图的绘图提示词）。二者用途不同、不冲突；若同一 figure 既有实验数据又需重绘，以 `figures_database` 为数据源。
 When a figure is registered in `figures/figure_index.md`, generate a Figure Prompt block and append to `figures/figure_prompts.md`:
 
 ```
@@ -392,6 +516,7 @@ Generation rules:
 7. **Final Integration**: AI 重写该节，插入 SI 标记。
 8. **Global Literature Sync**: 写完当前节后，通过脚本执行全局文献去重与编号同步（含正文 `[n]` 自动重写）。
 9. **Safety Write**: 检查文件差异 -> 写入文件 -> 智能快照。
+10. **🔴 节末用户确认检查点 (Mandatory)**：写完该节后展示 ① 字数 ② 引用条数 ③ 已引用的 figure_id 列表 ④ 本节新增缩略词列表 ⑤ 残留 `CITE_PENDING`/`DATA_PENDING`/`REF_DROPPED` 数；等待用户明确确认（"OK 继续下一节" 或 "需修改 X"）后才进入下一节 `/write`。**禁止连续自动写多节而不停**。
 
 **融合写作策略**：
 1. **数据呈现 (Results)**：描述Figure结果 + 统计数据。
@@ -405,7 +530,7 @@ Generation rules:
 2. **Methods**（1-2句）：核心方法/策略概述
 3. **Results**（3-4句）：关键定量结果（必须含具体数值）
 4. **Conclusion**（1-2句）：核心结论与意义
-**禁止**：不引用文献 `[n]`；不使用缩写（首次出现须全称）；不出现"significantly"等无定量支撑的空话。
+**禁止**：不引用文献 `[n]`；**Abstract 独立**——即使正文已在 `abbreviations.json` 定义过，Abstract 首次出现仍须重新展开为 `Full Name (ABBR)`（投稿规范，Abstract 独立阅读）；不出现"significantly"等无定量支撑的空话。
 **输出文件**：`manuscripts/01_Abstract.md`
 
 ### Phase 5: 质量控制 (`/check`)
@@ -414,13 +539,31 @@ Generation rules:
 2. `python scripts/state_manager.py sync-literature --dry-run --strict-references` — 扫描正文引用号与 `literature_index.json` 是否一致
 3. `python scripts/citation_guard.py --index literature_index.json --report citation_guard_report.json --offline` — 离线核验文献完整性
 4. `python scripts/style_checker.py --manuscript-dir manuscripts --report style_check_report.json --threshold 70` — 去AI风格检测（句长方差、被动语态、禁词、段首重复）
+4b. `python scripts/style_checker.py --manuscript-dir figure_analysis --report figure_analysis_style.json --threshold 70` — 识图阶段写入的英文草稿也跑一遍风格检测（Bug 11 修复：原 /check 只扫 manuscripts/）
+5. `grep -rn "CITE_PENDING\|DATA_PENDING\|REF_DROPPED" manuscripts/ figure_analysis/ 2>/dev/null` — 扫描 Phase 3 / 3.6 留下的未清零占位（待补文献 / 待补数据 / 文献核验失败的丢弃句）
+6. `[ ! -f manuscripts/Full_Manuscript.md ] || ! grep -q "AUTO-GENERATED" manuscripts/Full_Manuscript.md && echo "WARN: 合并稿缺自动生成警告头，可能被手动改写过"` — 防误改合并稿门禁
+7. **缩略词一致性扫描**（在合并稿上）：
+   - 提取所有 `Full Name (ABBR)` 定义模式；扫描所有大写≥2 字符的裸缩写。
+   - **3 类违规**：(a) 裸用但未定义的缩写；(b) 同一缩写在多个章节重复展开；(c) 已定义但全文未使用。
+   - 与 `abbreviations.json` 交叉比对——库中无 / 库中有但正文未用 / 多次展开，均报告。
+   - 通用缩写（DNA/RNA/PCR 等，见 SKILL §Phase 3.7 白名单）跳过检测。
 
 **质量标准**：Key Section ≥500词且引用≥3条；Supporting Section ≥200词；style_checker 评分 ≥70。
-**阻断条件**：字数不足 → 指出具体章节，等待补写；引用冲突 → 重跑 `sync-literature --apply` 后再检查；style_checker 不达标 → 列出具体问题，逐段修改后重检。
+**阻断条件**：字数不足 → 指出具体章节，等待补写；引用冲突 → 重跑 `sync-literature --apply` 后再检查；style_checker 不达标 → 列出具体问题，逐段修改后重检；**占位残留**（`CITE_PENDING` / `DATA_PENDING` 非空）→ 先补全真检索文献 / 缺失数据再交付，严禁带占位合并。
 
-### Phase 6: 审稿人模拟 (`/reviewer`)
+### Phase 6: 审稿人模拟 / 退稿改进 (`/reviewer`)
+
+**6A. 内部审稿模拟（投稿前）**：
 **Storyline 阶段**：逻辑自检（假设→方法→结论链完整性）。
-**Final 阶段**：完整同行评审报告（新颖性/严谨性/影响力），标注需作者回应的 major/minor 问题。
+**Final 阶段**：完整同行评审报告（新颖性/严谨性/影响力），标注需作者回应的 major/minor 问题；与项目根 `reviewer_concerns.json` 内的领域质疑库逐条比对，覆盖率不足则补写。输出 `reviewer_report.md`。
+
+**6B. 退稿/审稿意见改进（收到真实退稿信后）**：
+当用户提供真实退稿信 / 审稿人意见时触发：
+1. **导入**：将退稿信原文存为 `reviews/decision_letter.md`，每条审稿意见原文逐条编号存为 `reviews/reviewer_X_concerns.md`（X = 审稿人编号）。
+2. **逐条 gap 分析**：每条意见映射到 ① 涉及的 section（数据/方法/讨论/逻辑）② 严重度（major/minor）③ 修改类型（补实验 / 重写 / 增引用 / 澄清）。结果存为 `reviews/revision_plan.json`，含字段 `{reviewer, concern_id, severity, action_type, target_section, status}`。
+3. **修改执行**：按 plan 逐条改原子化文件（走 §3 润色 workflow，不改合并稿）；每条改完 `status` 设 `addressed` 并写明改动出处（如 "Results 3.2 加入 Figure 2F 增补 n=10 重复实验"）。
+4. **Response letter 生成**：`reviews/response_letter.md`，对每条意见用结构化模板回复："Reviewer X comment N: <原文摘要>. **Response:** <说明修改/反驳/承认局限>. **Changes in manuscript:** <文件:行号或段落锚点>"。
+5. **重投门禁**：`revision_plan.json` 所有 `status` 必须 `addressed` 或带书面理由的 `not_addressed`（如审稿人提议越界）才允许 `/merge` 重投稿。
 
 ### Phase 7: 版本控制 (`/snapshot`, `/rollback`)
 智能快照 + 手动备份 + 回滚机制。
@@ -451,6 +594,7 @@ Generation rules:
 | `/preview` | 预审报告 | - |
 | `/storyline` | 构建提纲 | 自动规划融合式章节 |
 | `/literature` | 文献检索 | - |
+| `/figure` | Figure 识图与讨论 | 逐张读图→读图清单确认→存 `figure_analysis/figure_{N}.md` 作正文依据；只读符号化信息，读不到问用户（见 Phase 3.6） |
 | `/write` | 撰写章节 | **章节局部读取 + 自我修正 + 智能快照** |
 | `/abstract` | 撰写摘要 | 全文完成后最后写，≤250词，含定量结果 |
 | `/check` | 质量检查 | 含 style_checker 去AI检测 |
@@ -543,7 +687,7 @@ python scripts/state_manager.py set-field --field drug_delivery
 
 ---
 
-**版本**: 2.17.0
+**版本**: 2.18.0
 **更新**:
 1. **citation_guard 增强**: DOI→标题/PMID→标题逐源交叉验证，年份合理性校验，防止拼接幻觉
 2. **style_checker.py 新增**: 句长方差/被动语态/禁词/段首重复/列点检测，量化去AI评分
@@ -553,6 +697,7 @@ python scripts/state_manager.py set-field --field drug_delivery
 6. **Phase 2 引用预估**: storyline 确认前必须标注各节预估引用数量
 7. **学科语感配置**: configs 增加 writing_style 字段（语态/推荐动词/句长范围/领域备注）
 8. **Phase 5 集成 style_checker**: 质量控制增加去AI风格检测，评分≥70方可通过
+9. **Phase 3.6 `/figure` 识图与讨论**: 逐张读图→读图清单确认→存 `figure_analysis/`，护栏禁止像素定量/数散点/脑补背景，读不到即问用户，对接 §2 熔断与文献真实性硬约束
 
 ---
 
