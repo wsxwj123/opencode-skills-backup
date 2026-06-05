@@ -327,6 +327,38 @@ def _fig_pyramid(spec, out_dir):
     return _save(fig, _out_path(out_dir, spec))
 
 
+def _fig_svg(spec, out_dir):
+    """SVG figure（v3.13.0）：AI 直接给一段 SVG 字符串，用 PyMuPDF 渲成 PNG。
+    几何题（三角形/圆/平行线/标注角度边长）走这条比 matplotlib geometry 更精准漂亮——
+    AI 自己算坐标点、自己写 SVG，可控性远高于 spec 转换链。
+    spec: {"kind":"svg","svg":"<svg xmlns=\"http://www.w3.org/2000/svg\" ...></svg>",
+           "alt":"...","dpi":200}"""
+    svg = spec.get("svg") or spec.get("xml")
+    if not isinstance(svg, str) or "<svg" not in svg:
+        return None
+    try:
+        import fitz
+    except ImportError:
+        print("[make_figure] SVG 渲染需 PyMuPDF：pip3 install pymupdf", file=sys.stderr)
+        return None
+    # 确保有 xmlns，否则 PyMuPDF 可能拒解析
+    if "xmlns" not in svg[:200]:
+        svg = svg.replace("<svg", '<svg xmlns="http://www.w3.org/2000/svg"', 1)
+    try:
+        doc = fitz.open(stream=svg.encode("utf-8"), filetype="svg")
+    except Exception as e:
+        print(f"[make_figure] SVG 解析失败：{e}", file=sys.stderr)
+        return None
+    if doc.page_count < 1:
+        return None
+    dpi = int(spec.get("dpi", 200))
+    scale = dpi / 72
+    pix = doc[0].get_pixmap(matrix=fitz.Matrix(scale, scale), alpha=False)
+    out = _out_path(out_dir, spec)
+    pix.save(out)
+    return out
+
+
 _DISPATCH = {
     "function": _fig_function, "plot": _fig_function,
     "geometry": _fig_geometry,
@@ -336,6 +368,7 @@ _DISPATCH = {
     "vector": _fig_vector, "force": _fig_vector,
     "climate": _fig_climate,
     "pyramid": _fig_pyramid, "population_pyramid": _fig_pyramid,
+    "svg": _fig_svg,  # AI 直接写 SVG（几何题推荐）
 }
 
 
