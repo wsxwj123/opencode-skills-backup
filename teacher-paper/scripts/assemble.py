@@ -86,10 +86,10 @@ _CHANGSHA_MANIFEST = [
     ("223", "q11", "小说·结构/手法 简答", 6, "手法分析", "0.5"),
     ("224", "q12", "小说·主旨探究 简答", 6, "探究", "0.45"),
     ("232", "q13", "古诗词·理解赏析 选择", 2, "诗词鉴赏", "0.6"),
-    ("233", "q14", "古诗词·手法赏析 简答", 4, "鉴赏", "0.5"),
+    ("233", "q14", "古诗词·手法赏析 简答", 5, "鉴赏", "0.5"),
     ("235", "q15", "文言·实词理解 选择", 2, "文言实词", "0.65"),
     ("236", "q16", "文言·断句 选择", 2, "文言断句", "0.6"),
-    ("237", "q17", "文言·翻译", 4, "文言翻译", "0.55"),
+    ("237", "q17", "文言·翻译", 3, "文言翻译", "0.55"),
     ("238", "q18", "文言·形象/内容 分析", 4, "内容分析", "0.55"),
     ("242", "q19", "名著·理解分析 选择", 2, "名著识记", "0.6"),
     ("243", "q20", "名著·创意探究 简答", 6, "探究", "0.45"),
@@ -97,8 +97,6 @@ _CHANGSHA_MANIFEST = [
 ]
 
 # 通用学科大题骨架（样卷/预设都缺时的兜底；只给大题分隔，细目靠样卷或人工补）
-# 本技能聚焦【文科·纯文字、不配图】：语文/英语/政治·道法/历史/地理。
-# 数学·物理·化学·生物（需大量配图）暂不在范围内。
 _GENERIC_SECTIONS = {
     "语文": ["一、积累与运用", "二、阅读", "三、写作"],
     "英语": ["一、听力", "二、单项选择", "三、完形填空", "四、阅读理解", "五、书面表达"],
@@ -107,11 +105,15 @@ _GENERIC_SECTIONS = {
     "思想政治": ["一、选择题", "二、非选择题（材料分析）"],
     "历史": ["一、选择题", "二、非选择题（材料解析）"],
     "地理": ["一、选择题", "二、综合题（材料分析）"],
+    "数学": ["一、选择题", "二、填空题", "三、解答题"],
+    "物理": ["一、选择题（单选+多选）", "二、填空与实验探究题", "三、综合计算题"],
+    "化学": ["一、选择题（单选+不定项）", "二、填空与简答题", "三、实验探究题", "四、计算题"],
+    "生物": ["一、选择题", "二、非选择题（识图·实验·遗传分析）"],
 }
-# 未列科目按文科兜底（选择 + 非选择）
+# 未列科目按通用兜底（选择 + 非选择）
 _GENERIC_DEFAULT = ["一、选择题", "二、非选择题"]
-# 不支持的理科（需配图），命中时给出明确提示
-_UNSUPPORTED_SUBJECTS = ("数学", "物理", "化学", "生物")
+# 理科科目：题目常含图形，出卷时须提醒用户手动补图；程序层面不拦截（有预设文件即加载）
+_FIGURE_HEAVY_SUBJECTS = ("数学", "物理", "化学", "生物")
 
 # 预设目录（init 通常从技能 scripts/ 运行，预设在技能根 presets/）
 _PRESET_DIRS = [
@@ -137,11 +139,6 @@ def _changsha_chinese_blueprint():
 
 
 def _generic_blueprint(stage, subject, etype):
-    if subject in _UNSUPPORTED_SUBJECTS:
-        print(f"[提示] 本技能聚焦文科（语文/英语/政治·道法/历史/地理），"
-              f"『{subject}』属理科、题目多需配图，暂不在支持范围。\n"
-              f"        如确需出『{subject}』文字卷，请提供样卷用 --blueprint-file "
-              f"指定结构，且题目避免依赖图形。")
     secs = _GENERIC_SECTIONS.get(subject, _GENERIC_DEFAULT)
     skeleton = []
     for i, text in enumerate(secs, 1):
@@ -301,6 +298,12 @@ def cmd_init(args):
         print("[提示] 本卷英语含『听力』大题，但本技能出纯文字卷无音频。"
               "请先与用户三选一：①省略听力(分值并入其它板块) ②附听力文字稿当阅读 "
               "③用户自备音频(本卷只出题干选项)；据此再决定是否保留听力大题。")
+    # B1修复：理科科目（有配图需求）无论走预设还是兜底，均在 init 时提示手动补图。
+    if subject in _FIGURE_HEAVY_SUBJECTS:
+        print(f"[提示] 『{subject}』理科题目常含图形（电路图/几何图/坐标图/装置图等），"
+              f"本技能文字卷不自动配图。"
+              f"含图题请在题干用文字描述代替，或用 figure 块由用户提供图片；"
+              f"build 在缺图处输出 ［图：…］ 占位，需人工补图后交付。")
 
     def _ovr_int(key, default):
         try:
@@ -350,12 +353,16 @@ def cmd_init(args):
     _write_json(os.path.join(proj, "meta.json"), meta)
 
     # 写大题/小题分隔文件（按蓝图骨架，大题数不写死）
+    # B4修复：re-init 时跳过已存在的分隔文件，保留用户可能做过的修改。
     for name, text in bp["skeleton"]:
+        fp_sec = os.path.join(proj, "items", name + ".json")
+        if os.path.exists(fp_sec):
+            continue  # 已有则保留，不覆盖
         btype = "section" if is_sec_name(name) else "sub"
         block = {"type": btype, "text": text}
         atom = {"meta": {"status": "-"}, "paper": [block],
                 "answer": [block] if btype == "section" else []}
-        _write_json(os.path.join(proj, "items", name + ".json"), atom)
+        _write_json(fp_sec, atom)
 
     _write_manifest(proj, meta, bp.get("manifest", []), bp.get("summary"))
     _write_json(os.path.join(proj, "items", "_README.json"),
@@ -389,6 +396,8 @@ def _copy_scripts(proj):
             try:
                 shutil.copy2(os.path.join(HERE, fn), os.path.join(dst, fn))
                 copied += 1
+            except shutil.SameFileError:
+                copied += 1  # B7修复：源=目标（在技能目录内 init），静默跳过
             except OSError as e:
                 print(f"[警告] 复制脚本 {fn} 失败：{e}")
     return copied
@@ -412,7 +421,11 @@ def _write_manifest(proj, meta, rows, summary=None):
         "|------|------|------|------|------|------|----------|------|",
     ]
     for pre, q, typ, score, kp, diff in rows:
-        qnum = q[1:] if isinstance(q, str) and q[:1] == "q" else q
+        # B8修复："q01-q10" → "01-10"，"q01" → "01"
+        if isinstance(q, str) and q[:1] == "q":
+            qnum = q[1:].replace("-q", "-")
+        else:
+            qnum = q
         lines.append(f"| {pre} | {qnum} | {typ} | {score} | {kp} | {diff} |  | 待出 |")
     if not rows:
         lines.append("|  |  | （结构为通用兜底，请按本地样卷补充各题） |  |  |  |  | 待出 |")
@@ -487,10 +500,22 @@ def cmd_build(args):
     files = glob.glob(os.path.join(proj, "items", "*.json"))
     files = [f for f in files if not os.path.basename(f).startswith("_")]
     files = sorted(files, key=_sort_key)  # 自然数排序，避免字典序把"100"排到"90"前
-
     total = 0
     nums = []
     warn = []
+    # B3修复：同一数字前缀的多个 _sec_ 文件会重复输出大题标题，只保留第一个。
+    _seen_sec_prefix = set()
+    _deduped = []
+    for _f in files:
+        _bn = os.path.basename(_f)
+        if is_sec_name(_bn):
+            _prefix = _sort_key(_f)[0]
+            if _prefix in _seen_sec_prefix:
+                warn.append(f"{_bn} 与同前缀大题分隔文件重复，已跳过（避免标题重复）")
+                continue
+            _seen_sec_prefix.add(_prefix)
+        _deduped.append(_f)
+    files = _deduped
     source_errors = []  # 阅读类素材真实性硬门禁的违规项
     materials_dir = os.path.join(proj, "materials")
     for fp in files:
@@ -521,7 +546,7 @@ def cmd_build(args):
             if m.get("score") is None:
                 warn.append(f"题{m['num']} 缺 score 字段（未计入总分）")
 
-    # 校验（expected_questions=0 表示题量未知/通用兜底 → 无法做题量/分值门禁校验）
+    # 校验（expected_questions=0 表示题量未知/通用兜底/题量待定预设 → 跳过题量门禁，但仍校验总分）
     exp_q = meta.get("expected_questions", 21)
     exp_total = meta.get("total", 120)
     if exp_q:
@@ -530,10 +555,12 @@ def cmd_build(args):
         if abs(total - exp_total) > 0.01:
             warn.append(f"分值合计 {total:g} ≠ 期望 {exp_total}")
     else:
-        # 通用兜底/无样卷：题量分值结构未知，门禁无从校验，须人工把关，不能静默放行。
-        warn.append(f"⚠️结构未知（无样卷/预设题量分布），已跳过题量与分值门禁；"
+        # B6修复：题量未知时仍校验总分（total 来自预设，是可信期望值）；只跳过题量门禁。
+        warn.append(f"⚠️题量门禁已跳过（预设未指定固定题量）；"
                     f"当前实得 {len(nums)} 题/合计 {total:g} 分，目标总分 {exp_total}。"
                     f"请务必向用户确认大题题型与分值分布（或提供样卷 --blueprint-file）再定稿。")
+        if total > 0 and abs(total - exp_total) > 0.01:
+            warn.append(f"分值合计 {total:g} ≠ 期望 {exp_total}（题量门禁跳过，但分值校验仍有效）")
     dup = sorted({n for n in nums if nums.count(n) > 1})
     if dup:
         warn.append(f"题号重复：{','.join(dup)}")
@@ -689,8 +716,13 @@ def _blocks_to_markdown(blocks):
         elif t == "question":
             num = b.get("num", "")
             score = b.get("score", "")
-            head = f"{num}. " if num else ""
-            lines += [f"{head}{b.get('text', '')}{score}", ""]
+            text = b.get("text", "")
+            # B5修复：若 text 已以 "N." 或 "N、" 或 "N．" 开头则不再加前缀，避免双重题号。
+            if num and not any(text.startswith(f"{num}{sep}") for sep in (".", "、", "．", " ")):
+                head = f"{num}. "
+            else:
+                head = ""
+            lines += [f"{head}{text}{score}", ""]
         elif t == "options":
             for opt in b.get("items", []):
                 lines.append(str(opt))
@@ -906,6 +938,10 @@ def _check_source(fp, meta, paper_blocks, materials_dir, errors):
         if not sfile:
             errors.append(f"{name}：缺 meta.source_file（真实素材须把抓取原文落盘 "
                           f"materials/ 并在此指向该文件）")
+        elif os.path.isabs(sfile):
+            # B2修复：禁止绝对路径——os.path.join(materials_dir, "/abs/path") 会忽略 materials_dir
+            errors.append(f"{name}：source_file 不得使用绝对路径，"
+                          f"请填 materials/ 下的相对文件名（如 '非连_来源-标题.md'）")
         elif not os.path.exists(os.path.join(materials_dir, sfile)):
             errors.append(f"{name}：source_file 指向的 materials/{sfile} 不存在"
                           f"（禁止凭空编造真实素材）")
