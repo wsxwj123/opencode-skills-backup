@@ -27,3 +27,25 @@ Standard format for the reference list at the end of the document.
 1. **Accuracy:** Never fabricate citations. Every DOI must be real.
 2. **Diversity:** Ensure a mix of classic foundations and cutting-edge (last 3 years) research.
 3. **Primary Sources:** Prefer citing the original research paper over a review that mentions it, unless discussing the review's perspective itself.
+
+---
+
+## Reference Manager Modes
+
+### Zotero Mode (Recommended)
+- Real-time write during Phase 2 — one batch per section immediately after search.
+- Collection tree mirrors review outline hierarchy (root = title, subcollections = sections).
+- Each paper tagged `gid:N`; abstract stored as child note.
+- PDF: auto-download OA papers via Unpaywall API (free); non-OA papers tagged `pdf:missing`.
+- `lib_id` stored in `outline.md`; `api_key` asked each session, never persisted.
+
+### None Mode
+- Uses inherited scripts: `export_bibtex.py`, `matrix_manager.py`, `state_manager.py` (reindex only).
+- `data/literature_index.json`: paper metadata + gid + section assignments.
+- `data/synthesis_matrix.json`: structured claims per paper per section.
+- BibTeX export: `python3 scripts/export_bibtex.py --input data/literature_index.json --output exports/references.bib --clean`
+
+### EndNote Mode
+- Same as None Mode during writing phase.
+- Final step: user manually imports `exports/references.bib` into EndNote.
+- No automatic write-back.
