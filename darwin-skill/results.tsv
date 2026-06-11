@@ -62,3 +62,26 @@ timestamp	commit	skill	old_score	new_score	status	dimension	note	eval_mode
 2026-06-02T01:00	5fd5351	teacher-paper	85.4	-	keep	dim6+dim8+dim3+dim2+dim7	Top5修复:删6冗余preset+科目别名/兜底分值告警/政史地史实告警/轮次改名/命题理念下沉	dry_run
 2026-06-02T02:00	934186d	teacher-paper	85.4	86.2	keep	盲评复评	独立judge盲评86.2(+0.8);Top5修复确认落地;新修dim6数学示例矛盾;judge#2(manifest推题量)经核为分组行不可推已驳回	dry_run
 2026-06-02T03:00	f002452	teacher-paper	86.2	-	keep	dim4+dim8	盲评剩余短板修复:第二步三必问加🔴STOP标记(dim4);英语含听力(预设+兜底)init即提醒三选一	dry_run
+2026-06-04T10:07	darwin-eval-v2.18	general-sci-writing	76.9	69.6	reeval	收口断点	3judge独立盲评(A76.3/B67.9/C64.6);BP-1 update整体覆盖丢数据/BP-2 postwrite prewrite-gate必崩;Phase3.6拉低dim3+dim8	dry_run
+2026-06-04T10:31	fix-P0P1P2	general-sci-writing	69.6	—	keep	BP-1/BP-2收口	复评D70.4/E57.0(judge批次≠baseline不可直比);JudgeD读代码验证先读后合并+snapshot无gate与脚本100%吻合;收口必崩→可跑通;fig_id→figure_id;残留#2-5(自然语言路由/中途中断/跨图强制/无事务锁)系提示词嫁接脚本系统固有局限需python根治	full_test
+2026-06-04T10:43	fix-deep-2to5	general-sci-writing	—	—	keep	#5脚本根治	add-figure子命令(FileLock+figure_id去重+拒数组/缺id)实测merge不丢数据;SKILL收口update→add-figure单条;#2自然语言触发/#3中途续接/#4declared_panels校验;py_compile+--help回归OK	full_test
+2026-06-04T11:14	fix-integration-11	general-sci-writing	—	—	keep	集成完整性11条	figure_analysis备份+恢复/writing_progress+context_memory+storyline回写(add-figure锁内同步)/version_history写入/Methods联动stat_test/Discussion gate/section_memory/CITE_PENDING时机/双轨澄清/Methods门控;python端到端测试全绿	full_test
+2026-06-05T09:16	darwin-eval-v2.20	general-sci-writing	—	67.5	baseline	3judge均值	G79.0/H59.0/I64.4 散度大但真bug交叉验证;13个bug识别(数据安全6+流程5+一致性2)	full_test
+2026-06-05T09:21	darwin-fix-13	general-sci-writing	67.5	—	keep	13bug全修	BugA rollback对称/BugB passive灰区/BugC panel merge/BugD section_id兼容/BugE figure→abbrev/BugF tavily名/BugG-K退稿workflow+writing_style可选+humanizer可选+grep0命中fallback/BugL禁词表统一/BugM节末确认;实测全绿;同步opencode+codex	full_test
+2026-06-08T00:00	backup	teacher-paper	-	74	baseline	-	初始基线评估，dry_run全程	dry_run
+2026-06-08T00:01	file_edit	teacher-paper	74	78	keep	失败模式编码(dim3)	新增8行三段式异常兜底表格	dry_run
+2026-06-08T00:02	file_edit	teacher-paper	78	80	keep	反例黑名单(dim9)	新增12条命题反模式黑名单章节	dry_run
+2026-06-08T00:03	file_edit	teacher-paper	80	82	keep	实测表现(dim8)	政史地无预设路径加🔴显性提示	dry_run
+2026-06-08T12:00	bugfix-b6b7b8b9	teacher-paper	82	80.6	reeval	assemble.py 4bug修复后重评	B6总分校验/B7SameFileError/B8范围渲染/B9 warn未初始化;SKILL.md未改;评分方差内	dry_run
+2026-06-08T12:30	skillmd-scifix	teacher-paper	80.6	73.2	revert-trigger	SKILL.md理科矛盾暴露	description写"支持全科目"但Phase1写"遇理科→暂不支持"；dim8被评4/10;需修正	dry_run
+2026-06-08T12:35	scifix-3edits	teacher-paper	73.2	86.6	keep	Phase1科目描述+黑名单12+理科配图三选一	消除description与执行逻辑矛盾;理科告知配图限制后继续出卷;dim8从4→8	dry_run
+2026-06-08T13:00	dim6dim7-polish	teacher-paper	86.6	84.5	reeval	预设文件列表+听力去重+配图交叉引用	dim6 presets完整列出13文件;英语听力改交叉引用;政史地配图改指针;评分方差内(±2)	dry_run
+2026-06-08T13:30	phase2-restructure	teacher-paper	84.5	80.1	reeval	Phase2科目路由表+①②③④节结构	用户明确要求"每科只读对应要求"；restructure本身正确但暴露其他问题	dry_run
+2026-06-08T14:00	phase2-fixes-r1	teacher-paper	80.1	81.5	keep	preset/CLI优先级说明+build🔴标记+英语字数具体化	CLI参数优先级note;Phase3 build 🔴STOP;英语单篇150-250词/250-350词	dry_run
+2026-06-08T14:30	phase2-fixes-r2	teacher-paper	81.5	79.4	reeval	Phase0/1依赖说明+Phase2自洽note	评分方差内;LLM judge ±5pt噪音	dry_run
+2026-06-08T15:00	phase1-phase4-fixes	teacher-paper	79.4	80.8	reeval	Phase1第三轮🔴标记+Phase4 I/O结构	第三轮STOP标记;Phase4加Input/Output/退出条件;评分子agent dry_run	dry_run
+2026-06-08T15:30	item-format-inline+softlang-fix	teacher-paper	80.8	84.7	keep	Dim8 items/JSON内联+Dim5软化语言	Phase3内联原子题最小格式规范;教师原创条件具体化;dim8从7→9	dry_run
+2026-06-08T16:00	user-edits-r1	teacher-paper	84.7	83.5	reeval	formatting-rules内联兜底+黑名单13+理科补充简化	用户3处改动;dim7配图4处重复被扣;评分方差内	dry_run
+2026-06-08T16:30	factual-fixes+read_material-fallback	teacher-paper	83.5	88.0	keep	预设数量13→17+高中政史地有预设+read_material失败分支	修正2处事实错误;dim3补read_material失败兜底;dim5/7配图简化+软化词修复同批	dry_run
+2026-06-08T17:00	polish-final	teacher-paper	88.0	-	pending	Phase4🔴退出+allowed-tools数组+触发时机中文+presets17行穷举	Frontmatter/dim6/dim4最后打磨	dry_run
+2026-06-11T17:57	cef1a4a	teacher-paper	88.0	83.9	keep	架构重构	v3.9.0: 移植v3.13门禁+科目原子化+字数硬门禁+Phase1总表; judge另发现5问题已修; 路由抽查9/10物理卷不读语文文档; 回归40/40	dry_run
