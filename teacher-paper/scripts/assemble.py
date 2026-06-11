@@ -350,6 +350,14 @@ def cmd_init(args):
     # 小说选文字数区间：蓝图指定则带上，build 校验按此；默认（不写）即 1000-1500。
     if bp.get("novel_len"):
         meta["novel_len"] = bp["novel_len"]
+    # 各板块字数区间：蓝图/预设显式给 block_len 优先；否则按科目内置默认（仅语文）；
+    # 旧字段 novel_len 兼容并入 block_len["小说"]。build 按此表做字数门禁。
+    block_len = bp.get("block_len") or _default_block_len(stage, subject)
+    if bp.get("novel_len"):
+        block_len = dict(block_len)
+        block_len["小说"] = bp["novel_len"]
+    if block_len:
+        meta["block_len"] = block_len
     _write_json(os.path.join(proj, "meta.json"), meta)
 
     # 写大题/小题分隔文件（按蓝图骨架，大题数不写死）
@@ -575,10 +583,9 @@ def cmd_build(args):
 
     # —— 选文完整性硬门禁：阅读板块有题却无选文正文 → 学生无法作答，拒绝出卷 ——
     completeness_errors = _check_materials_present(paper)
-    # —— 小说选文字数检查，越界仅告警不阻断 ——
-    # 默认 1000-1500（九年级语文小说规格）；其他年级/特殊要求由蓝图 meta.novel_len 覆盖。
-    # 传 subject：英语等非中文卷按"词"计数，不套用中文字数默认区间。
-    _check_novel_length(paper, warn, meta.get("novel_len"), meta.get("subject", ""))
+    # —— 选文字数门禁：按板块校验（区间来自 meta.block_len；旧工程回退 novel_len/小说默认）——
+    length_errors = _check_block_lengths(paper, meta.get("block_len"),
+                                         meta.get("subject", ""), meta.get("novel_len"))
 
     # —— 选文出处措辞：真实性铁律要求忠实节选，标注应为'节选自'而非'改编自' ——
     _check_material_wording(paper, warn)
@@ -631,6 +638,21 @@ def cmd_build(args):
             sys.exit(2)
         print("\n  ⚠️ 你使用了 --allow-missing-figure，缺图位置将留 ［图：alt］ 文字占位（学生可能看不懂题）。",
               file=sys.stderr)
+
+    # —— 选文字数门禁：越界默认拒绝出卷（--allow-length 降级为告警）——
+    allow_length = "--allow-length" in args
+    if length_errors:
+        if allow_length:
+            warn.extend(e + "（--allow-length 已降级为告警）" for e in length_errors)
+        else:
+            print(f"[合并] 已读 {len(files)} 个原子文件，题量 {len(nums)}，分值合计 {total:g}")
+            print("\n🔴 [字数门禁] 以下选文字数越界（区间来自 meta.block_len，"
+                  "默认值见对应科目文档第 2 节）：")
+            for e in length_errors:
+                print("   - " + e)
+            print("\n  已拒绝出卷。请补充/精简选文（同步修订 materials/ 原文节选范围）后重跑；")
+            print("  如确需越界出卷，加 --allow-length（降级为告警，须告知用户字数不达标）。")
+            sys.exit(2)
 
     content = {
         "paper_path": os.path.join(proj, "build",
@@ -906,34 +928,68 @@ def _novel_text_len(paras, is_english=False):
     return sum(len(re.sub(r"\s", "", str(p))) for p in (paras or []))
 
 
-def _check_novel_length(paper, warn, bounds=None, subject=""):
-    """小说(文学作品)选文字数越界加入告警（不阻断）。
-    默认区间 1000-1500（九年级语文小说规格，按中文字）；bounds=[lo,hi] 时按蓝图给定区间。
-    英语等非中文卷：按"词"计数；未显式给 bounds 则不校验（中文默认区间不适用）。
-    识别：处于'小说/文学作品'小标题区间内、layout 非 verse 的 material 选文。"""
+# 板块识别关键词（顺序匹配，先匹配先得；material.block 显式声明优先于推断）
+_BLOCK_KEYWORDS = (("非连", "非连"), ("非文学", "非连"), ("信息类", "非连"),
+                   ("散文", "散文"), ("小说", "小说"), ("文学作品", "小说"),
+                   ("文言", "文言"), ("名著", "名著"))
+
+
+def _default_block_len(stage, subject):
+    """按科目给出各板块默认字数区间（净字数）。
+    仅语文有内置默认（九年级规格，与 references/subjects/语文.md 第2节区间表一致）；
+    其它科目无默认——蓝图/预设显式给 block_len 才校验（英语词数必须显式给）。"""
+    if "语文" in str(subject):
+        return {"非连": [600, 1000], "小说": [1000, 1500],
+                "散文": [800, 1200], "文言": [100, 200]}
+    return {}
+
+
+def _check_block_lengths(paper, block_len, subject="", legacy_novel_len=None):
+    """按板块校验选文字数/词数，返回 errors 列表（默认阻断，--allow-length 降级告警）。
+    板块归属：material.block 显式声明优先；否则按所在 sub 小标题关键词推断。
+    同一 sub 区间内同板块多则材料求和（非连"合计 600-1000"语义）。
+    跳过：layout=verse（古诗词不按字数）、推断不出板块、板块无配置区间。
+    旧工程兼容：meta 无 block_len 时回退 {"小说": novel_len or [1000,1500]}
+    （英语卷无显式区间则不校验，中文默认区间不适用）。"""
     is_english = "英语" in str(subject)
-    if is_english and not bounds:
-        return
-    try:
-        lo, hi = (bounds or [1000, 1500])
-        lo, hi = int(lo), int(hi)
-    except (TypeError, ValueError):
-        lo, hi = 1000, 1500
+    if not block_len:
+        if is_english and not legacy_novel_len:
+            return []
+        block_len = {"小说": legacy_novel_len or [1000, 1500]}
     unit = "词" if is_english else "字"
-    region = None
+    sums, order = {}, []          # 按 (sub区间序号, 板块) 求和
+    region, region_idx = None, 0
     for b in paper:
         if not isinstance(b, dict):
             continue
         t = b.get("type")
         if t in ("sub", "section"):
             region = b.get("text", "") if t == "sub" else None
-        elif t == "material" and b.get("paras") and region \
-                and ("小说" in region or "文学作品" in region) \
-                and b.get("layout") != "verse":
-            n = _novel_text_len(b.get("paras"), is_english)
-            if n < lo or n > hi:
-                warn.append(f"小说选文约 {n} {unit}，建议 {lo}-{hi} {unit}"
-                            f"（{'偏短' if n < lo else '偏长'}）")
+            region_idx += 1
+        elif t == "material" and b.get("paras") and b.get("layout") != "verse":
+            blk = b.get("block")
+            if not blk and region:
+                blk = next((v for k, v in _BLOCK_KEYWORDS if k in region), None)
+            if not blk or blk not in block_len:
+                continue
+            key = (region_idx, blk)
+            if key not in sums:
+                sums[key] = 0
+                order.append(key)
+            sums[key] += _novel_text_len(b.get("paras"), is_english)
+    errors = []
+    for key in order:
+        blk = key[1]
+        try:
+            lo, hi = int(block_len[blk][0]), int(block_len[blk][1])
+        except (TypeError, ValueError, IndexError, KeyError):
+            continue
+        n = sums[key]
+        if n < lo or n > hi:
+            errors.append(f"『{blk}』选文合计约 {n} {unit}，要求 {lo}-{hi} {unit}"
+                          f"（{'偏短' if n < lo else '偏长'}）——请补充/精简选文，"
+                          f"或调整 meta.block_len 区间")
+    return errors
 
 
 def _needs_source(meta, paper_blocks):
