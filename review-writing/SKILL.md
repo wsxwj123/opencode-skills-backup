@@ -42,7 +42,7 @@ not_for:
 - **Phase 1:** 提纲 → 用户确认 → Zotero 集合树 → **HALT**
 - **Phase 2:** 逐节搜索（**串行，≥1s 间隔**）→ 写入 Zotero/index → **HALT** dedup
 - **Phase 3:** 逐节写作 → citation spot-check → Reviewer Simulator → **HALT**
-- **Phase 4:** citation guard → 编译 → 连贯性扫描 → 缩写扫描 → 导出
+- **Phase 4:** 引用总量校验 → citation guard → 编译 → 连贯性扫描 → 缩写扫描 → 导出
 
 ### 绝对禁止
 - 并行搜索调用
@@ -892,7 +892,8 @@ If pending_sections is empty → all sections complete; proceed to Phase 4.
    - [Zotero mode] Also cross-check against `--get-section` output: every gid used in draft should appear in the section's Zotero collection.
 
 6. **Reviewer Simulator** — 执行 5 维度 16 项 Y/N checklist（📖 详见 `references/reviewer_checklist.md`）。
-   **Gate:** 任何维度 ≥1 项失败 → 内部修订（最多 2 轮）。2 轮后仍失败 → **HALT**，输出结构化反馈（【问题】+ 证据锚点 + 根源分析 + 修复方向）。
+   **优先委托独立 subagent 盲评**（消除"自写自评"偏差）：派一个 subagent，只给它 `drafts/section_XX_XX.md` 路径 + checklist，不给写作时的上下文，让它独立判定每项 Y/N 并返回结构化结果。无 subagent 能力的客户端 → 主 agent 自评，但必须切换到"审稿人视角"重新逐项核对（不默认通过）。
+   **Gate:** 任何维度 ≥1 项失败 → 内部修订（最多 2 轮）。2 轮后仍失败 → **HALT**，输出结构化反馈（【问题】+ 证据锚点 + 根源分析 + 修复方向）。修订与 HALT 决策由主 agent 负责（不可委托）。
 
 7. **Word count check:**
    ```bash
@@ -980,6 +981,25 @@ Write Mode has no `pending_sections` field so this gate is a no-op (no key → e
    # OR state.json marks citations as not imported
    python3 -c "import json,pathlib; s=json.loads(pathlib.Path('state.json').read_text(encoding='utf-8')); exit(0 if s.get('citations_imported') is False else 1)" && echo "GUARD: citations_imported=false → skip 2a-2b"
    ```
+   **引用总量校验（警告性，不阻断 —— 尊重用户自定的短篇长度）:**
+   ```bash
+   python3 -c "
+   import sys, pathlib
+   sys.path.insert(0, 'scripts')
+   from citation_utils import extract_citation_ids
+   ids = set()
+   for f in pathlib.Path('drafts').glob('*.md'):
+       ids.update(extract_citation_ids(f.read_text(encoding='utf-8')))
+   n = len(ids)
+   print(f'Unique citations in drafts: {n}')
+   if n < 150:
+       print(f'⚠️ 引用总数 {n} < 150（高影响力综述目标）。短篇或用户指定长度可忽略；否则建议 Round 2/3 补检索。')
+   else:
+       print(f'✅ 引用总数 {n} 达标（≥150）')
+   "
+   ```
+   > **类型分布（人工核对）：** literature_index.json 未记录 Original/Review/Preprint 类型字段，无法机器统计。AI 对照 Constraints 目标（Original≥80 / Review≥50 / Preprint≥20）人工抽查 index，明显失衡时提示用户。
+
    ```bash
    python3 scripts/check_global_citation_sequence.py
    python3 scripts/validate_citations.py --live --live-used-only --fail-on-orphan --retries 2
