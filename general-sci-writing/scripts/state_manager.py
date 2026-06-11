@@ -2540,6 +2540,42 @@ def gate_check(section, phase):
     return payload
 
 
+def required_refs_for_section(section):
+    """写作该 section 前必须先 Read 的 reference 清单（progressive disclosure 硬门禁）。
+
+    返回顺序保持去重。anti-ai-protocol 对所有英文正文写作通用；
+    results/discussion 另需识图依据与 Discussion 模板；methods/intro 需对应写作模板。
+    """
+    sid = (section or "").lower()
+    refs = ["references/anti-ai-protocol.md"]
+    is_rd = any(k in sid for k in ("results", "discussion"))
+    is_methods = "method" in sid
+    is_intro = any(k in sid for k in ("intro", "introduction"))
+    is_abstract = any(k in sid for k in ("abstract", "title"))
+    if is_rd:
+        refs += ["figure_analysis/<本节对应 figure_N.md>",
+                 "references/writing-templates.md",
+                 "references/citation-policy.md"]
+    elif is_methods:
+        refs.append("references/writing-templates.md")
+    elif is_intro:
+        refs += ["references/writing-templates.md", "references/citation-policy.md"]
+    elif is_abstract:
+        pass  # 摘要/标题：仅需 anti-ai-protocol
+    else:
+        # 类型无法从 section_id 识别（如 'uptake'/'characterization'）→ 宁多勿漏，
+        # 给全正文写作 refs，避免门禁因非标准命名而退化失效；本节若无图则 figure_analysis 自然跳过。
+        refs += ["figure_analysis/<本节对应 figure_N.md；本节无图则跳过>",
+                 "references/writing-templates.md",
+                 "references/citation-policy.md"]
+    seen, out = set(), []
+    for r in refs:
+        if r not in seen:
+            seen.add(r)
+            out.append(r)
+    return out
+
+
 def write_cycle(
     section,
     compact=True,
@@ -2563,7 +2599,8 @@ def write_cycle(
     preflight_strict=True,
     matrix_file=DEFAULT_LITERATURE_MATRIX_FILE,
     storyline_file=STATE_FILES["storyline"],
-    require_matrix_reindex=True
+    require_matrix_reindex=True,
+    confirm_refs=False
 ):
     tx = {
         "command": "write-cycle",
@@ -2616,6 +2653,13 @@ def write_cycle(
         )
         tx["load"] = summarize_bundle_for_log(loaded)
 
+        must_read = required_refs_for_section(section)
+        tx["must_read_refs"] = must_read
+        print("\n[⚠️ 写作前必读 references（硬门禁，未读会违反去AI/识图/引用规则）]")
+        for _r in must_read:
+            print(f"  - Read {_r}")
+        print("  读完写正文 → 落盘用 `--finalize --refs-confirmed`（缺 --refs-confirmed 会被阻断）\n")
+
         prewrite_gate = gate_check(section=section, phase="prewrite")
         tx["prewrite_gate"] = {
             "ok": bool((prewrite_gate or {}).get("ok")),
@@ -2624,6 +2668,16 @@ def write_cycle(
 
         # 3) Optional finalize step after writing content externally
         if finalize:
+            if not confirm_refs:
+                msg = {
+                    "ok": False,
+                    "error": "refs_not_confirmed",
+                    "section": section,
+                    "must_read": required_refs_for_section(section),
+                    "hint": "落盘被阻断：写作前必须 Read 上述 references。确认已读后在 finalize 命令追加 --refs-confirmed 重跑。"
+                }
+                print(json.dumps(msg, ensure_ascii=False, indent=2))
+                sys.exit(2)
             post = postwrite_state(
                 section=section,
                 status=status,
@@ -3507,6 +3561,7 @@ def main():
     cycle_parser.add_argument("--no-require-matrix-reindex", action="store_true", help="Allow finalize sync-apply without strict matrix reindex gate")
     cycle_parser.add_argument("--rewrite-docx", action="store_true", help="Also rewrite docx citation markers")
     cycle_parser.add_argument("--no-backup", action="store_true", help="Skip pre-sync backup")
+    cycle_parser.add_argument("--refs-confirmed", action="store_true", help="Declare that required references (anti-ai-protocol etc.) were Read before writing; mandatory for --finalize")
 
     # Snapshot command
     subparsers.add_parser("snapshot", help="Create a full project backup")
@@ -3649,7 +3704,8 @@ def main():
             no_backup=args.no_backup,
             matrix_file=args.matrix_file,
             storyline_file=args.storyline_file,
-            require_matrix_reindex=(not args.no_require_matrix_reindex)
+            require_matrix_reindex=(not args.no_require_matrix_reindex),
+            confirm_refs=args.refs_confirmed
         )
     elif args.command == "snapshot":
         backup_project_state()
