@@ -1,6 +1,6 @@
-# General SCI Writing Skill (v2.19.0) 使用指南
+# General SCI Writing Skill (v2.20.0) 使用指南
 
-## 📘 完整工作流程示例 (v2.19.0)
+## 📘 完整工作流程示例 (v2.20.0)
 
 ### 研究方向配置示例
 
