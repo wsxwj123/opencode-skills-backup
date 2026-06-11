@@ -554,9 +554,8 @@ Write `[TITLE]/outline.md`:
 ```
 
 **After writing both files, commit to git:**
-> ⚠️ 前置依赖：`git init` + 首次提交在 **0.5（详见 `docs/phase_0_init.md`）** 完成。若未读 docs/未执行 0.5 的 init，本步 commit 会因"不在 git 仓库"失败——务必先完成 0.5。
 ```bash
-# Only if git was initialized in 0.5 (git_available: true):
+# Only if git was initialized in 0.5 above (git_available: true):
 cd "[PROJECT_BASE]/[TITLE]"
 git add state.json outline.md && git commit -m "[review] Phase 0: state + outline initialized"
 # If git is not available → skip silently.
