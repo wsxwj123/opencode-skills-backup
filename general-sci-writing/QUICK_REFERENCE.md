@@ -1,4 +1,4 @@
-# General SCI Writing Skill - 快速参考卡片 (v2.19.0)
+# General SCI Writing Skill - 快速参考卡片 (v2.20.0)
 
 ## 核心定位
 - 面向多学科 SCI Article 写作。
@@ -14,7 +14,7 @@ python scripts/state_manager.py set-field --field default
 python scripts/state_manager.py write-cycle --section results_3.1 --token-budget 6000 --tail-lines 80
 
 # 3) 最终落盘并同步引用
-python scripts/state_manager.py write-cycle --section results_3.1 --finalize --sync-literature --sync-apply --strict-references --summary "..."
+python scripts/state_manager.py write-cycle --section results_3.1 --finalize --refs-confirmed --sync-literature --sync-apply --strict-references --summary "..."
 ```
 
 ## 文献核验硬门禁
@@ -69,5 +69,5 @@ python scripts/export_bibtex.py --index-file literature_index.json --output-file
 - `python3 -m unittest discover -s tests -p 'test_*.py' -q`
 
 ## 版本
-- Current: `2.19.0`
+- Current: `2.20.0`
 - Last updated: `2026-06-11`

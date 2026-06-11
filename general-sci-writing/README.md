@@ -5,7 +5,7 @@ This Skill is a structured manuscript collaboration system specifically engineer
 ---
 
 
-# General SCI Writing Skill (v2.19.0)
+# General SCI Writing Skill (v2.20.0)
 
 ## Purpose
 This skill is for long-form academic manuscript writing with strict state consistency.
@@ -68,7 +68,7 @@ python scripts/state_manager.py write-cycle --section results_3.1 --include-draf
 
 3. Finalize this turn:
 ```bash
-python scripts/state_manager.py write-cycle --section results_3.1 --finalize --sync-literature --sync-apply --strict-references --summary "..."
+python scripts/state_manager.py write-cycle --section results_3.1 --finalize --refs-confirmed --sync-literature --sync-apply --strict-references --summary "..."
 ```
 
 4. Word count (default excludes References):
@@ -132,4 +132,4 @@ python3 -m unittest discover -s tests -p 'test_*.py' -q
 - `manuscripts/` (in project workspace, not skill root): actual section drafts
 
 ## Version
-- Current: `2.19.0`
+- Current: `2.20.0`

@@ -28,7 +28,7 @@ license: Proprietary
 7. **引用格式**：正文一律 `[n]`（分节矩阵重排后的全局索引），每节末附 Vancouver 列表；严禁 `[Author,2023]`/`(1)`。
 8. **期刊上限**：storyline 必须在 `target_journal` 字数上限内编排，严禁先写超 30% 再砍。
 9. **占位清零**：`CITE_PENDING`/`DATA_PENDING`/`REF_DROPPED` 必须在 `/merge` 前清零（Phase 10 扫描门禁）。
-10. **状态持久化**：写前 `write-cycle --section`，写后 `write-cycle --finalize`；SI/figure/缩略词实时入库，不停留在记忆中。
+10. **状态持久化 + 读 references 硬门禁**：写前 `write-cycle --section`（脚本会列出本节**必读 references**清单）→ **先 `Read` 那些 references 再动笔**（不读直接凭记忆写 = 违规）→ 写后 `write-cycle --finalize --refs-confirmed`。**缺 `--refs-confirmed` 落盘会被脚本 exit 2 硬阻断**——这是把"忘记读 references"从软约束变成真门禁。SI/figure/缩略词实时入库，不停留在记忆中。
 
 ## 📁 references/ 参考文件地图（按需 Read，不要靠记忆复述其内容）
 
@@ -311,13 +311,13 @@ SCI 论文通常只在少数场景需引中文文献（中药/中医、临床路
    - **小节粒度硬要求**：矩阵中的 `section_id` 必须与 `storyline.sections[].id` 一一对应到“小节级”（如 `results_3.1`, `results_3.2`）；禁止只写到大章级（如仅 `results`）。
 3. **先重排后写作**：在开始任何小节正文前，必须按“小节顺序 + 小节内引用优先级”对 `literature_index.json` 重新编号为连续 `1..N`，不得沿用“检索时间顺序编号”。
 4. **分节引用约束**：撰写某小节时，只允许引用该小节矩阵内文献；后续新检索到的文献若理论上应归属前文小节，必须先触发全局重编号与正文同步，再继续写作。
-5. **一致性收口**：每轮写作收口仍必须执行 `write-cycle --finalize --sync-literature --sync-apply`，确保正文 `[n]`、各小节参考列表与全局索引三者一致。
+5. **一致性收口**：每轮写作收口仍必须执行 `write-cycle --finalize --refs-confirmed --sync-literature --sync-apply`，确保正文 `[n]`、各小节参考列表与全局索引三者一致。
 **后续增量检索同流程（Mandatory）**：
 1. **全程一致**：第二轮及后续每一轮新增文献，必须重复执行“分配到小节 → 更新矩阵 → 全局重编号 → 同步落盘”，严禁仅追加到索引末尾后直接写正文。
 2. **实时更新触发**：只要发生以下任一动作，必须立即更新 `literature_index.json` 与文献矩阵并执行同步：新增文献、文献重分配到其他小节、删除文献、合并去重、修改核心元数据（标题/作者/DOI/年份）。
 3. **写作前一致性检查**：开始任一小节写作前，必须确认“正文引用号、`literature_index.json`、文献矩阵”三者一致；任一不一致必须先同步修复，禁止继续生成正文。
 4. **冲突优先级**：当“新检索文献应出现在前文小节”与“当前小节写作”冲突时，优先执行全局重编号与全稿引用同步，再恢复写作。
-5. **脚本硬门禁**：`sync-literature --apply` 与 `write-cycle --finalize --sync-literature --sync-apply` 默认强制执行”矩阵重编号校验”；缺失矩阵或分配不完整将直接阻断落盘（仅调试可用 `--no-require-matrix-reindex` 临时放行）。
+5. **脚本硬门禁**：`sync-literature --apply` 与 `write-cycle --finalize --refs-confirmed --sync-literature --sync-apply` 默认强制执行”矩阵重编号校验”；缺失矩阵或分配不完整将直接阻断落盘（仅调试可用 `--no-require-matrix-reindex` 临时放行）。
 
 > **[用户确认检查点 Mandatory]** 展示文献矩阵（小节-文献映射，含各节文献数和 citation_guard 通过状态），等待用户确认后才进入 Phase 8 写作。矩阵未确认禁止启动 `/write`。
 
@@ -656,7 +656,7 @@ python scripts/state_manager.py set-field --field drug_delivery
 
 ---
 
-**版本**: 2.19.0（变更历史见 CHANGELOG.md）
+**版本**: 2.20.0（变更历史见 CHANGELOG.md）
 
 ---
 
@@ -673,7 +673,7 @@ python scripts/state_manager.py set-field --field drug_delivery
 正文一律 `[n]`，编号来源于分节文献矩阵重排后的全局索引，每节末附 Vancouver 格式参考文献列表。
 
 ### 3. 状态持久化与SI落地 (STATE & SI PERSISTENCE)
-- **状态持久化**：写前执行 `write-cycle --section [id]`，写后执行 `write-cycle --section [id] --finalize --sync-literature --sync-apply --strict-references --summary “[摘要]”`。
+- **状态持久化**：写前执行 `write-cycle --section [id]`，写后执行 `write-cycle --section [id] --finalize --refs-confirmed --sync-literature --sync-apply --strict-references --summary “[摘要]”`。
 - **SI 落地**：对话中确认的 SI 内容必须实时写入 `si_database.json`，不得仅停留在记忆中。
 
 ### 4. 强制交互输出 (MANDATORY INTERACTION)
