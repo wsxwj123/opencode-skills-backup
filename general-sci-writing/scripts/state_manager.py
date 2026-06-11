@@ -2549,15 +2549,25 @@ def required_refs_for_section(section):
     sid = (section or "").lower()
     refs = ["references/anti-ai-protocol.md"]
     is_rd = any(k in sid for k in ("results", "discussion"))
+    is_methods = "method" in sid
+    is_intro = any(k in sid for k in ("intro", "introduction"))
+    is_abstract = any(k in sid for k in ("abstract", "title"))
     if is_rd:
-        refs.append("figure_analysis/<本节对应 figure_N.md>")
+        refs += ["figure_analysis/<本节对应 figure_N.md>",
+                 "references/writing-templates.md",
+                 "references/citation-policy.md"]
+    elif is_methods:
         refs.append("references/writing-templates.md")
-    if "method" in sid:
-        refs.append("references/writing-templates.md")
-    if any(k in sid for k in ("intro", "introduction")):
-        refs.append("references/writing-templates.md")
-    if is_rd or any(k in sid for k in ("intro", "introduction")):
-        refs.append("references/citation-policy.md")
+    elif is_intro:
+        refs += ["references/writing-templates.md", "references/citation-policy.md"]
+    elif is_abstract:
+        pass  # 摘要/标题：仅需 anti-ai-protocol
+    else:
+        # 类型无法从 section_id 识别（如 'uptake'/'characterization'）→ 宁多勿漏，
+        # 给全正文写作 refs，避免门禁因非标准命名而退化失效；本节若无图则 figure_analysis 自然跳过。
+        refs += ["figure_analysis/<本节对应 figure_N.md；本节无图则跳过>",
+                 "references/writing-templates.md",
+                 "references/citation-policy.md"]
     seen, out = set(), []
     for r in refs:
         if r not in seen:
