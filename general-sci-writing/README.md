@@ -5,7 +5,7 @@ This Skill is a structured manuscript collaboration system specifically engineer
 ---
 
 
-# General SCI Writing Skill (v2.16.2)
+# General SCI Writing Skill (v2.19.0)
 
 ## Purpose
 This skill is for long-form academic manuscript writing with strict state consistency.
@@ -125,10 +125,11 @@ python3 -m unittest discover -s tests -p 'test_*.py' -q
 
 ## Directory Intent
 - `scripts/`: executable workflow logic
+- `references/`: on-demand reference docs loaded by SKILL.md phases (anti-AI protocol, stat tree, submission guide, writing templates, figure protocol)
 - `templates/`: initialization/reference templates
 - `configs/`: research field configurations
 - `tests/`: regression coverage for state manager
 - `manuscripts/` (in project workspace, not skill root): actual section drafts
 
 ## Version
-- Current: `2.16.2`
+- Current: `2.19.0`

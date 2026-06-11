@@ -1,4 +1,4 @@
-# General SCI Writing Skill - 快速参考卡片 (v2.16.2)
+# General SCI Writing Skill - 快速参考卡片 (v2.19.0)
 
 ## 核心定位
 - 面向多学科 SCI Article 写作。
@@ -69,5 +69,5 @@ python scripts/export_bibtex.py --index-file literature_index.json --output-file
 - `python3 -m unittest discover -s tests -p 'test_*.py' -q`
 
 ## 版本
-- Current: `2.16.2`
-- Last updated: `2026-03-07`
+- Current: `2.19.0`
+- Last updated: `2026-06-11`
