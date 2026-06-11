@@ -330,7 +330,7 @@ python3 <SKILL_DIR>/scripts/assemble.py init "<试卷名>_工程" --stage 九年
 # 2) 抓素材入 materials/，逐题写 items/NN_qXX.json（paper+answer+解析+命题意图）
 
 # 3) 合并校验并出卷 —— init 后改用【工程内脚本副本】，不再碰技能本体脚本！
-#    自动校验题量/分值、选文完整性、小说字数；生成两个 Word 到 build/（默认带页码）
+#    自动校验题量/分值、选文完整性、溯源凭证、缺图、各板块选文字数；生成两个 Word 到 build/（默认带页码）
 #    需同时出 PDF 加 --pdf（需本机 LibreOffice，否则提示手动导出）
 python3 "<工程>/scripts/assemble.py" build "<工程>" [--pdf]
 ```
@@ -367,7 +367,8 @@ python3 "<工程>/scripts/assemble.py" build "<工程>" [--pdf]
   "material": {
     "title": "选文标题", "author": "作者/朝代", "source": "出处标注",
     "paras": ["第一段", "第二段"],
-    "layout": "prose|verse"
+    "layout": "prose|verse",
+    "block": "非连|小说|散文|文言|名著（可选；不写则按小标题推断，字数门禁按此归板块）"
   },
   "figure": {"src": "materials/图.png", "caption": "图注"}
 }
@@ -423,7 +424,7 @@ python3 "<工程>/scripts/assemble.py" build "<工程>" [--pdf]
 | `ocr_image.py` 识别失败（所有 OCR 引擎均报错）| 用模型自身原生识图能力直接读图 | 请用户手动誊录图中文字为 .md 放入 `materials/` |
 | `assemble.py init` 失败（路径权限/磁盘问题）| 改为桌面默认路径重试（不传绝对路径）| 手动建目录后重试；若仍失败告知用户手动创建工程文件夹 |
 | 用户给 URL 无法访问（403/超时/反爬）| 换同主题备用站抓取一次 | 请用户截图/PDF；不使用无法核实来源的内容 |
-| build 字数校验告警（小说选文超/欠长）| 精简或补充选文后重写 materials/ 对应文件 | 征得用户知情同意后加 `--allow-unsourced` 跳过字数校验 |
+| build 字数门禁拒绝（选文越板块区间，区间见科目文档第2节）| 补充/精简选文后重写 materials/ 对应文件再 build | 征得用户知情同意后加 `--allow-length` 降级为告警（不要用 `--allow-unsourced`，那是溯源开关）|
 | 断点续作时工程路径找不到 | 让用户重新指定工程路径 | 重新 `init` 建新工程，提示用户把旧 `items/` 复制进来 |
 
 ---

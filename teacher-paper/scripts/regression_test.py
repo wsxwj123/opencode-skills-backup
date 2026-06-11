@@ -177,6 +177,50 @@ for expr in ["x**2 - 2*x", "sin(x) + cos(x)", "sqrt(x**2 + 1)"]:
                          "xrange": [-3, 3], "alt": ""}, fig_dir)
     case(f"E·合法 {expr}", r is not None and os.path.exists(r))
 
+# ============== Part F: 按板块字数门禁 ==============
+print("\n=== F. _check_block_lengths 字数门禁 ===")
+BL = {"非连": [600, 1000], "小说": [1000, 1500], "散文": [800, 1200], "文言": [100, 200]}
+
+
+def _mk(sub, paras, **kw):
+    return [{"type": "sub", "text": sub},
+            {"type": "material", "title": "x", "paras": paras, **kw}]
+
+
+errs = A._check_block_lengths(_mk("（二）文学作品阅读·小说", ["字" * 800]), BL)
+case("F1 小说800字<区间-阻断", any("小说" in e and "偏短" in e for e in errs))
+
+errs = A._check_block_lengths(_mk("（二）文学作品阅读·小说", ["字" * 1200]), BL)
+case("F2 小说1200字达标-通过", not errs)
+
+errs = A._check_block_lengths(
+    _mk("（一）非连续性文本阅读", ["字" * 300]) +
+    [{"type": "material", "title": "y", "paras": ["字" * 400]}], BL)
+case("F3 非连两则合计700-求和通过", not errs)
+
+errs = A._check_block_lengths(_mk("（一）非连续性文本阅读", ["字" * 300]), BL)
+case("F4 非连单则300偏短-阻断", any("非连" in e for e in errs))
+
+errs = A._check_block_lengths(_mk("（三）古诗文阅读", ["床前明月光"], layout="verse"), BL)
+case("F5 verse古诗-跳过", not errs)
+
+errs = A._check_block_lengths(_mk("（五）拓展阅读", ["字" * 50], block="文言"), BL)
+case("F6 显式block=文言覆盖推断-阻断", any("文言" in e for e in errs))
+
+errs = A._check_block_lengths(_mk("（二）小说", ["字" * 800]), None, "语文", None)
+case("F7 旧工程无block_len-回退小说默认仍阻断", any("小说" in e for e in errs))
+
+errs = A._check_block_lengths(_mk("阅读理解", ["word " * 100]), None, "英语", None)
+case("F8 英语无显式区间-跳过", not errs)
+
+errs = A._check_block_lengths(_mk("阅读理解A", ["word " * 100], block="阅读"),
+                              {"阅读": [150, 250]}, "英语")
+case("F9 英语显式区间按词-阻断", any("100 词" in e for e in errs))
+
+case("F10 语文默认表含四板块", set(A._default_block_len("九年级", "语文")) ==
+     {"非连", "小说", "散文", "文言"})
+case("F11 非语文无默认", A._default_block_len("九年级", "物理") == {})
+
 # 总结
 print(f"\n=== 总计 {len(PASS)}/{len(PASS)+len(FAIL)} 通过 ===")
 if FAIL:
