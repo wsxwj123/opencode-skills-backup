@@ -477,6 +477,31 @@ def _export_pdf(docx_paths, out_dir):
     return ok
 
 
+def _cleanup_nul_files(project_dir, warn):
+    """清理名为 NUL 的残留文件：cmd 风格重定向（>NUL / 2>NUL）在 Windows 的
+    Git Bash 下不会指向空设备，而是真的创建一个名为 NUL 的文件。
+    Windows 原生 API 删除保留名文件需要 \\\\?\\ 前缀。"""
+    for root, _dirs, fnames in os.walk(project_dir):
+        for name in fnames:
+            if name.upper() != "NUL":
+                continue
+            fp = os.path.join(root, name)
+            try:
+                os.remove(fp)
+            except OSError:
+                removed = False
+                if os.name == "nt":
+                    try:
+                        os.remove("\\\\?\\" + os.path.abspath(fp))
+                        removed = True
+                    except OSError:
+                        pass
+                if not removed:
+                    warn.append(f"发现残留文件 {fp}（疑似 '>NUL' 重定向误生成），自动删除失败，请手动删除")
+                    continue
+            warn.append(f"已清理残留文件 {fp}——由 cmd 风格 '>NUL' 重定向误生成，命令一律用 bash 语法，不要重定向到 NUL")
+
+
 def cmd_build(args):
     if not args:
         print("用法：assemble.py build <工程目录>")
@@ -511,6 +536,7 @@ def cmd_build(args):
     total = 0
     nums = []
     warn = []
+    _cleanup_nul_files(proj, warn)
     # B3修复：同一数字前缀的多个 _sec_ 文件会重复输出大题标题，只保留第一个。
     _seen_sec_prefix = set()
     _deduped = []
