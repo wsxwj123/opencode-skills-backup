@@ -14,6 +14,7 @@ To clarify which files are runtime artifacts versus manuscript assets.
 - `scripts/state_manager.py`
 - `scripts/citation_guard.py`
 - `SKILL.md`
+- `references/*.md`
 - `scripts/config_manager.py`
 - `configs/*.json`
 - `QUICK_REFERENCE.md`
