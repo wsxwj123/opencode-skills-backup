@@ -3,6 +3,14 @@
 Checklist-anchored evaluation per reviewer-simulator skill methodology.
 For each dimension, answer every checklist item (Y/N). Dimension passes when ALL items = Y.
 
+## 执行方式（优先盲评）
+
+为消除"自写自评"偏差，**优先委托独立 subagent 盲评**：
+
+- **委托盲评（推荐）：** 主 agent 派一个 subagent，输入仅为 `drafts/section_XX_XX.md` 路径 + 本 checklist，**不提供写作时的判断或上下文**。subagent 像真实审稿人一样只看成品，逐项判定 Y/N，返回结构化结果（失败项 + 证据锚点）。
+- **无 subagent 能力时：** 主 agent 自评，但必须显式切换到"审稿人视角"，对每一项默认怀疑、要求证据，不得因"是我写的"而默认通过。
+- **决策边界：** 评审执行（打分/找问题）可委托；修订方案与是否 HALT 由主 agent 决定，不可委托。
+
 ## D1 — Novelty & Contribution
 
 - [ ] Proposes at least one new framework, hypothesis, taxonomy, or perspective not in prior reviews
