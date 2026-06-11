@@ -1,4 +1,4 @@
-# General SCI Writing Skill - Test Checklist (v2.16.2)
+# General SCI Writing Skill - Test Checklist (v2.19.0)
 
 ## Scope
 This checklist validates the current hard-gate + section-local + citation-sync behavior, plus the tightened citation provider and manual-review policy.
