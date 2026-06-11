@@ -7,6 +7,7 @@
 - `write-cycle --finalize` 新增**强制 `--refs-confirmed` 声明**：缺失则 `exit 2` 阻断落盘（`error: refs_not_confirmed`），把"忘记读 references、凭记忆写作"从软约束变成硬门禁。
 - SKILL.md / README / QUICK_REFERENCE 所有 `--finalize` 示例同步加 `--refs-confirmed`；P0#10 补门禁说明。
 - 新增 `required_refs_for_section()` + `state_manager.py` write-cycle 的 `confirm_refs` 参数。
+- **鲁棒性补洞**：`required_refs_for_section()` 对**非标准 section 命名**（如 `uptake`/`characterization`，不含 results/methods 字样）采用"宁多勿漏"——识别不出类型即给全正文 refs，避免门禁因命名退化成只读 anti-ai 而失效。
 - **诚实边界**：脚本强制 AI **显式声明**已读，但无法验证它是否真读了内容——挡得住"忘记"，挡不住"故意绕过"。这是文本指令转代码门禁能到达的上限。
 
 ## [2.19.0] - 2026-06-11
