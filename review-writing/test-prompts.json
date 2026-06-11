@@ -12,6 +12,6 @@
   {
     "id": 3,
     "prompt": "继续写综述。现在写第 2.1 节「Delivery Systems」，要求 Nature Reviews 风格，不用 AI 常见词。",
-    "expected": "读取 outline.md + state.json → 检查 2.1 是否已在 completed_sections → Phase 3 per-section cycle: load context (Zotero/matrix_manager) → 评估是否需要 Round 2 search (citations/500w < 2) → figure_index.md 读+写 → 按段落体写作（无 bullet points, Anti-AI ban words）→ Reviewer Simulator 5维评分 (mean ≥8.0) → word_counter → 更新 state.json + Git Checkpoint → HALT 等待 Continue。"
+    "expected": "读取 outline.md + state.json → 检查 2.1 是否已在 completed_sections → Phase 3 per-section cycle: load context (Zotero/matrix_manager) → 评估是否需要 Round 2 search (citations/500w < 2) → figure_index.md 读+写 → 按段落体写作（无 bullet points, Anti-AI ban words）→ citation spot-check (validate_citations) → Reviewer Simulator 5维度16项 Y/N checklist（优先委托独立 subagent 盲评，任何维度失败则修订最多2轮后 HALT）→ word_counter → 更新 state.json + Git Checkpoint → HALT 等待 Continue。"
   }
 ]

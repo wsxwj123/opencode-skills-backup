@@ -19,10 +19,41 @@ not_for:
   - 单篇论文修改/润色（非综述）
   - 短篇评论/Commentary/Letter（<3000 words）
   - 非学术写作（科普、博客）
-  - 系统综述/Meta-analysis（需要 PRISMA 流程）
+  - 系统综述/Meta-analysis（需要完整 PRISMA-ScR 注册 + PROSPERO 流程）
 ---
 
 # General Literature Review Writing Specialist
+
+## Quick Reference Card
+
+### Phase 路由（读 state.json 后立即判断）
+> **⚠️ 前置门：`state.json` 不存在时，先执行 Mode Handshake Gate（问 Write/Polish Mode）并等用户回答，再进 Phase 0.1。不要跳过 Mode Gate 直接收参数。**
+
+| state.json 状态 | 跳转到 |
+|-----------------|--------|
+| 不存在 | **先过 Mode Handshake Gate** → Phase 0.1 |
+| phase=0, 无 mode 字段 | Phase 0.5（继续初始化） |
+| phase=0, mode="polish" | Phase 0-P（📖 读 `docs/phase_0p_polish_mode.md`） |
+| phase=1 | Phase 1（检查是否已完成） |
+| phase=2 | Phase 2（跳过 completed_sections） |
+| phase=3 或 pending_sections 非空 | Phase 3（跳过 completed_sections） |
+| phase=4, completed=true | 已完成，告知用户 |
+
+### 每 Phase 关键动作
+- **Phase 0:** 收参数 → 检测环境 → 创建项目 → git init
+- **Phase 1:** 提纲 → 用户确认 → Zotero 集合树 → **HALT**
+- **Phase 2:** 逐节搜索（**串行，≥1s 间隔**）→ 写入 Zotero/index → **HALT** dedup
+- **Phase 3:** 逐节写作 → citation spot-check → Reviewer Simulator → **HALT**
+- **Phase 4:** 引用总量校验 → citation guard → 编译 → 连贯性扫描 → 缩写扫描 → 导出
+
+### 绝对禁止
+- 并行搜索调用
+- websearch/tavily 查文献
+- 跳过 Reviewer Simulator
+- 跳过 state.json 更新
+- 跳过 Git Checkpoint
+
+---
 
 ## Role & Core Philosophy
 
@@ -138,17 +169,7 @@ http_proxy=http://127.0.0.1:PORT esearch -db pubmed -query "QUERY" < /dev/null |
 
 ## Subagent Delegation (Optional)
 
-Delegate mechanical tasks to subagent; main agent focuses on synthesis and writing.
-
-**Model:** Read `subagent_model` from `outline.md`. If unspecified, use same model as current session.
-
-| Delegatable | Input → Output |
-|-------------|---------------|
-| Batch literature search | Search strategy → `tmp/papers_X_X.json` (section-specific) |
-| Metadata extraction + Zotero write | papers.json → Zotero entries |
-| Anti-AI compliance scan | Draft text → violation report |
-| BibTeX formatting | literature data → refs.bib |
-| Word count + citation validation | Draft → stats report |
+> 📖 可委托任务清单及规则详见 `references/subagent_guide.md`
 
 **NOT delegatable:** Outline design, synthesis writing, Reviewer Simulator decisions, user interaction, HALT decisions.
 
@@ -532,12 +553,11 @@ Write `[TITLE]/outline.md`:
 - Zotero root collection key: [filled after Phase 1]
 ```
 
-**After writing both files, stage them into git** (so the initial commit captures the full Phase 0 state):
+**After writing both files, commit to git:**
 ```bash
-# Only if git was initialized above (git_available: true):
+# Only if git was initialized in 0.5 above (git_available: true):
 cd "[PROJECT_BASE]/[TITLE]"
-git add state.json outline.md && git commit --amend --no-edit
-# This amends the "[review] Phase 0: project initialized" commit to include state.json + outline.md.
+git add state.json outline.md && git commit -m "[review] Phase 0: state + outline initialized"
 # If git is not available → skip silently.
 ```
 
@@ -545,403 +565,26 @@ git add state.json outline.md && git commit --amend --no-edit
 
 ## Phase 0-P: Polish Mode
 
-> **Prerequisites (Polish Mode entry path):**
-> Complete **Phase 0.1–0.5** first (parameter collection → environment detection → project init).
-> Phase 0-P begins *after* `outline.md` and `state.json` exist and scripts are copied.
-> If resuming across sessions and `outline.md` already has `os:` field → skip environment detection.
+> 📖 **完整步骤详见 `docs/phase_0p_polish_mode.md`**，进入 Polish Mode 时必须读取该文件。
 
-### Step 0: Verify Parameters (already collected in Phase 0.1)
+**前置条件：** Phase 0.1–0.5 已完成（outline.md + state.json + scripts 已就位）。
 
-Phase 0.1 has already collected all parameters (title, journal, language, etc.) and Phase 0.5 has written them to `outline.md`.
-**Do NOT re-ask parameters.** Read `outline.md` Parameters section and confirm it is complete.
-If any field is missing (e.g., cross-session resume with a partial `outline.md`) → ask only the missing fields.
+**步骤概要：**
+1. **Step 0:** 验证参数（不重复收集）+ 格式依赖检测（.docx / .pdf）
+2. **Step 1:** 接收草稿（.md / .docx / .pdf / 粘贴文本）→ `tmp/draft_import.md`
+3. **Step 2:** 按标题层级原子拆分 → `drafts/section_XX_XX.md`（**必须用户确认后才写文件**）
+4. **Step 3:** 诊断报告（字数 / 引用密度 / AI 特征）→ keep / polish / rewrite / missing
+5. **Step 4:** 用户分配优先级（**Hard Block，每节必须有明确标签**）
+6. **Step 5:** 引文导入 → `data/literature_index.json`（保留原始 [N] 编号）
+7. **Step 6:** 初始化 state.json → 路由到 Phase 3
 
-- If `outline.md` already exists and has `os:` field → skip environment detection (already done).  
-- Otherwise → run Phase 0.2 Steps 0–3 (OS + Python version + Git + Zotero check) before continuing.
-- **Format-specific dependency probes** (run only for the format the user is actually importing). Each probe is **machine-checked, then HALT-on-miss with explicit consent prompt** — never silently degrade:
-
-  - `.docx` →
-    ```bash
-    python3 -c "import docx; print('✅ python-docx')" 2>/dev/null \
-      || echo "❌ python-docx missing"
-    ```
-    If ❌ → **HALT.** Ask user:
-    > "python-docx is not installed. Install it now (`pip install python-docx`)? (yes / no / convert externally)"
-    - On `yes` → run `python3 -m pip install python-docx` → **MANDATORY re-probe** with the
-      same one-liner above. If re-probe still shows ❌:
-      - Check `which python3` matches pip's interpreter; force-match with
-        `python3 -m pip install python-docx` (already shown above) rather than bare `pip`.
-      - If still failing, suggest `python3 -m pip install --user python-docx` to bypass
-        permission/venv issues.
-      - Loop until ✅ OR user switches to `convert externally`.
-    - On `no` / `convert externally` → ask user to save the document as .md (Word: File →
-      Save As → Markdown / Plain text) and restart Step 1.
-
-  - `.pdf` → run all three probes once, collect the available set.
-
-    **Cross-platform invocation** (pick the one that matches your shell):
-    ```bash
-    # Mac/Linux/WSL bash/zsh — heredoc directly to python3:
-python3 << 'PYEOF'
-import shutil, subprocess, sys
-results = {}
-for mod in ['pdfplumber', 'pypdf']:
-    r = subprocess.run([sys.executable, '-c', f'import {mod}'],
-                       capture_output=True)
-    results[mod] = (r.returncode == 0)
-results['pdftotext'] = bool(shutil.which('pdftotext'))
-available = [k for k, v in results.items() if v]
-missing   = [k for k, v in results.items() if not v]
-print('AVAILABLE:', available if available else 'NONE')
-print('MISSING:', missing)
-sys.exit(0 if available else 2)  # exit 2 = nothing available
-PYEOF
-    ```
-    ```powershell
-    # Windows PowerShell — here-string + Out-File. NOTE: probe runs BEFORE Phase 0.5
-    # creates tmp/, so write the probe file to CWD instead of tmp\:
-    @'
-    import shutil, subprocess, sys
-    results = {}
-    for mod in ['pdfplumber', 'pypdf']:
-        r = subprocess.run([sys.executable, '-c', f'import {mod}'], capture_output=True)
-        results[mod] = (r.returncode == 0)
-    results['pdftotext'] = bool(shutil.which('pdftotext'))
-    available = [k for k, v in results.items() if v]
-    missing   = [k for k, v in results.items() if not v]
-    print('AVAILABLE:', available if available else 'NONE')
-    print('MISSING:', missing)
-    sys.exit(0 if available else 2)
-    '@ | Out-File -Encoding utf8 _probe.py
-    python _probe.py
-    Remove-Item _probe.py  # clean up
-    # Read exit code: $LASTEXITCODE  (0 = at least one available; 2 = all missing)
-    ```
-    ```cmd
-    REM Windows CMD — no heredoc/here-string; create the file IN CWD (tmp\ not yet
-    REM created; Phase 0.5 will create it later):
-    python -c "open('_probe.py','w',encoding='utf-8').write('import shutil,subprocess,sys\nresults={}\nfor mod in [\"pdfplumber\",\"pypdf\"]:\n    r=subprocess.run([sys.executable,\"-c\",f\"import {mod}\"],capture_output=True)\n    results[mod]=(r.returncode==0)\nresults[\"pdftotext\"]=bool(shutil.which(\"pdftotext\"))\navail=[k for k,v in results.items() if v]\nmiss=[k for k,v in results.items() if not v]\nprint(\"AVAILABLE:\",avail if avail else \"NONE\")\nprint(\"MISSING:\",miss)\nsys.exit(0 if avail else 2)\n')"
-    python _probe.py
-    del _probe.py
-    REM Read exit code: %ERRORLEVEL%
-    ```
-    Decision rule:
-    - **At least one ✅** → use the highest-priority available tool (pdfplumber > pypdf > pdftotext) for Step 1. Do NOT prompt the user — proceed silently.
-    - **All ❌** → **HALT.** Show this exact menu to the user and wait for explicit choice:
-      ```
-      No PDF extractor found. Pick one to install:
-        [1] pdfplumber  (recommended; handles academic multi-column layouts best)
-             → pip install pdfplumber
-        [2] pypdf       (lighter, faster, less accurate on complex layouts)
-             → pip install pypdf
-        [3] pdftotext   (CLI tool; best for plain-text PDFs)
-             Mac:    brew install poppler
-             Linux:  sudo apt install poppler-utils
-             Windows: download poppler binaries → unzip → add bin/ to PATH
-                     https://github.com/oschwartz10612/poppler-windows/releases
-        [4] None — I'll convert the PDF to .docx/.md externally and retry
-      Your choice? (1/2/3/4)
-      ```
-    - After the user picks 1/2/3:
-      ```bash
-      # Install whichever was chosen, then RE-RUN the probe block above to confirm.
-      # Do NOT skip the re-probe — installation can silently fail (network, permissions,
-      # wrong Python interpreter, binary not added to PATH).
-      # If re-probe still shows AVAILABLE: NONE:
-      #   - For pip installs: check `which python3` matches the interpreter used by pip;
-      #     try `python3 -m pip install <pkg>` to force the same interpreter
-      #   - For pdftotext: confirm the install path is in PATH.
-      #       Mac/Linux/WSL: `command -v pdftotext` and `echo $PATH`
-      #       Windows (PowerShell/CMD): `where pdftotext` and `echo %PATH%`
-      #     If not found:
-      #       Mac/Linux/WSL → `export PATH="<install-bin-dir>:$PATH"` for current session;
-      #         persist by appending to `~/.zshrc` or `~/.bashrc` and `source` it.
-      #       Windows → System Properties → Environment Variables → edit PATH → add the
-      #         poppler `bin\` directory → **open a NEW terminal window** (PATH changes
-      #         only apply to new processes) → re-run the probe.
-      ```
-    Only after the re-probe returns at least one ✅, advance to Step 1. Otherwise loop back to the menu (the user may pick option 4 to bail out).
-
-Then run Phase 0.5 initialization (create folder structure + copy scripts), same as Write Mode.
-
-### Step 1: Accept Draft
-
-> **Placeholder convention:** `[FILE]` in the commands below = absolute or
-> project-relative path to the user-provided draft (e.g. `~/Downloads/my_review.pdf`).
-> AI MUST substitute it before executing. Path quoting must handle spaces — wrap with
-> single quotes in bash/zsh, double quotes in PowerShell, or escape per shell rules.
-
-```
-Accepted formats (Step 0 has already validated the required tool is available):
-  .md / .txt  → read directly into tmp/draft_import.md (UTF-8)
-  .docx       → python3 -c "import docx; d=docx.Document('[FILE]'); open('tmp/draft_import.md','w',encoding='utf-8').write('\n'.join(p.text for p in d.paragraphs))"
-  .pdf        → use the tool Step 0 confirmed available (preference: pdfplumber > pypdf > pdftotext):
-               (a) pdfplumber:
-python3 -c "
-import pdfplumber
-with pdfplumber.open('[FILE]') as pdf:
-    txt = '\n\n'.join((p.extract_text() or '') for p in pdf.pages)
-open('tmp/draft_import.md','w',encoding='utf-8').write(txt)
-"
-               (b) pypdf:
-python3 -c "
-from pypdf import PdfReader
-txt = '\n\n'.join((p.extract_text() or '') for p in PdfReader('[FILE]').pages)
-open('tmp/draft_import.md','w',encoding='utf-8').write(txt)
-"
-               (c) pdftotext:
-                   pdftotext -layout -enc UTF-8 '[FILE]' tmp/draft_import.md
-               ⚠️  PDF extraction usually LOSES heading hierarchy (markdown `#` markers
-                   are not present in the source). Step 2 must use the fallback path
-                   "no clear heading hierarchy → ask user to manually assign section IDs".
-               ⚠️  Scanned PDFs (image-only) yield empty text — the post-extraction sanity
-                   check below detects this (n < 200 chars → hard HALT with OCR guidance).
-  pasted text → write to tmp/draft_import.md (UTF-8)
-```
-
-> **Why explicit `encoding='utf-8'`:** Python's default text mode encoding is platform-dependent
-> (Mac/Linux: utf-8; Windows: cp1252). Without an explicit encoding, Chinese/Japanese reviews and
-> Unicode-rich academic PDFs will either raise `UnicodeEncodeError` mid-write or produce mojibake
-> in `tmp/draft_import.md`. Always pass `encoding='utf-8'` on every read/write touching the draft.
-
-Save raw text as `tmp/draft_import.md`.
-
-**Post-extraction sanity check (MANDATORY after .docx / .pdf extraction — fail-safe on missing file, hard HALT on suspicious length):**
-```python
-python3 -c "
-import pathlib, sys
-p = pathlib.Path('tmp/draft_import.md')
-if not p.exists():
-    sys.exit('❌ Extraction produced no output file. Check: (1) [FILE] path correct? (2) PDF password-protected or corrupt? (3) Run with the next probe tool in Step 0 priority order, or convert externally.')
-text = p.read_text(encoding='utf-8', errors='replace')
-n = len(text.strip())
-print(f'Extracted {n} chars, {len(text.splitlines())} lines')
-if n < 200:
-    sys.exit('❌ Suspiciously short (<200 chars) — likely scanned PDF (image-only, no text layer) or extraction failure. Run OCR (ocrmypdf / Adobe Acrobat) or convert to .docx first, then retry Step 1.')
-elif n < 2000:
-    sys.exit('⚠️ HALT: only {} chars extracted — very short for a full review. Verify with user that this is the complete document before continuing to Step 2 (the user may have uploaded an abstract-only file or extraction may have dropped pages).'.format(n))
-print('✅ Text length looks reasonable for a review draft — safe to proceed to Step 2.')
-"
-```
-> **Hard HALT semantics:** non-zero exit from this check **blocks Step 2 entirely**. Do NOT proceed to atomic split if any branch above triggers — first resolve the underlying extraction problem with the user.
-
-### Step 2: Atomic Split by Heading Hierarchy
-
-> **⚠️ MANDATORY — do NOT write any file to `drafts/` until user explicitly confirms the proposed structure. This gate cannot be skipped.**
-
-> **PDF-imported drafts:** PDF text extraction strips markdown markers, so the heading
-> detection in Step 1 below will almost always come up empty for `.pdf` sources. **Skip
-> directly to the fallback flow at the end of this section** (semantic boundary detection +
-> user confirmation) rather than reporting "no sections found" and stalling. `.docx`
-> imports preserve headings via paragraph styles ONLY if the original document used
-> Word's heading-level styles — many do not, so the same fallback may also apply.
-
-Execute in this exact order:
-
-1. Detect heading structure in `tmp/draft_import.md`: `#` (H1) / `##` (H2) / `###` (H3).
-   For PDF-extracted text where `#` markers are absent, treat ALL-CAPS lines, lines
-   matching `^\d+(\.\d+)?\s+[A-Z]` (e.g. "2.1 Delivery Systems"), and short isolated
-   lines followed by paragraph blocks as candidate section boundaries.
-2. Build the proposed split map: heading text → zero-padded section filename (e.g., `## 2.1 Delivery Systems` → `section_02_01.md`)
-3. **STOP. Show the user a confirmation table:**
-   ```
-   section_01_01.md  ←  ## 1.1 Introduction (820 words)
-   section_02_01.md  ←  ## 2.1 Delivery Systems (310 words)
-   section_03_01.md  ←  ## 3.1 Clinical Outcomes (0 words — missing)
-   ...
-   Confirm this split? (yes / adjust)
-   ```
-4. **Wait for explicit "yes" or adjustment instructions. Do not proceed until received.**
-5. Only after confirmation: write each section to `drafts/section_XX_XX.md` (zero-padded, identical naming to Write Mode)
-6. Rebuild `outline.md` Outline section from detected headings.
-   > **Section ID is what matters, not heading depth.** `zotero_manager.py --init` parses
-   > by ID pattern (`N.` → level 1; `N.M` → level 2) and accepts any `##` or deeper heading.
-   > Either of these is acceptable:
-   > ```markdown
-   > ## 1. Introduction          ### 1. Introduction
-   > ### 1.1 Background      OR  #### 1.1 Background
-   > ```
-   > **Do NOT** drop the numeric prefix (`## Introduction` is ignored — no ID = invisible to --init).
-
-**Fallback (no clear heading hierarchy):** Display detected paragraph blocks with estimated boundaries → ask user to manually assign section IDs → write files only after user confirmation.
-
-**Completion gate:** Step 2 is complete ONLY when `drafts/section_XX_XX.md` files physically exist on disk. If no files were written, do NOT advance to Step 3.
-
-### Step 3: Diagnosis Report (per section — no external script needed)
-
-Run `python3 scripts/word_counter.py --file drafts/section_XX_XX.md` for each section.  
-Scan each file for banned words from the Anti-AI Writing Style section.  
-Count inline `[N]` citation occurrences per 500 words.
-
-Display:
-```
-Section     | Words (EN) | Citations/500w | AI-flags | Recommendation
-1.1 Bg      |  820       |  3.2           | 0        | ✅ keep
-2.1 Del Sys |  180       |  0.8           | 2        | ⚠️ polish
-3.1 Clin    |  0         |  —             | —        | ❌ write from scratch
-```
-
-Classification:
-- **keep** — EN ≥500w (CN ≥1,500 chars) AND citations ≥2/500w AND AI-flags = 0
-- **polish** — below any one threshold but has substantial content
-- **rewrite** — below two or more thresholds  
-- **missing** — section absent or <50 words
-
-### Step 4: User Priority Assignment (Hard Block)
-
-Show the diagnosis table. Ask user to label each section: `rewrite / polish / keep`.  
-Accept flexible responses: "rewrite 2.1 and 3.1, polish 1.1, keep the rest."  
-**Do not proceed to Step 5 until every non-missing section has an explicit label.**
-
-### Step 5: Citation Import (Review-Specific)
-
-```
-0. Detect citation style in the imported draft:
-   - Numeric style: inline [N] (or [1,2] or [1-3]) + numbered reference list at end
-   - Author-year style: inline (Smith et al., 2020) + bibliography at end
-   - Mixed / none: treat as "no reference list" and skip to item 5
-
-   ⚠️ Author-year style: inform user that inline citations must be converted to [N]
-   format before atomic split files can be used. Two options:
-     a) Ask user to convert manually and re-upload
-     b) AI converts during Step 2 split: assign [N] numbers in document order,
-        rewrite inline (Author, Year) → [N] in each atomic draft file,
-        build a mapping table: N → (Author, Year, Title) for Step 5 import
-
-1. Extract reference list from tmp/draft_import.md (numbered list or bibliography).
-   Parse each entry into a JSON record with these fields:
-     `global_id` (int, MUST equal the original [N] number — see step 2),
-     `title` (str), `authors` (list[str]), `year` (int/str),
-     `journal` (str, optional), `doi` (str, optional), `pmid` (str, optional)
-   Write the resulting list of records to **`tmp/existing_refs.json`** — this filename is
-   consumed by step 3 below and the optional escape-hatch `--add-batch` call. Example:
-   ```json
-   [
-     {"global_id": 1, "title": "...", "authors": ["Smith J","Lee K"], "year": 2021, "doi": "10.1038/..."},
-     {"global_id": 2, "title": "...", "authors": ["..."], "year": 2020, "pmid": "31234567"}
-   ]
-   ```
-
-2. ⚠️ PRESERVE original [N] numbering as gid:N — do NOT renumber.
-   Renumbering would break all inline citations in the split section files.
-   (If author-year conversion was done in Step 2, the assigned [N] numbers are already final.)
-
-3. Write extracted references to data/literature_index.json (ALL modes — this is the canonical store):
-     ⚠️ Every record in `tmp/existing_refs.json` MUST have a `global_id` field set to its
-        original [N] number from the imported draft. Without it, Phase 3 `--add-batch` will
-        re-assign a fresh gid via `_next_gid`, breaking every inline `[N]` reference in the
-        atomic split files. The inline Python below hard-blocks on missing gid and reports
-        the offending indices so you can fix `tmp/existing_refs.json` before retrying.
-
-python3 -c "
-import json, pathlib, sys
-# encoding='utf-8' is mandatory: Windows default cp1252 will UnicodeDecodeError on UTF-8 refs
-refs = json.load(open('tmp/existing_refs.json', encoding='utf-8'))
-missing_gid = [i for i, r in enumerate(refs) if not isinstance(r.get('global_id'), int) or r.get('global_id') <= 0]
-if missing_gid:
-  more = '...' if len(missing_gid) > 5 else ''
-  sys.exit(f'❌ {len(missing_gid)} refs missing valid global_id (indices: {missing_gid[:5]}{more}). Fix tmp/existing_refs.json: every entry needs an integer global_id matching its original [N] in the draft.')
-idx = pathlib.Path('data/literature_index.json')
-exist = json.loads(idx.read_text(encoding='utf-8')) if idx.exists() else []
-known_dois = {e.get('doi','').strip().lower() for e in exist if e.get('doi','')}
-known_gids = {e.get('global_id') for e in exist if isinstance(e.get('global_id'), int)}
-added = skipped_dup = skipped_gid_collision = 0
-for ref in refs:
-  doi = ref.get('doi','').strip().lower()
-  if doi and doi in known_dois:
-      skipped_dup += 1
-      continue
-  if ref['global_id'] in known_gids:
-      _g = ref['global_id']
-      print(f'⚠️  gid:{_g} already in index — skipping (use --dedup repair if intentional)')
-      skipped_gid_collision += 1
-      continue
-  # Preserve original gid (DO NOT renumber); ensure related_sections is present (empty until mapping confirmed)
-  ref.setdefault('related_sections', [])
-  ref.setdefault('verified', False)
-  exist.append(ref)
-  known_gids.add(ref['global_id'])
-  if doi: known_dois.add(doi)
-  added += 1
-idx.write_text(json.dumps(exist, ensure_ascii=False, indent=2), encoding='utf-8')
-print(f'Imported {added} references (skipped {skipped_dup} duplicate DOI, {skipped_gid_collision} gid collision)')
-"
-
-   **Git Checkpoint:** `git add -A && git commit -m "[review] Phase 0-P: citations imported"`
-
-   [Zotero] **Default: do NOT sync to Zotero yet.** Imported references stay in `data/literature_index.json`
-            with original gid preserved. Zotero items will be created **per-section** as each pending section
-            gets a confirmed mapping — `--add-batch` is called inside Phase 3 (rewrite/polish branch) with the
-            real section ID, using the local index as the source of truth (3-branch upsert handles back-fill of
-            `zotero_key` automatically; see `cmd_add_batch` branch ②).
-
-            Run `--init` only if the project's Zotero collection tree does not yet exist.
-            Use the machine-readable `--find-root-title` probe to avoid fragile text parsing:
-              python3 scripts/zotero_manager.py --status --find-root-title "[TITLE]" \
-                --lib-id LIB_ID --api-key API_KEY
-              # exit 0 → root exists; stdout is the key (capture and reuse as ROOT_KEY)
-              # exit 3 → no match; run --init to create the collection tree:
-              #          python3 scripts/zotero_manager.py --init --title "[TITLE]" \
-              #            --outline outline.md --lib-id LIB_ID --api-key API_KEY
-              # exit 4 → ambiguous (multiple top-level collections with same name);
-              #          ask the user to pick from the printed key list
-
-            ⚠️ Do NOT create a fake "imported" subcollection. Do NOT call --add-batch with a placeholder section
-            name. Section mapping happens during Phase 3 per-section work.
-
-            **Opt-in escape hatch** — if the user explicitly wants imported refs visible in Zotero immediately
-            (e.g. for manual triage in Zotero UI), only then call --add-batch against a real, already-confirmed
-            section ID from the outline:
-              python3 scripts/zotero_manager.py --add-batch \
-                --section "<real-section-id>" --papers tmp/existing_refs.json \
-                --root-key ROOT_KEY --index data/literature_index.json \
-                --lib-id LIB_ID --api-key API_KEY
-
-4. Run citation guard:
-              python3 scripts/citation_guard.py \
-                --index data/literature_index.json \
-                --log data/citation_guard_report.json
-   → Unverifiable entries: mark verified:false, add to manual_review_queue
-   → Do NOT force-fix at this stage; user decides during rewrite
-
-5. If no reference list found → skip, set "citations_imported": false in state.json.
-   Phase 3 will prompt for Round 2 search to fill gaps.
-```
-
-### Step 6: Initialize State + Route to Revision
-
-Overwrite `state.json` (Phase 0.5's placeholder is replaced wholesale here — this is the
-first time Polish Mode has enough info to construct the full record):
-```python
-python3 -c "
-import json, pathlib
-state = {
-  'mode': 'polish',
-  'phase': 3,
-  'completed_sections': [],            # populated with the 'keep' list from Step 4
-  'pending_sections': {
-    'rewrite':  [],                    # filled from Step 4 user priority assignment
-    'polish':   [],
-    'missing':  [],
-  },
-  'zotero_root_key': '',               # captured from --find-root-title (Step 5) or --init
-  'citations_imported': True,          # set False if Step 5 found no reference list
-}
-# AI: fill the four list/string fields above with real values from Steps 4-5 BEFORE running this command.
-pathlib.Path('state.json').write_text(json.dumps(state, indent=2), encoding='utf-8')
-print('✅ state.json initialized for Polish Mode (phase=3)')
-"
-```
-
-**Git Checkpoint:** `git add -A && git commit -m "[review] Phase 0-P: polish mode initialized"`
-
-Routing after Step 6:
+**路由表：**
 | Section type | Path |
 |---|---|
-| `missing` | Phase 3 handles internally: run Phase 2 Round 1 search for this section, then write from scratch (do NOT leave Phase 3 to go back to Phase 2) |
-| `rewrite` | Phase 3 (Round 2 search optional) |
-| `polish` | Phase 3 (skip search; revise existing atomic file) |
-| `keep` | Skip entirely (already in completed_sections) |
+| `missing` | Phase 3 内部处理：先搜索再写（不回退 Phase 2） |
+| `rewrite` | Phase 3（可选 Round 2 搜索） |
+| `polish` | Phase 3（跳过搜索，直接修订） |
+| `keep` | 跳过（已在 completed_sections） |
 
 All sections complete → Phase 4 (export + compile).
 
@@ -1052,6 +695,9 @@ for each section in outline.md (e.g., section ID = "2.1"):
      # Safe: dedup-at-write-time — same paper across sections creates ONE Zotero item,
      # linked to multiple section collections; gid:N assigned at first creation and never changes.
      # --add-batch already writes to --index (literature_index.json); do NOT append separately.
+
+  **`--add-batch` 已自动写入 literature_index.json，不要再手动追加。**
+
   5. [None/EndNote]   Append to data/literature_index.json (auto-increment global_id, dedup by DOI):
      ```python
 python3 -c "
@@ -1075,8 +721,7 @@ for p in new_papers:
     p.setdefault('global_id', next_gid + added)
     p.setdefault('related_sections', ['X.X'])
     p.setdefault('source_provider', 'pubmed')
-    # source_id is required by validate_citations.py for traceability — fall back through pmid → doi → ''
-    p.setdefault('source_id', p.get('pmid') or p.get('doi') or '')
+    p.setdefault('source_id', p.get('pmid') or p.get('doi') or '')  # source_id required for traceability
     p.setdefault('verified', False)
     exist.append(p)
     if doi: known_dois.add(doi)
@@ -1152,15 +797,14 @@ Dedup rules (None/EndNote mode reindex):
 3. On duplicate: keep canonical entry, merge related_sections
 4. `global_id` reassigned in canonical section outline order (1.1 → 1.2 → 2.1 → ...)
 
-Update `state.json` (merge — preserve `mode`/`pending_sections`/`citations_imported` if present):
+**Update `state.json`（仅更新 phase 字段，不覆盖 completed_sections / zotero_root_key）：**
 ```python
 python3 -c "
 import json, pathlib
 s = pathlib.Path('state.json')
 state = json.loads(s.read_text(encoding='utf-8'))
 state['phase'] = 2
-# completed_sections is already maintained by Phase 2 Step 7; do NOT overwrite here.
-# zotero_root_key was written in Phase 1; do NOT overwrite here.
+# DO NOT overwrite completed_sections or zotero_root_key — they are maintained by earlier phases.
 s.write_text(json.dumps(state, indent=2), encoding='utf-8')
 print('✅ state.json: phase=2 (other fields preserved)')
 "
@@ -1242,51 +886,16 @@ If pending_sections is empty → all sections complete; proceed to Phase 4.
    ```bash
    # Scans all drafts/ but only this section's file matters (previous sections already passed).
    # --fail-on-orphan exits non-zero if any [N] in draft has no match in literature_index.json.
-   python3 scripts/validate_citations.py --drafts-dir drafts --index data/literature_index.json --fail-on-orphan
+   python3 scripts/validate_citations.py --drafts-dir drafts --index-path data/literature_index.json --fail-on-orphan
    ```
    - Checks every `[N]` in drafts exists in `literature_index.json` (or Zotero gid pool).
    - If any `[N]` is orphan (not in index) → fix immediately: either find the real gid or remove the citation.
    - Does NOT do online DOI/PMID verification here (that's Phase 4 `citation_guard.py`'s job).
    - [Zotero mode] Also cross-check against `--get-section` output: every gid used in draft should appear in the section's Zotero collection.
 
-6. **Reviewer Simulator** (checklist-anchored, per reviewer-simulator skill methodology):
-
-   For each dimension, answer every checklist item (Y/N). Dimension passes when ALL items = Y.
-
-   **D1 — Novelty & Contribution**
-   - [ ] Proposes at least one new framework, hypothesis, taxonomy, or perspective not in prior reviews
-   - [ ] Clearly states how this section advances beyond existing reviews (explicit "gap → contribution" sentence)
-   - [ ] Does NOT merely summarize existing work without synthesis
-
-   **D2 — Arbitration & Critical Analysis**
-   - [ ] Identifies ≥1 contradiction or debate between cited studies
-   - [ ] Provides *why* analysis for each contradiction (not just "results conflict")
-   - [ ] Takes a position or proposes a reconciling explanation (does not sit on the fence)
-
-   **D3 — Evidence Density & Traceability**
-   - [ ] Every factual claim has ≥1 citation; key claims have ≥2 independent sources
-   - [ ] No citation-free paragraphs (except transition/framing sentences)
-   - [ ] Evidence types match claim types (original article for mechanism, clinical trial for efficacy, review for background context)
-
-   **D4 — Flow & Coherence**
-   - [ ] Opening sentence of each paragraph connects to the previous paragraph's conclusion (causal/contrastive link, not bolted-on transition)
-   - [ ] Section has a clear internal arc: setup → evidence → synthesis → implication
-   - [ ] No orphan paragraphs (paragraphs that could be moved elsewhere without breaking logic)
-
-   **D5 — Anti-AI Compliance**
-   - [ ] Zero banned words/phrases from Anti-AI Writing Style lists
-   - [ ] Sentence length rhythm: no 3+ consecutive sentences within ±5 words of each other
-   - [ ] Passive voice ≤30% of sentences per paragraph (EN mode)
-   - [ ] No templated transitions ("Furthermore", "In addition", "Moreover" as sentence openers)
-
-   **Gate:** Any dimension with ≥1 failed item → internal revision targeting that item (max 2 rounds).
-   After 2 rounds, if any item still fails → **HALT**, output the specific failed checklist items as structured feedback:
-   ```
-   【问题】(failed item description)
-   证据锚点: (paragraph/sentence where the failure occurs)
-   根源分析: (why it fails — e.g., "Paragraph 3 lists 4 studies without comparing their findings")
-   修复方向: (specific action — e.g., "Add a synthesis sentence after the 4th citation contrasting dosage findings")
-   ```
+6. **Reviewer Simulator** — 执行 5 维度 16 项 Y/N checklist（📖 详见 `references/reviewer_checklist.md`）。
+   **优先委托独立 subagent 盲评**（消除"自写自评"偏差）：派一个 subagent，只给它 `drafts/section_XX_XX.md` 路径 + checklist，不给写作时的上下文，让它独立判定每项 Y/N 并返回结构化结果。无 subagent 能力的客户端 → 主 agent 自评，但必须切换到"审稿人视角"重新逐项核对（不默认通过）。
+   **Gate:** 任何维度 ≥1 项失败 → 内部修订（最多 2 轮）。2 轮后仍失败 → **HALT**，输出结构化反馈（【问题】+ 证据锚点 + 根源分析 + 修复方向）。修订与 HALT 决策由主 agent 负责（不可委托）。
 
 7. **Word count check:**
    ```bash
@@ -1374,6 +983,25 @@ Write Mode has no `pending_sections` field so this gate is a no-op (no key → e
    # OR state.json marks citations as not imported
    python3 -c "import json,pathlib; s=json.loads(pathlib.Path('state.json').read_text(encoding='utf-8')); exit(0 if s.get('citations_imported') is False else 1)" && echo "GUARD: citations_imported=false → skip 2a-2b"
    ```
+   **引用总量校验（警告性，不阻断 —— 尊重用户自定的短篇长度）:**
+   ```bash
+   python3 -c "
+   import sys, pathlib
+   sys.path.insert(0, 'scripts')
+   from citation_utils import extract_citation_ids
+   ids = set()
+   for f in pathlib.Path('drafts').glob('*.md'):
+       ids.update(extract_citation_ids(f.read_text(encoding='utf-8')))
+   n = len(ids)
+   print(f'Unique citations in drafts: {n}')
+   if n < 150:
+       print(f'⚠️ 引用总数 {n} < 150（高影响力综述目标）。短篇或用户指定长度可忽略；否则建议 Round 2/3 补检索。')
+   else:
+       print(f'✅ 引用总数 {n} 达标（≥150）')
+   "
+   ```
+   > **类型分布（人工核对）：** literature_index.json 未记录 Original/Review/Preprint 类型字段，无法机器统计。AI 对照 Constraints 目标（Original≥80 / Review≥50 / Preprint≥20）人工抽查 index，明显失衡时提示用户。
+
    ```bash
    python3 scripts/check_global_citation_sequence.py
    python3 scripts/validate_citations.py --live --live-used-only --fail-on-orphan --retries 2
@@ -1439,149 +1067,30 @@ print('✅ state.json: phase=4, completed=true (other fields preserved)')
 
 ## Reference Manager Modes
 
-### Zotero Mode (Recommended)
-- Real-time write during Phase 2 — one batch per section immediately after search.
-- Collection tree mirrors review outline hierarchy (root = title, subcollections = sections).
-- Each paper tagged `gid:N`; abstract stored as child note.
-- PDF: auto-download OA papers via Unpaywall API (free); non-OA papers tagged `pdf:missing`.
-- `lib_id` stored in `outline.md`; `api_key` asked each session, never persisted.
+Three modes: **Zotero**（推荐，实时写入）/ **None**（纯本地 JSON + BibTeX）/ **EndNote**（同 None，最后手动导入）。
 
-### None Mode
-- Uses inherited scripts: `export_bibtex.py`, `matrix_manager.py`, `state_manager.py` (reindex only).
-- `data/literature_index.json`: paper metadata + gid + section assignments.
-- `data/synthesis_matrix.json`: structured claims per paper per section.
-- BibTeX export: `python3 scripts/export_bibtex.py --input data/literature_index.json --output exports/references.bib --clean`
-
-### EndNote Mode
-- Same as None Mode during writing phase.
-- Final step: user manually imports `exports/references.bib` into EndNote.
-- No automatic write-back.
+> 📖 各模式详细说明见 `references/citation_styles.md` § Reference Manager Modes
 
 ---
 
 ## Edge Cases
 
+> 📖 完整列表详见 `references/edge_cases.md`
+
 | Issue | Handling |
 |-------|---------|
 | Zotero API key invalid / 403 error | Re-ask user for api_key; do NOT proceed until --status returns ✅ |
-| Preprint / no DOI | Dedup falls back to title fuzzy match |
-| Multiple Zotero libraries | `--status` lists all; user selects; write to outline.md |
-| Windows, no edirect | Prompt WSL install or fallback to paper-search MCP |
-| Proxy port varies | Auto-scan 7897/7890/1080/8080/8888; write result to outline.md |
-| API key forgotten (cross-session) | outline.md stores lib_id only; ask api_key at start |
-| Zotero Web API rate limit | PyZotero auto-waits; batch add ≤50 items per call |
-| Zotero --dedup gid 失同步 | --dedup 只改 Zotero 标签，不更新 literature_index.json。正常流程不需要 --dedup（--add-batch 已去重）。如果手动运行了 --dedup，必须用 --get-section 逐节获取新 gid 并手动同步到 literature_index.json |
 | Mid-search crash | state.json `completed_sections` tracks progress; resume skips done |
-| Section <10 papers found | Warn, prompt user to broaden keywords, continue |
-| NCBI_API_KEY set | Auto-use for 10 req/s rate limit |
-| Chinese review | One-time CNKI notice at Phase 0 end; no repeated prompts |
-| Round 2 new papers | Append + dedup immediately; gid assignments updated |
-| PubMed CLI + paper-search MCP both unavailable | HALT; tell user "literature retrieval tools unavailable"; suggest: (1) install edirect: `sh <(curl https://ftp.ncbi.nlm.nih.gov/entrez/entrezdirect/install-edirect.sh)` or (2) enable paper-search MCP in client settings; do NOT fallback to websearch/tavily |
-| Round 3 / Phase 4 preprint search yields 0 new results | Skip gracefully; record `"round3_papers": 0` in state.json; do not block Phase 4 export |
-| 需要回滚到之前某个阶段 | `git log --oneline` 查看检查点 → `git reset --hard <hash>` 回滚到目标阶段（完整还原文件状态，后续 commit 可通过 `git reflog` 恢复） |
-| 需要推倒重来（reset） | `git log --oneline` 找到 `[review] Phase 0` 的 commit → `git reset --hard <hash>` → 或直接删除项目目录重新 Phase 0 |
-| Git 不可用 | 所有 checkpoint 静默跳过，不影响写作流程；建议安装 git 以获得回滚能力 |
+| PubMed CLI + paper-search MCP both unavailable | HALT; suggest install edirect or enable paper-search MCP; do NOT fallback to websearch/tavily |
 
 ---
 
 ## Scripts Reference
 
-All scripts are in `[project]/scripts/` (copied from skill directory during Phase 0 init).
+> 📖 完整 CLI 参数和用法详见 `references/scripts_reference.md`
 
-| Script | Purpose | Mode |
-|--------|---------|------|
-| `zotero_manager.py` | Zotero Web API: init, add, dedup, get-section, export BibTeX | Zotero |
-| `state_manager.py` | Canonical dedup + reindex (Phase 2.5 None Mode only) | None |
-| `citation_utils.py` | **Import-only library, no CLI.** Shared citation-token parser (`extract_citation_ids`, `parse_citation_group`) imported by `citation_guard.py`, `validate_citations.py`, `check_global_citation_sequence.py`, `export_bibtex.py`. Never invoke directly — `python3 scripts/citation_utils.py` will run and exit silently. | All |
-| `export_bibtex.py` | BibTeX export from literature_index.json | None/EndNote |
-| `matrix_manager.py` | Section-claim evidence matrix: bootstrap + focus | None |
-| `word_counter.py` | Count words/chars in draft files | All |
-| `validate_citations.py` | DOI/PMID online validation | All |
-| `citation_guard.py` | Anti-hallucination guard | All |
-| `check_global_citation_sequence.py` | Verify global [1..N] citation continuity | All |
-
-**`state_manager.py` commands (None Mode — Phase 2.5 only):**
-```bash
-# Canonical dedup + reindex literature by section order + remap draft citations:
-python3 scripts/state_manager.py reindex \
-  --storyline outline.md --index data/literature_index.json \
-  --matrix data/synthesis_matrix.json
-# Note: state.json is managed via inline Python in Phase 0.5/1/3, NOT via this script.
-```
-
-**`matrix_manager.py` commands (None Mode):**
-```bash
-# Phase 2 Step 5b — bootstrap matrix after adding papers for a section:
-python3 scripts/matrix_manager.py bootstrap \
-  --index data/literature_index.json \
-  --matrix data/synthesis_matrix.json \
-  --section X.X --round 1
-
-# Phase 3 Step 1 — load evidence context before writing a section:
-python3 scripts/matrix_manager.py focus \
-  --matrix data/synthesis_matrix.json \
-  --section X.X
-```
-
-**`citation_guard.py` command:**
-```bash
-# Phase 2 (per-section, lightweight):
-python3 scripts/citation_guard.py \
-  --index data/literature_index.json \
-  --log data/citation_guard_report.json
-
-# Phase 4 (final delivery, full validation):
-python3 scripts/citation_guard.py \
-  --index data/literature_index.json \
-  --log data/citation_guard_report.json \
-  --write-back \
-  --manual-review data/manual_review_queue.json
-# --write-back   : persists verified:true/false back into literature_index.json
-# --manual-review: dumps unverifiable entries to a JSON queue for human review
-# --require-mcp  : hard-gate — blocks if any entry lacks MCP evidence (use only for top-tier journals)
-# --offline      : skip online checks (fast mode, local index only)
-```
-
-**`word_counter.py` command:**
-```bash
-python3 scripts/word_counter.py --file drafts/section_01_01.md --language en
-# --language cn: counts Chinese characters (CJK), goal 15,000–20,000 chars
-# --language en: counts English words (whitespace split), goal 7,000–10,000 words
-# Read language setting from outline.md and pass accordingly.
-```
-
-**`validate_citations.py` command (Phase 4 — pre-export consistency check):**
-```bash
-python3 scripts/validate_citations.py \
-  --drafts-dir drafts \
-  --index-path data/literature_index.json \
-  --live --live-used-only \
-  --fail-on-orphan --retries 2
-# --drafts-dir       : directory to scan for [N] citations (default: drafts)
-# --index-path       : literature_index.json path (default: data/literature_index.json)
-# --live             : enable online DOI/PMID verification (skip in offline mode)
-# --live-used-only   : with --live, only validate gids actually cited in drafts
-#                       (saves API calls — skip orphan entries)
-# --timeout 8        : HTTP timeout per live check (default: 8s)
-# --retries 2        : transient-error retry count (default: 2)
-# --retry-backoff 0.6: base backoff seconds between retries (default: 0.6)
-# --fail-on-orphan   : exit non-zero if any [N] in drafts has no matching index entry
-# --fail-on-live     : exit non-zero if any live DOI/PMID check fails
-# --fail-on-trace    : exit non-zero if source traceability gaps exist
-# Difference from citation_guard.py: validate_citations cross-checks drafts ⟷ index;
-# citation_guard validates the index itself (independent of drafts).
-```
-
-**`zotero_manager.py` command reference:**
-
-| Command | Function |
-|---------|---------|
-| `--status --lib-id X --api-key Y` | Test connection, list libraries and existing collections |
-| `--init --title "T" --outline outline.md --lib-id X --api-key Y` | Create root + subcollection tree from outline |
-| `--add-batch --section "2.1" --papers tmp/papers_2_1.json --root-key ROOT_KEY --index data/literature_index.json --lib-id X --api-key Y` | Safe upsert (3 branches): ① paper already in Zotero (has zotero_key) → link to section collection only, gid unchanged; ② paper in local index but NOT yet in Zotero (no zotero_key, e.g. Polish Mode import) → create Zotero item using existing gid, back-fill zotero_key; ③ paper not in index at all → create Zotero item + new gid, append to local index. `--root-key` scopes all collection lookups to the current project's root collection, preventing cross-project contamination when multiple reviews share the same Zotero library. |
-| `--dedup --scope ROOT_KEY --lib-id X --api-key Y` | **Repair only** — deduplicate within root collection scope; assigns gid:N; do NOT use in normal workflow (--add-batch already deduplicates at write time) |
-| `--get-section "2.1" --lib-id X --api-key Y` | Return section paper list (gid, title, authors, year, abstract) |
-| `--export-bibtex --output refs.bib --root-key ROOT_KEY --lib-id X --api-key Y` | Generate .bib with citation keys ref_N; `--root-key` scopes export to current project (without it, exports entire library) |
+9 个活跃脚本（`[project]/scripts/`，Phase 0 init 时复制）：
+`zotero_manager.py` | `state_manager.py` | `citation_utils.py`（import-only） | `export_bibtex.py` | `matrix_manager.py` | `word_counter.py` | `validate_citations.py` | `citation_guard.py` | `check_global_citation_sequence.py`
 
 ---
 
