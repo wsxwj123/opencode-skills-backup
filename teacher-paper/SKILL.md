@@ -117,6 +117,7 @@ python3 "<SKILL_DIR>/scripts/setup.py" --install
 - **可选依赖**（PDF/PPT/Excel 读取、网页提取增强、图片OCR）缺哪个、只在用到对应素材类型时才需，按需安装。
 - **外部工具**（Pandoc、LibreOffice、Word/WPS、OCR、系统转换工具）有就用、没有不强求。
 - 自带脚本若缺失 → 说明 skill 文件不完整，请用户重新获取完整 skill。
+- **命令一律按 bash 语法书写，禁止 cmd 风格的 `>NUL` / `2>NUL` 重定向**——Windows 上命令实际由 Git Bash 执行，`NUL` 不是空设备而是普通文件名，会在目录里留下一个名为 `NUL` 的垃圾文件。脚本输出本就必须如实转告用户，不要静默丢弃；确需丢弃用 `/dev/null`。
 
 ### DOCX 后端选择顺序
 
