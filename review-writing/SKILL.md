@@ -27,9 +27,11 @@ not_for:
 ## Quick Reference Card
 
 ### Phase 路由（读 state.json 后立即判断）
+> **⚠️ 前置门：`state.json` 不存在时，先执行 Mode Handshake Gate（问 Write/Polish Mode）并等用户回答，再进 Phase 0.1。不要跳过 Mode Gate 直接收参数。**
+
 | state.json 状态 | 跳转到 |
 |-----------------|--------|
-| 不存在 | Phase 0.1 |
+| 不存在 | **先过 Mode Handshake Gate** → Phase 0.1 |
 | phase=0, 无 mode 字段 | Phase 0.5（继续初始化） |
 | phase=0, mode="polish" | Phase 0-P（📖 读 `docs/phase_0p_polish_mode.md`） |
 | phase=1 | Phase 1（检查是否已完成） |
@@ -290,8 +292,9 @@ Write `[TITLE]/outline.md`:
 ```
 
 **After writing both files, commit to git:**
+> ⚠️ 前置依赖：`git init` + 首次提交在 **0.5（详见 `docs/phase_0_init.md`）** 完成。若未读 docs/未执行 0.5 的 init，本步 commit 会因"不在 git 仓库"失败——务必先完成 0.5。
 ```bash
-# Only if git was initialized above (git_available: true):
+# Only if git was initialized in 0.5 (git_available: true):
 cd "[PROJECT_BASE]/[TITLE]"
 git add state.json outline.md && git commit -m "[review] Phase 0: state + outline initialized"
 # If git is not available → skip silently.
