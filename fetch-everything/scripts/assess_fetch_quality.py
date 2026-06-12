@@ -18,13 +18,23 @@ BAD_PATTERNS = [
     r"scan to (follow|continue|use)",
     r"微信扫一扫",
     r"loading\.\.\.",
+    # Cloudflare / 反爬 challenge 盾页特征：命中即判低质，自动降级到隐身路线
+    r"just a moment",
+    r"checking (your|if the site)",
+    r"attention required",
+    r"cloudflare",
+    r"ddos protection",
+    r"enable javascript and cookies to continue",
+    r"正在验证|请稍候",
 ]
 
+# 正文/Markdown 结构信号（不含"任意非空行"这类几乎恒真的弱模式）
 GOOD_PATTERNS = [
-    r"^#?\s?.{4,}$",
-    r"\n\n",
-    r"```",
-    r"https?://",
+    r"\n\n",          # 段落分隔
+    r"^\s{0,3}#{1,6}\s",  # Markdown 标题
+    r"```",           # 代码块
+    r"^\s*[-*+]\s",   # 列表
+    r"https?://",     # 链接
 ]
 
 
@@ -32,6 +42,15 @@ def read_text(path: str | None) -> str:
     if path:
         return Path(path).read_text(encoding="utf-8", errors="ignore")
     return sys.stdin.read()
+
+
+def count_paragraphs(text: str) -> int:
+    """统计正文段落。优先按空行分段；无空行（常见于中文抓取）时退化为按长行计数。"""
+    blocks = [c for c in text.split("\n\n") if len(c.strip()) >= 20]
+    if len(blocks) >= 2:
+        return len(blocks)
+    long_lines = [ln for ln in text.split("\n") if len(ln.strip()) >= 40]
+    return max(len(blocks), len(long_lines))
 
 
 def assess_text(text: str) -> Dict[str, Any]:
@@ -55,7 +74,7 @@ def assess_text(text: str) -> Dict[str, Any]:
         score -= 40
         reasons.append(f"命中异常/验证特征: {len(bad_hits)}")
 
-    paragraph_count = sum(1 for chunk in stripped.split("\n\n") if len(chunk.strip()) >= 20)
+    paragraph_count = count_paragraphs(stripped)
     if paragraph_count >= 5:
         score += 20
         reasons.append("存在多个正文段落")

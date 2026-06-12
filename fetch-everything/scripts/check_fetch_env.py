@@ -24,8 +24,11 @@ OPTIONAL_COMMANDS = [
 ]
 
 
-def run_cmd(cmd):
-    return subprocess.run(cmd, text=True, capture_output=True, check=False)
+def run_cmd(cmd, timeout=None):
+    try:
+        return subprocess.run(cmd, text=True, capture_output=True, check=False, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return subprocess.CompletedProcess(cmd, returncode=124, stdout="", stderr=f"timeout after {timeout}s")
 
 
 def check_python() -> Dict[str, Any]:
@@ -91,6 +94,32 @@ def check_scrapling() -> Dict[str, Any]:
     }
 
 
+def check_browsers() -> Dict[str, Any]:
+    """验证 scrapling 浏览器路线的 chromium 二进制是否真就绪。
+    关键：`import StealthyFetcher` 成功 ≠ 浏览器可执行文件存在
+    （StealthyFetcher 走 patchright、DynamicFetcher 走 playwright，各需自己版本的 chromium）。"""
+    probe = (
+        "from {mod}.sync_api import sync_playwright\n"
+        "import os, sys\n"
+        "p = sync_playwright().start()\n"
+        "path = p.chromium.executable_path\n"
+        "p.stop()\n"
+        "sys.stdout.write(path or '')\n"
+        "sys.exit(0 if path and os.path.exists(path) else 3)\n"
+    )
+    engines = {}
+    for label, mod in (("stealthy-fetch(patchright)", "patchright"),
+                       ("fetch(playwright)", "playwright")):
+        proc = run_cmd([sys.executable, "-c", probe.format(mod=mod)], timeout=30)
+        ok = proc.returncode == 0
+        engines[label] = {
+            "ok": ok,
+            "path": proc.stdout.strip() if ok else None,
+            "hint": None if ok else f"运行 `python3 -m {mod} install chromium` 下载浏览器二进制",
+        }
+    return {"ok": all(e["ok"] for e in engines.values()), "engines": engines}
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="检查 fetch-everything 的本地执行环境")
     parser.add_argument("--json", action="store_true", help="输出 JSON")
@@ -101,6 +130,7 @@ def main() -> None:
         "scripts": check_scripts(),
         "requests": check_requests(),
         "scrapling": check_scrapling(),
+        "browsers": check_browsers(),
     }
     result["ok"] = all(section.get("ok", False) for section in result.values())
 
