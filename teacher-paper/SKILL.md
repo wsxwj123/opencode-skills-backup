@@ -4,7 +4,7 @@ description: "教师智能出题技能 - 覆盖小学一年级到高三全科目
 user-invocable: true
 allowed-tools: [Read, Write, Edit, Bash, Agent, AskUserQuestion, WebFetch, WebSearch]
 metadata:
-  version: "3.10.0"
+  version: "3.10.1"
   author: "teacher-paper-skill"
 ---
 
@@ -416,18 +416,27 @@ python3 "<工程>/scripts/assemble.py" build "<工程>" [--pdf]
 
 遇到异常**先告知用户，再按以下规则处理；绝不静默跳过**。
 
+🔴 **门禁拒绝 = 返工信号，不是停止信号**：build 被任何门禁拒绝（溯源/措辞/字数/缺图/完整性）时，任务**没有完成**，绝不把报错当最终结果停下来等用户。标准返工循环：
+
+1. 读报错，定位违规的 items/materials 文件；
+2. 素材不真实/无来源 → 用 `fetch_web.py` **重新检索真实素材**（换来源站/换文章均可），落盘 materials/；
+3. 据新的真实素材**重新命题**，替换对应原子文件（设问全新写，不沿用旧题）；
+4. 重跑 build → 仍被拒则回到第 1 步，**循环直到通过，把成卷交给用户**。
+
+`--allow-*` 开关不是修复手段——仅当用户主动要求、或确属误伤（如选文书名本身含"改编"二字）才可使用，且必须告知用户。连续 3 轮返工仍无法获得真实素材时，才停下来向用户说明卡点（如请用户提供截图/PDF）。
+
 | 触发条件 | 一线修复 | 仍失败兜底 |
 |----------|----------|-----------|
 | `read_material.py` 读本地文件报错（格式不支持/权限/损坏）| 尝试切换解析器（docx→LibreOffice转txt；pdf→pdfplumber→pdftotext）| 请用户另存为 .txt 或截图，走图片三级识别路径；不跳过该文件 |
 | `fetch_web.py` 抓取返回空/报错 | 换 `material-sources.md` 备用站点重试一次 | 告知用户"该站点无法抓取"，请用户截图/提供 PDF；**绝不臆造选文** |
-| `build` 门禁拒绝（材料文件缺 `source` 或 `source_file`）| 补填缺失字段后重跑 build | 加 `--allow-unsourced` 强制出卷，**必须显式告知用户"本卷已绕过真实性门禁"** |
+| `build` 门禁拒绝（材料文件缺 `source` 或 `source_file`）| 仅字段缺漏 → 补填重跑；素材本身无真实来源 → **重新抓取真实素材并据此重新出题**（见上方返工循环）| 连续 3 轮抓不到 → 请用户提供截图/PDF；`--allow-unsourced` 仅限用户主动要求 |
 | DOCX 后端全部不可用（python-docx/Pandoc/Office 均无） | `setup.py --install` 安装 python-docx（须征得用户同意）| 输出 `build/content.md`，告知用户用 Word 手动打开 Markdown 中间产物 |
 | `ocr_image.py` 识别失败（所有 OCR 引擎均报错）| 用模型自身原生识图能力直接读图 | 请用户手动誊录图中文字为 .md 放入 `materials/` |
 | `assemble.py init` 失败（路径权限/磁盘问题）| 改为桌面默认路径重试（不传绝对路径）| 手动建目录后重试；若仍失败告知用户手动创建工程文件夹 |
 | 用户给 URL 无法访问（403/超时/反爬）| 换同主题备用站抓取一次 | 请用户截图/PDF；不使用无法核实来源的内容 |
 | build 字数门禁拒绝（选文越板块区间，区间见科目文档第2节）| 补充/精简选文后重写 materials/ 对应文件再 build | 征得用户知情同意后加 `--allow-length` 降级为告警（不要用 `--allow-unsourced`，那是溯源开关）|
 | build 完整性门禁拒绝（items JSON 非法 / 题量≠期望）| 修复报错指出的 items/*.json（最常见：字符串内 ASCII 双引号改全角 `“”`）后重跑 | 仅分批预览等明确场景加 `--allow-incomplete` 降级为告警，**必须告知用户缺了哪些题** |
-| build 措辞门禁拒绝（选文标注含"改编/改写/整理自"或"原创"字样）| 标注改为"节选自…"；教师原创只写 meta.source='原创-已声明'，卷面不自称原创 | 仅选文标题/书名本身含这些词的误伤场景加 `--allow-wording`，并向用户说明 |
+| build 措辞门禁拒绝（选文标注含"改编/改写/整理自"或"原创"字样）| 只是标注写错 → 改为"节选自…"重跑；**正文确实被改写过 → 重新抓原文忠实节选并重新出题**（教师原创只写 meta.source='原创-已声明'）| 仅选文标题/书名本身含这些词的误伤场景加 `--allow-wording`，并向用户说明 |
 | 断点续作时工程路径找不到 | 让用户重新指定工程路径 | 在**新路径**建新工程并把旧 `items/`、`materials/` 复制进来；**绝不在旧工程上重跑 init**（会重置 meta.json 的 decisions，见反模式 #10）|
 
 ---
