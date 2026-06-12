@@ -123,6 +123,24 @@ with tempfile.TemporaryDirectory() as td:
     case("B10 纸质书-放行", len(errors) == 0)
 
 
+# ============== Part B2: 选文标注措辞校验 ==============
+print("\n=== B2. _check_material_wording 标注措辞 ===")
+w = []
+A._check_material_wording([{"type": "material", "title": "老街（改编自《读者》）",
+                            "paras": ["正文"]}], w)
+case("B11 title含'改编自'-告警", any("改编" in x for x in w))
+
+w = []
+A._check_material_wording([{"type": "material", "title": "老街",
+                            "source": "（教师原创）", "paras": ["正文"]}], w)
+case("B12 source含'原创'-告警", any("原创" in x for x in w))
+
+w = []
+A._check_material_wording([{"type": "material", "title": "老街",
+                            "source": "（节选自《读者》2024年第6期）",
+                            "paras": ["该电影改编自同名小说，上映后反响热烈。"]}], w)
+case("B13 正文含'改编'不误伤+规范标注-静默", not w)
+
 # ============== Part C: blueprint 脏数据规整 ==============
 print("\n=== C. blueprint 脏数据 ===")
 for name, bp in [
