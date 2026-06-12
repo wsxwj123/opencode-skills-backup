@@ -85,3 +85,5 @@ timestamp	commit	skill	old_score	new_score	status	dimension	note	eval_mode
 2026-06-08T16:30	factual-fixes+read_material-fallback	teacher-paper	83.5	88.0	keep	预设数量13→17+高中政史地有预设+read_material失败分支	修正2处事实错误;dim3补read_material失败兜底;dim5/7配图简化+软化词修复同批	dry_run
 2026-06-08T17:00	polish-final	teacher-paper	88.0	-	pending	Phase4🔴退出+allowed-tools数组+触发时机中文+presets17行穷举	Frontmatter/dim6/dim4最后打磨	dry_run
 2026-06-11T17:57	cef1a4a	teacher-paper	88.0	83.9	keep	架构重构	v3.9.0: 移植v3.13门禁+科目原子化+字数硬门禁+Phase1总表; judge另发现5问题已修; 路由抽查9/10物理卷不读语文文档; 回归40/40	dry_run
+2026-06-11T22:43	0a33bb7	review-writing	81.4	84.5	keep	dim2/dim7/dim8	修问题A(Quick Ref加Mode Gate前置门)+问题C(commit块标注git init前置依赖)；消除Phase 0两个入口断点，dim2/7漏读风险下降	dry_run
+2026-06-11T22:51	0a33bb7	review-writing	84.5	77.9	reeval	dim8根因	独立子agent复评(不知修复史):确认A/C修复有效但dim8降到5/10——戳穿真正根因=Phase0拆docs的摘要陷阱,主文件摘要太完整诱导AI跳过读docs致环境检测/脚本复制/gitinit静默降级;我的+3.1预估是同context乐观偏差(反例黑名单#1)	full_test
