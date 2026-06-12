@@ -552,18 +552,21 @@ def cmd_build(args):
     files = _deduped
     source_errors = []  # 阅读类素材真实性硬门禁的违规项
     figure_errors = []  # 缺图硬门禁：题干含"如图"但无 figure block
+    parse_errors = []   # 完整性硬门禁：坏 JSON / 结构错误的原子文件（跳过=静默漏题）
     allow_missing_fig = "--allow-missing-figure" in args
     materials_dir = os.path.join(proj, "materials")
     for fp in files:
         try:
             atom = _read_json(fp)
         except json.JSONDecodeError as e:
-            warn.append(f"{os.path.basename(fp)} 非合法JSON已跳过（{e}）")
+            parse_errors.append(
+                f"{os.path.basename(fp)} 非合法JSON（{e}）——最常见原因：JSON 字符串内的"
+                f"中文引述写了未转义的 ASCII 双引号 \"，请直接改为全角“”")
             continue
         p_blocks = atom.get("paper", [])
         a_blocks = atom.get("answer", [])
         if not isinstance(p_blocks, list) or not isinstance(a_blocks, list):
-            warn.append(f"{os.path.basename(fp)} 的 paper/answer 不是列表，已跳过（避免内容被逐字符拆散）")
+            parse_errors.append(f"{os.path.basename(fp)} 的 paper/answer 不是列表")
             continue
         paper.extend(p_blocks)
         answers.extend(a_blocks)
@@ -592,7 +595,7 @@ def cmd_build(args):
     exp_total = meta.get("total", 120)
     if exp_q:
         if len(nums) != exp_q:
-            warn.append(f"题量 {len(nums)} ≠ 期望 {exp_q}（题号：{','.join(nums) or '无'}）")
+            parse_errors.append(f"题量 {len(nums)} ≠ 期望 {exp_q}（题号：{','.join(nums) or '无'}）")
         if abs(total - exp_total) > 0.01:
             warn.append(f"分值合计 {total:g} ≠ 期望 {exp_total}")
     else:
@@ -622,6 +625,20 @@ def cmd_build(args):
     if any(k in _subj for k in ("历史", "地理", "政治", "道德与法治", "道法")):
         warn.append(f"⚠️『{_subj}』题干内嵌的史实/年代/数据/地名不受溯源门禁覆盖，"
                     f"请人工核验真实性，严禁编造（地图/图表需用户提供）。")
+
+    # —— 卷面完整性硬门禁：坏 JSON 原子文件 / 题量不符 → 静默漏题，拒绝出卷 ——
+    allow_incomplete = "--allow-incomplete" in args
+    if parse_errors:
+        if allow_incomplete:
+            warn.extend(e + "（--allow-incomplete 已降级为告警，卷面可能缺题）" for e in parse_errors)
+        else:
+            print(f"[合并] 已读 {len(files)} 个原子文件，题量 {len(nums)}，分值合计 {total:g}")
+            print("\n🔴 [完整性门禁] 以下问题会导致卷面静默缺题：")
+            for e in parse_errors:
+                print("   - " + e)
+            print("\n  已拒绝出卷。修复对应 items/*.json 后重跑 build；")
+            print("  如确认缺题可接受（如分批预览），加 --allow-incomplete（降级为告警，须告知用户缺了哪些题）。")
+            sys.exit(2)
 
     # —— 阅读类素材真实性硬门禁：有违规则拒绝出卷（除非显式 --allow-unsourced）——
     allow_unsourced = "--allow-unsourced" in args

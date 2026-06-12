@@ -63,6 +63,7 @@
              {"type":"analysis","text":"【解析】A项偷换'同一条件'为'不同条件'……"} ]
 }
 ```
+- 🔴 **JSON 字符串内的中文引述一律直接写全角 `“”`（铁律）**：未转义的 ASCII 双引号 `"` 会提前终止 JSON 字符串，导致整个文件解析失败、该题被 build 完整性门禁拦下。也不要用 `\"` 转义绕行——渲染时反正会被规范成全角，直接写全角最稳。
 - `paper`/`answer` 的 block 类型见 `scripts/make_paper.py` 顶部文档。
 - section 文件示例：`{"meta":{"status":"-"},"paper":[{"type":"section","text":"二、阅读（共50分）"}],"answer":[{"type":"section","text":"二、阅读（共50分）"}]}`
 - 共享材料文件：`paper` 放 `material`/`table` 块，`answer` 留空 `[]`。
