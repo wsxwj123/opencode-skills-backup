@@ -281,6 +281,28 @@ with tempfile.TemporaryDirectory() as td:
     except SystemExit as e:
         case("H3 题量1≠期望3-拒绝出卷", e.code == 2)
 
+_mat_bad = _json.dumps({
+    "meta": {"status": "-", "source": "本地纸质教材《读本》", "source_file": "b.md"},
+    "paper": [{"type": "material", "title": "老街（改编自《读者》）", "paras": ["正文" * 60]}],
+    "answer": []}, ensure_ascii=False)
+with tempfile.TemporaryDirectory() as td:
+    proj = _mk_proj(td, [("101_q01.json", _q_ok), ("211_mat.json", _mat_bad)], 1)
+    (proj / "materials" / "b.md").write_text("纸质书原文", encoding="utf-8")
+    try:
+        with contextlib.redirect_stdout(io.StringIO()):
+            A.cmd_build([str(proj)])
+        case("H4 标注含'改编自'-措辞门禁拒绝", False, "未退出")
+    except SystemExit as e:
+        case("H4 标注含'改编自'-措辞门禁拒绝", e.code == 2)
+    try:
+        with contextlib.redirect_stdout(io.StringIO()):
+            A.cmd_build([str(proj), "--allow-wording"])
+        _atbl_p = proj / "build" / "材料真实性自检表.md"
+        _atbl = _atbl_p.read_text(encoding="utf-8") if _atbl_p.exists() else ""
+        case("H5 --allow-wording降级出卷+自检表含❌", "改编" in _atbl and "❌" in _atbl)
+    except SystemExit as e:
+        case("H5 --allow-wording降级出卷+自检表含❌", False, f"exit {e.code}")
+
 # ============== Part G: NUL 残留文件清理 ==============
 print("\n=== G. _cleanup_nul_files NUL 残留清理 ===")
 with tempfile.TemporaryDirectory() as td:
