@@ -322,6 +322,15 @@ with tempfile.TemporaryDirectory() as td:
     A._cleanup_nul_files(str(proj), warn)
     case("G5 无残留时静默", not warn)
 
+with tempfile.TemporaryDirectory() as td:
+    parent = pathlib.Path(td)
+    gproj = parent / "工程"
+    gproj.mkdir()
+    (parent / "NUL").write_text("", encoding="utf-8")
+    warn = []
+    A._cleanup_nul_files(str(gproj), warn, extra_dirs=(str(parent),))
+    case("G6 工程父目录顶层NUL被清理", not (parent / "NUL").exists())
+
 # 总结
 print(f"\n=== 总计 {len(PASS)}/{len(PASS)+len(FAIL)} 通过 ===")
 if FAIL:

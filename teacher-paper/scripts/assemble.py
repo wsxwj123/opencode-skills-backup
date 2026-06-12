@@ -391,6 +391,11 @@ def cmd_init(args):
               f"\n    python3 \"{os.path.join(proj_scripts, 'assemble.py')}\" "
               f"build \"{proj}\"")
     print(f"  下一步：抓素材到 materials/，逐题写 items/NN_qXX.json，再 build。")
+    _nul_warn = []
+    _cleanup_nul_files(proj, _nul_warn,
+                       extra_dirs=(os.path.dirname(os.path.abspath(proj)) or ".", os.getcwd()))
+    for _w in _nul_warn:
+        print(f"  [清理] {_w}")
 
 
 def _copy_scripts(proj):
@@ -477,29 +482,34 @@ def _export_pdf(docx_paths, out_dir):
     return ok
 
 
-def _cleanup_nul_files(project_dir, warn):
+def _cleanup_nul_files(project_dir, warn, extra_dirs=()):
     """清理名为 NUL 的残留文件：cmd 风格重定向（>NUL / 2>NUL）在 Windows 的
-    Git Bash 下不会指向空设备，而是真的创建一个名为 NUL 的文件。
-    Windows 原生 API 删除保留名文件需要 \\\\?\\ 前缀。"""
+    Git Bash 下不会指向空设备，而是真的创建一个名为 NUL 的文件（OneDrive 同步
+    会因保留名报错）。工程目录递归清理；extra_dirs（工程父目录/当前目录，NUL
+    常被建在这两处）只清顶层。Windows 原生 API 删除保留名文件需要 \\\\?\\ 前缀。"""
+    targets = []
     for root, _dirs, fnames in os.walk(project_dir):
-        for name in fnames:
-            if name.upper() != "NUL":
+        targets += [os.path.join(root, n) for n in fnames if n.upper() == "NUL"]
+    for d in extra_dirs:
+        try:
+            targets += [os.path.join(d, n) for n in os.listdir(d) if n.upper() == "NUL"]
+        except OSError:
+            continue
+    for fp in dict.fromkeys(os.path.realpath(t) for t in targets):
+        try:
+            os.remove(fp)
+        except OSError:
+            removed = False
+            if os.name == "nt":
+                try:
+                    os.remove("\\\\?\\" + fp)
+                    removed = True
+                except OSError:
+                    pass
+            if not removed:
+                warn.append(f"发现残留文件 {fp}（疑似 '>NUL' 重定向误生成），自动删除失败，请手动删除")
                 continue
-            fp = os.path.join(root, name)
-            try:
-                os.remove(fp)
-            except OSError:
-                removed = False
-                if os.name == "nt":
-                    try:
-                        os.remove("\\\\?\\" + os.path.abspath(fp))
-                        removed = True
-                    except OSError:
-                        pass
-                if not removed:
-                    warn.append(f"发现残留文件 {fp}（疑似 '>NUL' 重定向误生成），自动删除失败，请手动删除")
-                    continue
-            warn.append(f"已清理残留文件 {fp}——由 cmd 风格 '>NUL' 重定向误生成，命令一律用 bash 语法，不要重定向到 NUL")
+        warn.append(f"已清理残留文件 {fp}——由 cmd 风格 '>NUL' 重定向误生成，命令一律用 bash 语法，不要重定向到 NUL")
 
 
 def cmd_build(args):
@@ -536,7 +546,8 @@ def cmd_build(args):
     total = 0
     nums = []
     warn = []
-    _cleanup_nul_files(proj, warn)
+    _cleanup_nul_files(proj, warn,
+                       extra_dirs=(os.path.dirname(os.path.abspath(proj)) or ".", os.getcwd()))
     # B3修复：同一数字前缀的多个 _sec_ 文件会重复输出大题标题，只保留第一个。
     _seen_sec_prefix = set()
     _deduped = []
