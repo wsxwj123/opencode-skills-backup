@@ -5,6 +5,7 @@ description: >
   支持平台：小红书（图文帖/视频帖）、B站、微博、抖音、YouTube、Twitter 等。
   只要用户分享社交/视频平台链接（无论是否附带文字），都自动触发。
   也适用于直接粘贴短链（xhslink.com、b23.tv 等）的场景。
+  也支持按关键词检索小红书（"搜小红书"、"找几篇XX笔记"），检索后提取选中笔记。
   除非用户明确说"看看就好"、"不用"等否定词，否则不需要确认。
   核心承诺：不跳过任何图片、不压缩转写内容、每个要点/例子/数据都完整保留。
 ---
@@ -20,14 +21,18 @@ description: >
 
 ## 快速路由
 
-收到用户的链接后，先走这张决策树：
+先判断用户给的是**链接**还是**关键词**：
 
 ```
-链接 → 判断平台
+输入 → 有链接？
+  ├── 否（只有关键词/主题，限小红书）
+  │     → [小红书关键词检索] → 选笔记 → get_feed_detail → 图文/视频流程
+  └── 是 → 判断平台
          ├── 小红书（xhslink / xiaohongshu）
          │     → 展开短链 → get_feed_detail
          │           ├── type=normal → [2A 图文帖流程]
          │           └── type=video  → [2B 视频帖流程]
+         │     （MCP 失败 → fetch-everything 隐身降级，不用 WebFetch）
          ├── B站 / bilibili
          │     → yt-dlp 提取音频 → voice-bridge 转写 → [总结标准] → Obsidian
          └── 其他平台（YouTube/抖音/微博等）
@@ -56,6 +61,36 @@ curl -sL --max-redirs 5 -o /dev/null -w "%{url_effective}" "SHORT_URL"
 
 ---
 
+## 小红书关键词检索（无链接，按主题找内容）
+
+当用户给的是**关键词/主题**而非具体链接（"搜小红书看看XXX"、"找几篇XXX的笔记"），先检索再提取：
+
+### 1. 检索笔记
+
+```
+mcp__xiaohongshu__search_feeds(keyword="关键词", filters={...})
+```
+
+`filters` 可选项：`sort_by`(综合/最新/最多点赞/最多评论/最多收藏)、`note_type`(不限/视频/图文)、`publish_time`(不限/一天内/一周内/半年内)、`search_scope`、`location`。用户没指定就用默认。
+
+### 2. 过滤并展示候选
+
+- **丢弃 `modelType == "hot_query"` 的条目**（那是热搜词，不是笔记）
+- 只保留 `modelType == "note"`，从 `noteCard` 取：`displayTitle`、`user.nickname`、`type`(normal/video)、`interactInfo`(点赞/收藏/评论数)
+- 按互动数排序，列给用户选，或按用户要求自动取 top-N
+
+### 3. 提取选中笔记
+
+对每条选中的笔记，用其 `id`(=feed_id) 和 `xsecToken`(=xsec_token) 直接进入下面的详情流程（**跳过短链展开**，检索结果已带这两个字段）：
+
+```
+mcp__xiaohongshu__get_feed_detail(feed_id=<id>, xsec_token=<xsecToken>)
+```
+
+→ 之后按 `note.type` 走 [2A 图文帖] 或 [2B 视频帖]，多篇则逐篇走完整提取 + 总结。
+
+---
+
 ## 小红书（XHS）完整流程
 
 ### 1. 获取帖子信息
@@ -73,8 +108,12 @@ mcp__xiaohongshu__get_feed_detail(feed_id=..., xsec_token=...)
 
 **MCP 调用失败时（报错/超时/空返回）**：
 1. 检查 `feed_id` 和 `xsec_token` 是否提取正确（URL 格式：`/discovery/item/{feed_id}?xsec_token={token}`）
-2. 仍然失败 → 直接用 WebFetch 抓页面文本作为降级内容源，能提取多少算多少
-3. 告知用户 "MCP 获取失败，已用网页文本降级"
+2. 仍然失败 → 用 **fetch-everything 执行器**降级抓取（它把小红书识别为动态站点，走 Scrapling 隐身浏览器，比 WebFetch 更能突破风控）：
+   ```bash
+   python3 ~/.claude/skills/fetch-everything/scripts/fetch_everything.py "完整XHS链接" --json
+   ```
+   能提取多少算多少；**不要用 WebFetch**（对小红书风控基本只能拿到登录墙）
+3. 告知用户 "MCP 获取失败，已用 fetch-everything 隐身路线降级"
 
 ---
 
