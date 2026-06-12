@@ -60,7 +60,9 @@
 
 - `https://markdown.new/<原始URL>`
 - `https://defuddle.md/<原始URL>`
-- `https://r.jina.ai/http://<原始URL>` 或兼容的读取格式
+- `https://r.jina.ai/<原始URL>`（原始 URL 需带 `http://` 或 `https://` 协议头）
+
+> `r.jina.ai` 免费档限流较重；如需稳定使用，设置环境变量 `JINA_API_KEY`，执行器会自动带上鉴权头。
 
 如果在线转换结果返回：
 - 环境异常

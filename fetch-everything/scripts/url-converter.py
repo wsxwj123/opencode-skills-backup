@@ -14,6 +14,7 @@
 - 如果在线服务失败，应切换到 Scrapling 或浏览器自动化
 """
 
+import os
 import sys
 import argparse
 import requests
@@ -41,6 +42,14 @@ class URLConverter:
             'User-Agent': 'Mozilla/5.0 (compatible; FetchEverythingURLRouter/1.0)'
         })
 
+    def _service_headers(self, service: str) -> Dict[str, str]:
+        """部分服务支持鉴权以提升配额；r.jina.ai 无 key 时按免费档（重度限流）。"""
+        if service == 'r.jina.ai':
+            key = os.environ.get('JINA_API_KEY')
+            if key:
+                return {'Authorization': f'Bearer {key}'}
+        return {}
+
     def convert_url(self, original_url: str, service: str = 'markdown.new') -> str:
         if service not in self.SERVICES:
             raise ValueError(f"不支持的服务: {service}。可选: {', '.join(self.SERVICES.keys())}")
@@ -65,9 +74,10 @@ class URLConverter:
     def test_service(self, url: str, service: str = 'markdown.new') -> Tuple[bool, str, Optional[int]]:
         try:
             converted_url = self.convert_url(url, service)
+            headers = self._service_headers(service)
             for attempt in range(self.retry):
                 try:
-                    response = self.session.get(converted_url, timeout=self.timeout, allow_redirects=True)
+                    response = self.session.get(converted_url, timeout=self.timeout, allow_redirects=True, headers=headers)
                     if response.status_code == 200:
                         return True, f"{service} 服务可用", response.status_code
                     return False, f"{service} 返回状态码: {response.status_code}", response.status_code
@@ -83,9 +93,10 @@ class URLConverter:
     def get_content(self, url: str, service: str = 'markdown.new') -> Tuple[bool, Optional[str], str]:
         try:
             converted_url = self.convert_url(url, service)
+            headers = self._service_headers(service)
             for attempt in range(self.retry):
                 try:
-                    response = self.session.get(converted_url, timeout=self.timeout, allow_redirects=True)
+                    response = self.session.get(converted_url, timeout=self.timeout, allow_redirects=True, headers=headers)
                     if response.status_code == 200:
                         content = response.text
                         if len(content) < 50:
