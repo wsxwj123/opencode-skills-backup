@@ -4,7 +4,7 @@ description: "教师智能出题技能 - 覆盖小学一年级到高三全科目
 user-invocable: true
 allowed-tools: [Read, Write, Edit, Bash, Agent, AskUserQuestion, WebFetch, WebSearch]
 metadata:
-  version: "3.10.2"
+  version: "3.11.0"
   author: "teacher-paper-skill"
 ---
 
@@ -194,6 +194,7 @@ python3 <SKILL_DIR>/scripts/read_material.py "文件1" "文件2" ...
 python3 <SKILL_DIR>/scripts/fetch_web.py "<url>" ...
 ```
 多策略降级抓取，输出 Markdown 正文。小红书/B站短链自动跟随重定向。
+已内置 fetch-everything 引擎（多在线服务分流 + Scrapling 浏览器降级 + 质量门），**不要调用外部抓取技能/工具替代**——只有 `fetch_web.py --save` 会写抓取凭证头，外部工具抓的内容过不了溯源门禁。`requests`/`scrapling` 未安装时引擎自动跳过对应路线，退回 jina 直连。
 
 **联网选材来源**（文言文/现代文/作文素材的具体站点与检索方法）见 `references/material-sources.md`。核心：文言文走古诗文网/ctext 公版古籍（《世说新语》《古文观止》节选）；现代文、作文素材按主题检索《意林》《读者》《作文周刊》《意林·作文素材》美文；非连文本取《科学之友》等科普+数据图表。**抓到的素材一律落盘到工程的 `materials/` 目录**（命题时只读当前题相关素材，避免上下文膨胀）；抓不到一律请用户截图或提供 PDF，绝不臆造拼凑选文。
 

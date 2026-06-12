@@ -7,6 +7,8 @@
     python3 fetch_web.py "<url>" --save materials/x.md  # 抓取并落盘（写入抓取凭证头）
 
 策略顺序（自动降级）：
+  0. 内置 fetch-everything 引擎（fetch_everything.py：markdown.new/defuddle/jina 在线分流
+     + Scrapling 浏览器降级 + 质量门评分；requests/scrapling 缺失时自动跳过对应路线）
   1. r.jina.ai 代理（纯 HTTP，无需本地依赖，对多数站点有效，输出 Markdown）
   2. requests + readability-lxml 本地正文提取（需 pip 安装）
   3. requests 取原始 HTML 粗清洗
@@ -50,6 +52,29 @@ def _http_get(url, timeout=25):
         except UnicodeDecodeError:
             continue
     return raw.decode("utf-8", "ignore")
+
+
+def via_engine(url):
+    """内置 fetch-everything 引擎：多在线服务分流 + Scrapling 浏览器降级 + 质量门。
+    引擎是独立子进程（fetch_everything.py），requests/scrapling 缺失时内部自动跳过
+    对应路线；整体无结果或质量不达标则抛错，降级到 jina 直连链。"""
+    import subprocess
+    import json
+    engine = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fetch_everything.py")
+    if not os.path.exists(engine):
+        raise RuntimeError("fetch_everything.py 缺失")
+    try:
+        r = subprocess.run([sys.executable, engine, url, "--json"],
+                           capture_output=True, text=True, timeout=300)
+    except subprocess.TimeoutExpired:
+        raise RuntimeError("引擎超时(300s)")
+    if r.returncode != 0:
+        raise RuntimeError("引擎无结果：" + (r.stderr or r.stdout or "").strip()[-150:])
+    data = json.loads(r.stdout)
+    text = (data.get("content") or "").strip()
+    if data.get("status") == "success" and len(text) > 120:
+        return text
+    raise RuntimeError(f"引擎质量不足（status={data.get('status')} score={data.get('score')}）")
 
 
 def via_jina(url):
@@ -108,7 +133,8 @@ def _looks_like_error_page(text):
 def fetch(url):
     """返回 (ok, strategy, text)：ok=False 时 text 为失败提示。"""
     errors = []
-    for name, fn in (("jina", via_jina),
+    for name, fn in (("engine", via_engine),
+                     ("jina", via_jina),
                      ("readability", via_readability),
                      ("raw", via_raw)):
         try:
