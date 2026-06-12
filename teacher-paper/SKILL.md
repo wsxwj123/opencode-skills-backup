@@ -4,7 +4,7 @@ description: "教师智能出题技能 - 覆盖小学一年级到高三全科目
 user-invocable: true
 allowed-tools: [Read, Write, Edit, Bash, Agent, AskUserQuestion, WebFetch, WebSearch]
 metadata:
-  version: "3.9.2"
+  version: "3.9.3"
   author: "teacher-paper-skill"
 ---
 
@@ -403,7 +403,7 @@ python3 "<工程>/scripts/assemble.py" build "<工程>" [--pdf]
 #### 交付时必须告知用户（免责与人工待办，逐条说清）
 
 1. **文件位置**：两份 Word 的绝对路径 + 所在文件夹，并询问是否打开**文件夹**（不直接开文件）。
-2. **本卷用了哪些素材来源**（URL/出处/抓取日期），便于用户复核。
+2. 🔴 **材料真实性自检表（必做，不可口头带过）**：逐材料输出一张表——板块 | 选文标题 | meta.source | source_file 凭证（✓抓取凭证头/纸质/原创-已声明）| 卷面标注措辞（应为"节选自…"，**不得出现"改编/改写/整理自"或"原创"字样**）。任何一行不合格 → 回改对应 items/materials 文件并重跑 build，**不得带病交付**；全部合格才把表展示给用户复核。
 3. **触发的告警**：选文字数越界、题量分值不符、抓取换源、配图降级占位、是否用了 `--allow-unsourced` / `--allow-missing-figure`——如实转达。
 4. **需人工补的内容（待办清单）**：名著须**核对书目版本**；历史地图/地理图表/英语听力音频需用户提供；figure 占位 `［图：…］` 处需补图。
 5. **请用户终审**：真实素材经删改、AI 命题可能有疏漏，**事实/数据/出处/答案务必请用户人工校对**；难度系数为命题估计值（非实测）。
