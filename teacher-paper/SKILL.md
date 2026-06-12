@@ -4,7 +4,7 @@ description: "教师智能出题技能 - 覆盖小学一年级到高三全科目
 user-invocable: true
 allowed-tools: [Read, Write, Edit, Bash, Agent, AskUserQuestion, WebFetch, WebSearch]
 metadata:
-  version: "3.9.1"
+  version: "3.9.2"
   author: "teacher-paper-skill"
 ---
 
@@ -375,7 +375,7 @@ python3 "<工程>/scripts/assemble.py" build "<工程>" [--pdf]
 }
 ```
 
-规则：① `id` 前缀与 manifest 大题编号对应（101→一选/201→二非选…）；② 含选文题必须有 `material` 块且 `paras` 写全文，缺 `source`+`source_file` 则 build 拒绝；③ `material.layout="verse"` 让古诗词逐句居中；④ 理科含图题填 `figure.src`，无图时留 `"src": ""` 输出占位符；⑤ `options` 仅选择题需要；⑥ `answer` 客观题填选项字母，主观题填采分点列表。完整 block 类型扩展见 `make_paper.py` 顶部文档（存在时参照）。
+规则：① `id` 前缀与 manifest 大题编号对应（101→一选/201→二非选…）；② 含选文题必须有 `material` 块且 `paras` 写全文，缺 `source`+`source_file` 则 build 拒绝；③ `material.layout="verse"` 让古诗词逐句居中；④ 理科含图题填 `figure.src`，无图时留 `"src": ""` 输出占位符；⑤ `options` 仅选择题需要；⑥ `answer` 客观题填选项字母，主观题填采分点列表；⑦ **JSON 字符串内的中文引述一律直接写全角 `“”`**——未转义的 ASCII 双引号会让整个文件解析失败、该题被完整性门禁拦下（不要用 `\"` 转义绕行，渲染时反正会规范成全角）。完整 block 类型扩展见 `make_paper.py` 顶部文档（存在时参照）。
 
 输出（缺一不可，落在 `build/`）：
 1. **学生试卷.docx**——A4，可直接打印，默认带页脚页码「第X页 共Y页」；按 `meta.sealing_line` 可加密封线与座位号；排版按 `references/formatting-rules.md`（缺失时默认规范：A4纸/页边距2.54cm，试卷名黑体二号居中，正文宋体小四10.5磅，行距1.5倍，古诗词楷体居中）
@@ -426,6 +426,7 @@ python3 "<工程>/scripts/assemble.py" build "<工程>" [--pdf]
 | `assemble.py init` 失败（路径权限/磁盘问题）| 改为桌面默认路径重试（不传绝对路径）| 手动建目录后重试；若仍失败告知用户手动创建工程文件夹 |
 | 用户给 URL 无法访问（403/超时/反爬）| 换同主题备用站抓取一次 | 请用户截图/PDF；不使用无法核实来源的内容 |
 | build 字数门禁拒绝（选文越板块区间，区间见科目文档第2节）| 补充/精简选文后重写 materials/ 对应文件再 build | 征得用户知情同意后加 `--allow-length` 降级为告警（不要用 `--allow-unsourced`，那是溯源开关）|
+| build 完整性门禁拒绝（items JSON 非法 / 题量≠期望）| 修复报错指出的 items/*.json（最常见：字符串内 ASCII 双引号改全角 `“”`）后重跑 | 仅分批预览等明确场景加 `--allow-incomplete` 降级为告警，**必须告知用户缺了哪些题** |
 | 断点续作时工程路径找不到 | 让用户重新指定工程路径 | 在**新路径**建新工程并把旧 `items/`、`materials/` 复制进来；**绝不在旧工程上重跑 init**（会重置 meta.json 的 decisions，见反模式 #10）|
 
 ---
