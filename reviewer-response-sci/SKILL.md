@@ -301,8 +301,8 @@ After manual editing of any unit JSON:
 2. Rebuild HTML only using `scripts/render_from_atomic_json.py`.
    - If render fails (JSON parse error / missing required field): fix the offending `units/*.json` directly, then re-run. Do not regenerate from scratch.
    - If render fails (script not found / import error): check `scripts/` directory exists and dependencies are installed; fall back to `scripts/run_pipeline.py --allow-placeholder` as last resort.
-3. Sync state using `scripts/state_manager.py sync`.
-   - If sync fails: run `scripts/state_manager.py status` to identify out-of-sync units; fix manually, then retry sync.
+3. Sync state using `scripts/state_manager.py sync --project-root .`.
+   - If sync fails: run `scripts/state_manager.py show --project-root .` to identify out-of-sync units; fix manually, then retry sync.
 4. Run `scripts/final_content_gate.py` and `scripts/html_format_check.py` on the newly rendered HTML.
    - Gate checks are mandatory even for single-unit edits.
    - If gate fails, fix the offending `units/*.json` directly and re-run from step 2. Do not skip.
