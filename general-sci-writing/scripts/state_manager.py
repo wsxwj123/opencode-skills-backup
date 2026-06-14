@@ -3277,23 +3277,25 @@ def restore_project_snapshot(snapshot_dir):
             shutil.copy2(src, filename)
             restored_files.append(filename)
 
-    # Restore manuscripts.
+    # Restore manuscripts (rmtree+copytree:完全还原到快照时点,清除快照后新建文件,与 figure_analysis 对齐).
     src_manuscripts = os.path.join(snapshot_dir, "manuscripts")
     if os.path.exists(src_manuscripts):
-        os.makedirs(DEFAULT_MANUSCRIPT_DIR, exist_ok=True)
-        for src in glob.glob(os.path.join(src_manuscripts, "*")):
-            dst = os.path.join(DEFAULT_MANUSCRIPT_DIR, os.path.basename(src))
-            shutil.copy2(src, dst)
-            restored_files.append(dst)
+        if os.path.exists(DEFAULT_MANUSCRIPT_DIR):
+            shutil.rmtree(DEFAULT_MANUSCRIPT_DIR)
+        shutil.copytree(src_manuscripts, DEFAULT_MANUSCRIPT_DIR)
+        for root, _, files in os.walk(DEFAULT_MANUSCRIPT_DIR):
+            for fn in files:
+                restored_files.append(os.path.join(root, fn))
 
-    # Restore section memory.
+    # Restore section memory (rmtree+copytree:同上,完全还原).
     src_memory = os.path.join(snapshot_dir, "section_memory")
     if os.path.exists(src_memory):
-        os.makedirs("section_memory", exist_ok=True)
-        for src in glob.glob(os.path.join(src_memory, "*")):
-            dst = os.path.join("section_memory", os.path.basename(src))
-            shutil.copy2(src, dst)
-            restored_files.append(dst)
+        if os.path.exists("section_memory"):
+            shutil.rmtree("section_memory")
+        shutil.copytree(src_memory, "section_memory")
+        for root, _, files in os.walk("section_memory"):
+            for fn in files:
+                restored_files.append(os.path.join(root, fn))
 
     # Restore figure analysis (对称于 backup 用 copytree —— 递归恢复含子目录).
     src_figs = os.path.join(snapshot_dir, "figure_analysis")
