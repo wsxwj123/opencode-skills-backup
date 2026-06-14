@@ -18,7 +18,9 @@
 - 决策：CF/登录态路线在本技能内**暂停**；CDP 代码保留为可选（独立 profile / 可调试环境仍有效），未在 Chrome 149 默认 profile 验证通过。
 - 需登录态/反爬的站：用**本机已装的 autocli**（nashsu/AutoCLI，Chrome 扩展桥接复用登录态），**不集成进本技能**。
   - autocli 与 OpenCLI 是机制几乎相同的同类项目；本机已有 autocli，**不必加 OpenCLI（重复）**。
-  - 待办：autocli 的 Chrome 扩展未连 daemon（`autocli read` 报 "extension not connected"），修好即可抓知乎类站。
+  - ✅ 已打通（2026-06-15）：扩展从 release 下载解压到 `~/.autocli-extension/`，Chrome `chrome://extensions` → 开发者模式 → Load unpacked 加载；daemon 监听 `127.0.0.1:19925`。`autocli doctor` 三项全绿，`autocli read <知乎URL>` 实测完整抓取登录态正文。
+  - 分工：需登录态/反爬正文 → `autocli read <URL>`（Readability，已验证）；通用网页 → 本技能 fetch_everything.py。零冗余。
+  - 已知限制：`zhihu hot`/`search` 等结构化 adapter 命令在页面内 `fetch` 知乎内部 API 时报 `TypeError: Failed to fetch`（上游 adapter / 知乎 API 变更，非扩展连接问题）；正文需求 `read` 已覆盖，不在本技能内修上游 adapter。
 
 ## 同步
 
