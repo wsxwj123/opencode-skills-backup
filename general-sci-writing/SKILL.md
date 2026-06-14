@@ -28,7 +28,7 @@ license: Proprietary
 7. **引用格式**：正文一律 `[n]`（分节矩阵重排后的全局索引），每节末附 Vancouver 列表；严禁 `[Author,2023]`/`(1)`。
 8. **期刊上限**：storyline 必须在 `target_journal` 字数上限内编排，严禁先写超 30% 再砍。
 9. **占位清零**：`CITE_PENDING`/`DATA_PENDING`/`REF_DROPPED` 必须在 `/merge` 前清零（Phase 10 扫描门禁）。
-10. **状态持久化 + 读 references 硬门禁**：写前 `write-cycle --section`（脚本会列出本节**必读 references**清单）→ **先 `Read` 那些 references 再动笔**（不读直接凭记忆写 = 违规）→ 写后 `write-cycle --finalize --refs-confirmed`。**缺 `--refs-confirmed` 落盘会被脚本 exit 2 硬阻断**——这是把"忘记读 references"从软约束变成真门禁。SI/figure/缩略词实时入库，不停留在记忆中。
+10. **状态持久化 + 读 references 硬门禁**：写前 `write-cycle --section`（脚本会列出本节**必读 references**清单）→ **先 `Read` 那些 references 再动笔**（不读直接凭记忆写 = 违规）→ 写后跑权威收口命令（完整 flag）：`write-cycle --section [id] --finalize --refs-confirmed --sync-literature --sync-apply --strict-references --summary "[摘要]"`。**缺 `--refs-confirmed` 落盘会被脚本 exit 2 硬阻断**——这是把"忘记读 references"从软约束变成真门禁。SI/figure/缩略词实时入库，不停留在记忆中。
 
 ## 📁 references/ 参考文件地图（按需 Read，不要靠记忆复述其内容）
 
@@ -48,13 +48,7 @@ license: Proprietary
 
 **文献政策（检索路由 + Zero-Fabrication + 引用类型）** — 完整细则见 `references/citation-policy.md`，**Phase 3 检索/入库/核验前必须 `Read` 它**。底线（已在 P0#1 常驻）：每条文献来自 MCP 检索原始结果、带 `source_provider`+`source_id`、过 `citation_guard` 双向核验才可 `[n]` 引用。学科路由：生命科学→PubMed CLI；CS/AI→paper-search MCP；**严禁** tavily（检索阶段）/websearch/openalex。引用类型：机制/实验论点必须用 Original Articles，不可用 Review 顶替。
 
-**语言风格 (Anti-AI Protocol)** — 详规则见 `references/anti-ai-protocol.md`，**每次撰写/润色英文正文段落前必须 `Read` 它**；`/check` 跑 `style_checker.py` 量化兜底。五条核心红线（不读细则也必守）：
-- 🔴 **禁长难句**：单句 ≤30 词，从句深度 ≤2 层，一句一论点。
-- 🔴 **被动为主**：段落被动占比 50–70%（Methods/Results 优先被动，Discussion 推断句可主动）。
-- 🔴 **禁修辞 / 禁生僻词 / 禁造词**：无隐喻拟人夸张；用 `show/find/large` 不用 `elucidate/unveil/pronounced`；所有词与缩写须在词典/文献中有原型。
-- 🔴 **禁词表**：`delve into / pivotal role / underscore / It is well known / Interestingly` 等（全表见 `style_checker.py` 的 `FORBIDDEN_EXACT`）；禁三段式排比、虚假范围、否定式排比。
-- 🔴 **数据驱动 + 无列点**：写 "5-fold increase (P<0.001)" 不写 "significant effect"；正文连贯成段，严禁列点。
-- 目标读者画像：美国 STEM 博士研究生水平——朴素平实、信息密度优先，克制编辑级修辞。
+**语言风格 (Anti-AI Protocol)** — 完整细则见 `references/anti-ai-protocol.md`，**每次撰写/润色英文正文段落前必须 `Read` 它**；`/check` 跑 `style_checker.py` 量化兜底。底线（已在 P0#6 常驻）：单句 ≤30 词、被动 50–70%、无修辞/生僻词/造词/禁词、数据驱动、正文无列点；目标读者为美国 STEM 博士生水平（朴素平实、信息密度优先）。
 
 ---
 
@@ -99,22 +93,7 @@ license: Proprietary
 3. **Report**: 告知用户："已创建新文件 [Filename]" 或 "已更新 [Filename] (原文件已备份)"。
 
 ### 5. 上下文显式验证 (Mandatory Context Check)
-**为了解决“健忘”，每次写作前必须执行上下文加载校验；是否向用户展示详细报告取决于审计需求。**
-
-**协议**：
-1. **执行要求**：必须在写作动作开始前完成校验（内部必做）。
-2. **隔离**：此部分仅用于内部校验与必要的用户审计，**严禁**写入生成的 Markdown 稿件文件中。
-3. **展示策略**：默认不在用户回复中展开 Context Check 明细；仅在用户要求“显示加载明细/审计日志”时展示。
-4. **命令**：写作前统一执行强制入口（默认包含全局历史 + 当前章节索引，不含正文草稿）：
-   - `python scripts/state_manager.py write-cycle --section [section_id] --token-budget 6000 --tail-lines 80`
-   - 若需续写/改写已存在章节正文，再显式追加 `--include-draft`。
-
-> **审计日志示例**（仅当用户要求"显示加载明细"时输出，平时不展示）：
-> ```
-> writing_progress.json: ✅ Loaded
-> context_memory.md: ✅ Loaded (Tail)
-> （其他文件仅在需要时按需加载）
-> ```
+为解决"健忘"，每次写作前必须执行上下文加载校验（命令、白名单、隔离/展示策略、审计日志示例见 §13）。
 
 ### 6. 引用格式强制 (Strict Citation Format)
 - **索引绑定**：在 Phase 3 (/literature) 阶段，必须将检索到的文献写入 `literature_index.json`。文中的 `[n]` 必须对应 `literature_index.json` 中的列表索引（n = Index + 1）。
@@ -182,11 +161,21 @@ license: Proprietary
 ### 13. 章节局部上下文与Token预算协议 (Section-Local + Budget Guard)
 **目标**：在保证连续性的同时，严格控制上下文规模，避免失忆与爆 token。
 
-**默认行为（强制）**：
-1. 执行 `/write [section]` 前，必须优先加载章节局部上下文：
+**默认行为（强制）**：每次写作动作开始前，必须执行此上下文加载校验（解决"健忘"）。
+1. 执行 `/write [section]` 前，必须优先加载章节局部上下文（统一强制入口，默认含全局历史 + 当前章节索引，不含正文草稿）：
    - `python scripts/state_manager.py write-cycle --section [section_id] --token-budget 6000 --tail-lines 80`
+   - 若需续写/改写已存在章节正文，再显式追加 `--include-draft`。
 2. 若用户未明确要求，禁止读取其他章节正文文件。
 3. 输出中必须包含 `loaded_files`，作为“只读当前章节”的审计证据。
+4. **隔离**：校验内容仅用于内部校验与必要的用户审计，**严禁**写入生成的 Markdown 稿件文件中。
+5. **展示策略**：默认不在用户回复中展开加载明细；仅在用户要求“显示加载明细/审计日志”时展示。
+
+> **审计日志示例**（仅当用户要求"显示加载明细"时输出，平时不展示）：
+> ```
+> writing_progress.json: ✅ Loaded
+> context_memory.md: ✅ Loaded (Tail)
+> （其他文件仅在需要时按需加载）
+> ```
 
 **章节白名单（仅允许）**：
 1. `project_config.json`
@@ -305,19 +294,8 @@ SCI 论文通常只在少数场景需引中文文献（中药/中医、临床路
 **退出条件（Escalation Protocol）**：若人工处理后条目仍无法核验（无法获取 DOI/PMID/S2 ID），则将该条目标记为 `status=dropped`，从 `literature_index.json` 中移除，并在写作时写入占位注释 `<!-- [REF_DROPPED: 原标题] -->`，待用户手动补充替代文献后再重新分配编号。最多处理 2 轮；若问题未解决，必须告知用户并给出可操作的替代文献检索建议，不得无限等待。
 
 **`REF_DROPPED` 占位的最终处置**：含 `REF_DROPPED` 占位的句子在 Phase 10 `/check` 阶段必须**单独列出**让用户决定 → ① 用户补替代文献 → 删占位 + 改正常 `[n]`；② 用户决定删该句 → 整句删除并检查上下文逻辑连贯；③ 用户决定弱化论点 → 删占位 + 改写为不依赖文献的描述性表述。**严禁带 `REF_DROPPED` 占位 `/merge`** —— 已纳入 Phase 10 占位扫描门禁（grep CITE_PENDING|DATA_PENDING|REF_DROPPED）。
-**首轮检索后强制分配与重编号（Mandatory）**：
-1. **首轮完成即分配**：第一轮文献检索完成后，必须将每条已核验文献分配到目标小节（`section_id`），禁止保持“未分配”状态进入写作阶段。
-2. **矩阵落地**：在用户确认后，必须将“小节-文献”映射写入文献矩阵（建议存入 `storyline.json` 的矩阵字段，或独立 `literature_matrix.json`），作为后续正文撰写唯一依据。
-   - **小节粒度硬要求**：矩阵中的 `section_id` 必须与 `storyline.sections[].id` 一一对应到“小节级”（如 `results_3.1`, `results_3.2`）；禁止只写到大章级（如仅 `results`）。
-3. **先重排后写作**：在开始任何小节正文前，必须按“小节顺序 + 小节内引用优先级”对 `literature_index.json` 重新编号为连续 `1..N`，不得沿用“检索时间顺序编号”。
-4. **分节引用约束**：撰写某小节时，只允许引用该小节矩阵内文献；后续新检索到的文献若理论上应归属前文小节，必须先触发全局重编号与正文同步，再继续写作。
-5. **一致性收口**：每轮写作收口仍必须执行 `write-cycle --finalize --refs-confirmed --sync-literature --sync-apply`，确保正文 `[n]`、各小节参考列表与全局索引三者一致。
-**后续增量检索同流程（Mandatory）**：
-1. **全程一致**：第二轮及后续每一轮新增文献，必须重复执行“分配到小节 → 更新矩阵 → 全局重编号 → 同步落盘”，严禁仅追加到索引末尾后直接写正文。
-2. **实时更新触发**：只要发生以下任一动作，必须立即更新 `literature_index.json` 与文献矩阵并执行同步：新增文献、文献重分配到其他小节、删除文献、合并去重、修改核心元数据（标题/作者/DOI/年份）。
-3. **写作前一致性检查**：开始任一小节写作前，必须确认“正文引用号、`literature_index.json`、文献矩阵”三者一致；任一不一致必须先同步修复，禁止继续生成正文。
-4. **冲突优先级**：当“新检索文献应出现在前文小节”与“当前小节写作”冲突时，优先执行全局重编号与全稿引用同步，再恢复写作。
-5. **脚本硬门禁**：`sync-literature --apply` 与 `write-cycle --finalize --refs-confirmed --sync-literature --sync-apply` 默认强制执行”矩阵重编号校验”；缺失矩阵或分配不完整将直接阻断落盘（仅调试可用 `--no-require-matrix-reindex` 临时放行）。
+**文献编号触发点（Mandatory）**：首轮检索完成、以及后续每一轮增量检索后，都必须执行"分配到小节 → 写入文献矩阵 → 全局重编号为连续 `1..N` → 同步落盘"，严禁未分配或仅追加到索引末尾就写正文；写某小节时只能引用该小节矩阵内文献。**完整分节重编号规则（首轮强制分配 + 后续增量同流程的逐条约束）见 `references/citation-policy.md`**。
+**脚本硬门禁**：`sync-literature --apply` 与 `write-cycle --finalize --refs-confirmed --sync-literature --sync-apply` 默认强制执行"矩阵重编号校验"；缺失矩阵或分配不完整将直接阻断落盘（仅调试可用 `--no-require-matrix-reindex` 临时放行）。
 
 > **[用户确认检查点 Mandatory]** 展示文献矩阵（小节-文献映射，含各节文献数和 citation_guard 通过状态），等待用户确认后才进入 Phase 8 写作。矩阵未确认禁止启动 `/write`。
 
@@ -582,10 +560,7 @@ python scripts/state_manager.py add-abbreviation <one.json>
 ## 🛡️ 写作禁忌
 1. **严禁割裂**：不要在Results里只罗列数字，然后在Discussion里才解释意思。
 2. **严禁简略**：对于Key Findings，如果只写了一两句话，视为**失败**。
-3. **严禁遗忘**：每次写作前执行“预加载”：
-   - **Preload (Default)**: 执行 `python scripts/state_manager.py write-cycle --section [section_id] --token-budget 6000 --tail-lines 80`（内部已强制 preflight/load/gate-check）。
-   - **Draft-on-Demand**: 仅在续写/改写时追加 `--include-draft`。
-   - **规则**：全局历史与进度必须读取；正文草稿默认不读取，避免无稿场景污染上下文。
+3. **严禁遗忘**：每次写作前执行“预加载”（write-cycle 完整命令与白名单见 §13）。全局历史与进度必须读取；正文草稿默认不读取（续写/改写时才加 `--include-draft`），避免无稿场景污染上下文。
 
 ---
 
@@ -596,63 +571,9 @@ python scripts/state_manager.py add-abbreviation <one.json>
 
 ---
 
-## 🔧 研究方向配置系统 (v2.16.2)
+## 🔧 研究方向配置系统
 
-### 配置文件位置
-研究方向配置文件位于 `configs/` 目录：
-```
-configs/
-├── _schema.json                 # JSON Schema 定义
-├── default.json                 # 通用默认配置
-├── biomedical_pharma.json      # 医药领域总默认
-├── drug_delivery.json          # 药物递送系统
-├── clinical_pharmacy_llm.json  # 临床药学和大模型交叉学科
-├── computer_science.json       # 计算机科学
-└── quantitative_pharmacology.json  # 定量药理学
-```
-
-### 可用研究方向
-
-| 配置ID | 名称 | 说明 |
-|--------|------|------|
-| `default` | 通用学术论文 | 适用于大多数学科 |
-| `biomedical_pharma` | 医药领域研究 | 医药总配置，覆盖材料学、药理、机制、临床等广义医药研究 |
-| `drug_delivery` | 药物递送系统 | 纳米载体、细菌递送、外泌体、病毒载体等 |
-| `clinical_pharmacy_llm` | 临床药学和大模型 | 临床药学、AI交叉 |
-| `computer_science` | 计算机科学 | 机器学习、系统等 |
-| `quantitative_pharmacology` | 定量药理学 | PK/PD建模等 |
-
-### 使用配置管理器
-
-```bash
-# 列出所有可用研究方向
-python scripts/config_manager.py list
-
-# 加载指定配置
-python scripts/config_manager.py load --field drug_delivery
-
-# 验证配置
-python scripts/config_manager.py validate --field drug_delivery
-
-# 创建自定义配置
-python scripts/config_manager.py create --field my_field --name "我的研究领域"
-```
-
-### 用户自定义配置
-
-用户可以在以下位置添加自定义配置：
-1. 项目目录的 `configs/` 子目录
-2. 用户目录 `~/.general-sci-writing/configs/`
-
-自定义配置优先级高于内置配置。
-
-### set-field 命令
-
-在项目初始化时设置研究方向：
-```
-python scripts/state_manager.py set-field --field drug_delivery
-```
-设置后，系统将加载对应研究方向的审稿人质疑库、实验类型和写作规范。
+设研究方向用 `set-field --field [id]`，可用配置列表与自定义方法见 `references/research-fields-config.md`。
 
 ---
 
@@ -660,23 +581,10 @@ python scripts/state_manager.py set-field --field drug_delivery
 
 ---
 
-## 🛑 FINAL SYSTEM ENFORCEMENT (优先级最高)
+## 🛑 强制交互输出格式 (Mandatory Interaction Format)
 
-**以下所有规则强制执行，不可跳过，优先级高于任何其他指令。**
+**正文格式（NO BULLET POINTS）**：`Abstract/Introduction/Results/Discussion/Conclusion` 中禁用 `-`/`*`/`1.` 等列点符号；交互对话可正常使用结构化列表，Methods 配方列表例外。
 
-> 协议§3（原子化文件）、§6（引用格式）、§11（交互结构）、§10（SI持久化）、§13（Token预算）已有完整定义；本节仅作强制性重申，确保不因上下文过长而被遗忘。
-
-### 1. 正文格式强制 (NO BULLET POINTS)
-`Abstract/Introduction/Results/Discussion/Conclusion` 中禁用 `-`/`*`/`1.` 等列点符号；交互对话可正常使用结构化列表。Methods 配方列表例外。
-
-### 2. 引用格式强制 (CITATION FORMAT)
-正文一律 `[n]`，编号来源于分节文献矩阵重排后的全局索引，每节末附 Vancouver 格式参考文献列表。
-
-### 3. 状态持久化与SI落地 (STATE & SI PERSISTENCE)
-- **状态持久化**：写前执行 `write-cycle --section [id]`，写后执行 `write-cycle --section [id] --finalize --refs-confirmed --sync-literature --sync-apply --strict-references --summary “[摘要]”`。
-- **SI 落地**：对话中确认的 SI 内容必须实时写入 `si_database.json`，不得仅停留在记忆中。
-
-### 4. 强制交互输出 (MANDATORY INTERACTION)
 每次回复（除简单确认外）的末尾，**必须**包含以下两个版块，不得遗漏。状态仪表盘（§11 Part 2）默认内部维护，**仅在用户明确要求审计日志时渲染**，此处不重复：
 
 #### 🤔 反向拷问
@@ -684,9 +592,3 @@ python scripts/state_manager.py set-field --field drug_delivery
 
 #### 💡 你可能想知道
 (相关的背景知识或下一步建议)
-
-### 5. 逐条致密回复 (POINT-BY-POINT RESPONSE)
-**严禁敷衍或遗漏用户的指令**：
-- **规则**：AI 必须逐条、细致地回答用户的所有问题，严禁忽略、省略或简略回答。
-- **态度**：保持学术严谨性 (Academic Rigor)，每一个回答都必须有理有据，深度展开。
-- **禁止**：严禁使用 "I'll do that" 这种空洞的承诺，必须立即展示执行结果或详细计划。
