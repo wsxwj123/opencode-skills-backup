@@ -28,7 +28,7 @@ SQ is the upstream root; H/O/RC/KSQ form the 1:1 consistency backbone derived fr
 
 | Symbol | Chinese | Role | Example |
 |--------|---------|------|---------|
-| SQ | 科学问题 (Scientific Question) | Field-level open problem distilled in P1; root for H and KSQ (not part of the 1:1 chain) | "XXX的分子机制尚不清楚" |
+| SQ | 科学问题 (Scientific Question) | Field-level open problem distilled in P1; root for H and KSQ (not part of the 1:1 chain). SQ 不持有下行映射字段，关联由 H/KSQ 的 `mapped_from_sq` 反向建立 | "XXX的分子机制尚不清楚" |
 | H | 假说 (Hypothesis) | Causal claim derived from SQ | "A蛋白通过B通路调控C过程" |
 | O | 目标 (Objective) | What you **do** (action-oriented) | "阐明XXX的机制" |
 | RC | 研究内容 (Research Content) | Specific investigation; links to methods | "通过ChIP-seq分析A蛋白的结合位点" |
@@ -92,17 +92,21 @@ Apply these resolutions when references conflict:
 Follow phased gates in order:
 1. Phase 0: initialize project profile, section targets, mapping cardinality.
 2. Phase 1: write P1 with full citation pipeline and verification.
+   - 每节先跑 `python scripts/state_manager.py --root . write-cycle --section P1`（逐节预算/上下文注入的预写门控，完整参数见 references/08）；不得跳过直接硬写。
    - Input: confirmed project profile (title, discipline, H/O/RC/KSQ mapping counts).
    - Output: `sections/P1_立项依据.md` + `data/literature_index.json` (all P1 citations verified) + updated `context_memory.md`.
    **Citation Type by Context for P1 (立项依据，MANDATORY):** specific mechanistic/experimental claims (具体科学论点) must cite Original Articles as primary evidence; clinical evidence cites Clinical Trials at the same priority; preprints are last-resort, labeled `[Preprint]`, used only when no peer-reviewed equivalent exists. Full context-to-type mapping and the `role` taxonomy (gap_evidence / method_support / prior_work / comparison / background) live in `references/04_文献管理.md`.
 3. Phase 2: write P2 研究内容（contains all sub-content: H/O/RC/KSQ, methods, innovations, annual plan）.
+   - 每节先跑 `python scripts/state_manager.py --root . write-cycle --section P2`（逐节预算/上下文注入的预写门控，完整参数见 references/08）；不得跳过直接硬写。
    - Input: verified P1; H/O/RC/KSQ mapping counts from Phase 0; consistency_map.json with SQ entries.
+   - consistency_map 条目结构（mapped_from_sq / mapped_to_objective / supports_method 等字段名）见 `references/02_核心机制.md` §2.2，按其字段名产出避免 validate 报错。
    - Output: `sections/P2_研究内容.md` + updated `data/consistency_map.json` (H→O→RC→KSQ→M→IN all links validated) + `sections/figure_prompts.md`.
    - Sub-content order: 研究假说(H) → 研究目标(O) → 研究内容(RC) → 关键科学问题(KSQ) → 研究方案与技术路线(M) → 特色与创新之处(IN) → 年度研究计划.
    - No literature numbers anywhere in P2. Paragraph narrative throughout; annual plan may use year-based paragraphs.
    - Every M must trace back to a specific RC; every IN must trace to RC and M.
    - **Figure Prompt Generation（AI绘图提示词）：** Phase 2 完成后，为技术路线图等必要图表生成绘图提示词，保存至 `sections/figure_prompts.md`。模板与生成规则见 `references/10_Figure_Prompt规范.md`。
 4. Phase 3: write P3 研究基础（4 sub-files）.
+   - 每节先跑 `python scripts/state_manager.py --root . write-cycle --section P3_1`（其余子节同理 P3_2/P3_3/P3_4；逐节预算/上下文注入的预写门控，完整参数见 references/08）；不得跳过直接硬写。
    - Input: P2 confirmed; team CV, platform data, and prior publications from Phase 0 profile.
    - Output:
      - `sections/P3_1_研究基础与可行性分析.md` (prior work + feasibility evidence per M + risk mitigation)
@@ -112,6 +116,7 @@ Follow phased gates in order:
    - Each M in consistency_map must have at least one feasibility entry (F) sourced from P3_1 or P3_2.
    - P3_3 and P3_4 may use list format (tables allowed).
 5. Phase 4: write P4 其他需要说明的情况（≤500字）.
+   - 每节先跑 `python scripts/state_manager.py --root . write-cycle --section P4`（逐节预算/上下文注入的预写门控，完整参数见 references/08）；不得跳过直接硬写。
    - Input: P3 confirmed.
    - Output: `sections/P4_其他需要说明的情况.md`.
    - Cover: concurrent grant applications, senior PI prior grants, postdoc status, AI usage declaration, any other required disclosures.

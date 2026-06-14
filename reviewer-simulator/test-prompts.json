@@ -2,7 +2,7 @@
   {
     "id": 1,
     "prompt": "帮我模拟审稿一下这篇准备投Nature Medicine的稿件，重点看新颖性和方法是否足够严谨。（附全文PDF）",
-    "expected": "skill应触发：声明证据边界、读取report_template.html模板、按18点框架逐项分析、输出含目标期刊评估的完整中文HTML审稿报告，文件命名为assets/report_YYYYMMDD_*.html"
+    "expected": "skill应触发：声明证据边界、读取report_template.html模板（assets只读）、按18点框架逐项分析、输出含目标期刊评估的完整中文HTML审稿报告，文件写到用户当前工作目录(CWD)，命名为report_YYYYMMDD_*.html"
   },
   {
     "id": 2,
