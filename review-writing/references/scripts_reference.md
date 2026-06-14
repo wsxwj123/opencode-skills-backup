@@ -16,15 +16,30 @@ All scripts are in `[project]/scripts/` (copied from skill directory during Phas
 | `citation_guard.py` | Anti-hallucination guard | All |
 | `check_global_citation_sequence.py` | Verify global [1..N] citation continuity | All |
 
-## `state_manager.py` commands (None Mode — Phase 2.5 only)
+## `state_manager.py` commands
 
 ```bash
-# Canonical dedup + reindex literature by section order + remap draft citations:
+# reindex (None Mode — Phase 2.5): canonical dedup + reindex literature by section order + remap draft citations:
 python3 scripts/state_manager.py reindex \
   --storyline outline.md --index data/literature_index.json \
   --matrix data/synthesis_matrix.json
-# Note: state.json is managed via inline Python in Phase 0.5/1/3, NOT via this script.
+
+# set-phase (all modes — Phase 2.5/3/4): set workflow phase in state.json, preserving every other key.
+python3 scripts/state_manager.py set-phase --phase 4 --completed true   # --completed optional (Phase 4 final)
+
+# complete-section (all modes — Phase 2/3): add a section to completed_sections AND drop it from any
+# pending_sections bucket (Polish Mode), preserving other keys. Idempotent.
+python3 scripts/state_manager.py complete-section --section 2.1
 ```
+
+> `set-phase` / `complete-section` operate on the workflow `state.json` (the `{phase, completed_sections,
+> mode, pending_sections, zotero_root_key, citations_imported}` record), which is **disjoint** from the
+> `STATE_FILES` map (`progress.json`/`storyline.md`/`literature_index.json`/…) that `load`/`update`/`reindex`
+> touch — so these two commands cannot affect dedup/reindex. They replace the repeated inline "load json →
+> set key → write" Python that previously lived in Phase 2/2.5/3/4. Default path is `state.json` in CWD;
+> override with `--state PATH`. Phase 0.5 init and Phase 0-P Step 6 still build state.json inline (they
+> create the file / write multiple keys at once, not a single-field update). Phase 1 Step 6 also stays inline
+> (it writes `zotero_root_key` alongside the phase).
 
 ## `matrix_manager.py` commands (None Mode)
 
@@ -98,6 +113,7 @@ python3 scripts/validate_citations.py \
 | Command | Function |
 |---------|---------|
 | `--status --lib-id X --api-key Y` | Test connection, list libraries and existing collections |
+| `--status --find-root-title "T" --lib-id X --api-key Y` | Idempotent root-collection probe (used in Phase 1 / Phase 0-P Step 5 before `--init`). Exact-match lookup by top-level collection name. **Exit codes:** `0` → exactly one match, prints its key to stdout (capture as ROOT_KEY); `3` → no match (caller should run `--init`); `4` → ambiguous, prints all candidate keys (ask user to pick). Optional `--json` applies to `--status` only, not this probe. |
 | `--init --title "T" --outline outline.md --lib-id X --api-key Y` | Create root + subcollection tree from outline |
 | `--add-batch --section "2.1" --papers tmp/papers_2_1.json --root-key ROOT_KEY --index data/literature_index.json --lib-id X --api-key Y` | Safe upsert (3 branches): ① paper already in Zotero (has zotero_key) → link to section collection only, gid unchanged; ② paper in local index but NOT yet in Zotero (no zotero_key, e.g. Polish Mode import) → create Zotero item using existing gid, back-fill zotero_key; ③ paper not in index at all → create Zotero item + new gid, append to local index. `--root-key` scopes all collection lookups to the current project's root collection, preventing cross-project contamination when multiple reviews share the same Zotero library. |
 | `--dedup --scope ROOT_KEY --lib-id X --api-key Y` | **Repair only** — deduplicate within root collection scope; assigns gid:N; do NOT use in normal workflow (--add-batch already deduplicates at write time) |
