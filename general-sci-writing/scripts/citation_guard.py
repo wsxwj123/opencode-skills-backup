@@ -200,6 +200,8 @@ def _provider_family(provider: str) -> str:
     p = str(provider or "").strip().lower()
     if p.startswith("paper-search"):
         return "paper-search"
+    if p.startswith("pubmed"):
+        return "pubmed-cli"
     if p.startswith("tavily"):
         return "tavily"
     if "websearch" in p or "web-search" in p or "web_search" in p:
