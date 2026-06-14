@@ -42,6 +42,11 @@ SQ vs KSQ: SQ is the broad open problem stated in P1; KSQ is the focused, answer
 ## Inputs Required
 Collect before execution:
 - Project basics: title, discipline code, project type, research attribute, duration, budget.
+- 🔴 **科学问题属性（四选一，强制）**：与上面的"研究属性"是**两个独立必填字段**，不可混为一谈。研究属性=分类评审的「自由探索类/目标导向类」；科学问题属性=申请书另一独立必填项，四类官方标准措辞如下，Phase 0 必须选定其一并写入 profile 的 `science_problem_attribute`：
+  - 鼓励探索、突出原创
+  - 聚焦前沿、独辟蹊径
+  - 需求牵引、突破瓶颈
+  - 共性导向、交叉融通
 - Existing materials: draft files, prior work, platform/conditions, related projects.
 - User constraints: word targets per section, preferred P2 sub-structure, H/O/RC/KSQ mapping count.
 
@@ -54,6 +59,8 @@ Collect before execution:
 | P4 其他需要说明的情况 | ≤500字 |
 | P3_4 完成基金项目情况总结 | ≤500字 |
 | 研究属性（分类评审） | 必选「自由探索类」或「目标导向类」二选一 |
+| 科学问题属性（独立必填，≠研究属性） | 四选一：鼓励探索·突出原创 / 聚焦前沿·独辟蹊径 / 需求牵引·突破瓶颈 / 共性导向·交叉融通；Phase 0 未选定则 gate-check 阻断（`failed_at=profile`） |
+| 伦理审查（涉人类受试者/实验动物/生物安全/人类遗传资源时） | 须在可行性分析中说明伦理审查批件或送审计划 |
 
 ## Tooling Rules
 Academic literature retrieval follows topic-dependent routing (Mandatory):
@@ -91,6 +98,7 @@ Apply these resolutions when references conflict:
 ### Write Mode
 Follow phased gates in order:
 1. Phase 0: initialize project profile, section targets, mapping cardinality.
+   - 🔴 **必须选定「科学问题属性」四选一**（鼓励探索·突出原创 / 聚焦前沿·独辟蹊径 / 需求牵引·突破瓶颈 / 共性导向·交叉融通），写入 profile `science_problem_attribute`。注意与「研究属性（自由探索类/目标导向类）」区分，二者是独立字段。未选定将在 Phase 7 `gate-check` 触发 `failed_at=profile` 阻断。
 2. Phase 1: write P1 with full citation pipeline and verification.
    - 每节先跑 `python scripts/state_manager.py --root . write-cycle --section P1`（逐节预算/上下文注入的预写门控，完整参数见 references/08）；不得跳过直接硬写。
    - Input: confirmed project profile (title, discipline, H/O/RC/KSQ mapping counts).
@@ -114,12 +122,13 @@ Follow phased gates in order:
      - `sections/P3_3_正在承担的相关项目.md` (ongoing projects; explain overlap/difference from this project)
      - `sections/P3_4_完成基金项目情况.md` (completed grants summary ≤500字 + deliverables list)
    - Each M in consistency_map must have at least one feasibility entry (F) sourced from P3_1 or P3_2.
+   - **伦理审查（涉人类受试者/实验动物/生物安全/人类遗传资源时为硬项）：** P3_1 可行性分析须说明已获或计划申请的伦理审查批件（如医学伦理委员会、实验动物福利伦理、生物安全审批、人类遗传资源采集/保藏/利用审批），尚未取得的注明送审计划与时间节点。不涉及上述情形则无需展开。
    - P3_3 and P3_4 may use list format (tables allowed).
 5. Phase 4: write P4 其他需要说明的情况（≤500字）.
    - 每节先跑 `python scripts/state_manager.py --root . write-cycle --section P4`（逐节预算/上下文注入的预写门控，完整参数见 references/08）；不得跳过直接硬写。
    - Input: P3 confirmed.
    - Output: `sections/P4_其他需要说明的情况.md`.
-   - Cover: concurrent grant applications, senior PI prior grants, postdoc status, AI usage declaration, any other required disclosures.
+   - Cover: concurrent grant applications, senior PI prior grants, postdoc status, AI usage declaration, ethics/biosafety/human-genetic-resource approvals (若涉及，与 P3_1 伦理说明呼应), any other required disclosures.
 6. Phase 5: write 预算说明书（B1-B3）.
    - Input: P2 confirmed (M entries define budget items); project profile (budget_total, duration).
    - Output:
@@ -185,6 +194,7 @@ Use atomic gate command for final checks:
 - `python scripts/state_manager.py --root . gate-check --sections-dir sections --index data/literature_index.json --p1 sections/P1_立项依据.md --ref sections/REF_参考文献.md --mcp-cache data/mcp_literature_cache.json --mcp-ttl-days 30 --require-mcp`
 
 Failure handling playbook:
+- `failed_at=profile`: 科学问题属性未选定或取值非四类官方措辞之一。回到 Phase 0 与用户确认四选一，写入 profile `science_problem_attribute`（`python scripts/state_manager.py --root . profile --json '{"science_problem_attribute":"聚焦前沿、独辟蹊径"}'`），再 re-run `gate-check`。
 - `failed_at=sync`: run `sync-all --auto-fix`, then re-run `gate-check`.
 - `failed_at=citation`: repair index/cache, re-run `verify-all --require-mcp`, then `gate-check`.
 - `failed_at=matrix`: run `matrix-check` and `reorder`, then `gate-check`.
