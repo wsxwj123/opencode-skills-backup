@@ -225,7 +225,7 @@ Execute in this exact order:
 ## Step 3: Diagnosis Report (per section — no external script needed)
 
 Run `python3 scripts/word_counter.py --file drafts/section_XX_XX.md` for each section.  
-Scan each file for banned words from the Anti-AI Writing Style section.  
+Scan each file for banned words from the Anti-AI Writing Style rules (`references/writing_guidelines.md` §4).  
 Count inline `[N]` citation occurrences per 500 words.
 
 Display:

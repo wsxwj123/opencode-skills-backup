@@ -41,3 +41,58 @@ High-impact reviews are not summaries; they are arguments.
 2. **Evidence:** Citations and data supporting the claim.
 3. **Counter-evidence/Nuance:** Complexity and conflicting data.
 4. **Synthesis/Mini-conclusion:** What does this mean for the section's argument?
+
+## 4. Anti-AI Writing Style
+
+### English Mode
+- **Ban List:** Moreover, Crucial, Landscape, Tapestry, Realm, Pivot, Foster, Underscore, Delve into, Spearhead
+- **Phrases to Avoid:** It is worth noting, In conclusion, As mentioned above, Serves as, Acts as
+- **Structure Ban:** No "Not only...but also"; No "From A to B"; No trailing "-ing" clauses
+- **Rhythm:** Mix short sentences (≤12 words) with long (25–40 words). NEVER 3+ consecutive similar-length sentences.
+- **Voice:** Active preferred, passive ≤30% per paragraph.
+- **Transitions:** Ban "Furthermore / In addition / Moreover" bolted-on. Embed causality into main clause.
+
+### Chinese Mode
+- **Ban List:** 值得注意的是、不仅如此、此外、综上所述、总而言之、深入探讨、至关重要、在此背景下、显而易见
+- **Structure Ban:** 一方面……另一方面……; 随着……的不断发展; 日益受到关注
+- **Rhythm:** Short sentences ≤15 characters, long sentences 30–60 characters. Avoid 3+ consecutive same-pattern sentences.
+
+### Deep Rewriting (Anti-Similarity Protocol)
+- **Lexical:** Replace non-terminological generic words. Verbatim phrase ≥4 consecutive words → decompose and reconstruct.
+- **Syntactic:** Alternate active/passive. Embed causality. No templated transitions.
+- **Structural:** Alternate "claim-then-evidence" vs "evidence-then-claim". Insert judgment sentences ("This likely reflects…").
+
+### Abbreviation / Acronym Management
+- **First-use rule (EN):** `Full Name (ABBR)` on first occurrence in the manuscript body. Subsequent uses → ABBR only.
+- **First-use rule (CN):** `中文全称（英文全称, ABBR）` on first occurrence. Example: `光动力疗法（Photodynamic Therapy, PDT）`.
+- **Title & Abstract:** Do NOT use abbreviations in the title. In the abstract, re-define any abbreviation used (abstract is read independently from the body).
+- **Universally known exceptions:** DNA, RNA, PCR, HIV, WHO, FDA — may be used without expansion.
+- **Abbreviation registry:** Maintain `exports/abbreviation_list.md` (auto-generated in Phase 4 Step 4c). Format:
+
+  ```
+  | Abbreviation | Full Name | First Defined In |
+  |---|---|---|
+  | PDT | Photodynamic Therapy | Section 1.1 |
+  | ROS | Reactive Oxygen Species | Section 2.1 |
+  ```
+- **Cross-section consistency:** When writing Section N, check if the abbreviation was already defined in a previous section. During Phase 3 the registry does not exist yet (Phase 4 generates it) — grep the already-written `drafts/section_*.md` files for the `Full Name (ABBR)` pattern. If already defined, use ABBR directly — do NOT re-expand.
+
+## 5. Figure Prompt Template
+
+**Trigger:** Run ONCE after ALL sections in Phase 3 are complete (all sections in `completed_sections`).
+Generate prompts for every entry in `figures/figure_index.md`. Write output to `figures/figure_prompts.md`.
+
+```
+[FIGURE PROMPT — Figure N: <title>]
+TYPE: Schematic | Conceptual overview | Data plot | Workflow | Mechanistic pathway
+SUBJECT: <specific scientific content>
+STYLE: BioRender style, scientific diagram, white background (#FFFFFF), publication-quality
+COLOR SCHEME: Primary #2E86AB | Secondary #A23B72 | Accent #F18F01 | Neutral #4A4A4A | BG #FFFFFF
+ELEMENTS:
+  - <Element 1>: <shape, position, connections>
+  - <Element 2>: ...
+LAYOUT: <Single/Multi-panel> | <aspect ratio> | reading direction left→right
+TYPOGRAPHY: Sans-serif (Arial/Helvetica), 8-10pt labels, English only
+KEY MESSAGE: <one sentence>
+AVOID: 3D effects, drop shadows, gradients, decorative borders, excessive text
+```

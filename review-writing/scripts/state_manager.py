@@ -1079,6 +1079,55 @@ def snapshot_state(output_path=None):
     print(f"Snapshot written: {output_path}")
 
 
+def _load_workflow_state(path):
+    """Load the workflow state.json (phase/completed_sections/...). Returns {} if absent/corrupt."""
+    p = Path(path)
+    if not p.exists():
+        raise SystemExit(f"Error: {path} not found. Run Phase 0.5 init first.")
+    try:
+        return json.loads(p.read_text(encoding="utf-8") or "{}")
+    except json.JSONDecodeError as e:
+        raise SystemExit(f"Error: {path} is not valid JSON: {e}")
+
+
+def set_phase(phase, completed=None, state_path="state.json"):
+    """Set workflow phase (and optionally `completed`) in state.json, preserving all other keys.
+
+    Replaces the inline 'load json → set phase → write' pattern used across Phase 1/2.5/3/4.
+    Only the explicitly named keys are mutated; completed_sections / mode / pending_sections /
+    zotero_root_key / citations_imported are left untouched.
+    """
+    state = _load_workflow_state(state_path)
+    state["phase"] = phase
+    if completed is not None:
+        state["completed"] = completed
+    _atomic_write_text(state_path, json.dumps(state, indent=2, ensure_ascii=False))
+    extra = f", completed={completed}" if completed is not None else ""
+    print(f"✅ state.json: phase={phase}{extra} (other fields preserved)")
+
+
+def complete_section(section, state_path="state.json"):
+    """Add `section` to completed_sections and remove it from pending_sections, preserving other keys.
+
+    Replaces the inline pattern in Phase 2 Step 7 and Phase 3 Step 8. Idempotent: re-adding an
+    already-completed section is a no-op. A section never stays in both lists simultaneously.
+    """
+    state = _load_workflow_state(state_path)
+    completed = state.setdefault("completed_sections", [])
+    if not isinstance(completed, list):
+        raise SystemExit("Error: completed_sections is not a list in state.json")
+    if section not in completed:
+        completed.append(section)
+    # Polish Mode only: drop from any pending_sections bucket
+    pending = state.get("pending_sections")
+    if isinstance(pending, dict):
+        for bucket in pending.values():
+            if isinstance(bucket, list) and section in bucket:
+                bucket.remove(section)
+    _atomic_write_text(state_path, json.dumps(state, indent=2, ensure_ascii=False))
+    print(f"✅ state.json: {section} → completed_sections")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Manage state files for Review Writing Skill")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -1115,6 +1164,26 @@ def main():
     )
 
     subparsers.add_parser("compact", help="Compact the context memory file if too large")
+
+    setphase_parser = subparsers.add_parser(
+        "set-phase",
+        help="Set workflow phase in state.json (preserves all other keys). Replaces inline phase-update Python in Phase 1/2.5/3/4.",
+    )
+    setphase_parser.add_argument("--phase", type=int, required=True, help="Phase number to set (0-4)")
+    setphase_parser.add_argument(
+        "--completed",
+        choices=["true", "false"],
+        default=None,
+        help="Optional: also set the boolean `completed` flag (Phase 4 final).",
+    )
+    setphase_parser.add_argument("--state", default="state.json", help="Path to workflow state.json (default: state.json)")
+
+    completesec_parser = subparsers.add_parser(
+        "complete-section",
+        help="Add a section to completed_sections (and drop it from pending_sections) in state.json, preserving other keys.",
+    )
+    completesec_parser.add_argument("--section", required=True, help="Section ID, e.g. '2.1'")
+    completesec_parser.add_argument("--state", default="state.json", help="Path to workflow state.json (default: state.json)")
 
     snapshot_parser = subparsers.add_parser("snapshot", help="Write a full state snapshot JSON")
     snapshot_parser.add_argument(
@@ -1175,6 +1244,11 @@ def main():
         update_state(args.payload_file, merge=not args.replace)
     elif args.command == "compact":
         compact_memory()
+    elif args.command == "set-phase":
+        completed = None if args.completed is None else (args.completed == "true")
+        set_phase(args.phase, completed=completed, state_path=args.state)
+    elif args.command == "complete-section":
+        complete_section(args.section, state_path=args.state)
     elif args.command == "snapshot":
         snapshot_state(output_path=args.out)
     elif args.command == "reindex":

@@ -1,6 +1,6 @@
 ---
 name: review-writing
-description: "Universal assistant for writing high-impact academic literature reviews (Nature/Cell/Lancet level). Works across all AI clients (Claude, Cursor, Windsurf, Codex, ChatGPT, etc.). Supports real-time Zotero integration, outline persistence, and multi-mode reference management. Use when writing a comprehensive review article requiring systematic search, synthesis, and citation management."
+description: "Universal assistant for writing high-impact academic literature reviews (Nature/Cell/Lancet level). Supports real-time Zotero integration, outline persistence, and multi-mode reference management. Use when writing a comprehensive review article requiring systematic search, synthesis, and citation management. 触发词：写综述、文献综述、综述写作、literature review、review article、改综述、完善综述、继续写综述、improve review。"
 triggers:
   - "写综述"
   - "literature review"
@@ -132,38 +132,11 @@ http_proxy=http://127.0.0.1:PORT esearch -db pubmed -query "QUERY" < /dev/null |
 
 ## Anti-AI Writing Style
 
-### English Mode
-- **Ban List:** Moreover, Crucial, Landscape, Tapestry, Realm, Pivot, Foster, Underscore, Delve into, Spearhead
-- **Phrases to Avoid:** It is worth noting, In conclusion, As mentioned above, Serves as, Acts as
-- **Structure Ban:** No "Not only...but also"; No "From A to B"; No trailing "-ing" clauses
-- **Rhythm:** Mix short sentences (≤12 words) with long (25–40 words). NEVER 3+ consecutive similar-length sentences.
-- **Voice:** Active preferred, passive ≤30% per paragraph.
-- **Transitions:** Ban "Furthermore / In addition / Moreover" bolted-on. Embed causality into main clause.
-
-### Chinese Mode
-- **Ban List:** 值得注意的是、不仅如此、此外、综上所述、总而言之、深入探讨、至关重要、在此背景下、显而易见
-- **Structure Ban:** 一方面……另一方面……; 随着……的不断发展; 日益受到关注
-- **Rhythm:** Short sentences ≤15 characters, long sentences 30–60 characters. Avoid 3+ consecutive same-pattern sentences.
-
-### Deep Rewriting (Anti-Similarity Protocol)
-- **Lexical:** Replace non-terminological generic words. Verbatim phrase ≥4 consecutive words → decompose and reconstruct.
-- **Syntactic:** Alternate active/passive. Embed causality. No templated transitions.
-- **Structural:** Alternate "claim-then-evidence" vs "evidence-then-claim". Insert judgment sentences ("This likely reflects…").
-
-### Abbreviation / Acronym Management
-- **First-use rule (EN):** `Full Name (ABBR)` on first occurrence in the manuscript body. Subsequent uses → ABBR only.
-- **First-use rule (CN):** `中文全称（英文全称, ABBR）` on first occurrence. Example: `光动力疗法（Photodynamic Therapy, PDT）`.
-- **Title & Abstract:** Do NOT use abbreviations in the title. In the abstract, re-define any abbreviation used (abstract is read independently from the body).
-- **Universally known exceptions:** DNA, RNA, PCR, HIV, WHO, FDA — may be used without expansion.
-- **Abbreviation registry:** Maintain `exports/abbreviation_list.md` (auto-generated in Phase 4 Step 4c). Format:
-
-  ```
-  | Abbreviation | Full Name | First Defined In |
-  |---|---|---|
-  | PDT | Photodynamic Therapy | Section 1.1 |
-  | ROS | Reactive Oxygen Species | Section 2.1 |
-  ```
-- **Cross-section consistency:** When writing Section N, check if the abbreviation was already defined in a previous section (via the registry or prior drafts). If yes, use ABBR directly — do NOT re-expand.
+> 📖 Full ban lists (EN/CN), Deep Rewriting protocol, and Abbreviation/Acronym Management rules live in `references/writing_guidelines.md` §4. **Read it before writing/polishing any section.** Quick reminders:
+> - EN ban examples: Moreover, Crucial, Landscape, Delve into, "It is worth noting", "Not only…but also", trailing "-ing" clauses.
+> - CN ban examples: 值得注意的是、此外、综上所述、深入探讨、至关重要、一方面……另一方面.
+> - Rhythm: never 3+ consecutive similar-length sentences. Active voice preferred.
+> - Abbreviation first-use: `Full Name (ABBR)` (EN) / `中文全称（英文全称, ABBR）` (CN); reuse ABBR after first definition; never abbreviate in the title.
 
 ---
 
@@ -185,7 +158,7 @@ Before any **writing / search / import / Zotero-mutating** action, ask exactly *
 **Do not proceed until user explicitly selects a mode.**
 
 > **Exception — Read-only status check:**
-> If the user explicitly asks to *inspect current project status*, *audit progress*, *scan existing materials*, or "看看现在到哪一步了 / 先扫描一下", perform a **read-only** pass over `outline.md`, `state.json`, `drafts/`, `data/`, and `scripts/` first, then present a status report. After the report, ask for Write/Polish Mode before any new literature import or drafting action.
+> If the user explicitly asks to *inspect current project status*, *audit progress*, *scan existing materials*, or "看看现在到哪一步了 / 先扫描一下", perform a **read-only** pass over `outline.md`, `state.json`, `drafts/`, `data/`, and `scripts/` first, then present a status report. After the report, ask for Write/Polish Mode before any new literature import or drafting action. If `state.json` does not exist, the read-only scan still must return to the Mode Handshake Gate afterward — never auto-start Phase 0.
 > Read-only means: no file writes, no Zotero API mutations, no search calls.
 
 > **Route map:**
@@ -239,125 +212,23 @@ Ask all parameters at once. State defaults; user may accept silently.
 
 ### 0.2 Full Environment Check
 
-Run all checks sequentially. Display ✅/❌ per item. All must be ✅ before proceeding.
+Run the 8-step environment detection (📖 full commands in `references/env_check.md`): Step 0 OS+Python, 1 curl, 2 git, 3 Zotero+pyzotero, 4 edirect, 5 proxy+PubMed connectivity, 6 NCBI key, 7 paper-search MCP, 8 required scripts. Display ✅/❌ per step. Record `os` / `git_available` / `pubmed_proxy` / `search_fallback` for Phase 0.5 to write into `outline.md`.
 
-**Step 0: Detect OS + Python version (always)**
-```python
-python3 -c "
-import sys, platform
-ver = sys.version_info
-assert ver >= (3, 7), f'Python 3.7+ required — found {ver.major}.{ver.minor}. Upgrade at python.org'
-print(f'✅ Python {ver.major}.{ver.minor}.{ver.micro}')
-print(f'OS: {platform.system()}')  # Darwin | Linux | Windows
-"
-```
-Record `os: Darwin/Linux/Windows` — written to `outline.md` later in Phase 0.5. All subsequent platform-specific commands branch on this value.
-- Python < 3.7 → abort; guide user to upgrade (python.org / `brew install python` / `winget install Python.Python.3`)
+**All 8 must resolve before Phase 0.5.** Failure routing:
 
-**Step 1: Base dependencies (always)**
-```bash
-curl --version      # ❌ → system-level issue (Windows: curl available in PowerShell 5.1+)
-```
+| Failed step | Blocking? | Consequence / route |
+|-------------|-----------|---------------------|
+| 0 Python < 3.7 | **YES** | Abort; guide upgrade (python.org / `brew install python` / `winget install Python.Python.3`). |
+| 1 curl missing | **YES** | System-level issue; resolve before continuing (Windows: curl ships with PowerShell 5.1+). |
+| 2 git missing | No | Not blocking — all Git Checkpoints silently skip (`git_available: false`); recommend install for rollback. |
+| 3 Zotero/pyzotero (Zotero mode) | **YES** (Zotero mode) | `pip install pyzotero`; install Zotero desktop. None/EndNote mode → skip Step 3. |
+| 4 edirect missing (Medical/Bio) | No | Auto-fallback to paper-search MCP → write `search_fallback: paper-search-mcp`; Windows → WSL or fallback. |
+| 5 PubMed unreachable | No | Auto-scan proxy ports; if all fail → fallback to paper-search MCP, notify user. |
+| 6 NCBI key unset | No | Optional; default 3 req/s rate limit. |
+| 7 paper-search MCP absent | No | PubMed CLI only; inform user MCP is optional. |
+| 8 required script missing | **YES** | Abort; verify SKILL_DIR path or re-install the skill. |
 
-**Step 2: Git availability (always — enables auto-checkpoint for rollback)**
-```bash
-git --version 2>/dev/null && echo "✅ git available" || echo "⚠️ git not found (auto-checkpoint disabled; no rollback)"
-```
-Record `git_available: true / false` — written to `outline.md` later in Phase 0.5.
-Git not available → **not blocking** — all checkpoint operations silently skip. Recommend user install git for rollback capability.
-
-**Step 3: Zotero (Zotero mode only)**
-```python
-# Desktop app installed? (cross-platform)
-python3 -c "
-import platform, pathlib, sys
-s = platform.system()
-paths = {
-  'Darwin':  pathlib.Path('/Applications/Zotero.app'),
-  'Linux':   pathlib.Path('/usr/bin/zotero'),
-  'Windows': pathlib.Path(r'C:/Program Files/Zotero/Zotero.exe'),
-}
-p = paths.get(s)
-print('✅ Zotero found' if p and p.exists() else f'❌ Zotero not found at {p}')
-"
-
-# PyZotero library
-python3 -c "import pyzotero; print('✅')" 2>/dev/null || echo "❌ run: pip install pyzotero"
-```
-
-**Step 4: PubMed edirect (Medical/Bio discipline)**
-```python
-# edirect detection (cross-platform)
-python3 -c "
-import shutil, platform
-if shutil.which('esearch'):
-    print('✅ edirect found')
-elif platform.system() == 'Windows':
-    print('❌ edirect not available on native Windows')
-    print('   Options: (1) install WSL then run edirect inside WSL bash')
-    print('            (2) skip edirect → use paper-search MCP as primary tool')
-else:
-    print('❌ edirect not installed')
-"
-```
-If missing (Mac/Linux — run in bash):
-```bash
-sh -c "$(curl -fsSL https://ftp.ncbi.nlm.nih.gov/entrez/entrezdirect/install-edirect.sh)"
-source ~/.bashrc  # or ~/.zshrc
-```
-If missing (Windows) → install WSL (`wsl --install` in PowerShell as Admin), then install edirect inside WSL; or auto-fallback to paper-search MCP (write `search_fallback: paper-search-mcp` to outline.md).
-
-**Step 5: Proxy + PubMed connectivity**
-```bash
-PUBMED_TEST="https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=test"
-DIRECT=$(curl -s --max-time 4 "$PUBMED_TEST" 2>/dev/null | grep -c "Count" || echo 0)
-PROXY_PORT=""
-if [ "$DIRECT" -eq 0 ]; then
-  for port in 7897 7890 1080 8080 8888; do
-    R=$(curl -s --proxy "http://127.0.0.1:$port" --max-time 4 "$PUBMED_TEST" 2>/dev/null | grep -c "Count" || echo 0)
-    if [ "$R" -gt 0 ]; then PROXY_PORT=$port; break; fi
-  done
-fi
-# → write to outline.md: pubmed_proxy: none / http://127.0.0.1:XXXX
-# → if both fail: fallback to paper-search MCP, notify user
-```
-
-**Step 6: NCBI API Key (optional, improves rate limit)**
-```bash
-echo ${NCBI_API_KEY:-"not set (rate limit 3 req/s; recommended to set)"}
-# To set: export NCBI_API_KEY=your_key >> ~/.bashrc
-```
-
-**Step 7: paper-search MCP availability**
-```
-Check if tool list includes search_pubmed / search_arxiv:
-  ✅ → paper-search MCP available
-  ❌ → PubMed CLI only; inform user they may optionally configure paper-search MCP
-```
-
-**Step 8: Required scripts exist (always — verify SKILL_DIR is correct first)**
-```python
-python3 -c "
-import pathlib, sys
-# SKILL_DIR common locations:
-#   Claude Code:  ~/.claude/skills/review-writing/
-#   Cursor:       ~/.cursor/skills/review-writing/  (or project .cursor/skills/)
-#   Windsurf:     ~/.windsurf/skills/review-writing/
-#   Other:        the directory from which this SKILL.md was loaded
-skill_dir = pathlib.Path('[SKILL_DIR]')  # AI substitutes actual path
-required = ['zotero_manager.py','export_bibtex.py',
-            'matrix_manager.py','word_counter.py','citation_guard.py',
-            'validate_citations.py','check_global_citation_sequence.py',
-            'citation_utils.py','state_manager.py']  # keep aligned with Phase 0.5 REQUIRED_SCRIPTS
-missing = [s for s in required if not (skill_dir/'scripts'/s).exists()]
-if missing:
-    print(f'❌ Missing scripts: {missing}')
-    print(f'   Check SKILL_DIR is correct: {skill_dir}')
-    sys.exit(1)
-print(f'✅ All {len(required)} required scripts found in {skill_dir}/scripts/')
-"
-```
-If any script is missing → abort; verify SKILL_DIR path or re-install the skill.
+> ⚠️ At least one of Step 4/5/7 must yield a working retrieval path (edirect OR paper-search MCP). If **both** PubMed CLI and paper-search MCP are unavailable → HALT (see Edge Cases). Never fall back to websearch/tavily.
 
 ### 0.3 Zotero First-Time Setup (Zotero mode only)
 
@@ -411,14 +282,15 @@ If `--status` lists multiple libraries (personal + group), show the list and ask
 
 ### 0.5 Initialize Project Files
 
-After all checks pass. All file operations use **Python** (cross-platform: Mac/Linux/Windows).
+After all checks pass. Run `scripts/init_project.py` — it creates the folder structure,
+copies the 9 active scripts, writes `state.json` + `outline.md` (templates below), and runs
+`git init` + the initial `[review] Phase 0: project initialized` commit (skips git silently if
+unavailable). Cross-platform (pure pathlib, no heredoc).
 
-> **Cross-platform shell note:** the `python3 << 'PYEOF' ... PYEOF` block below uses bash
-> heredoc syntax (works in bash/zsh/WSL). On native Windows PowerShell or CMD, save the
-> body between `PYEOF` markers to `_init.py` and run `python _init.py` instead — same effect.
-> The Python code itself is platform-agnostic; only the *how-you-invoke-it* differs.
-
-> **⚠️ AI: resolve placeholders before executing.** Replace `[PROJECT_BASE]` and `[SKILL_DIR]` with actual paths:
+> **⚠️ AI: resolve the three arguments before running:**
+> - `--title` = the review title from Phase 0.1.
+> - `--base`  = project location from Phase 0.1 (default: current working directory `.`).
+> - `--skill-dir` = directory containing this skill. Lookup table:
 >
 > | Client | `[SKILL_DIR]` (Mac/Linux) | `[SKILL_DIR]` (Windows) |
 > |--------|--------------------------|------------------------|
@@ -426,7 +298,7 @@ After all checks pass. All file operations use **Python** (cross-platform: Mac/L
 > | Cursor | `~/.cursor/skills/review-writing` or project `.cursor/skills/review-writing` | `C:\Users\<name>\.cursor\skills\review-writing` |
 > | Windsurf | `~/.windsurf/skills/review-writing` | `C:\Users\<name>\.windsurf\skills\review-writing` |
 > | Other | Auto-detect (run one-liner below) | same |
->
+
 **"Other" client — auto-detect SKILL_DIR** (run from anywhere; uses `zotero_manager.py` as a stable cross-mode marker):
 
 ```bash
@@ -442,82 +314,26 @@ print(found if found else 'NOT FOUND — run: find ~ -name zotero_manager.py -pa
 "
 ```
 
-> `[PROJECT_BASE]` = location confirmed in Phase 0.1 (default: current working directory = `pathlib.Path.cwd()`).
-
-```python
-# PROJECT_BASE = project location confirmed in Phase 0.1 (default: current working directory)
-# SKILL_DIR    = directory containing this SKILL.md (see lookup table above)
-#   Claude Code: ~/.claude/skills/review-writing/   (Mac/Linux)
-#                C:\Users\<name>\.claude\skills\review-writing\  (Windows)
-#   Cursor:      ~/.cursor/skills/review-writing/   (Mac/Linux)
-#   Windsurf:    ~/.windsurf/skills/review-writing/ (Mac/Linux)
-#   Other:       the directory from which this SKILL.md was loaded
-
-python3 << 'PYEOF'
-import os, shutil, pathlib, sys, subprocess
-
-TITLE     = "[review title]"         # replace with actual title
-BASE      = pathlib.Path("[PROJECT_BASE]").expanduser().resolve()  # or pathlib.Path.cwd()
-SKILL_DIR = pathlib.Path("[SKILL_DIR]").expanduser().resolve()
-
-proj = BASE / TITLE
-for d in ["drafts", "exports", "scripts", "data", "tmp", "figures"]:
-    (proj / d).mkdir(parents=True, exist_ok=True)
-
-# Initialize figures index (needed by Phase 3 Step 3 in ALL modes)
-fig_index = proj / "figures" / "figure_index.md"
-if not fig_index.exists():
-    fig_index.write_text("# Figure Index\n\n", encoding="utf-8")
-
-# Whitelist: copy ONLY the scripts the SKILL.md workflow actively calls.
-REQUIRED_SCRIPTS = [
-    "zotero_manager.py",
-    "export_bibtex.py",
-    "matrix_manager.py",
-    "word_counter.py",
-    "citation_guard.py",
-    "validate_citations.py",
-    "check_global_citation_sequence.py",
-    "citation_utils.py",
-    "state_manager.py",  # used in Phase 2.5 None Mode (reindex subcommand only)
-]
-missing = []
-for name in REQUIRED_SCRIPTS:
-    src = SKILL_DIR / "scripts" / name
-    if not src.exists():
-        missing.append(name)
-        continue
-    shutil.copy(src, proj / "scripts" / name)
-if missing:
-    sys.exit(f"❌ Missing scripts in SKILL_DIR: {missing}. Verify SKILL_DIR={SKILL_DIR}")
-
-print(f"✅ Project created at: {proj}")
-print(f"   Copied {len(REQUIRED_SCRIPTS)} active scripts")
-
-# Git auto-checkpoint init (skip if git not available)
-if shutil.which('git'):
-    subprocess.run(['git', 'init'], cwd=str(proj), check=True)
-    gitignore = proj / '.gitignore'
-    gitignore.write_text('.DS_Store\nThumbs.db\n__pycache__/\n*.pyc\nlogs/\n*.lock\n', encoding='utf-8')
-    subprocess.run(['git', 'add', '-A'], cwd=str(proj), check=True)
-    subprocess.run(['git', 'commit', '-m', '[review] Phase 0: project initialized'], cwd=str(proj), check=True)
-    print('✅ Git repo initialized with initial commit')
-else:
-    print('ℹ️  Git not found — auto-checkpoint disabled (no rollback)')
-PYEOF
+```bash
+python3 "[SKILL_DIR]/scripts/init_project.py" \
+  --title "[review title]" \
+  --base "[PROJECT_BASE]" \
+  --skill-dir "[SKILL_DIR]"
+# Writes: drafts/ exports/ scripts/ data/ tmp/ figures/ + figures/figure_index.md
+#         + state.json {"phase":0,...} + outline.md template + git init & first commit.
 ```
 
 > **⚠️ Working directory rule:** All commands in Phase 1–4 are run from inside `[PROJECT_BASE]/[TITLE]/`.
-> After initialization: `os.chdir(proj)` in Python, or `cd "[PROJECT_BASE]/[TITLE]"` in shell.
+> After initialization: `cd "[PROJECT_BASE]/[TITLE]"` (the script prints this path).
 >
-> **Note:** Phase 0.5 only creates folder structure + copies scripts. Zotero collection tree (`--init`) is NOT run here — it runs in Phase 1 (Write Mode) or Phase 0-P Step 5 (Polish Mode).
+> **Note:** Phase 0.5 only creates folder structure + copies scripts + writes state.json/outline.md. Zotero collection tree (`--init`) is NOT run here — it runs in Phase 1 (Write Mode) or Phase 0-P Step 5 (Polish Mode).
 
-Write `[TITLE]/state.json`:
+The script writes `[TITLE]/state.json`:
 ```json
 {"phase": 0, "completed_sections": [], "zotero_root_key": ""}
 ```
 
-Write `[TITLE]/outline.md`:
+…and the `[TITLE]/outline.md` template (AI fills Parameters/Environment fields after Phase 0.1–0.4):
 ```markdown
 # Review Configuration (READ THIS FILE at the start of every phase)
 
@@ -551,14 +367,6 @@ Write `[TITLE]/outline.md`:
 - Phase: Phase 0 complete
 - Completed sections: none
 - Zotero root collection key: [filled after Phase 1]
-```
-
-**After writing both files, commit to git:**
-```bash
-# Only if git was initialized in 0.5 above (git_available: true):
-cd "[PROJECT_BASE]/[TITLE]"
-git add state.json outline.md && git commit -m "[review] Phase 0: state + outline initialized"
-# If git is not available → skip silently.
 ```
 
 ---
@@ -631,7 +439,7 @@ AI: substitute `<MESSAGE>` with the checkpoint description. Format: `[review] Ph
      || python3 scripts/zotero_manager.py --init --title "[TITLE]" --outline outline.md \
         --lib-id LIB_ID --api-key API_KEY
    ```
-   - `--find-root-title` exit 0 → root already exists (reuse key); exit 3 → run `--init` to create.
+   - `--find-root-title` exit 0 → root already exists (stdout = key, reuse it); exit 3 → no match, the `||` branch runs `--init`; exit 4 → ambiguous (multiple same-named roots), stdout lists candidate keys — **stop and ask user to pick** rather than letting `--init` create a duplicate.
    - Creates root collection + subcollections matching outline hierarchy.
 5. **Initialize index files (None mode):**
    ```python
@@ -659,7 +467,7 @@ s.write_text(json.dumps(state, indent=2), encoding='utf-8')
 print('✅ state.json updated to phase 1')
 "
    ```
-7. **Git Checkpoint:** `git add -A && git commit -m "[review] Phase 1: outline confirmed"`
+7. **Git Checkpoint** (见复用块, msg: `[review] Phase 1: outline confirmed`)
 
 **HALT. Wait for user to confirm outline before Phase 2.**
 
@@ -671,11 +479,8 @@ print('✅ state.json updated to phase 1')
 > **Phase gate:** if `state.json` does not exist or `phase < 1` → HALT; tell user "Phase 0 init must be completed first (run Phase 0.5 to create outline.md and state.json)"; do not proceed.
 
 ### Search Priority by Discipline
-| Discipline | Primary | Fallback | Forbidden |
-|-----------|---------|----------|-----------|
-| Medical/Biomedical | PubMed CLI (edirect) | paper-search MCP | websearch, tavily |
-| CS/AI | paper-search MCP | PubMed CLI | websearch, tavily |
-| Interdisciplinary | PubMed CLI | paper-search MCP | websearch, tavily |
+
+> Use the **Search Tool Priority (Universal)** table above (§ Search Tool Priority). Primary = PubMed CLI for Medical/Bio/Interdisciplinary, paper-search MCP for CS/AI; fallback is the other; `websearch`/`tavily` are forbidden in all disciplines.
 
 ### Per-Section Search Loop
 ```
@@ -751,17 +556,9 @@ print(f'Added {added} papers ({len(new_papers)-added} duplicates merged); total 
          --log data/citation_guard_report.json
      If guard exits non-zero → do NOT continue to next section; fix flagged entries first.
   7. Confirm write success → update state.json (add section to completed_sections):
-     python3 -c "
-     import json, pathlib
-     SECTION = 'X.X'   # replace with actual section ID
-     s = pathlib.Path('state.json')
-     state = json.loads(s.read_text(encoding='utf-8'))
-     if SECTION not in state.get('completed_sections', []):
-         state.setdefault('completed_sections', []).append(SECTION)
-     s.write_text(json.dumps(state, indent=2), encoding='utf-8')
-     print(f'✅ state.json: {SECTION} → completed_sections')
-     "
-  8. Git Checkpoint: git add -A && git commit -m "[review] Phase 2: section X.X search complete"
+     python3 scripts/state_manager.py complete-section --section X.X
+     # Adds X.X to completed_sections (idempotent), preserves all other keys.
+  8. Git Checkpoint (见复用块, msg: [review] Phase 2: section X.X search complete)
   9. Continue to next section
 ```
 
@@ -776,15 +573,9 @@ Wait for explicit "Continue".
 
 ```
 [Zotero] ⚠️ --add-batch already deduplicates at write time (DOI exact + title fuzzy ≥0.85).
-         Normal workflow does NOT need --dedup here. Skip this step unless user reports
-         duplicate items in Zotero (manual imports, interrupted runs, etc.).
-         **Repair only (user-requested):**
-           python3 scripts/zotero_manager.py --dedup --scope ROOT_KEY --lib-id LIB_ID --api-key API_KEY
-         ⚠️ WARNING: --dedup reassigns all gid:N tags in Zotero but does NOT update
-         literature_index.json. After running --dedup, you MUST manually sync gids:
-           1. Use --get-section for each section to get new gid assignments
-           2. Update literature_index.json global_id values to match
-         If unsure → do NOT run --dedup; the write-time dedup is sufficient.
+         Normal workflow does NOT need --dedup here — SKIP this step.
+         📖 `--dedup` is repair-only and has a gid-resync caveat — see `references/edge_cases.md`
+            ("Zotero --dedup gid 失同步") before ever running it.
 
 [None/EndNote]   python3 scripts/state_manager.py reindex \
            --storyline outline.md --index data/literature_index.json \
@@ -798,37 +589,22 @@ Dedup rules (None/EndNote mode reindex):
 4. `global_id` reassigned in canonical section outline order (1.1 → 1.2 → 2.1 → ...)
 
 **Update `state.json`（仅更新 phase 字段，不覆盖 completed_sections / zotero_root_key）：**
-```python
-python3 -c "
-import json, pathlib
-s = pathlib.Path('state.json')
-state = json.loads(s.read_text(encoding='utf-8'))
-state['phase'] = 2
-# DO NOT overwrite completed_sections or zotero_root_key — they are maintained by earlier phases.
-s.write_text(json.dumps(state, indent=2), encoding='utf-8')
-print('✅ state.json: phase=2 (other fields preserved)')
-"
+```bash
+python3 scripts/state_manager.py set-phase --phase 2
+# Sets phase=2 only; completed_sections / zotero_root_key / mode / pending_sections preserved.
 ```
 
-**Git Checkpoint:** `git add -A && git commit -m "[review] Phase 2.5: dedup + global ID assigned"`
+**Git Checkpoint** (见复用块, msg: `[review] Phase 2.5: dedup + global ID assigned`)
 
 ---
 
 ## Phase 3: Section-by-Section Writing
 
 **Entry: Read `outline.md` + `state.json` first. If `state.json` phase < 3 (Write Mode), update to phase=3:**
-```python
-python3 -c "
-import json, pathlib
-s = pathlib.Path('state.json')
-state = json.loads(s.read_text(encoding='utf-8'))
-if state.get('phase', 0) < 3:
-    state['phase'] = 3
-    s.write_text(json.dumps(state, indent=2), encoding='utf-8')
-    print('✅ state.json: phase=3')
-else:
-    print(f'ℹ️  phase already {state[\"phase\"]} — no update needed')
-"
+```bash
+# Only run if current phase < 3 (read state.json first; Polish Mode already enters at phase=3).
+# Do NOT regress a phase=4 project back to 3.
+python3 scripts/state_manager.py set-phase --phase 3
 ```
 **Skip completed sections (check `completed_sections` list).**
 
@@ -880,7 +656,7 @@ If pending_sections is empty → all sections complete; proceed to Phase 4.
    - **Reference the figure caption from Step 3a** — the draft must describe and introduce the figure using its planned caption and key message.
    - Apply Anti-AI Writing rules (English or Chinese mode per outline.md).
    - Synthesis not summary; arbitration of contradictions; alternate claim/evidence order.
-   - **Abbreviation rule:** First occurrence of any abbreviation in this section must use "Full Name (ABBR)" format. If the abbreviation was already defined in a previous section, use ABBR directly (check `exports/abbreviation_list.md` if it exists).
+   - **Abbreviation rule:** First occurrence of any abbreviation in this section must use "Full Name (ABBR)" format. If the abbreviation was already defined in a previous section, use ABBR directly. `exports/abbreviation_list.md` does not exist yet (it is generated in Phase 4 Step 4c) — to check prior definitions, grep the already-written `drafts/section_*.md` files for the `Full Name (ABBR)` pattern.
 
 5. **Citation spot-check** (lightweight, runs per-section — catches hallucinated `[N]` before Reviewer Simulator):
    ```bash
@@ -905,24 +681,14 @@ If pending_sections is empty → all sections complete; proceed to Phase 4.
    **If user explicitly requested a shorter length** (e.g., "~800 characters"): defer to user's request; treat the skill's minimums as guidance for quality, not a hard gate. Do not loop-prompt the user to write more if they have already confirmed their target length.
 
 8. **Update state.json — MANDATORY, do not skip:**
-   ```python
-python3 -c "
-import json, pathlib
-SECTION = 'X.X'   # replace with actual section ID
-s = pathlib.Path('state.json')
-state = json.loads(s.read_text(encoding='utf-8'))
-if SECTION not in state.get('completed_sections', []):
-    state.setdefault('completed_sections', []).append(SECTION)
-# Polish Mode only: remove from pending_sections
-for cat in state.get('pending_sections', {}).values():
-    if SECTION in cat: cat.remove(SECTION)
-s.write_text(json.dumps(state, indent=2), encoding='utf-8')
-print(f'✅ state.json updated: {SECTION} → completed_sections')
-"
+   ```bash
+   python3 scripts/state_manager.py complete-section --section X.X
+   # Adds X.X to completed_sections AND removes it from any pending_sections bucket (Polish Mode),
+   # preserving all other keys. Idempotent.
    ```
-   A section must never appear in both `completed_sections` and `pending_sections` simultaneously.
+   A section must never appear in both `completed_sections` and `pending_sections` simultaneously (the command guarantees this).
 
-9. **Git Checkpoint:** `git add -A && git commit -m "[review] Phase 3: section X.X draft complete"`
+9. **Git Checkpoint** (见复用块, msg: `[review] Phase 3: section X.X draft complete`)
 
 10. **HALT:** Output summary (content / logic / citation count / word count). Wait for "Continue".
 
@@ -931,20 +697,7 @@ print(f'✅ state.json updated: {SECTION} → completed_sections')
 **Trigger:** Run ONCE after ALL sections in Phase 3 are complete (all sections in `completed_sections`).
 Generate prompts for every entry in `figures/figure_index.md`. Write output to `figures/figure_prompts.md`.
 
-```
-[FIGURE PROMPT — Figure N: <title>]
-TYPE: Schematic | Conceptual overview | Data plot | Workflow | Mechanistic pathway
-SUBJECT: <specific scientific content>
-STYLE: BioRender style, scientific diagram, white background (#FFFFFF), publication-quality
-COLOR SCHEME: Primary #2E86AB | Secondary #A23B72 | Accent #F18F01 | Neutral #4A4A4A | BG #FFFFFF
-ELEMENTS:
-  - <Element 1>: <shape, position, connections>
-  - <Element 2>: ...
-LAYOUT: <Single/Multi-panel> | <aspect ratio> | reading direction left→right
-TYPOGRAPHY: Sans-serif (Arial/Helvetica), 8-10pt labels, English only
-KEY MESSAGE: <one sentence>
-AVOID: 3D effects, drop shadows, gradients, decorative borders, excessive text
-```
+> 📖 Use the figure-prompt template in `references/writing_guidelines.md` §5 (TYPE / SUBJECT / STYLE / COLOR SCHEME / ELEMENTS / LAYOUT / TYPOGRAPHY / KEY MESSAGE / AVOID).
 
 ---
 
@@ -1044,23 +797,16 @@ Write Mode has no `pending_sections` field so this gate is a no-op (no key → e
    4c. **Abbreviation consistency scan** (on compiled `exports/Final_Review.md`):
    - Scan for all uppercase sequences ≥2 chars (candidate abbreviations) and parenthetical definitions like `Full Name (ABBR)` or `中文全称（英文全称, ABBR）`.
    - **Check:** Every abbreviation used bare (without parenthetical definition) in the text must have exactly ONE prior definition. Flag: (a) undefined abbreviations, (b) abbreviations re-defined in multiple sections, (c) abbreviations defined but never used again.
-   - Generate `exports/abbreviation_list.md` table (see format in Anti-AI Writing Style § Abbreviation Management).
+   - Generate `exports/abbreviation_list.md` table (see format in `references/writing_guidelines.md` §4 Abbreviation Management).
    - Title and abstract must not contain unexpanded abbreviations (except universally known: DNA, RNA, PCR, HIV, WHO, FDA).
    - If violations found → list them; AI fixes inline in `exports/Final_Review.md` and propagates back to the source `drafts/section_XX_XX.md`.
 5. **Final word count:** Verify total ≥ target in `outline.md`.
 6. **Update state.json — merge, do NOT overwrite:**
-   ```python
-python3 -c "
-import json, pathlib
-s = pathlib.Path('state.json')
-state = json.loads(s.read_text(encoding='utf-8'))
-state.update({'phase': 4, 'completed': True})
-s.write_text(json.dumps(state, indent=2), encoding='utf-8')
-print('✅ state.json: phase=4, completed=true (other fields preserved)')
-"
+   ```bash
+   python3 scripts/state_manager.py set-phase --phase 4 --completed true
    ```
-   `state.update(...)` only mutates the two listed keys; `completed_sections`, `mode`, `pending_sections`, `zotero_root_key`, `citations_imported` are preserved untouched.
-7. **Git Checkpoint:** `git add -A && git commit -m "[review] Phase 4: export finalized"`
+   Only `phase` and `completed` are mutated; `completed_sections`, `mode`, `pending_sections`, `zotero_root_key`, `citations_imported` are preserved untouched.
+7. **Git Checkpoint** (见复用块, msg: `[review] Phase 4: export finalized`)
 8. **Update outline.md** current status section (human-readable summary).
 
 ---
@@ -1091,6 +837,8 @@ Three modes: **Zotero**（推荐，实时写入）/ **None**（纯本地 JSON + 
 
 9 个活跃脚本（`[project]/scripts/`，Phase 0 init 时复制）：
 `zotero_manager.py` | `state_manager.py` | `citation_utils.py`（import-only） | `export_bibtex.py` | `matrix_manager.py` | `word_counter.py` | `validate_citations.py` | `citation_guard.py` | `check_global_citation_sequence.py`
+
+> `scripts/init_project.py` 是 Phase 0.5 一次性脚手架（从 SKILL_DIR 运行，不复制进项目），负责创建目录/复制上述脚本/写 state.json+outline.md/git init。`state_manager.py` 新增 `set-phase` / `complete-section` 子命令管理 workflow `state.json`。
 
 ---
 
