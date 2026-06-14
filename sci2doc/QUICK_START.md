@@ -16,9 +16,19 @@ pip3 install pdfminer.six
 
 ## 2. 初始化项目
 
+🔴 运行 init 前必须先与用户确认样式（见 3.1）。`--format-mode` 默认 `default_csu`，会静默落成中南大学格式并立即放行 docx 导出——**不要省略该参数把它当默认值跑**，必须显式传入用户已确认的样式：
+
 ```bash
+# 用户确认用默认中南大学格式后：
 python3 scripts/state_manager.py --project-root "${save_path}" init \
-  --title "论文题目" --author "作者" --major "专业"
+  --title "论文题目" --author "作者" --major "专业" \
+  --format-mode default_csu
+
+# 用户选自定义、但模板信息尚不完整时（保持 pending_template，禁止导出 docx）：
+python3 scripts/state_manager.py --project-root "${save_path}" init \
+  --title "论文题目" --author "作者" --major "专业" \
+  --format-mode custom --university-name "XX大学" --degree-type "工学博士" \
+  --missing-requirement "页边距" --missing-requirement "页眉页脚距离"
 ```
 
 ## 3. 确认并设置目标配置
