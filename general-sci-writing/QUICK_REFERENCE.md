@@ -28,9 +28,9 @@ python scripts/citation_guard.py \
   --report citation_guard_report.json
 ```
 
-- 只允许 `paper-search` 与受限 `tavily` provider family。
-- `tavily` 仅可用于无 DOI/PMID 的反向核验或摘要补全兜底。
-- Tavily 条目一旦带 DOI/PMID，直接失败。
+- 只允许 `pubmed-cli` 与 `paper-search` provider family。
+- `tavily` 仅用于文献真实性的反向核验，不得作为检索/入库来源。
+- 任何 `source_provider=tavily` 的条目一律失败（带 DOI/PMID 也不例外）。
 - `title_mismatch`、`doi_invalid_or_unresolved`、`pmid_invalid_or_unresolved`、`id_mismatch` 都会强制 `verified=false` 并进入 `manual_review_queue.json`。
 - `manual_review_queue.json` 非空、`ok=false` 或命令非零，正文写作必须中断。
 

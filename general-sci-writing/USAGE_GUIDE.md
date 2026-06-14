@@ -40,8 +40,8 @@ python scripts/citation_guard.py \
 ```
 
 执行规则：
-- 只有 `paper-search` 与受限 `tavily` provider family 能通过 guard。
-- `tavily` 仅可用于无 DOI/PMID 的反向核验或摘要补全兜底；带 identifier 的 Tavily 条目会直接失败。
+- 只有 `pubmed-cli` 与 `paper-search` provider family 能通过 guard。
+- `tavily` 仅用于文献真实性的反向核验，不得作为检索/入库来源；任何 `source_provider=tavily` 的条目一律失败。
 - 只要 `citation_guard` 返回非零、`citation_guard_report.json` 中 `ok=false`，或 `manual_review_queue.json` 非空，都必须先处理，不能继续正文写作。
 - `unverified` 或 `needs_manual_review=true` 的条目不得出现在 `[n]` 引用和参考文献列表中。
 

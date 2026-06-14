@@ -98,8 +98,8 @@ python scripts/export_bibtex.py --index-file literature_index.json --output-file
 - md rewrite is default; docx rewrite is opt-in with `--rewrite-docx`.
 
 ## Citation Integrity Defaults
-- `citation_guard.py` now enforces provider family allowlist: only `paper-search` and restricted `tavily` are accepted.
-- `tavily` is only allowed for no-identifier reverse verification or abstract recovery fallback; Tavily entries carrying DOI/PMID are rejected.
+- `citation_guard.py` now enforces provider family allowlist: only `pubmed-cli` and `paper-search` are accepted.
+- `tavily` is only for reverse verification of literature authenticity, never a retrieval/ingestion source; any entry with `source_provider=tavily` is rejected.
 - Any bidirectional verification failure (`title_mismatch`, DOI/PMID mismatch, id mismatch) forces `verified=false` and routes the entry to `manual_review_queue.json`.
 - Entries without `source_provider` / `source_id`, or with `needs_manual_review=true`, must not be cited in manuscript text or emitted into the final references list.
 - If `citation_guard.py` exits non-zero or report `ok=false`, writing must stop until `manual_review_queue.json` is resolved.

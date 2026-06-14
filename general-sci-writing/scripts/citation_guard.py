@@ -24,7 +24,7 @@ from typing import Any
 DOI_RE = re.compile(r"^10\.\d{4,9}/[-._;()/:A-Z0-9]+$", re.IGNORECASE)
 PMID_RE = re.compile(r"^\d{4,10}$")
 TITLE_TOKEN_RE = re.compile(r"[a-z0-9\u4e00-\u9fff]+")
-ALLOWED_PROVIDER_FAMILIES = {"pubmed-cli", "paper-search", "tavily"}
+ALLOWED_PROVIDER_FAMILIES = {"pubmed-cli", "paper-search"}
 FORBIDDEN_PROVIDER_FAMILIES = {"websearch", "openalex-cli"}
 
 
