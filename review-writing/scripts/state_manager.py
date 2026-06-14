@@ -18,7 +18,7 @@ except Exception:  # pragma: no cover
 # Define state files map for Review Writing Project
 STATE_FILES = {
     "project_info": "project_info.md",          # Basic project info (RQ, PICO)
-    "storyline": "storyline.md",                # Outline and status
+    "storyline": "outline.md",                  # Outline and status
     "progress": "progress.json",                # Quantitative progress (citations count, stage)
     "literature_index": "data/literature_index.json",  # The core database of papers
     "synthesis_matrix": "data/synthesis_matrix.json",  # Matrix for synthesis
@@ -773,7 +773,7 @@ def _merge_matrix(existing, incoming):
 
 
 def reindex_literature_by_section(
-    storyline_path="storyline.md",
+    storyline_path="outline.md",
     index_path="data/literature_index.json",
     matrix_path=None,
     drafts_dir="drafts",
@@ -1284,7 +1284,7 @@ def main():
         "reindex",
         help="Canonical-deduplicate and reindex literature by section/matrix order, then remap matrix+draft citations",
     )
-    reindex_parser.add_argument("--storyline", default="storyline.md", help="Storyline markdown path")
+    reindex_parser.add_argument("--storyline", default="outline.md", help="Storyline markdown path")
     reindex_parser.add_argument("--index", default="data/literature_index.json", help="Literature index path")
     reindex_parser.add_argument(
         "--matrix",
