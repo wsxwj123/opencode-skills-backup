@@ -111,7 +111,7 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
 - `scripts/build_full_package.py`（pipeline 内部自动调用）一次性完成 Step 3/4/5/6/8 的机械部分：atomize 论文/SI 段落、在 `units/*.json` 写好**占位符**骨架（`【待AI...】` / `[AI_FILL_REQUIRED]`）、生成 `index.json`、并由 `render_html()` 渲出完整 HTML。**不要手工 atomize，也不要手写 index.json。**
 - AI 的核心工作只有两件：①**Step 7** 把 `units/*.json` 里的占位符字段填成真实内容；②gate 失败时按报告**直接改对应 `units/*.json` 再重跑**。
 - 两种调用时机，二选一：
-  1. **分步**：先 `build_full_package.py --allow-placeholder` 出骨架 → AI 填 `units/*.json` → 再 `run_pipeline.py`（不带 `--allow-placeholder`）跑全部 gate；
+  1. **分步**：先 `build_full_package.py` 出骨架（无条件写占位符、不跑 gate）→ AI 填 `units/*.json` → 再 `run_pipeline.py` 跑全部 gate；
   2. **串起**：一条 `run_pipeline.py` 走完 build→gate（首轮占位符会被门禁拦下，按报告填 units 后重跑）。
 - 下列编号步骤是**逻辑顺序说明**，多数由脚本代劳；User Checkpoint 之间 AI 需停下确认。
 
