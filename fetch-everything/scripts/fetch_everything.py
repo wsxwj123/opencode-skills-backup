@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import signal
 import subprocess
 import sys
 import tempfile
@@ -56,14 +57,14 @@ def resolve_short_url(url: str) -> str:
     import requests
     headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"}
     try:
-        resp = requests.head(url, allow_redirects=True, timeout=10, headers=headers)
+        resp = requests.head(url, allow_redirects=True, timeout=5, headers=headers)
         if resp.url and resp.url != url:
             return resp.url
     except Exception:
         pass
     # fallback: 部分服务器不支持 HEAD，用 GET（stream 避免下载正文）
     try:
-        resp = requests.get(url, allow_redirects=True, timeout=10, stream=True, headers=headers)
+        resp = requests.get(url, allow_redirects=True, timeout=5, stream=True, headers=headers)
         final = resp.url
         resp.close()
         if final and final != url:
@@ -86,21 +87,51 @@ def is_dynamic_site(url: str) -> bool:
 
 def run_cmd(cmd: List[str], input_text: Optional[str] = None,
             timeout: Optional[int] = None) -> subprocess.CompletedProcess:
-    try:
+    # 无超时需求（assess/clean/url-converter）：用简单 run，行为不变
+    if timeout is None:
         return subprocess.run(
-            cmd,
-            input=input_text,
-            text=True,
-            capture_output=True,
-            check=False,
-            timeout=timeout,
+            cmd, input=input_text, text=True, capture_output=True, check=False,
         )
-    except subprocess.TimeoutExpired as exc:
-        # 超时按失败处理（returncode=124），调用方据此降级到下一路线
+
+    # 有超时（scrapling 浏览器路线）：放进独立进程组，超时时杀整组，
+    # 否则 scrapling spawn 的 chromium 孙进程会成孤儿泄漏。
+    proc = subprocess.Popen(
+        cmd,
+        stdin=subprocess.PIPE if input_text is not None else None,
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        text=True, start_new_session=True,
+    )
+    try:
+        out, err = proc.communicate(input=input_text, timeout=timeout)
+        return subprocess.CompletedProcess(cmd, proc.returncode, out, err)
+    except subprocess.TimeoutExpired:
+        _kill_group(proc)
+        try:
+            out, err = proc.communicate(timeout=5)
+        except subprocess.TimeoutExpired:
+            out, err = "", ""
         return subprocess.CompletedProcess(
             cmd, returncode=124,
-            stdout=exc.stdout or "", stderr=f"wall-clock timeout after {timeout}s",
+            stdout=out or "", stderr=f"wall-clock timeout after {timeout}s; process group killed",
         )
+
+
+def _kill_group(proc: subprocess.Popen) -> None:
+    """杀掉子进程所在的整个进程组（含浏览器孙进程）：先 SIGTERM 后 SIGKILL。"""
+    try:
+        pgid = os.getpgid(proc.pid)
+    except ProcessLookupError:
+        return
+    for sig in (signal.SIGTERM, signal.SIGKILL):
+        try:
+            os.killpg(pgid, sig)
+        except ProcessLookupError:
+            return
+        try:
+            proc.wait(timeout=3)
+            return
+        except subprocess.TimeoutExpired:
+            continue
 
 
 def assess_text(text: str) -> Dict:
@@ -166,6 +197,7 @@ def fetch_via_scrapling(url: str) -> List[Dict]:
                 pass
             continue
         text = tmp_path.read_text(encoding="utf-8", errors="ignore")
+        tmp_path.unlink(missing_ok=True)  # 内容已在内存，立即删除，避免 assess 抛异常时泄漏
         item = {
             "method": " ".join(base_cmd),
             "content": text,
@@ -173,7 +205,6 @@ def fetch_via_scrapling(url: str) -> List[Dict]:
         }
         _assess_candidate(item)
         results.append(item)
-        tmp_path.unlink(missing_ok=True)
         if _is_good_enough(item):
             break  # 已拿到优质正文，不再跑更慢的浏览器路线
     return results
@@ -213,11 +244,10 @@ def main() -> None:
     candidates: List[Dict] = []
     # 根据站点类型调整抓取顺序；任一路线拿到优质正文即停止降级
     if is_dynamic_site(url):
-        # 动态站点：优先浏览器路线，跳过在线服务（在线服务必触发风控）
-        print(f"[info] 检测到动态站点，优先使用 Scrapling 浏览器路线", file=sys.stderr)
+        # 动态站点（微信/小红书等）：仅走 Scrapling 浏览器路线。
+        # 在线服务对这类站点必触发风控，补跑纯属浪费 ~45s；失败则交给下方 HALT 提示。
+        print(f"[info] 检测到动态站点，仅使用 Scrapling 浏览器路线", file=sys.stderr)
         candidates.extend(fetch_via_scrapling(url))
-        if not any(_is_good_enough(c) for c in candidates):
-            candidates.extend(fetch_via_online_services(url))
     else:
         candidates.extend(fetch_via_online_services(url))
         if not any(_is_good_enough(c) for c in candidates):
