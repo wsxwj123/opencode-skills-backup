@@ -257,7 +257,7 @@ license: Proprietary
 2. 用 `update` 命令改 `project_config.json` 的 `target_journal` + `word_limits` 字段。
 3. 立即跑 `/check` 1-2 步看正文字数是否需要砍（或新刊允许更长，可保留）。
 4. 重跑 `/submission-pack`——它会 Read `submission_state.json`，仅问"哪些字段需要因转投而改"（如 cover letter 编辑名、suggested reviewer 是否变），不重新问全部。
-5. 若新刊 Methods 结构不同（如 STAR Methods vs Online Methods），需重新组织 `manuscripts/05_Methods*.md`。
+5. 若新刊 Methods 结构不同（如 STAR Methods vs Online Methods），需重新组织 `manuscripts/03_Methods*.md`。
 
 **引用密度预估（Mandatory）**：storyline 确认前，必须为每个小节标注预估引用数量：
 - Introduction 各段：背景段 1-2 篇，Gap 段 3-5 篇，创新点段 2-3 篇
@@ -275,6 +275,14 @@ license: Proprietary
 
 ### Phase 3: 文献检索 (`/literature`)
 分阶段检索（Phase 1核心，Phase 2写作时实时补充）。**执行前必须 `Read references/citation-policy.md`**——检索路由（生命科学 PubMed CLI / CS·AI paper-search）、Zero-Fabrication 9 条硬约束、引用类型按语境的完整细则都在那。
+
+**检索命令模板（高频执行必需，常驻正文）**：
+- 生命科学/医学/药学 → **PubMed CLI**（必须带 `< /dev/null` + 走代理）：
+  ```bash
+  export http_proxy=http://127.0.0.1:7897 && esearch -db pubmed -query "xxx" < /dev/null | efetch -format abstract
+  ```
+- CS/AI/工程/跨学科 → **paper-search MCP**（`mcp__paper-search-mcp__search_arxiv` / `search_pubmed` 等），串行执行、间隔 ≥1s。
+- **Provider 白名单（`citation_guard` 强制）**：入库只接受 `source_provider` ∈ {`pubmed-cli`, `paper-search`}（`tavily` 仅限无 DOI/PMID 条目的摘要补全）；`websearch`、`openalex-cli` 一律阻断；检索阶段严禁 tavily。
 
 **中文文献支线（Chinese Literature Manual Track，按需触发）**：
 SCI 论文通常只在少数场景需引中文文献（中药/中医、临床路径、地方流行病学、政策文献等）。中文期刊普遍**无 DOI、无 PMID**，`citation_guard` 双向核验跑不通，故走"AI 发现 → 用户人工取证 → 责任标记"的合规通道，绝不绕过护栏自动入库。
@@ -330,20 +338,12 @@ SCI 论文通常只在少数场景需引中文文献（中药/中医、临床路
 5. **讨论不脑补背景**：讨论草稿只写"基于用户提供的实验设计/假设、以及本图数据本身成立的推理"；需外部文献佐证处（段落首背景句、尾意义句）用占位注释 `<!-- [CITE_PENDING: 关键词] -->` 标记，留待 Phase 8/最终补引时按"文献真实性硬约束"真检索填充，补不到则问用户或转 `REF_DROPPED`。严禁用知识库充当已检索文献。
 6. **中文确认 → 英文写入**：每张小图读完，先用**中文**贴出"结果 + 讨论草稿"（含读到的分组 / 比较 / 趋势 + ❓待确认项）给用户核对；经用户确认 / 修正后，再翻译为**英文**写入 `figure_X.md`（文档落盘正文为英文，确认环节用中文）。
 
-**流程 (逐图循环)**：
-1. **进入（含自然语言触发）**：用户提到"分析 / 解读 figureN"、"写 XX 结果章节"、"这几个图是什么结果"等——**即使没打 `/figure` 命令、即使只发了图没说命令**——都应进入本流程，**不要跳过识图直接 `/write`**。进入后询问用户：该小节对应的 **Figure 编号** 与 **小图数量**（如 "Figure 2，共 A–E 五图"）。
-2. **建档（含中途续接）**：确保 `figure_analysis/` 存在（无则 `mkdir -p figure_analysis`）；创建/打开 `figure_analysis/figure_{N}.md`，进度行记录声明的小图总数（如 `[0/5]`）。**若文件已存在且进度未满**（如 `[3/5]`）→ 读已写入的 Panel，从**下一个未完成 Panel** 续接，不重复识别已写的（沿用 §4 Anti-Overwrite，增量追加、禁止整体覆盖）。
-3. **逐张索取**：请用户发送 Panel A 图片。**若用户只用文字描述图、未上传图片** → 不进入读图，转"口述数据"模式：要求用户直接给分组 + 数值 + 统计结果；AI **严禁**从图类型关键词（CCK8 / 流式等）脑补典型结果，并明确告知"我没看到图、仅凭你给的文字写，发图能核对得更准"。
-4. **读图 → 中文草稿**：用中文贴出该 Panel 的图类型 / 分组 / 坐标轴与量纲(标注是否 log 轴) / 组间比较结果(含星号) / 趋势方向，并给出**中文结果 + 讨论草稿**；**❓待确认**：误差棒类型、n、星号阈值、看不清项。
-5. **确认 → 英文写入**：用户确认或修正后，将草稿翻译为英文、按**结果块 + 讨论块分离**写入文档（模板见下），讨论需引文处置 `[CITE_PENDING]`。
-6. **自检**：每张图写入时触发 §11 的 **Design / Reliability** 检查（对照设置、n、统计方法是否合理）。**Consistency（跨图一致性）不在逐图时做**——逐图时其他图尚未读取、无从比对；留到本大 figure 全部小图读完后（收口前）统一比对一次（如 Fig A 结论是否与 Fig C 矛盾），发现问题写入"❓待确认"提示用户。
-7. **下一张**：索取 Panel B，重复 4–6，直至全部小图完成。
-8. **收口（每完成一个大 Figure 更新一次状态）**：
-   - **同步到 `figures_database.json`（用 `add-figure`，单条即可）**：把本 figure 写成**单个** JSON 对象（`figure_id` 必需、`section` = storyline 的 section_id；外加 `declared_panels`（可选，命令比对实际 panels 数、不符警告）/ `panels` / 比较对 / `p_value` / `n` / `stat_test`（供 Methods 联动）/ `data_status`，格式见下方「条目示例」），执行 `python scripts/state_manager.py add-figure <one_figure.json>`。该命令在 `FileLock` 下：① 按 `figure_id` 去重合并进 figures_database（**不覆盖其他 figure**）；② **顺带同步** `writing_progress`（追加 figure 事件）、`context_memory`（追加识图记录）、回写 `storyline.sections[].figures`——一次锁内全办，无需再调有 gate 的 `postwrite`。误传数组或缺 `figure_id` 会被拒；核心定量读不到的项 `data_status="pending"`，对接 §2 熔断。
-   - **记识图确认到 section_memory**：执行 `python scripts/state_manager.py update <payload.json>`，payload 形如 `{"section_memory":{"section":"results_3.2","content":"Figure 2 A–E 已识别；用户确认 n=6、误差棒=SEM；Panel C 留 CITE_PENDING"}}`——让 `/write --include-draft` 写该节时能读到识图确认细节。
-   - **备份**：执行 `python scripts/state_manager.py snapshot`（无 gate；现已备份 `figure_analysis/` 并写入 `version_history`）。**勿用 `postwrite`**——它有 prewrite gate（state_manager.py:2403），识图阶段没跑 write-cycle 会 `sys.exit(2)`。
-   - **缩略词扫描（与 Phase 7 联动）**：扫描本 figure_{N}.md 新引入的 `Full Name (ABBR)` 模式，对每个未在 `abbreviations.json` 的缩写执行 `add-abbreviation`（first_defined_in 填本 figure 对应的 section_id）。**否则 `/write` 写正文时查表查不到、会重复展开**——这是 figure 与 §Phase 7 跨阶段集成的必经一步。
-   - 告知用户：`figure_analysis/figure_{N}.md` 就绪，将作为 `/write {section}` 的结果与讨论依据。
+**流程 (逐图循环)**：完整 8 步流程（进入→建档→逐张索取→读图中文草稿→确认英文写入→自检→下一张→收口）见 `references/figure-protocol.md`，进入 `/figure` 时 `Read` 取用；本节只留收口的执行命令与不可丢的约束。
+
+**收口命令（执行必需，每完成一个大 Figure 跑一次）**：
+- `python scripts/state_manager.py add-figure <one_figure.json>`——传**单个** figure 对象（`figure_id` 必需、`section` = storyline 的 section_id），锁内去重合并进 figures_database 并顺带同步 writing_progress/context_memory/storyline；核心定量读不到的项 `data_status="pending"`，对接 §2 熔断。**字段与条目示例见 figure-protocol.md。**
+- 缩略词扫描：对本 figure_{N}.md 新引入且未在 `abbreviations.json` 的 `Full Name (ABBR)`，逐个 `add-abbreviation`（否则 `/write` 写正文会重复展开）。
+- `python scripts/state_manager.py snapshot` 备份。**勿用 `postwrite`**——它有 prewrite gate（state_manager.py:2403），识图阶段没跑 write-cycle 会 `sys.exit(2)`。
 
 **落盘模板**：`figure_analysis/figure_{N}.md` 模板与 `figures_database.json` 条目示例见 `references/figure-protocol.md`，收口落盘 / `add-figure` 时 `Read` 取用。（`data_status`：核心定量齐全=`ready`，缺核心项=`pending`；`section` 值必须 = storyline 的 section_id。）
 
@@ -419,7 +419,7 @@ python scripts/state_manager.py add-abbreviation <one.json>
 **为什么前置**：投稿包要从已质检的稿子里取材（cover letter 的 key findings 必须是已校对版、Source Data 必须与已校对的图表对应）。先 /check → 通过 → 再 /submission-pack。
 
 **执行命令（有序，每步阻断条件明确）**：
-1. `python scripts/state_manager.py stats` — 字数检查。**字数预算分类**：手动汇总 `02_Abstract*.md + 03_Intro*.md + 04_Results*.md + 06_Discussion*.md` 为"正文字数"（Methods/Refs/Legends 多数期刊不计入），对比 `project_config.word_limits`。**阻断**：超 10% 必砍；超 5% 警告。
+1. `python scripts/state_manager.py stats` — 字数检查。**字数预算分类**：手动汇总 `01_Abstract*.md + 02_Introduction*.md + 04_Results*.md + 05_Discussion*.md` 为"正文字数"（`03_Methods*.md`/`07_References*.md`/Legends 多数期刊不计入），对比 `project_config.word_limits`。**阻断**：超 10% 必砍；超 5% 警告。
 2. `python scripts/state_manager.py sync-literature --dry-run --strict-references` — 引用号一致性。**阻断**：dry-run 报冲突 → 跑 `--apply` 后重检。
 3. `python scripts/citation_guard.py --index literature_index.json --report citation_guard_report.json --offline` — 文献完整性。**阻断**：`ok=false` → 处理 `manual_review_queue.json` 后重跑。
 4. `python scripts/style_checker.py --manuscript-dir manuscripts --report style_check_report.json --threshold 70` — 去 AI 风格检测。**阻断**：avg_score<70 → 列具体段落修改后重跑。
@@ -517,7 +517,7 @@ python scripts/state_manager.py add-abbreviation <one.json>
   - **中间版本（给导师 / 自己核对）**：`python scripts/merge_manuscript.py --manuscript-dir manuscripts --output-md manuscripts/Draft_Round{N}_Manuscript.md --skip-docx`，文件名带 round 编号，不覆盖 Full_Manuscript.md。
   - **最终版本（投稿用）**：`python scripts/merge_manuscript.py --manuscript-dir manuscripts`（默认输出 `manuscripts/Full_Manuscript.md` + .docx）。**只在 `/check` 全过 + `/submission-pack` 已生成后才允许跑最终版**；否则视为中间稿。
   - 可选：`--skip-docx`（仅生成 Markdown）
-  - 可选：`--patterns "01_Abstract*.md,02_Introduction*.md,04_Results*.md,*.md"`（自定义合并顺序与兜底匹配）
+  - 可选：`--patterns "01_Abstract*.md,02_Introduction*.md,03_Methods*.md,04_Results*.md,05_Discussion*.md,06_Conclusion*.md,07_References*.md,*.md"`（自定义合并顺序与兜底匹配；默认值同此，与 `merge_manuscript.py` DEFAULT_PATTERNS 一致）
 - `/export_bib` → `python scripts/export_bibtex.py --index-file literature_index.json --output-file references.bib`
   - 支持 `literature_index.json` 为 list 或 dict（`references/items/entries/data`）
 
