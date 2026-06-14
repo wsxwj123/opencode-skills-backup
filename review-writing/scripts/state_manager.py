@@ -1155,12 +1155,17 @@ def init_index():
     print("✅ Index files initialized")
 
 
-def append_literature(section, papers_path, index_path="data/literature_index.json"):
+def append_literature(section, papers_path, index_path="data/literature_index.json", source_provider="pubmed-cli"):
     """Append a section's papers to literature_index.json (None/EndNote mode, Phase 2 Step 5).
 
     Auto-increments global_id, dedups by DOI (case-insensitive). On a DOI already present,
     only appends `section` to that record's related_sections instead of creating a new entry.
     Replaces the inline Python block in Phase 2 Step 5.
+
+    `source_provider` is the default tag applied to NEW entries that do not already carry
+    their own source_provider field (e.g. "pubmed-cli", "paper-search", "openalex").
+    Pass the real search provider per discipline so source_provider metadata is accurate
+    for downstream citation/traceability (citation_guard maps these to the paper-search family).
     """
     idx = Path(index_path)
     idx.parent.mkdir(parents=True, exist_ok=True)
@@ -1185,7 +1190,7 @@ def append_literature(section, papers_path, index_path="data/literature_index.js
             continue
         p.setdefault("global_id", next_gid + added)
         p.setdefault("related_sections", [section])
-        p.setdefault("source_provider", "pubmed")
+        p.setdefault("source_provider", source_provider)
         p.setdefault("source_id", p.get("pmid") or p.get("doi") or "")
         p.setdefault("verified", False)
         exist.append(p)
@@ -1272,6 +1277,13 @@ def main():
     appendlit_parser.add_argument("--section", required=True, help="Section ID, e.g. '2.1'")
     appendlit_parser.add_argument("--papers", required=True, help="Path to tmp/papers_X_X.json")
     appendlit_parser.add_argument("--index", default="data/literature_index.json", help="Literature index path")
+    appendlit_parser.add_argument(
+        "--source-provider",
+        default="pubmed-cli",
+        help="Default source_provider tag for new entries lacking their own (default: pubmed-cli). "
+             "Pass the real provider per discipline, e.g. 'paper-search' (CS/AI via MCP) or 'openalex'. "
+             "Maps to the paper-search family in citation_guard.",
+    )
 
     snapshot_parser = subparsers.add_parser("snapshot", help="Write a full state snapshot JSON")
     snapshot_parser.add_argument(
@@ -1342,7 +1354,7 @@ def main():
     elif args.command == "init-index":
         init_index()
     elif args.command == "append-literature":
-        append_literature(args.section, args.papers, index_path=args.index)
+        append_literature(args.section, args.papers, index_path=args.index, source_provider=args.source_provider)
     elif args.command == "snapshot":
         snapshot_state(output_path=args.out)
     elif args.command == "reindex":
