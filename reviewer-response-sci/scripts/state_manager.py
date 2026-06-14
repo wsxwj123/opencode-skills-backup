@@ -130,6 +130,77 @@ def cmd_set(args) -> int:
     return 0
 
 
+def _snapshots_dir(project_root: Path) -> Path:
+    return project_root / "logs" / "snapshots"
+
+
+def cmd_snapshot(args) -> int:
+    import shutil
+
+    root = Path(args.project_root)
+    units_dir = root / "units"
+    if not units_dir.exists():
+        print("STATE_SNAPSHOT: FAIL")
+        print(f"- units dir not found: {units_dir}")
+        return 1
+    with _lock(root):
+        ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S_%fZ")
+        dest = _snapshots_dir(root) / f"units_{ts}"
+        dest.mkdir(parents=True, exist_ok=True)
+        copied = []
+        for fp in _unit_files(root):
+            shutil.copy2(fp, dest / fp.name)
+            copied.append(fp.name)
+        # also snapshot key tracking products if present
+        for extra in ("index.json", "project_state.json"):
+            ep = root / extra
+            if ep.exists():
+                shutil.copy2(ep, dest / extra)
+                copied.append(extra)
+    print("STATE_SNAPSHOT: PASS")
+    print(f"- snapshot dir: {dest}")
+    print(f"- files copied: {len(copied)}")
+    return 0
+
+
+def cmd_rollback(args) -> int:
+    import shutil
+
+    root = Path(args.project_root)
+    snaps_dir = _snapshots_dir(root)
+    if args.snapshot:
+        snap = Path(args.snapshot)
+        if not snap.is_absolute():
+            snap = snaps_dir / args.snapshot
+    else:
+        candidates = sorted(p for p in snaps_dir.glob("units_*") if p.is_dir())
+        if not candidates:
+            print("STATE_ROLLBACK: FAIL")
+            print(f"- no snapshot found under: {snaps_dir}")
+            return 1
+        snap = candidates[-1]
+    if not snap.exists():
+        print("STATE_ROLLBACK: FAIL")
+        print(f"- snapshot not found: {snap}")
+        return 1
+    with _lock(root):
+        units_dir = root / "units"
+        units_dir.mkdir(parents=True, exist_ok=True)
+        restored = []
+        for fp in sorted(snap.glob("*.json")):
+            if fp.name in ("index.json", "project_state.json"):
+                shutil.copy2(fp, root / fp.name)
+            else:
+                shutil.copy2(fp, units_dir / fp.name)
+            restored.append(fp.name)
+    print("STATE_ROLLBACK: PASS")
+    print(f"- from snapshot: {snap}")
+    print(f"- files restored: {len(restored)}")
+    for name in restored:
+        print(f"  - {name}")
+    return 0
+
+
 def cmd_show(args) -> int:
     root = Path(args.project_root)
     state = _load_state(root)
@@ -169,6 +240,15 @@ def main() -> int:
     p_show.add_argument("--project-root", required=True)
     p_show.add_argument("--unit-id", default="")
     p_show.set_defaults(func=cmd_show)
+
+    p_snap = sub.add_parser("snapshot")
+    p_snap.add_argument("--project-root", required=True)
+    p_snap.set_defaults(func=cmd_snapshot)
+
+    p_roll = sub.add_parser("rollback")
+    p_roll.add_argument("--project-root", required=True)
+    p_roll.add_argument("--snapshot", default="", help="Snapshot dir name or path; default = most recent")
+    p_roll.set_defaults(func=cmd_rollback)
 
     args = parser.parse_args()
     return args.func(args)
