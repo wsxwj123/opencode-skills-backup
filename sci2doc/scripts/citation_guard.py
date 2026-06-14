@@ -24,7 +24,7 @@ from typing import Any
 DOI_RE = re.compile(r"^10\.\d{4,9}/[-._;()/:A-Z0-9]+$", re.IGNORECASE)
 PMID_RE = re.compile(r"^\d{4,10}$")
 TITLE_TOKEN_RE = re.compile(r"[a-z0-9\u4e00-\u9fff]+")
-ALLOWED_PROVIDER_FAMILIES = {"paper-search", "pubmed-cli", "tavily"}
+ALLOWED_PROVIDER_FAMILIES = {"paper-search", "pubmed-cli"}
 FORBIDDEN_PROVIDER_FAMILIES = {"websearch"}
 
 
@@ -474,7 +474,7 @@ def main() -> int:
         "provider_policy": {
             "allowed_provider_families": sorted(ALLOWED_PROVIDER_FAMILIES),
             "forbidden_provider_families": sorted(FORBIDDEN_PROVIDER_FAMILIES),
-            "tavily_only_for_no_identifier": True,
+            "tavily_role": "reverse_verification_only_not_a_retrieval_source",
         },
     }
 
