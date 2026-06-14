@@ -82,7 +82,7 @@ RESTORE_MANAGED_FILES = tuple(
     + list(OPTIONAL_STATE_FILES.values())
     + ["context_memory_v-1.md", "context_memory_v-2.md"]
 )
-RESTORE_MANAGED_DIRS = (".state", "02_分章节文档", "02_分章节文档_md", "03_合并文档", "03_合并文档_md", "04_图表文件")
+RESTORE_MANAGED_DIRS = (".state", "atomic_md", "02_分章节文档", "02_分章节文档_md", "03_合并文档", "03_合并文档_md", "04_图表文件")
 
 GATE_STATE_DIR = ".state"
 GATE_STATE_FILE = os.path.join(GATE_STATE_DIR, "write_gate.json")
@@ -1348,7 +1348,7 @@ def backup_project_state(project_root, backup_dir="backups"):
         shutil.copytree(state_dir, resolve_path(snapshot_dir, ".state"))
 
     # Backup chapter docs dirs (if exists)
-    for folder in ("02_分章节文档", "02_分章节文档_md", "03_合并文档", "03_合并文档_md", "04_图表文件"):
+    for folder in ("atomic_md", "02_分章节文档", "02_分章节文档_md", "03_合并文档", "03_合并文档_md", "04_图表文件"):
         src = resolve_path(project_root, folder)
         if os.path.exists(src):
             shutil.copytree(src, resolve_path(snapshot_dir, folder))

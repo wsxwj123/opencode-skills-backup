@@ -43,9 +43,15 @@ The workflow is built around:
 1. `默认设置` — 内置中南大学（CSU）博士学位论文格式。
 2. `自定义样式` — 用户须提供目标院校 + 详细 Word 格式要求和/或模板证据文件。
 
+🔴 **CHECKPOINT（阻断 init）：** 未与用户明确确认样式前，**不得运行 `state_manager.py init`**。即使用户可能想用默认 CSU，也必须先得到用户对"就用中南大学默认格式"的明确确认，再带样式参数运行 init。**禁止** 因看到 QUICK_START 的 init 示例就直接套用默认 `--format-mode default_csu` 跑 init（该默认会静默落成 CSU 格式且立即放行 docx 导出）。
+
 **硬门禁：** 自定义信息不完整的项目标记为 `pending_template`，可继续整理 markdown，但 **不得生成 `.docx`、不得运行格式验收**。`custom` 仅在写入结构化布局字段后才能转为 `ready`，否则保持 `pending_template`。
 
-字段清单、custom→ready 的最小必填字段、managed front matter 渲染列表、managed marker 覆盖规则等完整细则见 `references/format_profile_schema.md`。
+**custom→ready 最小必填字段**（缺一即保持 `pending_template`）：`page_margins_cm.top/bottom/left/right`（四个边距）、`header_distance_cm`、`footer_distance_cm`、`university_name`、`degree_type`。
+
+**managed front matter 文件清单**（init/profile 自动渲染，按此名落到 `atomic_md/`，对应 docx 落到 `02_分章节文档/`）：封面、题名页、独创性声明与授权书、中文摘要、英文摘要、目录、缩略语表。
+
+字段完整定义、需求→字段映射、managed marker 覆盖规则等细则见 `references/format_profile_schema.md`。
 
 ## Non-Negotiable Requirements
 
@@ -136,9 +142,7 @@ Rules:
 
 ## Single Source of Truth
 
-论文目标配置存于 `thesis_profile.json`；样式选择与格式门禁存于其 `format_profile`；运行时状态镜像在 `project_state.json`。
-
-**硬门禁：** 自定义要求不完整时 `progress.status` 必须为 `pending_template`，禁止导出 docx / 跑格式验收。
+论文目标配置存于 `thesis_profile.json`；样式选择与格式门禁存于其 `format_profile`；运行时状态镜像在 `project_state.json`。自定义要求不完整时 `progress.status` 必须为 `pending_template`（导出硬门禁见 `## Style Selection Gate`）。
 
 `format_profile` 完整字段清单、结构化更新入口（`--format-profile-json` / `--project-info-json`）、页码格式枚举、需求→字段映射规则、`project_info` 字段，均见 `references/format_profile_schema.md`。
 
@@ -251,7 +255,7 @@ If source materials are missing or inaccessible, **stop and request them**. Do n
 
 - `state_manager.py init`：先二选一样式。`--format-mode default_csu` 或 `--format-mode custom`（+ `--university-name` / `--degree-type` / `--template-source` / `--missing-requirement`）。
 - `state_manager.py profile --show` 验证；`render-front-matter` 手动重渲前置页；`profile --body-target/--abstract-min/--chapter-target ...` 协商目标；后续补齐自定义要求用 `profile --format-mode custom --top-margin-cm ...`。
-- **门禁：** 自定义结构化布局字段不全 → 保持 `pending_template`。
+- 自定义结构化布局字段不全 → 保持 `pending_template`（最小必填字段见 `## Style Selection Gate`）。
 - init / profile 必须自动刷新 managed front matter；无 managed marker 的用户改写文件不得覆盖。用户在聊天里给的详细要求应转成 JSON 经 `--format-profile-json` / `--project-info-json` 写入，而非仅留在 prose memory。
 
 ### 2) Prewrite Gate (Mandatory)
@@ -277,7 +281,7 @@ If source materials are missing or inaccessible, **stop and request them**. Do n
 ### 6) Chapter Self-Check (Immediate)
 
 - `atomic_md_workflow.py self-check --target ".../02_分章节文档/第N章_自动合并.docx"`。
-- **门禁：** `pending_template` 时 `check_quality.py` 拒绝格式验收，要求先补齐模板要求。章节自检按 `chapter_targets` 判断，不卡全文参考文献下限（在全文总检卡）。
+- 章节自检按 `chapter_targets` 判断，不卡全文参考文献下限（在全文总检卡）。`pending_template` 时 `check_quality.py` 同样拒绝格式验收（同 Style Gate 导出门禁）。
 
 ### 7) Finalize Chapter State
 
