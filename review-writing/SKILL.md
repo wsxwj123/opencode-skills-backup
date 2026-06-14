@@ -501,9 +501,18 @@ for each section in outline.md (e.g., section ID = "2.1"):
        # **`--add-batch` 已自动写入 literature_index.json，不要再手动追加。**
 
      [None/EndNote] python3 scripts/state_manager.py append-literature \
-       --section X.X --papers tmp/papers_X_X.json --index data/literature_index.json
+       --section X.X --papers tmp/papers_X_X.json --index data/literature_index.json \
+       --source-provider SP
+       # SP = the actual search tool used for this section (see § Search Tool Priority):
+       #   PubMed CLI (Medical/Bio, esearch/efetch)  → --source-provider pubmed-cli   (default; may omit)
+       #   paper-search MCP (CS/AI, or PubMed-CLI fallback) → --source-provider paper-search
+       #   OpenAlex CLI (cross-disciplinary)         → --source-provider openalex
+       # All three map to the paper-search family in citation_guard (passes the guard).
+       # Per-entry source_provider already set in tmp/papers_X_X.json is preserved (setdefault, not overwrite).
        # gid auto-increments; DOI dup (case-insensitive) → only appends X.X to that record's related_sections.
        # Sets defaults per new entry: global_id, related_sections=[X.X], source_provider, source_id, verified=false.
+       # NOTE: CNKI/Wanfang Chinese refs are NOT added here — they go via manual EndNote/RIS import
+       #       (see Phase 0 note) + manual gid tag, bypassing this script and citation_guard's online checks.
 
      Required fields per entry: `global_id` (int), `title`, `authors`, `year`, `doi` or `pmid`, `abstract`, `related_sections` (array, e.g. `["1.1"]`).
      > ⚠️ Use `related_sections` (array), NOT `section` (string) — `matrix_manager.py` and `state_manager.py` filter by `related_sections`.
