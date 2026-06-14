@@ -421,6 +421,19 @@ AI: substitute `<MESSAGE>` with the checkpoint description. Format: `[review] Ph
 | Phase 0-P Step 5 (after substep 3) | `[review] Phase 0-P: citations imported` |
 | Phase 0-P Step 6 (after state init) | `[review] Phase 0-P: polish mode initialized` |
 
+### Rollback (using the checkpoints above)
+
+Because `init_project.py` runs `git init` + commits at Phase 0, every checkpoint is a full project snapshot — drafts (`drafts/section_*.md`), `state.json`, and `data/` indices all roll back together (atomic-draft rollback, no orphaned state). Run from inside the project root (`git_available: true` only):
+
+```bash
+git log --oneline                          # list checkpoints; find the [review] commit to return to
+git checkout <sha> -- drafts/section_03_02.md   # restore ONE file (e.g. a bad section draft) from that checkpoint
+git revert <sha>                            # undo a specific checkpoint's changes as a new commit (history-safe)
+git checkout <sha> -- .                     # restore the ENTIRE project tree to that checkpoint (does not move HEAD)
+```
+
+Prefer `git checkout <sha> -- <file>` for a single bad section and `git revert` to back out a whole checkpoint. After any file restore, re-run `state_manager.py reindex` (None/EndNote) if gid alignment may have shifted. Do NOT use `git reset --hard` (destroys uncommitted work without confirmation).
+
 ---
 
 ## Phase 1: Outline Confirmation + Collection Tree
@@ -441,31 +454,15 @@ AI: substitute `<MESSAGE>` with the checkpoint description. Format: `[review] Ph
    ```
    - `--find-root-title` exit 0 → root already exists (stdout = key, reuse it); exit 3 → no match, the `||` branch runs `--init`; exit 4 → ambiguous (multiple same-named roots), stdout lists candidate keys — **stop and ask user to pick** rather than letting `--init` create a duplicate.
    - Creates root collection + subcollections matching outline hierarchy.
-5. **Initialize index files (None mode):**
-   ```python
-python3 -c "
-import json, pathlib
-for p, v in [('data/literature_index.json', []),
-             ('data/synthesis_matrix.json', [])]:
-    pathlib.Path(p).parent.mkdir(exist_ok=True)
-    pathlib.Path(p).write_text(json.dumps(v), encoding='utf-8')
-pathlib.Path('figures').mkdir(exist_ok=True)
-fig = pathlib.Path('figures/figure_index.md')
-if not fig.exists():
-    fig.write_text('# Figure Index\n\n')
-print('✅ Index files initialized')
-"
+5. **Initialize index files (None/EndNote mode):**
+   ```bash
+   python3 scripts/state_manager.py init-index
+   # Creates empty data/literature_index.json + data/synthesis_matrix.json + figures/figure_index.md (idempotent).
    ```
-6. **Update state.json:**
-   ```python
-python3 -c "
-import json, pathlib
-s = pathlib.Path('state.json')
-state = json.loads(s.read_text(encoding='utf-8'))
-state.update({'phase': 1, 'completed_sections': [], 'zotero_root_key': '[key from step 4]'})
-s.write_text(json.dumps(state, indent=2), encoding='utf-8')
-print('✅ state.json updated to phase 1')
-"
+6. **Update state.json** (writes phase=1 + zotero_root_key, preserving other keys):
+   ```bash
+   python3 scripts/state_manager.py set-phase --phase 1
+   python3 scripts/state_manager.py set-root-key --key "[key from step 4]"   # Zotero mode only; skip in None/EndNote
    ```
 7. **Git Checkpoint** (见复用块, msg: `[review] Phase 1: outline confirmed`)
 
@@ -492,58 +489,31 @@ for each section in outline.md (e.g., section ID = "2.1"):
      - Every paper must have abstract; if missing → re-fetch via efetch or paper-search
      - Still no abstract after retry → mark abstract:missing, skip for now
   3. Save metadata to tmp/papers_X_X.json  (e.g., section 1.1 → tmp/papers_1_1.json)
-  4. [Zotero] python3 scripts/zotero_manager.py --add-batch \
+  4. Write papers (run ONLY the branch matching the project's Reference Manager — they are alternatives, not sequential):
+     [Zotero] python3 scripts/zotero_manager.py --add-batch \
        --section "X.X" --papers tmp/papers_X_X.json \
        --root-key ROOT_KEY --index data/literature_index.json \
        --lib-id LIB_ID --api-key API_KEY
-     # ROOT_KEY = zotero_root_key from state.json (written by --init)
-     # Safe: dedup-at-write-time — same paper across sections creates ONE Zotero item,
-     # linked to multiple section collections; gid:N assigned at first creation and never changes.
-     # --add-batch already writes to --index (literature_index.json); do NOT append separately.
+       # ROOT_KEY = zotero_root_key from state.json (written by --init)
+       # Safe: dedup-at-write-time — same paper across sections creates ONE Zotero item,
+       # linked to multiple section collections; gid:N assigned at first creation and never changes.
+       # --add-batch already writes to --index (literature_index.json); do NOT append separately.
+       # **`--add-batch` 已自动写入 literature_index.json，不要再手动追加。**
 
-  **`--add-batch` 已自动写入 literature_index.json，不要再手动追加。**
+     [None/EndNote] python3 scripts/state_manager.py append-literature \
+       --section X.X --papers tmp/papers_X_X.json --index data/literature_index.json
+       # gid auto-increments; DOI dup (case-insensitive) → only appends X.X to that record's related_sections.
+       # Sets defaults per new entry: global_id, related_sections=[X.X], source_provider, source_id, verified=false.
 
-  5. [None/EndNote]   Append to data/literature_index.json (auto-increment global_id, dedup by DOI):
-     ```python
-python3 -c "
-import json, pathlib
-idx = pathlib.Path('data/literature_index.json')
-exist = json.loads(idx.read_text(encoding='utf-8')) if idx.exists() else []
-known_dois = {e.get('doi','').strip().lower() for e in exist if e.get('doi','')}
-next_gid = max((e.get('global_id',0) for e in exist), default=0) + 1
-new_papers = json.loads(pathlib.Path('tmp/papers_X_X.json').read_text(encoding='utf-8'))
-added = 0
-for p in new_papers:
-    doi = p.get('doi','').strip().lower()
-    if doi and doi in known_dois:
-        # Duplicate: only append section to existing record
-        for e in exist:
-            if e.get('doi','').strip().lower() == doi:
-                secs = e.setdefault('related_sections', [])
-                if 'X.X' not in secs: secs.append('X.X')
-                break
-        continue
-    p.setdefault('global_id', next_gid + added)
-    p.setdefault('related_sections', ['X.X'])
-    p.setdefault('source_provider', 'pubmed')
-    p.setdefault('source_id', p.get('pmid') or p.get('doi') or '')  # source_id required for traceability
-    p.setdefault('verified', False)
-    exist.append(p)
-    if doi: known_dois.add(doi)
-    added += 1
-idx.write_text(json.dumps(exist, ensure_ascii=False, indent=2), encoding='utf-8')
-print(f'Added {added} papers ({len(new_papers)-added} duplicates merged); total {len(exist)}')
-"
-     ```
      Required fields per entry: `global_id` (int), `title`, `authors`, `year`, `doi` or `pmid`, `abstract`, `related_sections` (array, e.g. `["1.1"]`).
-     > ⚠️ Use `related_sections` (array), NOT `section` (string) — `matrix_manager.py` and inline Python filter by `related_sections`.
+     > ⚠️ Use `related_sections` (array), NOT `section` (string) — `matrix_manager.py` and `state_manager.py` filter by `related_sections`.
      >
      > **Multi-section membership (important):**
      > A paper may belong to multiple top-level sections **and** multiple subsections simultaneously. For example, one record may legitimately carry:
      > `"related_sections": ["2.1", "3.1", "4.1"]`
      > meaning the paper is a mechanistic anchor (2.1), a delivery-platform example (3.1), **and** a disease-mapping case (4.1).
      > Do **not** force a single-section assignment when the paper supports multiple review functions. `--add-batch` appends to `related_sections` on repeat calls (does not overwrite); Zotero side, the same item is linked to multiple section collections.
-  5b. [None/EndNote] Bootstrap synthesis matrix entry for this section (auto-skips if row exists):
+  5. [None/EndNote] Bootstrap synthesis matrix entry for this section (auto-skips if row exists):
       ```bash
       python3 scripts/matrix_manager.py bootstrap \
         --index data/literature_index.json \
@@ -669,7 +639,12 @@ If pending_sections is empty → all sections complete; proceed to Phase 4.
    - Does NOT do online DOI/PMID verification here (that's Phase 4 `citation_guard.py`'s job).
    - [Zotero mode] Also cross-check against `--get-section` output: every gid used in draft should appear in the section's Zotero collection.
 
-6. **Reviewer Simulator** — 执行 5 维度 16 项 Y/N checklist（📖 详见 `references/reviewer_checklist.md`）。
+6. **Reviewer Simulator** — 执行 5 维度 16 项 Y/N checklist（📖 完整 16 项详见 `references/reviewer_checklist.md`）。5 个维度（每项任一 N 即该维度失败）：
+   - **D1 Novelty & Contribution** — 是否提出新框架/假说/视角，明写"gap→contribution"，不只是罗列已有工作。
+   - **D2 Arbitration & Critical Analysis** — 是否识别 ≥1 处文献矛盾，分析*为何*矛盾，并给出立场或调和解释（不骑墙）。
+   - **D3 Evidence Density & Traceability** — 每个事实断言有引用、关键断言 ≥2 独立来源、证据类型与断言类型匹配（机制→原著，疗效→临床试验）。
+   - **D4 Flow & Coherence** — 段首承接上段结论、本节有 setup→evidence→synthesis→implication 内在弧线、无可随意搬移的孤立段。
+   - **D5 Anti-AI Compliance** — 零禁用词、句长有节奏（无连续 3 句近长）、被动句 ≤30%、无模板化转折开头。
    **优先委托独立 subagent 盲评**（消除"自写自评"偏差）：派一个 subagent，只给它 `drafts/section_XX_XX.md` 路径 + checklist，不给写作时的上下文，让它独立判定每项 Y/N 并返回结构化结果。无 subagent 能力的客户端 → 主 agent 自评，但必须切换到"审稿人视角"重新逐项核对（不默认通过）。
    **Gate:** 任何维度 ≥1 项失败 → 内部修订（最多 2 轮）。2 轮后仍失败 → **HALT**，输出结构化反馈（【问题】+ 证据锚点 + 根源分析 + 修复方向）。修订与 HALT 决策由主 agent 负责（不可委托）。
 
