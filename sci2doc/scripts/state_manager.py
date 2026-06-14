@@ -74,6 +74,7 @@ OPTIONAL_STATE_FILES = {
     "history_log": "history_log.json",
     "literature_index": "literature_index.json",
     "figures_index": "figures_index.json",
+    "figure_map": "figure_map.json",
     "abbreviation_registry": "abbreviation_registry.json",
 }
 
