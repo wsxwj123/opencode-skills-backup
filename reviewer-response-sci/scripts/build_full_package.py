@@ -66,15 +66,46 @@ def extract_email(text: str) -> str:
     )
 
 
+# Editor comment block headers (English + Chinese). Editor sits as a top-level
+# node alongside Reviewer #N so editor-only requirements (word count, formatting,
+# ethics/data-availability/COI statements, statistical re-check) are not lost or
+# wrongly merged into a reviewer block.
+EDITOR_BLOCK_PATTERN = (
+    r"(?:Comments?\s+from\s+the\s+Editor|Editor(?:'s)?\s+Comments?|"
+    r"Editor(?:'s)?\s+Requests?|Editorial\s+Comments?|Editor)\s*[:：]|"
+    r"(?:编辑意见|编辑要求|编辑评论|来自编辑的意见|编辑)\s*[:：]"
+)
+
+
+def normalize_block_label(raw: str) -> str:
+    """Map a matched block header to a canonical top-level node label."""
+    head = raw.strip().rstrip(":：").strip()
+    rm = re.match(r"Reviewer\s*#?\s*(\d+)", head, flags=re.IGNORECASE)
+    if rm:
+        return f"Reviewer #{rm.group(1)}"
+    return "Editor"
+
+
 def split_reviewer_blocks(text: str) -> dict[str, str]:
-    hits = list(re.finditer(r"Reviewer\s*#\d+:", text))
+    # Match Reviewer #N and Editor headers; keep them ordered by position so a
+    # leading Editor block is not dropped and a trailing Editor block is not
+    # absorbed into the preceding reviewer.
+    # Anchor headers to line start (optionally after leading spaces/numbering) to
+    # avoid matching a bare "editor:" appearing mid-sentence.
+    block_pat = re.compile(
+        r"(?m)^[ \t]*(?:\d+[.)]\s*)?"
+        r"(?:(?:Reviewer\s*#\d+\s*[:：])|(?:" + EDITOR_BLOCK_PATTERN + r"))"
+    )
+    hits = list(block_pat.finditer(text))
     if not hits:
         return {"Reviewer #1": text}
     out: dict[str, str] = {}
     for i, m in enumerate(hits):
         start = m.start()
         end = hits[i + 1].start() if i + 1 < len(hits) else len(text)
-        out[m.group(0).rstrip(":")] = text[start:end]
+        label = normalize_block_label(m.group(0))
+        # Merge if the same label appears twice (e.g. duplicate "Editor:" headers).
+        out[label] = out.get(label, "") + text[start:end]
     return out
 
 
@@ -1006,6 +1037,9 @@ def build_index(units: list[dict[str, Any]]) -> dict[str, Any]:
         groups.setdefault(u["reviewer"], {}).setdefault(u["section"], []).append(u)
 
     def reviewer_sort_key(k: str) -> tuple[int, str]:
+        # Editor is a top-level node ranked above all numbered reviewers.
+        if k == "Editor":
+            return (-1, k)
         m = re.search(r"#(\d+)", k)
         return (int(m.group(1)) if m else 999, k)
 

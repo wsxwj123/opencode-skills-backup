@@ -32,7 +32,7 @@ Default behavior if user does not specify a custom location:
 3. Write all artifacts into that subfolder (`units/`, `manuscript_units/`, `si_units/`, `logs/`, final HTML).
 
 ## Output Contract (One-Shot)
-**主交付物 = 单文件分层 HTML**（左侧层级 TOC + 右侧内容，单页可见）。**全部 UI 由 `scripts/build_full_package.py` 的 `render_html()` 生成**——TOC 层级、严重度背景色、折叠/展开、可拖拽分割线、`复制` 按钮、`localStorage` 持久化、各 box 布局均已硬编码，**AI 无需手工实现 HTML**。完整 UI 验收对照细则见 `references/output-template.md`。
+**主交付物 = 单文件分层 HTML**（左侧层级 TOC + 右侧内容，单页可见）。TOC 顶层节点为 **Editor（若有）+ Reviewer #1/#2/...**，Editor 排在所有 Reviewer 之前；编辑信里的 editor comment（字数/格式/伦理声明/数据可用性/利益冲突/统计复核等）作为**独立顶层 Editor 节点**呈现，与各 Reviewer 并列，**不得并入任何 Reviewer**。**全部 UI 由 `scripts/build_full_package.py` 的 `render_html()` 生成**——TOC 层级、严重度背景色、折叠/展开、可拖拽分割线、`复制` 按钮、`localStorage` 持久化、各 box 布局均已硬编码，**AI 无需手工实现 HTML**。完整 UI 验收对照细则见 `references/output-template.md`。
 
 AI 真正要产出的是每条 comment unit 的**内容字段**（脚本只写占位符，AI 填真值）：
 - 审稿人意图：原始意见(EN) + 中文直译（直译不意译）+ 中文意图理解（摘要，非粘贴英文原文）。直译/中文回应必须由当前模型直接产出，脚本不自动出译文、只留占位符。
@@ -115,10 +115,10 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
   2. **串起**：一条 `run_pipeline.py` 走完 build→gate（首轮占位符会被门禁拦下，按报告填 units 后重跑）。
 - 下列编号步骤是**逻辑顺序说明**，多数由脚本代劳；User Checkpoint 之间 AI 需停下确认。
 
-1. Parse all reviewer comments from `comments_docx_path`.
+1. Parse all reviewer comments from `comments_docx_path`. The parser (`split_reviewer_blocks`) recognizes both `Reviewer #N` blocks and **Editor blocks** (`Editor:`, `Editor Comments`, `Comments from the Editor`, `Editorial Comments`, `编辑意见`, `编辑要求` 等) as **top-level nodes**. Editor comments become an independent `reviewer="Editor"` group, never merged into a reviewer.
 1.5. **[User Checkpoint]** Print parsed comment summary table:
-   - Reviewer count
-   - Per-reviewer breakdown: Major / Minor / General comment counts
+   - Top-level node count (Editor + Reviewers)
+   - Per-node breakdown: Major / Minor / General comment counts (Editor comments usually fall under General)
    - Full list: reviewer × section × comment index × first 20 words of each comment
    Ask the user: "Comment parsing complete. Does this match the reviewer letter? (yes / abort / correct:N)"
    Do not continue to step 1.7 until user confirms.
