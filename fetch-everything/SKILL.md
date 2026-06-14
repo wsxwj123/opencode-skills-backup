@@ -148,6 +148,29 @@ scrapling extract fetch "<url>" output.md --timeout 45000 --network-idle
 - UA、等待策略和请求头会明显影响成功率
 - 即便抓取成功，也要检查内容是不是正文而不是验证页
 
+## 用本机登录态过 Cloudflare / 登录墙（CDP，可选）
+
+当目标站有 Cloudflare 盾或需要登录，而你本机 Chrome 已经能正常访问它（已过盾/已登录），可让执行器**复用这个浏览器会话**直接抓——绕过反检测军备竞赛，是过 CF 最可靠的方式。
+
+> **前提**：该站你本机 Chrome 已有有效会话（cf_clearance / 登录 cookie）。对从没访问过的陌生站无效。
+
+**启用步骤**：
+
+```bash
+# 1. 完全退出 Chrome，再以调试端口启动（沿用默认 profile，带所有登录态/cf_clearance）
+'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' --remote-debugging-port=9222 &
+
+# 2. 在这个 Chrome 里打开目标站，确认能正常显示（过盾/已登录）
+
+# 3. 设环境变量后照常抓取
+export FETCH_CDP_URL=http://localhost:9222
+python3 scripts/fetch_everything.py "<url>" --json
+```
+
+**行为**：CDP 是**最后兜底**——仅当在线服务 + Scrapling 都没拿到优质正文时，才连本机 Chrome 用登录态重抓（method=`cdp:real-chrome`）。不设 `FETCH_CDP_URL` 则完全不启用，默认流程不受影响。
+
+**限制**：需 Chrome 以调试端口运行；`cf_clearance` 通常几小时过期，过期后在那个浏览器里重新访问一下目标站即可刷新。
+
 ## 使用示例
 
 ### 示例 1：提取公众号推送正文

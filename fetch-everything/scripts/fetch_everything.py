@@ -33,6 +33,10 @@ EARLY_EXIT_SCORE = 25
 # scrapling 子进程的 wall-clock 上限（秒）：防止浏览器启动/下载卡死拖垮整个抓取
 SCRAPLING_WALL_TIMEOUT = 100
 
+# CDP 兜底：连本机已登录 Chrome，复用 cf_clearance/登录态过 CF/登录墙。
+# 默认空=不启用；设为 http://localhost:9222（Chrome 调试端口）即开启。opt-in，不影响默认流程。
+CDP_ENDPOINT = os.environ.get("FETCH_CDP_URL", "").strip()
+
 
 def _env_proxy() -> Optional[str]:
     """读取环境代理，透传给 scrapling（浏览器不自动读 http_proxy，需 --proxy）。"""
@@ -215,6 +219,46 @@ def fetch_via_scrapling(url: str) -> List[Dict]:
     return results
 
 
+def _resolve_cdp_ws() -> Optional[str]:
+    """把 http://host:port 的 Chrome 调试地址探测成 ws 端点；端口没开或未配置则 None。"""
+    base = CDP_ENDPOINT
+    if not base:
+        return None
+    if base.startswith(("ws://", "wss://")):
+        return base
+    import requests
+    try:
+        resp = requests.get(base.rstrip("/") + "/json/version", timeout=3)
+        return resp.json().get("webSocketDebuggerUrl")
+    except Exception:
+        return None
+
+
+def fetch_via_cdp(url: str) -> List[Dict]:
+    """连本机已登录 Chrome（CDP）抓取，复用其 cf_clearance/登录态过 CF/登录墙。
+    需用户以 --remote-debugging-port 启动 Chrome 并设环境变量 FETCH_CDP_URL。"""
+    ws = _resolve_cdp_ws()
+    if not ws:
+        print("[info] 未配置或连不上 CDP（FETCH_CDP_URL），跳过登录态兜底", file=sys.stderr)
+        return []
+    try:
+        from scrapling.fetchers import DynamicFetcher
+        page = DynamicFetcher.fetch(url, cdp_url=ws, network_idle=True, timeout=45000)
+    except Exception as exc:
+        print(f"[info] CDP 抓取失败: {exc}", file=sys.stderr)
+        return []
+    text = ""
+    try:
+        text = page.get_all_text() or ""
+    except Exception:
+        text = getattr(page, "html_content", "") or ""
+    if not text.strip():
+        return []
+    item = {"method": "cdp:real-chrome", "content": text}
+    _assess_candidate(item)
+    return [item]
+
+
 def _assess_candidate(item: Dict) -> None:
     """原地填充 cleaned_content 和 quality（幂等，已评估则跳过）。"""
     if "quality" not in item:
@@ -257,6 +301,11 @@ def main() -> None:
         candidates.extend(fetch_via_online_services(url))
         if not any(_is_good_enough(c) for c in candidates):
             candidates.extend(fetch_via_scrapling(url))
+
+    # 最后兜底：常规路线都没拿到优质结果且配置了 CDP → 连本机已登录 Chrome 复用登录态过 CF
+    if CDP_ENDPOINT and not any(_is_good_enough(c) for c in candidates):
+        print("[info] 常规路线未过，尝试 CDP（本机已登录 Chrome）兜底", file=sys.stderr)
+        candidates.extend(fetch_via_cdp(url))
 
     best = choose_best(candidates)
     if not best:
