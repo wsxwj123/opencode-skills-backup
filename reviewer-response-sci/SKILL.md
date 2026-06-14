@@ -1,12 +1,12 @@
 ---
 name: reviewer-response-sci
-description: 用于 SCI 审稿意见逐条回复的全流程技能，适用于期刊大修/小修阶段，输入论文正文与审稿意见，输出含双栏 HTML 导航、中英文对照、修改定位的完整回复包。当用户提到「审稿意见回复」「回复审稿人」「回复reviewer」「修回」「修稿」「Response to Reviewer」「revise and resubmit」「R&R」「reviewer comments」时优先调用。注意与 reviewer-simulator（模拟写审稿意见）区分：本技能是针对已收到的审稿意见撰写回复。
+description: 用于 SCI 审稿意见逐条回复的全流程技能，适用于期刊大修/小修阶段，输入论文正文与审稿意见，生成完整的逐条回复包。当用户提到「审稿意见回复」「回复审稿人」「回复reviewer」「response letter」「回复信」「rebuttal」「逐条回复」「修回」「修稿」「Response to Reviewer」「revise and resubmit」「R&R」「reviewer comments」时优先调用。注意与 reviewer-simulator（模拟写审稿意见）区分：本技能是针对已收到的审稿意见撰写回复。
 ---
 
 # Reviewer Response SCI
 
 ## Scope
-Default mode is **one-shot full package with atomic storage**.
+Default mode is **one-shot full package with atomic storage**. Two secondary modes also exist: **Re-Render**（手改 unit JSON 后单独重渲，见 Re-Render Workflow）和 **skeleton/prewrite 预览**（用 `--allow-placeholder` 跳过占位符门禁出草稿）。
 
 ## Required Inputs
 | 参数 | 必需 | 说明 |
@@ -69,7 +69,7 @@ Each leaf page must include:
    - Chinese fields must be written in Chinese summary form; do not directly paste English comment text as the Chinese understanding
 2. Response block (`Response to Reviewer`):
    - Chinese response first, then corresponding English translation (top/bottom layout)
-   - each box has a `复制` button (button text must be exactly `复制`)
+   - each box has a `复制` button
 3. Revision candidate block (`可能需要修改的正文/附件内容`):
    - must include one **Quick Location** block (human-facing):
      - section/subsection
@@ -96,32 +96,7 @@ Each leaf page must include:
    - image handling rule:
      - if no image revision required, do not render image placeholder block
      - if image revision is required, render an explicit image placeholder block first
-   - **Figure Prompt Block（图片修改需求时自动生成提示词）：**
-     When a reviewer requires figure revision or addition, generate a structured Figure Prompt immediately after the image placeholder block:
-
-     ```
-     [FIGURE PROMPT — Response to Reviewer #N, Comment K]
-     REVISION TYPE: New figure | Replace existing Figure X | Add panel to Figure X | Revise color/style only
-     REVIEWER REQUEST SUMMARY: <one sentence distilling what the reviewer asked for>
-     TYPE: Data plot | Schematic | Mechanistic pathway | Statistical | Workflow
-     SUBJECT: <specific scientific content required by reviewer>
-     STYLE: BioRender风格, 科研绘图, 最高分辨率, white background (#FFFFFF), publication-quality, consistent with manuscript's existing figure style [默认BioRender风格；如需其他风格（如Cell-style flat icon / Nature手绘风），在启动时告知]
-     COLOR SCHEME: (match manuscript's existing palette; default: Primary #2E86AB | Secondary #A23B72 | Accent #F18F01 | colorblind-safe)
-     ELEMENTS:
-       - <Element 1>: <exact requirement from reviewer comment>
-       - <Element 2>: <additional components needed>
-     LAYOUT: <Single panel | Multi-panel, specifying new panel position relative to existing figure>
-     TYPOGRAPHY: Match existing manuscript figures (Arial/Helvetica, 8-10pt, English labels)
-     STATISTICAL REQUIREMENTS: <if new statistical analysis required: chart type, error bars: SEM/SD, significance markers>
-     KEY MESSAGE: <what this revised figure must now demonstrate to satisfy the reviewer>
-     AVOID: Changes that contradict existing data; adding elements not supported by the underlying experiment
-     ```
-
-     Rules:
-     - Generate Figure Prompt ONLY when reviewer explicitly requests a figure change (not for text-only responses)
-     - If reviewer requests a new experiment's figure: mark as `[NEW EXPERIMENT REQUIRED]` and note `Not provided by user` in evidence area
-     - If revision is cosmetic only (color, font, layout): mark as `[STYLE REVISION ONLY]` and skip ELEMENTS block
-     - Store all figure prompts in the corresponding comment unit JSON under `content.figure_prompt`
+   - **Figure Prompt Block：** 当审稿人明确要求修改/新增图片时，按 `references/figure-prompt-template.md` 生成结构化提示词，存入对应 comment unit JSON 的 `content.figure_prompt`。
 
 ## Atomic JSON Contract
 Project layout:
@@ -148,8 +123,7 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
 - If evidence is missing, explicitly mark `Not provided by user`.
 - Keep tone professional and non-defensive.
 - English reviewer responses must be fluent and natural, with low AI-style phrasing.
-- Prefer short sentences; avoid long and complex sentences by default.
-- Short-sentence preference means clear and natural rhythm, not mechanical sentence splitting.
+- Prefer short sentences for clear, natural rhythm; avoid long complex sentences by default, but do not split mechanically.
 - If a reviewer comment requires adding references, literature retrieval follows topic-dependent routing: ① determine field — life science/medicine → PubMed CLI first (`esearch`/`efetch`, `~/edirect/`, `< /dev/null`, proxy `http://127.0.0.1:7897`); CS/AI/engineering → paper-search MCP first (`mcp__paper-search-mcp__search_arxiv` etc.) ② fallback to the other when primary yields no results. Auto-install PubMed CLI if `~/edirect/esearch` missing: `sh -c "$(curl -fsSL https://ftp.ncbi.nlm.nih.gov/entrez/entrezdirect/install-edirect.sh)"`.
 - **严禁** 使用 `tavily`、`websearch` 或 `openalex`（pyalex）进行文献检索。
 - **Serial Search (MANDATORY):** Execute all retrieval calls sequentially (PubMed CLI and paper-search MCP alike). Never parallelize search requests. Enforce ≥1s interval between consecutive calls.
@@ -217,7 +191,7 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
    - Print the strategy table and ask user: "Strategy plan ready. Approve? (yes / adjust:R1.2 → Accept / abort)"
    - Do not proceed to Step 2 until user confirms
 
-2. If any comment needs additional citations (identified in Step 1.7 `Data Needed`), run retrieval via topic-dependent routing (life science → PubMed CLI first; CS/AI → paper-search MCP first; fallback to the other when primary yields no results). See Rules section for full routing spec.
+2. If any comment needs additional citations (identified in Step 1.7 `Data Needed`), run retrieval per the Rules section's topic-dependent routing spec.
    - After retrieval, build `citation_registry.json` in `project_root/`:
      ```json
      {
@@ -279,7 +253,7 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
    **7b. 逐条填写（每条 comment unit）：**
    1. `content.reviewer_comment_zh`：直译审稿意见（中文，不改写不概括）
    2. `content.reviewer_intent_zh`：理解审稿人真实意图（中文摘要，≤3 句）
-   3. `content.response_en`：英文回复（遵循 `references/decision-rules.md` 的基调选择和句式规范；短句优先，避免 AI 味重的长复合句）
+   3. `content.response_en`：英文回复（遵循 `references/decision-rules.md` 的基调选择和句式规范；短句优先见 Rules）
    4. `content.response_zh`：中文回复（与英文回复对应，非逐字翻译，需自然通顺）
    5. `content.revised_excerpt_en`：修改后的英文正文段落（如无需修改写 `无`）
    6. `content.revised_excerpt_zh`：修改后的中文翻译（如无需修改写 `无`）
@@ -308,7 +282,7 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
    - 确认后方可进入 Step 8
 
 8. Render single HTML with left hierarchical TOC + right content pane from updated atomic JSON.
-9. Run hard gate checks, citation checks, and HTML checks before delivery.
+9. Run hard gate checks, citation checks, and HTML checks before delivery. These are executed automatically and serially by `scripts/run_pipeline.py` in this order: `strict_gate.py`（硬门禁）→ `final_content_gate.py` → `consistency_check.py` → `final_consistency_report.py` → `html_format_check.py` → `risk_check.py` → `citation_guard.py` → `citation_ref_tracker.py`. Do not run them manually one-by-one during normal runs.
    - final delivery must pass `final_content_gate.py`（**内容完整性门禁**）:
      - if any `待AI` / `AI_FILL_REQUIRED` placeholder remains, gate fails
      - `--allow-placeholder` is only for skeleton/prewrite stage, not final delivery
@@ -334,28 +308,25 @@ After manual editing of any unit JSON:
    - If gate fails, fix the offending `units/*.json` directly and re-run from step 2. Do not skip.
 
 ## Scripts
-- One-shot enforced pipeline: `scripts/run_pipeline.py`
-  - Debug/preview mode: add `--allow-placeholder` to relax strict placeholder gate temporarily.
-- Preflight checker: `scripts/preflight.py`
-- One-shot generator: `scripts/build_full_package.py`
-- Re-render from atomic JSON: `scripts/render_from_atomic_json.py`
-- Unit state manager: `scripts/state_manager.py`
-- Hard gate checker: `scripts/strict_gate.py`
-- Final content gate: `scripts/final_content_gate.py` — 检查回复内容占位符与修改文本是否填写完整（非文献溯源）
-- Consistency checker: `scripts/consistency_check.py`
-- Final consistency report: `scripts/final_consistency_report.py`
-- HTML validator: `scripts/html_format_check.py`
-- Risk phrase + AI style scan: `scripts/risk_check.py` — 支持 `--project-root` 扫描所有 unit JSON；检测虚构实验/统计、过度承诺、AI 式套话（hedging/appreciation/filler）、跨 unit 结构重复；已集成到 pipeline
-- Citation guard: `scripts/citation_guard.py` — 验证 `citation_registry.json` 中新增引用的真实性（CrossRef DOI 解析、PubMed PMID 验证、标题相似度 ≥0.72、撤稿检测）；`--offline` 跳过在线验证；`--fail-on-unverified` 强制失败；已集成到 pipeline
-- Citation ref tracker: `scripts/citation_ref_tracker.py` — 扫描所有 unit 中的 `[N]` 引用编号，交叉验证 `citation_registry.json` 和原始参考文献数量；检测未定义引用、孤立注册表条目、编号间隙；`--fail-on-undefined` 强制失败；已集成到 pipeline
-- ~~Legacy format checker~~: `scripts/format_check.py` — 已废弃（检查旧 3-code-block 格式），被 `html_format_check.py` 完全取代，不在 pipeline 中
-- Full HTML generator: `scripts/generate_full_html.py` — 早期独立 HTML 生成脚本，功能已被 `build_full_package.py` 吸收
+**入口：** `scripts/run_pipeline.py` —— 一站式串行执行 preflight → build → 全部 gate → consistency report → html gate。
+- Debug/preview 模式：加 `--allow-placeholder` 临时放宽占位符门禁。
+
+各 gate 由 pipeline 自动调用，正常运行无需手动单独跑（详见 Step 9）：
+- `strict_gate.py`（硬门禁）/ `final_content_gate.py`（内容完整性，检查占位符与修改文本是否填齐，非文献溯源）/ `consistency_check.py` / `final_consistency_report.py` / `html_format_check.py`
+- `risk_check.py`：检测虚构实验/统计、过度承诺、AI 式套话、跨 unit 结构重复
+- `citation_guard.py`：验证 `citation_registry.json` 新增引用真实性（DOI/PMID/撤稿检测）；`--offline` 跳过在线验证
+- `citation_ref_tracker.py`：交叉验证 `[N]` 引用编号一致性（未定义引用、编号间隙）
+
+Re-Render 单独脚本：`render_from_atomic_json.py`（重渲）、`state_manager.py`（状态同步）。
 
 ## References
 按需加载，不要全部预加载：
 - Atomic schema: `references/atomic-unit-schema.json` — 单元 JSON 结构定义（原子化构建时参考）
 - Atomic workflow: `references/atomic-workflow.md` — 原子化流程详细说明（首次使用或遇到异常时）
-- HTML structural skeleton: `references/html-template-full.html` — 布局骨架（grid + sidebar + content 结构）；实际渲染由 `scripts/build_full_package.py` 的 `render_html()` 生成完整 UI（含折叠/展开、拖拽分割线、复制按钮、severity 背景色、localStorage 持久化）
+- HTML structural skeleton: `references/html-template-full.html` — 主交付物布局骨架（grid + sidebar + content 结构）；实际渲染由 `scripts/build_full_package.py` 的 `render_html()` 生成完整 UI（含折叠/展开、拖拽分割线、复制按钮、severity 背景色、localStorage 持久化）
+- Single-comment fill template: `references/html-template.html` — 单条 comment 的占位符填充骨架，仅配合 `html-fill-guide.md` 手工填单页时使用；与上面的整包骨架 `html-template-full.html` 不同
 - Output contract: `references/output-template.md` — 输出规范（核对交付物结构时）
 - Decision rules and sentence patterns: `references/decision-rules.md` — 回复措辞决策规则（撰写英文回复时）
-- HTML filling notes: `references/html-fill-guide.md` — HTML 填写注意事项（渲染异常时）
+- HTML filling notes: `references/html-fill-guide.md` — `html-template.html` 占位符填写注意事项（手工填单页或渲染异常时）
+- Figure prompt template: `references/figure-prompt-template.md` — 图片修改/新增时的结构化提示词模板（Output Contract 第3块图片需求时）
+- Consistency rules: `references/consistency-rules.json` — `consistency_check.py` 默认加载的一致性规则集（无需手动引用，gate 自动读取）
