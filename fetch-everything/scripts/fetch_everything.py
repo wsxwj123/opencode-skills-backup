@@ -156,9 +156,14 @@ _SERVICE_BASE_URLS = {
 
 
 def _is_good_enough(item: Dict) -> bool:
-    """候选已通过质量门且分数达到 early-exit 阈值。"""
+    """候选已通过质量门且分数达到 early-exit 阈值，且未命中任何盾页/验证特征。
+    命中验证特征的候选即使分数够也不早退，强制降级到浏览器路线。"""
     q = item.get("quality", {})
-    return bool(q.get("passed")) and q.get("score", -999) >= EARLY_EXIT_SCORE
+    return (
+        bool(q.get("passed"))
+        and q.get("score", -999) >= EARLY_EXIT_SCORE
+        and q.get("bad_pattern_hits", 0) == 0
+    )
 
 
 def fetch_via_online_services(url: str) -> List[Dict]:

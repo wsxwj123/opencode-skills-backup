@@ -10,22 +10,30 @@ import sys
 from pathlib import Path
 from typing import List, Dict, Any
 
-BAD_PATTERNS = [
+# 盾页 / 验证页 / 未渲染：命中任一即【一票否决】（无论内容多长都判失败，强制降级到浏览器路线）。
+# 借鉴 crawl4ai 的否决式判定——这些特征出现在正文里的概率极低，宁可误判降级（浏览器重抓正常页也能成功）。
+CHALLENGE_PATTERNS = [
     r"环境异常",
     r"去验证",
     r"captcha",
     r"access denied",
-    r"scan to (follow|continue|use)",
-    r"微信扫一扫",
-    r"loading\.\.\.",
-    # Cloudflare / 反爬 challenge 盾页特征：命中即判低质，自动降级到隐身路线
     r"just a moment",
-    r"checking (your|if the site)",
+    r"checking (your browser|if the site)",
     r"attention required",
     r"cloudflare",
     r"ddos protection",
     r"enable javascript and cookies to continue",
     r"正在验证|请稍候",
+    # r.jina.ai 等返回的"页面未渲染完成"警告 → JS 空壳，必须降级到浏览器渲染
+    r"maybe not yet fully loaded",
+    r"consider .{0,20}specify a timeout",
+]
+
+# 软噪音：扣分但【不否决】（正常微信公众号正文尾部也常有这些，硬否决会误杀真正文）
+SOFT_NOISE_PATTERNS = [
+    r"scan to (follow|continue|use)",
+    r"微信扫一扫",
+    r"loading\.\.\.",
 ]
 
 # 正文/Markdown 结构信号（不含"任意非空行"这类几乎恒真的弱模式）
@@ -69,10 +77,15 @@ def assess_text(text: str) -> Dict[str, Any]:
         score -= 25
         reasons.append("内容偏短")
 
-    bad_hits = [p for p in BAD_PATTERNS if re.search(p, stripped, flags=re.I)]
-    if bad_hits:
-        score -= 40
-        reasons.append(f"命中异常/验证特征: {len(bad_hits)}")
+    challenge_hits = [p for p in CHALLENGE_PATTERNS if re.search(p, stripped, flags=re.I)]
+    if challenge_hits:
+        score -= 100  # 大幅扣分；并在下方 passed 处一票否决
+        reasons.append(f"命中盾页/验证特征(硬否决): {len(challenge_hits)}")
+
+    soft_noise = [p for p in SOFT_NOISE_PATTERNS if re.search(p, stripped, flags=re.I)]
+    if soft_noise:
+        score -= 10
+        reasons.append(f"命中软噪音: {len(soft_noise)}")
 
     paragraph_count = count_paragraphs(stripped)
     if paragraph_count >= 5:
@@ -113,14 +126,15 @@ def assess_text(text: str) -> Dict[str, Any]:
         score -= 50
         reasons.append(f"疑似 JS 代码而非正文（JS 特征数: {js_indicators}）")
 
-    passed = score >= 15 and not (bad_hits and length < 500) and html_tag_count < 20
+    # 盾页/验证/未渲染特征一票否决，不再被长度架空
+    passed = score >= 15 and not challenge_hits and html_tag_count < 20
     return {
         "score": score,
         "passed": passed,
         "reasons": reasons,
         "length": length,
         "paragraph_count": paragraph_count,
-        "bad_pattern_hits": len(bad_hits),
+        "bad_pattern_hits": len(challenge_hits),
         "ui_noise_hits": ui_noise_hits,
     }
 
