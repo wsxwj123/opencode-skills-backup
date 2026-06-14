@@ -282,7 +282,7 @@ license: Proprietary
   export http_proxy=http://127.0.0.1:7897 && esearch -db pubmed -query "xxx" < /dev/null | efetch -format abstract
   ```
 - CS/AI/工程/跨学科 → **paper-search MCP**（`mcp__paper-search-mcp__search_arxiv` / `search_pubmed` 等），串行执行、间隔 ≥1s。
-- **Provider 白名单（`citation_guard` 强制）**：入库只接受 `source_provider` ∈ {`pubmed-cli`, `paper-search`}（`tavily` 仅限无 DOI/PMID 条目的摘要补全）；`websearch`、`openalex-cli` 一律阻断；检索阶段严禁 tavily。
+- **Provider 白名单（`citation_guard` 强制）**：入库只接受 `source_provider` ∈ {`pubmed-cli`, `paper-search`}；`tavily` 仅用于文献真实性的反向核验，**不得作为检索来源**（任何 `source_provider=tavily` 的条目一律阻断）；`websearch`、`openalex-cli` 一律阻断；检索阶段严禁 tavily。
 
 **中文文献支线（Chinese Literature Manual Track，按需触发）**：
 SCI 论文通常只在少数场景需引中文文献（中药/中医、临床路径、地方流行病学、政策文献等）。中文期刊普遍**无 DOI、无 PMID**，`citation_guard` 双向核验跑不通，故走"AI 发现 → 用户人工取证 → 责任标记"的合规通道，绝不绕过护栏自动入库。

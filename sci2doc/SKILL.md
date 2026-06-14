@@ -106,6 +106,11 @@ The workflow is built around:
     - `**text**` and `__text__` Markdown bold markers must be stripped during Word conversion; body text should not contain bold formatting.
     - Single `*` used for statistical significance (e.g. `*p<0.05`, `*P<0.01`) must be preserved as-is.
     - `strip_bold_markers()` in `markdown_to_docx.py` handles this automatically.
+20. Reuse of the author's own published SCI content is mandatory-compliant, not free copy-paste (self-plagiarism / duplicate-publication control):
+    - 正文复用已发表 SCI 内容必须**改写**为中文学术表述，不得直接翻译粘贴原文段落。
+    - 每章首次复用某篇已发表成果处，必须标注来源文献（正文引用 [N] + 在该处或脚注/章节首说明"本章部分内容已发表于 [N]"）。
+    - 复用成果必须同时体现在"攻读学位期间取得的成果"清单与"独创性声明"中（独创性声明已声明"除文中已注明引用的内容外"，故被复用的已发表成果必须落到正文引用标注，二者一致）。
+    - 这是合规底线，不是文风偏好：缺标注的已发表内容复用等同未注明引用，触发学位办自我抄袭/重复发表红线。
 
 ## Citation Zero-Hallucination Gate (Mandatory)
 
@@ -130,7 +135,8 @@ Rules:
 - Source provider policy is strict:
   - Allowed: `pubmed-cli` (life science primary, esearch/efetch/einfo，~/edirect/，需 < /dev/null，代理 http://127.0.0.1:7897), `paper-search` (CS/AI primary / fallback / preprints: arXiv/bioRxiv).
   - Forbidden: `websearch`, `openalex-cli` (pyalex), `tavily` provider entries.
-  - **严禁** 使用 `tavily`、`websearch` 或 `openalex`（pyalex）查文献，无论有无 DOI/PMID.
+  - **严禁** 使用 `tavily`、`websearch` 或 `openalex`（pyalex）作为文献检索来源，无论有无 DOI/PMID；不得出现 `source_provider=tavily` 的文献条目（`citation_guard.py` 会以 `source_provider_not_allowed` 拒绝）。
+  - tavily 仅用于对已检索文献做真实性反向核验（如核对标题），不作为检索来源；其核验结果不得登记为文献条目的 `source_provider`。
   - **Serial Search (MANDATORY):** Execute all retrieval calls sequentially (PubMed CLI and paper-search MCP alike). Never parallelize search requests. Enforce ≥1s interval between consecutive calls.
   - **Citation Type by Context (MANDATORY):**
     - Background / field overview → Reviews or Systematic Reviews preferred.
@@ -337,6 +343,7 @@ The thesis outline must include:
 - References at end
 - Acknowledgements
 - Achievements during doctoral period (papers/patents/awards)
+  - 作为转化来源的已发表 SCI 论文必须全部列入此清单；正文中复用这些成果之处须与本清单及独创性声明保持一致（见 Non-Negotiable 第 20 条）。
 
 ## Abbreviation Contract
 

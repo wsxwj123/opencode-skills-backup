@@ -20,6 +20,7 @@ import word_counter
 DEFAULT_PROFILE = {
     "project_type": "面上项目",
     "research_attribute": "自由探索类",
+    "science_problem_attribute": None,
     "duration_years": 4,
     "budget_total": 500000,
     "page_limit": 30,
@@ -33,6 +34,14 @@ DEFAULT_PROFILE = {
     "citation_targets": {"min_total": 30, "min_recent_5yr": 20, "min_cn_journals": 5},
     "mode": "write",
 }
+
+# 国自然申请书"科学问题属性"四选一官方标准措辞（与"研究属性"为两个独立字段）
+SCIENCE_PROBLEM_ATTRIBUTES = (
+    "鼓励探索、突出原创",
+    "聚焦前沿、独辟蹊径",
+    "需求牵引、突破瓶颈",
+    "共性导向、交叉融通",
+)
 
 SECTION_ALIASES = {
     "P1": "P1_立项依据.md",
@@ -306,6 +315,9 @@ def gate_check(
     matrix_ok = bool(matrix.get("ok"))
 
     profile = load_json(root / "proposal_profile.json", DEFAULT_PROFILE)
+    spa = profile.get("science_problem_attribute")
+    profile_ok = isinstance(spa, str) and spa.strip() in SCIENCE_PROBLEM_ATTRIBUTES
+
     review = diagnosis_engine.full_review(
         sections_dir=root / sections_dir,
         consistency_path=root / "data/consistency_map.json",
@@ -316,8 +328,10 @@ def gate_check(
     )
     review_ok = review.get("pass_status") == "pass" and int(review.get("d_count", 0)) == 0 and int(review.get("c_count", 0)) <= 3
 
-    overall_ok = sync_ok and citation_ok and matrix_ok and review_ok
-    if not sync_ok:
+    overall_ok = profile_ok and sync_ok and citation_ok and matrix_ok and review_ok
+    if not profile_ok:
+        failed_at = "profile"
+    elif not sync_ok:
         failed_at = "sync"
     elif not citation_ok:
         failed_at = "citation"
@@ -331,6 +345,10 @@ def gate_check(
     return {
         "ok": overall_ok,
         "failed_at": failed_at,
+        "profile": {
+            "ok": profile_ok,
+            "science_problem_attribute": spa,
+        },
         "sync": {
             "ok": sync_ok,
             "exists_ok": exists_ok,
