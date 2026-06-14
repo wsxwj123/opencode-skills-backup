@@ -7,7 +7,7 @@ All scripts are in `[project]/scripts/` (copied from skill directory during Phas
 | Script | Purpose | Mode |
 |--------|---------|------|
 | `zotero_manager.py` | Zotero Web API: init, add, dedup, get-section, export BibTeX | Zotero |
-| `state_manager.py` | Canonical dedup + reindex (Phase 2.5 None Mode only) | None |
+| `state_manager.py` | Workflow state.json (`set-phase`/`complete-section`/`set-root-key`), None-mode index ops (`init-index`/`append-literature`), canonical dedup + reindex | All / None |
 | `citation_utils.py` | **Import-only library, no CLI.** Shared citation-token parser (`extract_citation_ids`, `parse_citation_group`) imported by `citation_guard.py`, `validate_citations.py`, `check_global_citation_sequence.py`, `export_bibtex.py`. Never invoke directly — `python3 scripts/citation_utils.py` will run and exit silently. | All |
 | `export_bibtex.py` | BibTeX export from literature_index.json | None/EndNote |
 | `matrix_manager.py` | Section-claim evidence matrix: bootstrap + focus | None |
@@ -30,16 +30,29 @@ python3 scripts/state_manager.py set-phase --phase 4 --completed true   # --comp
 # complete-section (all modes — Phase 2/3): add a section to completed_sections AND drop it from any
 # pending_sections bucket (Polish Mode), preserving other keys. Idempotent.
 python3 scripts/state_manager.py complete-section --section 2.1
+
+# set-root-key (Zotero mode — Phase 1 Step 6): set zotero_root_key in state.json, preserving other keys.
+python3 scripts/state_manager.py set-root-key --key ROOT_KEY
+
+# init-index (None/EndNote mode — Phase 1 Step 5): create empty literature_index.json +
+# synthesis_matrix.json + figures/figure_index.md. Idempotent (existing files untouched).
+python3 scripts/state_manager.py init-index
+
+# append-literature (None/EndNote mode — Phase 2 Step 5): append a section's papers to
+# literature_index.json with gid auto-increment + DOI dedup (case-insensitive). On a duplicate DOI,
+# only the section is appended to that record's related_sections.
+python3 scripts/state_manager.py append-literature --section 2.1 --papers tmp/papers_2_1.json
 ```
 
-> `set-phase` / `complete-section` operate on the workflow `state.json` (the `{phase, completed_sections,
-> mode, pending_sections, zotero_root_key, citations_imported}` record), which is **disjoint** from the
-> `STATE_FILES` map (`progress.json`/`storyline.md`/`literature_index.json`/…) that `load`/`update`/`reindex`
-> touch — so these two commands cannot affect dedup/reindex. They replace the repeated inline "load json →
-> set key → write" Python that previously lived in Phase 2/2.5/3/4. Default path is `state.json` in CWD;
-> override with `--state PATH`. Phase 0.5 init and Phase 0-P Step 6 still build state.json inline (they
-> create the file / write multiple keys at once, not a single-field update). Phase 1 Step 6 also stays inline
-> (it writes `zotero_root_key` alongside the phase).
+> `set-phase` / `complete-section` / `set-root-key` operate on the workflow `state.json` (the `{phase,
+> completed_sections, mode, pending_sections, zotero_root_key, citations_imported}` record), which is
+> **disjoint** from the `STATE_FILES` map (`progress.json`/`storyline.md`/`literature_index.json`/…) that
+> `load`/`update`/`reindex` touch — so these commands cannot affect dedup/reindex. They replace the repeated
+> inline "load json → set key → write" Python that previously lived in Phase 1/2/2.5/3/4. Default path is
+> `state.json` in CWD; override with `--state PATH`. Phase 0.5 init and Phase 0-P Step 6 still build state.json
+> inline (they create the file / write multiple keys at once, not a single-field update).
+> `init-index` / `append-literature` operate on the None/EndNote `data/literature_index.json` (+ matrix/figure
+> registry) and replace the large inline Python that previously lived in Phase 1 Step 5 and Phase 2 Step 5.
 
 ## `matrix_manager.py` commands (None Mode)
 

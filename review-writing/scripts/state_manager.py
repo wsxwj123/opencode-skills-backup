@@ -1128,6 +1128,74 @@ def complete_section(section, state_path="state.json"):
     print(f"✅ state.json: {section} → completed_sections")
 
 
+def set_root_key(key, state_path="state.json"):
+    """Set zotero_root_key in state.json, preserving all other keys (Zotero mode, Phase 1 Step 6)."""
+    state = _load_workflow_state(state_path)
+    state["zotero_root_key"] = key
+    _atomic_write_text(state_path, json.dumps(state, indent=2, ensure_ascii=False))
+    print(f"✅ state.json: zotero_root_key set (other fields preserved)")
+
+
+def init_index():
+    """Initialize empty None/EndNote-mode index files + figure registry (idempotent).
+
+    Replaces the inline Python in Phase 1 Step 5. Creates data/literature_index.json
+    and data/synthesis_matrix.json (empty arrays) plus figures/figure_index.md.
+    Existing files are left untouched.
+    """
+    for rel in ("data/literature_index.json", "data/synthesis_matrix.json"):
+        p = Path(rel)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        if not p.exists():
+            p.write_text("[]", encoding="utf-8")
+    fig = Path("figures/figure_index.md")
+    fig.parent.mkdir(parents=True, exist_ok=True)
+    if not fig.exists():
+        fig.write_text("# Figure Index\n\n", encoding="utf-8")
+    print("✅ Index files initialized")
+
+
+def append_literature(section, papers_path, index_path="data/literature_index.json"):
+    """Append a section's papers to literature_index.json (None/EndNote mode, Phase 2 Step 5).
+
+    Auto-increments global_id, dedups by DOI (case-insensitive). On a DOI already present,
+    only appends `section` to that record's related_sections instead of creating a new entry.
+    Replaces the inline Python block in Phase 2 Step 5.
+    """
+    idx = Path(index_path)
+    idx.parent.mkdir(parents=True, exist_ok=True)
+    exist = _load_json_list(str(idx))
+    known_dois = {e.get("doi", "").strip().lower() for e in exist if e.get("doi", "")}
+    next_gid = max((e.get("global_id", 0) for e in exist if isinstance(e.get("global_id"), int)), default=0) + 1
+    new_papers = _read_json_file(papers_path)
+    if not isinstance(new_papers, list):
+        raise SystemExit(f"Error: {papers_path} must contain a JSON array of papers")
+    added = 0
+    for p in new_papers:
+        if not isinstance(p, dict):
+            continue
+        doi = p.get("doi", "").strip().lower()
+        if doi and doi in known_dois:
+            for e in exist:
+                if e.get("doi", "").strip().lower() == doi:
+                    secs = e.setdefault("related_sections", [])
+                    if section not in secs:
+                        secs.append(section)
+                    break
+            continue
+        p.setdefault("global_id", next_gid + added)
+        p.setdefault("related_sections", [section])
+        p.setdefault("source_provider", "pubmed")
+        p.setdefault("source_id", p.get("pmid") or p.get("doi") or "")
+        p.setdefault("verified", False)
+        exist.append(p)
+        if doi:
+            known_dois.add(doi)
+        added += 1
+    _atomic_write_text(idx, json.dumps(exist, ensure_ascii=False, indent=2))
+    print(f"Added {added} papers ({len(new_papers) - added} duplicates merged); total {len(exist)}")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Manage state files for Review Writing Skill")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -1184,6 +1252,26 @@ def main():
     )
     completesec_parser.add_argument("--section", required=True, help="Section ID, e.g. '2.1'")
     completesec_parser.add_argument("--state", default="state.json", help="Path to workflow state.json (default: state.json)")
+
+    setrootkey_parser = subparsers.add_parser(
+        "set-root-key",
+        help="Set zotero_root_key in state.json (Zotero mode, Phase 1 Step 6), preserving other keys.",
+    )
+    setrootkey_parser.add_argument("--key", required=True, help="Zotero root collection key")
+    setrootkey_parser.add_argument("--state", default="state.json", help="Path to workflow state.json (default: state.json)")
+
+    initindex_parser = subparsers.add_parser(
+        "init-index",
+        help="Initialize empty None/EndNote index files + figure registry (Phase 1 Step 5). Idempotent.",
+    )
+
+    appendlit_parser = subparsers.add_parser(
+        "append-literature",
+        help="Append a section's papers to literature_index.json with gid auto-increment + DOI dedup (Phase 2 Step 5, None/EndNote mode).",
+    )
+    appendlit_parser.add_argument("--section", required=True, help="Section ID, e.g. '2.1'")
+    appendlit_parser.add_argument("--papers", required=True, help="Path to tmp/papers_X_X.json")
+    appendlit_parser.add_argument("--index", default="data/literature_index.json", help="Literature index path")
 
     snapshot_parser = subparsers.add_parser("snapshot", help="Write a full state snapshot JSON")
     snapshot_parser.add_argument(
@@ -1249,6 +1337,12 @@ def main():
         set_phase(args.phase, completed=completed, state_path=args.state)
     elif args.command == "complete-section":
         complete_section(args.section, state_path=args.state)
+    elif args.command == "set-root-key":
+        set_root_key(args.key, state_path=args.state)
+    elif args.command == "init-index":
+        init_index()
+    elif args.command == "append-literature":
+        append_literature(args.section, args.papers, index_path=args.index)
     elif args.command == "snapshot":
         snapshot_state(output_path=args.out)
     elif args.command == "reindex":
