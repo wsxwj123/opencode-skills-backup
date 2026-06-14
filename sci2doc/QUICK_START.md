@@ -7,9 +7,12 @@
 ```bash
 pip3 install python-docx
 pip3 install docxcompose
+pip3 install pdfminer.six
 ```
 
-说明：第二行用于高保真 docx 合并，可选。
+说明：
+- `docxcompose` 用于高保真 docx 合并，可选。
+- `pdfminer.six` 用于 Step 0 提取 PDF 源材料文本，处理 PDF 格式 SCI 论文时必需。
 
 ## 2. 初始化项目
 

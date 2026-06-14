@@ -1,11 +1,13 @@
 ---
 name: sci2doc
-description: 用于将SCI论文材料转化为中文博士学位论文草稿，执行严格的章节结构、原子化Markdown工作流、门禁检查和版本回滚。当用户提到博士论文、学位论文、毕业论文、学位论文写作、SCI转论文、SCI转博士论文、把文章写成论文、doctoral thesis、dissertation 时优先调用。
+description: 用于将SCI论文材料转化为中文博士学位论文草稿，执行严格的章节结构、原子化Markdown工作流、门禁检查和版本回滚。当用户提到博士论文、博士学位论文、毕业论文、SCI转论文、doctoral thesis、dissertation 时优先调用。
 ---
 
 # Sci2Doc
 
 ## Overview
+
+本技能仅适用于博士学位论文（正文 ≥8 万字 / ≥5 章），且需用户提供已成稿的 SCI 论文材料作为转化来源。若场景是硕士/本科论文，或用户没有可访问的 SCI 论文材料，主动退出本技能，不要套用本流程。
 
 This skill converts SCI paper materials (PDF/Word plus user context) into a Chinese doctoral thesis draft.
 
@@ -36,43 +38,14 @@ The workflow is built around:
 
 > **执行顺序：** 本 Gate 在 `### 0) Material Input Gate` 完成后执行（先确认材料，再选样式）。如无源材料，停在 Step 0，不进入 Style Selection。
 
-Before any project initialization or drafting, the AI **must** present exactly two style options and require the user to choose one:
+初始化或起草前，AI **必须** 让用户在两种样式中二选一：
 
-1. `默认设置` — use the built-in Central South University (中南大学) doctoral thesis style.
-2. `自定义样式` — user must provide the target university plus detailed Word formatting requirements and/or reference template materials.
+1. `默认设置` — 内置中南大学（CSU）博士学位论文格式。
+2. `自定义样式` — 用户须提供目标院校 + 详细 Word 格式要求和/或模板证据文件。
 
-Rules:
-- The choice must be written to local state via `thesis_profile.json > format_profile`.
-- `project_state.json > progress.status` must mirror the operational state.
-- If the user chooses custom style but the template information is incomplete, the project may still be initialized, but it **must** be marked as `pending_template`.
-- `custom` can become `ready` only after the AI writes structured layout fields into local state, at minimum:
-  - `format_profile.page_margins_cm.top|bottom|left|right`
-  - `format_profile.header_distance_cm`
-  - `format_profile.footer_distance_cm`
-  - `format_profile.university_name`
-  - `format_profile.degree_type`
-- For requirement-driven customization, AI should prefer writing structured rules into `format_profile.style_profile` when the user provides explicit font/size/spacing/table/front-matter requirements instead of a `.docx/.dotx` file.
-- `pending_template` projects may continue collecting requirements and drafting source markdown, but **must not** generate `.docx` or run final format acceptance.
-- Do not silently inherit CSU layout numbers when switching a project from `default_csu` to `custom`. Missing structured custom layout fields mean `pending_template`, not `ready`.
-- Built-in automated Word formatting defaults to CSU only for `default_csu`. For `custom ready`, scripts must read local structured fields instead of hardcoded CSU constants.
-- Custom template evidence files should be stored under `04_图表文件/` or referenced by absolute path in `format_profile.source_template_files`.
-- `state_manager.py init` and `state_manager.py profile` must automatically render managed front matter files into:
-  - `atomic_md/封面.md`
-  - `atomic_md/题名页.md`
-  - `atomic_md/独创性声明与授权书.md`
-  - `atomic_md/中文摘要.md`
-  - `atomic_md/英文摘要.md`
-  - `atomic_md/目录.md`
-  - `atomic_md/缩略语表.md`
-  - `02_分章节文档/封面.docx`
-  - `02_分章节文档/题名页.docx`
-  - `02_分章节文档/独创性声明与授权书.docx`
-  - `02_分章节文档/中文摘要.docx`
-  - `02_分章节文档/英文摘要.docx`
-  - `02_分章节文档/目录.docx`
-  - `02_分章节文档/缩略语表.docx`
-- If a front matter markdown file has been manually rewritten and no longer carries the managed marker, scripts must not silently overwrite it.
-- If `format_profile.status == pending_template`, managed front matter markdown may still be refreshed, but managed `.docx` front matter must be skipped.
+**硬门禁：** 自定义信息不完整的项目标记为 `pending_template`，可继续整理 markdown，但 **不得生成 `.docx`、不得运行格式验收**。`custom` 仅在写入结构化布局字段后才能转为 `ready`，否则保持 `pending_template`。
+
+字段清单、custom→ready 的最小必填字段、managed front matter 渲染列表、managed marker 覆盖规则等完整细则见 `references/format_profile_schema.md`。
 
 ## Non-Negotiable Requirements
 
@@ -97,11 +70,7 @@ Rules:
 12. Humanization is required before finalizing chapter text; use humanizer-zh principles to reduce mechanical AI style.
 13. Do not invent experimental data.
 13.1 Do not invent references; citation hallucination is forbidden.
-14. Literature retrieval follows topic-dependent routing (MANDATORY):
-    - Life science / medicine / clinical / biochemistry / pharmacology → **PubMed CLI first** (`esearch`/`efetch`/`einfo`, `~/edirect/`, requires `< /dev/null`, proxy `http://127.0.0.1:7897`). Auto-install if missing: `sh -c "$(curl -fsSL https://ftp.ncbi.nlm.nih.gov/entrez/entrezdirect/install-edirect.sh)"`.
-    - CS / AI / engineering / physics / interdisciplinary → **paper-search MCP first** (`mcp__paper-search-mcp__search_arxiv` etc.).
-    - Fallback to the other source when primary yields no results. All calls serial ≥1s (see rule 15 below).
-    - **Forbidden:** `tavily`, `websearch`, `openalex` (pyalex).
+14. Literature retrieval follows topic-dependent routing (MANDATORY): 细则见 `## Citation Zero-Hallucination Gate`。
 15. Abbreviation consistency is mandatory:
     - First occurrence of any abbreviation must expand as: `中文全称（English Full Name, ABBR）`
     - All subsequent occurrences use bare abbreviation only, no re-expansion.
@@ -145,27 +114,12 @@ Rules:
 - Unverified references must not be cited in chapter markdown.
 - Every cited entry must carry traceability fields (`source_provider` + `source_id`) and DOI/PMID whenever available.
 
-**`literature_index.json` 必需字段 schema（每条文献一个 JSON 对象，存入顶层数组）：**
+**Topic-dependent routing (MANDATORY):**
+- Life science / medicine / clinical / biochemistry / pharmacology → **PubMed CLI first** (`esearch`/`efetch`/`einfo`, `~/edirect/`, requires `< /dev/null`, proxy `http://127.0.0.1:7897`). Auto-install if missing: `sh -c "$(curl -fsSL https://ftp.ncbi.nlm.nih.gov/entrez/entrezdirect/install-edirect.sh)"`.
+- CS / AI / engineering / physics / interdisciplinary → **paper-search MCP first** (`mcp__paper-search-mcp__search_arxiv` etc.).
+- Fallback to the other source when primary yields no results.
 
-```json
-[
-  {
-    "id": "ref001",
-    "title": "文章完整标题（从检索结果复制，勿手写）",
-    "authors": ["Author A", "Author B"],
-    "year": 2023,
-    "journal": "Journal Name",
-    "doi": "10.xxxx/xxxxx",
-    "pmid": "12345678",
-    "source_provider": "pubmed-cli",
-    "source_id": "12345678",
-    "chapter": 2,
-    "verified": false
-  }
-]
-```
-
-字段规则：`source_provider` 只允许 `"pubmed-cli"` 或 `"paper-search"`；`doi`/`pmid` 至少填一个；`verified` 初始为 `false`，citation_guard 通过后由脚本置 `true`；`chapter` 为该文献首次引用的章节号；未知字段填空字符串，**严禁填写推测值**。
+`literature_index.json` 必需字段 schema 见 `references/format_profile_schema.md`。
 
 - Source provider policy is strict:
   - Allowed: `pubmed-cli` (life science primary, esearch/efetch/einfo，~/edirect/，需 < /dev/null，代理 http://127.0.0.1:7897), `paper-search` (CS/AI primary / fallback / preprints: arXiv/bioRxiv).
@@ -182,63 +136,11 @@ Rules:
 
 ## Single Source of Truth
 
-The thesis target profile is stored in:
-- `thesis_profile.json`
+论文目标配置存于 `thesis_profile.json`；样式选择与格式门禁存于其 `format_profile`；运行时状态镜像在 `project_state.json`。
 
-The style choice and formatting gate are also stored there:
-- `format_profile.mode`: `default_csu` | `custom`
-- `format_profile.status`: `ready` | `pending_template`
-- `format_profile.source_template_files`
-- `format_profile.requirements_summary`
-- `format_profile.missing_requirements`
-- `format_profile.allow_docx_generation`
-- `format_profile.page_margins_cm`
-- `format_profile.header_distance_cm`
-- `format_profile.footer_distance_cm`
-- `format_profile.header_left_text`
-- `format_profile.graduate_school_name`
-- `format_profile.declaration_authorization_school_name`
-- `format_profile.school_code`
-- `format_profile.style_profile`
-- `format_profile.page_numbering`
+**硬门禁：** 自定义要求不完整时 `progress.status` 必须为 `pending_template`，禁止导出 docx / 跑格式验收。
 
-Default profile is created by `state_manager.py init` and can be updated with:
-- `state_manager.py profile`
-
-Preferred structured update entrypoints:
-- `state_manager.py profile --format-profile-json '{...}'`
-- `state_manager.py profile --project-info-json '{...}'`
-
-Structured payload rules:
-- `--format-profile-json` and `--project-info-json` must decode to JSON objects only.
-- Scripts must reject unknown top-level keys or wrong field types instead of silently ignoring them.
-- `format_profile.page_numbering` is the canonical location for page-number orchestration:
-  - `front_matter.format|start`
-  - `body.format|start`
-  - `back_matter.format|start`
-- Allowed page number formats are:
-  - `decimal`
-  - `lowerRoman`
-  - `upperRoman`
-  - `lowerLetter`
-  - `upperLetter`
-- Requirement-only customization should be mapped into structured fields first:
-  - page layout -> `page_margins_cm`, `header_distance_cm`, `footer_distance_cm`
-  - body/heading/table/abstract rules -> `style_profile`
-  - page numbering switch points -> `page_numbering`
-- If the user only gives narrative formatting rules and those rules are still insufficient to fill the required structured fields, keep the project in `pending_template`.
-
-`project_info_json` should be used for front matter content such as:
-- `classification`
-- `udc`
-- `abstract_zh`
-- `keywords_zh`
-- `abstract_en`
-- `keywords_en`
-
-`project_state.json` mirrors the actionable runtime status. When custom requirements are incomplete, `progress.status` must be `pending_template`.
-
-All scripts should follow this profile to avoid rule conflicts and to prevent accidental export under the wrong school format.
+`format_profile` 完整字段清单、结构化更新入口（`--format-profile-json` / `--project-info-json`）、页码格式枚举、需求→字段映射规则、`project_info` 字段，均见 `references/format_profile_schema.md`。
 
 ## Project Directory Structure
 
@@ -343,194 +245,58 @@ If source materials are missing or inaccessible, **stop and request them**. Do n
 
 提取完成后，AI 应先通读全文摘要（Abstract）、结果（Results）、方法（Methods）三节，形成对实验内容的基本理解，再进入 Step 1。
 
+> 以下各步只列命令名 + 关键参数 + 门禁条件。**完整可复制 CLI（含所有 flag、占位符）见 `QUICK_START.md`。**
+
 ### 1) Initialize Project
 
-First choose one style path.
-
-Default CSU style:
-
-```bash
-python3 scripts/state_manager.py --project-root "${save_path}" init \
-  --title "论文中文题目" --author "作者姓名" --major "学科" \
-  --format-mode default_csu
-```
-
-Custom style with incomplete requirements allowed:
-
-```bash
-python3 scripts/state_manager.py --project-root "${save_path}" init \
-  --title "论文中文题目" --author "作者姓名" --major "学科" \
-  --format-mode custom --university-name "目标院校" --degree-type "博士学位论文" \
-  --template-source "${save_path}/04_图表文件/格式规范.pdf" \
-  --missing-requirement "页边距规范" --missing-requirement "页眉页脚规范"
-```
-
-If custom style is still incomplete, the project must stay in `pending_template`.
-
-Then verify profile:
-
-```bash
-python3 scripts/state_manager.py --project-root "${save_path}" profile --show
-```
-
-If front matter needs to be regenerated manually:
-
-```bash
-python3 scripts/state_manager.py --project-root "${save_path}" render-front-matter
-```
-
-If needed, update negotiated targets:
-
-```bash
-python3 scripts/state_manager.py --project-root "${save_path}" profile \
-  --body-target 80000 --abstract-min 1500 --abstract-max 2500 \
-  --references-min 80 --min-chapters 5 \
-  --chapter-target 1:12000 --chapter-target 2:17000
-```
-
-When custom requirements are supplemented later, update the local profile first:
-
-```bash
-python3 scripts/state_manager.py --project-root "${save_path}" profile \
-  --format-mode custom --university-name "目标院校" --degree-type "博士学位论文" \
-  --template-source "${save_path}/04_图表文件/格式规范.pdf" \
-  --format-requirement "A4，上下 2.54cm，左右 3.17cm，页眉 1.5cm，页脚 1.75cm" \
-  --top-margin-cm 2.54 --bottom-margin-cm 2.54 \
-  --left-margin-cm 3.17 --right-margin-cm 3.17 \
-  --header-distance-cm 1.5 --footer-distance-cm 1.75 \
-  --graduate-school-name "目标院校研究生院" \
-  --declaration-school-name "目标院校"
-```
-
-If the user only gives a template path or prose notes but no structured layout numbers, keep the project in `pending_template`.
-
-Initialization and profile updates must auto-refresh managed front matter files. User-edited front matter files without the managed marker must be left untouched.
-When the user provides detailed requirements in chat, AI should convert them into structured JSON and write them through `--format-profile-json` / `--project-info-json` instead of leaving them only in prose memory.
+- `state_manager.py init`：先二选一样式。`--format-mode default_csu` 或 `--format-mode custom`（+ `--university-name` / `--degree-type` / `--template-source` / `--missing-requirement`）。
+- `state_manager.py profile --show` 验证；`render-front-matter` 手动重渲前置页；`profile --body-target/--abstract-min/--chapter-target ...` 协商目标；后续补齐自定义要求用 `profile --format-mode custom --top-margin-cm ...`。
+- **门禁：** 自定义结构化布局字段不全 → 保持 `pending_template`。
+- init / profile 必须自动刷新 managed front matter；无 managed marker 的用户改写文件不得覆盖。用户在聊天里给的详细要求应转成 JSON 经 `--format-profile-json` / `--project-info-json` 写入，而非仅留在 prose memory。
 
 ### 2) Prewrite Gate (Mandatory)
 
-```bash
-python3 scripts/state_manager.py --project-root "${save_path}" \
-  write-cycle --chapter 2 --token-budget 6000 --tail-lines 80 --json-summary
-```
+- `state_manager.py write-cycle --chapter N --token-budget 6000 --tail-lines 80 --json-summary`。每章每节必跑，加载跨章记忆。
 
 ### 3) Atomic Subsection Writing
 
-Store subsection files under:
-- `${save_path}/atomic_md/第{chapter}章/`
-
-Filename pattern:
-- `{section_number}_{section_title}.md`
-- Example: `2.1_研究对象.md`
-
-**Table reminder**: Any subsection presenting structured data (reagents, instruments, grouping, statistical results, etc.) **must** include a Markdown pipe table. See [Table Contract](#table-contract) for syntax. Do NOT describe tabular data in prose — use a table.
-
-Validate numbering:
-
-```bash
-python3 scripts/atomic_md_workflow.py --project-root "${save_path}" \
-  validate --chapter 2
-python3 scripts/atomic_md_workflow.py --project-root "${save_path}" \
-  validate --chapter 2 --enforce-research-structure
-```
-
-Validate experiment mapping and one-experiment-one-figure/table:
-
-```bash
-python3 scripts/atomic_md_workflow.py --project-root "${save_path}" \
-  validate-experiment-map --chapter 2
-```
-
-**Post-write (Mandatory after each subsection):**
-
-```bash
-# Extract + register + strip redundant abbreviation expansions
-python3 scripts/abbreviation_registry.py --project-root "${save_path}" \
-  process --file "${md_file}" --chapter 2 --section 2.1 --in-place
-```
-
-After running the above: update `chapter_index.json` with key facts from this section (AI responsibility), then proceed to Step 4 (Snapshot).
+- 文件存于 `${save_path}/atomic_md/第{chapter}章/`，命名 `{section_number}_{section_title}.md`（如 `2.1_研究对象.md`）。
+- **Table reminder**：呈现结构化数据（试剂/仪器/分组/统计）的小节 **必须** 用 Markdown 管道表，见 [Table Contract](#table-contract)，不得用散文描述。
+- 校验：`atomic_md_workflow.py validate --chapter N`（加 `--enforce-research-structure`）+ `validate-experiment-map --chapter N`。**门禁：** 编号断裂 → 修复后才能继续。
+- Post-write 必做：`abbreviation_registry.py process --file ... --in-place`，然后更新 `chapter_index.json` key_facts（AI 责任），再进 Step 4。
 
 ### 4) Subsection Summary Snapshot
 
-After finishing each subsection summary:
-
-```bash
-python3 scripts/atomic_md_workflow.py --project-root "${save_path}" \
-  section-snapshot --chapter 2 --section 2.1
-```
+- `atomic_md_workflow.py section-snapshot --chapter N --section X.Y`。每节小结完成即快照。
 
 ### 5) Merge Chapter Markdown and Convert
 
-```bash
-python3 scripts/atomic_md_workflow.py --project-root "${save_path}" \
-  merge --chapter 2 --to-docx
-```
-
-Hard gate:
-- If `format_profile.status == pending_template`, `markdown_to_docx.py` must reject `.docx` generation.
-- Do not bypass this by manually calling the converter.
+- `atomic_md_workflow.py merge --chapter N --to-docx`。
+- **硬门禁：** `format_profile.status == pending_template` 时 `markdown_to_docx.py` 拒绝生成 `.docx`，不得手动绕过转换器。
 
 ### 6) Chapter Self-Check (Immediate)
 
-```bash
-python3 scripts/atomic_md_workflow.py --project-root "${save_path}" \
-  self-check --target "${save_path}/02_分章节文档/第2章_自动合并.docx"
-```
-
-Notes:
-- If `format_profile.status == pending_template`, `check_quality.py` must reject format acceptance and instruct the user to补齐模板要求 first.
-- If `chapter_targets` is configured, chapter self-check uses that chapter target first.
-- Chapter self-check does not enforce full-thesis references minimum; references minimum is enforced in full-thesis check.
+- `atomic_md_workflow.py self-check --target ".../02_分章节文档/第N章_自动合并.docx"`。
+- **门禁：** `pending_template` 时 `check_quality.py` 拒绝格式验收，要求先补齐模板要求。章节自检按 `chapter_targets` 判断，不卡全文参考文献下限（在全文总检卡）。
 
 ### 7) Finalize Chapter State
 
-```bash
-python3 scripts/state_manager.py --project-root "${save_path}" \
-  write-cycle --chapter 2 --finalize --summary "第2章完成并通过自检" --snapshot
-```
+- `state_manager.py write-cycle --chapter N --finalize --summary "..." --snapshot`。
 
 ### 8) Merge Full Markdown and Full Word
 
-```bash
-python3 scripts/atomic_md_workflow.py --project-root "${save_path}" merge-full --to-docx
-```
-
-Rule:
-- `merge-full` must include root-level front matter markdown files from `atomic_md/` before正文合并内容。
-
-Optional high-fidelity chapter docx merge:
-
-```bash
-python3 scripts/merge_chapters.py \
-  --project-root "${save_path}" \
-  --input-dir "${save_path}/02_分章节文档" \
-  --output "${save_path}/03_合并文档/完整博士论文.docx" \
-  --require-high-fidelity
-```
-
-Compatibility rule:
-- `merge_documents.py` must prefer materialized front matter docx files in `02_分章节文档/` and include `封面`、`题名页`、`独创性声明与授权书` by default when present.
+- `atomic_md_workflow.py merge-full --to-docx`。**规则：** 必须先纳入 `atomic_md/` 根级前置页 markdown，再合并正文。
+- 可选高保真合并：`merge_chapters.py --input-dir .../02_分章节文档 --output .../03_合并文档/完整博士论文.docx --require-high-fidelity`。
+- 兼容规则：`merge_documents.py` 优先用 `02_分章节文档/` 中已物化的前置页 docx，默认纳入 `封面`、`题名页`、`独创性声明与授权书`。
 
 ### 9) Full Thesis Checks
 
-```bash
-# 字数统计（支持 .md / atomic_md 目录，自动检测路径类型）
-python3 scripts/state_manager.py --project-root "${save_path}" word-count
-# 或直接指定路径：
-python3 scripts/count_words.py "${save_path}/atomic_md"
-python3 scripts/count_words.py "${save_path}/atomic_md/第2章/2.1_引言.md"
-
-python3 scripts/check_quality.py "${save_path}/03_合并文档/完整博士论文.docx" \
-  --output json --enforce-full-structure
-```
+- 字数：`state_manager.py word-count` 或 `count_words.py <路径>`（支持 .md / atomic_md 目录）。
+- 全文质检：`check_quality.py ".../完整博士论文.docx" --output json --enforce-full-structure`。
 
 ### 10) Rollback if Needed
 
-```bash
-python3 scripts/state_manager.py --project-root "${save_path}" rollback --target snapshot
-python3 scripts/state_manager.py --project-root "${save_path}" rollback --target snapshot --strict-mirror
-```
+- `state_manager.py rollback --target snapshot`（加 `--strict-mirror` 严格镜像）。
 
 ## Chapter Structure Contract
 
@@ -716,32 +482,7 @@ python3 scripts/figure_registry.py --project-root "${save_path}" export --format
 
 ## Figure Prompt Generation（图注之外，同步生成AI绘图提示词）
 
-For each figure referenced in the converted document where the original figure is unavailable or needs redrawing, generate a Figure Prompt block:
-
-```
-[FIGURE PROMPT — Figure N: <caption title>]
-TYPE: Data plot | Schematic | Mechanistic pathway | Workflow | Statistical | Structural | Microscopy description
-SUBJECT: <exact scientific content from the original paper, one sentence>
-STYLE: BioRender风格, 科研示意图, 最高分辨率, white background (#FFFFFF), publication-quality [默认BioRender风格；如需其他风格（如Cell-style flat icon / Nature手绘风 / 简约线条风），在启动时告知]
-COLOR SCHEME: Primary #2E86AB | Secondary #A23B72 | Accent #F18F01 | Neutral #4A4A4A | colorblind-safe
-ELEMENTS:
-  - <Element 1>: <derived from figure caption or manuscript description>
-  - <Element 2>: <arrows, labels, key components>
-LAYOUT: <inferred from caption: single/multi-panel> | <aspect ratio: 4:3 default>
-TYPOGRAPHY: Arial/Helvetica, 8-10pt, English labels, panel letters bold top-left
-DATA REPRESENTATION (if applicable): <chart type | axes labels from caption>
-SCALE/LEGEND: <from original caption if stated | N/A>
-KEY MESSAGE: <derived from the Results section paragraph that references this figure>
-AVOID: 3D effects, gradients, clip art, decorative elements, photo-realistic rendering
-SOURCE NOTE: Reconstructed from: <original paper DOI or figure caption text>
-```
-
-Generation rules:
-- Only generate a Figure Prompt if the original figure is not available in the source PDF or needs reconstruction
-- Derive all element descriptions from the figure caption + surrounding Results text — do NOT fabricate experimental data
-- If microscopy/imaging data: describe as "Representative [modality] image showing [structure], [magnification] if stated, scale bar [X]μm if stated" — do NOT attempt to recreate actual experimental images
-- Store all generated prompts in `${save_path}/figure_prompts.md`
-- Mark each prompt with `[RECONSTRUCTED]` tag to distinguish from original figures
+原图在源 PDF 中不可用或需重绘时，按 `references/figure_prompt_template.md` 为每张图生成 Figure Prompt 块，存入 `${save_path}/figure_prompts.md` 并标 `[RECONSTRUCTED]`。所有元素描述须来自图注与 Results 文本，**不得编造实验数据**。
 
 ## Common Mistakes
 
@@ -762,29 +503,11 @@ Generation rules:
 
 ## Acceptance Checklist
 
-- [ ] Body target >= 80,000 (configured and checked)
-- [ ] Chapter targets negotiated and stored in profile
-- [ ] Chinese abstract 1500-2500
-- [ ] Structure meets intro + research + conclusion with >= 5 chapters
-- [ ] References unified at end
-- [ ] Atomic markdown workflow used and numbering validated
-- [ ] Chapter self-check run immediately after chapter merge
-- [ ] Subsection summary snapshots created
-- [ ] Humanization pass completed before finalize
-- [ ] Snapshot/rollback available and tested
-- [ ] All tables use three-line format (1.5pt top/bottom, 0.5pt header, no vertical lines)
-- [ ] Abbreviation registry populated and cross-reference validation passed
-- [ ] No redundant abbreviation expansions in non-first-occurrence chapters
-- [ ] Abbreviation table page generated in front matter
-- [ ] Figure numbering registry populated and validated
-- [ ] Figure cross-validation passed (all `[图]` markers registered)
-- [ ] Body text uses justified alignment (两端对齐)
-- [ ] All table cells center-aligned; figure placeholders centered with no indent
-- [ ] Bold markers stripped from body text; significance markers (*p<0.05) preserved
-- [ ] Page header: 宋体五号, left "中南大学博士学位论文", right chapter name, 1.5cm from top
-- [ ] Page footer: TNR 小五号 centered page number, 1.75cm from bottom
-- [ ] Chinese abstract: 三号黑体居中标题, 四号宋体正文, 关键词全角分号
-- [ ] English abstract: 三号TNR居中标题, 四号TNR正文, keywords semicolon-separated
-- [ ] Table of contents: 三号黑体居中标题, 章名小四黑体, 节名小四宋体, 1.5倍行距
-- [ ] Table caption spacing: 段前12pt/段后0; Figure caption spacing: 段前0/段后12pt
-- [ ] Three-line table header separator: 0.5pt (sz=4)
+格式类参数（字体/字号/边框/对齐/页眉页脚/摘要/目录间距等）由脚本硬编码并强制校验，**不在此复述**，以 `check_quality.py` 各类别通过为准。本清单只保留需人工确认的项：
+
+- [ ] `check_quality.py --enforce-full-structure` 各类别（三线表 / 引用格式 / 标点 / 缩略语 / 字体字号 / 页眉页脚）全部通过
+- [ ] Body target >= 80,000 且各章字数已与用户协商并写入 profile
+- [ ] 结构满足：引言 + 研究章 + 结论，总章数 >= 5；参考文献统一在全文末尾
+- [ ] 原子化工作流：编号校验通过、章节自检已跑、小节快照已建、快照/回滚可用
+- [ ] Humanization pass 已完成（humanizer-zh 或人工清单）
+- [ ] 缩略语注册表与图号注册表已填充并交叉校验通过
