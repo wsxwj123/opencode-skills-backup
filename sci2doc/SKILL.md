@@ -164,8 +164,7 @@ ${save_path}/
 ├── 03_合并文档_md/          # 全文 md 合并中间产物
 ├── 04_图表文件/             # 图表描述文件 + 自定义格式模板证据文件（AI/用户手动放置）
 ├── .state/                 # gate-check 状态
-├── backups/                # 快照备份（自动创建）
-├── snapshots/              # section-snapshot（自动创建）
+├── backups/                # 快照备份 / section-snapshot（自动创建）
 ├── project_state.json      # 项目状态
 ├── thesis_profile.json     # 论文配置
 ├── context_memory.md       # 运行时上下文记忆

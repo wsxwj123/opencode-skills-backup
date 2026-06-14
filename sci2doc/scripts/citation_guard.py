@@ -24,7 +24,7 @@ from typing import Any
 DOI_RE = re.compile(r"^10\.\d{4,9}/[-._;()/:A-Z0-9]+$", re.IGNORECASE)
 PMID_RE = re.compile(r"^\d{4,10}$")
 TITLE_TOKEN_RE = re.compile(r"[a-z0-9\u4e00-\u9fff]+")
-ALLOWED_PROVIDER_FAMILIES = {"paper-search", "tavily"}
+ALLOWED_PROVIDER_FAMILIES = {"paper-search", "pubmed-cli", "tavily"}
 FORBIDDEN_PROVIDER_FAMILIES = {"websearch"}
 
 
@@ -200,6 +200,8 @@ def _provider_family(provider: str) -> str:
     p = str(provider or "").strip().lower()
     if p.startswith("paper-search"):
         return "paper-search"
+    if p.startswith("pubmed"):
+        return "pubmed-cli"
     if p.startswith("tavily"):
         return "tavily"
     if "websearch" in p or "web-search" in p or "web_search" in p:
