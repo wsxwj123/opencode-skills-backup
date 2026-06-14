@@ -24,8 +24,8 @@ This checklist validates the current hard-gate + section-local + citation-sync b
 - [x] reference style `nature` renders expected output form
 - [x] `set-field` persists active field config and reviewer concerns
 - [x] unknown provider family is rejected by `citation_guard.py`
-- [x] Tavily entries with DOI/PMID are rejected
-- [x] Tavily entries without DOI/PMID enter manual review and remain unverified
+- [x] Tavily entries are rejected as a source (any `source_provider=tavily`, with or without DOI/PMID)
+- [x] Tavily reverse-verification backend (`_extract_tavily_title`, title cross-check) remains functional
 - [x] bidirectional verification failure forces `verified=false` and manual confirmation
 - [x] `citation_guard_report.json` exposes provider policy
 

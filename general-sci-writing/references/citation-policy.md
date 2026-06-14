@@ -19,8 +19,8 @@
 
 1. **零容忍**：严禁编造虚拟文献；严禁把不同文献的标题/作者/期刊/年份/DOI 交叉拼接成"新文献"。
 2. **来源强制**：写入 `literature_index.json` 的每条文献必须来自 MCP 检索原始结果，并保留可追溯来源信息（至少包含 `source_provider` + `source_id`，如 PMID/DOI/arXiv ID/S2 ID 之一）。
-3. **Provider 白名单**：`citation_guard.py` 允许的 provider：`pubmed-cli`（首选）、`paper-search`（CS/AI首选/备用/预印本）；`tavily` 仅限摘要补全与反向验证（见下条）；`openalex-cli` 及 `websearch` 一律阻断。文献**检索**阶段严禁使用 tavily。
-4. **Tavily 边界**：`tavily` 只能用于无 DOI/PMID 条目的摘要补全最后兜底；凡带 DOI/PMID 的 Tavily 条目必须判为失败，禁止入库。
+3. **Provider 白名单**：`citation_guard.py` 允许入库的 `source_provider` 仅限 `pubmed-cli`（首选）、`paper-search`（CS/AI首选/备用/预印本）；`tavily`、`openalex-cli`、`websearch` 一律阻断，不得作为检索/入库来源。文献**检索**阶段严禁使用 tavily。
+4. **Tavily 边界**：`tavily` 仅用于文献真实性的反向核验（佐证已入库条目的标题/元数据），**不得作为检索来源**；任何 `source_provider=tavily` 的条目一律判为失败，禁止入库（带 DOI/PMID 也不例外）。
 5. **入库前核对**：入库前必须核对"标题-作者-DOI/ID"来自同一条原始记录；任一关键字段冲突则判定为无效条目，禁止入库。
 6. **双向核验失败处理**：若出现 `title_mismatch`、`doi_invalid_or_unresolved`、`pmid_invalid_or_unresolved`、`id_mismatch`，必须立即设为 `verified=false`，写入 `manual_review_queue.json`，禁止正文引用。
 7. **不确定处理**：无法完成同源核验的条目必须标记为 `unverified`；未带 `source_provider` / `source_id` 的条目不得入库。`unverified` 与 `needs_manual_review=true` 条目都**禁止在正文使用 `[n]` 引用**，也不得进入参考文献列表。
