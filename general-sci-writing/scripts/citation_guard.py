@@ -494,7 +494,7 @@ def main() -> int:
         status = "empty"
 
     report = {
-        "ok": status in ("verified", "empty"),
+        "ok": status == "verified",
         "status": status,
         "shape": shape,
         "checked_entries": len(checked),
