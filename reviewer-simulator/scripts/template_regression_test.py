@@ -1,4 +1,13 @@
 #!/usr/bin/env python3
+"""模板回归测试（开发者维护工具，非审稿运行时流程）。
+
+维护规范：
+- 每次修改 assets/report_template.html 后，必须执行回归测试：
+    python scripts/template_regression_test.py
+- 若为有意的样式/结构变更，先用 --bless 更新基线：
+    python scripts/template_regression_test.py --bless
+  随后再执行不带参数的回归校验确认通过。
+"""
 import argparse
 import json
 import re

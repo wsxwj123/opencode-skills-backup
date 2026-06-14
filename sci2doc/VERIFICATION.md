@@ -1,7 +1,5 @@
 # VERIFICATION
 
-Last verified: 2026-02-25 | 309 tests | 0 failures
-
 ## Scripts Inventory
 
 | Script | Description | LOC (approx) |
@@ -18,22 +16,9 @@ Last verified: 2026-02-25 | 309 tests | 0 failures
 | `scripts/thesis_profile.py` | Profile management | 110+ |
 | `scripts/shared_utils.py` | Shared utilities | 95+ |
 
-## Test Suites (309 tests total)
+## Tests
 
-| Test File | Tests | Coverage |
-|-----------|-------|----------|
-| `tests/test_sci2doc_scripts.py` | 55 | Integration: state_manager, atomic_md, check_quality, count_words, merge |
-| `scripts/test_abbreviation_registry.py` | 59 | Abbreviation: register/extract/strip/validate/CLI |
-| `scripts/test_checkers.py` | 24 | Checkers: citations/writing style/table format |
-| `scripts/test_count_words.py` | 41 | Word count: strip/count/file/dir/unified |
-| `scripts/test_figure_registry.py` | 38 | Figure: letter conv/parse/CRUD/validate/cross-validate/export |
-| `tests/test_markdown_to_docx.py` | 27 | MD→Docx: parse/separator/borders/fonts |
-| `tests/test_merge_chapters.py` | 18 | Merge: extract/merge/TOC/header-footer/resolve order |
-| `scripts/test_check_quality_md.py` | 15 | MD Quality: structure, style, citation, numbering |
-| `scripts/test_check_quality_word.py` | 13 | Word Format: layout, fonts, styles, spacing |
-| **Total** | **290** | |
-
-Note: `tests/test_sci2doc_scripts.py` contains 55 tests across 3 test classes (main 48 + TestMethodsTableCheck 7 + TestTitleMatchingExclusionLogic 12 = 67 test methods; pytest collects as shown above). Actual pytest collected count: **309**.
+测试在开发仓库维护，不随技能分发。本技能目录不包含 `tests/` 或 `scripts/test_*.py`。
 
 ## Documentation
 

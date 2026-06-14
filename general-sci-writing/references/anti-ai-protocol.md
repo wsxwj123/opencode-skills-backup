@@ -1,6 +1,6 @@
 # 去 AI 化写作协议 (Anti-AI Protocol)
 
-> 被 SKILL.md 的 Role 区与 **Phase 4 (`/write`)、Phase 5 (`/check`)** 引用。
+> 被 SKILL.md 的 Role 区与 **Phase 8 (`/write`)、Phase 10 (`/check`)** 引用。
 > **每次撰写或润色英文正文段落前必须 `Read` 本文件**；`/check` 跑 `style_checker.py` 作为客观兜底。
 > 本协议自包含；`humanizer-zh` skill 若已装可作辅助参考但非强制依赖。
 

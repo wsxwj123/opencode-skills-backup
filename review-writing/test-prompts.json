@@ -7,7 +7,7 @@
   {
     "id": 2,
     "prompt": "我有一篇写了一半的综述草稿（PDF格式），想导入进来诊断并改进。",
-    "expected": "触发 Mode Handshake Gate → 用户选 Polish Mode → Phase 0 参数收集 + 环境检测 → Phase 0-P Step 0 收集参数 + PDF 依赖探测 → Step 1 接受草稿（pdfplumber > pypdf > pdftotext 优先级）→ Step 2 原子拆分（HALT 等用户确认 split map）→ Step 3 诊断报告（words/citations/AI-flags per section）→ Step 4 用户标注 rewrite/polish/keep → Step 5 引用导入 → Step 6 state.json 初始化 + Git Checkpoint。"
+    "expected": "触发 Mode Handshake Gate → 用户选 Polish Mode → Phase 0 参数收集 + 环境检测 → Phase 0-P Step 0 验证参数 + PDF 依赖探测 → Step 1 接受草稿（pdfplumber > pypdf > pdftotext 优先级）→ Step 2 原子拆分（HALT 等用户确认 split map）→ Step 3 诊断报告（words/citations/AI-flags per section，分类标签 keep/polish/rewrite/missing 四类）→ Step 4 用户标注 keep/polish/rewrite/missing（每节必须有明确标签，Hard Block）→ Step 5 引用导入 → Step 6 state.json 初始化 + Git Checkpoint。"
   },
   {
     "id": 3,
