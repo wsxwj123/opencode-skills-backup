@@ -9,8 +9,8 @@ import re
 from pathlib import Path
 
 BANNED_PATTERNS = [
-    (r"不是[^，。]+而是", "pattern_not_but", "改为直接陈述句，避免对比模板"),
-    (r"不仅[^，。]+而且", "pattern_not_only_but_also", "拆成两句事实陈述"),
+    (r"不是[^。]{1,30}?而是", "pattern_not_but", "改为直接陈述句，避免对比模板"),
+    (r"不仅[^。]{1,30}?而且", "pattern_not_only_but_also", "拆成两句事实陈述"),
     (r"值得注意的是", "filler_phrase", "删除该提示语，直接给结论"),
     (r"需要指出的是", "filler_phrase", "删除该提示语，直接给证据"),
     (r"至关重要|举足轻重|不可或缺", "overstatement", "用具体数据替代形容词"),
