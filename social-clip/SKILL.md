@@ -27,7 +27,7 @@ description: >
 | 知乎/微博/豆瓣 | ✅ autocli search(登录态) | ✅ autocli read | read 提图 | yt-dlp(若视频) | 🟡 尽力(脆弱) |
 | YouTube/抖音/其他 | autocli search / 给链接 | autocli read | read 提图 | yt-dlp 字幕优先 | 🟡 尽力 |
 
-- **后端原则**:非小红书平台一律先试 `autocli`(复用本机 Chrome 登录态,对登录墙站点远比隐身抓取可靠),无对应命令/抓空再降级 `fetch-everything`,再不行 HALT 告知用户。
+- **后端原则**:非小红书平台一律先试 `autocli`(复用本机 Chrome 登录态,对登录墙站点远比隐身抓取可靠),无对应命令/抓空再降级 `fetch-everything`,再不行 🛑 HALT 告知用户。
 - ✅ 满血可靠 · 🟡 尽力而为(尤其评论:autocli 无通用读评论命令,非小红书评论靠 read/fetch 部分抓取,抓不到不硬刷)
 - **评论 MCP 可选增强**:为某平台装了评论 MCP(B站/知乎/抖音/豆瓣,见 platform-recipes.md)则自动用它满血读评论;不装也能跑,纯 opt-in、不进硬依赖。
 - **非小红书平台的所有抓取配方在 `references/platform-recipes.md`**——处理它们时先读那个文件。
@@ -51,7 +51,7 @@ description: >
 - `VOICE_BRIDGE_URL`:转写服务地址,默认 `http://127.0.0.1:7788`
 - 网络代理:默认直连;本机需代理时 `export http_proxy=...` 即可,技能不写死端口
 
-> 跨技能路径用 `~/.claude/skills/...`(各用户 home 自动展开,通用);不出现任何特定用户名的绝对路径。
+> **跨技能路径按当前 runtime 的 skills 根解析**:Claude Code=`~/.claude/skills`、Codex=`~/.codex/skills`、OpenCode=`~/.config/opencode/skills`。本技能与 fetch-everything/yt-dlp-downloader 同级,**取本技能所在目录的父目录**即可定位它们;下文示例按 Claude Code 路径书写,换 runtime 时相应替换根目录。不出现任何特定用户名的绝对路径。
 
 ---
 
@@ -177,7 +177,7 @@ mcp__xiaohongshu__get_feed_detail(feed_id=..., xsec_token=...,
 - 检索 → `autocli <site> search`;正文/文章 → `autocli read "<url>"`,再从正文提 img URL 逐张下载 Read
 - 视频:B站 → `autocli bilibili subtitle`;其他 → yt-dlp **字幕优先**,无字幕降级 ASR
 - 评论 → 装了该平台评论 MCP(可选,见 recipes)则优先用它满血读;否则 autocli read/fetch-everything 抓首屏(尽力而为,标注部分抓取)
-- autocli 抓空/无命令 → fetch-everything(知乎/微博登录墙必要时 CDP 登录态);仍失败 HALT 告知用户
+- autocli 抓空/无命令 → fetch-everything(知乎/微博登录墙必要时 CDP 登录态);仍失败 🛑 HALT 告知用户
 
 ---
 
@@ -211,7 +211,7 @@ curl -s -X POST "$VB/transcribe_file" \
    ```bash
    ls -d ~/Library/Mobile\ Documents/iCloud~md~obsidian/Documents/*/ 2>/dev/null   # 也可找本地含 .obsidian 的目录
    ```
-3. 恰好一个 → 自动用它;**多个或零个 → 问用户要 vault 路径**
+3. 恰好一个 → 自动用它;🔴 **多个或零个 → STOP,问用户要 vault 路径**(别瞎猜目录)
 
 ### 选目录与文件名
 
@@ -225,6 +225,18 @@ curl -s -X POST "$VB/transcribe_file" \
 
 文件名用内容主题命名,不用日期前缀(如 `净水器选购避坑9点.md`)。
 **同主题文件已存在 → 先 Read 再追加/更新,不直接覆盖。**
+
+---
+
+## 🔴 红线与反例(不要做)
+
+- **不用 WebFetch 抓小红书**:基本只拿到登录墙;失败走 fetch-everything 隐身降级
+- **抓不到就 HALT,不硬刷、不假装完整**:登录墙/风控挡住评论或正文 → 标注"未抓取"并告知用户,**绝不编造**评论/正文/数字
+- **不跳图、不压缩转写**:imageList 每张都 Read;总结不把多个例子压成"多种情况"(详见 summary-standard.md)
+- **保存不覆盖**:同名文件先 Read 再追加/更新,绝不直接覆盖既有笔记
+- **微信公众号/Twitter/TikTok 评论别折腾**:无干净可部署方案,只交付正文或跳过,不耗时逆向
+- **不写死个人路径/端口**:vault、代理、转写地址一律走环境变量或运行时探测(见依赖表)
+- **写操作(发帖/评论/点赞)默认不做**:autocli/MCP 的 publish/comment 类命令属互动写操作,本技能只读;确需执行 🔴 先展示内容等用户确认
 
 ---
 
