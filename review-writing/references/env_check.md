@@ -1,5 +1,22 @@
 # Phase 0.2 — Full Environment Check (8 steps)
 
+## SKILL_DIR Auto-Detection ("Other" clients)
+
+Run from anywhere; uses `zotero_manager.py` as a stable cross-mode marker:
+
+```bash
+python3 -c "
+import pathlib
+dirs = [pathlib.Path.home()/p for p in [
+    '.claude/skills/review-writing',
+    '.cursor/skills/review-writing',
+    '.windsurf/skills/review-writing',
+    '.config/opencode/skills/review-writing']]
+found = next((str(d) for d in dirs if (d/'scripts'/'zotero_manager.py').exists()), None)
+print(found if found else 'NOT FOUND — run: find ~ -name zotero_manager.py -path */review-writing/*')
+"
+```
+
 Run all checks sequentially. Display ✅/❌ per item. All must be ✅ before proceeding to Phase 0.5.
 Values recorded here (`os`, `git_available`, `pubmed_proxy`, `search_fallback`) are written to
 `outline.md` in Phase 0.5 and read directly in later phases.
