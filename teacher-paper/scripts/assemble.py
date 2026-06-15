@@ -597,6 +597,7 @@ def cmd_build(args):
     excerpt_errors = []  # 忠实节选硬门禁：材料非原文连续子串（跳段/改字/重排）
     stale_errors = []    # W-1：道法/思想政治时政素材过期
     audit_rows = []     # 材料真实性自检表（build 自动生成）
+    quality_rows = []   # Batch6-L3 Phase 3.5 自审表（考点/难度/风格机器统计）
     allow_missing_fig = "--allow-missing-figure" in args
     materials_dir = os.path.join(proj, "materials")
     for fp in files:
@@ -612,6 +613,14 @@ def cmd_build(args):
         if not isinstance(p_blocks, list) or not isinstance(a_blocks, list):
             parse_errors.append(f"{os.path.basename(fp)} 的 paper/answer 不是列表")
             continue
+        # Batch6-L1：听力稿位置硬门禁——录音稿不能在 paper 字段（会让听力题退化为阅读题）
+        for _b in p_blocks:
+            if isinstance(_b, dict) and _b.get("type") == "material" \
+                    and _b.get("layout") == "listening_transcript":
+                parse_errors.append(f"{os.path.basename(fp)} 的 paper 字段含听力录音稿"
+                                    f"(layout=listening_transcript)——录音稿必须写到 answer 字段，"
+                                    f"由老师按答案文档朗读，不能印在学生试卷上（否则听力题退化为阅读题）")
+                break
         paper.extend(p_blocks)
         answers.extend(a_blocks)
         m = atom.get("meta", {})
@@ -651,6 +660,17 @@ def cmd_build(args):
                 total += float(m["score"])
             except (TypeError, ValueError):
                 pass
+            # Batch6-L3：收集 Phase 3.5 自审数据（考点/难度/题干长度）
+            stems = " ".join(str(b.get("text") or b.get("stem") or "")
+                             for b in p_blocks if isinstance(b, dict)
+                             and b.get("type") in ("question", "stem"))
+            quality_rows.append({
+                "num": str(m.get("num", "?")),
+                "kp": str(m.get("knowledge_point") or m.get("knowledge") or "未标"),
+                "diff": str(m.get("difficulty", "-")),
+                "stem_len": len(stems),
+                "type": str(m.get("type", "")),
+            })
         if m.get("num"):
             nums.append(str(m["num"]))
             if m.get("score") is None:
@@ -836,6 +856,21 @@ def cmd_build(args):
         for ln in _tbl:
             print("  " + ln)
 
+    # —— Batch6-L3：Phase 3.5 自审表机器化 ——
+    _audit_md, _audit_issues = _gen_self_audit(quality_rows)
+    if _audit_md:
+        _spath = os.path.join(proj, "build", "Phase3.5_自审表.md")
+        os.makedirs(os.path.dirname(_spath), exist_ok=True)
+        with open(_spath, "w", encoding="utf-8") as f:
+            f.write(_audit_md)
+        print("\n[Phase 3.5 自审表] 已写入 build/Phase3.5_自审表.md")
+        if _audit_issues:
+            print("  🔴 自审 Issue（修复对应题后重跑 build）：")
+            for it in _audit_issues:
+                print("    " + it)
+        else:
+            print("  ✅ 自审通过（考点分布/难度梯度/题干长度均正常）")
+
     content = {
         "paper_path": os.path.join(proj, "build",
                                    meta.get("title", "试卷") + ".docx"),
@@ -855,6 +890,28 @@ def cmd_build(args):
         print("[校验告警] " + "；".join(warn))
     else:
         print("[校验通过] 题量与分值符合期望")
+
+    # —— Batch6-L4：多 allow 开关审计聚合 ——
+    _allow_used = [a for a in (
+        "--allow-unsourced", "--allow-missing-figure", "--allow-length",
+        "--allow-incomplete", "--allow-wording", "--allow-excerpt",
+        "--allow-stale") if a in args]
+    if _allow_used:
+        _msg = f"本次启用了 {len(_allow_used)} 个降级开关：{', '.join(_allow_used)}"
+        if len(_allow_used) >= 2:
+            print(f"\n🔴 [降级开关审计] ⚠️ {_msg}", file=sys.stderr)
+            print("    多个开关同时使用会绕过大量真实性/规格门禁，相当于关闭质量保障；"
+                  "必须向用户逐一说明每个开关绕过了什么。", file=sys.stderr)
+        else:
+            print(f"\n⚠️ [降级开关] {_msg}（向用户说明被绕过的检查）")
+        # 同步追加到材料自检表
+        _apath = os.path.join(proj, "build", "材料真实性自检表.md")
+        if os.path.exists(_apath):
+            try:
+                with open(_apath, "a", encoding="utf-8") as f:
+                    f.write(f"\n\n## ⚠️ 降级开关使用记录\n\n{_msg}\n")
+            except OSError:
+                pass
 
     python_cmd = _python_cmd_with_module("docx")
     if python_cmd != [sys.executable]:
@@ -1298,6 +1355,27 @@ def _parse_fetch_credential(text):
     return info if info.get("url") else None
 
 
+def _parse_manual_credential(text):
+    """Batch6-L2 修复：解析手抄/截图素材的两行裸文本元信息（SKILL.md:219 要求）。
+        来源：<URL 或 出处>
+        抓取日期：YYYY-MM-DD
+    时政时效门禁/溯源校验对这类素材也需可识别。返回 dict(source=..., fetched_at=...) 或 None。"""
+    if not text:
+        return None
+    head = text[:800]
+    info = {}
+    for line in head.splitlines():
+        line = line.strip()
+        # 兼容中英冒号
+        for raw, key in (("来源：", "source"), ("来源:", "source"),
+                         ("抓取日期：", "fetched_at"), ("抓取日期:", "fetched_at"),
+                         ("Source:", "source"), ("Fetched:", "fetched_at")):
+            if line.startswith(raw):
+                info[key] = line[len(raw):].strip()
+                break
+    return info if info.get("fetched_at") else None
+
+
 _HISTORY_SUBJECTS = ("历史",)
 # 引号字符集：中文书名号《》+ 智能引号 “”‘’ + 中式角引号「」『』
 _QUOTE_CHARS = (chr(0x300A) + chr(0x300B) + chr(0x201C) + chr(0x201D) +
@@ -1347,8 +1425,12 @@ def _check_freshness(fp, meta, paper_blocks, materials_dir, subject, errors, war
             head = f.read(1500)
     except (OSError, UnicodeDecodeError):
         return
-    info = _parse_fetch_credential(head)
+    info = _parse_fetch_credential(head) or _parse_manual_credential(head)
     if not info or not info.get("fetched_at"):
+        # Batch6-L2：手抄/截图素材也无 fetched_at → 时政科目硬要求两行元信息
+        warn.append(f"{os.path.basename(fp)}：时政素材 {sfile} 缺抓取日期元信息——"
+                    f"手抄/截图素材请在 materials/ 文件开头加两行：'来源：<出处>' 和 "
+                    f"'抓取日期：YYYY-MM-DD'，否则时政时效门禁无法核验是否过期。")
         return
     import datetime
     try:
@@ -1366,6 +1448,67 @@ def _check_freshness(fp, meta, paper_blocks, materials_dir, subject, errors, war
         warn.append(f"{name}：时政素材 {sfile} 抓取于 {info['fetched_at'][:10]} "
                     f"（距今 {age} 天 > {window_days} 天软阈值）——建议核对是否仍属"
                     f"当前热点；近 1-3 月报道最稳。")
+
+
+def _gen_self_audit(quality_rows):
+    """Batch6-L3 修复：Phase 3.5 自审表机器化。
+    统计：考点重复、难度方差、题干长度分布。返回 markdown 字符串与 issue 列表。"""
+    if not quality_rows:
+        return "", []
+    issues = []
+    # 1) 考点重复（同考点 >2 次）
+    from collections import Counter
+    kp_counter = Counter(r["kp"] for r in quality_rows if r["kp"] not in ("未标", "-"))
+    repeats = {k: c for k, c in kp_counter.items() if c >= 3}
+    # 2) 难度方差/分布
+    diffs = []
+    for r in quality_rows:
+        try:
+            d = float(r["diff"])
+            if 0 < d <= 1:
+                diffs.append(d)
+        except (ValueError, TypeError):
+            pass
+    if diffs:
+        avg = sum(diffs) / len(diffs)
+        diff_min, diff_max = min(diffs), max(diffs)
+        diff_spread = diff_max - diff_min
+    else:
+        avg = diff_min = diff_max = diff_spread = 0
+    # 3) 题干长度分布（识别"前简短后冗长"风格突变）
+    stem_lens = [r["stem_len"] for r in quality_rows]
+    avg_stem = sum(stem_lens) / max(len(stem_lens), 1)
+    long_stem_n = sum(1 for L in stem_lens if L > avg_stem * 2.5)
+
+    # 生成 issue
+    if repeats:
+        issues.append(f"⚠️ 考点重复：{len(repeats)} 个考点出现≥3次："
+                      + "、".join(f"{k}×{c}" for k, c in repeats.items()))
+    if diffs and diff_spread < 0.25:
+        issues.append(f"⚠️ 难度梯度过窄：max-min={diff_spread:.2f}<0.25，全卷难度均匀"
+                      f"（缺乏'基础送分→中档→拉分压轴'分层）")
+    if long_stem_n >= 3:
+        issues.append(f"⚠️ 题干长度突变：{long_stem_n} 题题干长度>均值2.5倍，"
+                      f"可能前后风格不统一")
+
+    # 生成 markdown
+    rows = ["| 题号 | 考点 | 难度 | 题干长度 | 题型 |", "|---|---|---|---|---|"]
+    for r in quality_rows:
+        rows.append(f"| {r['num']} | {r['kp']} | {r['diff']} | {r['stem_len']} | {r['type'][:20]} |")
+
+    summary = [
+        f"- **总题数**: {len(quality_rows)}",
+        f"- **考点分布**: 共 {len(kp_counter)} 个独立考点；重复≥3次: {len(repeats)} 个",
+        f"- **难度分布**: 均值 {avg:.2f}，范围 [{diff_min:.2f}, {diff_max:.2f}]，跨度 {diff_spread:.2f}",
+        f"- **题干长度**: 均值 {avg_stem:.0f} 字，突出长题（>均值2.5倍）: {long_stem_n} 题",
+    ]
+    md = ("# Phase 3.5 自审表（build 自动生成）\n\n"
+          "> ⚠️ 出现的 issue 必须返工对应题目重跑 build，全绿才可进入 Phase 4 交付用户。\n\n"
+          "## 整卷统计\n" + "\n".join(summary) + "\n\n"
+          + ("## 🔴 自审 Issue\n" + "\n".join(issues) + "\n\n" if issues else
+             "## ✅ 自审通过（无明显异常）\n\n")
+          + "## 逐题明细\n" + "\n".join(rows) + "\n")
+    return md, issues
 
 
 def _extract_body(text):

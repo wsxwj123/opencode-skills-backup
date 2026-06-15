@@ -611,6 +611,74 @@ try:
 except Exception as e:
     case("M4.B-4 CSV读取", False, str(e))
 
+# ============== Part N: Batch 6 darwin 反馈修复（L1/L2/L3/L4）==============
+print("\n=== N. Batch 6 darwin 反馈修复 ===")
+
+# N.L1 听力稿位置：paper 字段含 listening_transcript → parse_errors
+with tempfile.TemporaryDirectory() as td:
+    proj = pathlib.Path(td) / "p"
+    (proj / "items").mkdir(parents=True)
+    (proj / "materials").mkdir()
+    (proj / "meta.json").write_text(_json.dumps({
+        "title":"t", "expected_questions":1, "total":2}), encoding="utf-8")
+    bad_atom = _json.dumps({
+        "meta":{"num":"1","score":2},
+        "paper":[{"type":"material","title":"L","layout":"listening_transcript","paras":["M: Hi"]},
+                 {"type":"question","num":"1","text":"Q"}],
+        "answer":[]}, ensure_ascii=False)
+    (proj / "items" / "101_q01.json").write_text(bad_atom, encoding="utf-8")
+    try:
+        with _ctx.redirect_stdout(_io.StringIO()) as buf:
+            A.cmd_build([str(proj), "--allow-length"])
+        case("N1.L1 听力稿在paper-拒绝", False, "未退出")
+    except SystemExit as e:
+        out = buf.getvalue()
+        case("N1.L1 听力稿在paper-拒绝", e.code == 2 and "听力录音稿" in out)
+
+# N.L2 手抄凭证（裸文本两行）解析
+manual_text = "来源：人民网 2026-06-15 时政热点\n抓取日期：2026-06-15\n\n正文..."
+info = A._parse_manual_credential(manual_text)
+case("N2.L2 手抄凭证解析fetched_at", info and info.get("fetched_at") == "2026-06-15")
+case("N2b.L2 手抄凭证解析source", info and "人民网" in info.get("source", ""))
+
+# N.L3 自审表机器化（考点重复+难度均匀）
+md_audit, issues = A._gen_self_audit([
+    {"num":"1","kp":"信息筛选","diff":"0.7","stem_len":50,"type":"选择"},
+    {"num":"2","kp":"信息筛选","diff":"0.7","stem_len":50,"type":"选择"},
+    {"num":"3","kp":"信息筛选","diff":"0.7","stem_len":50,"type":"选择"},  # 同考点 3 次
+    {"num":"4","kp":"语言运用","diff":"0.7","stem_len":50,"type":"填空"},
+])
+case("N3.L3 自审表-考点重复issue", any("考点重复" in i for i in issues))
+case("N4.L3 自审表-难度过窄issue", any("难度梯度过窄" in i for i in issues))
+
+# 正常分布无 issue
+md_ok, issues_ok = A._gen_self_audit([
+    {"num":"1","kp":"字音","diff":"0.85","stem_len":50,"type":"选择"},
+    {"num":"2","kp":"默写","diff":"0.80","stem_len":40,"type":"填空"},
+    {"num":"3","kp":"病句","diff":"0.65","stem_len":60,"type":"选择"},
+    {"num":"4","kp":"写作","diff":"0.50","stem_len":80,"type":"作文"},
+])
+case("N5.L3 正常分布无issue", not issues_ok)
+
+# N.L4 多 allow 开关聚合警告
+with tempfile.TemporaryDirectory() as td:
+    proj = pathlib.Path(td) / "p"
+    (proj / "items").mkdir(parents=True)
+    (proj / "materials").mkdir()
+    (proj / "meta.json").write_text(_json.dumps({
+        "title":"t","expected_questions":1,"total":2}), encoding="utf-8")
+    (proj / "items" / "101_q01.json").write_text(_json.dumps({
+        "meta":{"num":"1","score":2},
+        "paper":[{"type":"question","num":"1","text":"Q"}],"answer":[]}, ensure_ascii=False),
+        encoding="utf-8")
+    try:
+        with _ctx.redirect_stdout(_io.StringIO()) as buf_o, _ctx.redirect_stderr(_io.StringIO()) as buf_e:
+            A.cmd_build([str(proj), "--allow-length", "--allow-incomplete"])
+        combined = buf_o.getvalue() + buf_e.getvalue()
+        case("N6.L4 2个allow开关-红字警告", "启用了 2 个降级开关" in combined and "降级开关审计" in combined)
+    except SystemExit:
+        case("N6.L4 2个allow开关-红字警告", False, "build 失败")
+
 # 总结
 print(f"\n=== 总计 {len(PASS)}/{len(PASS)+len(FAIL)} 通过 ===")
 if FAIL:
