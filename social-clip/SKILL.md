@@ -128,6 +128,7 @@ mcp__xiaohongshu__search_feeds(keyword="关键词", filters={...})
 mcp__xiaohongshu__get_feed_detail(feed_id=..., xsec_token=...)
 ```
 `note.type`:`"normal"`→图文帖,`"video"`→视频帖。**返回里已含前10条评论**(见 2C)。
+> 返回结构(实测):`data.note.{title,desc,type,imageList[].urlDefault,interactInfo}` + `data.comments.list[]`(每条 `content`/`likeCount`/`userInfo.nickname`/`subComments[]` 二级回复)。下文 `note.xxx` 均指 `data.note.xxx`。
 
 **MCP 调用失败时**:
 1. 检查 `feed_id`/`xsec_token` 是否提取正确(`/discovery/item/{feed_id}?xsec_token={token}`)
