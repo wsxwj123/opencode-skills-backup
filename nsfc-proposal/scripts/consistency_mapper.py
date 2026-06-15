@@ -45,6 +45,8 @@ RULE_DOC = {
     "V-08": "关键词在摘要/P1/P2中均出现",
     "V-09": "M的budget_trace可追溯到budget_table",
     "V-10": "无孤立条目",
+    "V-11": "prior_work类F条目须有representative_works且supports_technique与对应M的key_technique有交集",
+    "V-12": "每个M须有非空alternative_plan（备选技术路线）",
 }
 
 
@@ -229,6 +231,43 @@ def _v10(cm: dict[str, Any]) -> bool:
     return True
 
 
+def _v11(cm: dict[str, Any]) -> bool:
+    """V-11: prior_work类F须有representative_works，且supports_technique与对应M的key_technique有交集。"""
+    m_key_tech: dict[str, str] = {
+        m.get("id", ""): m.get("key_technique", "")
+        for m in cm.get("methodologies", [])
+    }
+    for f in cm.get("feasibility_evidence", []):
+        if f.get("type") != "prior_work":
+            continue
+        rws = f.get("representative_works", []) or []
+        if not rws:
+            return False
+        # 检查至少一条 representative_work 的 supports_technique 与任一关联 M 的 key_technique 有字符串交集
+        supported_methods = f.get("supports_method", []) or []
+        matched = False
+        for rw in rws:
+            rw_tech = rw.get("supports_technique", "") or ""
+            for mid in supported_methods:
+                m_tech = m_key_tech.get(mid, "")
+                if rw_tech and m_tech and (rw_tech in m_tech or m_tech in rw_tech or rw_tech == m_tech):
+                    matched = True
+                    break
+            if matched:
+                break
+        if not matched:
+            return False
+    return True
+
+
+def _v12(cm: dict[str, Any]) -> bool:
+    """V-12: 每个M须有非空alternative_plan（备选技术路线）。"""
+    return all(
+        bool((m.get("alternative_plan") or "").strip())
+        for m in cm.get("methodologies", [])
+    )
+
+
 def _entity_locators(cm: dict[str, Any]) -> dict[str, dict[str, Any]]:
     loc: dict[str, dict[str, Any]] = {}
     for collection, items in cm.items():
@@ -331,6 +370,33 @@ def _rule_locations(cm: dict[str, Any], rule_id: str) -> list[dict[str, Any]]:
                 for item in cm.get(coll, []):
                     if item.get("id"):
                         bad_ids.add(item["id"])
+    elif rule_id == "V-11":
+        m_key_tech: dict[str, str] = {
+            m.get("id", ""): m.get("key_technique", "")
+            for m in cm.get("methodologies", [])
+        }
+        for f in cm.get("feasibility_evidence", []):
+            if f.get("type") != "prior_work":
+                continue
+            rws = f.get("representative_works", []) or []
+            supported = f.get("supports_method", []) or []
+            matched = False
+            for rw in rws:
+                rw_tech = rw.get("supports_technique", "") or ""
+                for mid in supported:
+                    m_tech = m_key_tech.get(mid, "")
+                    if rw_tech and m_tech and (rw_tech in m_tech or m_tech in rw_tech or rw_tech == m_tech):
+                        matched = True
+                        break
+                if matched:
+                    break
+            if not rws or not matched:
+                if f.get("id"):
+                    bad_ids.add(f["id"])
+    elif rule_id == "V-12":
+        for m in cm.get("methodologies", []):
+            if not (m.get("alternative_plan") or "").strip() and m.get("id"):
+                bad_ids.add(m["id"])
 
     out = []
     for eid in sorted(bad_ids):
@@ -361,6 +427,8 @@ def validate(cm: dict[str, Any]) -> dict[str, dict[str, Any]]:
         "V-08": ("WARNING", _v08(cm)),
         "V-09": ("INFO", _v09(cm)),
         "V-10": ("WARNING", _v10(cm)),
+        "V-11": ("WARNING", _v11(cm)),
+        "V-12": ("ERROR", _v12(cm)),
     }
     result: dict[str, dict[str, Any]] = {}
     for k, v in checks.items():
@@ -484,7 +552,7 @@ def main() -> int:
     sub.add_parser("validate")
 
     p_one = sub.add_parser("validate-one")
-    p_one.add_argument("rule", choices=sorted(RULE_DOC.keys()))
+    p_one.add_argument("rule", choices=sorted(RULE_DOC.keys()))  # V-01~V-12
 
     p_query = sub.add_parser("query")
     p_query.add_argument("--section", required=True)
