@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import signal
 import subprocess
 import sys
 import tempfile
@@ -32,6 +33,10 @@ EARLY_EXIT_SCORE = 25
 # scrapling 子进程的 wall-clock 上限（秒）：防止浏览器启动/下载卡死拖垮整个抓取
 SCRAPLING_WALL_TIMEOUT = 100
 
+# CDP 兜底：连本机已登录 Chrome，复用 cf_clearance/登录态过 CF/登录墙。
+# 默认空=不启用；设为 http://localhost:9222（Chrome 调试端口）即开启。opt-in，不影响默认流程。
+CDP_ENDPOINT = os.environ.get("FETCH_CDP_URL", "").strip()
+
 
 def _env_proxy() -> Optional[str]:
     """读取环境代理，透传给 scrapling（浏览器不自动读 http_proxy，需 --proxy）。"""
@@ -53,20 +58,17 @@ DYNAMIC_SITE_DOMAINS = [
 
 def resolve_short_url(url: str) -> str:
     """跟随重定向返回最终 URL（短链、跟踪链接统一归一）；失败回退原 URL。"""
-    try:
-        import requests
-    except ImportError:
-        return url  # requests 未装：跳过短链解析，不影响后续抓取
+    import requests
     headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"}
     try:
-        resp = requests.head(url, allow_redirects=True, timeout=10, headers=headers)
+        resp = requests.head(url, allow_redirects=True, timeout=5, headers=headers)
         if resp.url and resp.url != url:
             return resp.url
     except Exception:
         pass
     # fallback: 部分服务器不支持 HEAD，用 GET（stream 避免下载正文）
     try:
-        resp = requests.get(url, allow_redirects=True, timeout=10, stream=True, headers=headers)
+        resp = requests.get(url, allow_redirects=True, timeout=5, stream=True, headers=headers)
         final = resp.url
         resp.close()
         if final and final != url:
@@ -89,26 +91,51 @@ def is_dynamic_site(url: str) -> bool:
 
 def run_cmd(cmd: List[str], input_text: Optional[str] = None,
             timeout: Optional[int] = None) -> subprocess.CompletedProcess:
-    try:
+    # 无超时需求（assess/clean/url-converter）：用简单 run，行为不变
+    if timeout is None:
         return subprocess.run(
-            cmd,
-            input=input_text,
-            text=True,
-            capture_output=True,
-            check=False,
-            timeout=timeout,
+            cmd, input=input_text, text=True, capture_output=True, check=False,
         )
-    except subprocess.TimeoutExpired as exc:
-        # 超时按失败处理（returncode=124），调用方据此降级到下一路线
+
+    # 有超时（scrapling 浏览器路线）：放进独立进程组，超时时杀整组，
+    # 否则 scrapling spawn 的 chromium 孙进程会成孤儿泄漏。
+    proc = subprocess.Popen(
+        cmd,
+        stdin=subprocess.PIPE if input_text is not None else None,
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        text=True, start_new_session=True,
+    )
+    try:
+        out, err = proc.communicate(input=input_text, timeout=timeout)
+        return subprocess.CompletedProcess(cmd, proc.returncode, out, err)
+    except subprocess.TimeoutExpired:
+        _kill_group(proc)
+        try:
+            out, err = proc.communicate(timeout=5)
+        except subprocess.TimeoutExpired:
+            out, err = "", ""
         return subprocess.CompletedProcess(
             cmd, returncode=124,
-            stdout=exc.stdout or "", stderr=f"wall-clock timeout after {timeout}s",
+            stdout=out or "", stderr=f"wall-clock timeout after {timeout}s; process group killed",
         )
-    except (FileNotFoundError, OSError) as exc:
-        # 命令不存在（如未装 scrapling）：按失败降级到下一路线
-        return subprocess.CompletedProcess(
-            cmd, returncode=127, stdout="", stderr=str(exc),
-        )
+
+
+def _kill_group(proc: subprocess.Popen) -> None:
+    """杀掉子进程所在的整个进程组（含浏览器孙进程）：先 SIGTERM 后 SIGKILL。"""
+    try:
+        pgid = os.getpgid(proc.pid)
+    except ProcessLookupError:
+        return
+    for sig in (signal.SIGTERM, signal.SIGKILL):
+        try:
+            os.killpg(pgid, sig)
+        except ProcessLookupError:
+            return
+        try:
+            proc.wait(timeout=3)
+            return
+        except subprocess.TimeoutExpired:
+            continue
 
 
 def assess_text(text: str) -> Dict:
@@ -133,9 +160,14 @@ _SERVICE_BASE_URLS = {
 
 
 def _is_good_enough(item: Dict) -> bool:
-    """候选已通过质量门且分数达到 early-exit 阈值。"""
+    """候选已通过质量门且分数达到 early-exit 阈值，且未命中任何盾页/验证特征。
+    命中验证特征的候选即使分数够也不早退，强制降级到浏览器路线。"""
     q = item.get("quality", {})
-    return bool(q.get("passed")) and q.get("score", -999) >= EARLY_EXIT_SCORE
+    return (
+        bool(q.get("passed"))
+        and q.get("score", -999) >= EARLY_EXIT_SCORE
+        and q.get("bad_pattern_hits", 0) == 0
+    )
 
 
 def fetch_via_online_services(url: str) -> List[Dict]:
@@ -174,6 +206,7 @@ def fetch_via_scrapling(url: str) -> List[Dict]:
                 pass
             continue
         text = tmp_path.read_text(encoding="utf-8", errors="ignore")
+        tmp_path.unlink(missing_ok=True)  # 内容已在内存，立即删除，避免 assess 抛异常时泄漏
         item = {
             "method": " ".join(base_cmd),
             "content": text,
@@ -181,10 +214,49 @@ def fetch_via_scrapling(url: str) -> List[Dict]:
         }
         _assess_candidate(item)
         results.append(item)
-        tmp_path.unlink(missing_ok=True)
         if _is_good_enough(item):
             break  # 已拿到优质正文，不再跑更慢的浏览器路线
     return results
+
+
+def _resolve_cdp_ws() -> Optional[str]:
+    """把 http://host:port 的 Chrome 调试地址探测成 ws 端点；端口没开或未配置则 None。"""
+    base = CDP_ENDPOINT
+    if not base:
+        return None
+    if base.startswith(("ws://", "wss://")):
+        return base
+    import requests
+    try:
+        resp = requests.get(base.rstrip("/") + "/json/version", timeout=3)
+        return resp.json().get("webSocketDebuggerUrl")
+    except Exception:
+        return None
+
+
+def fetch_via_cdp(url: str) -> List[Dict]:
+    """连本机已登录 Chrome（CDP）抓取，复用其 cf_clearance/登录态过 CF/登录墙。
+    需用户以 --remote-debugging-port 启动 Chrome 并设环境变量 FETCH_CDP_URL。"""
+    ws = _resolve_cdp_ws()
+    if not ws:
+        print("[info] 未配置或连不上 CDP（FETCH_CDP_URL），跳过登录态兜底", file=sys.stderr)
+        return []
+    try:
+        from scrapling.fetchers import DynamicFetcher
+        page = DynamicFetcher.fetch(url, cdp_url=ws, network_idle=True, timeout=45000)
+    except Exception as exc:
+        print(f"[info] CDP 抓取失败: {exc}", file=sys.stderr)
+        return []
+    text = ""
+    try:
+        text = page.get_all_text() or ""
+    except Exception:
+        text = getattr(page, "html_content", "") or ""
+    if not text.strip():
+        return []
+    item = {"method": "cdp:real-chrome", "content": text}
+    _assess_candidate(item)
+    return [item]
 
 
 def _assess_candidate(item: Dict) -> None:
@@ -221,15 +293,19 @@ def main() -> None:
     candidates: List[Dict] = []
     # 根据站点类型调整抓取顺序；任一路线拿到优质正文即停止降级
     if is_dynamic_site(url):
-        # 动态站点：优先浏览器路线，跳过在线服务（在线服务必触发风控）
-        print(f"[info] 检测到动态站点，优先使用 Scrapling 浏览器路线", file=sys.stderr)
+        # 动态站点（微信/小红书等）：仅走 Scrapling 浏览器路线。
+        # 在线服务对这类站点必触发风控，补跑纯属浪费 ~45s；失败则交给下方 HALT 提示。
+        print(f"[info] 检测到动态站点，仅使用 Scrapling 浏览器路线", file=sys.stderr)
         candidates.extend(fetch_via_scrapling(url))
-        if not any(_is_good_enough(c) for c in candidates):
-            candidates.extend(fetch_via_online_services(url))
     else:
         candidates.extend(fetch_via_online_services(url))
         if not any(_is_good_enough(c) for c in candidates):
             candidates.extend(fetch_via_scrapling(url))
+
+    # 最后兜底：常规路线都没拿到优质结果且配置了 CDP → 连本机已登录 Chrome 复用登录态过 CF
+    if CDP_ENDPOINT and not any(_is_good_enough(c) for c in candidates):
+        print("[info] 常规路线未过，尝试 CDP（本机已登录 Chrome）兜底", file=sys.stderr)
+        candidates.extend(fetch_via_cdp(url))
 
     best = choose_best(candidates)
     if not best:
