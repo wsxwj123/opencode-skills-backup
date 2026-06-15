@@ -531,6 +531,37 @@ A._check_embedded_history("k8.json",
     "语文", warn_W2b)
 case("K8.W2 非历史不触发", not warn_W2b)
 
+# ============== Part L: Batch 4 流程优化（Z-1 逐题分值门禁）==============
+print("\n=== L. Batch 4 逐题分值软门禁 ===")
+
+# Z-1: 通过实际 cmd_build 验证
+import json as _json
+with tempfile.TemporaryDirectory() as td:
+    proj = pathlib.Path(td) / "p"
+    (proj / "items").mkdir(parents=True)
+    (proj / "materials").mkdir()
+    # meta 含 expected_per_question
+    (proj / "meta.json").write_text(_json.dumps({
+        "title":"t", "expected_questions":2, "total":7,
+        "expected_per_question": {"1": 2, "2": 5}
+    }), encoding="utf-8")
+    # 题1 实际 2 分（符合）；题 2 实际 4 分（不符合期望 5 分）
+    for name, num, score in [("101_q01.json","1",2),("102_q02.json","2",4)]:
+        (proj / "items" / name).write_text(_json.dumps({
+            "meta": {"num":num,"score":score},
+            "paper":[{"type":"question","num":num,"text":"x"}],
+            "answer":[]
+        }, ensure_ascii=False), encoding="utf-8")
+    import io as _io, contextlib as _ctx
+    try:
+        with _ctx.redirect_stdout(_io.StringIO()) as buf:
+            A.cmd_build([str(proj), "--allow-length"])
+        out = buf.getvalue()
+        case("L1.Z-1 题2实际4≠期望5分-告警", "实际 4 分" in out and "期望 5 分" in out)
+        case("L2.Z-1 题1实际等于期望-不告警", "题1 实际 2 分" not in out)
+    except SystemExit:
+        case("L1.Z-1 Z-1门禁告警", False, "意外 SystemExit")
+
 # 总结
 print(f"\n=== 总计 {len(PASS)}/{len(PASS)+len(FAIL)} 通过 ===")
 if FAIL:

@@ -347,6 +347,19 @@ def cmd_init(args):
         "textbook": opt.get("textbook", ""),      # 教材版本/册次
         "answer_detail": opt.get("answer-detail", "详细"),  # 答案解析详略：详细/简略/含采分点
     }
+    # Bug-Z-1：把蓝图 manifest 写入 meta，build 可对照逐题分值
+    if bp.get("manifest"):
+        meta["expected_per_question"] = {}
+        for row in bp["manifest"]:
+            try:
+                q_raw = str(row[1] if len(row) > 1 else "")
+                score_raw = row[3] if len(row) > 3 else None
+                # 题号归一："q01" → "1"
+                qnum = q_raw.lstrip("q").lstrip("0") or "0"
+                if score_raw is not None and str(score_raw) not in ("—", ""):
+                    meta["expected_per_question"][qnum] = float(score_raw)
+            except (ValueError, TypeError, IndexError):
+                continue
     # 小说选文字数区间：蓝图指定则带上，build 校验按此；默认（不写）即 1000-1500。
     if bp.get("novel_len"):
         meta["novel_len"] = bp["novel_len"]
@@ -633,6 +646,18 @@ def cmd_build(args):
             nums.append(str(m["num"]))
             if m.get("score") is None:
                 warn.append(f"题{m['num']} 缺 score 字段（未计入总分）")
+            # Bug-Z-1：逐题分值对照 manifest 期望值
+            exp_pq = meta.get("expected_per_question") or {}
+            qn = str(m["num"]).lstrip("0") or "0"
+            if qn in exp_pq and m.get("score") is not None:
+                try:
+                    actual = float(m["score"])
+                    expected = float(exp_pq[qn])
+                    if abs(actual - expected) > 0.01:
+                        warn.append(f"题{m['num']} 实际 {actual:g} 分 ≠ manifest 期望 {expected:g} 分"
+                                    f"（真题/样卷分值被改写；若有意调整请同步更新 00_manifest.md）")
+                except (ValueError, TypeError):
+                    pass
 
     # 校验（expected_questions=0 表示题量未知/通用兜底/题量待定预设 → 跳过题量门禁，但仍校验总分）
     exp_q = meta.get("expected_questions", 21)
