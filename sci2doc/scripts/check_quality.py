@@ -54,6 +54,17 @@ except Exception:  # pragma: no cover
         extract_abbreviations = None
         validate_cross_references = None
 
+try:
+    from reference_renderer import validate_all as _validate_references
+except Exception:  # pragma: no cover
+    _ref_script_dir = os.path.dirname(os.path.abspath(__file__))
+    if _ref_script_dir not in sys.path:
+        sys.path.insert(0, _ref_script_dir)
+    try:
+        from reference_renderer import validate_all as _validate_references
+    except ImportError:
+        _validate_references = None
+
 
 def _pending_template_payload(docx_path):
     try:
@@ -2137,6 +2148,37 @@ def generate_quality_report(
     # 5.1 参考文献位置校验
     reference_position_issues = check_reference_position(doc)
     all_issues.extend(reference_position_issues)
+
+    # 5.1.1 参考文献著录格式校验（从 literature_index.json 读取）
+    _lit_index_path = None
+    _inferred_root = infer_project_root_for_profile(docx_path)
+    if _inferred_root:
+        _candidate = os.path.join(_inferred_root, "literature_index.json")
+        if os.path.exists(_candidate):
+            _lit_index_path = _candidate
+    if _lit_index_path and _validate_references is not None:
+        if verbose:
+            print("🔍 检查参考文献著录格式...")
+        try:
+            with open(_lit_index_path, "r", encoding="utf-8") as _f:
+                _lit_entries = json.load(_f)
+            if isinstance(_lit_entries, list):
+                _ref_format_issues = _validate_references(_lit_entries)
+                # 映射字段到 check_quality 统一格式
+                for _iss in _ref_format_issues:
+                    all_issues.append({
+                        "level": _iss.get("level", "warning"),
+                        "category": "参考文献著录",
+                        "message": _iss.get("message", ""),
+                        "suggestion": "补齐 literature_index.json 中缺失字段，或修正 type 标识；详见 scripts/reference_renderer.py",
+                    })
+        except Exception as _e:
+            all_issues.append({
+                "level": "warning",
+                "category": "参考文献著录",
+                "message": f"无法读取 literature_index.json 进行著录格式校验：{_e}",
+                "suggestion": "确认 literature_index.json 存在且为合法 JSON 数组",
+            })
 
     # 5.2 正文内联引用格式检测
     if verbose:

@@ -19,7 +19,10 @@ not_for:
   - 单篇论文修改/润色（非综述）
   - 短篇评论/Commentary/Letter（<3000 words）
   - 非学术写作（科普、博客）
-  - 系统综述/Meta-analysis（需要完整 PRISMA-ScR 注册 + PROSPERO 流程）
+  - 系统综述/Meta-analysis（需要完整 PRISMA 注册 + PROSPERO 流程，超出本技能范围）
+scoping_review_note: |
+  Scoping review 支持（轻量流程，不需 PROSPERO）。Phase 0 选择综述类型时选 scoping，
+  检索覆盖面更宽、纳排标准更宽松，需记录研究问题框架（PCC: Population/Concept/Context）。
 ---
 
 # General Literature Review Writing Specialist
@@ -195,20 +198,14 @@ Ask all parameters at once. State defaults; user may accept silently.
 | Target journal | (required) | Affects word count and citation density |
 | Writing language | **English** | English / Chinese (Chinese: only changes writing language, same search tools) |
 | Discipline | **Medical/Biomedical** | Determines search tool priority |
+| **Review type** | **narrative** | `narrative`（叙述性）/ `critical`（批判性）/ `scoping`（范围综述）。Scoping review：不需要 PROSPERO，检索覆盖更宽，研究问题框架用 PCC（Population/Concept/Context）替代 PICO，Phase 0 末尾提示 scoping 特有记录要求。Systematic review / Meta-analysis → 转到专用工具（超出本技能范围）。 |
 | Word count target | EN: 7,000–10,000 words / CN: 15,000–20,000 chars | |
 | Total citations | ≥150 (Original≥80, Review≥50, Preprint≥20) | |
 | Reference manager | **Zotero** | Zotero / None / EndNote |
 | Subagent model | Same as current session | AI scans available models, user confirms |
 
 **If Chinese writing selected**, notify at end of Phase 0:
-> 本技能使用 PubMed/paper-search MCP 检索英文文献。如需补充知网（CNKI）、万方等中文数据库文献：
-> 1. 在知网检索页勾选目标文献 → 导出 → 选择"EndNote"格式 → 下载 .txt 文件
-> 2. 在 Zotero 中：文件 → 导入 → 选择下载的 .txt 文件 → 导入到对应章节集合
-> 3. 手动为导入条目添加 `gid:N` tag（N 从当前最大 gid+1 开始递增）
-> 4. 在 `drafts/section_XX_XX.md` 中用 `[N]` 引用
->
-> 万方：导出 → 选择"RIS"格式 → 同上步骤导入 Zotero。
-> 建议在初稿完成后统一补充中文文献，避免 gid 编号冲突。
+> 本技能使用 PubMed/paper-search MCP 检索英文文献。中文数据库（CNKI/万方）补充流程详见 `references/citation_styles.md` § CNKI / 万方中文文献导入。建议在初稿完成后统一补充，避免 gid 编号冲突。
 
 ### 0.2 Full Environment Check
 
@@ -232,41 +229,13 @@ Run the 8-step environment detection (📖 full commands in `references/env_chec
 
 ### 0.3 Zotero First-Time Setup (Zotero mode only)
 
-Note: PyZotero uses **Zotero Web API** (cloud). Desktop app does NOT need to run during API operations — but install it for local sync of created items.
+> 📖 完整设置步骤（账号注册、API key 生成、权限配置、连接测试、安全规则）详见 `references/zotero_setup.md`。
 
-**Step-by-step guide (show this to user if they haven't done it before):**
+Key rule: `lib_id` → 写入 `outline.md`；`api_key` → 每次会话口头询问，**绝不写入任何文件**。
 
-```
-① Register / log in
-   → https://www.zotero.org/user/register  (if no account)
-   → https://www.zotero.org/user/login
-
-② Get your Library ID (numeric user ID)
-   → https://www.zotero.org/settings
-   → Scroll to the bottom of the page
-   → Look for: "Your user ID for use in API calls is: [NUMBER]"
-   → Copy that number — this is your lib_id
-
-③ Create an API key
-   → https://www.zotero.org/settings/keys
-   → Click "Create new private key"
-   → Key Description: e.g. "review-writing-skill"
-   → Permissions — check ALL of the following:
-       ✅ Allow library access
-       ✅ Allow write access           ← required for creating items/collections
-       ✅ Allow notes access           ← required for abstract child notes
-       ✅ Allow file access            ← required for PDF attachments
-   → Click "Save Key"
-   → Copy the generated key immediately (shown only once)
-
-④ Test connection
-   python3 scripts/zotero_manager.py --status --lib-id [NUMBER] --api-key [KEY]
-   Expected output: ✅ Connected to Zotero library ...
-
-⑤ Security rules
-   - Write lib_id to outline.md (safe, not secret)
-   - NEVER write api_key to any file — ask user at each new session start
-   - If 403 Forbidden error: re-ask user for api_key; re-run --status before continuing
+```bash
+python3 scripts/zotero_manager.py --status --lib-id [NUMBER] --api-key [KEY]
+# Expected: ✅ Connected to Zotero library ...
 ```
 
 If `--status` lists multiple libraries (personal + group), show the list and ask user which to use. Write chosen `lib_id` to `outline.md`.
@@ -342,6 +311,7 @@ The script writes `[TITLE]/state.json`:
 - Target Journal: [user input]
 - Language: [English / Chinese]
 - Reference Manager: [Zotero / None / EndNote]
+- Review Type: [narrative / critical / scoping]
 - Word Count Target: [EN: 7,000–10,000 words / CN: 15,000–20,000 chars]
 - Citation Requirements: ≥150 total (Original≥80, Review≥50, Preprint≥20)
 - Discipline: [Medical-Biomedical / CS-AI / Interdisciplinary]
@@ -413,7 +383,7 @@ AI: substitute `<MESSAGE>` with the checkpoint description. Format: `[review] Ph
 | Checkpoint location | Commit message |
 |---------------------|----------------|
 | Phase 0.5 (in init script) | `[review] Phase 0: project initialized` |
-| Phase 1 Step 7 | `[review] Phase 1: outline confirmed` |
+| Phase 1 Step 9 | `[review] Phase 1: outline confirmed` |
 | Phase 2 per-section Step 8 | `[review] Phase 2: section X.X search complete` |
 | Phase 2.5 (after dedup) | `[review] Phase 2.5: dedup + global ID assigned` |
 | Phase 3 per-section Step 9 | `[review] Phase 3: section X.X draft complete` |
@@ -423,16 +393,7 @@ AI: substitute `<MESSAGE>` with the checkpoint description. Format: `[review] Ph
 
 ### Rollback (using the checkpoints above)
 
-Because `init_project.py` runs `git init` + commits at Phase 0, every checkpoint is a full project snapshot — drafts (`drafts/section_*.md`), `state.json`, and `data/` indices all roll back together (atomic-draft rollback, no orphaned state). Run from inside the project root (`git_available: true` only):
-
-```bash
-git log --oneline                          # list checkpoints; find the [review] commit to return to
-git checkout <sha> -- drafts/section_03_02.md   # restore ONE file (e.g. a bad section draft) from that checkpoint
-git revert <sha>                            # undo a specific checkpoint's changes as a new commit (history-safe)
-git checkout <sha> -- .                     # restore the ENTIRE project tree to that checkpoint (does not move HEAD)
-```
-
-Prefer `git checkout <sha> -- <file>` for a single bad section and `git revert` to back out a whole checkpoint. After any file restore, re-run `state_manager.py reindex` (None/EndNote) if gid alignment may have shifted. Do NOT use `git reset --hard` (destroys uncommitted work without confirmation).
+> 📖 Rollback 命令、Edge Cases（需要推倒重来 / Git 不可用）详见 `references/git_rollback.md`。
 
 ---
 
@@ -441,10 +402,37 @@ Prefer `git checkout <sha> -- <file>` for a single bad section and `git revert` 
 **Start: Read `outline.md` + `state.json`. If state.json shows phase≥1, skip.**
 **Polish Mode: if `state.json` contains `"mode": "polish"`, skip Phase 1 entirely — go to Phase 3.**
 
-1. **Propose outline structure:** "Funnel" Introduction + "Thematic" Body structure.
-2. **Confirm outline with user** (≤2 hierarchy levels). Update `outline.md`.
-3. **Define RQ/PICO** with user. Write to `outline.md`.
-4. **Initialize Zotero collections (Zotero mode):**
+1. **Define RQ/PICO** (or PCC for scoping review) with user first. Write to `outline.md`.
+   - RQ/PICO 是提纲的语义锚点：研究问题明确后，提纲各节才能有检验标准。
+   - Scoping review：用 PCC 框架（Population / Concept / Context）替代 PICO。
+2. **Propose outline structure** based on RQ/PICO: "Funnel" Introduction + "Thematic" Body. (≤2 hierarchy levels)
+3. **Confirm outline with user.** Update `outline.md`.
+
+   > **⚠️ 迭代闸（Iteration Gate）：提纲在此可回修。**
+   > Phase 2 检索完成后，若揭示出提纲遗漏了重大分支或主要争议（例如：某类方法在文献中被大量讨论但提纲无对应节次），允许回到此步修改提纲，并记录修改理由：
+   > ```
+   > [Outline revision after Phase 2 search]
+   > Reason: Phase 2 revealed that X is a major branch in literature (~N papers) but
+   >         was not covered in the original outline. Added Section X.X.
+   > Impact: Related sections [list] may need additional citation targets.
+   > ```
+   > 修改后须更新 `outline.md`，重新确认 Zotero 集合树（`--init` 是幂等的），并用 Git Checkpoint 记录版本。**不得因回修提纲而删除已完成节次的已有文献入库记录。**
+
+4. **规划贯穿全文的概念框架图（提纲确认后，Phase 1 内完成）：**
+   在 `figures/figure_index.md` 中注册一条 `Figure 0`（概念框架图），要求：
+   - 覆盖全文逻辑主线（背景→机制/方法→应用/挑战→展望），体现各节之间的内在逻辑联系
+   - 包含 Key Message（一句话）、草稿 Caption（出版级精确度）、节次映射关系
+   - 写作时（Phase 3）各节需在文中引用该图，"如 Figure 1 所示"
+   ```
+   ## Figure 0: [Conceptual Framework — Title of Review]
+   - Type: Conceptual overview
+   - Section: ALL (全文贯穿)
+   - Key Message: [one sentence summarizing the review's core argument/framework]
+   - Caption: [draft — publication-ready, ≤150 words]
+   - Node mapping: [e.g., "Section 1.1→Background box; Section 2.X→Mechanism module; Section 3.X→Application module"]
+   ```
+
+6. **Initialize Zotero collections (Zotero mode):**
    ```bash
    # First check if collection tree already exists (idempotent — safe on re-entry):
    ROOT_KEY=$(python3 scripts/zotero_manager.py --status --find-root-title "[TITLE]" \
@@ -454,17 +442,17 @@ Prefer `git checkout <sha> -- <file>` for a single bad section and `git revert` 
    ```
    - `--find-root-title` exit 0 → root already exists (stdout = key, reuse it); exit 3 → no match, the `||` branch runs `--init`; exit 4 → ambiguous (multiple same-named roots), stdout lists candidate keys — **stop and ask user to pick** rather than letting `--init` create a duplicate.
    - Creates root collection + subcollections matching outline hierarchy.
-5. **Initialize index files (None/EndNote mode):**
+7. **Initialize index files (None/EndNote mode):**
    ```bash
    python3 scripts/state_manager.py init-index
    # Creates empty data/literature_index.json + data/synthesis_matrix.json + figures/figure_index.md (idempotent).
    ```
-6. **Update state.json** (writes phase=1 + zotero_root_key, preserving other keys):
+8. **Update state.json** (writes phase=1 + zotero_root_key, preserving other keys):
    ```bash
    python3 scripts/state_manager.py set-phase --phase 1
-   python3 scripts/state_manager.py set-root-key --key "[key from step 4]"   # Zotero mode only; skip in None/EndNote
+   python3 scripts/state_manager.py set-root-key --key "[key from step 6]"   # Zotero mode only; skip in None/EndNote
    ```
-7. **Git Checkpoint** (见复用块, msg: `[review] Phase 1: outline confirmed`)
+9. **Git Checkpoint** (见复用块, msg: `[review] Phase 1: outline confirmed`)
 
 **HALT. Wait for user to confirm outline before Phase 2.**
 
@@ -488,6 +476,20 @@ for each section in outline.md (e.g., section ID = "2.1"):
   2. Search ≥10 papers → collect metadata: title, authors, year, doi, abstract, source
      - Every paper must have abstract; if missing → re-fetch via efetch or paper-search
      - Still no abstract after retry → mark abstract:missing, skip for now
+  2a. [可复现性] 记录检索日志：
+      python3 scripts/state_manager.py append-search-log \
+        --section X.X --query "QUERY" --database pubmed \
+        --n-hits N_HITS --n-screened N_SCREENED
+      # N_HITS = 搜索工具返回的原始命中数；N_SCREENED = 阅读标题/摘要后判断相关保留的数量
+      # 检索日志写入 data/search_log.json（独立文件，不影响 literature_index.json）
+  2b. [相关性筛选] 入库前逐篇判断（不得"搜到即入库"）：
+      - 保留条件：标题/摘要与本节 RQ/PICO（或 PCC）直接相关，且能提供引用价值的论据
+      - 排除条件（需记录排除理由类型）：
+        · 语言（非英文/中文）→ 标记 excluded: language
+        · 超范围（话题偏离本节主题）→ 标记 excluded: off_topic
+        · 质量问题（无同行评审且非顶级 preprint）→ 标记 excluded: quality
+        · 时效（发表年份过早且无奠基价值）→ 标记 excluded: outdated
+      - 最终保留的才进入 tmp/papers_X_X.json
   3. Save metadata to tmp/papers_X_X.json  (e.g., section 1.1 → tmp/papers_1_1.json)
   4. Write papers (run ONLY the branch matching the project's Reference Manager — they are alternatives, not sequential):
      [Zotero] python3 scripts/zotero_manager.py --add-batch \
@@ -691,15 +693,7 @@ Generate prompts for every entry in `figures/figure_index.md`. Write output to `
 
 **⚠️ MANDATORY entry gate — block Phase 4 when pending sections remain (Polish Mode):**
 ```bash
-python3 -c "
-import json, pathlib, sys
-s = json.loads(pathlib.Path('state.json').read_text(encoding='utf-8'))
-pending = s.get('pending_sections') or {}
-remaining = {k: v for k, v in pending.items() if v}
-if remaining:
-    sys.exit(f'❌ Phase 4 blocked — pending sections remain: {remaining}. Return to Phase 3 and finish them first (or explicitly remove from pending_sections if intentionally skipping).')
-print('✅ all pending sections cleared — safe to enter Phase 4')
-"
+python3 scripts/state_manager.py check-pending
 ```
 Write Mode has no `pending_sections` field so this gate is a no-op (no key → empty dict → pass).
 
@@ -722,20 +716,7 @@ Write Mode has no `pending_sections` field so this gate is a no-op (no key → e
    ```
    **引用总量校验（警告性，不阻断 —— 尊重用户自定的短篇长度）:**
    ```bash
-   python3 -c "
-   import sys, pathlib
-   sys.path.insert(0, 'scripts')
-   from citation_utils import extract_citation_ids
-   ids = set()
-   for f in pathlib.Path('drafts').glob('*.md'):
-       ids.update(extract_citation_ids(f.read_text(encoding='utf-8')))
-   n = len(ids)
-   print(f'Unique citations in drafts: {n}')
-   if n < 150:
-       print(f'⚠️ 引用总数 {n} < 150（高影响力综述目标）。短篇或用户指定长度可忽略；否则建议 Round 2/3 补检索。')
-   else:
-       print(f'✅ 引用总数 {n} 达标（≥150）')
-   "
+   python3 scripts/state_manager.py count-citations --drafts-dir drafts --threshold 150
    ```
    > **类型分布（人工核对）：** literature_index.json 未记录 Original/Review/Preprint 类型字段，无法机器统计。AI 对照 Constraints 目标（Original≥80 / Review≥50 / Preprint≥20）人工抽查 index，明显失衡时提示用户。
 
@@ -785,6 +766,33 @@ Write Mode has no `pending_sections` field so this gate is a no-op (no key → e
    - Title and abstract must not contain unexpanded abbreviations (except universally known: DNA, RNA, PCR, HIV, WHO, FDA).
    - If violations found → list them; AI fixes inline in `exports/Final_Review.md` and propagates back to the source `drafts/section_XX_XX.md`.
 5. **Final word count:** Verify total ≥ target in `outline.md`.
+
+5b. **结构化"未来方向/开放问题"段（强制，Phase 4 交付前）：**
+   若结论节或最后正文节不含独立的"Future Directions/Open Questions"结构化段，在此强制补写，并插入到 `exports/Final_Review.md` 对应位置 + 反向同步到 `drafts/section_XX_XX.md`（最后一节）。
+   要求：
+   - ≥3 条具体、可操作的研究方向（不得只写泛化描述如"further studies are needed"）
+   - 每条 ≥1 句说明"为什么当前无法回答"（gap 原因）
+   - 每条 ≥1 句说明"突破路径"（具体方法/技术/数据类型）
+   - 与正文论证对应，不引入正文未建立的概念
+   格式示例（EN）：
+   ```
+   ## Future Directions and Open Questions
+   **1. [Direction title]**
+   Current knowledge gap: [why it cannot be answered now]. Recommended approach: [specific method/resource].
+   **2. ...
+   ```
+
+5c. **元数据块（导出前补全）：** 在 `exports/Final_Review.md` 末尾追加：
+   ```
+   ---
+   ## Manuscript Metadata
+   - Search cutoff date: [YYYY-MM-DD — the date of the final search run]
+   - Databases searched: [e.g., PubMed, arXiv, Google Scholar] (see data/search_log.json for full log)
+   - Conflicts of interest: [author statement — ask user to provide, default: "None declared"]
+   - Funding: [funding statement — ask user to provide, default: "Not specified"]
+   ```
+   > search_log.json was populated by `append-search-log` calls during Phase 2. If search_log.json is absent, reconstruct dates from git log.
+
 6. **Update state.json — merge, do NOT overwrite:**
    ```bash
    python3 scripts/state_manager.py set-phase --phase 4 --completed true

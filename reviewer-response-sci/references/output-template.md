@@ -54,3 +54,9 @@ Produce **one single HTML file**.
 3. 修改候选块：Quick Location（section/段落 index/Word 检索句）；atomic 定位字段（`manuscript_unit_id`/`si_unit_id`/相对路径/段落与句子 index）默认 `details/summary` 折叠；Original Text 聚焦片段默认折叠；revised EN + 中文译文各带 `复制`；无修改写 `无`；不渲染独立 `Tracked Edit` 或 Section 3 内的独立 `修改说明` 卡。
 4. 修改说明块：单一合并卡，子项 A=动作列表（添加/删除/修改+原因），子项 B=`🔴 Core`/`🟡 Support` 汇总。
 5. 证据区：文本/图/表；无图修改则不渲染图片占位；有图修改先渲染显式图片占位块。
+
+## Frontend Design Spec（由脚本硬编码，AI 无需手写）
+- Color palette: primary `#0F4C81` (deep blue), core marker `#B42318` (red), support marker `#B54708` (amber), background `#F4F7FB`, panel `#FFFFFF`, border `#D9E2EC`
+- Typography: `"Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif`; body 14px/1.6; headings bold; code/path `monospace`
+- Card spacing: `padding: 14px 16px`, `border-radius: 10px`, `margin-bottom: 12px`
+- Responsive breakpoint: ≤980px switch to single-column, sidebar becomes top nav

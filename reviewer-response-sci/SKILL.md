@@ -32,6 +32,9 @@ Default behavior if user does not specify a custom location:
 3. Write all artifacts into that subfolder (`units/`, `manuscript_units/`, `si_units/`, `logs/`, final HTML).
 
 ## Output Contract (One-Shot)
+> **主交付 = 回复包**（给编辑的总览邮件 + 各审稿人 point-by-point 回复，最终渲染为单文件分层 HTML）。
+> **修改稿 track-changes 需用户手工补**：本技能生成回复文档，不产出 Word track-changes 版本；用户应以 `manuscript_edit_plan.md` 为操作指南，在 Word 中手动启用修订模式完成改稿。若用户要求 track-changes 稿件，解释此限制并推荐使用 `manuscript_edit_plan.md`。
+
 **主交付物 = 单文件分层 HTML**（左侧层级 TOC + 右侧内容，单页可见）。TOC 顶层节点为 **Editor（若有）+ Reviewer #1/#2/...**，Editor 排在所有 Reviewer 之前；编辑信里的 editor comment（字数/格式/伦理声明/数据可用性/利益冲突/统计复核等）作为**独立顶层 Editor 节点**呈现，与各 Reviewer 并列，**不得并入任何 Reviewer**。**全部 UI 由 `scripts/build_full_package.py` 的 `render_html()` 生成**——TOC 层级、严重度背景色、折叠/展开、可拖拽分割线、`复制` 按钮、`localStorage` 持久化、各 box 布局均已硬编码，**AI 无需手工实现 HTML**。完整 UI 验收对照细则见 `references/output-template.md`。
 
 AI 真正要产出的是每条 comment unit 的**内容字段**（脚本只写占位符，AI 填真值）：
@@ -74,11 +77,7 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
 - When gate checks fail, directly edit the failing `project_root/units/*.json` fields and re-run checks.
 - Keep one-page-per-comment structure.
 - All copy buttons in the UI must use Chinese label `复制`.
-- Frontend design specifications:
-  - Color palette: primary `#0F4C81` (deep blue), core marker `#B42318` (red), support marker `#B54708` (amber), background `#F4F7FB`, panel `#FFFFFF`, border `#D9E2EC`
-  - Typography: `"Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif`; body 14px/1.6; headings bold; code/path `monospace`
-  - Card spacing: `padding: 14px 16px`, `border-radius: 10px`, `margin-bottom: 12px`
-  - Responsive breakpoint: ≤980px switch to single-column, sidebar becomes top nav
+- Frontend design specifications are hardcoded in `scripts/build_full_package.py`'s `render_html()`; AI does not need to write HTML. Full spec is in `references/output-template.md`.
 - Quality gates must fail when:
   - `revised_excerpt_en` is placeholder/empty (unless explicitly running with a relaxed gate mode)
   - `revised_excerpt_en` is identical to `original_excerpt_en`
@@ -92,12 +91,6 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
   - Filler phrases: "in order to", "we would like to point out that", "as the reviewer rightly noted"
   - Structural repetition: ≥3 responses must not open with the same template sentence
   - `risk_check.py` scans for these patterns automatically; WARN-level issues should be fixed before delivery
-- **Track Changes Awareness:**
-  - This skill generates the **response document** (point-by-point reply); it does **not** produce a track-changes version of the manuscript
-  - Track changes (Word `.docx` with revisions marked) must be done **manually** by the user using the `manuscript_edit_plan.md` as a guide
-  - `revised_excerpt_en` in each unit shows the proposed new text; the user applies these edits to the manuscript with Track Changes enabled
-  - If the user asks for a tracked-changes manuscript, explain this limitation and recommend using `manuscript_edit_plan.md` for efficient manual editing
-
 ### Domain Edge Cases
 - **Reviewer recommends acceptance without comments** ("I have no major/minor concerns"): create a single email-only response acknowledging the reviewer; do not generate an empty Major/Minor section.
 - **Two reviewers give contradictory suggestions** (e.g., R1 says "remove Section 3" vs R2 says "expand Section 3"): flag the conflict explicitly in both units' `notes_core_zh`; in the English response, acknowledge the divergence and state which direction is adopted with evidence-based justification. Add a `[CONFLICTING ADVICE]` marker in `manuscript_edit_plan.md`.
@@ -142,6 +135,7 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
    - If strategy requires new literature, flag in `Data Needed` column for Step 2
    - Print the strategy table and ask user: "Strategy plan ready. Approve? (yes / adjust:R1.2 → Accept / abort)"
    - Do not proceed to Step 2 until user confirms
+   - **用户确认后，将每条 comment 的 strategy 写入对应 `units/*.json` 的 `content.strategy` 字段**（脚本建骨架时留空字符串，由 AI 在此步骤填入）
 
 2. If any comment needs additional citations (identified in Step 1.7 `Data Needed`), run retrieval per the Rules section's topic-dependent routing spec.
    - After retrieval, build `citation_registry.json` in `project_root/`:
@@ -181,7 +175,7 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
    - `change_summary`: one bullet per reviewer, ≤2 sentences per bullet, summarizing major revisions made
    - `closing`: restate willingness to provide further revisions if needed
    - Tone: professional, concise, non-defensive; English only; no Chinese in email body
-5. Build `manuscript_edit_plan.md` in `project_root/` **before** final delivery.
+5. Build `manuscript_edit_plan.md` **skeleton** in `project_root/` (Step 5 = 建骨架；Step 7 后回填真值，见下).
    - The plan must be sorted by manuscript original order (ascending `manuscript_paragraph_index`).
    - Each row must include:
      - `comment_unit_id` / reviewer and major-minor info
@@ -190,7 +184,7 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
      - paragraph index
      - one Word-search key sentence (`Word Find key sentence`)
      - exact to-be-replaced snippet (if available)
-     - revised text to insert (EN, and ZH if provided)
+     - `revised text to insert` (EN, and ZH if provided) — **此列 Step 5 时留占位符 `[PENDING Step 7]`；Step 7 完成后运行 `python3 scripts/state_manager.py aggregate-edit-plan --project-root <root>` 自动聚合回填**。
      - action type (`添加` / `删除` / `修改`)
    - When multiple comments map to the same paragraph, merge into one ordered block with sub-items.
    - If a comment is global (language polishing, full-figure consistency), put it in a separate `Global edits` section and explicitly mark as non-localized.
@@ -206,6 +200,7 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
    - 每条 comment unit 需填写以下 8 组字段（参照 `references/atomic-unit-schema.json`）：
 
    **7b. 逐条填写（每条 comment unit）：**
+   0. 读取 `content.strategy` 字段（Step 1.7 已写入），据此选定回复基调：Accept→直接致谢+落实；Partial→分点肯定+部分推回；Push back→证据先行+礼貌否定；Acknowledge→解释为何未采纳。
    1. `content.reviewer_comment_zh`：直译审稿意见（中文，不改写不概括）
    2. `content.reviewer_intent_zh`：理解审稿人真实意图（中文摘要，≤3 句）
    3. `content.response_en`：英文回复（遵循 `references/decision-rules.md` 的基调选择和句式规范；短句优先见 Rules）
@@ -236,17 +231,15 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
    - 用户可指定修改特定 unit，修改后重新展示该 unit 摘要
    - 确认后方可进入 Step 8
 
+   **Step 7 后 → edit_plan 回填（在进入 Step 8 前执行）：**
+   ```
+   python3 scripts/state_manager.py aggregate-edit-plan --project-root <root>
+   ```
+   脚本遍历 `units/*.json`，把每个 unit 的 `revised_excerpt_en`（以及 `revised_excerpt_zh`，若有则以 ` ／ ` 拼接）写入 `manuscript_edit_plan.md` 对应行的 `revised text to insert` 列，替换 `[PENDING Step 7]`。`revised_excerpt_en == "无"` 的 unit 写入 `无改动`，不计为 PENDING。输出含两行关键信息：`filled: N`（已回填数）和 `still PENDING: N`（未填数）；若有 PENDING，脚本列出具体 unit_id 并以退出码 2 提示，需补填后重跑。回填完成后 edit_plan 即为可直接用于手工 track-changes 的完整操作清单。
+
 8. Render single HTML with left hierarchical TOC + right content pane from updated atomic JSON.
 9. Run hard gate checks, citation checks, and HTML checks before delivery.
-   - **判读：** pipeline 退出码 `0` = 全部 gate 通过；非零时 stdout 会打印 `PIPELINE: FAIL (step=..., code=...)` 及失败 step 和涉及的 unit。按失败信息直接改对应 `units/*.json`（≤3 次上限，见 Rules）后重跑 `run_pipeline.py`。
-   - These are executed automatically and serially by `scripts/run_pipeline.py` in this order: `strict_gate.py`（硬门禁）→ `final_content_gate.py` → `consistency_check.py` → `final_consistency_report.py` → `html_format_check.py` → `risk_check.py` → `citation_guard.py` → `citation_ref_tracker.py`. Do not run them manually one-by-one during normal runs.
-   - final delivery must pass `final_content_gate.py`（**内容完整性门禁**）:
-     - if any `待AI` / `AI_FILL_REQUIRED` placeholder remains, gate fails
-     - `--allow-placeholder` is only for skeleton/prewrite stage, not final delivery
-   - `citation_guard.py` validates new references in `citation_registry.json`（DOI/PMID 真实性、撤稿检测）
-   - `citation_ref_tracker.py` checks citation number consistency across all units（未定义引用、编号间隙）
-   - `risk_check.py` scans for fabrication patterns + AI style issues
-   - if gate fails, fix the listed units by direct JSON edits; do not generate extra fixer scripts
+   - **判读：** `scripts/run_pipeline.py` 串行自动执行全部 gate（顺序与职责详见 Scripts 段）；退出码 `0` = 全部通过；非零时 stdout 打印 `PIPELINE: FAIL (step=..., code=...)` 及失败 unit。按失败信息直接改对应 `units/*.json`（≤3 次上限，见 Rules）后重跑。Do not run gates manually one-by-one; do not generate extra fixer scripts.
 10. Run final consistency report.
 11. Write checkpoint + transaction logs to `project_root/logs/`.
 12. Sync unit state map to `project_root/logs/unit_state.json`.
@@ -279,8 +272,12 @@ python3 scripts/run_pipeline.py \
 ```
 无 SI 时省略 `--si`。AI 填完 `units/*.json` 后，去掉 `--allow-placeholder` 重跑同一命令即为正式交付。
 
-各 gate 由 pipeline 自动调用，正常运行无需手动单独跑（详见 Step 9）：
-- `strict_gate.py`（硬门禁）/ `final_content_gate.py`（内容完整性，检查占位符与修改文本是否填齐，非文献溯源）/ `consistency_check.py` / `final_consistency_report.py` / `html_format_check.py`
+各 gate 由 `run_pipeline.py` 串行自动调用，正常运行无需手动单独跑。按执行顺序：
+- `strict_gate.py`：硬门禁，检查 `revised_excerpt_en` 非空/非占位符/与原文有实质差异、`needs_manual_revision` 状态
+- `final_content_gate.py`：内容完整性，检查所有 `待AI` / `AI_FILL_REQUIRED` 占位符是否已填（`--allow-placeholder` 仅骨架预览阶段）
+- `consistency_check.py`：① 禁用词/冲突术语检查；② **承诺↔落点一致性（WARN）**：`response_en` 中承诺的动作动词（`we added/clarified/revised` + 对象）须能在同 unit 的 `modification_actions` 或 `revised_excerpt_en` 找到对应，否则 WARN（非阻断）
+- `final_consistency_report.py`：生成统计报告（units 数量、链接率、缺失 excerpt 计数）
+- `html_format_check.py`：HTML 结构完整性
 - `risk_check.py`：检测虚构实验/统计、过度承诺、AI 式套话、跨 unit 结构重复
 - `citation_guard.py`：验证 `citation_registry.json` 新增引用真实性（DOI/PMID/撤稿检测）；`--offline` 跳过在线验证
 - `citation_ref_tracker.py`：交叉验证 `[N]` 引用编号一致性（未定义引用、编号间隙）
