@@ -44,6 +44,20 @@ python3 scripts/state_manager.py init-index
 python3 scripts/state_manager.py append-literature --section 2.1 --papers tmp/papers_2_1.json
 ```
 
+```bash
+# check-pending (Phase 4 entry gate): exit 1 if Polish Mode pending sections remain.
+# Write Mode: always passes (no pending_sections field → empty dict → pass).
+python3 scripts/state_manager.py check-pending
+
+# count-citations (Phase 4 Step 2, 引用总量校验): count unique [N] IDs across drafts/, non-blocking warning.
+python3 scripts/state_manager.py count-citations --drafts-dir drafts --threshold 150
+
+# append-search-log (Phase 2 per-section, 改动B 检索可复现): record search provenance to data/search_log.json.
+python3 scripts/state_manager.py append-search-log \
+  --section 2.1 --query "QUERY STRING" --database pubmed \
+  --n-hits 342 --n-screened 18
+```
+
 > `set-phase` / `complete-section` / `set-root-key` operate on the workflow `state.json` (the `{phase,
 > completed_sections, mode, pending_sections, zotero_root_key, citations_imported}` record), which is
 > **disjoint** from the `STATE_FILES` map (`progress.json`/`storyline.md`/`literature_index.json`/…) that

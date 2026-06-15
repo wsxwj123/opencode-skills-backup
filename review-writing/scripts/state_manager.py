@@ -1155,6 +1155,78 @@ def init_index():
     print("✅ Index files initialized")
 
 
+def check_pending(state_path="state.json"):
+    """Gate check for Phase 4: exit non-zero if Polish Mode pending sections remain.
+
+    Replaces the inline Python block at Phase 4 entry (SKILL.md Phase 4 mandatory entry gate).
+    Write Mode has no pending_sections, so this is a no-op (pass) for Write Mode.
+    """
+    state = _load_workflow_state(state_path)
+    pending = state.get("pending_sections") or {}
+    remaining = {k: v for k, v in pending.items() if v}
+    if remaining:
+        print(f"❌ Phase 4 blocked — pending sections remain: {remaining}. Return to Phase 3 and finish them first (or explicitly remove from pending_sections if intentionally skipping).")
+        raise SystemExit(1)
+    print("✅ all pending sections cleared — safe to enter Phase 4")
+
+
+def count_citations(drafts_dir="drafts", threshold=150):
+    """Count unique citation IDs across all draft files and check against threshold.
+
+    Replaces the inline Python block at Phase 4 Step 2 (引用总量校验).
+    Prints unique count and a warning if below threshold (non-blocking).
+    """
+    try:
+        import sys as _sys
+        _sys.path.insert(0, str(Path("scripts")))
+        from citation_utils import extract_citation_ids
+    except ImportError:
+        raise SystemExit("Error: citation_utils not found. Run from inside the project directory.")
+    ids = set()
+    for f in Path(drafts_dir).glob("*.md"):
+        ids.update(extract_citation_ids(f.read_text(encoding="utf-8")))
+    n = len(ids)
+    print(f"Unique citations in drafts: {n}")
+    if n < threshold:
+        print(f"⚠️ 引用总数 {n} < {threshold}（高影响力综述目标）。短篇或用户指定长度可忽略；否则建议 Round 2/3 补检索。")
+    else:
+        print(f"✅ 引用总数 {n} 达标（≥{threshold}）")
+
+
+def append_search_log(section, search_query, database, n_hits, n_screened,
+                      index_path="data/literature_index.json"):
+    """Append a search log entry to literature_index.json's search_log array.
+
+    Supports改动B: 检索可复现。每节检索后记录检索式、数据库、命中数、筛选数。
+    Creates/updates the search_log field in the root of literature_index.json (stored as a
+    sibling key alongside the paper array in a wrapper dict if it already has a search_log,
+    otherwise stored in data/search_log.json to avoid breaking the paper-array schema).
+    Uses data/search_log.json as standalone log file (keeps literature_index.json as pure array).
+    """
+    from datetime import date
+    log_path = Path("data/search_log.json")
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log = []
+    if log_path.exists():
+        try:
+            log = json.loads(log_path.read_text(encoding="utf-8") or "[]")
+            if not isinstance(log, list):
+                log = []
+        except Exception:
+            log = []
+    entry = {
+        "section": section,
+        "search_query": search_query,
+        "database": database,
+        "search_date": date.today().isoformat(),
+        "n_hits": n_hits,
+        "n_screened": n_screened,
+    }
+    log.append(entry)
+    _atomic_write_text(log_path, json.dumps(log, indent=2, ensure_ascii=False))
+    print(f"✅ Search log entry added: section={section}, db={database}, hits={n_hits}, screened={n_screened}")
+
+
 def append_literature(section, papers_path, index_path="data/literature_index.json", source_provider="pubmed-cli"):
     """Append a section's papers to literature_index.json (None/EndNote mode, Phase 2 Step 5).
 
@@ -1285,6 +1357,30 @@ def main():
              "Maps to the paper-search family in citation_guard.",
     )
 
+    checkpending_parser = subparsers.add_parser(
+        "check-pending",
+        help="Phase 4 entry gate: exit 1 if Polish Mode pending sections remain. No-op for Write Mode.",
+    )
+    checkpending_parser.add_argument("--state", default="state.json", help="Path to workflow state.json (default: state.json)")
+
+    countcit_parser = subparsers.add_parser(
+        "count-citations",
+        help="Count unique [N] citation IDs across drafts/ and check against threshold (non-blocking warning).",
+    )
+    countcit_parser.add_argument("--drafts-dir", default="drafts", help="Drafts directory (default: drafts)")
+    countcit_parser.add_argument("--threshold", type=int, default=150, help="Warning threshold (default: 150)")
+
+    searchlog_parser = subparsers.add_parser(
+        "append-search-log",
+        help="Append a search log entry to data/search_log.json (改动B: 检索可复现).",
+    )
+    searchlog_parser.add_argument("--section", required=True, help="Section ID, e.g. '2.1'")
+    searchlog_parser.add_argument("--query", required=True, help="Search query string used")
+    searchlog_parser.add_argument("--database", required=True, help="Database searched (e.g. pubmed, arxiv, google_scholar)")
+    searchlog_parser.add_argument("--n-hits", type=int, required=True, help="Total hits returned by search")
+    searchlog_parser.add_argument("--n-screened", type=int, required=True, help="Papers retained after relevance screening")
+    searchlog_parser.add_argument("--index", default="data/literature_index.json", help="Literature index path (unused, kept for CLI consistency)")
+
     snapshot_parser = subparsers.add_parser("snapshot", help="Write a full state snapshot JSON")
     snapshot_parser.add_argument(
         "--out",
@@ -1367,6 +1463,19 @@ def main():
             similarity_threshold=args.similarity_threshold,
             conflict_threshold=args.conflict_threshold,
             allow_conflicts=args.allow_conflicts,
+        )
+    elif args.command == "check-pending":
+        check_pending(state_path=args.state)
+    elif args.command == "count-citations":
+        count_citations(drafts_dir=args.drafts_dir, threshold=args.threshold)
+    elif args.command == "append-search-log":
+        append_search_log(
+            section=args.section,
+            search_query=args.query,
+            database=args.database,
+            n_hits=args.n_hits,
+            n_screened=args.n_screened,
+            index_path=args.index,
         )
 
 
