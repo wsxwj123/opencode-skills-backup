@@ -2,16 +2,31 @@
   {
     "id": 1,
     "prompt": "净水器已避雷！坚决不删，能帮一个是一个 http://xhslink.com/o/4YXLxGKprbK 继续总结这个写到笔记里",
-    "expected": "XHS图文帖：读取desc文字内容 + 逐张读取7张图片 + 完整总结9个要点含具体例子 + 自动存Obsidian House/经验避坑/"
+    "expected": "XHS图文帖：读desc + 逐张读7张图 + 完整总结含具体例子 + 自动存Obsidian House/经验避坑/"
   },
   {
     "id": 2,
-    "prompt": "买窗帘记住这四点，保证没人敢坑你 http://xhslink.com/o/4P0xIodbEpZ 总结一下",
-    "expected": "XHS视频帖：Playwright拦截CDN→ffmpeg提音频→voice-bridge转写→完整总结4个要点→存Obsidian"
+    "prompt": "买窗帘记住这四点 http://xhslink.com/o/4P0xIodbEpZ 总结一下，把评论区有用的也带上",
+    "expected": "XHS视频帖：Playwright拦CDN→ffmpeg提音频→health检查→voice-bridge转写→get_feed_detail load_all_comments取评论→总结正文+评论区补充→存Obsidian"
   },
   {
     "id": 3,
-    "prompt": "https://www.bilibili.com/video/BV1XRDfB7ExQ/ 这个视频总结一下内容，存到笔记",
-    "expected": "B站视频：yt-dlp提音频→转写→按房间分类整理全屋插座预留指南→存Obsidian"
+    "prompt": "https://www.bilibili.com/video/BV1XRDfB7ExQ/ 这个视频总结一下，存到笔记",
+    "expected": "B站：读platform-recipes→yt-dlp字幕优先(无字幕降级ASR+health检查)→fetch-everything尽力抓评论→分类整理→存Obsidian"
+  },
+  {
+    "id": 4,
+    "prompt": "https://www.zhihu.com/question/xxx 这个知乎回答帮我提取一下，连高赞评论",
+    "expected": "知乎(T3脆弱)：读platform-recipes→fetch-everything抓正文+图片识图+渲染后评论；登录墙挡则启CDP登录态或HALT告知用户"
+  },
+  {
+    "id": 5,
+    "prompt": "搜小红书看看有哪些好用的扫地机器人推荐",
+    "expected": "XHS关键词检索：search_feeds→过滤hot_query→按互动排序列候选→选中笔记逐篇get_feed_detail走图文/视频+评论流程"
+  },
+  {
+    "id": 6,
+    "prompt": "去B站搜一下「显卡选购」的视频，找几个高播放的总结给我",
+    "expected": "非XHS主动检索(脆弱)：读platform-recipes抓B站搜索页→提取候选标题+链接→选top-N→逐条yt-dlp字幕优先总结"
   }
 ]
