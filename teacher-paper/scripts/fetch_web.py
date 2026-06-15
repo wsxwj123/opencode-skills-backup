@@ -130,13 +130,22 @@ def _looks_like_error_page(text):
     return any(s.lower() in low for s in _ERROR_PAGE_SIGNATURES)
 
 
+_GLOBAL_DEADLINE_SEC = 90  # Bug-B3：单 URL 抓取全局上限 90 秒，防 4 级累积超时
+
+
 def fetch(url):
-    """返回 (ok, strategy, text)：ok=False 时 text 为失败提示。"""
+    """返回 (ok, strategy, text)：ok=False 时 text 为失败提示。
+    Bug-B3：加全局 deadline，超时立即降级而非按子策略逐级耗尽。"""
+    import time
     errors = []
+    start = time.monotonic()
     for name, fn in (("engine", via_engine),
                      ("jina", via_jina),
                      ("readability", via_readability),
                      ("raw", via_raw)):
+        if time.monotonic() - start > _GLOBAL_DEADLINE_SEC:
+            errors.append(f"{name}:跳过(全局超时{_GLOBAL_DEADLINE_SEC}s)")
+            continue
         try:
             out = fn(url)
             if not out or len(out.strip()) <= 120:

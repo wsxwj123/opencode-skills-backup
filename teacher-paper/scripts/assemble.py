@@ -570,16 +570,25 @@ def cmd_build(args):
     _cleanup_nul_files(proj, warn,
                        extra_dirs=(os.path.dirname(os.path.abspath(proj)) or ".", os.getcwd()))
     # B3修复：同一数字前缀的多个 _sec_ 文件会重复输出大题标题，只保留第一个。
+    # Bug-B1 修复：同一数字前缀的多个题目文件（如 101_q01.json + 101_q01_v2.json）
+    # 会双倍读入造成同号双题。去重策略：完全相同的数字前缀只保留第一个，其余 warn 跳过。
     _seen_sec_prefix = set()
+    _seen_q_prefix = set()
     _deduped = []
     for _f in files:
         _bn = os.path.basename(_f)
+        _prefix = _sort_key(_f)[0]
         if is_sec_name(_bn):
-            _prefix = _sort_key(_f)[0]
             if _prefix in _seen_sec_prefix:
                 warn.append(f"{_bn} 与同前缀大题分隔文件重复，已跳过（避免标题重复）")
                 continue
             _seen_sec_prefix.add(_prefix)
+        else:
+            # 题目/题材/子分隔 等非 section 文件按前缀去重
+            if _prefix in _seen_q_prefix:
+                warn.append(f"{_bn} 与同前缀题目/材料文件重复，已跳过（避免同号双题）")
+                continue
+            _seen_q_prefix.add(_prefix)
         _deduped.append(_f)
     files = _deduped
     source_errors = []  # 阅读类素材真实性硬门禁的违规项
@@ -1241,16 +1250,19 @@ _FIG_CUES = ("如图", "如下图", "下图", "图中", "图所示", "根据图"
 
 def _check_missing_figure(fp, paper_blocks, errors):
     """题干含'如图/如下图/图中/图所示'等图引用字样，但 paper 块里没有 figure block
-    （也没有 src 提供的图）→ 拒绝出卷。AI 不能写出"如图所示"却不给图。"""
+    （也没有 src 提供的图）→ 拒绝出卷。AI 不能写出"如图所示"却不给图。
+    Bug-B2 修复：只扫题干文字（text/stem），不扫 options——选项里出现"下图错误/
+    上图正确"等是答案表述，不是题干引用，扫了会误伤无图题。"""
     has_fig = any(isinstance(b, dict) and b.get("type") == "figure" for b in paper_blocks)
     if has_fig:
         return
     for b in paper_blocks:
         if not isinstance(b, dict):
             continue
+        # 只扫题干文字，不扫选项
+        if b.get("type") not in ("question", "stem"):
+            continue
         text = str(b.get("text", "")) + str(b.get("stem", ""))
-        for opt in (b.get("options") or b.get("items") or []):
-            text += str(opt)
         if any(cue in text for cue in _FIG_CUES):
             errors.append(f"{os.path.basename(fp)}：题干含『{next(c for c in _FIG_CUES if c in text)}』"
                           f"等图引用字样，但 paper 块里没有 figure 块——必须补图"
