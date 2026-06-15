@@ -646,7 +646,15 @@
     </section>
 
     <section id="sec-12" class="critique-section">
-        <h2>十二、作者逐条回复审稿意见草案</h2>
+        <h2>十二、给编辑的保密意见</h2>
+        <p><em>以下内容仅供编辑参考，不转达作者。</em></p>
+        <div class="deep-analysis forensic">
+            {{CONFIDENTIAL_EDITOR_HTML}}
+        </div>
+    </section>
+
+    <section id="sec-13" class="critique-section">
+        <h2>十三、作者逐条回复审稿意见草案</h2>
         <p><em>以下回复草案必须覆盖第七部分与第八部分的全部意见，确保真实投稿场景可逐条应答。</em></p>
         <div class="deep-analysis rebuttal">
             {{REBUTTAL_DRAFT_HTML}}
@@ -666,7 +674,7 @@
     var VALID = ['拒稿', '大修', '小修', '接收'];
     var SECTION_MAP = {
         '一': 'sec-1', '二': 'sec-2', '三': 'sec-3', '四': 'sec-4', '五': 'sec-5', '六': 'sec-6',
-        '七': 'sec-7', '八': 'sec-8', '九': 'sec-9', '十': 'sec-10', '十一': 'sec-11', '十二': 'sec-12'
+        '七': 'sec-7', '八': 'sec-8', '九': 'sec-9', '十': 'sec-10', '十一': 'sec-11', '十二': 'sec-12', '十三': 'sec-13'
     };
 
     function normalize(v) {

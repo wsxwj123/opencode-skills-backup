@@ -24,6 +24,8 @@ from typing import Any
 DOI_RE = re.compile(r"^10\.\d{4,9}/[-._;()/:A-Z0-9]+$", re.IGNORECASE)
 PMID_RE = re.compile(r"^\d{4,10}$")
 TITLE_TOKEN_RE = re.compile(r"[a-z0-9\u4e00-\u9fff]+")
+ALLOWED_PROVIDER_FAMILIES = {"pubmed-cli", "paper-search"}
+FORBIDDEN_PROVIDER_FAMILIES = {"websearch", "openalex-cli", "tavily"}
 
 
 def load_json(path: Path, default: Any) -> Any:
@@ -92,7 +94,7 @@ def _parse_dt(value: str | None) -> datetime | None:
 def _is_mcp_fresh(record: dict[str, Any], ttl_days: int, now_utc: datetime) -> tuple[bool, str | None]:
     if ttl_days <= 0:
         return True, None
-    checked_at = _parse_dt(str(record.get("verified_at") or record.get("checked_at") or ""))
+    checked_at = _parse_dt(str(record.get("verified_at") or record.get("checked_at") or record.get("retrieved_at") or ""))
     if checked_at is None:
         return False, "mcp_timestamp_missing"
     if checked_at < now_utc - timedelta(days=ttl_days):
@@ -194,6 +196,21 @@ def _entry_ref_id(entry: dict[str, Any], fallback_idx: int) -> str:
     return f"idx:{fallback_idx}"
 
 
+def _provider_family(provider: str) -> str:
+    p = str(provider or "").strip().lower()
+    if p.startswith("paper-search"):
+        return "paper-search"
+    if p.startswith("pubmed"):
+        return "pubmed-cli"
+    if p.startswith("openalex") or p == "pyalex":
+        return "openalex-cli"
+    if p.startswith("tavily"):
+        return "tavily"
+    if "websearch" in p or "web-search" in p or "web_search" in p:
+        return "websearch"
+    return p
+
+
 def validate_entry(
     entry: dict[str, Any],
     *,
@@ -209,6 +226,7 @@ def validate_entry(
 
     source_provider = str(entry.get("source_provider") or "").strip()
     source_id = str(entry.get("source_id") or "").strip()
+    provider_family = _provider_family(source_provider)
 
     doi_fmt_ok = DOI_RE.match(doi) is not None if doi else None
     pmid_fmt_ok = PMID_RE.match(pmid) is not None if pmid else None
@@ -227,6 +245,22 @@ def validate_entry(
 
     title_similarity = max((_title_similarity(title, st) for st in source_titles), default=0.0)
     title_match = bool(source_titles) and title_similarity >= 0.72
+
+    # Per-source title cross-validation: detect spliced/fabricated entries
+    crossref_title_sim = _title_similarity(title, crossref["title"]) if (crossref and crossref.get("title") and title) else None
+    pubmed_title_sim = _title_similarity(title, pubmed["title"]) if (pubmed and pubmed.get("title") and title) else None
+    crossref_title_ok = crossref_title_sim is None or crossref_title_sim >= 0.72
+    pubmed_title_ok = pubmed_title_sim is None or pubmed_title_sim >= 0.72
+
+    # Year reasonableness check
+    entry_year = entry.get("year")
+    year_reasonable = True
+    if entry_year is not None:
+        try:
+            yr = int(entry_year)
+            year_reasonable = 1900 <= yr <= now_utc.year + 1
+        except (ValueError, TypeError):
+            year_reasonable = False
 
     doi_valid: bool | None
     if doi:
@@ -267,10 +301,20 @@ def validate_entry(
     failure_reasons: list[str] = []
     if not title:
         failure_reasons.append("title_missing")
+    if provider_family in FORBIDDEN_PROVIDER_FAMILIES:
+        failure_reasons.append("source_provider_forbidden")
+    elif provider_family and provider_family not in ALLOWED_PROVIDER_FAMILIES:
+        failure_reasons.append("source_provider_not_allowed")
     if not has_identifier:
         failure_reasons.append("identifier_missing")
-    if title and not title_match:
+    if title and source_titles and not title_match:
         failure_reasons.append("title_mismatch")
+    if not crossref_title_ok:
+        failure_reasons.append("crossref_title_mismatch")
+    if not pubmed_title_ok:
+        failure_reasons.append("pubmed_title_mismatch")
+    if not year_reasonable:
+        failure_reasons.append("year_unreasonable")
     if doi_valid is False:
         failure_reasons.append("doi_invalid_or_unresolved")
     if pmid_match is False:
@@ -291,13 +335,21 @@ def validate_entry(
     if online_check and not (crossref or pubmed):
         failure_reasons.append("source_unreachable")
 
+    bidirectional_verification_failed = any(
+        r in {"title_mismatch", "crossref_title_mismatch", "pubmed_title_mismatch",
+              "doi_invalid_or_unresolved", "pmid_invalid_or_unresolved", "id_mismatch"}
+        for r in failure_reasons
+    )
+    if bidirectional_verification_failed:
+        failure_reasons.append("manual_confirmation_required_bidirectional_failure")
+
     needs_manual_review = any(
         r in {"title_mismatch", "id_mismatch", "mcp_stale", "mcp_timestamp_missing", "source_unreachable"}
         for r in failure_reasons
-    )
+    ) or bidirectional_verification_failed
 
     score = 0.0
-    score += title_similarity * 35
+    score += (title_similarity * 35) if source_titles else 15  # neutral when no sources to compare
     if doi_valid is True:
         score += 18
     elif doi_valid is False:
@@ -308,15 +360,27 @@ def validate_entry(
         score -= 8
     score += 10 if id_cross_match else -12
     score += 8 if has_traceability else -15
+    if provider_family in ALLOWED_PROVIDER_FAMILIES:
+        score += 6
+    elif provider_family in FORBIDDEN_PROVIDER_FAMILIES:
+        score -= 20
+    elif provider_family:
+        score -= 10
     score += (8 if mcp_ok else (-10 if require_mcp else 0))
     if mcp_ok:
         score += 6 if mcp_fresh else -8
     score += (8 if (crossref or pubmed) else -8) if online_check else 4
+    if not crossref_title_ok:
+        score -= 15
+    if not pubmed_title_ok:
+        score -= 15
+    if not year_reasonable:
+        score -= 10
     if retracted:
         score -= 60
     confidence = int(max(0, min(100, round(score))))
 
-    verified = len(failure_reasons) == 0
+    verified = (len(failure_reasons) == 0) and (not bidirectional_verification_failed)
 
     return {
         **entry,
@@ -327,9 +391,15 @@ def validate_entry(
             "checked_at": now_utc.isoformat(),
             "title_match": title_match,
             "title_similarity": round(title_similarity, 4),
+            "crossref_title_similarity": round(crossref_title_sim, 4) if crossref_title_sim is not None else None,
+            "pubmed_title_similarity": round(pubmed_title_sim, 4) if pubmed_title_sim is not None else None,
+            "crossref_fetched_title": (crossref["title"] if crossref and crossref.get("title") else None),
+            "pubmed_fetched_title": (pubmed["title"] if pubmed and pubmed.get("title") else None),
+            "year_reasonable": year_reasonable,
             "doi_valid": doi_valid,
             "pmid_match": pmid_match,
             "id_cross_match": id_cross_match,
+            "bidirectional_verification_failed": bidirectional_verification_failed,
             "retracted": retracted,
             "has_traceability": has_traceability,
             "failure_reasons": failure_reasons,
@@ -342,6 +412,8 @@ def validate_entry(
                 "online_check": online_check,
                 "mcp_ttl_days": mcp_ttl_days,
                 "require_mcp": require_mcp,
+                "source_provider": source_provider,
+                "provider_family": provider_family,
             },
         },
     }
@@ -401,7 +473,7 @@ def main() -> int:
 
     verified_count = sum(1 for e in checked if e.get("verified"))
     duration_ms = int((time.perf_counter() - t0) * 1000)
-    status = "verified" if verified_count == len(checked) and checked else ("failed" if checked else "empty")
+    status = "verified" if (checked and verified_count == len(checked)) else ("failed" if checked else "empty")
 
     report = {
         "ok": status == "verified",
@@ -419,6 +491,11 @@ def main() -> int:
         "online_check": not args.offline,
         "require_mcp": bool(args.require_mcp),
         "mcp_ttl_days": max(0, int(args.mcp_ttl_days)),
+        "provider_policy": {
+            "allowed_provider_families": sorted(ALLOWED_PROVIDER_FAMILIES),
+            "forbidden_provider_families": sorted(FORBIDDEN_PROVIDER_FAMILIES),
+            "no_identifier_policy": "manual_review_queue",
+        },
     }
 
     save_json(Path(args.report), {"report": report, "manual_review_queue": manual})
