@@ -49,3 +49,22 @@ Standard format for the reference list at the end of the document.
 - Same as None Mode during writing phase.
 - Final step: user manually imports `exports/references.bib` into EndNote.
 - No automatic write-back.
+
+---
+
+## CNKI / 万方中文文献导入
+
+仅适用于 **Chinese writing** 模式。英文模式不需要此流程。
+
+建议在初稿完成后统一补充中文文献，避免 gid 编号冲突。
+
+**知网（CNKI）：**
+1. 在检索页勾选目标文献 → 导出 → 选择"EndNote"格式 → 下载 .txt 文件
+2. 在 Zotero 中：文件 → 导入 → 选择下载的 .txt 文件 → 导入到对应章节集合
+3. 手动为导入条目添加 `gid:N` tag（N 从当前最大 gid+1 开始递增）
+4. 在 `drafts/section_XX_XX.md` 中用 `[N]` 引用
+
+**万方：**
+导出 → 选择"RIS"格式 → 同上步骤 2–4 导入 Zotero。
+
+> ⚠️ CNKI/Wanfang 条目不走 `append-literature` 脚本（绕过 citation_guard 在线校验）。导入后须人工核对 DOI/PMID 字段是否完整，并在 Phase 4 前手动补全 `data/literature_index.json` 对应记录。
