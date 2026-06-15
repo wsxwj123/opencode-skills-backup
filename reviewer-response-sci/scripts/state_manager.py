@@ -201,6 +201,111 @@ def cmd_rollback(args) -> int:
     return 0
 
 
+_PLACEHOLDER = "[PENDING Step 7]"
+_NO_CHANGE_VALUES = {"无", "无改动", "n/a", "none"}
+
+
+def _is_placeholder(value: str) -> bool:
+    v = value.strip()
+    return (
+        not v
+        or v == _PLACEHOLDER
+        or v.startswith("[AI_FILL_REQUIRED]")
+        or v.startswith("[PENDING")
+    )
+
+
+def _is_no_change(value: str) -> bool:
+    return value.strip().lower() in _NO_CHANGE_VALUES
+
+
+def cmd_aggregate_edit_plan(args) -> int:
+    """Back-fill manuscript_edit_plan.md [PENDING Step 7] placeholders from unit JSONs."""
+    root = Path(args.project_root)
+    plan_path = root / "manuscript_edit_plan.md"
+
+    if not plan_path.exists():
+        print("AGGREGATE_EDIT_PLAN: FAIL")
+        print(f"- manuscript_edit_plan.md not found: {plan_path}")
+        return 1
+
+    # Load all units: uid -> content dict
+    units: dict[str, dict] = {}
+    for fp in _unit_files(root):
+        u = _read_json(fp, {})
+        uid = u.get("unit_id")
+        if not uid:
+            continue
+        # Skip email-section units — they don't appear in manuscript_edit_plan
+        if u.get("section") == "email":
+            continue
+        units[uid] = u.get("content", {})
+
+    if not units:
+        print("AGGREGATE_EDIT_PLAN: FAIL")
+        print("- no unit JSON files found under units/")
+        return 1
+
+    lines = plan_path.read_text(encoding="utf-8").splitlines(keepends=True)
+    filled: list[str] = []
+    pending: list[str] = []
+    skipped_no_change: list[str] = []
+
+    for uid, content in sorted(units.items()):
+        revised = content.get("revised_excerpt_en", "")
+
+        if _is_placeholder(revised):
+            pending.append(uid)
+            continue
+
+        # Determine replacement text
+        if _is_no_change(revised):
+            replacement = "无改动"
+        else:
+            revised_zh = content.get("revised_excerpt_zh", "")
+            if revised_zh and not _is_no_change(revised_zh) and not _is_placeholder(revised_zh):
+                replacement = f"{revised} ／ {revised_zh}"
+            else:
+                replacement = revised
+
+        # Replace [PENDING Step 7] on each line that contains this uid
+        replaced_on_this_uid = 0
+        for i, line in enumerate(lines):
+            if uid in line and _PLACEHOLDER in line:
+                lines[i] = line.replace(_PLACEHOLDER, replacement, 1)
+                replaced_on_this_uid += 1
+
+        if replaced_on_this_uid:
+            if _is_no_change(revised):
+                skipped_no_change.append(uid)
+            else:
+                filled.append(uid)
+        # If uid not found in plan (e.g. merged block or email), silently skip
+
+    plan_path.write_text("".join(lines), encoding="utf-8")
+
+    # Summary
+    status = "PASS" if not pending else "WARN"
+    print(f"AGGREGATE_EDIT_PLAN: {status}")
+    print(f"- filled: {len(filled)}")
+    if filled:
+        for uid in filled:
+            print(f"  ✓ {uid}")
+    print(f"- no-change (无改动): {len(skipped_no_change)}")
+    if skipped_no_change:
+        for uid in skipped_no_change:
+            print(f"  - {uid}")
+    print(f"- still PENDING: {len(pending)}")
+    if pending:
+        print("  WARNING: the following units have no revised_excerpt_en yet:")
+        for uid in pending:
+            print(f"  ✗ {uid}")
+        print("  → Fill revised_excerpt_en in these unit JSONs, then re-run aggregate-edit-plan.")
+        return 2
+
+    return 0
+
+
 def cmd_show(args) -> int:
     root = Path(args.project_root)
     state = _load_state(root)
@@ -249,6 +354,10 @@ def main() -> int:
     p_roll.add_argument("--project-root", required=True)
     p_roll.add_argument("--snapshot", default="", help="Snapshot dir name or path; default = most recent")
     p_roll.set_defaults(func=cmd_rollback)
+
+    p_agg = sub.add_parser("aggregate-edit-plan")
+    p_agg.add_argument("--project-root", required=True)
+    p_agg.set_defaults(func=cmd_aggregate_edit_plan)
 
     args = parser.parse_args()
     return args.func(args)

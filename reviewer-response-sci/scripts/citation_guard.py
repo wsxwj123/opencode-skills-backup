@@ -28,7 +28,7 @@ DOI_RE = re.compile(r"^10\.\d{4,9}/[-._;()/:A-Z0-9]+$", re.IGNORECASE)
 PMID_RE = re.compile(r"^\d{4,10}$")
 TITLE_TOKEN_RE = re.compile(r"[a-z0-9一-鿿]+")
 
-FORBIDDEN_PROVIDERS = {"websearch", "web-search", "web_search", "tavily"}
+FORBIDDEN_PROVIDERS = {"websearch", "web-search", "web_search", "tavily", "openalex", "openalex-cli"}
 
 
 def _http_get_json(url: str, timeout_sec: float = 8.0) -> dict[str, Any] | None:

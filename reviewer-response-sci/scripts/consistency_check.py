@@ -55,6 +55,46 @@ def main() -> int:
         if marker not in merged_text:
             warnings.append(f"Required marker not found globally: {marker}")
 
+    # --- Commitment ↔ Landing-point consistency check (WARN level) ---
+    # Verify that action verbs promised in response_en (added/clarified/revised + object)
+    # can be found as corresponding entries in modification_actions or revised_excerpt_en
+    # of the same unit. Mismatch → WARN (non-blocking).
+    ACTION_VERB_RE = re.compile(
+        r"\b(we (?:added|clarified|revised|corrected|updated|included|removed|expanded|moved|replaced)"
+        r"(?: [\w]+){0,5})",
+        re.IGNORECASE,
+    )
+    for u in units:
+        if u.get("section") == "email":
+            continue
+        uid = u.get("unit_id", "?")
+        c = u.get("content", {})
+        response_en = c.get("response_en", "")
+        mod_actions = c.get("modification_actions", [])
+        revised = c.get("revised_excerpt_en", "")
+
+        # Skip if unit is still a placeholder (not yet filled by AI)
+        if "AI_FILL_REQUIRED" in response_en or "【待AI" in response_en:
+            continue
+
+        promises = ACTION_VERB_RE.findall(response_en)
+        for promise in promises:
+            promise_lower = promise.lower()
+            # Check if any modification_action reason or revised_excerpt_en contains a matching echo
+            found_in_actions = any(
+                any(kw in (a.get("reason", "") + a.get("target", "")).lower() for kw in promise_lower.split()[1:3])
+                for a in mod_actions
+            )
+            found_in_revised = any(
+                kw in revised.lower() for kw in promise_lower.split()[1:3]
+                if len(kw) > 3
+            )
+            if not found_in_actions and not found_in_revised and revised.strip() not in {"", "无", "N/A"}:
+                warnings.append(
+                    f"[{uid}] response_en promises '{promise}' but no matching entry found "
+                    f"in modification_actions or revised_excerpt_en"
+                )
+
     if conflicts:
         print("CONSISTENCY_CHECK: FAIL")
         for c in conflicts:
