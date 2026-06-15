@@ -1353,8 +1353,8 @@ def main():
         "--source-provider",
         default="pubmed-cli",
         help="Default source_provider tag for new entries lacking their own (default: pubmed-cli). "
-             "Pass the real provider per discipline, e.g. 'paper-search' (CS/AI via MCP) or 'openalex'. "
-             "Maps to the paper-search family in citation_guard.",
+             "Pass the real provider per discipline: 'pubmed-cli' (Medical/Bio) or 'paper-search' (CS/AI via MCP). "
+             "openalex/tavily/websearch are FORBIDDEN by citation_guard.",
     )
 
     checkpending_parser = subparsers.add_parser(

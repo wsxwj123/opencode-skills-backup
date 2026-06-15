@@ -508,8 +508,8 @@ for each section in outline.md (e.g., section ID = "2.1"):
        # SP = the actual search tool used for this section (see § Search Tool Priority):
        #   PubMed CLI (Medical/Bio, esearch/efetch)  → --source-provider pubmed-cli   (default; may omit)
        #   paper-search MCP (CS/AI, or PubMed-CLI fallback) → --source-provider paper-search
-       #   OpenAlex CLI (cross-disciplinary)         → --source-provider openalex
-       # All three map to the paper-search family in citation_guard (passes the guard).
+       # ⚠️ openalex / tavily / websearch 均被 citation_guard 列为 FORBIDDEN，不可用作 SP。
+       # 仅 pubmed-cli 和 paper-search 可通过 citation_guard。
        # Per-entry source_provider already set in tmp/papers_X_X.json is preserved (setdefault, not overwrite).
        # gid auto-increments; DOI dup (case-insensitive) → only appends X.X to that record's related_sections.
        # Sets defaults per new entry: global_id, related_sections=[X.X], source_provider, source_id, verified=false.
