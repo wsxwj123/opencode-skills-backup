@@ -598,6 +598,8 @@ def cmd_build(args):
         # —— 缺图硬门禁：题干含"如图/图中/图所示"等图引用字样但 paper 无 figure 块 ——
         if is_question:
             _check_missing_figure(fp, p_blocks, figure_errors)
+            # Bug-W-2：历史题干内嵌史料软提醒（warn，不阻断；机器无法判真伪）
+            _check_embedded_history(fp, p_blocks, meta.get("subject", ""), warn)
 
         # —— 阅读类素材真实性硬门禁 ——
         _pre_src_err = len(source_errors)
@@ -1077,16 +1079,32 @@ def _novel_text_len(paras, is_english=False):
 # 板块识别关键词（顺序匹配，先匹配先得；material.block 显式声明优先于推断）
 _BLOCK_KEYWORDS = (("非连", "非连"), ("非文学", "非连"), ("信息类", "非连"),
                    ("散文", "散文"), ("小说", "小说"), ("文学作品", "小说"),
-                   ("文言", "文言"), ("名著", "名著"))
+                   ("文言", "文言"), ("名著", "名著"),
+                   # Bug-Y-2：英语板块关键词（按词计），让英语字数门禁实际生效
+                   ("阅读理解", "英语阅读"), ("english_reading", "英语阅读"),
+                   ("完形填空", "完形"), ("完形", "完形"), ("cloze", "完形"),
+                   ("七选五", "七选五"), ("seven_choose_five", "七选五"),
+                   ("语法填空", "语法填空"), ("读后续写", "读后续写"),
+                   ("书面表达", "书面表达"), ("短文改错", "短文改错"))
 
 
 def _default_block_len(stage, subject):
-    """按科目给出各板块默认字数区间（净字数）。
-    仅语文有内置默认（九年级规格，与 references/subjects/语文.md 第2节区间表一致）；
-    其它科目无默认——蓝图/预设显式给 block_len 才校验（英语词数必须显式给）。"""
+    """按科目给出各板块默认字数区间（净字数/词数）。
+    与 references/subjects/语文.md / 英语.md 第2节区间表对齐。
+    其它科目无默认——蓝图/预设显式给 block_len 才校验。"""
     if "语文" in str(subject):
         return {"非连": [600, 1000], "小说": [1000, 1500],
                 "散文": [800, 1200], "文言": [100, 200]}
+    if "英语" in str(subject):
+        # Bug-Y-2: 英语按词计；按学段大致区分（初中阅读较短，高中较长）
+        s = str(stage)
+        if any(k in s for k in ("高一", "高二", "高三", "高中", "高考")):
+            return {"英语阅读": [300, 400], "完形": [250, 350],
+                    "七选五": [250, 350], "语法填空": [180, 240],
+                    "读后续写": [120, 180], "书面表达": [80, 120], "短文改错": [110, 140]}
+        # 初中
+        return {"英语阅读": [200, 300], "完形": [180, 250],
+                "书面表达": [60, 100]}
     return {}
 
 
@@ -1100,8 +1118,12 @@ def _check_block_lengths(paper, block_len, subject="", legacy_novel_len=None):
     is_english = "英语" in str(subject)
     if not block_len:
         if is_english and not legacy_novel_len:
-            return []
-        block_len = {"小说": legacy_novel_len or [1000, 1500]}
+            # Bug-Y-2：英语 block_len 缺失时回退到默认（按学段从 _default_block_len）
+            block_len = _default_block_len("", subject) or {}
+            if not block_len:
+                return []
+        else:
+            block_len = {"小说": legacy_novel_len or [1000, 1500]}
     unit = "词" if is_english else "字"
     sums, order = {}, []          # 按 (sub区间序号, 板块) 求和
     region, region_idx = None, 0
@@ -1239,6 +1261,33 @@ def _parse_fetch_credential(text):
     return info if info.get("url") else None
 
 
+_HISTORY_SUBJECTS = ("历史",)
+# 引号字符集：中文书名号《》+ 智能引号 “”‘’ + 中式角引号「」『』
+_QUOTE_CHARS = (chr(0x300A) + chr(0x300B) + chr(0x201C) + chr(0x201D) +
+                chr(0x2018) + chr(0x2019) + chr(0x300C) + chr(0x300D) +
+                chr(0x300E) + chr(0x300F))
+_EMBEDDED_QUOTE_RE = re.compile("[" + _QUOTE_CHARS + "]")
+
+
+def _check_embedded_history(fp, p_blocks, subject, warn):
+    """Bug-W-2：历史题干内嵌长史料段（≥30字+含书名号/智能引号）触发 warn 提醒人工溯源。
+    历史 40-50% 分值是'史料+设问'，史料嵌 stem 里完全绕过 _check_faithful_excerpt——
+    机器无法知道这段史料真伪，只能提醒命题者人工核查。"""
+    if not any(k in str(subject) for k in _HISTORY_SUBJECTS):
+        return
+    name = os.path.basename(fp)
+    for b in p_blocks:
+        if not (isinstance(b, dict) and b.get("type") == "question"):
+            continue
+        text = str(b.get("text") or "")
+        if len(text) < 30 or not _EMBEDDED_QUOTE_RE.search(text):
+            continue
+        snippet = text[:30] + "…"
+        warn.append(f"{name}：题干含内嵌史料『{snippet}』——历史题干史料不受溯源门禁覆盖，"
+                    f"请人工核验：①引文是否真实存在 ②出处是否准确 ③标点字句是否忠实。"
+                    f"严禁编造伪史料。")
+
+
 _POLITICAL_SUBJECTS = ("思想政治", "政治", "道德与法治", "道法")
 _FRESHNESS_DEFAULT_DAYS = 90  # 时政时效默认窗口：90 天
 
@@ -1325,8 +1374,14 @@ def _credential_matches_url(text, source_url):
 
 def _norm_text(s):
     """归一化：去掉空白与标点，只留汉字/字母/数字，用于'选文是否为原文子串'的
-    忠实节选校验——忽略标点风格差异（弯/直引号、句读不同），但改字/缺字仍会落空。"""
-    return re.sub(r"\W+", "", str(s or ""), flags=re.UNICODE)
+    忠实节选校验——忽略标点风格差异（弯/直引号、句读不同），但改字/缺字仍会落空。
+    Bug-Y-3：兼容英语——智能引号/不间断空格先归一，再小写化（英语大小写差异不算改字）。"""
+    s = str(s or "")
+    # 智能引号 / 不间断空格 → ASCII
+    s = (s.replace("‘", "'").replace("’", "'")
+           .replace("“", '"').replace("”", '"').replace(" ", " "))
+    s = re.sub(r"\W+", "", s, flags=re.UNICODE)
+    return s.lower()
 
 
 def _check_source(fp, meta, paper_blocks, materials_dir, errors, warn):
@@ -1438,6 +1493,12 @@ def _check_faithful_excerpt(fp, meta, paper_blocks, materials_dir, errors):
         if not (isinstance(b, dict) and b.get("type") == "material"):
             continue
         if b.get("layout") == "verse":
+            continue
+        # Bug-L-3：理科情境引子（命题情境，非阅读选文）跳过逐字校验，仅靠溯源
+        if b.get("block") == "情境引子":
+            continue
+        # Bug-Y-3：英语听力稿（教师改写/原创，非阅读节选）跳过逐字校验
+        if b.get("layout") == "listening_transcript":
             continue
         pos = 0  # 上一段在原文中的结束位置（保证按原文顺序、禁重排）
         # Bug-A4 修复：短段累计占比统计，防"拆成 11 字短句逐句编造"绕过门禁
