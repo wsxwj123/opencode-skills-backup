@@ -27,6 +27,10 @@ def _fmt_authors(authors: list[str], max_authors: int = 3) -> str:
     """
     GB/T 7714: 3 名以内全列，超过 3 名列前 3 人后加 "等" / "et al."（外文）。
     作者间用 ", " 分隔，末尾不加句号（外部拼接时处理）。
+
+    注意：GB/T 7714-2015 要求外文作者采用"姓在前+名缩写"格式（如 Zhang S 而非 Shuang Zhang）。
+    本函数原样输出输入值，不做自动缩写——输入应在写入 literature_index.json 时预处理为规范格式
+    （如通过 PubMed authors 字段抓取时，作者名通常已是 "Zhang S" 格式）。
     """
     if not authors:
         return "佚名"
@@ -49,7 +53,7 @@ def _fmt_title(title: str) -> str:
 def render_journal(entry: dict) -> str:
     """
     [J] 期刊论文
-    格式：著者. 题名[J]. 刊名, 年, 卷(期): 起止页.  DOI: xxx.
+    格式：著者. 题名[J]. 刊名, 年, 卷(期): 起止页. DOI: xxx.
     """
     authors = _fmt_authors(entry.get("authors", []))
     title = _fmt_title(entry.get("title", ""))
@@ -75,7 +79,7 @@ def render_journal(entry: dict) -> str:
 
     result = f"{authors}. {title}[J]. {journal}, {loc_str}."
     if doi:
-        result += f"  DOI: {doi}."
+        result += f" DOI: {doi}."
     return result
 
 
@@ -184,7 +188,7 @@ def render_online(entry: dict) -> str:
     if url:
         result += f" {url}."
     elif doi:
-        result += f"  DOI: {doi}."
+        result += f" DOI: {doi}."
     return result
 
 
