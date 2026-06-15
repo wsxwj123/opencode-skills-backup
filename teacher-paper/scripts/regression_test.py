@@ -562,6 +562,55 @@ with tempfile.TemporaryDirectory() as td:
     except SystemExit:
         case("L1.Z-1 Z-1门禁告警", False, "意外 SystemExit")
 
+# ============== Part M: Batch 5 中等 Bug（B-1/B-2/B-4）==============
+print("\n=== M. Batch 5 中等 Bug ===")
+
+# B-1 同前缀题目文件去重
+with tempfile.TemporaryDirectory() as td:
+    proj = pathlib.Path(td) / "p"
+    (proj / "items").mkdir(parents=True)
+    (proj / "materials").mkdir()
+    (proj / "meta.json").write_text(_json.dumps({
+        "title":"t", "expected_questions":1, "total":2}), encoding="utf-8")
+    q1 = _json.dumps({"meta":{"num":"1","score":2},
+                      "paper":[{"type":"question","num":"1","text":"v1"}],"answer":[]}, ensure_ascii=False)
+    (proj / "items" / "101_q01.json").write_text(q1, encoding="utf-8")
+    (proj / "items" / "101_q01_v2.json").write_text(q1, encoding="utf-8")  # 重复
+    try:
+        with _ctx.redirect_stdout(_io.StringIO()) as buf:
+            A.cmd_build([str(proj), "--allow-length"])
+        out = buf.getvalue()
+        case("M1.B-1 同前缀101_q01_v2.json被去重", "重复" in out and "同号双题" in out)
+    except SystemExit:
+        case("M1.B-1 同前缀去重", False, "意外 SystemExit")
+
+# B-2 figure cues 不扫 options
+fig_errs = []
+A._check_missing_figure("m2.json",
+    [{"type":"question","num":"1","text":"以下哪个选项正确？"},
+     {"type":"options","items":["A. 上图错误","B. 下图正确"]}], fig_errs)
+case("M2.B-2 options中'下图'不触发缺图门禁", not fig_errs)
+# 但 text 中含'如图'仍要拦
+fig_errs2 = []
+A._check_missing_figure("m3.json",
+    [{"type":"question","num":"1","text":"如图所示，求解..."}], fig_errs2)
+case("M3.B-2 题干含'如图'仍拦截", any("如图" in e for e in fig_errs2))
+
+# B-4 CSV 编码探测（构造已知乱码 → 应拒绝）
+import sys as _sys
+_sys.path.insert(0, "teacher-paper/scripts")
+try:
+    import read_material as RM
+    # 写一个 UTF-8 中文文件，用 gbk 解会乱
+    with tempfile.NamedTemporaryFile("wb", suffix=".csv", delete=False) as f:
+        f.write("姓名,分数\n张三,95\n李四,88\n".encode("utf-8"))
+        tmp_csv = f.name
+    out = RM.read_csv(tmp_csv)
+    case("M4.B-4 UTF-8 CSV 正确读取（不乱码）", "张三" in out and "李四" in out)
+    import os as _os; _os.unlink(tmp_csv)
+except Exception as e:
+    case("M4.B-4 CSV读取", False, str(e))
+
 # 总结
 print(f"\n=== 总计 {len(PASS)}/{len(PASS)+len(FAIL)} 通过 ===")
 if FAIL:

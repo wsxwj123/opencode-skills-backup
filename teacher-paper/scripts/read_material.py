@@ -122,18 +122,56 @@ def read_xlsx(path):
 
 
 def read_csv(path):
+    """Bug-B4 修复：先用 chardet/charset_normalizer 探测编码（utf-8 字节用 gbk
+    解码常不抛异常而是产生乱码），避免按 utf-8/gbk 静默匹配错误编码。
+    探测不到时回退原有 utf-8-sig/gbk/utf-8 顺序，但增加'非可打印率'校验。"""
     import csv
-    out = []
-    for enc in ("utf-8-sig", "gbk", "utf-8"):
+    # 优先用 chardet 或 charset_normalizer 探测
+    enc = None
+    try:
+        with open(path, "rb") as f:
+            sample = f.read(8192)
         try:
-            with open(path, newline="", encoding=enc) as f:
-                for row in csv.reader(f):
-                    out.append(" | ".join(row))
-            return "\n".join(out)
-        except UnicodeDecodeError:
-            out = []
+            import chardet
+            res = chardet.detect(sample)
+            if res and res.get("confidence", 0) > 0.7:
+                enc = res.get("encoding")
+        except ImportError:
+            try:
+                from charset_normalizer import from_bytes
+                result = from_bytes(sample).best()
+                if result:
+                    enc = result.encoding
+            except ImportError:
+                pass
+    except OSError:
+        pass
+
+    encodings = [enc] if enc else []
+    encodings += ["utf-8-sig", "gbk", "utf-8"]
+
+    def _gibberish_ratio(text):
+        """U+FFFD / 控制字符占比；高于 1% 视为乱码。"""
+        if not text:
+            return 0
+        bad = sum(1 for c in text if c == "�" or (ord(c) < 32 and c not in "\r\n\t"))
+        return bad / len(text)
+
+    for e in encodings:
+        if not e:
             continue
-    return "[无法识别 CSV 编码]"
+        try:
+            with open(path, newline="", encoding=e, errors="replace") as f:
+                text = f.read()
+            if _gibberish_ratio(text) < 0.01:
+                out = []
+                with open(path, newline="", encoding=e, errors="replace") as f:
+                    for row in csv.reader(f):
+                        out.append(" | ".join(row))
+                return "\n".join(out)
+        except (UnicodeDecodeError, OSError):
+            continue
+    return "[无法识别 CSV 编码，请改存为 UTF-8 后重试，或安装 chardet：pip3 install chardet]"
 
 
 def read_text(path):

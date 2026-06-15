@@ -46,7 +46,10 @@ OPTIONAL = [
 ]
 # 本 skill 自带的脚本，逐个核对是否齐全（防止文件缺失）
 SELF_SCRIPTS = ["read_material.py", "fetch_web.py", "ocr_image.py",
-                "assemble.py", "make_paper.py"]
+                "assemble.py", "make_paper.py", "make_figure.py",
+                "fetch_everything.py", "assess_fetch_quality.py",
+                "clean_fetched_markdown.py", "url-converter.py",
+                "regression_test.py"]
 # 可选的外部命令行工具（增强能力，有就用没有不强求）
 CLI_TOOL_GROUPS = [
     ("pandoc", ["pandoc"], "Markdown/HTML 转 DOCX，可配 reference.docx 模板"),
