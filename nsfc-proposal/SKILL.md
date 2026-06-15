@@ -98,7 +98,7 @@ Apply these resolutions when references conflict:
 ### Write Mode
 Follow phased gates in order:
 1. Phase 0: initialize project profile, section targets, mapping cardinality.
-   - 🔴 **必须选定「科学问题属性」四选一**（鼓励探索·突出原创 / 聚焦前沿·独辟蹊径 / 需求牵引·突破瓶颈 / 共性导向·交叉融通），写入 profile `science_problem_attribute`。注意与「研究属性（自由探索类/目标导向类）」区分，二者是独立字段。未选定将在 Phase 7 `gate-check` 触发 `failed_at=profile` 阻断。
+   - 🔴 **必须选定「科学问题属性」四选一**（四类官方措辞见 Inputs Required 节），写入 profile `science_problem_attribute`。注意与「研究属性（自由探索类/目标导向类）」区分，二者是独立字段。未选定将在 Phase 7 `gate-check` 触发 `failed_at=profile` 阻断。
 2. Phase 1: write P1 with full citation pipeline and verification.
    - 每节先跑 `python scripts/state_manager.py --root . write-cycle --section P1`（逐节预算/上下文注入的预写门控，完整参数见 references/08）；不得跳过直接硬写。
    - Input: confirmed project profile (title, discipline, H/O/RC/KSQ mapping counts).
@@ -109,6 +109,7 @@ Follow phased gates in order:
    - Input: verified P1; H/O/RC/KSQ mapping counts from Phase 0; consistency_map.json with SQ entries.
    - consistency_map 条目结构（mapped_from_sq / mapped_to_objective / supports_method 等字段名）见 `references/02_核心机制.md` §2.2，按其字段名产出避免 validate 报错。
    - Output: `sections/P2_研究内容.md` + updated `data/consistency_map.json` (H→O→RC→KSQ→M→IN all links validated) + `sections/figure_prompts.md`.
+   - **V 规则分层说明（防"假通过"）：** Phase 2 门控仅验 V-01/V-02/V-03/V-04/V-05/V-08/V-10（H/O/RC/KSQ/IN 结构链路）。V-06（M→F）、V-07（F来源）、V-09（预算追溯）、V-11（代表作匹配）、V-12（备选方案）所依赖的 F 和预算字段在 Phase 2 时尚为空，不在此阶段验证——延迟到 Phase 7 `gate-check` 全量验证。Phase 2 出现这些规则"通过"仅因字段为空时默认 pass，不代表内容已合规。
    - Sub-content order: 研究假说(H) → 研究目标(O) → 研究内容(RC) → 关键科学问题(KSQ) → 研究方案与技术路线(M) → 特色与创新之处(IN) → 年度研究计划.
    - No literature numbers anywhere in P2. Paragraph narrative throughout; annual plan may use year-based paragraphs.
    - Every M must trace back to a specific RC; every IN must trace to RC and M.
@@ -219,7 +220,7 @@ Load only what is needed:
 ## Output Contract
 Deliverables should include:
 - section files under `sections/` (canonical filenames):
-  `P1_立项依据.md`, `P2_研究内容.md`,
+  `P1_立项依据.md`, `P2_研究内容.md`（含独立"预期成果"小节：论文/专利/人才培养目标），
   `P3_1_研究基础与可行性分析.md`, `P3_2_工作条件.md`, `P3_3_正在承担的相关项目.md`, `P3_4_完成基金项目情况.md`,
   `P4_其他需要说明的情况.md`,
   `B1_预算说明_直接费用.md`, `B2_预算说明_合作外拨.md`, `B3_预算说明_其他来源.md`,

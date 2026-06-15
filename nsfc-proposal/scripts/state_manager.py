@@ -491,6 +491,34 @@ def _section_excerpt(text: str, limit_chars: int = 1200) -> str:
     return text[:half] + "\n...\n" + text[-half:]
 
 
+# 科学问题属性 → 论证关键词映射（SPA-WARN 规则，WARN 级不硬卡）
+_SPA_KEYWORD_MAP: dict[str, list[str]] = {
+    "鼓励探索、突出原创": ["原创", "首次", "新发现", "无先例"],
+    "聚焦前沿、独辟蹊径": ["前沿", "空白", "独特视角", "尚无"],
+    "需求牵引、突破瓶颈": ["瓶颈", "制约", "急需", "突破"],
+    "共性导向、交叉融通": ["共性", "交叉", "融合", "跨学科"],
+}
+
+
+def _check_spa_justification(spa: str | None, p1_text: str) -> dict[str, Any]:
+    """检查P1正文是否对所选科学问题属性做了论证（WARN级，不硬卡）。"""
+    if not spa or spa not in _SPA_KEYWORD_MAP:
+        return {"warn": False, "spa": spa, "found_keywords": []}
+    keywords = _SPA_KEYWORD_MAP[spa]
+    found = [kw for kw in keywords if kw in p1_text]
+    warn = len(found) == 0
+    return {
+        "warn": warn,
+        "spa": spa,
+        "keywords_checked": keywords,
+        "found_keywords": found,
+        "message": (
+            f'[SPA-WARN] 科学问题属性"{spa}"未见正文论证，建议在P1科学问题凝练段补充说明原创性/瓶颈/前沿/交叉维度的具体体现。'
+            if warn else ""
+        ),
+    }
+
+
 def build_write_cycle(root: Path, section: str, token_budget: int | None = None) -> dict[str, Any]:
     profile = load_json(root / "proposal_profile.json", DEFAULT_PROFILE)
     cm = consistency_mapper.load_map(root / "data/consistency_map.json")
@@ -536,6 +564,12 @@ def build_write_cycle(root: Path, section: str, token_budget: int | None = None)
             "page_limit": profile.get("page_limit"),
             "word_targets": profile.get("word_targets", {}),
         },
+        # SPA-WARN：仅在撰写P1时检查科学问题属性论证（WARN级，不硬卡）
+        "spa_justification_check": (
+            _check_spa_justification(profile.get("science_problem_attribute"), section_text)
+            if sec_path.stem.startswith("P1")
+            else None
+        ),
     }
 
 
