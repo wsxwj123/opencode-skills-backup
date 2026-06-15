@@ -91,3 +91,82 @@
 4. ⬜ review-writing 瘦身 844→~520(清单见第四节,待用户确认是否做)
 5. ⬜ 其余瘦身:gsw 608→~550、sci2doc 496→~400、reviewer-simulator 砍~80
 6. ⬜ 借鉴点评估(Devil's Advocate / Generator-Evaluator / Calibration 可选增强)
+
+## 七、下一步执行计划(2026-06-16 拟定,待用户批准)
+
+> 核心矛盾:瘦身(减)与借鉴点(加)方向相反。策略 = **先瘦身降负担,借鉴点只挑低成本高价值的精简引入**。分两阶段,阶段一做完实测通过再进阶段二。
+
+### 阶段一:瘦身(纯减,优先)
+方法论(复用 gsw v2.19 重构经验):**砍模板/散文/重复,留流程骨架+门禁命令+HALT;细节下沉 references 按需 Read**。每个技能瘦身后,派 agent"以新用户身份按 SKILL.md 从零实操"实测,确认不因下沉导致跳步(吸取本次端到端实测教训)。
+
+| 技能 | 现行 | 目标 | 主要下沉项 |
+|---|---|---|---|
+| review-writing | 844 | ~520 | outline 模板(L305-340)、SKILL_DIR 探测(L271-293)、检索循环伪代码(L470-544 留骨架)、扫描/未来方向/元数据模板(L753-794)、期刊表(L86-95)+CNKI 重复(3处) |
+| sci2doc | 496 | ~400 | Non-Negotiable 20 条与各 Contract 的重复(缩写/三线表/对齐)合并去重,Non-Negotiable 留指针 |
+| reviewer-simulator | 471 | ~390 | 重复训诫("语气严苛"等同义反复~80 行)精简 |
+| general-sci-writing | 608 | ~550 | Phase 10.5 合规门禁细则下沉,留触发+阻断条件;Phase 11-16 精简 |
+| revise-sci | 249 | ~235 | "第十七轮"开发日志移到 CHANGELOG |
+| nsfc-proposal | 259 | 不缩 | V-11/V-12 摘要上浮(小增,提升可见性) |
+| reviewer-response-sci | 297 | 不缩 | 已较精炼 |
+
+执行方式:派 6 个 sonnet agent(按技能),带各自下沉清单 → 瘦身后逐个端到端实测 → 通过才提交。
+
+### 阶段二:从 academic-research-skills 引入高价值能力(opus 彻查后,2026-06-16)
+**事实更正**:该仓库**仅 4 个技能,无任何 AI 文生图**(穷举 grep 零命中)。所谓"生图"=academic-paper 的 visualization_agent 生成 **matplotlib/ggplot2 代码**(9 类统计图,含 forest/funnel plot),非 DALL-E/SD。
+
+候选(按 价值/成本 排序,待用户选范围):
+| # | 能力 | 接入我方 | 成本 | 推荐 |
+|---|---|---|---|---|
+| 1 | **统计配图代码生成**(16 模板+决策树+APA caption+色盲安全+VLM 验证) | gsw/review/sci2doc 写作配图空白;本地已有 matplotlib/seaborn skill 可复用 | 轻 | ⭐强推 |
+| 2 | **引用完整性硬门**(100% Crossref/S2 API 核验存在性,灰区=FAIL,7类幻觉检查) | 接各写作技能产出后,防幻觉引用 | 中 | ⭐强推 |
+| 3 | WHY-HOW-WHAT 轻量文献档 | review-writing 前置中间档 | 轻 | 可选 |
+| 4 | 魔鬼代言人对抗角色 | reviewer-simulator(挑核心论点漏洞,CRITICAL 可阻断接收) | 中 | 可选 |
+| 5 | Patch 修订协议(anchorize→patch→确定性 apply) | revise-sci 降整篇重写漂移 | 中 | 可选 |
+| 6 | calibration FNR/FPR 校准 | reviewer-simulator 自报误差 | 中 | 可选 |
+| 7 | ⏸ deep-research/pipeline 全编排器 | —— | 重 | 不建议全盘移植:我方定位是单技能深做,非流水线产品;只借"阶段转换注入原则提醒"防 context rot |
+
+### 阶段二 · 已确认范围与详细计划(2026-06-16 用户确认)
+引入 6 项(配图 opt-in),编排器移阶段三不做。**总原则:补的功能尽量放 references/scripts,SKILL.md 只加触发点,不让主文件再膨胀(与瘦身协调)。每项改完实测、分批 commit。**
+
+**2.1 系统综述方法学 → review-writing(重点)**
+- 解除对 systematic/meta 的排除,新增"系统综述模式"(与叙述性/scoping 并列,模式开关)
+- 补:PRISMA 2020(检索→去重→筛选→纳入,数字流图)、纳入/排除标准登记、RoB(RoB2/ROBINS-I)、可选 meta(效应量/异质性/森林图数据)、GRADE 证据分级
+- 放 references/systematic_review_methodology.md + state_manager 加 PRISMA 计数字段;SKILL.md 仅加模式触发点
+- 复杂度:中-重;验证:按系统综述模式实操一个样例
+
+**2.2 配图代码生成(opt-in)→ gsw / sci2doc / review-writing**
+- opt-in:figure 阶段问"是否需 AI 生成配图代码?"默认否(基础实验自作图;生信等启用)
+- matplotlib/ggplot2 代码,9 类统计图(含 forest/funnel),APA caption,色盲安全,300DPI
+- 复用本地 matplotlib/seaborn skill + 新增 references/statistical_figure_standards.md;不重造
+- 复杂度:轻;验证:生成 forest plot 代码跑通
+
+**2.3 引用完整性增强 → 统一 citation_guard(6 份共享)**
+- 增强非新建:① 无 DOI/PMID 条目用 Crossref/S2 按标题核验存在性(不只进 manual queue)② 扩展失败模式提示(伪造结果/方法论捏造等)
+- 保持白名单政策(pubmed-cli/paper-search);先改 gsw 权威版+测,再同步覆盖其余 5 份
+- 复杂度:中;风险:S2 限流、标题匹配假阳→阈值+人工复核;验证:无 DOI 条目 by-title 核验
+
+**2.4 reviewer-simulator 增强**
+- 魔鬼代言人:对抗复查维度(核心论点漏洞/cherry-picking,CRITICAL 阻断接收),放 review_rubric.md,SKILL.md 留触发点
+- calibration:可选模式,金标准集测 FNR/FPR(无标注集则跳过)
+- 复杂度:中
+
+**2.5 Patch 修订协议 → revise-sci**
+- anchorize→patch→确定性 apply(哈希校验,只改触及 block),2 脚本
+- 复杂度:中;验证:改一 block 确认其他 block 字节不变
+
+**2.6 WHY-HOW-WHAT 轻量文献档 → review-writing**
+- 中间档(介于快速摘要与完整综述):WHY 动机/HOW 方法/WHAT 发现 三层结构化;轻量模式
+- 复杂度:轻
+
+### 执行顺序
+1. **阶段一瘦身(全部)→ 端到端实测** — 先确立干净精炼基线
+2. **阶段二 2.1-2.6** — 补功能(下沉优先)→ 各项实测 → 分批 commit
+3. 阶段三编排器:本轮不做(见下)
+
+### 阶段三(列入计划,本轮不做)
+编排器:7 技能串 research→write→review→revise→finalize 总控 + 状态机 + 跨 session 断点续跑;或先只借"阶段转换强制注入核心原则提醒"防 context rot。待阶段一二完成后评估。
+
+### 高风险项与缓解
+- 系统综述方法学:子系统大 → 独立 references + 模式开关,主文件最小,防 review-writing 膨胀
+- 引用完整性增强:改 6 份共享 citation_guard → 先 gsw 权威版改+测再同步,白名单政策不变
+- 配图 opt-in 默认关 → 不打扰基础实验用户
