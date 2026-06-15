@@ -926,26 +926,29 @@ def normalize_format_profile(raw_profile=None):
         school_code = DEFAULT_SCHOOL_CODE
         header_left_text = f"{university_name}{degree_type}"
     else:
-        inferred_missing = []
+        # 每次 normalize 从当前字段实际值重算 missing，不累加旧条目
+        missing_requirements = []
         if not university_name:
-            inferred_missing.append("院校名称")
+            missing_requirements.append("院校名称")
         if not degree_type:
-            inferred_missing.append("学位类型")
+            missing_requirements.append("学位类型")
         if not source_template_files and not requirements_summary:
-            inferred_missing.append("格式模板或详细格式要求")
+            missing_requirements.append("格式模板或详细格式要求")
         if any(page_margins_cm[key] is None for key in ("top", "bottom", "left", "right")):
-            inferred_missing.append("页边距规范")
+            missing_requirements.append("页边距规范")
         if header_distance_cm is None or footer_distance_cm is None:
-            inferred_missing.append("页眉页脚距离规范")
-        for item in inferred_missing:
-            if item not in missing_requirements:
-                missing_requirements.append(item)
+            missing_requirements.append("页眉页脚距离规范")
+        # status 由字段是否齐全决定，不继承旧值
         if missing_requirements:
             status = "pending_template"
-        if explicit_allow_docx_generation is None:
+        else:
+            status = "ready"
+        # allow_docx 同样由 status 决定；explicit_allow_docx_generation 仅用于在 ready 状态下
+        # 用户主动禁止生成（None 表示未显式设置，False 若由 pending→ready 变化前写入则忽略）
+        if explicit_allow_docx_generation is None or status == "ready":
             allow_docx_generation = status == "ready"
         else:
-            allow_docx_generation = bool(explicit_allow_docx_generation) and status == "ready"
+            allow_docx_generation = False
         if not graduate_school_name and university_name:
             graduate_school_name = f"{university_name}研究生院"
         if not declaration_authorization_school_name and university_name:

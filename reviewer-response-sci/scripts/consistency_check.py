@@ -82,7 +82,11 @@ def main() -> int:
             promise_lower = promise.lower()
             # Check if any modification_action reason or revised_excerpt_en contains a matching echo
             found_in_actions = any(
-                any(kw in (a.get("reason", "") + a.get("target", "")).lower() for kw in promise_lower.split()[1:3])
+                any(
+                    kw in (a.get("reason", "") + a.get("target", "")).lower()
+                    for kw in promise_lower.split()[1:3]
+                    if len(kw) > 3
+                )
                 for a in mod_actions
             )
             found_in_revised = any(

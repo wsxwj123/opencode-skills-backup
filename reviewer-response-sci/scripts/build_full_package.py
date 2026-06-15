@@ -98,6 +98,13 @@ def split_reviewer_blocks(text: str) -> dict[str, str]:
     )
     hits = list(block_pat.finditer(text))
     if not hits:
+        import sys
+        print(
+            "WARN: no Reviewer header matched (expected 'Reviewer #N:' or Editor block); "
+            "treating whole document as Reviewer #1. Check that the reviewer letter uses "
+            "'Reviewer #1:', 'Reviewer #2:', or 'Editor:' headers.",
+            file=sys.stderr,
+        )
         return {"Reviewer #1": text}
     out: dict[str, str] = {}
     for i, m in enumerate(hits):
@@ -109,12 +116,24 @@ def split_reviewer_blocks(text: str) -> dict[str, str]:
     return out
 
 
+def _section_type_from_header(header: str) -> str:
+    """Map a section header string to 'major' or 'minor', case-insensitively."""
+    h = header.lower()
+    if h.startswith("major"):
+        return "major"
+    if h.startswith("minor"):
+        return "minor"
+    return "general"
+
+
 def split_sections(block: str) -> list[tuple[str, str]]:
+    # Case-insensitive search for section headers
+    _section_pat = re.compile(
+        r"(?i)(?:Major\s+Comments?|Minor\s+Comments?|Major\s+changes?|Minor\s+changes?)"
+    )
     marks: list[tuple[int, str]] = []
-    for key in ["Major Comments", "Minor Comments", "Major changes", "Minor changes"]:
-        idx = block.find(key)
-        if idx != -1:
-            marks.append((idx, key))
+    for m in _section_pat.finditer(block):
+        marks.append((m.start(), m.group(0)))
     marks.sort(key=lambda x: x[0])
     if not marks:
         return [("general", block)]
@@ -123,7 +142,7 @@ def split_sections(block: str) -> list[tuple[str, str]]:
     for i, (idx, name) in enumerate(marks):
         start = idx + len(name)
         end = marks[i + 1][0] if i + 1 < len(marks) else len(block)
-        out.append((SECTION_MAP[name.lower()], block[start:end]))
+        out.append((_section_type_from_header(name), block[start:end]))
     return out
 
 
@@ -1011,9 +1030,16 @@ def render_html(project_title: str, index_data: dict[str, Any], units: list[dict
                     else:
                         image_block = """<div class=\"img-placeholder\">图片修改占位符：请插入修订后图片（如 Figure 面板替换、图注同步更新）。</div>"""
 
+                strategy = unit["content"].get("strategy", "")
+                strategy_html = (
+                    f'<div class="stack-box"><h4>回复基调（Strategy）</h4><p>{escape(strategy)}</p></div>\n'
+                    if strategy and strategy.strip()
+                    else ""
+                )
+
                 pages.append(
                     f'''<section id="page-{escape(uid)}" class="page"><h2>{escape(unit['title'])}</h2>
-<div class="card"><h3>1) 审稿意见与中文理解</h3>
+{strategy_html}<div class="card"><h3>1) 审稿意见与中文理解</h3>
 <div class="stack-box"><h4>原始审稿意见（English）</h4><p>{escape(unit['content']['reviewer_comment_en'])}</p></div>
 <div class="stack-box"><h4>审稿意见中文翻译（直译）</h4><p>{escape(comment_zh)}</p></div>
 <div class="stack-box"><h4>审稿意见中文理解</h4><p>{escape(intent_zh)}</p></div>
@@ -1235,6 +1261,37 @@ def main() -> int:
         },
     }
     write_json(project_root / "project_state.json", project_state)
+
+    # B9 fix: generate manuscript_edit_plan.md skeleton (one row per comment unit)
+    # Each row has uid + [PENDING Step 7] placeholder for revised text.
+    edit_plan_path = project_root / "manuscript_edit_plan.md"
+    if not edit_plan_path.exists():
+        plan_lines = [
+            "# Manuscript Edit Plan\n",
+            "\n",
+            "| unit_id | reviewer | section | comment# | target_doc | section_heading | para_index | Word Find key sentence | revised text to insert |\n",
+            "|---------|----------|---------|----------|------------|-----------------|------------|------------------------|------------------------|\n",
+        ]
+        for u in units:
+            if u.get("section") == "email":
+                continue
+            uid = u["unit_id"]
+            reviewer = u.get("reviewer", "")
+            section = u.get("section", "")
+            cnum = u.get("comment_number", "")
+            aloc = u.get("content", {}).get("atomic_location", {})
+            heading = aloc.get("manuscript_heading_context") or aloc.get("si_heading_context") or "N/A"
+            para_idx = str(aloc.get("manuscript_paragraph_index", aloc.get("si_paragraph_index", "N/A")))
+            key_sent = aloc.get("manuscript_sentence_text") or "N/A"
+            key_sent = " ".join(str(key_sent).split())[:80]
+            target_doc = "SI" if aloc.get("si_unit_id") and not aloc.get("manuscript_unit_id") else "manuscript"
+            plan_lines.append(
+                f"| {uid} | {reviewer} | {section} | {cnum} | {target_doc} | {heading} | {para_idx} | {key_sent} | [PENDING Step 7] |\n"
+            )
+        edit_plan_path.write_text("".join(plan_lines), encoding="utf-8")
+        print(f"WROTE edit plan skeleton: {edit_plan_path} ({len(plan_lines) - 4} comment rows)")
+    else:
+        print(f"SKIP edit plan (already exists): {edit_plan_path}")
 
     html = render_html(project_title=args.title, index_data=index_data, units=units)
     out_html = Path(args.output_html)
