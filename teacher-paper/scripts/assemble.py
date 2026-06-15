@@ -564,6 +564,7 @@ def cmd_build(args):
     source_errors = []  # 阅读类素材真实性硬门禁的违规项
     figure_errors = []  # 缺图硬门禁：题干含"如图"但无 figure block
     parse_errors = []   # 完整性硬门禁：坏 JSON / 结构错误的原子文件（跳过=静默漏题）
+    excerpt_errors = []  # 忠实节选硬门禁：材料非原文连续子串（跳段/改字/重排）
     audit_rows = []     # 材料真实性自检表（build 自动生成）
     allow_missing_fig = "--allow-missing-figure" in args
     materials_dir = os.path.join(proj, "materials")
@@ -592,6 +593,8 @@ def cmd_build(args):
         # —— 阅读类素材真实性硬门禁 ——
         _pre_src_err = len(source_errors)
         _check_source(fp, m, p_blocks, materials_dir, source_errors, warn)
+        # —— 忠实节选硬门禁：材料只能从原文首尾连续删减（禁跳段/改字/重排）——
+        _check_faithful_excerpt(fp, m, p_blocks, materials_dir, excerpt_errors)
         # —— 材料真实性自检表行（build 自动生成，交付时原样转发用户）——
         for _b in p_blocks:
             if isinstance(_b, dict) and _b.get("type") == "material" and _b.get("paras"):
@@ -706,6 +709,21 @@ def cmd_build(args):
                 print("   - " + e)
             print("\n  已拒绝出卷。把标注改为'节选自…'（教师原创只写在 meta.source）后重跑；")
             print("  仅当选文标题本身确实含这些词（如书名）误伤时，加 --allow-wording 降级为告警并告知用户。")
+            sys.exit(2)
+
+    # —— 忠实节选硬门禁：材料只能从原文首尾连续删减（禁跳段/改字/重排）——
+    allow_excerpt = "--allow-excerpt" in args
+    if excerpt_errors:
+        if allow_excerpt:
+            warn.extend(e.split("。若确为")[0] + "（--allow-excerpt 已降级为告警，请人工担保真实性）"
+                        for e in excerpt_errors)
+        else:
+            print(f"[合并] 已读 {len(files)} 个原子文件，题量 {len(nums)}，分值合计 {total:g}")
+            print("\n🔴 [忠实节选门禁] 以下选文疑似改字/编造/重排（材料未逐字取自真实原文）：")
+            for e in excerpt_errors:
+                print("   - " + e)
+            print("\n  已拒绝出卷。材料可删减无关部分，但保留的每段须逐字取自真实原文、按原文顺序；")
+            print("  重新抓原文、按原文逐字节选后重跑。")
             sys.exit(2)
 
     # —— 缺图硬门禁：题干含"如图"但 paper 无 figure block ——
@@ -1236,7 +1254,7 @@ def _check_source(fp, meta, paper_blocks, materials_dir, errors, warn):
     - 非原创且 source 是 URL：materials 原文必须带 fetch_web.py 抓取凭证头，
       否则判为「凭记忆默写+补假URL」拒绝（除非显式标 '用户提供-…'）。
     - 非原创、非URL的纯出处（纸质书/杂志）：程序无法核验，放行但 warn 提示人工核对。
-    - 忠实节选子串校验：选文每段去空白后须为原文连续子串，改写/重排会落空 → warn。"""
+    （忠实节选的"只能首尾连续删减"校验已独立为硬门禁 _check_faithful_excerpt）"""
     if not _needs_source(meta, paper_blocks):
         return
     name = os.path.basename(fp)
@@ -1302,28 +1320,61 @@ def _check_source(fp, meta, paper_blocks, materials_dir, errors, warn):
     elif not is_user:
         warn.append(f"{name}：素材来源『{source}』非网络链接、无法用抓取凭证核验，"
                     f"请人工核对该选文是否逐字属实。")
-
-    # —— 忠实节选·子串校验（软提醒，汇总所有 miss）——
-    src_norm = _norm_text(src_doc)
-    if not src_norm:
-        warn.append(f"{name}：materials/{sfile} 内容为空或无法读取，无法校验"
-                    f"选文是否忠实节选。")
-        return
+    # 注：忠实节选「只能首尾连续删减」的子串校验已独立为硬门禁 _check_faithful_excerpt（build 调用）。
+    # title-only 材料（有来源但无 paras 正文）：无原文可比，提示人工核对（完整性门禁另会拦缺正文）
     for b in mats:
-        # title-only 块（无 paras）无法校验正文——必须 warn,不能静默放行
         if not b.get("paras"):
             warn.append(f"{name}：material 块仅有 title 无 paras 正文，"
-                        f"无法校验选文是否忠实节选，请人工核对。")
+                        f"无法核验选文是否属实，请人工核对。")
+
+
+def _check_faithful_excerpt(fp, meta, paper_blocks, materials_dir, errors):
+    """忠实节选硬门禁（落地'材料保真：允许合理删减，但禁造假/改字/重排'）：
+    每段保留的正文必须逐字取自 source_file 原文（去标点空白后是原文子串），
+    且各段按原文出现顺序排列。**允许删掉无关部分（含中间段，ABC→AC 可以）**，
+    但禁止改字/编造（段落不在原文）、禁止重排（段落顺序与原文颠倒）→ 拒绝出卷。
+    跳过：原创素材（无原文可比）、verse 古诗词（逐句默写、另行核验）、
+    缺 source_file/文件不存在（由 _check_source 溯源门禁先行拦截）、过短材料。"""
+    if not _needs_source(meta, paper_blocks):
+        return
+    source = str(meta.get("source", "")).strip()
+    sfile = str(meta.get("source_file", "")).strip()
+    if "原创" in source or not sfile or os.path.isabs(sfile):
+        return
+    fpath = os.path.join(materials_dir, sfile)
+    if not os.path.exists(fpath):
+        return
+    try:
+        with open(fpath, encoding="utf-8") as f:
+            src_norm = _norm_text(f.read())
+    except (OSError, UnicodeDecodeError):
+        return
+    if not src_norm:
+        return
+    name = os.path.basename(fp)
+    for b in paper_blocks:
+        if not (isinstance(b, dict) and b.get("type") == "material"):
             continue
-        miss_paras = []
-        for para in b.get("paras") or []:
+        if b.get("layout") == "verse":
+            continue
+        pos = 0  # 上一段在原文中的结束位置（保证按原文顺序、禁重排）
+        for para in (b.get("paras") or []):
             p = _norm_text(para)
-            if len(p) >= 12 and p not in src_norm:
-                miss_paras.append(str(para)[:18])
-        if miss_paras:
-            warn.append(f"{name}：选文有 {len(miss_paras)} 段未在 materials/{sfile} "
-                        f"原文中逐字找到（如『{miss_paras[0]}…』）"
-                        f"——可能被改写/重排，请核对是否忠实节选。")
+            if len(p) < 12:        # 过短段落（标题/过渡句）不校验
+                continue
+            idx = src_norm.find(p, pos)
+            if idx >= 0:
+                pos = idx + len(p)
+                continue
+            snippet = str(para)[:18]
+            if p in src_norm:      # 原文里有但在 pos 之前 → 顺序颠倒
+                errors.append(f"{name}：选文段落顺序与 materials/{sfile} 原文不一致"
+                              f"（如『{snippet}…』排在前文之前）——只能按原文顺序删减，禁止重排。")
+            else:                  # 原文里根本没有 → 改字或编造
+                errors.append(f"{name}：选文有段落未在 materials/{sfile} 原文中逐字出现"
+                              f"（如『{snippet}…』）——疑似改字或编造，材料每段须逐字取自真实原文"
+                              f"（可删减无关部分，但不可改写）。")
+            break
 
 
 def _detect_desktop():

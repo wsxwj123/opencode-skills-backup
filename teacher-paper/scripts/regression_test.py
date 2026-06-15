@@ -287,7 +287,7 @@ _mat_bad = _json.dumps({
     "answer": []}, ensure_ascii=False)
 with tempfile.TemporaryDirectory() as td:
     proj = _mk_proj(td, [("101_q01.json", _q_ok), ("211_mat.json", _mat_bad)], 1)
-    (proj / "materials" / "b.md").write_text("纸质书原文", encoding="utf-8")
+    (proj / "materials" / "b.md").write_text("正文" * 60, encoding="utf-8")  # 含正文,只测措辞门禁不触发忠实节选门禁
     try:
         with contextlib.redirect_stdout(io.StringIO()):
             A.cmd_build([str(proj)])
@@ -302,6 +302,53 @@ with tempfile.TemporaryDirectory() as td:
         case("H5 --allow-wording降级出卷+自检表含❌", "改编" in _atbl and "❌" in _atbl)
     except SystemExit as e:
         case("H5 --allow-wording降级出卷+自检表含❌", False, f"exit {e.code}")
+
+# ============== Part I: 忠实节选连续子串门禁 ==============
+print("\n=== I. _check_faithful_excerpt 连续删减门禁 ===")
+with tempfile.TemporaryDirectory() as td:
+    md = pathlib.Path(td) / "materials"
+    md.mkdir()
+    # 原文 ABC 三段
+    A_txt, B_txt, C_txt = "甲" * 20, "乙" * 20, "丙" * 20
+    (md / "src.md").write_text(A_txt + "\n\n" + B_txt + "\n\n" + C_txt, encoding="utf-8")
+    meta = {"status": "-", "source": "本地纸质《合集》", "source_file": "src.md"}
+
+    def _excerpt(paras, **kw):
+        return [{"type": "material", "title": "x", "paras": paras, **kw}]
+
+    er = []
+    A._check_faithful_excerpt("i1.json", meta, _excerpt([A_txt, B_txt]), str(md), er)
+    case("I1 取AB连续-放行", not er)
+
+    er = []
+    A._check_faithful_excerpt("i2.json", meta, _excerpt([B_txt, C_txt]), str(md), er)
+    case("I2 取BC连续-放行", not er)
+
+    er = []
+    A._check_faithful_excerpt("i3.json", meta, _excerpt([A_txt, C_txt]), str(md), er)
+    case("I3 取AC删中段-放行（允许删无关部分）", not er)
+
+    er = []
+    A._check_faithful_excerpt("i4.json", meta, _excerpt([A_txt.replace("甲", "改", 1)]), str(md), er)
+    case("I4 改字-拒", any("逐字" in e for e in er))
+
+    er = []
+    A._check_faithful_excerpt("i5.json", meta, _excerpt([C_txt, A_txt]), str(md), er)
+    case("I5 调序CA-拒（重排）", any("顺序" in e for e in er))
+
+    er = []
+    A._check_faithful_excerpt("i8.json", meta, _excerpt([A_txt + "凭空编造一段假内容" * 2]), str(md), er)
+    case("I8 编造-拒", any("逐字" in e for e in er))
+
+    er = []
+    A._check_faithful_excerpt("i6.json", {"status": "-", "source": "原创-已声明"},
+                              _excerpt([A_txt, C_txt]), str(md), er)
+    case("I6 原创素材-跳过", not er)
+
+    er = []
+    A._check_faithful_excerpt("i7.json", meta,
+                              _excerpt(["床前明月光"], layout="verse"), str(md), er)
+    case("I7 verse古诗-跳过", not er)
 
 # ============== Part G: NUL 残留文件清理 ==============
 print("\n=== G. _cleanup_nul_files NUL 残留清理 ===")
