@@ -13,9 +13,9 @@
 
 | 能力 | 首选(autocli) | 降级(fetch-everything) |
 |------|----------------|------------------------|
-| 主动检索 | `autocli <site> search --keyword/--query "..." --format json` | 抓搜索页(脆弱) |
+| 主动检索 | `autocli <site> search "关键词" --format json`(关键词是**位置参数**) | 抓搜索页(脆弱) |
 | 正文/文案 | `autocli read "<url>"`(Readability→Markdown,含登录墙页) | `fetch_everything.py "<url>" --json` |
-| B站字幕 | `autocli bilibili subtitle --bvid <BVID>` | yt-dlp 字幕 |
+| B站字幕 | `autocli bilibili subtitle <BVID>`(bvid 是**位置参数**) | yt-dlp 字幕 |
 | 视频音频 | yt-dlp(见下) | — |
 | 评论 | ⚠️ autocli 无通用读评论命令 | 见下「评论」 |
 
@@ -25,11 +25,12 @@
 
 各平台都有 `search`,直接拿候选条目列给用户选或取 top-N,再逐条进详情:
 ```bash
-autocli bilibili search --keyword "显卡选购" --type video --limit 20 --format json
-autocli zhihu     search --keyword "大模型"   --limit 20 --format json
-autocli weibo     search --keyword "关键词"   --limit 20 --format json
-autocli douban    search --keyword "书名"     --limit 20 --format json
-autocli youtube   search --query  "LLM"       --limit 20 --format json
+# 关键词是位置参数,不要加 --keyword/--query;--type/--limit/--format 才是选项
+autocli bilibili search "显卡选购" --type video --limit 20 --format json
+autocli zhihu     search "大模型"   --limit 20 --format json
+autocli weibo     search "关键词"   --limit 20 --format json
+autocli douban    search "书名"     --type book --limit 20 --format json   # --type movie|book|music
+autocli youtube   search "LLM"       --limit 20 --format json
 ```
 
 ---
@@ -62,7 +63,7 @@ find /tmp -maxdepth 1 -name 'social_clip_img_*' -exec rm -f {} + 2>/dev/null
 
 **B站字幕最优**(autocli 走登录态,比 yt-dlp 稳):
 ```bash
-autocli bilibili subtitle --bvid <BVID> --format json   # 有字幕→去时间轴→进总结
+autocli bilibili subtitle <BVID> --format json   # bvid 位置参数;有字幕→去时间轴→进总结
 ```
 
 **通用字幕优先**(其他平台,有官方/自动字幕时比 ASR 快且准):
