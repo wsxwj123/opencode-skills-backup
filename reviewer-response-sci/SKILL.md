@@ -279,7 +279,7 @@ python3 scripts/run_pipeline.py \
 - `final_consistency_report.py`：生成统计报告（units 数量、链接率、缺失 excerpt 计数）
 - `html_format_check.py`：HTML 结构完整性
 - `risk_check.py`：检测虚构实验/统计、过度承诺、AI 式套话、跨 unit 结构重复
-- `citation_guard.py`：验证 `citation_registry.json` 新增引用真实性（DOI/PMID/撤稿检测）；`--offline` 跳过在线验证
+- `citation_guard.py`：验证 `citation_registry.json` 新增引用真实性（DOI/PMID/撤稿检测）；`--offline` 跳过在线验证。报告写入 `logs/citation_guard_report.json`，顶层结构为 `{"status": "pass"|"warn", "verified": N, "failed": N, "retracted": N, ...}`（注意：无 `report.ok` 嵌套层；判断通过用 `status == "pass"`，判断撤稿用 `retracted > 0`）
 - `citation_ref_tracker.py`：交叉验证 `[N]` 引用编号一致性（未定义引用、编号间隙）
 
 Re-Render 单独脚本：`render_from_atomic_json.py`（重渲）、`state_manager.py`（状态同步 `sync`/`show`/`set`/`init`；改 units 前后用 `snapshot`/`rollback` 建还原点与回滚）。

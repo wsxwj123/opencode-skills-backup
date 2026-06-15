@@ -212,6 +212,8 @@ def _is_placeholder(value: str) -> bool:
         or v == _PLACEHOLDER
         or v.startswith("[AI_FILL_REQUIRED]")
         or v.startswith("[PENDING")
+        or v.startswith("【待AI")
+        or v.startswith("【待")
     )
 
 
