@@ -378,6 +378,97 @@ with tempfile.TemporaryDirectory() as td:
     A._cleanup_nul_files(str(gproj), warn, extra_dirs=(str(parent),))
     case("G6 工程父目录顶层NUL被清理", not (parent / "NUL").exists())
 
+# ============== Part J: Batch 1 安全补丁（A1/A2/A3/A4/W1）==============
+print("\n=== J. Batch 1 安全补丁 ===")
+
+# J.A1 sha256 校验
+import hashlib as _hl
+body_J1 = "正文测试" * 30   # 真实正文
+sha_J1 = _hl.sha256(body_J1.encode()).hexdigest()
+cred_J1 = (f"<!-- teacher-paper:fetched\nurl: https://news.cn/J1\n"
+           f"strategy: jina\nchars: {len(body_J1)}\nsha256: {sha_J1}\nfetched_at: 2026-06-15\n-->\n\n"
+           f"来源：https://news.cn/J1\n抓取日期：2026-06-15\n\n{body_J1}")
+ok, _ = A._credential_matches_url(cred_J1, "https://news.cn/J1")
+case("J1.A1 真凭证+真sha256-放行", ok)
+
+# 攻击：内容被改但 chars 对齐
+fake_body = "篡改正文" * 30  # 等长但内容不同
+fake_text = cred_J1.replace(body_J1, fake_body)
+ok, why = A._credential_matches_url(fake_text, "https://news.cn/J1")
+case("J2.A1 chars对齐但sha256不符-拒", not ok and "sha256" in why)
+
+# J.A2 manifest 宽容解包
+import tempfile as _tf
+with _tf.TemporaryDirectory() as td:
+    _meta = {"grade":"九","subject":"语文","exam_type":"中考","region":"长沙",
+             "total":120,"duration":120,"expected_questions":21,"title":"t","blueprint_source":""}
+    bad_rows = [("100","q1","选择",2,"考点A"),  # 5字段
+                ("200","q2","填空"),               # 4字段
+                ("300","q3","解答",4,"考点B",0.6,"额外字段")]  # 7字段
+    try:
+        A._write_manifest(td, _meta, bad_rows)
+        case("J3.A2 manifest脏数据不崩溃", True)
+    except Exception as e:
+        case("J3.A2 manifest脏数据不崩溃", False, str(e))
+
+# J.A3 sympy 白名单（已单独验证）
+import make_figure as _MF
+for atk in ["factorial(5)", "integrate(x, x)", "diff(x, x)", "Sum(x, (x, 0, 5))"]:
+    try:
+        _MF._make_func(atk)
+        case(f"J4.A3 拦 {atk[:18]}", False, "未拒绝")
+    except ValueError:
+        case(f"J4.A3 拦 {atk[:18]}", True)
+# 合法仍放行
+ok_J = True
+for legit in ["x**2-1", "sin(x)+cos(x)", "sqrt(x**2+1)"]:
+    try:
+        _MF._make_func(legit)
+    except Exception:
+        ok_J = False
+case("J5.A3 合法表达式仍放行", ok_J)
+
+# J.A4 忠实节选短段累计占比
+with _tf.TemporaryDirectory() as td:
+    md = pathlib.Path(td) / "materials"
+    md.mkdir()
+    long_orig = "这是原文很长一段连续完整的内容请勿打散" * 5  # 真实原文
+    (md / "src.md").write_text(long_orig, encoding="utf-8")
+    # 攻击：把原文每段拆成 11 字短句逐句重写
+    short_chunks = ["这是原文很长一段连内", "全新编造的内容欺骗系统", "再来一段编造的违规内容",
+                    "这也是编造的不在原文里", "完全编造内容欺骗校验"] * 3
+    meta = {"status":"-", "source":"本地纸质《合集》", "source_file":"src.md"}
+    er = []
+    A._check_faithful_excerpt("j6.json", meta,
+                              [{"type":"material","title":"x","paras":short_chunks}],
+                              str(md), er)
+    case("J6.A4 短段拆解绕过-拒", any("短段" in e for e in er))
+
+# J.W1 时政时效
+with _tf.TemporaryDirectory() as td:
+    md = pathlib.Path(td) / "materials"
+    md.mkdir()
+    stale_body = "旧时政素材测试" * 30
+    stale_sha = _hl.sha256(stale_body.encode()).hexdigest()
+    cred_stale = (f"<!-- teacher-paper:fetched\nurl: https://gov.cn/stale\n"
+                  f"strategy: jina\nchars: {len(stale_body)}\nsha256: {stale_sha}\n"
+                  f"fetched_at: 2024-01-01\n-->\n\n来源：https://gov.cn/stale\n抓取日期：2024-01-01\n\n{stale_body}")
+    (md / "stale.md").write_text(cred_stale, encoding="utf-8")
+    er, w = [], []
+    A._check_freshness("j7.json",
+                       {"source":"https://gov.cn/stale", "source_file":"stale.md"},
+                       [{"type":"material","title":"x","paras":[stale_body]}],
+                       str(md), "思想政治", er, w, 90)
+    case("J7.W1 道法素材>180天-拒", any("时政" in e for e in er))
+
+# 非时政科目不触发
+er2 = []
+A._check_freshness("j8.json",
+                   {"source":"https://gov.cn/stale", "source_file":"stale.md"},
+                   [{"type":"material","title":"x","paras":[stale_body]}],
+                   str(md), "语文", er2, [], 90)
+case("J8.W1 语文科目不触发freshness", not er2)
+
 # 总结
 print(f"\n=== 总计 {len(PASS)}/{len(PASS)+len(FAIL)} 通过 ===")
 if FAIL:
