@@ -16,7 +16,8 @@ from common import normalize_ws, read_json, write_json
 DOI_RE = re.compile(r"^10\.\d{4,9}/[-._;()/:A-Z0-9]+$", re.IGNORECASE)
 PMID_RE = re.compile(r"^\d{4,10}$")
 TITLE_TOKEN_RE = re.compile(r"[a-z0-9\u4e00-\u9fff]+")
-ALLOWED_PROVIDER_FAMILIES = {"paper-search"}
+ALLOWED_PROVIDER_FAMILIES = {"paper-search", "pubmed-cli"}
+FORBIDDEN_PROVIDER_FAMILIES = {"websearch", "openalex-cli", "tavily"}
 
 
 def _http_get_json(url: str, timeout_sec: float = 8.0) -> dict[str, Any] | None:
@@ -62,7 +63,9 @@ def _fetch_crossref_by_doi(doi: str) -> dict[str, Any] | None:
     msg = payload["message"]
     title = (msg.get("title") or [""])[0] if isinstance(msg.get("title"), list) else ""
     returned_doi = str(msg.get("DOI") or doi).strip()
-    return {"title": title or "", "doi": returned_doi}
+    relation = msg.get("relation") or {}
+    is_retracted = isinstance(relation, dict) and any("retract" in str(k).lower() for k in relation.keys())
+    return {"title": title or "", "doi": returned_doi, "retracted": is_retracted}
 
 
 def _fetch_pubmed_by_pmid(pmid: str) -> dict[str, Any] | None:
@@ -81,14 +84,28 @@ def _fetch_pubmed_by_pmid(pmid: str) -> dict[str, Any] | None:
         if isinstance(item, dict) and str(item.get("idtype", "")).lower() == "doi":
             doi = str(item.get("value") or "").strip()
             break
-    return {"title": str(result.get("title") or "").strip(), "pmid": str(pmid), "doi": doi}
+    pubtypes = result.get("pubtype") or []
+    is_retracted = any("retract" in str(x).lower() for x in pubtypes)
+    return {"title": str(result.get("title") or "").strip(), "pmid": str(pmid), "doi": doi, "retracted": is_retracted}
 
 
 def _provider_family(citation: dict[str, Any]) -> str:
-    provider = normalize_ws(
-        str(citation.get("source_provider") or citation.get("provider_family") or citation.get("provider") or "paper-search")
+    raw = normalize_ws(
+        str(citation.get("source_provider") or citation.get("provider_family") or citation.get("provider") or "")
     ).lower()
-    return "paper-search" if provider.startswith("paper-search") else provider
+    if not raw:
+        return "paper-search"  # default when field absent (backwards compat)
+    if raw.startswith("paper-search"):
+        return "paper-search"
+    if raw.startswith("pubmed") or raw in ("edirect", "ncbi", "esearch"):
+        return "pubmed-cli"
+    if raw.startswith("tavily"):
+        return "tavily"
+    if raw in ("openalex", "openalex-cli", "pyalex"):
+        return "openalex-cli"
+    if "websearch" in raw or "web-search" in raw or "web_search" in raw:
+        return "websearch"
+    return raw
 
 
 def _extract_identifier(citation: dict[str, Any]) -> tuple[str, str]:
@@ -138,7 +155,9 @@ def validate_citation(citation: dict[str, Any], *, online_check: bool) -> dict[s
     provider_family = _provider_family(citation)
     failure_reasons: list[str] = []
 
-    if provider_family not in ALLOWED_PROVIDER_FAMILIES:
+    if provider_family in FORBIDDEN_PROVIDER_FAMILIES:
+        failure_reasons.append("source_provider_forbidden")
+    elif provider_family not in ALLOWED_PROVIDER_FAMILIES:
         failure_reasons.append("source_provider_not_allowed")
     if not title:
         failure_reasons.append("title_missing")
@@ -159,18 +178,28 @@ def validate_citation(citation: dict[str, Any], *, online_check: bool) -> dict[s
         if value:
             secondary_titles.append(value)
 
+    crossref_rec = None
+    pubmed_rec = None
     if online_check:
         if doi and not secondary_titles:
-            rec = _fetch_crossref_by_doi(doi)
-            if rec:
-                secondary_titles.append(normalize_ws(rec.get("title", "")))
-                secondary_doi = secondary_doi or normalize_ws(rec.get("doi", ""))
+            crossref_rec = _fetch_crossref_by_doi(doi)
+            if crossref_rec:
+                secondary_titles.append(normalize_ws(crossref_rec.get("title", "")))
+                secondary_doi = secondary_doi or normalize_ws(crossref_rec.get("doi", ""))
         if pmid and not secondary_titles:
-            rec = _fetch_pubmed_by_pmid(pmid)
-            if rec:
-                secondary_titles.append(normalize_ws(rec.get("title", "")))
-                secondary_pmid = secondary_pmid or normalize_ws(rec.get("pmid", ""))
-                secondary_doi = secondary_doi or normalize_ws(rec.get("doi", ""))
+            pubmed_rec = _fetch_pubmed_by_pmid(pmid)
+            if pubmed_rec:
+                secondary_titles.append(normalize_ws(pubmed_rec.get("title", "")))
+                secondary_pmid = secondary_pmid or normalize_ws(pubmed_rec.get("pmid", ""))
+                secondary_doi = secondary_doi or normalize_ws(pubmed_rec.get("doi", ""))
+
+    # Retraction check
+    retracted = bool(citation.get("retracted", False))
+    for rec in (crossref_rec, pubmed_rec):
+        if rec and rec.get("retracted"):
+            retracted = True
+    if retracted:
+        failure_reasons.append("retracted")
 
     if not secondary_titles:
         failure_reasons.append("secondary_verification_missing")
@@ -189,6 +218,7 @@ def validate_citation(citation: dict[str, Any], *, online_check: bool) -> dict[s
     payload["provider_family"] = provider_family
     payload["doi"] = doi
     payload["pmid"] = pmid
+    payload["retracted"] = retracted
     payload["guard_verified"] = verified
     payload["reference_entry"] = build_reference_entry(payload)
     payload["verification_details"] = {
@@ -197,6 +227,7 @@ def validate_citation(citation: dict[str, Any], *, online_check: bool) -> dict[s
         "secondary_titles": secondary_titles,
         "secondary_doi": secondary_doi,
         "secondary_pmid": secondary_pmid,
+        "retracted": retracted,
     }
     return payload
 
@@ -217,7 +248,8 @@ def main() -> int:
     rows = payload.get("results", []) if isinstance(payload, dict) else payload
 
     validated_rows = []
-    all_rows_guard_verified = True
+    # Fail-closed: empty rows means no citations verified — treat as unverified
+    all_rows_guard_verified = bool(rows)
     verified_citation_count = 0
     total_citation_count = 0
 
