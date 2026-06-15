@@ -25,7 +25,7 @@ DOI_RE = re.compile(r"^10\.\d{4,9}/[-._;()/:A-Z0-9]+$", re.IGNORECASE)
 PMID_RE = re.compile(r"^\d{4,10}$")
 TITLE_TOKEN_RE = re.compile(r"[a-z0-9\u4e00-\u9fff]+")
 ALLOWED_PROVIDER_FAMILIES = {"pubmed-cli", "paper-search"}
-FORBIDDEN_PROVIDER_FAMILIES = {"websearch", "openalex-cli"}
+FORBIDDEN_PROVIDER_FAMILIES = {"websearch", "openalex-cli", "tavily"}
 
 
 def load_json(path: Path, default: Any) -> Any:
@@ -202,19 +202,13 @@ def _provider_family(provider: str) -> str:
         return "paper-search"
     if p.startswith("pubmed"):
         return "pubmed-cli"
+    if p.startswith("openalex") or p == "pyalex":
+        return "openalex-cli"
     if p.startswith("tavily"):
         return "tavily"
     if "websearch" in p or "web-search" in p or "web_search" in p:
         return "websearch"
     return p
-
-
-def _extract_tavily_title(entry: dict[str, Any]) -> str:
-    for k in ("tavily_title", "tavily_verified_title", "reverse_verified_title", "web_title"):
-        v = entry.get(k)
-        if isinstance(v, str) and v.strip():
-            return v.strip()
-    return ""
 
 
 def validate_entry(
@@ -248,10 +242,6 @@ def validate_entry(
     for rec in (mcp_record, pubmed, crossref):
         if rec and rec.get("title"):
             source_titles.append(str(rec["title"]))
-    if provider_family == "tavily":
-        tavily_title = _extract_tavily_title(entry)
-        if tavily_title:
-            source_titles.append(tavily_title)
 
     title_similarity = max((_title_similarity(title, st) for st in source_titles), default=0.0)
     title_match = bool(source_titles) and title_similarity >= 0.72
@@ -307,7 +297,6 @@ def validate_entry(
 
     has_traceability = bool(source_provider and source_id)
     has_identifier = bool(doi or pmid)
-    tavily_no_identifier = (provider_family == "tavily" and not has_identifier)
 
     failure_reasons: list[str] = []
     if not title:
@@ -316,12 +305,8 @@ def validate_entry(
         failure_reasons.append("source_provider_forbidden")
     elif provider_family and provider_family not in ALLOWED_PROVIDER_FAMILIES:
         failure_reasons.append("source_provider_not_allowed")
-    if not has_identifier and not tavily_no_identifier:
+    if not has_identifier:
         failure_reasons.append("identifier_missing")
-    if provider_family == "tavily" and has_identifier:
-        failure_reasons.append("tavily_not_for_identifier_entries")
-    if tavily_no_identifier:
-        failure_reasons.append("tavily_manual_review_required")
     if title and source_titles and not title_match:
         failure_reasons.append("title_mismatch")
     if not crossref_title_ok:
@@ -347,7 +332,7 @@ def validate_entry(
             failure_reasons.append(mcp_fresh_reason or "mcp_stale")
     elif mcp_ok and (not mcp_fresh):
         failure_reasons.append("mcp_stale_warning")
-    if online_check and not (crossref or pubmed) and not tavily_no_identifier:
+    if online_check and not (crossref or pubmed):
         failure_reasons.append("source_unreachable")
 
     bidirectional_verification_failed = any(
@@ -361,7 +346,7 @@ def validate_entry(
     needs_manual_review = any(
         r in {"title_mismatch", "id_mismatch", "mcp_stale", "mcp_timestamp_missing", "source_unreachable"}
         for r in failure_reasons
-    ) or tavily_no_identifier or bidirectional_verification_failed
+    ) or bidirectional_verification_failed
 
     score = 0.0
     score += (title_similarity * 35) if source_titles else 15  # neutral when no sources to compare
@@ -429,7 +414,6 @@ def validate_entry(
                 "require_mcp": require_mcp,
                 "source_provider": source_provider,
                 "provider_family": provider_family,
-                "tavily_no_identifier": tavily_no_identifier,
             },
         },
     }
@@ -489,9 +473,7 @@ def main() -> int:
 
     verified_count = sum(1 for e in checked if e.get("verified"))
     duration_ms = int((time.perf_counter() - t0) * 1000)
-    status = "verified" if verified_count == len(checked) else "failed"
-    if not checked:
-        status = "empty"
+    status = "verified" if (checked and verified_count == len(checked)) else ("failed" if checked else "empty")
 
     report = {
         "ok": status == "verified",
@@ -512,7 +494,7 @@ def main() -> int:
         "provider_policy": {
             "allowed_provider_families": sorted(ALLOWED_PROVIDER_FAMILIES),
             "forbidden_provider_families": sorted(FORBIDDEN_PROVIDER_FAMILIES),
-            "tavily_only_for_no_identifier": True,
+            "no_identifier_policy": "manual_review_queue",
         },
     }
 

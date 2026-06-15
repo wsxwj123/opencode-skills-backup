@@ -28,7 +28,7 @@ license: Proprietary
 7. **引用格式**：正文一律 `[n]`（分节矩阵重排后的全局索引），每节末附 Vancouver 列表；严禁 `[Author,2023]`/`(1)`。
 8. **期刊上限**：storyline 必须在 `target_journal` 字数上限内编排，严禁先写超 30% 再砍。
 9. **占位清零**：`CITE_PENDING`/`DATA_PENDING`/`REF_DROPPED` 必须在 `/merge` 前清零（Phase 10 扫描门禁）。
-10. **状态持久化 + 读 references 硬门禁**：写前 `write-cycle --section`（脚本会列出本节**必读 references**清单）→ **先 `Read` 那些 references 再动笔**（不读直接凭记忆写 = 违规）→ 写后跑权威收口命令（完整 flag）：`write-cycle --section [id] --finalize --refs-confirmed --sync-literature --sync-apply --strict-references --summary "[摘要]"`。**缺 `--refs-confirmed` 落盘会被脚本 exit 2 硬阻断**——这是把"忘记读 references"从软约束变成真门禁。SI/figure/缩略词实时入库，不停留在记忆中。
+10. **状态持久化 + 读 references 硬门禁**：写前 `Read` references 清单（由 `write-cycle --section` 列出），写后带 `--refs-confirmed` 收口（缺失则脚本 exit 2 硬阻断）。完整命令与白名单见 §13/`references/interaction-protocol.md`。
 
 ## 📁 references/ 参考文件地图（按需 Read，不要靠记忆复述其内容）
 
@@ -39,6 +39,7 @@ license: Proprietary
 | `references/stat-decision-tree.md` | `/stat-helper`（用户不确定用什么统计检验）时 |
 | `references/figure-protocol.md` | `/figure` 收口、落盘 `figure_analysis/` 与 `add-figure` 时 |
 | `references/submission-guide.md` | `/submission-pack` 时 |
+| `references/interaction-protocol.md` | §4/§7/§9/§12/§13 执行时；`/change-journal`、`/upgrade-scripts` 触发时 |
 
 ---
 
@@ -87,10 +88,7 @@ license: Proprietary
 - **自检（写入前必答）**：在 `Edit`/`Write` 任何 `.md` 前，自问"这是 `manuscripts/` 下的原子化源文件吗？还是合并稿/派生物？"——后者一律拒绝写入。
 
 ### 4. 写入安全检查 (Anti-Overwrite Check)
-在执行 `write_file` 之前，必须进行以下**自查**：
-1. **Check Existence**: 目标路径是否存在文件？
-2. **Diff Check**: 如果存在，读取旧内容。如果新内容是旧内容的**完全覆盖**（而非追加或优化），必须先将旧文件重命名备份为 `.bak`，或者向用户发出**高风险警告**。
-3. **Report**: 告知用户："已创建新文件 [Filename]" 或 "已更新 [Filename] (原文件已备份)"。
+每次 `write_file` 前执行覆写自查（检查存在 → Diff → 备份/警告 → 报告）。完整细则见 `references/interaction-protocol.md §4`。
 
 ### 5. 上下文显式验证 (Mandatory Context Check)
 为解决"健忘"，每次写作前必须执行上下文加载校验（命令、白名单、隔离/展示策略、审计日志示例见 §13）。
@@ -104,26 +102,14 @@ license: Proprietary
   - *格式*: `1. Author AA, et al. Title. Journal. Year;Vol:Page.`
 
 ### 7. 智能快照判断 (Smart Snapshot)
-在每次回复结束时，进行内部判断：
-- "我刚刚生成了新的正文段落吗？"
-- "用户刚刚确认了一个关键决策吗？"
-- "我刚刚添加了新的文献到索引吗？"
-**如果有任意一个为Yes** → **主动执行** `/snapshot` 并告知用户。
+每次回复结束时内部判断（新正文/关键决策/新文献 → 任一 Yes 则主动 `/snapshot`）。完整细则见 `references/interaction-protocol.md §7`。
 
 ### 8. 弹性写作深度 (Elastic Depth)
 - **核心论点 (Key Claims)**：必须展开讨论。包含：数据描述 + 统计意义 + 机制解释 + 文献对比 + 意义阐述。
 - **辅助数据 (Supporting Data)**：仅描述结果和直接结论。
 
 ### 9. 自我修正回路 (Self-Correction Loop)
-**在生成任何正文段落时，必须在内部执行以下隐式思维链**：
-1. **Draft**: 生成初稿。
-2. **Critique**:
-   - "这是否太啰嗦？"
-   - "是否用了'It is well known'等废话？"
-   - "核心论点是否展开了200词以上？"
-   - "逻辑连接词是否自然？"
-3. **Polish**: 根据 Critique 修改。
-**输出原则**：只输出 Polish 后的最终版本，不要向用户展示修改过程。
+生成正文前执行隐式 Draft → Critique → Polish 三步思维链，只输出 Polish 结果。完整细则见 `references/interaction-protocol.md §9`。
 
 ### 10. SI 主动建议与整合 (SI Proactive Loop)
 **在完成每一小节的正文初稿后，必须执行以下步骤**：
@@ -149,48 +135,10 @@ license: Proprietary
 ---
 
 ### 12. 摘要补全协议 (Abstract Recovery Protocol)
-**针对检索结果中缺失摘要（Abstract）的文献，严禁直接丢弃。必须严格执行以下补全回退链（Mandatory Fallback Chain）**：
-1. **Google Scholar (Primary)**: 必须优先使用 `mcp__paper-search-mcp__search_google_scholar` 检索论文标题。
-2. **PubMed (Secondary)**: 若前者失败，使用 `mcp__paper-search-mcp__search_pubmed` 或 PubMed CLI 按标题检索。
-3. **Tavily (Final Fallback)**: 若前两者均失败，才允许使用 `mcp__tavily__tavily-search` 搜索 "Title abstract"。
-**执行边界**：
-- Tavily 在此阶段只允许补全 `abstract` 或辅助反向核验，**不得**替换原始文献的 `source_provider` / `source_id`。
-- 若该条文献本身没有 DOI/PMID，且 Tavily 仅提供网页级佐证，则必须进入 `manual_review_queue.json`，且不得视为 `verified=true`。
-**终止条件**：仅当上述三个步骤均无法获取摘要时，才允许将该文献标记为 "Abstract Missing" 并询问用户手动补充。
+缺摘要的文献严禁丢弃，必须走 Google Scholar → PubMed → Tavily 回退链补全。完整细则见 `references/interaction-protocol.md §12`。
 
 ### 13. 章节局部上下文与Token预算协议 (Section-Local + Budget Guard)
-**目标**：在保证连续性的同时，严格控制上下文规模，避免失忆与爆 token。
-
-**默认行为（强制）**：每次写作动作开始前，必须执行此上下文加载校验（解决"健忘"）。
-1. 执行 `/write [section]` 前，必须优先加载章节局部上下文（统一强制入口，默认含全局历史 + 当前章节索引，不含正文草稿）：
-   - `python scripts/state_manager.py write-cycle --section [section_id] --token-budget 6000 --tail-lines 80`
-   - 若需续写/改写已存在章节正文，再显式追加 `--include-draft`。
-2. 若用户未明确要求，禁止读取其他章节正文文件。
-3. 输出中必须包含 `loaded_files`，作为“只读当前章节”的审计证据。
-4. **隔离**：校验内容仅用于内部校验与必要的用户审计，**严禁**写入生成的 Markdown 稿件文件中。
-5. **展示策略**：默认不在用户回复中展开加载明细；仅在用户要求“显示加载明细/审计日志”时展示。
-
-> **审计日志示例**（仅当用户要求"显示加载明细"时输出，平时不展示）：
-> ```
-> writing_progress.json: ✅ Loaded
-> context_memory.md: ✅ Loaded (Tail)
-> （其他文件仅在需要时按需加载）
-> ```
-
-**章节白名单（仅允许）**：
-1. `project_config.json`
-2. `storyline.json`（仅当前 section 过滤结果）
-3. `figures_database.json`（仅当前 section 过滤结果）
-4. `literature_index.json`（仅当前 section 过滤结果）
-5. （默认不读）`manuscripts/` 下匹配当前 section 的原子化文件，仅在 `--include-draft` 时加载
-6. `section_memory/[section_id].md`
-7. `figure_analysis/figure_{N}.md`（撰写对应 Results 小节时，由 `/write` 在 write-cycle 之外**显式 `Read` 加载**；write-cycle 不自动加载它，须手动读取，作为该节结果与讨论的事实依据）
-
-**预算熔断策略**：
-1. 若估算 token 超出预算，先裁剪当前章节正文到 tail。
-2. 再裁剪章节记忆到 tail。
-3. 再压缩文献与图数据为 compact 字段。
-4. 若仍超预算，输出 `over_budget=true` 并要求进一步压缩输入数据。
+`write-cycle` 命令、章节白名单（7 项）、预算熔断四级策略，见 `references/interaction-protocol.md §13`。核心：写前只读当前节，白名单外禁止加载，超预算四步递进裁剪。
 
 ---
 
@@ -226,11 +174,7 @@ license: Proprietary
    - 运行 `python scripts/state_manager.py set-field --field [field_id]` 生成 `project_config.json` 和 `reviewer_concerns.json`
 5. **Verify**: 尝试运行 `python scripts/state_manager.py load` 验证环境。
 
-**`/upgrade-scripts` 升级脚本（解决版本漂移）**：项目 init 后 scripts/ 是该时点 skill 的快照副本；skill 后续更新（如新增 `add-figure` / `add-abbreviation` / `add-stat-method` / `rename-figure` / `proofread` 等命令）后，旧项目用不到新功能。触发：用户说"升级脚本"/"项目脚本是旧的"。流程：
-1. 提示用户备份：`cp -r scripts scripts.bak.$(date +%Y%m%d)`
-2. 从 skill 源拷贝最新版：`cp ~/.claude/skills/general-sci-writing/scripts/*.py ./scripts/`（路径按用户实际 skill 安装位置调整）
-3. 验证：`python scripts/state_manager.py --help` 看是否含 `add-figure` / `add-abbreviation` / `add-stat-method` / `rename-figure` 等新子命令；`ls scripts/` 看是否含 `proofread.py`。
-4. 若有不兼容的 STATE_FILES 字段（如旧项目缺新 key），新版脚本会自动按 `get(..., default)` 兼容，无需手动迁移。
+**`/upgrade-scripts` 升级脚本**：触发场景、备份/拷贝/验证流程见 `references/interaction-protocol.md`（`/upgrade-scripts` 节）。
 
 ### Phase 1: 预审模式 (`/preview`)
 **输入**：用户提供的摘要/实验描述/数据概述。
@@ -252,12 +196,7 @@ license: Proprietary
 
 不在表内的期刊由 AI 上 journal 官网查 author guideline 后告知用户、写入 `project_config.word_limits`。Storyline 必须在期刊上限内编排，**严禁先写超 30% 再砍**——浪费的成本极高。
 
-**`/change-journal` 中途转投流程**：写完一半想转投另一家期刊（如 Nature 退稿→投 Nat Commun）触发：
-1. 询问新 target_journal 名称 → 上面表查或官网查新 word_limits / Abstract 结构 / Methods 位置。
-2. 用 `update` 命令改 `project_config.json` 的 `target_journal` + `word_limits` 字段。
-3. 立即跑 `/check` 1-2 步看正文字数是否需要砍（或新刊允许更长，可保留）。
-4. 重跑 `/submission-pack`——它会 Read `submission_state.json`，仅问"哪些字段需要因转投而改"（如 cover letter 编辑名、suggested reviewer 是否变），不重新问全部。
-5. 若新刊 Methods 结构不同（如 STAR Methods vs Online Methods），需重新组织 `manuscripts/03_Methods*.md`。
+**`/change-journal` 中途转投流程**：五步流程（查新刊限制→改 config→/check 字数→重跑 submission-pack→重组 Methods）见 `references/interaction-protocol.md`（`/change-journal` 节）。
 
 **引用密度预估（Mandatory）**：storyline 确认前，必须为每个小节标注预估引用数量：
 - Introduction 各段：背景段 1-2 篇，Gap 段 3-5 篇，创新点段 2-3 篇
@@ -271,30 +210,40 @@ license: Proprietary
 - **强制包含**：核心实体（具体到化合物/分子/疾病模型）+ 核心动作（improves/inhibits/activates/links）+ 必要语境（细胞类型 / 物种 / 临床场景）。
 - **核对**：选定后必须 cross-check storyline 主线（创新点）—— title 必须能从一句话浓缩主线得到，不能有"title 没体现的 Results"或"Results 没支撑的 title 承诺"。
 
-> **[用户确认检查点 Mandatory]** 展示 storyline 草稿（章节标题、核心论点、关键图序、**各节预估引用数**、**3 个 title 候选**），等待用户明确确认后才进入 Phase 3。禁止在故事线未确认的情况下启动文献检索。
+> **[用户确认检查点 Mandatory]** 展示 storyline 草稿（章节标题、核心论点、关键图序、**各节预估引用数**、**3 个 title 候选**），等待用户明确确认后才进入 Phase 2.5。禁止在故事线未确认的情况下启动图集规划。
+
+### Phase 2.5: 主图集规划 (`/figure-plan`)
+
+**定位**：在故事线骨架确定后、文献检索前，先规划图集结构。Nature/Cell 流程中图集即论文骨架，先规划再写字，避免识图后频繁调整字数与结构。
+
+**输入**：用户已有的实验数据概要（不需要图文件，只需知道有哪些数据/实验）+ 已确认的 storyline。
+
+**输出**：Figure 1–N 规划表（含每张图的信息载荷、main/SI 分配建议）。
+
+**执行步骤**：
+
+1. **信息载荷映射**：对 storyline 每个核心论点，列出支撑它的实验数据类型，决定哪些是 Main Figure 必须展示的、哪些可移入 SI。
+2. **Figure 编号规划**（草版）：
+   - 按"Figure 1 = 模型/机制/全景图；Figure 2–N-1 = 核心数据图；Figure N = 转化/机理/功能验证图"的 Nature/Cell 惯例排布。
+   - 每张 Figure 对应 storyline 中的哪个小节（section_id），信息载荷一句话描述。
+   - main/SI 分配：结论直接的数据→main；重复验证/对照/方法学细节→SI。
+   - 输出格式（表格）：Figure ID | 对应 section_id | 信息载荷（一句话）| Main/SI | 需要的数据类型（用户确认是否已有）
+3. **与 storyline 双向对齐**：检查图序与 storyline 小节顺序是否一一对应；若规划图集后发现 storyline 有逻辑缺口或冗余节，**允许此时回修 storyline**（storyline 是草版，图集规划是第一次真实检验）。用户确认回修内容后更新 `storyline.json`。
+4. **写入 figures_database.json（草版条目）**：用 `add-figure` 为每张 Main Figure 写入占位条目（`data_status="pending"` 表示用户尚未提供图文件），SI Figure 记录到 `si_database.json`。
+
+**迭代规则（允许但须显式触发）**：
+- Phase 6（`/figure` 识图）后若发现某张图承载的信息需拆分或合并，可回到此步更新图集规划，同步修改 `storyline.json` 对应节。
+- 每次回修必须告知用户"图集规划已迭代：Figure X 信息载荷调整为…，storyline [section_id] 对应更新"，不得静默改动。
+- 字数预算跟随：图集变动后必须重新评估各 section 字数是否仍在期刊上限内。
+
+> **[用户确认检查点 Mandatory]** 展示 Figure 1–N 规划表 + main/SI 分配 + 与 storyline 对齐确认（含是否需要回修 storyline），等待用户明确确认后才进入 Phase 3 文献检索。
 
 ### Phase 3: 文献检索 (`/literature`)
 分阶段检索（Phase 1核心，Phase 2写作时实时补充）。**执行前必须 `Read references/citation-policy.md`**——检索路由（生命科学 PubMed CLI / CS·AI paper-search）、Zero-Fabrication 9 条硬约束、引用类型按语境的完整细则都在那。
 
-**检索命令模板（高频执行必需，常驻正文）**：
-- 生命科学/医学/药学 → **PubMed CLI**（必须带 `< /dev/null` + 走代理）：
-  ```bash
-  export http_proxy=http://127.0.0.1:7897 && esearch -db pubmed -query "xxx" < /dev/null | efetch -format abstract
-  ```
-- CS/AI/工程/跨学科 → **paper-search MCP**（`mcp__paper-search-mcp__search_arxiv` / `search_pubmed` 等），串行执行、间隔 ≥1s。
-- **Provider 白名单（`citation_guard` 强制）**：入库只接受 `source_provider` ∈ {`pubmed-cli`, `paper-search`}；`tavily` 仅用于文献真实性的反向核验，**不得作为检索来源**（任何 `source_provider=tavily` 的条目一律阻断）；`websearch`、`openalex-cli` 一律阻断；检索阶段严禁 tavily。
+**检索命令**：路由、命令模板（PubMed CLI / paper-search MCP）、Provider 白名单见 `references/citation-policy.md`（文献检索工具节）——Phase 3 执行前必须 `Read` 该文件。
 
-**中文文献支线（Chinese Literature Manual Track，按需触发）**：
-SCI 论文通常只在少数场景需引中文文献（中药/中医、临床路径、地方流行病学、政策文献等）。中文期刊普遍**无 DOI、无 PMID**，`citation_guard` 双向核验跑不通，故走"AI 发现 → 用户人工取证 → 责任标记"的合规通道，绝不绕过护栏自动入库。
-1. **检索（AI 自动）**：用 `mcp__paper-search-mcp__search_google_scholar` 检索中文关键词（Google Scholar 覆盖中文核心期刊，免费可调；**不要**用知网/万方/维普——无开放 API，反爬严，无法自动调用）。
-2. **AI 仅返回候选清单**：标题 / 作者 / 期刊 / 年份 / Scholar 链接。**严禁直接入库**，因为缺 DOI/PMID 无法过 `citation_guard`。
-3. **用户人工取证**（必选其一）：
-   - **路径 A（推荐）**：去 CNKI / 万方 / 维普 / 期刊官网搜该篇，记下 **DOI** 或 **CSTR**（中科院中文 DOI）→ AI 用此 ID 走 `citation_guard` 双向核验入库（与英文文献同流程）。
-   - **路径 B**：用户提供原文 PDF + 完整元数据 → AI 入库，但条目必须带 `verified=false`、`needs_manual_review=true`、`requires_human_attest=true`（用户书面确认"我对这条负责"才允许在正文 `[n]` 引用）→ 进入 `manual_review_queue.json`。
-   - **路径 C**：以上都做不到 → **不引该条**，找等价英文文献替代。
-4. **正文引用规则**：路径 A 与英文条目同等；路径 B 入库的条目，每次在正文写 `[n]` 前 AI 必须主动提醒"该条为人工背书条目，是否仍要引用"，用户确认后才写入。
-5. **导出**：`/export_bib` 时路径 B 条目在 .bib 中加 note 字段标注 `[CN-Manual]`，方便投稿前人工复核。
-
+**中文文献支线**：AI发现→用户取证（路径A/B/C）→合规入库的完整流程见 `references/citation-policy.md`（中文文献支线节）。
 
 **执行红线**：本阶段必须遵守“文献真实性硬约束”，任何未通过同源核验的条目不得进入 `literature_index.json`，也不得在正文中引用。
 **新增硬门禁**：完成本阶段后必须运行 `citation_guard.py --require-mcp`，仅当 `citation_guard_report.json` 为 `ok=true` 才能进入 `/write`。`--require-mcp` 在 Phase 3 结束时为强制参数，确保所有文献有 MCP 证据轨。
@@ -328,7 +277,7 @@ SCI 论文通常只在少数场景需引中文文献（中药/中医、临床路
 
 **定位**：固化"用户逐张发实验图 → AI 读图产出结果与讨论草稿 → 存为写作依据"这一步。产物 `figure_analysis/figure_{N}.md` 是 Phase 8 撰写对应 Results/Discussion 小节的**上游素材**，非正文，不参与 `/merge` 合并。
 
-**前置**：必须在 `/storyline`（Phase 2）确定全文结构与"小节↔figure"对应之后运行。结构由 storyline 决定（融合式 / Results 与 Discussion 分离 / 方法学后置均可），本阶段只产素材、不假设结构。文献已在 Phase 3（Introduction 阶段）基本完成，**本阶段不检索文献**。**与 Phase 8 逐节交替**：不是先识完所有 figure 再统一写，而是每写一个 Results 小节前先对该节对应 figure 跑 `/figure`，再 `/write` 该节。
+**前置**：必须在 `/figure-plan`（Phase 2.5）完成图集规划、且文献检索（Phase 3）基本完成后才运行。此时每张图的 section_id 与 main/SI 分配已确定（来自 Phase 2.5 的 `figures_database.json` 草版条目），本阶段用真实图文件填充该条目，不再重新规划图序。结构由 storyline 决定（融合式 / Results 与 Discussion 分离 / 方法学后置均可），本阶段只产素材、不假设结构。**本阶段不检索文献**。**与 Phase 8 逐节交替**：不是先识完所有 figure 再统一写，而是每写一个 Results 小节前先对该节对应 figure 跑 `/figure`，再 `/write` 该节。
 
 **🔴 读图红线 (Zero-Hallucination on Images，最高优先级)**：
 1. **只读已符号化/已印出的信息**：分组标签、坐标轴文字与量纲、星号数量(`*/**/***`)、图面或图注印出的 P 值数字、误差棒有无、组间高低**方向**与趋势。
@@ -429,7 +378,70 @@ python scripts/state_manager.py add-abbreviation <one.json>
 6. 防误改合并稿门禁：`[ ! -f manuscripts/Full_Manuscript.md ] || grep -q "AUTO-GENERATED" manuscripts/Full_Manuscript.md` — **阻断**：banner 不在 → 合并稿被手改过，需 `/merge` 重生成。
 7. **缩略词一致性扫描**（在合并稿上）：① 裸用但未定义的缩写 ② 同一缩写在多个章节重复展开 ③ 已定义但全文未使用。与 `abbreviations.json` 交叉比对。通用缩写（DNA/RNA/PCR 等）跳过。**阻断**：① ② 类违规必修。
 
-**全部通过 → 进 Phase 11 投稿包**；任一阻断 → 修复后重跑该步及之后步骤。
+**全部通过 → 进 Phase 10.5 合规门禁**；任一阻断 → 修复后重跑该步及之后步骤。
+
+### Phase 10.5: 投稿前合规门禁 (`/compliance-check`)
+
+**定位**：在 `/check` 质量门通过、进入 `/submission-pack` 之前，强制核验六项合规要素，缺一阻断。此关卡统一处理现有散落在 submission-guide.md 与 writing-templates.md 中的合规检查，并补充缺失的试验注册号与 reviewer COI 要求。
+
+**触发时机**：`/check` 全部通过后、`/submission-pack` 执行前强制触发。用户说"准备投稿"时 AI 应自动先跑此 phase 再进 Phase 11。
+
+**六项合规检查（缺一阻断，逐项输出 ✅/❌ + 缺失说明）**：
+
+1. **伦理批号**：
+   - 动物实验 → IACUC 批准号（格式：`机构名-年份-批次`）+ 实验方案是否符合 3Rs 原则（Replacement/Reduction/Refinement）。
+   - 人体研究 → IRB 批准号 + 知情同意书获取声明（"All participants provided written informed consent"）。
+   - 体外/计算/公开数据集研究 → 无需伦理批号，标注 "This study did not involve human subjects or animal experiments"。
+   - **阻断条件**：涉及动物/人体但缺批准号，或 Methods 中无伦理声明段落。
+
+2. **临床试验注册号**：
+   - 前瞻性临床研究（干预性试验、观察性队列、RCT）→ 必须提供 ClinicalTrials.gov NCT 编号或等效注册库（ChiCTR/ISRCTN/UMIN 等）编号及注册日期（注册须在首例入组**前**完成，事后注册须标明并接受期刊审查）。
+   - 回顾性研究/体外实验/动物实验 → 标注 "Not applicable (retrospective study / in vitro study)"。
+   - **阻断条件**：前瞻性临床研究缺注册号（ICMJE 强制要求，缺注册号即桌面拒稿）。
+
+3. **报告规范（CONSORT/STROBE/ARRIVE/PRISMA）**：
+   - `Read templates/reporting_checklists.json` → 按 `project_config.research_field` + `target_journal` 自动匹配对应 checklist。
+   - 适用匹配规则：RCT → CONSORT 2010；观察性研究（队列/病例对照/横断面）→ STROBE；动物实验 → ARRIVE 2.0 essential 10；系统综述/Meta分析 → PRISMA 2020；预测模型 → TRIPOD；qPCR → MIQE；ML → NeurIPS ML reproducibility。
+   - 对 Methods/Results 逐项核对，输出 checklist 通过率；**缺项必须补写到 Methods 后才能继续**。
+   - **阻断条件**：关键条目（ARRIVE essential 10 中任意一项、CONSORT flow diagram、PRISMA flow diagram）缺失。
+
+4. **统计报告完整性**：
+   - **精确 P 值**：正文中所有统计结论必须报告精确 P 值（如 P = 0.032），禁止仅写 P < 0.05 或 P < 0.001（除非 P < 0.0001 确无精确值）。
+   - **效应量 + 置信区间**：每个主要比较必须报告效应量（Cohen's d / OR / HR / η² 等）+ 95% CI；单 P 值不够。
+   - **多重比较校正方法**：任何涉及多组比较或多个主要终点时，必须说明校正方法（Bonferroni / Benjamini-Hochberg FDR / 其他）及校正后阈值。
+   - **检验前提验证**：正态性（Shapiro-Wilk / Q-Q plot）+ 方差齐性（Levene / Brown-Forsythe）是否在 Methods 中说明；未验证则必须补写或改用非参检验。
+   - **阻断条件**（仅适用于含假设检验/组间推断统计的研究）：主要结果缺 95% CI，或多重比较无校正说明。纯描述性研究（无推断统计、无组间比较）不受此条阻断，但仍须报告描述性统计的离散度（SD/IQR 等）。
+
+5. **署名（Authorship，ICMJE 四准则）**：
+   - 每位作者须同时满足全部四条：① 对构思/设计/数据采集/分析有**实质性贡献**；② 参与起草或对重要内容进行**严格修订**；③ 批准最终提交版本；④ 对本工作各方面问责（能说明其他作者的贡献并信任其诚信）。
+   - **仅满足 1-2 条的贡献者**（如提供试剂、技术支持、数据采集但无实质设计参与）→ 列入 Acknowledgments，**不能列为作者**。
+   - **署名顺序**：第一作者（通常是主要完成者）、共同第一作者（co-first，标注"†These authors contributed equally"）、通讯作者（最后，标注"*Corresponding author"）、共同通讯（co-corresponding，标注双 *）。
+   - **阻断条件**：CRediT 分配中出现不符合 ICMJE 四准则的作者（挂名作者），须提请用户确认并修正。
+
+6. **Reviewer 推荐 COI 回避**：
+   - 每位 suggested reviewer 须核查：近 3 年内无共同发表论文、近 3 年内无同一基金、无同单位（同一机构不同系也须回避）、非直接导师/学生/博士后关系。
+   - 如用户提供了 suggested reviewers 列表，逐一核对上述条件；任一不符合须替换。
+   - **阻断条件**：suggested reviewer 存在明显 COI（同单位/近 3 年合作发表/导师-学生关系）而未回避。
+
+**执行命令**：
+```bash
+# 无专用脚本，逐项以交互核查方式完成；核查结果写入 submission/compliance_report.md
+# 报告规范部分：
+# Read templates/reporting_checklists.json → 对应 checklist 逐项核对
+```
+
+**输出**：`submission/compliance_report.md`，格式：
+```
+## 投稿前合规门禁报告
+1. 伦理批号：✅/❌ [说明]
+2. 试验注册号：✅/❌ [说明]
+3. 报告规范（CONSORT/STROBE/ARRIVE/PRISMA）：✅/❌ [缺失条目列表]
+4. 统计报告完整性：✅/❌ [缺失项]
+5. 署名合规性（ICMJE）：✅/❌ [问题项]
+6. Reviewer COI 回避：✅/❌ [问题项]
+```
+
+**全部 ✅ → 进 Phase 11 投稿包**；任一 ❌ → 必须补充后重跑，不得跳过进入 `/submission-pack`。
 
 ### Phase 11: 投稿包准备 (`/submission-pack`)
 **时机**：`/check` **全部通过**后；投稿包内容必须基于已质检的稿子。投稿包不全 → 编辑桌面拒（desk reject），白写。
@@ -531,6 +543,7 @@ python scripts/state_manager.py add-abbreviation <one.json>
 | `/resume` | 恢复写作 | 执行 `state_manager.py load` 加载全局状态 → 读取 `writing_progress.json` 的 `last_section` → 自动进入 `write-cycle --section [last_section]` |
 | `/preview` | 预审报告 | - |
 | `/storyline` | 构建提纲 | 自动规划融合式章节 |
+| `/figure-plan` | 主图集规划 | storyline 确认后、识图前，规划 Figure 1–N 信息载荷与 main/SI 分配；允许回修 storyline（见 Phase 2.5） |
 | `/literature` | 文献检索 | - |
 | `/stat-helper` | 统计方法选择助手 | 不知道用 t-test/ANOVA/非参时触发，按决策树询问（见 Phase 5） |
 | `add-stat-method` | 注入统计方法到 figure panel | /stat-helper 输出后落地用：`add-stat-method --figure-id "Figure 2" --panel A --stat-test "one-way ANOVA + Tukey" --n 6 --error-bar SEM --software "GraphPad Prism v10.1"` |
@@ -540,6 +553,7 @@ python scripts/state_manager.py add-abbreviation <one.json>
 | `/rename-figure` | 重整 figure 编号 | 全局改名 + 同步 figures_database/storyline/正文/识图文件，支持 --dry-run（脚本 rename-figure） |
 | `/write` | 撰写章节 | **章节局部读取 + 自我修正 + 智能快照** |
 | `/abstract` | 撰写摘要 | 全文完成后最后写，≤250词，含定量结果 |
+| `/compliance-check` | 投稿前合规门禁 | /check 通过后强制执行：伦理批号+试验注册号+报告规范+统计完整性+ICMJE署名+reviewer COI，缺一阻断（见 Phase 10.5） |
 | `/submission-pack` | 投稿包准备 | Cover letter+DAS+CRediT+COI+Funding+Highlights+eTOC+Graphical Abstract+Source Data+Acks+checklist（见 Phase 11） |
 | `/presubmission-inquiry` | Nature/Cell 系预审询函 | ≤1 页 inquiry,省 4-6 周等审稿（见 Phase 12） |
 | `/proofread` | 机械错误最终校对 | 拼写/中文标点/单位/术语一致性/数字格式/Methods 时态(脚本 proofread.py) |
