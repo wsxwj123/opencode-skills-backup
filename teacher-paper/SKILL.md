@@ -266,10 +266,17 @@ python3 <SKILL_DIR>/scripts/fetch_web.py "<url>" ...
 
 | 科目 | Phase 2 动笔前必读 |
 |------|-----------------|
-| 语文 | ① 通用命题规则 → Read `references/subjects/语文.md` |
-| 英语 | ① 通用命题规则 → Read `references/subjects/英语.md` |
-| 政治·历史·地理 | ① 通用命题规则 → Read `references/subjects/政史地.md` |
-| 数学·物理·化学·生物 | ① 通用命题规则 → Read `references/subjects/理科.md` |
+| 语文 | ① 通用命题规则 → Read `references/subjects/语文.md` + `references/exam-templates.md`（21题逐题命题工艺） |
+| 英语 | ① 通用命题规则 → Read `references/subjects/英语.md`（387行，覆盖听力/完形/阅读/七选五/语法填空/读后续写/书面表达/短文改错） |
+| 政治·道法 | ① 通用命题规则 → Read `references/subjects/政治.md`（含时政时效门禁规则） |
+| 历史 | ① 通用命题规则 → Read `references/subjects/历史.md`（含史料软门禁规则） |
+| 地理 | ① 通用命题规则 → Read `references/subjects/地理.md`（含SVG/用户提供图源分级） |
+| 数学 | ① 通用命题规则 → Read `references/subjects/数学.md` |
+| 物理 | ① 通用命题规则 → Read `references/subjects/物理.md` |
+| 化学 | ① 通用命题规则 → Read `references/subjects/化学.md` |
+| 生物 | ① 通用命题规则 → Read `references/subjects/生物.md` |
+
+> 旧版 `subjects/理科.md` 和 `subjects/政史地.md` 已拆分（v3.18.0），保留为兼容入口（仅提示导向新文档），新出卷请按上表读对应单科文档。
 
 > 科目文档统一含 5 节：命题规则 / 选材规格与字数区间 / 排版要求 / 科目反模式 / Phase 1 额外参数。含阅读选文的科目（语/英/政史地材料题）还须读 `references/authoring-workflow.md` 的 material 块排版铁律（build 硬门禁）。
 >
