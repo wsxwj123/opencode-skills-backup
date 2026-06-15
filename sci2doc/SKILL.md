@@ -24,8 +24,9 @@ The workflow is built around:
 | 步骤 | 操作 | 阻断条件 | 详见 |
 |------|------|----------|------|
 | **0. 材料确认** | 确认源材料可访问、用户提供论文题目/章数/院校 | 材料缺失 → 停止 | `### 0) Material Input Gate` |
+| **0.5. 研究主线设计** | 产出科学问题→贡献→章节映射表；协商章节字数目标；写入 `outline` | `outline` 为空 → 不得进入 Step 1 | `### 0.5) Research Storyline Design` |
 | **1. 样式选择** | 询问 CSU默认 or 自定义；写入 `thesis_profile.json` | 自定义信息不完整 → `pending_template` | `## Style Selection Gate` |
-| **2. 初始化项目** | `state_manager.py init`；验证 profile；协商章节字数目标 | profile 缺字段 → 不允许生成 docx | `### 1) Initialize Project` |
+| **2. 初始化项目** | `state_manager.py init`；验证 profile；章节字数已在 Step 0.5 协商 | profile 缺字段 → 不允许生成 docx | `### 1) Initialize Project` |
 | **3. 文献检索** | 学科路由（生命科学→PubMed CLI / CS/AI→paper-search MCP）；运行 citation_guard | guard `ok=false` → 停止写作 | `## Citation Zero-Hallucination Gate` |
 | **4. 预写门禁** | `write-cycle --chapter N` 加载跨章记忆 | 每章每节必做，不可跳过 | `### 2) Prewrite Gate` |
 | **5. 原子化写作** | 每节一个 `.md`；写完验证编号+实验映射；更新 `chapter_index.json`；原始图不可用时生成 Figure Prompt | 编号断裂 → 修复后才能继续 | `### 3) Atomic Subsection Writing` |
@@ -82,22 +83,8 @@ The workflow is built around:
     - All subsequent occurrences use bare abbreviation only, no re-expansion.
     - Use `abbreviation_registry.py` to register, track, and auto-strip redundant expansions.
     - A formal abbreviation table page (three-line format, alphabetically sorted) must be generated in front matter.
-16. Three-line table format is mandatory for all tables:
-    - Top border: 1.5pt solid
-    - Header-body separator: 0.5pt solid
-    - Bottom border: 1.5pt solid
-    - No vertical lines, no other horizontal lines
-    - Use Markdown `| col1 | col2 |` syntax in atomic `.md` files; `markdown_to_docx.py` auto-converts to Word three-line tables.
-    - Table captions use five-point KaiTi (楷体五号, 10.5pt), centered above the table.
-17. Writing style constraints are mandatory:
-    - No em dashes (——). Use commas, periods, or restructure the sentence instead.
-    - Statements only, no rhetorical or direct questions in body text. Every sentence must be declarative.
-    - Result descriptions must be objective, fair, and neutral. No subjective adjectives (e.g. 令人惊讶的、显著优于、远超预期). State data and let readers judge.
-    - Result discussions must be correct, precise, and provide extended analysis (e.g. compare with prior work, explain mechanisms, note limitations).
-    - Language must be plain and accessible. Avoid overly formal/literary phrasing, archaic words, and jargon without explanation.
-    - No metaphors of any kind (e.g. 如同、好比、仿佛、犹如、像...一样、...的桥梁、...的基石).
-    - No parallelism/排比 constructions (e.g. repeating sentence patterns for rhetorical effect).
-    - Use `check_quality.py` `check_writing_style()` to auto-detect violations.
+16. Three-line table format is mandatory for all tables: 三线表强制，使用 Markdown 管道表语法（`| col1 | col2 |`），`markdown_to_docx.py` 自动转换。具体边框参数（pt 值）与题注字体字号见 `references/word-format-spec.md`。
+17. Writing style constraints: 见 `## Humanization Contract`（清单集中在那里，本条不重复）。`check_quality.py` `check_writing_style()` 自动检测违规，违规必须清零后才能 finalize。
 18. Formatting alignment rules are mandatory:
     - Body text (正文) must use justified alignment (两端对齐, `WD_ALIGN_PARAGRAPH.JUSTIFY`), not left-aligned.
     - All three-line table cell text must be center-aligned (居中).
@@ -136,7 +123,7 @@ Rules:
   - Allowed: `pubmed-cli` (life science primary, esearch/efetch/einfo，~/edirect/，需 < /dev/null，代理 http://127.0.0.1:7897), `paper-search` (CS/AI primary / fallback / preprints: arXiv/bioRxiv).
   - Forbidden: `websearch`, `openalex-cli` (pyalex), `tavily` provider entries.
   - **严禁** 使用 `tavily`、`websearch` 或 `openalex`（pyalex）作为文献检索来源，无论有无 DOI/PMID；不得出现 `source_provider=tavily` 的文献条目（`citation_guard.py` 会以 `source_provider_not_allowed` 拒绝）。
-  - tavily 仅用于对已检索文献做真实性反向核验（如核对标题），不作为检索来源；其核验结果不得登记为文献条目的 `source_provider`。
+  - 无 DOI/PMID 的条目不予放行，进入 `manual_review_queue` 人工核实。
   - **Serial Search (MANDATORY):** Execute all retrieval calls sequentially (PubMed CLI and paper-search MCP alike). Never parallelize search requests. Enforce ≥1s interval between consecutive calls.
   - **Citation Type by Context (MANDATORY):**
     - Background / field overview → Reviews or Systematic Reviews preferred.
@@ -184,21 +171,13 @@ ${save_path}/
 
 ### Anti-Drift Rule (Mandatory)
 
-AI **must not** create directories outside the above list. Specifically:
-- ❌ `01_文献分析/` — removed, never used by any script
-- ❌ `05_参考文献/` — removed, never used by any script
-- ❌ `chapter_memory/` — removed, never used by any script
-- ❌ `chapters/` — not a project directory
-- ❌ `output/` — not a project directory; use `02_分章节文档/` for chapter docx
-- ❌ `front_matter/` — not a project directory; front matter goes in `atomic_md/`
-
-If the AI needs to store any new artifact, it must go into one of the existing directories above. Creating ad-hoc directories is a workflow violation.
+AI **must only** create or write files into the directories listed above. Any artifact that does not fit an existing directory is a workflow violation. Do not create directories outside this list.
 
 ## Prewrite Memory Loading (Critical)
 
 When `write-cycle` runs, `load_state` automatically loads:
 
-1. `project_state.json` — project metadata, progress, and **outline** (大纲)
+1. `project_state.json` — project metadata, progress, and **outline**（含研究主线 `scientific_question` + 各章 `core_argument`，是写作一致性的锚点）
 2. `chapter_index.json` — chapter structure with section titles (filtered to current chapter)
 3. `literature_index.json` — references (filtered to current chapter)
 4. `figures_index.json` — figures/tables (filtered to current chapter)
@@ -252,14 +231,45 @@ If source materials are missing or inaccessible, **stop and request them**. Do n
 - **Word 格式** → 使用 `/docx` skill 或直接 Read 工具读取文件内容
 - **网络来源（DOI 可访问）** → 使用 `/fetch-everything` skill 抓取全文
 
-提取完成后，AI 应先通读全文摘要（Abstract）、结果（Results）、方法（Methods）三节，形成对实验内容的基本理解，再进入 Step 1。
+提取完成后，AI 应先通读全文摘要（Abstract）、结果（Results）、方法（Methods）三节，形成对实验内容的基本理解，再进入 Step 0.5。
+
+**SCI 自身参考文献导出（初始种子）：** 在通读的同时，同步扫描源 SCI 论文的 References 部分，将其中每条参考文献按 `literature_index.json` schema 格式整理为初始种子条目，`source_provider` 填 `"sci-source-seed"`，`verified` 填 `false`，写入项目的 `literature_index.json`（若文件已存在则 merge 而非覆盖）。这些种子作为 Step 3 文献检索的**待核验候选清单**（已带 DOI/PMID，省去重新构造检索式、确定检索目标的成本），而非可直接引用的来源。注意：`sci-source-seed` 不在 `citation_guard.py` 的合法 provider 白名单（`pubmed-cli` / `paper-search`）内——种子条目必须在 Step 3 以其 DOI/PMID 为目标经 `pubmed-cli` 或 `paper-search` 正式检索核验，核验通过后将 `source_provider` 更新为实际核验来源并置 `verified=true`，方可引用；未核验的种子不得进入正文。
 
 > 以下各步只列命令名 + 关键参数 + 门禁条件。**完整可复制 CLI（含所有 flag、占位符）见 `QUICK_START.md`。**
+
+### 0.5) Research Storyline Design (Mandatory)
+
+> **执行时机：** Step 0（材料确认 + 内容提取）完成后、Style Selection Gate 前执行。
+
+通读 SCI 论文材料的 Abstract / Introduction / Results / Discussion 后，AI **必须**与用户共同确定"研究主线"并产出下表，写入 `project_state.json` 的 `outline` 字段（每章一条记录）再进入 Step 1。
+
+**强制产出：科学问题 → 贡献映射表**
+
+| 字段 | 说明 |
+|------|------|
+| `scientific_question` | 全论文核心科学问题（一句话，来自材料，不得自造） |
+| `chapters[]` | 每章：章号、章名、对应 SCI 论文/图组、本章核心论点、承载主要内容（300字以内） |
+| `contribution_map` | 各 SCI 来源 → 对应章节（避免章节撞题） |
+
+**写入格式（project_state.json `outline` 数组，每条一章）：**
+```json
+{
+  "chapter": 2,
+  "title": "XX对XX的影响",
+  "sci_source": "Paper A, Figure 1-3",
+  "core_argument": "XX通过XX机制发挥XX作用",
+  "estimated_content": "材料方法+结果讨论，主实验3个，预计图表各3"
+}
+```
+
+🔴 **门禁（阻断 Step 1）：** `outline` 数组为空时不得进入 Style Selection Gate。`outline` 必须包含：`scientific_question`（顶层字段）+ 所有研究章条目（含 `sci_source` 和 `core_argument`）。
+
+**章节字数协商在此阶段完成（不在 init 后）：** 基于各章实际承载内容（实验数量/图表数量/方法复杂度），与用户协商每章字数目标，写入 profile 的 `chapter_targets`，再执行 Step 1 init。
 
 ### 1) Initialize Project
 
 - `state_manager.py init`：先二选一样式。`--format-mode default_csu` 或 `--format-mode custom`（+ `--university-name` / `--degree-type` / `--template-source` / `--missing-requirement`）。
-- `state_manager.py profile --show` 验证；`render-front-matter` 手动重渲前置页；`profile --body-target/--abstract-min/--chapter-target ...` 协商目标；后续补齐自定义要求用 `profile --format-mode custom --top-margin-cm ...`。
+- `state_manager.py profile --show` 验证；`render-front-matter` 手动重渲前置页；`profile --body-target/--abstract-min/--chapter-target ...` 写入已协商好的各章字数目标（应在 Step 0.5 中已与用户确定）。
 - 自定义结构化布局字段不全 → 保持 `pending_template`（最小必填字段见 `## Style Selection Gate`）。
 - init / profile 必须自动刷新 managed front matter；无 managed marker 的用户改写文件不得覆盖。用户在聊天里给的详细要求应转成 JSON 经 `--format-profile-json` / `--project-info-json` 写入，而非仅留在 prose memory。
 
@@ -336,7 +346,8 @@ The thesis outline must include:
 - Chinese abstract + keywords
 - English abstract + keywords
 - Table of contents (+ figure/table lists if needed)
-- Symbol/abbreviation list (if needed)
+- **缩略语表**（Abbreviation List）：首次出现展开的英文缩略语，三线表，字母升序，auto-generated from `abbreviation_registry.py table`
+- **符号表**（Symbol/Notation Table，理工科含大量数学/物理变量时必设，其他可选）：变量符号、含义、单位，三线表；见 `references/symbol_table_template.md`
 - Chapter 1 Introduction
 - Multiple research chapters (>= 3 research chapters recommended for total >= 5 chapters)
 - Final conclusion/outlook chapter
@@ -354,31 +365,13 @@ Rules:
 - After AI generates a section markdown, run `abbreviation_registry.py process` to extract, register, and strip redundant expansions before saving.
 - The abbreviation table page is auto-generated from the registry during full-thesis Word conversion.
 
-CLI quick reference:
-
-```bash
-# Query before writing
-python3 scripts/abbreviation_registry.py --project-root "${save_path}" list
-
-# Process after writing a section (extract + register + strip)
-python3 scripts/abbreviation_registry.py --project-root "${save_path}" \
-  process --file "${md_file}" --chapter 2 --section 2.1 --in-place
-
-# Generate abbreviation table markdown
-python3 scripts/abbreviation_registry.py --project-root "${save_path}" table
-
-# Validate cross-references (registry entries vs actual markdown files)
-python3 scripts/abbreviation_registry.py --project-root "${save_path}" validate
-```
+命令：`abbreviation_registry.py list`（写前查询）/ `process --file ... --in-place`（写后注册+去重展开）/ `table`（生成缩略语表 md）/ `validate`（交叉引用校验）。完整 CLI 见 `QUICK_START.md`。
 
 ## Humanization Contract
 
 Before finalizing each chapter:
 
-1. Run technical self-check (word count + quality):
-   ```bash
-   python3 scripts/atomic_md_workflow.py --project-root "${save_path}" self-check --target "${save_path}/02_分章节文档/第N章_自动合并.docx"
-   ```
+1. Run technical self-check（命令见 `QUICK_START.md` § 7）。
 2. Invoke the `/humanizer-zh` skill on the chapter's merged markdown. The skill rewrites the text in-place; confirm the output before saving. If `/humanizer-zh` is unavailable, manually apply the following checklist to every paragraph:
    - [ ] **无模板化过渡句**：删除"综上所述"、"值得注意的是"、"由此可见"等空洞衔接词
    - [ ] **无重复排比**：连续出现≥3个句式相同的句子→合并或改写
@@ -467,28 +460,7 @@ Priority rule: **chapter-based numbering takes precedence**. If a figure from SC
 3. **Validate**: Run `figure_registry.py validate` to check continuity.
 4. **Cross-validate**: Run `figure_registry.py cross-validate` to verify all markers match the registry.
 
-### CLI Quick Reference
-
-```bash
-# Register a figure mapping
-python3 scripts/figure_registry.py --project-root "${save_path}" register \
-  --chapter 2 --seq 1 --source "Figure 1A" --title "PMG对HepG2细胞形态的影响"
-
-# List all mappings (or filter by chapter)
-python3 scripts/figure_registry.py --project-root "${save_path}" list --chapter 2
-
-# Delete a mapping
-python3 scripts/figure_registry.py --project-root "${save_path}" unregister --cn-id "图2-1"
-
-# Validate continuity and uniqueness
-python3 scripts/figure_registry.py --project-root "${save_path}" validate
-
-# Cross-validate with atomic_md markers
-python3 scripts/figure_registry.py --project-root "${save_path}" cross-validate --chapter 2
-
-# Export mapping table
-python3 scripts/figure_registry.py --project-root "${save_path}" export --format markdown
-```
+命令：`figure_registry.py register`（注册映射）/ `list`（列出/筛章）/ `unregister`（删除）/ `validate`（连续性）/ `cross-validate --chapter N`（与 atomic_md 交叉验证）/ `export --format markdown`（导出映射表）。完整 CLI 见 `QUICK_START.md`。
 
 ## Figure Prompt Generation（图注之外，同步生成AI绘图提示词）
 
@@ -515,9 +487,10 @@ python3 scripts/figure_registry.py --project-root "${save_path}" export --format
 
 格式类参数（字体/字号/边框/对齐/页眉页脚/摘要/目录间距等）由脚本硬编码并强制校验，**不在此复述**，以 `check_quality.py` 各类别通过为准。本清单只保留需人工确认的项：
 
-- [ ] `check_quality.py --enforce-full-structure` 各类别（三线表 / 引用格式 / 标点 / 缩略语 / 字体字号 / 页眉页脚）全部通过
+- [ ] `check_quality.py --enforce-full-structure` 各类别（三线表 / 引用格式 / 标点 / 缩略语 / 字体字号 / 页眉页脚 / **参考文献著录格式**）全部通过
 - [ ] Body target >= 80,000 且各章字数已与用户协商并写入 profile
 - [ ] 结构满足：引言 + 研究章 + 结论，总章数 >= 5；参考文献统一在全文末尾
 - [ ] 原子化工作流：编号校验通过、章节自检已跑、小节快照已建、快照/回滚可用
 - [ ] Humanization pass 已完成（humanizer-zh 或人工清单）
 - [ ] 缩略语注册表与图号注册表已填充并交叉校验通过
+- [ ] **查重预检（人工）：** 提交知网/万方查重前，基于 Non-Negotiable 第 20 条中已标注的复用来源，人工列出"高风险复用段落清单"（每条含：所在章节、原 SCI 来源 [N]、改写状态 confirmed/pending），确认全部为中文改写且有引用标注，再提交查重。
