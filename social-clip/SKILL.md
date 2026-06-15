@@ -95,6 +95,17 @@ curl -sL --max-redirs 5 -o /dev/null -w "%{url_effective}" "SHORT_URL"
 
 ---
 
+## 临时文件管理(防残留)
+
+下载的图片/视频/音频统一用前缀 `/tmp/social_clip_*`。**会下载的流程(图文配图/视频/音频)开始第一步先清上次残留、全部完成后再清一次**——幂等 self-healing:某次中途跳步残留,下次入口也兜底清掉,不累积。统一清理命令:
+```bash
+find /tmp -maxdepth 1 -name 'social_clip_*' -exec rm -rf {} + 2>/dev/null
+```
+> 🔴 **清理必须用 `find`,禁止 `rm -rf /tmp/social_clip_*`**:zsh 下通配无匹配会报错中断,且一条命令含多个通配只要一个无匹配就连累整条(该删的也删不掉)。`find` 无匹配静默、bash/zsh/Linux 一致。
+> 技能跨多次独立 Bash 调用执行,单进程 `trap` 覆盖不了全程,故用"入口+出口双清"而非 trap。
+
+---
+
 ## 小红书(XHS)完整流程
 
 ### 关键词检索(无链接时)
@@ -135,7 +146,7 @@ mcp__xiaohongshu__get_feed_detail(feed_id=..., xsec_token=...)
 curl -s "imageList[0].urlDefault" -o /tmp/social_clip_img_1.jpg   # → Read
 curl -s "imageList[1].urlDefault" -o /tmp/social_clip_img_2.jpg   # → Read
 # ...共 N 次,每张都下载+Read。下载失败(报错或 <1KB)→ 记"第X张失败",继续后续
-rm -f /tmp/social_clip_img_*.jpg /tmp/social_clip_img_*.png /tmp/social_clip_img_*.webp
+find /tmp -maxdepth 1 -name 'social_clip_img_*' -exec rm -f {} + 2>/dev/null   # 读完清图(zsh 安全)
 ```
 图里的文字、表格、对比图全部提取。
 
@@ -157,7 +168,7 @@ ffmpeg -i /tmp/social_clip_video.mp4 -vn -acodec mp3 -ar 16000 -ac 1 -y /tmp/soc
 rm -f /tmp/social_clip_video.mp4
 ```
 Playwright 脚本本身无 CDN 输出 → 检查 `~/.claude/skills/yt-dlp-downloader/xhs_get_video.py` 是否存在,并告知用户"CDN 拦截失败,建议手动下载后提供本地路径"。
-**Step 3** 转写(见下"voice-bridge 转写统一前置")→ **Step 4** `rm -f /tmp/social_clip_audio.mp3`
+**Step 3** 转写(见下"voice-bridge 转写统一前置")→ **Step 4** 清本次临时文件:`find /tmp -maxdepth 1 -name 'social_clip_*' -exec rm -rf {} + 2>/dev/null`
 
 ### 2C. 评论提取(NEW)
 
@@ -247,4 +258,4 @@ curl -s -X POST "$VB/transcribe_file" \
 - [ ] 评论:抓取了吗?增量观点写进"评论区补充"了?(部分抓取已标注?)
 - [ ] 总结:每个要点、数字、例子、反面案例都写进去了?
 - [ ] Obsidian 已保存?目录/文件名正确?同名已合并?
-- [ ] 临时文件(/tmp/social_clip_*)已清理?
+- [ ] **无论成功失败**,已跑 `find /tmp -maxdepth 1 -name 'social_clip_*' -exec rm -rf {} + 2>/dev/null` 清临时文件?
