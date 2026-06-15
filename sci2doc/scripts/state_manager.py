@@ -78,6 +78,10 @@ OPTIONAL_STATE_FILES = {
     "abbreviation_registry": "abbreviation_registry.json",
 }
 
+# 这些文件由后续阶段脚本生成（figure_registry / abbreviation_registry），
+# init 时不创建。strict 模式下缺失不视为 preflight 失败。
+LATE_GENERATED_STATE_FILES = {"figure_map", "abbreviation_registry"}
+
 RESTORE_MANAGED_FILES = tuple(
     list(REQUIRED_STATE_FILES.values())
     + list(OPTIONAL_STATE_FILES.values())
@@ -891,7 +895,9 @@ def preflight_validate_state(project_root, chapter=None, strict=False, origin="m
         if not item["exists"]:
             item["parse_ok"] = False
             item["error"] = "missing"
-            if key in REQUIRED_STATE_FILES or strict:
+            # late-generated 文件（figure_map / abbreviation_registry）即使 strict 也不强制
+            is_required_in_strict = key in REQUIRED_STATE_FILES or (strict and key not in LATE_GENERATED_STATE_FILES)
+            if is_required_in_strict:
                 ok = False
             else:
                 warnings.append(f"missing:{rel_path}")
@@ -906,7 +912,8 @@ def preflight_validate_state(project_root, chapter=None, strict=False, origin="m
             except Exception as e:
                 item["parse_ok"] = False
                 item["error"] = str(e)
-                if key in REQUIRED_STATE_FILES or strict:
+                is_required_in_strict = key in REQUIRED_STATE_FILES or (strict and key not in LATE_GENERATED_STATE_FILES)
+                if is_required_in_strict:
                     ok = False
                 else:
                     warnings.append(f"parse-error:{rel_path}")
@@ -1644,7 +1651,7 @@ def init_project(
             shutil.copy2(src, dst)
             copied_scripts.append(dst)
 
-    front_matter_payload = _render_front_matter_if_possible(project_root)
+    front_matter_payload = _render_front_matter_if_possible(effective_root)
 
     print(
         json.dumps(
