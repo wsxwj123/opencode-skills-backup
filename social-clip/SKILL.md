@@ -166,10 +166,12 @@ find /tmp -maxdepth 1 -name 'social_clip_img_*' -exec rm -f {} + 2>/dev/null   #
 
 ### 2B. 视频帖
 
-**Step 1** Playwright 拦截 CDN 视频 URL:
+**Step 1** Playwright 拦截 CDN 视频 URL(**先初始化 pyenv**——playwright 装在 pyenv 的 python 里,系统 python3 没装,不初始化会误报"没装 playwright"):
 ```bash
+source ~/.zshrc 2>/dev/null; eval "$(pyenv init -)" 2>/dev/null   # 确保用 pyenv 的 python
 python3 ~/.claude/skills/yt-dlp-downloader/xhs_get_video.py "XHS_URL"   # 多行CDN URL,取第一行
 ```
+> 若仍报错,看**确切信息**:`No module named playwright`=python 环境问题(上面没生效);`Target page/context closed`或`browser is already in use`=Chrome 占用了 Profile 5,关掉 Chrome 再跑。
 **Step 2** ffmpeg 直接从 CDN 提音频(不下整个视频):
 ```bash
 ffmpeg -i "CDN_URL" -vn -acodec mp3 -ar 16000 -ac 1 -y /tmp/social_clip_audio.mp3 2>/dev/null
