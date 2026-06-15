@@ -433,7 +433,15 @@ def _write_manifest(proj, meta, rows, summary=None):
         "| 文件前缀 | 题号 | 题型 | 分值 | 考点 | 难度 | 拟用素材 | 状态 |",
         "|------|------|------|------|------|------|----------|------|",
     ]
-    for pre, q, typ, score, kp, diff in rows:
+    # Bug-A2 修复：宽容解包，蓝图行少给/多给字段都不再崩溃（用占位填充）
+    for raw in rows:
+        try:
+            row = list(raw) if isinstance(raw, (list, tuple)) else [raw]
+        except TypeError:
+            row = ["", str(raw), "", "", "", ""]
+        # 补齐到 6 字段、截断超出
+        row = (row + ["", "", "", "", "", ""])[:6]
+        pre, q, typ, score, kp, diff = row
         # B8修复："q01-q10" → "01-10"，"q01" → "01"
         if isinstance(q, str) and q[:1] == "q":
             qnum = q[1:].replace("-q", "-")
@@ -565,6 +573,7 @@ def cmd_build(args):
     figure_errors = []  # 缺图硬门禁：题干含"如图"但无 figure block
     parse_errors = []   # 完整性硬门禁：坏 JSON / 结构错误的原子文件（跳过=静默漏题）
     excerpt_errors = []  # 忠实节选硬门禁：材料非原文连续子串（跳段/改字/重排）
+    stale_errors = []    # W-1：道法/思想政治时政素材过期
     audit_rows = []     # 材料真实性自检表（build 自动生成）
     allow_missing_fig = "--allow-missing-figure" in args
     materials_dir = os.path.join(proj, "materials")
@@ -595,6 +604,10 @@ def cmd_build(args):
         _check_source(fp, m, p_blocks, materials_dir, source_errors, warn)
         # —— 忠实节选硬门禁：材料只能从原文首尾连续删减（禁跳段/改字/重排）——
         _check_faithful_excerpt(fp, m, p_blocks, materials_dir, excerpt_errors)
+        # —— Bug-W-1 时政时效硬门禁：道法/思想政治素材抓取距今需 ≤ 时政窗口 ——
+        _window = int(meta.get("decisions", {}).get("时政窗口", _FRESHNESS_DEFAULT_DAYS) or _FRESHNESS_DEFAULT_DAYS)
+        _check_freshness(fp, m, p_blocks, materials_dir, meta.get("subject", ""),
+                         stale_errors, warn, _window)
         # —— 材料真实性自检表行（build 自动生成，交付时原样转发用户）——
         for _b in p_blocks:
             if isinstance(_b, dict) and _b.get("type") == "material" and _b.get("paras"):
@@ -696,6 +709,19 @@ def cmd_build(args):
             print("\n  已拒绝出卷。修正后重跑；如确需强制出卷，加 --allow-unsourced。")
             sys.exit(2)
         print("\n  ⚠️ 你使用了 --allow-unsourced，跳过门禁强制出卷（风险自负）。")
+
+    # —— W-1 时政时效硬门禁：道法/思想政治素材抓取距今超 2 倍窗口 → 拒绝出卷 ——
+    allow_stale = "--allow-stale" in args
+    if stale_errors:
+        if allow_stale:
+            warn.extend(e.split("。请")[0] + "（--allow-stale 已降级为告警）" for e in stale_errors)
+        else:
+            print(f"[合并] 已读 {len(files)} 个原子文件，题量 {len(nums)}，分值合计 {total:g}")
+            print("\n🔴 [时政时效门禁] 以下道法/思想政治素材已过期：")
+            for e in stale_errors:
+                print("   - " + e)
+            print("\n  已拒绝出卷。重新抓取近 1-3 月新闻；如确需保留旧素材，加 --allow-stale 并告知用户。")
+            sys.exit(2)
 
     # —— 选文标注措辞硬门禁：'改编/改写/整理自'或卷面自称'原创' → 拒绝出卷 ——
     allow_wording = "--allow-wording" in args
@@ -1207,37 +1233,93 @@ def _parse_fetch_credential(text):
     info = {}
     for line in head.splitlines():
         line = line.strip()
-        for key in ("url", "chars", "sha256", "strategy"):
+        for key in ("url", "chars", "sha256", "strategy", "fetched_at"):
             if line.startswith(key + ":"):
                 info[key] = line[len(key) + 1:].strip()
     return info if info.get("url") else None
 
 
+_POLITICAL_SUBJECTS = ("思想政治", "政治", "道德与法治", "道法")
+_FRESHNESS_DEFAULT_DAYS = 90  # 时政时效默认窗口：90 天
+
+
+def _check_freshness(fp, meta, paper_blocks, materials_dir, subject, errors, warn, window_days):
+    """Bug-W-1：道法/思想政治 等时政科目的素材抓取日期距今须 ≤ window_days。
+    超期则告警（warn）；超 2 倍则升级为硬拒绝（errors，可 --allow-stale 降级）。"""
+    if not any(k in str(subject) for k in _POLITICAL_SUBJECTS):
+        return
+    if not _needs_source(meta, paper_blocks):
+        return
+    sfile = str(meta.get("source_file", "")).strip()
+    if not sfile or os.path.isabs(sfile):
+        return
+    fpath = os.path.join(materials_dir, sfile)
+    if not os.path.exists(fpath):
+        return
+    try:
+        with open(fpath, encoding="utf-8") as f:
+            head = f.read(1500)
+    except (OSError, UnicodeDecodeError):
+        return
+    info = _parse_fetch_credential(head)
+    if not info or not info.get("fetched_at"):
+        return
+    import datetime
+    try:
+        fetched = datetime.datetime.strptime(info["fetched_at"][:10], "%Y-%m-%d")
+    except (ValueError, TypeError):
+        return
+    age = (datetime.datetime.now() - fetched).days
+    name = os.path.basename(fp)
+    if age > window_days * 2:
+        errors.append(f"{name}：时政素材 {sfile} 抓取于 {info['fetched_at'][:10]} "
+                      f"（距今 {age} 天 > {window_days*2} 天硬阈值）——道法/思想政治"
+                      f"高度依赖近 1-3 月时事，超期素材会导致整卷过时。请重新抓取最新"
+                      f"报道；若确需保留旧素材，加 --allow-stale 并向用户说明。")
+    elif age > window_days:
+        warn.append(f"{name}：时政素材 {sfile} 抓取于 {info['fetched_at'][:10]} "
+                    f"（距今 {age} 天 > {window_days} 天软阈值）——建议核对是否仍属"
+                    f"当前热点；近 1-3 月报道最稳。")
+
+
+def _extract_body(text):
+    """从凭证文件中抽出正文（去掉 <!-- --> 凭证头 + 来源/抓取日期两行）。"""
+    body_start = text.find("-->")
+    body = text[body_start + 3:].strip() if body_start >= 0 else text
+    body_lines = body.splitlines()
+    while body_lines and (body_lines[0].startswith("来源：")
+                          or body_lines[0].startswith("抓取日期：")
+                          or not body_lines[0].strip()):
+        body_lines.pop(0)
+    return "\n".join(body_lines)
+
+
 def _credential_matches_url(text, source_url):
     """凭证头里的 URL 必须与 meta.source 一致——防止"复制别处凭证 + 改 meta.source"伪造。
-    chars 也要与文件实际内容长度匹配，防止"加凭证头 + 篡改正文"。"""
+    chars + sha256 都要与文件实际内容匹配，防止"加凭证头 + 篡改正文 + 对齐字数"绕过。
+    """
+    import hashlib
     info = _parse_fetch_credential(text)
     if not info:
         return False, "无凭证头"
     if info["url"].strip() != source_url.strip():
         return False, f"凭证 URL ({info['url']}) ≠ meta.source ({source_url})"
+    body = _extract_body(text)
     try:
         declared = int(info.get("chars", "0"))
-        # 文件正文 = 全文 - 凭证头(到第一个 "-->\n" 之后)；以"来源："行后视为正文起点
-        body_start = text.find("-->")
-        body = text[body_start + 3:].strip() if body_start >= 0 else text
-        # 去掉自动写入的"来源/抓取日期"两行
-        body_lines = body.splitlines()
-        while body_lines and (body_lines[0].startswith("来源：")
-                              or body_lines[0].startswith("抓取日期：")
-                              or not body_lines[0].strip()):
-            body_lines.pop(0)
-        actual = len("\n".join(body_lines))
+        actual = len(body)
         # 允许 ±20% 偏差（编辑器换行/末尾空行可能差几字节）
         if declared > 0 and abs(actual - declared) > max(50, declared * 0.2):
             return False, f"凭证声明 {declared} 字，实测 {actual} 字（差异>20%）"
     except (ValueError, KeyError):
         pass
+    # 🔴 sha256 强校验：堵"chars 对得上但内容被改"的绕过路径（Bug-A1）
+    declared_sha = (info.get("sha256") or "").strip().lower()
+    if declared_sha and len(declared_sha) == 64:
+        actual_sha = hashlib.sha256(body.encode("utf-8")).hexdigest()
+        if actual_sha != declared_sha:
+            return False, (f"凭证 sha256 不匹配（声明 {declared_sha[:12]}…，"
+                           f"实测 {actual_sha[:12]}…）——正文被篡改")
     return True, ""
 
 
@@ -1358,9 +1440,15 @@ def _check_faithful_excerpt(fp, meta, paper_blocks, materials_dir, errors):
         if b.get("layout") == "verse":
             continue
         pos = 0  # 上一段在原文中的结束位置（保证按原文顺序、禁重排）
+        # Bug-A4 修复：短段累计占比统计，防"拆成 11 字短句逐句编造"绕过门禁
+        total_len = 0
+        short_len = 0
+        broke = False
         for para in (b.get("paras") or []):
             p = _norm_text(para)
-            if len(p) < 12:        # 过短段落（标题/过渡句）不校验
+            total_len += len(p)
+            if len(p) < 12:        # 过短段落（标题/过渡句）暂不逐字校验
+                short_len += len(p)
                 continue
             idx = src_norm.find(p, pos)
             if idx >= 0:
@@ -1374,7 +1462,13 @@ def _check_faithful_excerpt(fp, meta, paper_blocks, materials_dir, errors):
                 errors.append(f"{name}：选文有段落未在 materials/{sfile} 原文中逐字出现"
                               f"（如『{snippet}…』）——疑似改字或编造，材料每段须逐字取自真实原文"
                               f"（可删减无关部分，但不可改写）。")
+            broke = True
             break
+        # 短段累计占比 >30% 且全文 >50 字 → 疑似刻意拆短句绕过，拒绝
+        if not broke and total_len > 50 and short_len * 10 > total_len * 3:
+            errors.append(f"{name}：选文 {short_len}/{total_len} 字位于"
+                          f"≤11字短段（{short_len*100//total_len}%>30%）——疑似刻意拆短句"
+                          f"绕过逐字校验。请按原文段落自然换行，每段保留 ≥12 字便于核验。")
 
 
 def _detect_desktop():

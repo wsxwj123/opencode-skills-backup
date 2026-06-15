@@ -100,18 +100,32 @@ def _make_func(expr):
     x = sympy.symbols("x")
     transformations = standard_transformations + (
         implicit_multiplication_application,)
+    # Bug-A3 修复：在 sympy 解析**之前**用 Python AST 做调用白名单
+    # 原因：atoms(sympy.Function) 抓不到 factorial/integrate/diff/Sum/Product 等
+    # sympy 内置算子（它们在 parse_expr 时立即求值，不是 Function 子类）。
+    # AST 白名单在源头拒绝，不依赖 sympy 内部分类。
+    import ast
+    allowed_calls = {"sin", "cos", "tan", "asin", "acos", "atan",
+                     "sinh", "cosh", "tanh", "exp", "log", "ln",
+                     "sqrt", "Abs", "Pow", "Min", "Max", "pi", "E"}
+    try:
+        tree = ast.parse(expr, mode="eval")
+    except SyntaxError as ex:
+        raise ValueError(f"表达式语法错误：{ex}")
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            fn_name = getattr(node.func, "id", None) or getattr(node.func, "attr", None)
+            if fn_name not in allowed_calls:
+                raise ValueError(f"表达式含禁用函数：{fn_name or node.func!r}")
+        elif isinstance(node, ast.Attribute):
+            raise ValueError(f"表达式禁用属性访问：.{node.attr}")
+        elif isinstance(node, ast.Name) and node.id not in allowed_calls | {"x"}:
+            raise ValueError(f"表达式含未声明符号：{node.id}")
     e = parse_expr(expr, local_dict={"x": x}, transformations=transformations,
                    evaluate=True)
-    # 自由符号白名单
+    # 自由符号白名单（双保险）
     if not (e.free_symbols <= {x}):
         raise ValueError(f"表达式含未声明符号：{e.free_symbols - {x}}")
-    # 函数调用白名单（按 sympy 类名比对，禁止 __import__/getattr 等）
-    allowed_func_names = {"sin", "cos", "tan", "asin", "acos", "atan",
-                          "sinh", "cosh", "tanh", "exp", "log", "ln",
-                          "sqrt", "Abs", "Pow", "Min", "Max"}
-    for fn in e.atoms(sympy.Function):
-        if fn.func.__name__ not in allowed_func_names:
-            raise ValueError(f"表达式含禁用函数：{fn.func.__name__}")
     return sympy.lambdify(x, e, "numpy")
 
 
