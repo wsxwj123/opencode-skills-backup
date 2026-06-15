@@ -4,9 +4,54 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import sys
 from pathlib import Path
 
 from common import AtomicCommentHTMLParser, detect_comments_input_mode, is_meaningful_text, normalize_ws, read_docx_paragraphs, read_json, write_json
+
+
+# Keywords for language-agnostic severity detection (中英双语).
+# Order matters: major keywords are checked first.
+_MAJOR_KEYWORDS = (
+    # Chinese
+    "必须解决", "核心问题", "关键问题", "主要问题", "重大问题", "必须修改", "硬伤",
+    # English
+    "major", "critical", "must be addressed", "essential", "required revision",
+    "serious concern", "fundamental", "mandatory",
+)
+_MINOR_KEYWORDS = (
+    # Chinese
+    "其他改进", "改进建议", "次要问题", "建议修改", "小问题", "可选",
+    # English
+    "minor", "suggestion", "optional", "recommended", "improvement",
+    "enhancement", "consider",
+)
+
+# section id → severity mapping (matches reviewer-simulator template sec-7/sec-8)
+_SECTION_ID_SEVERITY: dict[str, str] = {
+    "sec-7": "major",
+    "sec-8": "minor",
+}
+
+
+def infer_severity_from_section(section) -> str | None:
+    """Return 'major'/'minor' from section id or h2 heading text; None if ambiguous."""
+    # 1. Check section id attribute first (most reliable)
+    sec_id = (section.get("id") or "").strip().lower()
+    if sec_id in _SECTION_ID_SEVERITY:
+        return _SECTION_ID_SEVERITY[sec_id]
+
+    # 2. Fall back to heading text keyword match
+    h2 = section.find("h2")
+    heading = normalize_ws(h2.get_text(" ", strip=True) if h2 else "").lower()
+    for kw in _MAJOR_KEYWORDS:
+        if kw.lower() in heading:
+            return "major"
+    for kw in _MINOR_KEYWORDS:
+        if kw.lower() in heading:
+            return "minor"
+
+    return None
 
 
 def reviewer_number(reviewer: str) -> int:
@@ -240,13 +285,15 @@ def parse_html_comments(path: Path) -> list[dict[str, str]]:
 
     reviewer = "Reviewer #1"
     severity_counters: dict[str, int] = {"major": 0, "minor": 0}
+    skipped_sections: list[str] = []
     for section in soup.select("section.critique-section"):
-        heading = normalize_ws(section.find("h2").get_text(" ", strip=True) if section.find("h2") else "")
-        if "必须解决的核心问题" in heading:
-            severity = "major"
-        elif "其他改进建议" in heading:
-            severity = "minor"
-        else:
+        severity = infer_severity_from_section(section)
+        if severity is None:
+            # Section has no identifiable severity — skip but record for warning
+            h2 = section.find("h2")
+            heading_preview = normalize_ws(h2.get_text(" ", strip=True) if h2 else "")[:60]
+            sec_id = section.get("id", "")
+            skipped_sections.append(f"id={sec_id!r} heading={heading_preview!r}")
             continue
         for item in section.select("ul.critique-list > li"):
             title = normalize_ws(item.select_one(".critique-title").get_text(" ", strip=True) if item.select_one(".critique-title") else "")
@@ -274,6 +321,20 @@ def parse_html_comments(path: Path) -> list[dict[str, str]]:
                     "comment_input_mode": "reviewer-simulator-html",
                 }
             )
+
+    if not units:
+        # Warn loudly when a critique HTML yields zero comments so callers don't
+        # silently produce an empty docx.  This is a non-fatal warning so the
+        # caller can still decide how to handle it.
+        has_critique_sections = bool(soup.select("section.critique-section"))
+        print(
+            f"WARNING [atomize_comments]: parsed 0 comment units from {path}. "
+            f"critique-section found={has_critique_sections}. "
+            f"Skipped sections (no severity detected): {skipped_sections or 'none'}. "
+            "Check that section ids (sec-7/sec-8) or h2 headings contain major/minor keywords.",
+            file=sys.stderr,
+        )
+
     return units
 
 
@@ -503,6 +564,14 @@ def main() -> int:
     state.setdefault("counts", {})
     state["counts"]["comment_units"] = len(parsed)
     write_json(project_root / "project_state.json", state)
+
+    if len(parsed) == 0:
+        print(
+            f"WARNING [atomize_comments]: 0 comment units extracted from {args.comments}. "
+            "The downstream docx will be empty. "
+            "Check the input file format and severity heading keywords.",
+            file=sys.stderr,
+        )
 
     print(json.dumps({"ok": True, "count": len(parsed)}, ensure_ascii=False))
     return 0
