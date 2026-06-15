@@ -50,9 +50,7 @@ The workflow is built around:
 
 **custom→ready 最小必填字段**（缺一即保持 `pending_template`）：`page_margins_cm.top/bottom/left/right`（四个边距）、`header_distance_cm`、`footer_distance_cm`、`university_name`、`degree_type`。
 
-**managed front matter 文件清单**（init/profile 自动渲染，按此名落到 `atomic_md/`，对应 docx 落到 `02_分章节文档/`）：封面、题名页、独创性声明与授权书、中文摘要、英文摘要、目录、缩略语表。
-
-字段完整定义、需求→字段映射、managed marker 覆盖规则等细则见 `references/format_profile_schema.md`。
+字段完整定义、需求→字段映射、managed front matter 文件清单、managed marker 覆盖规则等细则见 `references/format_profile_schema.md § Style Selection Gate (full rules)`。
 
 ## Non-Negotiable Requirements
 
@@ -60,44 +58,31 @@ The workflow is built around:
 2. Chapter-level target allocation is **not hardcoded** and must be negotiated with the user for each project.
 3. Chinese abstract must be **1500-2500 characters**.
 4. Main structure is fixed:
-- independent Introduction chapter
-- multiple research chapters
-- independent final Conclusion/Outlook chapter
-- total chapters >= 5
+   - independent Introduction chapter
+   - multiple research chapters
+   - independent final Conclusion/Outlook chapter
+   - total chapters >= 5
 5. References are unified at the end of the full thesis.
 6. Review article content is handled separately by the user and is out of this skill's body target scope.
 7. For research chapters, Results & Discussion must map to Methods experiment-by-experiment.
 8. One experiment must map to at least one standalone figure or table.
-9. Atomic markdown is mandatory:
-- one subsection per `.md`
-- continuous numbering
-- merge to chapter/full `.md` before Word conversion
+9. Atomic markdown is mandatory: one subsection per `.md`, continuous numbering, merge before Word conversion.
 10. Chapter completion requires immediate self-check.
 11. Each subsection summary completion requires immediate snapshot.
-12. Humanization is required before finalizing chapter text; use humanizer-zh principles to reduce mechanical AI style.
+12. Humanization is required before finalizing chapter text；细则见 `## Humanization Contract`。
 13. Do not invent experimental data.
 13.1 Do not invent references; citation hallucination is forbidden.
-14. Literature retrieval follows topic-dependent routing (MANDATORY): 细则见 `## Citation Zero-Hallucination Gate`。
-15. Abbreviation consistency is mandatory:
-    - First occurrence of any abbreviation must expand as: `中文全称（English Full Name, ABBR）`
-    - All subsequent occurrences use bare abbreviation only, no re-expansion.
-    - Use `abbreviation_registry.py` to register, track, and auto-strip redundant expansions.
-    - A formal abbreviation table page (three-line format, alphabetically sorted) must be generated in front matter.
-16. Three-line table format is mandatory for all tables: 三线表强制，使用 Markdown 管道表语法（`| col1 | col2 |`），`markdown_to_docx.py` 自动转换。具体边框参数（pt 值）与题注字体字号见 `references/word-format-spec.md`。
-17. Writing style constraints: 见 `## Humanization Contract`（清单集中在那里，本条不重复）。`check_quality.py` `check_writing_style()` 自动检测违规，违规必须清零后才能 finalize。
-18. Formatting alignment rules are mandatory:
-    - Body text (正文) must use justified alignment (两端对齐, `WD_ALIGN_PARAGRAPH.JUSTIFY`), not left-aligned.
-    - All three-line table cell text must be center-aligned (居中).
-    - All figure placeholders must be center-aligned with no first-line indent.
-19. Bold marker handling in body text:
-    - `**text**` and `__text__` Markdown bold markers must be stripped during Word conversion; body text should not contain bold formatting.
-    - Single `*` used for statistical significance (e.g. `*p<0.05`, `*P<0.01`) must be preserved as-is.
-    - `strip_bold_markers()` in `markdown_to_docx.py` handles this automatically.
-20. Reuse of the author's own published SCI content is mandatory-compliant, not free copy-paste (self-plagiarism / duplicate-publication control):
-    - 正文复用已发表 SCI 内容必须**改写**为中文学术表述，不得直接翻译粘贴原文段落。
-    - 每章首次复用某篇已发表成果处，必须标注来源文献（正文引用 [N] + 在该处或脚注/章节首说明"本章部分内容已发表于 [N]"）。
-    - 复用成果必须同时体现在"攻读学位期间取得的成果"清单与"独创性声明"中（独创性声明已声明"除文中已注明引用的内容外"，故被复用的已发表成果必须落到正文引用标注，二者一致）。
-    - 这是合规底线，不是文风偏好：缺标注的已发表内容复用等同未注明引用，触发学位办自我抄袭/重复发表红线。
+14. Literature retrieval follows topic-dependent routing (MANDATORY)：细则见 `## Citation Zero-Hallucination Gate`。
+15. 缩写一致性强制执行：首次展开格式 `中文全称（English Full Name, ABBR）`，后续裸缩写；用 `abbreviation_registry.py` 管理；需生成前置缩略语表。细则见 `## Abbreviation Contract`。
+16. 三线表格式强制：所有数据表使用 Markdown 管道语法，`markdown_to_docx.py` 自动转换；边框参数与题注字体字号见 `references/word-format-spec.md § Three-Line Table Borders`。细则见 `## Table Contract`。
+17. 文风约束：见 `## Humanization Contract`（清单集中在那里）；`check_quality.py check_writing_style()` 自动检测，违规必须清零后才能 finalize。
+18. 格式对齐规则：正文两端对齐、三线表单元格居中、图占位符居中无首行缩进。完整参数见 `references/word-format-spec.md`。
+19. Bold marker 处理：`**text**` / `__text__` 在 Word 转换时由 `strip_bold_markers()` 自动剥除；单 `*` 统计显著性标记（如 `*p<0.05`）保留原样。
+20. 已发表 SCI 内容复用合规底线：
+    - 正文复用必须**改写**为中文学术表述，不得直接翻译粘贴。
+    - 每章首次复用处必须标注来源文献（正文引用 [N] + 声明"本章部分内容已发表于 [N]"）。
+    - 复用成果须同时体现在"攻读学位期间取得的成果"清单与"独创性声明"中。
+    - 缺标注的已发表内容复用等同未注明引用，触发学位办自我抄袭/重复发表红线。
 
 ## Citation Zero-Hallucination Gate (Mandatory)
 
@@ -117,19 +102,18 @@ Rules:
 - CS / AI / engineering / physics / interdisciplinary → **paper-search MCP first** (`mcp__paper-search-mcp__search_arxiv` etc.).
 - Fallback to the other source when primary yields no results.
 
-`literature_index.json` 必需字段 schema 见 `references/format_profile_schema.md`。
+`literature_index.json` 必需字段 schema 见 `references/format_profile_schema.md § literature_index.json schema`。
 
 - Source provider policy is strict:
-  - Allowed: `pubmed-cli` (life science primary, esearch/efetch/einfo，~/edirect/，需 < /dev/null，代理 http://127.0.0.1:7897), `paper-search` (CS/AI primary / fallback / preprints: arXiv/bioRxiv).
-  - Forbidden: `websearch`, `openalex-cli` (pyalex), `tavily` provider entries.
-  - **严禁** 使用 `tavily`、`websearch` 或 `openalex`（pyalex）作为文献检索来源，无论有无 DOI/PMID；不得出现 `source_provider=tavily` 的文献条目（`citation_guard.py` 会以 `source_provider_not_allowed` 拒绝）。
+  - Allowed: `pubmed-cli` (life science primary), `paper-search` (CS/AI primary / fallback / preprints).
+  - Forbidden: `websearch`, `openalex-cli` (pyalex), `tavily`。`citation_guard.py` 以 `source_provider_not_allowed` 拒绝这些来源。
   - 无 DOI/PMID 的条目不予放行，进入 `manual_review_queue` 人工核实。
-  - **Serial Search (MANDATORY):** Execute all retrieval calls sequentially (PubMed CLI and paper-search MCP alike). Never parallelize search requests. Enforce ≥1s interval between consecutive calls.
+  - **Serial Search (MANDATORY):** Execute all retrieval calls sequentially. Never parallelize. Enforce ≥1s interval between consecutive calls.
   - **Citation Type by Context (MANDATORY):**
     - Background / field overview → Reviews or Systematic Reviews preferred.
-    - Specific mechanistic/experimental claims → Original Articles (mandatory primary evidence; do NOT substitute a Review as the sole support for a specific experimental claim).
-    - Clinical efficacy/safety claims → Clinical Trials (same priority as Original Articles for clinical evidence).
-    - Emerging/cutting-edge claims → Preprints (only when no peer-reviewed equivalent exists; label as [Preprint] in citation list).
+    - Specific mechanistic/experimental claims → Original Articles (do NOT substitute a Review as the sole support).
+    - Clinical efficacy/safety claims → Clinical Trials.
+    - Emerging/cutting-edge claims → Preprints (label as [Preprint]; only when no peer-reviewed equivalent exists).
 - This guard does not change existing chapter writing workflow; it only validates reference correctness.
 - For final delivery strict mode, run with `--require-mcp`.
 
@@ -137,7 +121,7 @@ Rules:
 
 论文目标配置存于 `thesis_profile.json`；样式选择与格式门禁存于其 `format_profile`；运行时状态镜像在 `project_state.json`。自定义要求不完整时 `progress.status` 必须为 `pending_template`（导出硬门禁见 `## Style Selection Gate`）。
 
-`format_profile` 完整字段清单、结构化更新入口（`--format-profile-json` / `--project-info-json`）、页码格式枚举、需求→字段映射规则、`project_info` 字段，均见 `references/format_profile_schema.md`。
+`format_profile` 完整字段清单、结构化更新入口（`--format-profile-json` / `--project-info-json`）、页码格式枚举、需求→字段映射规则、`project_info` 字段，均见 `references/format_profile_schema.md § Single Source of Truth`。
 
 ## Project Directory Structure
 
@@ -417,14 +401,7 @@ Three-line tables are mandatory in (but not limited to):
 
 **Writing rule**: If a subsection contains 3+ items sharing the same attributes (name+spec+source, group+treatment+n, etc.), it MUST be written as a Markdown pipe table, never as a prose list or paragraph.
 
-### Quality Check
-
-```bash
-python3 scripts/check_quality.py "${save_path}/03_合并文档/完整博士论文.docx" \
-  --output json --enforce-full-structure
-```
-
-The quality checker validates: no vertical lines, correct border weights (1.5pt top/bottom, 0.5pt header line).
+边框参数（pt 值）与题注字体字号见 `references/word-format-spec.md § Three-Line Table Borders`；格式由 `check_quality.py` 强制校验（无竖线，顶/底线 1.5pt，表头线 0.5pt）。
 
 ## Word Format Specification (CSU Standard)
 
@@ -469,19 +446,19 @@ Priority rule: **chapter-based numbering takes precedence**. If a figure from SC
 ## Common Mistakes
 
 1. Mistake: Hardcoding chapter targets without user negotiation.
-- Fix: update `thesis_profile.json` via `state_manager.py profile`.
+   - Fix: update `thesis_profile.json` via `state_manager.py profile`.
 
 2. Mistake: Keeping conflicting old thresholds in docs/scripts.
-- Fix: profile-driven targets only.
+   - Fix: profile-driven targets only.
 
 3. Mistake: Writing one chapter in a single large markdown file.
-- Fix: atomic subsection files + validate numbering.
+   - Fix: atomic subsection files + validate numbering.
 
 4. Mistake: Skipping self-check and snapshot.
-- Fix: run `self-check` and `section-snapshot` as hard gates.
+   - Fix: run `self-check` and `section-snapshot` as hard gates.
 
 5. Mistake: Overly mechanical AI text in final chapter.
-- Fix: run humanizer pass before finalize.
+   - Fix: run humanizer pass before finalize.
 
 ## Acceptance Checklist
 

@@ -1,5 +1,24 @@
 # Git Rollback 指南
 
+## Git Checkpoint 消息表
+
+每次 `state.json` 更新后执行（`git_available: true` 时）：
+
+```bash
+git add -A && git commit -m "[review] <MESSAGE>" --allow-empty-message 2>/dev/null || true
+```
+
+| Checkpoint 位置 | commit message |
+|-----------------|----------------|
+| Phase 0.5 (init script 内) | `[review] Phase 0: project initialized` |
+| Phase 1 Step 9 | `[review] Phase 1: outline confirmed` |
+| Phase 2 每节 Step 8 | `[review] Phase 2: section X.X search complete` |
+| Phase 2.5 (dedup 后) | `[review] Phase 2.5: dedup + global ID assigned` |
+| Phase 3 每节 Step 9 | `[review] Phase 3: section X.X draft complete` |
+| Phase 4 Step 7 | `[review] Phase 4: export finalized` |
+| Phase 0-P Step 5 (substep 3 后) | `[review] Phase 0-P: citations imported` |
+| Phase 0-P Step 6 (state init 后) | `[review] Phase 0-P: polish mode initialized` |
+
 Because `init_project.py` runs `git init` + commits at Phase 0, every checkpoint is a full project snapshot — drafts (`drafts/section_*.md`), `state.json`, and `data/` indices all roll back together (atomic-draft rollback, no orphaned state). Run from inside the project root (`git_available: true` only):
 
 ```bash

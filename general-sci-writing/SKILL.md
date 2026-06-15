@@ -40,6 +40,7 @@ license: Proprietary
 | `references/figure-protocol.md` | `/figure` 收口、落盘 `figure_analysis/` 与 `add-figure` 时 |
 | `references/submission-guide.md` | `/submission-pack` 时 |
 | `references/interaction-protocol.md` | §4/§7/§9/§12/§13 执行时；`/change-journal`、`/upgrade-scripts` 触发时 |
+| `references/compliance-gate.md` | `/compliance-check`（Phase 10.5）执行时 |
 
 ---
 
@@ -382,66 +383,22 @@ python scripts/state_manager.py add-abbreviation <one.json>
 
 ### Phase 10.5: 投稿前合规门禁 (`/compliance-check`)
 
-**定位**：在 `/check` 质量门通过、进入 `/submission-pack` 之前，强制核验六项合规要素，缺一阻断。此关卡统一处理现有散落在 submission-guide.md 与 writing-templates.md 中的合规检查，并补充缺失的试验注册号与 reviewer COI 要求。
+**触发时机**：`/check` 全部通过后、`/submission-pack` 执行前强制触发。用户说"准备投稿"时 AI 自动先跑此 phase。
 
-**触发时机**：`/check` 全部通过后、`/submission-pack` 执行前强制触发。用户说"准备投稿"时 AI 应自动先跑此 phase 再进 Phase 11。
+**执行前必须 `Read references/compliance-gate.md`** — 六项判定细则与阻断条件完整定义在那里。
 
 **六项合规检查（缺一阻断，逐项输出 ✅/❌ + 缺失说明）**：
 
-1. **伦理批号**：
-   - 动物实验 → IACUC 批准号（格式：`机构名-年份-批次`）+ 实验方案是否符合 3Rs 原则（Replacement/Reduction/Refinement）。
-   - 人体研究 → IRB 批准号 + 知情同意书获取声明（"All participants provided written informed consent"）。
-   - 体外/计算/公开数据集研究 → 无需伦理批号，标注 "This study did not involve human subjects or animal experiments"。
-   - **阻断条件**：涉及动物/人体但缺批准号，或 Methods 中无伦理声明段落。
+1. **伦理批号**（IACUC/IRB）— 涉及动物/人体无批号即阻断
+2. **临床试验注册号**（NCT/ChiCTR 等）— 前瞻性临床研究无注册号即阻断（ICMJE 强制）
+3. **报告规范**（CONSORT/STROBE/ARRIVE/PRISMA）— 按研究类型匹配；关键条目缺失即阻断
+4. **统计报告完整性**（精确 P 值/效应量+95%CI/多重比较校正）— 推断统计研究主要结果缺 CI 即阻断
+5. **署名合规性**（ICMJE 四准则）— 挂名作者须提请用户确认修正
+6. **Reviewer COI 回避**（近 3 年合作/同单位/导师-学生）— 明显 COI 未回避即阻断
 
-2. **临床试验注册号**：
-   - 前瞻性临床研究（干预性试验、观察性队列、RCT）→ 必须提供 ClinicalTrials.gov NCT 编号或等效注册库（ChiCTR/ISRCTN/UMIN 等）编号及注册日期（注册须在首例入组**前**完成，事后注册须标明并接受期刊审查）。
-   - 回顾性研究/体外实验/动物实验 → 标注 "Not applicable (retrospective study / in vitro study)"。
-   - **阻断条件**：前瞻性临床研究缺注册号（ICMJE 强制要求，缺注册号即桌面拒稿）。
+**执行**：无专用脚本，逐项交互核查；报告规范部分 `Read templates/reporting_checklists.json` 取 checklist。**输出** `submission/compliance_report.md`。
 
-3. **报告规范（CONSORT/STROBE/ARRIVE/PRISMA）**：
-   - `Read templates/reporting_checklists.json` → 按 `project_config.research_field` + `target_journal` 自动匹配对应 checklist。
-   - 适用匹配规则：RCT → CONSORT 2010；观察性研究（队列/病例对照/横断面）→ STROBE；动物实验 → ARRIVE 2.0 essential 10；系统综述/Meta分析 → PRISMA 2020；预测模型 → TRIPOD；qPCR → MIQE；ML → NeurIPS ML reproducibility。
-   - 对 Methods/Results 逐项核对，输出 checklist 通过率；**缺项必须补写到 Methods 后才能继续**。
-   - **阻断条件**：关键条目（ARRIVE essential 10 中任意一项、CONSORT flow diagram、PRISMA flow diagram）缺失。
-
-4. **统计报告完整性**：
-   - **精确 P 值**：正文中所有统计结论必须报告精确 P 值（如 P = 0.032），禁止仅写 P < 0.05 或 P < 0.001（除非 P < 0.0001 确无精确值）。
-   - **效应量 + 置信区间**：每个主要比较必须报告效应量（Cohen's d / OR / HR / η² 等）+ 95% CI；单 P 值不够。
-   - **多重比较校正方法**：任何涉及多组比较或多个主要终点时，必须说明校正方法（Bonferroni / Benjamini-Hochberg FDR / 其他）及校正后阈值。
-   - **检验前提验证**：正态性（Shapiro-Wilk / Q-Q plot）+ 方差齐性（Levene / Brown-Forsythe）是否在 Methods 中说明；未验证则必须补写或改用非参检验。
-   - **阻断条件**（仅适用于含假设检验/组间推断统计的研究）：主要结果缺 95% CI，或多重比较无校正说明。纯描述性研究（无推断统计、无组间比较）不受此条阻断，但仍须报告描述性统计的离散度（SD/IQR 等）。
-
-5. **署名（Authorship，ICMJE 四准则）**：
-   - 每位作者须同时满足全部四条：① 对构思/设计/数据采集/分析有**实质性贡献**；② 参与起草或对重要内容进行**严格修订**；③ 批准最终提交版本；④ 对本工作各方面问责（能说明其他作者的贡献并信任其诚信）。
-   - **仅满足 1-2 条的贡献者**（如提供试剂、技术支持、数据采集但无实质设计参与）→ 列入 Acknowledgments，**不能列为作者**。
-   - **署名顺序**：第一作者（通常是主要完成者）、共同第一作者（co-first，标注"†These authors contributed equally"）、通讯作者（最后，标注"*Corresponding author"）、共同通讯（co-corresponding，标注双 *）。
-   - **阻断条件**：CRediT 分配中出现不符合 ICMJE 四准则的作者（挂名作者），须提请用户确认并修正。
-
-6. **Reviewer 推荐 COI 回避**：
-   - 每位 suggested reviewer 须核查：近 3 年内无共同发表论文、近 3 年内无同一基金、无同单位（同一机构不同系也须回避）、非直接导师/学生/博士后关系。
-   - 如用户提供了 suggested reviewers 列表，逐一核对上述条件；任一不符合须替换。
-   - **阻断条件**：suggested reviewer 存在明显 COI（同单位/近 3 年合作发表/导师-学生关系）而未回避。
-
-**执行命令**：
-```bash
-# 无专用脚本，逐项以交互核查方式完成；核查结果写入 submission/compliance_report.md
-# 报告规范部分：
-# Read templates/reporting_checklists.json → 对应 checklist 逐项核对
-```
-
-**输出**：`submission/compliance_report.md`，格式：
-```
-## 投稿前合规门禁报告
-1. 伦理批号：✅/❌ [说明]
-2. 试验注册号：✅/❌ [说明]
-3. 报告规范（CONSORT/STROBE/ARRIVE/PRISMA）：✅/❌ [缺失条目列表]
-4. 统计报告完整性：✅/❌ [缺失项]
-5. 署名合规性（ICMJE）：✅/❌ [问题项]
-6. Reviewer COI 回避：✅/❌ [问题项]
-```
-
-**全部 ✅ → 进 Phase 11 投稿包**；任一 ❌ → 必须补充后重跑，不得跳过进入 `/submission-pack`。
+**全部 ✅ → 进 Phase 11**；任一 ❌ → 补充后重跑，不得跳过。
 
 ### Phase 11: 投稿包准备 (`/submission-pack`)
 **时机**：`/check` **全部通过**后；投稿包内容必须基于已质检的稿子。投稿包不全 → 编辑桌面拒（desk reject），白写。
