@@ -1,12 +1,11 @@
 ---
 name: social-clip
 description: >
-  从社交平台主动检索/提取完整内容并保存到 Obsidian 知识库,做多重信息聚合。
-  能力:主动检索内容与评论、读图文(下载图片识图)、转视频音频为文字并总结、提取文案。
-  支持平台:小红书(原生检索+评论最完整)、B站、知乎、微博、豆瓣、抖音、YouTube、Twitter 等。
-  只要用户分享社交/视频链接、粘贴短链(xhslink.com、b23.tv 等),或要求"搜/找某主题的内容、评论",都自动触发。
-  触发后按归档意图分档:明示"存/记/收藏/整理到笔记"才全量提取并存 Obsidian;只想知道讲了啥则先轻量给结论、再问是否存;说"看看就好"则仅速览。
-  核心承诺(全量归档档):不跳过任何图片、不压缩转写、每个要点/例子/数据/高赞评论都完整保留。
+  分享社交/视频平台链接(小红书、B站、知乎、微博、豆瓣、抖音、YouTube、Twitter 等)、粘贴短链(xhslink.com、b23.tv 等),或要求"搜/找某主题的内容或评论"时,**优先用本技能**——不要用通用的 read / fetch-everything / autocli(它们只取单页正文,会漏图、漏视频、漏评论)。
+  本技能做完整社交剪藏:主动检索、逐张下载图片识图、音视频转文字、抓评论,整理后按需存入 Obsidian。
+  支持小红书(原生检索+评论最全)、B站、知乎、微博、豆瓣、抖音、YouTube、Twitter 等。
+  触发后按归档意图分档:明示"存/记/收藏/整理到笔记"才全量提取并存档;只想知道讲了啥则先轻量给结论再问是否存;说"看看就好"则仅速览。
+  核心承诺(全量档):不跳过任何图片、不压缩转写、每个要点/例子/数据/高赞评论都完整保留。
 ---
 
 # social-clip:社交内容聚合技能
@@ -125,7 +124,7 @@ find /tmp -maxdepth 1 -name 'social_clip_*' -exec rm -rf {} + 2>/dev/null
 ### 关键词检索(无链接时)
 
 ```
-mcp__xiaohongshu__search_feeds(keyword="关键词", filters={...})
+mcp__xiaohongshu-mcp__search_feeds(keyword="关键词", filters={...})
 ```
 `filters` 可选:`sort_by`(综合/最新/最多点赞/最多评论/最多收藏)、`note_type`(不限/视频/图文)、`publish_time`(不限/一天内/一周内/半年内)、`search_scope`、`location`。
 
@@ -139,7 +138,7 @@ mcp__xiaohongshu__search_feeds(keyword="关键词", filters={...})
 
 从展开后 URL 提取 `feed_id`(path 最后一段)和 `xsec_token`(query 参数)。
 ```
-mcp__xiaohongshu__get_feed_detail(feed_id=..., xsec_token=...)
+mcp__xiaohongshu-mcp__get_feed_detail(feed_id=..., xsec_token=...)
 ```
 `note.type`:`"normal"`→图文帖,`"video"`→视频帖。**返回里已含前10条评论**(见 2C)。
 > 返回结构(实测):`data.note.{title,desc,type,imageList[].urlDefault,interactInfo}` + `data.comments.list[]`(每条 `content`/`likeCount`/`userInfo.nickname`/`subComments[]` 二级回复)。下文 `note.xxx` 均指 `data.note.xxx`。
@@ -189,7 +188,7 @@ Playwright 脚本本身无 CDN 输出 → 检查 `~/.claude/skills/yt-dlp-downlo
 
 `get_feed_detail` 默认返回前10条一级评论。用户要更全/明确要评论时:
 ```
-mcp__xiaohongshu__get_feed_detail(feed_id=..., xsec_token=...,
+mcp__xiaohongshu-mcp__get_feed_detail(feed_id=..., xsec_token=...,
     load_all_comments=true, limit=20, click_more_replies=true)
 ```
 - `load_all_comments=true` 滚动加载更多;`limit` 控一级评论数;`click_more_replies=true` 展开二级回复
