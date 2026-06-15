@@ -96,3 +96,41 @@ TYPOGRAPHY: Sans-serif (Arial/Helvetica), 8-10pt labels, English only
 KEY MESSAGE: <one sentence>
 AVOID: 3D effects, drop shadows, gradients, decorative borders, excessive text
 ```
+
+## 6. Future Directions / Open Questions Template (Phase 4 Step 5b)
+
+Required format for the structured "Future Directions" section. ≥3 items, each with gap reason + breakthrough path:
+
+```markdown
+## Future Directions and Open Questions
+
+**1. [Direction title]**
+Current knowledge gap: [why it cannot be answered now]. Recommended approach: [specific method/resource/data type].
+
+**2. [Direction title]**
+Current knowledge gap: [...]. Recommended approach: [...].
+
+**3. [Direction title]**
+Current knowledge gap: [...]. Recommended approach: [...].
+```
+
+Rules:
+- ≥3 specific, actionable directions (not "further studies are needed")
+- Each item must explain *why* current knowledge cannot answer it
+- Each item must name a concrete breakthrough path (specific method/technology/data)
+- Must correspond to arguments already established in the body — no new concepts
+
+## 7. Manuscript Metadata Block (Phase 4 Step 5c)
+
+Append to end of `exports/Final_Review.md` before export:
+
+```markdown
+---
+## Manuscript Metadata
+- Search cutoff date: [YYYY-MM-DD — the date of the final search run]
+- Databases searched: [e.g., PubMed, arXiv, Google Scholar] (see data/search_log.json for full log)
+- Conflicts of interest: [author statement — ask user to provide, default: "None declared"]
+- Funding: [funding statement — ask user to provide, default: "Not specified"]
+```
+
+> search_log.json was populated by `append-search-log` calls during Phase 2. If search_log.json is absent, reconstruct dates from git log.

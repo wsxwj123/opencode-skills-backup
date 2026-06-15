@@ -44,6 +44,29 @@ python3 scripts/state_manager.py init-index
 python3 scripts/state_manager.py append-literature --section 2.1 --papers tmp/papers_2_1.json
 ```
 
+### Related-Sections 字段规则（append-literature / --add-batch 共用）
+
+每条记录必须用 `related_sections`（array），不用 `section`（string）。一篇论文可同时属于多个节次：
+
+```json
+"related_sections": ["2.1", "3.1", "4.1"]
+```
+
+`--add-batch` 对重复 DOI 自动 append 到 `related_sections`（不覆盖）；Zotero 侧同一 item 链接到多个集合。**不要强制单节归属。**
+
+### Phase 2 入库前相关性筛选（不得"搜到即入库"）
+
+每篇论文入库前按标题/摘要判断：
+
+| 排除条件 | 标记 |
+|---------|------|
+| 语言（非英文/中文） | `excluded: language` |
+| 话题偏离本节 RQ/PICO | `excluded: off_topic` |
+| 无同行评审且非顶级 preprint | `excluded: quality` |
+| 发表年份过早且无奠基价值 | `excluded: outdated` |
+
+最终保留的才进入 `tmp/papers_X_X.json`。
+
 ```bash
 # check-pending (Phase 4 entry gate): exit 1 if Polish Mode pending sections remain.
 # Write Mode: always passes (no pending_sections field → empty dict → pass).
