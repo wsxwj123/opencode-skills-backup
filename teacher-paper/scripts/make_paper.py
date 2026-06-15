@@ -392,8 +392,25 @@ def main():
     meta = data.get("meta", {}) if isinstance(data.get("meta"), dict) else {}
     want_page_num = meta.get("page_number", True)  # 默认加页码
 
+    # Bug Batch6-L1：拒绝把 listening_transcript material 渲染到试卷文档
+    # 听力稿应放 answer 字段供老师朗读，印在试卷上等于把听力题退化为阅读题
+    paper_blocks = data.get("paper", [])
+    _bad = [b for b in paper_blocks if isinstance(b, dict)
+            and b.get("type") == "material"
+            and b.get("layout") == "listening_transcript"]
+    if _bad:
+        print("[错误] paper 字段包含听力录音稿 material 块（layout=listening_transcript）：",
+              file=sys.stderr)
+        for b in _bad:
+            print(f"   - title={b.get('title') or b.get('label') or '(无标题)'}",
+                  file=sys.stderr)
+        print("\n  录音稿必须写到原子文件的 answer 字段，由老师按答案文档朗读。", file=sys.stderr)
+        print("  把听力稿印在试卷上会让听力题退化为阅读题，整张卷废掉。", file=sys.stderr)
+        print("  修复：把听力 material 块从 paper:[...] 移到 answer:[...]，重跑 build。",
+              file=sys.stderr)
+        sys.exit(2)
     paper = new_doc()
-    render(paper, data.get("paper", []))
+    render(paper, paper_blocks)
     if want_page_num:
         _add_page_footer(paper)
     paper_path = data.get("paper_path", "试卷.docx")
