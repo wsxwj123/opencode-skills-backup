@@ -31,6 +31,10 @@ STATE_FILES = {
     "submission_state": "submission/submission_state.json"
 }
 
+# Files generated in later phases (review/submission); not required for write-cycle
+# strict preflight so a fresh /init doesn't break the first write-cycle.
+OPTIONAL_STATE_FILES = {"revision_plan", "mentor_plan", "submission_state"}
+
 TOKEN_CHAR_RATIO = 4
 DEFAULT_TOKEN_BUDGET = 6000
 DEFAULT_TAIL_LINES = 80
@@ -643,6 +647,14 @@ def parse_literature_matrix(payload):
         "innovation_core", "main_hypothesis", "para_1",
         "literature_refs", "literature_references", "cited_refs",
         "supporting_refs", "background_refs", "method_refs",
+        # Storyline section narrative/annotation fields (must not be confused
+        # with section ids when the storyline JSON is parsed for embedded matrix)
+        "key_claims", "key_arguments", "key_findings", "key_messages",
+        "key_contributions", "core_claims", "arguments", "claims",
+        "subsections", "sub_sections", "outline", "bullets", "bullet_points",
+        "experiments", "methods_used", "datasets", "tables",
+        "abbreviations", "authors", "affiliations", "tags", "labels",
+        "citations_needed", "figure_ids", "figure_list", "si_figures",
     }
 
     def add(section_id, refs):
@@ -1545,18 +1557,21 @@ def preflight_validate_state(
 
     # 1) Validate all declared state files
     for key, path in STATE_FILES.items():
+        is_optional = key in OPTIONAL_STATE_FILES
         item = {
             "key": key,
             "file": path,
             "exists": os.path.exists(path),
             "parse_ok": None,
-            "error": None
+            "error": None,
+            "optional": is_optional,
         }
         if not item["exists"]:
             item["parse_ok"] = False
             item["error"] = "missing"
-            if strict:
+            if strict and not is_optional:
                 ok = False
+                item["strict_fail"] = True
             else:
                 warnings.append(f"missing:{path}")
         else:
@@ -1614,6 +1629,12 @@ def preflight_validate_state(
         else:
             warnings.append("schema_validation_failed_in_lenient_mode")
 
+    # Collect which required files caused strict failures for actionable error messages
+    strict_missing = [
+        c["file"] for c in checks
+        if c.get("strict_fail") and c.get("error") == "missing"
+    ]
+
     result = {
         "mode": "strict" if strict else "lenient",
         "ok": ok,
@@ -1622,6 +1643,12 @@ def preflight_validate_state(
         "section_check": section_check,
         "schema": schema_report,
     }
+    if strict_missing:
+        result["strict_missing_files"] = strict_missing
+        result["hint"] = (
+            f"Strict preflight failed: the following required state files are missing — "
+            f"{strict_missing}. Run /init to create them."
+        )
     if section:
         update_gate_state(
             section=section,
