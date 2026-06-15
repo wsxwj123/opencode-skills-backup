@@ -127,8 +127,13 @@ python3 scripts/assemble.py init "九年级中考模拟语文_工程" \
 ```
 生成目录骨架、`meta.json`、`00_manifest.md`、`items/` 内的 section/sub 占位文件。
 
-### 2. 选材（联网 + 本地）
-按 `references/material-sources.md`：
+### 2. 规划蓝图（写 manifest）—— **必须先于选材（Bug-P-1 修复后顺序）**
+对照 `references/exam-templates.md` 的 21 题结构（或科目对应模板），在 `00_manifest.md` 列出每题：题号·题型·考点·分值·难度·**拟用素材主题**·状态（待出）。这是全卷"地图"，**先定考点蓝图，再按蓝图找材料**——否则容易"有什么写什么"，考点覆盖随机。
+
+> 🔴 **真实教师流程**：先看考纲/样卷定考点蓝图 → 按考点找素材 → 命题。**绝不能反过来**（抓到什么素材就出什么题，会让全卷考点失衡、知识点漏覆盖）。
+
+### 3. 选材（按蓝图找，联网 + 本地）
+**按第 2 步 manifest 的"拟用素材主题"逐题找材料**。来源参考 `references/material-sources.md`：
 - 文言文：抓古诗文网《世说新语》《古文观止》节选 → 存 `materials/文言文_*.md`
 - 现代文：抓/搜《意林》《读者》风格美文 → `materials/现代文_*.md`
 - 作文素材：抓《作文周刊》《意林·作文素材》或时文 → `materials/作文素材_*.md`
@@ -137,9 +142,6 @@ python3 scripts/assemble.py init "九年级中考模拟语文_工程" \
 python3 scripts/fetch_web.py "<url>" > "九年级..._工程/materials/文言文_世说新语-管宁割席.md"
 ```
 抓不到 → 提示用户截图/给 PDF，用 `read_material.py` 读本地。**每份素材都落盘**，后续命题只读相关素材文件，上下文不膨胀。
-
-### 3. 规划蓝图（写 manifest）
-对照 `references/exam-templates.md` 的 21 题结构，在 `00_manifest.md` 列出每题：题号·题型·考点·分值·难度·拟用素材·状态（待出）。这是全卷"地图"。
 
 ### 4. 逐题原子化命题
 一次只专注一题：读该题对应的 `materials/` 素材 → 写 `items/NN_qXX.json`（paper+answer+解析+命题意图）→ manifest 标"已出"。
