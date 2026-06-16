@@ -23,6 +23,15 @@ import sys
 from pathlib import Path
 from typing import Any
 
+
+def is_merged_derivative(path: str) -> bool:
+    """True for merge_manuscript.py outputs (Full_Manuscript.md / Draft_Round*_Manuscript.md).
+    These carry the AUTO-GENERATED banner and duplicate the atomic sources, so
+    scanning them produces false positives (e.g. banner em-dash)."""
+    name = os.path.basename(path).lower()
+    return name == "full_manuscript.md" or (name.startswith("draft_round") and name.endswith("_manuscript.md"))
+
+
 # ── Forbidden words/phrases (AI-typical) ──────────────────────────────────────
 FORBIDDEN_EXACT = {
     "delve into", "comprehensive landscape", "pivotal role", "realm",
@@ -339,6 +348,9 @@ def main() -> int:
         files = [args.file]
     elif os.path.isdir(args.manuscript_dir):
         files = sorted(glob.glob(os.path.join(args.manuscript_dir, "*.md")))
+        # Skip merge-generated derivatives (carry the AUTO-GENERATED banner;
+        # double-scanning them and the banner em-dash cause false positives).
+        files = [f for f in files if not is_merged_derivative(f)]
 
     if not files:
         print(json.dumps({"ok": True, "message": "No manuscript files found", "files": []}))
