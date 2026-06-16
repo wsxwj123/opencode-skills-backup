@@ -351,7 +351,13 @@ python scripts/state_manager.py add-abbreviation <one.json>
 
    **🔴 DoD 自检清单（硬规则：清单未逐项确认通过，不得向用户声明"本节完成"）**
 
-   节末落盘前，必须逐项过以下清单并在展示中注明 ✅/❌：
+   **🔴 委托盲检（不得主 agent 自评）**：你刚写完本节，自评会失真地默认通过、且易漏项。落盘前必须把 DoD 清单**委托给独立上下文的子代理盲检**，自己不直接打勾：
+   1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate section-dod --files <本节文件>`
+   2. **派一个独立子代理**(Claude Code 用 `academic-blind-reviewer`;其他平台派通用子代理)，把任务包原样给它、**不要给它本节的写作上下文**，要求按任务包返回 JSON 数组。
+   3. 校验返回:`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate section-dod --return <子代理返回.json>`;退出码非 0(任一缺项/fail/无证据)= **fail-closed**,据子代理证据修复后重跑,**未过不得声明完成**。
+   - **降级路径**(当前环境无法派子代理时):主 agent 切换"审稿人视角"、清空对本节的写作记忆，逐项独立重核——绝不因"自己刚写完"默认通过；仍跑 `verify` 把关。
+
+   下列清单与 `references/dod_checklist.json` 逐项对应(改清单先改 JSON),供人工对照;能脚本核的项子代理会先跑脚本:
 
    **通用 6 项**（能脚本核的项挂脚本，不可跳过）：
    - [ ] **①引文对应**：`[n]` 与节末 Vancouver 列表一一对应、编号连续、无孤儿引用（脚本：`sync-literature --dry-run --strict-references`）
