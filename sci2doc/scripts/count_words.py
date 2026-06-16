@@ -28,12 +28,12 @@ except Exception:  # pragma: no cover
     from thesis_profile import load_profile
 
 try:
-    from shared_utils import classify_heading, infer_project_root_for_profile
+    from shared_utils import classify_heading, infer_project_root_for_profile, classify_lines_with_chapter_scope
 except ImportError:  # pragma: no cover
     script_dir = os.path.dirname(os.path.abspath(__file__))
     if script_dir not in sys.path:
         sys.path.insert(0, script_dir)
-    from shared_utils import classify_heading, infer_project_root_for_profile
+    from shared_utils import classify_heading, infer_project_root_for_profile, classify_lines_with_chapter_scope
 
 
 def is_chinese_char(char):
@@ -131,11 +131,14 @@ def count_words_in_md(
     body_target_chars=80000,
     review_target_chars=0,
     review_in_scope=False,
+    extra_exclude=None,
 ):
     """
     统计单个 Markdown 文件字数。
 
-    通过 # 标题识别章节类型，复用 classify_heading 分类逻辑。
+    使用章作用域继承分类：章级标题确定章类型，其下所有子节继承该类型，
+    直到下一个同级或更浅的章级标题。
+    摘要（abstract）计入正文。综述章（含其内部子节和参考文献）排除。
 
     Args:
         md_path: .md 文件路径
@@ -143,6 +146,7 @@ def count_words_in_md(
         body_target_chars: 正文目标字数
         review_target_chars: 综述目标字数
         review_in_scope: 是否将综述纳入考核目标
+        extra_exclude: 额外排除的章节标题列表（normalize_text 后匹配）
 
     Returns:
         dict: 统计结果
@@ -158,55 +162,54 @@ def count_words_in_md(
     review_chinese_chars = 0
     review_english_words = 0
 
-    current_section_type = "body"
-    current_section_title = "正文"
     section_stats = []
     current_section = {
-        "title": current_section_title,
-        "type": current_section_type,
+        "title": "正文",
+        "type": "body",
         "chinese_chars": 0,
         "english_words": 0,
     }
+    current_section_type = "body"
 
     def flush_section():
         if current_section["chinese_chars"] > 0 or current_section["english_words"] > 0:
             section_stats.append(current_section.copy())
 
-    def accumulate(counts):
+    def accumulate(counts, sec_type):
         nonlocal body_chinese_chars, body_english_words
         nonlocal review_chinese_chars, review_english_words
         current_section["chinese_chars"] += counts["chinese_chars"]
         current_section["english_words"] += counts["english_words"]
-        if current_section_type == "review":
+        if sec_type == "review":
             review_chinese_chars += counts["chinese_chars"]
             review_english_words += counts["english_words"]
-        elif current_section_type == "references" and exclude_references:
+        elif sec_type == "references" and exclude_references:
             pass
-        elif current_section_type in {"toc", "abstract", "acknowledgement", "appendix", "achievements", "declaration", "abbreviation_table"}:
+        elif sec_type in {"toc", "acknowledgement", "appendix", "achievements", "declaration", "abbreviation_table"}:
             pass
         else:
+            # body and abstract both count toward body
             body_chinese_chars += counts["chinese_chars"]
             body_english_words += counts["english_words"]
 
     heading_re = re.compile(r"^(#{1,6})\s+(.+)$")
+    lines = raw.split("\n")
 
-    for line in raw.split("\n"):
-        stripped = line.strip()
+    for stripped, sec_type in classify_lines_with_chapter_scope(lines, extra_exclude=extra_exclude):
         if not stripped:
             continue
         m = heading_re.match(stripped)
         if m:
-            flush_section()
-            title_text = m.group(2).strip()
-            current_section_type = classify_heading(title_text)
-            current_section_title = title_text
-            current_section = {
-                "title": current_section_title,
-                "type": current_section_type,
-                "chinese_chars": 0,
-                "english_words": 0,
-            }
-            accumulate(count_words_in_text(title_text))
+            if sec_type != current_section_type or m.group(2).strip() != current_section.get("title"):
+                flush_section()
+                current_section = {
+                    "title": m.group(2).strip(),
+                    "type": sec_type,
+                    "chinese_chars": 0,
+                    "english_words": 0,
+                }
+                current_section_type = sec_type
+            accumulate(count_words_in_text(m.group(2).strip()), sec_type)
             continue
         # 跳过表格分隔行
         if re.match(r"^\|?[\s:]*-{3,}[\s:]*(\|[\s:]*-{3,}[\s:]*)*\|?$", stripped):
@@ -217,7 +220,7 @@ def count_words_in_md(
         # 普通行：去除 md 语法后统计
         clean = strip_markdown_syntax(stripped)
         if clean.strip():
-            accumulate(count_words_in_text(clean))
+            accumulate(count_words_in_text(clean), sec_type)
 
     flush_section()
 
@@ -276,6 +279,7 @@ def count_words_in_atomic_dir(
     body_target_chars=80000,
     review_target_chars=0,
     review_in_scope=False,
+    extra_exclude=None,
 ):
     """
     统计原子化 atomic_md 目录下所有小节 .md 文件的字数。
@@ -290,6 +294,7 @@ def count_words_in_atomic_dir(
         body_target_chars: 正文目标字数
         review_target_chars: 综述目标字数
         review_in_scope: 是否将综述纳入考核目标
+        extra_exclude: 额外排除章节标题列表
 
     Returns:
         dict: 聚合统计结果，含 per_file 明细
@@ -330,6 +335,7 @@ def count_words_in_atomic_dir(
             body_target_chars=0,
             review_target_chars=0,
             review_in_scope=review_in_scope,
+            extra_exclude=extra_exclude,
         )
         if not r.get("success"):
             per_file.append({"file": fpath, "error": r.get("error")})
@@ -403,6 +409,7 @@ def count_words(
     body_target_chars=80000,
     review_target_chars=0,
     review_in_scope=False,
+    extra_exclude=None,
 ):
     """
     统一入口：自动检测路径类型并调用对应统计函数。
@@ -421,6 +428,7 @@ def count_words(
         body_target_chars: 正文目标字数
         review_target_chars: 综述目标字数
         review_in_scope: 是否将综述纳入考核目标
+        extra_exclude: 额外排除章节标题列表
 
     Returns:
         dict: 统计结果（schema 统一）
@@ -431,6 +439,7 @@ def count_words(
         body_target_chars=body_target_chars,
         review_target_chars=review_target_chars,
         review_in_scope=review_in_scope,
+        extra_exclude=extra_exclude,
     )
 
     if os.path.isdir(path):
@@ -581,8 +590,10 @@ def main():
         print(json.dumps(payload, ensure_ascii=False, indent=2) if output_format == "json" else f"❌ {payload['message']}")
         sys.exit(1)
     targets = profile.get("targets", {}) if isinstance(profile, dict) else {}
+    format_profile = profile.get("format_profile", {}) if isinstance(profile, dict) else {}
+    extra_exclude = format_profile.get("exclude_from_body_count") or []
 
-    body_target = int(args.body_target if args.body_target is not None else targets.get("body_target_chars", 80000))
+    body_target = int(args.body_target if args.body_target is not None else targets.get("body_target_chars", 50000))
     review_in_scope = bool(args.review_in_scope or targets.get("review_in_scope", False))
     default_review_target = int(targets.get("review_target_chars", 0) or 0)
     review_target = int(args.review_target if args.review_target is not None else default_review_target)
@@ -593,6 +604,7 @@ def main():
         body_target_chars=body_target,
         review_target_chars=review_target,
         review_in_scope=review_in_scope,
+        extra_exclude=extra_exclude,
     )
 
     if output_format == 'json':

@@ -348,7 +348,7 @@ DEFAULT_PROFILE = {
     "schema_version": "1.0",
     "language": "zh-CN",
     "targets": {
-        "body_target_chars": 80000,
+        "body_target_chars": None,  # derived from degree_type at load time: 硕士→30000, 博士→50000
         "abstract_min_chars": 1500,
         "abstract_max_chars": 2500,
         "review_in_scope": False,
@@ -655,6 +655,7 @@ def validate_format_profile_patch(format_profile):
         "header_left_text",
         "style_profile",
         "page_numbering",
+        "exclude_from_body_count",
     }
     unknown = set(format_profile.keys()) - allowed_keys
     if unknown:
@@ -673,6 +674,20 @@ def validate_format_profile_patch(format_profile):
     ):
         if key in format_profile and not isinstance(format_profile[key], str):
             _raise_validation_error(f"format_profile.{key}", "string", type(format_profile[key]).__name__)
+    if "degree_type" in format_profile and isinstance(format_profile["degree_type"], str):
+        dt = format_profile["degree_type"]
+        _valid_degree = (
+            "博士" in dt or "硕士" in dt
+            or "doctoral" in dt.lower() or "master" in dt.lower()
+        )
+        if not _valid_degree:
+            _raise_validation_error(
+                "format_profile.degree_type",
+                "含'博士'/'硕士'(或 doctoral/master) 的字符串",
+                repr(dt),
+            )
+    if "exclude_from_body_count" in format_profile:
+        _validate_string_list_field("format_profile.exclude_from_body_count", format_profile["exclude_from_body_count"])
     for key in ("source_template_files", "requirements_summary", "missing_requirements"):
         if key in format_profile:
             _validate_string_list_field(f"format_profile.{key}", format_profile[key])
@@ -1024,13 +1039,28 @@ def ensure_format_profile(profile):
     return profile
 
 
+def _derive_body_target(profile):
+    """
+    当 body_target_chars 为 None（未显式设置）时，按 degree_type 填充默认值：
+    硕士 → 30000，其他（博士）→ 50000。
+    """
+    targets = profile.setdefault("targets", {})
+    if targets.get("body_target_chars") is None:
+        degree = str(profile.get("format_profile", {}).get("degree_type", "")).strip()
+        if "硕士" in degree or "master" in degree.lower():
+            targets["body_target_chars"] = 30000
+        else:
+            targets["body_target_chars"] = 50000
+    return profile
+
+
 def load_profile(project_root, profile_path=None):
     path = resolve_profile_path(project_root, profile_path)
     if not os.path.exists(path):
-        return ensure_format_profile(deep_merge(DEFAULT_PROFILE, {})), path
+        return _derive_body_target(ensure_format_profile(deep_merge(DEFAULT_PROFILE, {}))), path
     with open(path, "r", encoding="utf-8") as f:
         payload = json.load(f)
-    return ensure_format_profile(deep_merge(DEFAULT_PROFILE, payload)), path
+    return _derive_body_target(ensure_format_profile(deep_merge(DEFAULT_PROFILE, payload))), path
 
 
 def save_profile(path, profile):

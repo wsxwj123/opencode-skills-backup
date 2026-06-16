@@ -33,9 +33,16 @@ def _try_import(module_name):
 # ─── 工具函数 ────────────────────────────────────────────────────────────────
 
 def safe_name(filename: str) -> str:
-    """将文件名转为合法的目录/文件名片段（无空格、无特殊字符）。"""
+    """
+    将文件名转为合法的目录/文件名片段（无空格、无特殊字符）。
+
+    为避免不同特殊字符文件名经压缩后碰撞，追加来源文件名的短 hash 后缀。
+    示例：「实验 #1.xlsx」→ experiment__1_a3f2b1
+    """
     stem = Path(filename).stem
-    return re.sub(r"[^\w\-]", "_", stem)[:60]
+    slug = re.sub(r"[^\w\-]", "_", stem)[:52]
+    suffix_hash = hashlib.sha256(filename.encode("utf-8")).hexdigest()[:6]
+    return f"{slug}_{suffix_hash}"
 
 
 def file_hash(path: Path) -> str:
