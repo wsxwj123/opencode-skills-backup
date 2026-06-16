@@ -42,7 +42,7 @@
 | B1 | gsw | write-cycle 开箱即死:preflight strict 要求 revision_plan/mentor_plan/submission_state 等文件存在,但 init 不创建 | state_manager.py preflight_validate_state(~1547);默认 preflight_strict=True | 待修 |
 | B2 | revise-sci | atomize_comments 静默丢弃评论:severity 判定硬编码中文串,英文/措辞变动→count:0 且 ok:true→空 docx | atomize_comments.py:245-250 | 待修 |
 | B3 | sci2doc | init 前置页泄漏到 cwd(数据污染):渲染传 project_root 而非 effective_root | state_manager.py:1647 | 待修 |
-| B4 | sci2doc | custom 格式 pending_template→ready 永久卡死:missing_requirements 只累加不重算 | thesis_profile.py:897,940-944 | 待修 |
+| B4 | sci2doc | custom 格式 pending_template→ready 永久卡死:missing_requirements 只累加不重算 | thesis_profile.py:944-960 | ✅已修(2026-06-16复核:每次 normalize 重置 missing=[]再重算,status 不继承旧值) |
 
 ### 🟡 中危
 | ID | 技能 | 问题 | 定位 | 状态 |
@@ -226,7 +226,7 @@
 4. ✅ **自检/评审委托独立子代理**(见第十二、十三节):7 技能 DoD 自检改委托独立子代理盲检 + `.claude/agents/academic-blind-reviewer` 预定义 + delegate_review.py pack/verify 脚本固定(2026-06-16)
 5. ✅ 实施后 git commit + darwin 7 judge 盲评(见第十三节);⬜ 按需加载优化(各技能 SKILL.md 可瘦身,见第十三节短板,待后续)
 6. ✅ **新功能:结构完整性前置闸口**(见第十三节)——写完即检、verify 未 exit0 不得进下一节;opus 双向实测通过(2026-06-16)
-7. ⬜ 反例黑名单补强(darwin 共性短板:多数技能缺"❌不要做什么"集中清单);⬜ SKILL.md 按需加载瘦身(gsw/review/reviewer-simulator 偏长)
+7. ✅ 反例黑名单补强(2026-06-16:6 技能补齐,opus 审计全 PASS,见第十五节);🟡 SKILL.md 按需加载瘦身(本轮只清真冗余 review-writing DoD,未空砍执行主线;如需压到具体行数待用户给目标值)
 
 ## 十二、自检/评审委托独立子代理(用户要求 + 三平台调研,2026-06-16)
 > 备注:去 AI 的"中英文"指**最终产品(论文/标书)的语言**,非 skill 文本。
@@ -327,3 +327,21 @@
 **审计附带揪出 2 处既有文档矛盾(非黑名单引入)**:
 - ✅ **已修**:sci2doc Acceptance Checklist 残留 `Body target >= 80,000`(解除博士锁时漏改),与新博硕地板(50000/30000)冲突 → 改为学位地板值表述。
 - ⏳ **待用户定**:nsfc V-12 验证阶段冲突——SKILL.md 正文称 V-12 延到 Phase 7 验、Phase 2 不验;references(02/05/08)定义 V-12 "阻断 Phase 3"。黑名单对齐了 references。究竟哪个阶段是权威,需领域决策后统一,本轮不擅改。
+
+## 十六、用户逐技能提问闭环表(截至 2026-06-16)
+
+> 仅统计**用户明确提出的问题**;darwin 自查发现的 backlog 单列(见下)。
+
+| 技能 | 用户提的问题 | 结论/动作 | 状态 |
+|---|---|---|---|
+| general-sci-writing | figure-plan 是否逐图逐子图确认后落盘原子文件 | Explore 实证已符合(发图→中文草稿+❓→确认→英文落盘),无需改 | ✅ 闭环 |
+| review-writing | systematic 模式该整合非分支?与普通综述区别 | 已是 review_type 枚举整合(非分支),共用主流程仅按需挂接 PICO/PRISMA/RoB/GRADE | ✅ 闭环 |
+| sci2doc | 是否分析用户材料落盘 + 博硕区分(正文定义/字数) | 新增 material_ingest 通用材料库;开头问学位+字数(博5w/硕3w可配);正文=摘要→正文末排综述章 | ✅ 闭环(+本轮修 80000 遗留) |
+| revise-sci | 用途(润色还是审稿驱动)?Figpad 整合?有无原子化拆分 | 审稿意见驱动改稿(非全文润色,polish 仅改片段);Figpad 不整合(零代码能力低);有原子化拆分(围绕意见落点) | ✅ 闭环 |
+| reviewer-response-sci | 与 revise-sci 的区别 | 只出 HTML 回复包不改稿(revise 改主稿+出 docx+Patch);description 已写分工 | ✅ 闭环 |
+| reviewer-simulator | (无专门提问) | 受益于委托并发盲评 + VERDICT_CLASS 校验 + 黑名单 | — 无未决 |
+| nsfc-proposal | (无专门提问) | 受益于 N1-N58 + 命令 bug 修复 + 黑名单;**但审计发现 V-12 阶段冲突待你定** | ⏳ 1 项待决 |
+
+**结论:用户明确提出的每条逐技能问题均已闭环。** 唯一需你拍板的是 nsfc V-12 验证阶段(Phase 3 阻断 vs Phase 7 验证,究竟哪个权威)。
+
+**非用户提出、仍挂起的 darwin backlog**(供决定是否后续处理,本轮未动):① 第六节 B3(sci2doc init 前置页泄漏 cwd,行号已漂移待重核)+ 其余中危项(第190行清单:gsw passive 阈值矛盾、review PRISMA 无校验、reviewer-response 双语匹配误报、nsfc humanizer 空心化等);② 暂缓的 7 技能编排器;③ 激进瘦身(待目标行数)。
