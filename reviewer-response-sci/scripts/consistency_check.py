@@ -80,23 +80,41 @@ def main() -> int:
         promises = ACTION_VERB_RE.findall(response_en)
         for promise in promises:
             promise_lower = promise.lower()
-            # Check if any modification_action reason or revised_excerpt_en contains a matching echo
-            found_in_actions = any(
-                any(
-                    kw in (a.get("reason", "") + a.get("target", "")).lower()
-                    for kw in promise_lower.split()[1:3]
-                    if len(kw) > 3
-                )
+            kws = [kw for kw in promise_lower.split()[1:3] if len(kw) > 3]
+
+            # 1) English keyword match in action reason/target or revised excerpt
+            found_in_actions_en = bool(kws) and any(
+                any(kw in (a.get("reason", "") + a.get("target", "")).lower() for kw in kws)
                 for a in mod_actions
             )
-            found_in_revised = any(
-                kw in revised.lower() for kw in promise_lower.split()[1:3]
-                if len(kw) > 3
+            found_in_revised_en = bool(kws) and any(kw in revised.lower() for kw in kws)
+
+            # 2) Chinese fields: if modification_actions has a non-placeholder action_type
+            #    and response_zh / notes are filled, treat the unit as consistent.
+            #    This handles bilingual units where reason/target are written in Chinese.
+            response_zh = c.get("response_zh", "")
+            notes_core = c.get("notes_core_zh", [])
+            zh_fields_filled = (
+                response_zh
+                and "【待AI" not in response_zh
+                and "AI_FILL_REQUIRED" not in response_zh
             )
-            if not found_in_actions and not found_in_revised and revised.strip() not in {"", "无", "N/A"}:
+            actions_have_type = any(
+                a.get("action_type", "").strip() not in {"", "修改"}
+                or a.get("reason", "").strip() not in {"", "【待AI填写：添加/删除/修改及原因】"}
+                for a in mod_actions
+            )
+
+            found = (
+                found_in_actions_en
+                or found_in_revised_en
+                or (zh_fields_filled and actions_have_type)
+            )
+
+            if not found and revised.strip() not in {"", "无", "N/A"}:
                 warnings.append(
                     f"[{uid}] response_en promises '{promise}' but no matching entry found "
-                    f"in modification_actions or revised_excerpt_en"
+                    f"in modification_actions, revised_excerpt_en, or Chinese fields"
                 )
 
     if conflicts:

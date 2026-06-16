@@ -77,14 +77,28 @@ def _check_structural_repetition(units: list[dict]) -> list[tuple[str, str]]:
     return hits
 
 
-def scan_text(text: str, *, skip_ai_style: bool = False) -> list[tuple[str, str]]:
+def scan_text(text: str, *, skip_ai_style: bool = False, cross_check_text: str = "") -> list[tuple[str, str]]:
+    """Scan text for risk patterns.
+
+    cross_check_text: when provided, fabricated_statistics hits are suppressed if
+    the same matched substring also appears in cross_check_text (revised_excerpt_en),
+    meaning the statistic is grounded in the actual revision rather than invented.
+    """
     hits: list[tuple[str, str]] = []
     for category, patterns in RISK_PATTERNS.items():
         if skip_ai_style and category in AI_STYLE_CATEGORIES:
             continue
         for pattern in patterns:
-            if re.search(pattern, text, flags=re.IGNORECASE):
-                hits.append((category, pattern))
+            m = re.search(pattern, text, flags=re.IGNORECASE)
+            if not m:
+                continue
+            # Exempt fabricated_statistics when the same matched value also appears
+            # in revised_excerpt_en — the statistic is being reported faithfully, not invented.
+            if category == "fabricated_statistics" and cross_check_text:
+                matched_value = m.group(0)
+                if re.search(re.escape(matched_value), cross_check_text, flags=re.IGNORECASE):
+                    continue  # Grounded in revised excerpt — not fabricated
+            hits.append((category, pattern))
     return hits
 
 
@@ -116,8 +130,10 @@ def main() -> int:
             content = unit.get("content", {})
             response_en = str(content.get("response_en", ""))
             revised_en = str(content.get("revised_excerpt_en", ""))
-            # Fabrication patterns only scan response_en (revised_excerpt naturally contains stats from manuscript)
-            for cat, pat in scan_text(response_en, skip_ai_style=is_email):
+            # Fabrication patterns only scan response_en.
+            # Pass revised_en as cross_check: if the same statistic appears in the revision,
+            # it is being reported faithfully and should not be flagged as fabricated.
+            for cat, pat in scan_text(response_en, skip_ai_style=is_email, cross_check_text=revised_en):
                 all_hits.append((unit.get("unit_id", p.name), cat, pat))
             # AI style + overpromise also scan revised_excerpt (but NOT fabrication categories)
             for cat, pat in scan_text(revised_en, skip_ai_style=is_email):

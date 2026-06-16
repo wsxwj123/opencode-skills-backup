@@ -111,6 +111,7 @@ def main() -> int:
     citation_guard = script_dir / "citation_guard.py"
     citation_tracker = script_dir / "citation_ref_tracker.py"
     state_mgr = script_dir / "state_manager.py"
+    render_html_script = script_dir / "render_from_atomic_json.py"
 
     preflight_cmd = [sys.executable, str(preflight), "--comments", args.comments, "--manuscript", args.manuscript, "--project-root", args.project_root, "--output-html", args.output_html]
     if args.si:
@@ -139,10 +140,15 @@ def main() -> int:
         final_content_cmd.append("--allow-placeholder")
 
     html_cmd = [sys.executable, str(html_gate), args.output_html]
+    render_html_cmd = [sys.executable, str(render_html_script), "--project-root", args.project_root, "--output-html", args.output_html, "--title", args.title]
     risk_cmd = [sys.executable, str(risk_check), "--project-root", args.project_root]
     citation_guard_cmd = [sys.executable, str(citation_guard), "--project-root", args.project_root]
     citation_tracker_cmd = [sys.executable, str(citation_tracker), "--project-root", args.project_root]
     state_sync_cmd = [sys.executable, str(state_mgr), "sync", "--project-root", args.project_root, "--pipeline-status", "pass"]
+
+    # Steps marked as always_run are never skipped by --resume (re-run every time).
+    # render_html must always run so the HTML reflects the latest filled units.
+    ALWAYS_RUN_STEPS = {"render_html"}
 
     steps = [
         ("preflight", preflight_cmd),
@@ -151,6 +157,9 @@ def main() -> int:
         ("final_content_gate", final_content_cmd),
         ("consistency", consistency_cmd),
         ("final_report", report_cmd),
+        # Always re-render HTML from the current units JSON before gate validation.
+        # This ensures filled units are reflected even when --resume skips build.
+        ("render_html", render_html_cmd),
         ("html_gate", html_cmd),
         ("risk_check", risk_cmd),
         ("citation_guard", citation_guard_cmd),
@@ -183,7 +192,7 @@ def main() -> int:
         failed_code = 0
 
         for step, cmd in steps:
-            if step in completed:
+            if step in completed and step not in ALWAYS_RUN_STEPS:
                 print(f"SKIP (resume): {step}")
                 continue
             rc, dt = run(cmd)
