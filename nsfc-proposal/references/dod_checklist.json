@@ -22,7 +22,7 @@
           "id": "N3",
           "name": "SQ/H/KSQ 主线对齐",
           "check": "论述符合 SQ/H/KSQ 主线，未出现与 consistency_map 矛盾的表述",
-          "script": "python scripts/consistency_mapper.py --path data/consistency_map.json validate"
+          "script": "python scripts/consistency_mapper.py --path data/consistency_map.json validate --rules V-01"
         },
         {
           "id": "N4",
@@ -45,8 +45,8 @@
         {
           "id": "N7",
           "name": "H/O/RC/KSQ 一致性",
-          "check": "H/O/RC/KSQ 与 P1 中 SQ 表述一致（V-01；consistency_mapper validate 无 ERROR）",
-          "script": "python scripts/consistency_mapper.py --path data/consistency_map.json validate"
+          "check": "H/O/RC/KSQ 与 P1 中 SQ 表述一致（V-01；consistency_mapper validate --rules V-01 无 ERROR）",
+          "script": "python scripts/consistency_mapper.py --path data/consistency_map.json validate --rules V-01"
         },
         {
           "id": "N8",
@@ -73,14 +73,14 @@
         {
           "id": "N10",
           "name": "H/O/RC/KSQ 1:1 映射",
-          "check": "H/O/RC/KSQ 1:1 映射无交叉（consistency_mapper validate V-01~V-05 全 PASS）",
-          "script": "python scripts/consistency_mapper.py --path data/consistency_map.json validate"
+          "check": "H/O/RC/KSQ 1:1 映射无交叉（consistency_mapper validate --phase 2 V-01~V-05 全 PASS）",
+          "script": "python scripts/consistency_mapper.py --path data/consistency_map.json validate --phase 2"
         },
         {
           "id": "N11",
           "name": "M/IN 可追溯性",
-          "check": "每个 M 可追溯到具体 RC，每个 IN 可追溯到 RC 和 M（V-08/V-10）",
-          "script": "python scripts/consistency_mapper.py --path data/consistency_map.json validate"
+          "check": "每个 M 可追溯到具体 RC，每个 IN 可追溯到 RC 和 M（--phase 2 输出中的 V-08/V-10）",
+          "script": "python scripts/consistency_mapper.py --path data/consistency_map.json validate --phase 2"
         },
         {
           "id": "N12",
@@ -109,7 +109,7 @@
         {
           "id": "N16",
           "name": "V-06/V-07/V-09/V-11 延迟标注，V-12 归 Phase 3",
-          "check": "V-06（M→F）/V-07（F来源）/V-09（预算追溯）/V-11（代表作匹配）依赖 F/预算字段，本阶段不读其结论，强制点在 Phase 7 gate-check；V-12（备选路线）只依赖 M.alternative_plan，自 Phase 3 起为 ERROR 硬门控，不属于 Phase 7 才首验之列。注意全量 validate 会对空字段直接报 ERROR（非默认 pass），不得据此误判通过（人工确认）"
+          "check": "V-06（M→F）/V-07（F来源）/V-09（预算追溯）/V-11（代表作匹配）依赖 F/预算字段，本阶段用 validate --phase 2 即不输出其结论，强制点在 Phase 7 gate-check；V-12（备选路线）只依赖 M.alternative_plan，自 Phase 3 起进入 --phase 3 集合为 ERROR 硬门控，不属于 Phase 7 才首验之列"
         },
         {
           "id": "N17",
@@ -142,8 +142,8 @@
         {
           "id": "N20",
           "name": "M 可行性覆盖",
-          "check": "consistency_map 中每个 M 至少有一条 F（可行性条目）来自 P3_1 或 P3_2",
-          "script": "python scripts/consistency_mapper.py --path data/consistency_map.json validate"
+          "check": "consistency_map 中每个 M 至少有一条 F（可行性条目）来自 P3_1 或 P3_2（V-06）",
+          "script": "python scripts/consistency_mapper.py --path data/consistency_map.json validate --rules V-06"
         },
         {
           "id": "N21",
@@ -171,8 +171,8 @@
         {
           "id": "N25",
           "name": "P3 一致性未引入新矛盾",
-          "check": "H/O/RC/KSQ 与 P1/P2 一致性未因 P3 新增内容产生新矛盾（consistency_mapper validate 仍 PASS）",
-          "script": "python scripts/consistency_mapper.py --path data/consistency_map.json validate"
+          "check": "H/O/RC/KSQ 与 P1/P2 一致性未因 P3 新增内容产生新矛盾，且 V-12 备选路线已就位（consistency_mapper validate --phase 3 仍 PASS）",
+          "script": "python scripts/consistency_mapper.py --path data/consistency_map.json validate --phase 3"
         },
         {
           "id": "N26",

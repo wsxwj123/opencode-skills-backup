@@ -49,6 +49,16 @@ RULE_DOC = {
     "V-12": "每个M须有非空alternative_plan（备选技术路线）",
 }
 
+# phase→应验规则集。依据 SKILL.md「V 规则分层说明」与 references/02_核心机制.md：
+# Phase 2 只验 H/O/RC/KSQ/IN 结构链路；Phase 3 起加 V-12（alternative_plan）；Phase 7 全量。
+# V-10 含“每个 M 被 F 覆盖”检查,F 在 Phase 2/3 尚空必假阳;其结构子检查与
+# V-01/V-02/V-08 重叠不会漏,故 V-10 只在 Phase 7(F 齐全后)验。
+PHASE_RULES = {
+    "2": ["V-01", "V-02", "V-03", "V-04", "V-05", "V-08"],
+    "3": ["V-01", "V-02", "V-03", "V-04", "V-05", "V-08", "V-12"],
+    "7": list(RULE_DOC.keys()),
+}
+
 
 def load_map(path: Path) -> dict[str, Any]:
     if not path.exists():
@@ -415,27 +425,32 @@ def _rule_locations(cm: dict[str, Any], rule_id: str) -> list[dict[str, Any]]:
     return out
 
 
-def validate(cm: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    checks = {
-        "V-01": ("ERROR", _v01(cm)),
-        "V-02": ("ERROR", _v02(cm)),
-        "V-03": ("ERROR", _v03(cm)),
-        "V-04": ("WARNING", _v04(cm)),
-        "V-05": ("ERROR", _v05(cm)),
-        "V-06": ("ERROR", _v06(cm)),
-        "V-07": ("WARNING", _v07(cm)),
-        "V-08": ("WARNING", _v08(cm)),
-        "V-09": ("INFO", _v09(cm)),
-        "V-10": ("WARNING", _v10(cm)),
-        "V-11": ("WARNING", _v11(cm)),
-        "V-12": ("ERROR", _v12(cm)),
-    }
+RULE_FNS = {
+    "V-01": ("ERROR", _v01),
+    "V-02": ("ERROR", _v02),
+    "V-03": ("ERROR", _v03),
+    "V-04": ("WARNING", _v04),
+    "V-05": ("ERROR", _v05),
+    "V-06": ("ERROR", _v06),
+    "V-07": ("WARNING", _v07),
+    "V-08": ("WARNING", _v08),
+    "V-09": ("INFO", _v09),
+    "V-10": ("WARNING", _v10),
+    "V-11": ("WARNING", _v11),
+    "V-12": ("ERROR", _v12),
+}
+
+
+def validate(cm: dict[str, Any], rules: list[str] | None = None) -> dict[str, dict[str, Any]]:
+    """校验规则。rules 为 None 时全量计算；否则只计算并只报指定规则子集。"""
+    selected = list(RULE_FNS.keys()) if rules is None else rules
     result: dict[str, dict[str, Any]] = {}
-    for k, v in checks.items():
-        passed = v[1]
+    for k in selected:
+        severity, fn = RULE_FNS[k]
+        passed = fn(cm)
         result[k] = {
             "rule": RULE_DOC[k],
-            "severity": v[0],
+            "severity": severity,
             "pass": passed,
             "locations": [] if passed else _rule_locations(cm, k),
         }
@@ -549,7 +564,10 @@ def main() -> int:
     p_unlink.add_argument("--field", required=True)
     p_unlink.add_argument("--to-id")
 
-    sub.add_parser("validate")
+    p_val = sub.add_parser("validate")
+    g_val = p_val.add_mutually_exclusive_group()
+    g_val.add_argument("--rules", help="只验证逗号分隔的规则子集，如 V-01,V-02；不传则全量")
+    g_val.add_argument("--phase", choices=sorted(PHASE_RULES.keys()), help="按阶段验证该阶段应验的规则集（语法糖）")
 
     p_one = sub.add_parser("validate-one")
     p_one.add_argument("rule", choices=sorted(RULE_DOC.keys()))  # V-01~V-12
@@ -587,7 +605,16 @@ def main() -> int:
         return 0
 
     if args.cmd == "validate":
-        print(json.dumps(validate(cm), ensure_ascii=False, indent=2))
+        if args.phase:
+            rules = PHASE_RULES[args.phase]
+        elif args.rules:
+            rules = [r.strip() for r in args.rules.split(",") if r.strip()]
+            unknown = [r for r in rules if r not in RULE_DOC]
+            if unknown:
+                parser.error(f"unknown rule id(s): {', '.join(unknown)}")
+        else:
+            rules = None
+        print(json.dumps(validate(cm, rules), ensure_ascii=False, indent=2))
         return 0
 
     if args.cmd == "validate-one":
