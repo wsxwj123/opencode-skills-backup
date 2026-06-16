@@ -19,10 +19,19 @@ not_for:
   - 单篇论文修改/润色（非综述）
   - 短篇评论/Commentary/Letter（<3000 words）
   - 非学术写作（科普、博客）
-  - 系统综述/Meta-analysis（需要完整 PRISMA 注册 + PROSPERO 流程，超出本技能范围）
 scoping_review_note: |
   Scoping review 支持（轻量流程，不需 PROSPERO）。Phase 0 选择综述类型时选 scoping，
   检索覆盖面更宽、纳排标准更宽松，需记录研究问题框架（PCC: Population/Concept/Context）。
+systematic_review_note: |
+  Systematic review / Meta-analysis 支持（系统综述模式）。Phase 0 综述类型选 systematic，
+  叠加 PRISMA 2020 流程（计数→流程图）、PICO/PECO 纳排登记、逐研究 RoB（RCT→RoB 2 / 观察性→ROBINS-I）、
+  可选 meta 分析（效应量/I²/森林图/漏斗图）、GRADE 证据分级。细则见
+  references/systematic_review_methodology.md。本技能产出结构化数据与表格，不自动注册 PROSPERO、
+  不内置数值合并引擎（合并交由 stats 工具/matplotlib 配图）。
+why_how_what_note: |
+  WHY-HOW-WHAT 轻量模式。Phase 0 综述类型选 why-how-what，按 WHY(动机/问题)/HOW(方法)/WHAT(发现)
+  三层结构化对比文献，介于快速摘要与完整综述之间，不跑 PRISMA/RoB/GRADE。细则见
+  references/why_how_what_mode.md。
 ---
 
 # General Literature Review Writing Specialist
@@ -198,7 +207,7 @@ Ask all parameters at once. State defaults; user may accept silently.
 | Target journal | (required) | Affects word count and citation density |
 | Writing language | **English** | English / Chinese (Chinese: only changes writing language, same search tools) |
 | Discipline | **Medical/Biomedical** | Determines search tool priority |
-| **Review type** | **narrative** | `narrative`（叙述性）/ `critical`（批判性）/ `scoping`（范围综述）。Scoping review：不需要 PROSPERO，检索覆盖更宽，研究问题框架用 PCC（Population/Concept/Context）替代 PICO，Phase 0 末尾提示 scoping 特有记录要求。Systematic review / Meta-analysis → 转到专用工具（超出本技能范围）。 |
+| **Review type** | **narrative** | `narrative`（叙述性）/ `critical`（批判性）/ `scoping`（范围综述）/ `systematic`（系统综述/Meta）/ `why-how-what`（三层轻量对比）。<br>• **scoping**：不需 PROSPERO，检索更宽，研究问题用 PCC（Population/Concept/Context）替代 PICO，Phase 0 末尾提示 scoping 记录要求。<br>• **systematic**：叠加 PRISMA 2020 + PICO/PECO + RoB（RoB 2/ROBINS-I）+ 可选 meta + GRADE。选此档则读取 `references/systematic_review_methodology.md`，并在各 Phase 挂接其触发点（见下「系统综述模式触发点」）。<br>• **why-how-what**：WHY/HOW/WHAT 三层结构化对比，介于快速摘要与完整综述之间，无 PRISMA/RoB/GRADE。选此档则读取 `references/why_how_what_mode.md`。 |
 | Word count target | EN: 7,000–10,000 words / CN: 15,000–20,000 chars | |
 | Total citations | ≥150 (Original≥80, Review≥50, Preprint≥20) | |
 | Reference manager | **Zotero** | Zotero / None / EndNote |
@@ -206,6 +215,26 @@ Ask all parameters at once. State defaults; user may accept silently.
 
 **If Chinese writing selected**, notify at end of Phase 0:
 > 本技能使用 PubMed/paper-search MCP 检索英文文献。中文数据库（CNKI/万方）补充流程详见 `references/citation_styles.md` § CNKI / 万方中文文献导入。建议在初稿完成后统一补充，避免 gid 编号冲突。
+
+#### 系统综述模式触发点（仅当 Review type = systematic）
+
+> 📖 全部细则见 `references/systematic_review_methodology.md`（选 systematic 档时必读）。本文件只列挂接点：
+
+| Phase | 触发点 | 动作 |
+|-------|--------|------|
+| **0** | PICO/PECO 登记 | 检索前把纳排标准（PICO 干预型 / PECO 暴露型）写入 `outline.md`；提示用户可选 PROSPERO 注册（本技能不代注册）。 |
+| **2** | PRISMA 计数 | 每轮检索/去重后写入计数：`set-screening-counts`（identified/deduplicated/screened/excluded/included），维护「排除原因」表。 |
+| **3** | RoB 逐研究评级 | RCT → RoB 2；观察性 → ROBINS-I；产出逐研究 RoB 表（domain × study）。 |
+| **3**（可选） | meta 分析 | 仅当用户要求合并：选效应量（OR/RR/MD/SMD）、报告 I²/Q、产出森林图/漏斗图数据（数值合并交 stats 工具，配图交 matplotlib/seaborn）。 |
+| **4** | GRADE + 输出 | 逐结局 GRADE 分级（high/moderate/low/very low + 降/升级因素）；导出 PRISMA 流程图数据块 + RoB 汇总 + SoF/GRADE 表。 |
+
+PRISMA 计数读写命令（systematic 模式专用）：
+
+```bash
+python3 scripts/state_manager.py set-screening-counts --identified N --deduplicated N
+python3 scripts/state_manager.py set-screening-counts --screened N --excluded N --included N
+python3 scripts/state_manager.py get-screening-counts   # 读回校验
+```
 
 ### 0.2 Full Environment Check
 
@@ -594,6 +623,8 @@ If pending_sections is empty → all sections complete; proceed to Phase 4.
 Generate prompts for every entry in `figures/figure_index.md`. Write output to `figures/figure_prompts.md`.
 
 > 📖 Use the figure-prompt template in `references/writing_guidelines.md` §5 (TYPE / SUBJECT / STYLE / COLOR SCHEME / ELEMENTS / LAYOUT / TYPOGRAPHY / KEY MESSAGE / AVOID).
+
+**配图（opt-in，默认关）：** 默认不生成配图；仅当用户明确要求「生成配图 / 画图代码」（生信/统计图）时启用 → 调用本地 matplotlib / seaborn skill 生成**可运行代码（非图片）**，遵循：按数据选图型（bar / box / line / scatter+回归 / forest / funnel（meta 用）/ heatmap / network / concept map）、APA caption、色盲安全配色（viridis / cividis）、300 DPI、轴标签带单位、禁 3D / 饼图。systematic 模式下可据此生成 PRISMA 流程图 / RoB 红绿灯图 / forest / funnel 代码。
 
 ---
 

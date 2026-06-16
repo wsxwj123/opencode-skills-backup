@@ -1227,6 +1227,39 @@ def append_search_log(section, search_query, database, n_hits, n_screened,
     print(f"✅ Search log entry added: section={section}, db={database}, hits={n_hits}, screened={n_screened}")
 
 
+def set_screening_counts(state_path="state.json", **counts):
+    """Set/update PRISMA screening counts in state.json (systematic review mode).
+
+    Stores the 5 PRISMA-flow stages under screening_counts:
+    {identified, deduplicated, screened, excluded, included}. Only the stages passed as
+    non-None kwargs are mutated; the rest are preserved. All other state keys are untouched.
+    """
+    state = _load_workflow_state(state_path)
+    sc = state.setdefault("screening_counts", {
+        "identified": 0, "deduplicated": 0, "screened": 0, "excluded": 0, "included": 0,
+    })
+    if not isinstance(sc, dict):
+        raise SystemExit("Error: screening_counts is not an object in state.json")
+    for stage in ("identified", "deduplicated", "screened", "excluded", "included"):
+        val = counts.get(stage)
+        if val is not None:
+            sc[stage] = val
+    _atomic_write_text(state_path, json.dumps(state, indent=2, ensure_ascii=False))
+    print(f"✅ state.json: screening_counts={json.dumps(sc, ensure_ascii=False)} (other fields preserved)")
+
+
+def get_screening_counts(state_path="state.json"):
+    """Print PRISMA screening counts from state.json as JSON (systematic review mode).
+
+    Prints an all-zero object if the field is absent (not yet initialized).
+    """
+    state = _load_workflow_state(state_path)
+    sc = state.get("screening_counts") or {
+        "identified": 0, "deduplicated": 0, "screened": 0, "excluded": 0, "included": 0,
+    }
+    print(json.dumps(sc, indent=2, ensure_ascii=False))
+
+
 def append_literature(section, papers_path, index_path="data/literature_index.json", source_provider="pubmed-cli"):
     """Append a section's papers to literature_index.json (None/EndNote mode, Phase 2 Step 5).
 
@@ -1381,6 +1414,23 @@ def main():
     searchlog_parser.add_argument("--n-screened", type=int, required=True, help="Papers retained after relevance screening")
     searchlog_parser.add_argument("--index", default="data/literature_index.json", help="Literature index path (unused, kept for CLI consistency)")
 
+    setscreening_parser = subparsers.add_parser(
+        "set-screening-counts",
+        help="Set/update PRISMA screening counts (systematic review mode); preserves other keys",
+    )
+    setscreening_parser.add_argument("--identified", type=int, default=None, help="Records identified (databases + other sources)")
+    setscreening_parser.add_argument("--deduplicated", type=int, default=None, help="Records after duplicates removed")
+    setscreening_parser.add_argument("--screened", type=int, default=None, help="Records screened (title/abstract)")
+    setscreening_parser.add_argument("--excluded", type=int, default=None, help="Records excluded with reasons")
+    setscreening_parser.add_argument("--included", type=int, default=None, help="Studies included in synthesis")
+    setscreening_parser.add_argument("--state", default="state.json", help="Path to workflow state.json (default: state.json)")
+
+    getscreening_parser = subparsers.add_parser(
+        "get-screening-counts",
+        help="Print PRISMA screening counts as JSON (systematic review mode)",
+    )
+    getscreening_parser.add_argument("--state", default="state.json", help="Path to workflow state.json (default: state.json)")
+
     snapshot_parser = subparsers.add_parser("snapshot", help="Write a full state snapshot JSON")
     snapshot_parser.add_argument(
         "--out",
@@ -1477,6 +1527,17 @@ def main():
             n_screened=args.n_screened,
             index_path=args.index,
         )
+    elif args.command == "set-screening-counts":
+        set_screening_counts(
+            state_path=args.state,
+            identified=args.identified,
+            deduplicated=args.deduplicated,
+            screened=args.screened,
+            excluded=args.excluded,
+            included=args.included,
+        )
+    elif args.command == "get-screening-counts":
+        get_screening_counts(state_path=args.state)
 
 
 if __name__ == "__main__":

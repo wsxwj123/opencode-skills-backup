@@ -97,6 +97,64 @@ def _fetch_pubmed_by_pmid(pmid: str) -> dict[str, Any] | None:
     return {"source": "pubmed", "title": title, "doi": doi, "pmid": str(pmid), "retracted": is_retracted}
 
 
+TITLE_VERIFY_THRESHOLD = 0.8
+
+
+def _verify_title_exists(title: str) -> dict[str, Any] | None:
+    """Confirm a no-DOI/no-PMID entry maps to a real publication via by-title search.
+
+    Tries Crossref by-title, then Semantic Scholar (rate-limit prone) as fallback.
+    Returns the best match record when similarity >= TITLE_VERIFY_THRESHOLD, else
+    None. Network failures (_http_get_json -> None) yield None: fail-closed, the
+    caller treats "no match" as not-verified -> FAIL.
+    """
+    if not title.strip():
+        return None
+
+    def _best_match(cands: list[tuple[str, str | None, str | None]], source: str) -> dict[str, Any] | None:
+        best: dict[str, Any] | None = None
+        for ct, cd, cp in cands:
+            if not ct:
+                continue
+            sim = _title_similarity(title, ct)
+            if best is None or sim > best["similarity"]:
+                best = {"source": source, "matched_title": ct, "similarity": sim, "doi": cd, "pmid": cp}
+        return best if (best and best["similarity"] >= TITLE_VERIFY_THRESHOLD) else None
+
+    cr = _http_get_json(
+        "https://api.crossref.org/works?" + urllib.parse.urlencode({"query.bibliographic": title, "rows": 5})
+    )
+    if cr and isinstance(cr.get("message"), dict):
+        cands = []
+        for it in cr["message"].get("items") or []:
+            if not isinstance(it, dict):
+                continue
+            t = (it.get("title") or [""])[0] if isinstance(it.get("title"), list) else ""
+            cands.append((str(t or ""), str(it.get("DOI") or "") or None, None))
+        m = _best_match(cands, "crossref-bytitle")
+        if m:
+            return m
+
+    ss = _http_get_json(
+        "https://api.semanticscholar.org/graph/v1/paper/search?"
+        + urllib.parse.urlencode({"query": title, "limit": 5, "fields": "title,externalIds"})
+    )
+    if ss and isinstance(ss.get("data"), list):
+        cands = []
+        for it in ss["data"]:
+            if not isinstance(it, dict):
+                continue
+            ext = it.get("externalIds") or {}
+            doi = (str(ext.get("DOI") or "") or None) if isinstance(ext, dict) else None
+            pmid = (str(ext.get("PubMed") or "") or None) if isinstance(ext, dict) else None
+            cands.append((str(it.get("title") or ""), doi, pmid))
+        m = _best_match(cands, "semanticscholar-bytitle")
+        if m:
+            return m
+
+    return None
+
+
 def validate_entry(entry: dict[str, Any], *, online: bool) -> dict[str, Any]:
     """Validate a single citation registry entry."""
     title = str(entry.get("title") or "").strip()
@@ -109,6 +167,12 @@ def validate_entry(entry: dict[str, Any], *, online: bool) -> dict[str, Any]:
 
     crossref = _fetch_crossref_by_doi(doi) if (online and doi and doi_fmt_ok) else None
     pubmed = _fetch_pubmed_by_pmid(pmid) if (online and pmid and pmid_fmt_ok) else None
+
+    has_identifier = bool(doi or pmid)
+
+    # By-title verification only when entry has NO DOI and NO PMID.
+    title_verify = _verify_title_exists(title) if (online and not has_identifier and title) else None
+    title_verified = title_verify is not None
 
     # Title similarity check against external sources
     source_titles = []
@@ -124,8 +188,10 @@ def validate_entry(entry: dict[str, Any], *, online: bool) -> dict[str, Any]:
         failures.append("title_missing")
     if provider in FORBIDDEN_PROVIDERS:
         failures.append("forbidden_provider")
-    if not doi and not pmid:
+    if not has_identifier and not title_verified:
         failures.append("no_identifier")
+        if online and title:
+            failures.append("title_not_found_online")
     if doi and not doi_fmt_ok:
         failures.append("doi_format_invalid")
     if pmid and not pmid_fmt_ok:
@@ -163,6 +229,8 @@ def validate_entry(entry: dict[str, Any], *, online: bool) -> dict[str, Any]:
         score += 6
     elif provider in FORBIDDEN_PROVIDERS:
         score -= 20
+    if not has_identifier:
+        score += 12 if title_verified else -12
     if retracted:
         score -= 60
     confidence = int(max(0, min(100, round(score))))
@@ -175,6 +243,9 @@ def validate_entry(entry: dict[str, Any], *, online: bool) -> dict[str, Any]:
         "verified": len(failures) == 0,
         "confidence": confidence,
         "title_similarity": round(title_sim, 4),
+        "title_verified": title_verified,
+        "title_verify_source": (title_verify.get("source") if title_verify else None),
+        "title_verify_similarity": (round(title_verify["similarity"], 4) if title_verify else None),
         "failures": failures,
         "retracted": retracted,
     }
