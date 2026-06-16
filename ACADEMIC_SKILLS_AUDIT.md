@@ -426,3 +426,13 @@ revise-sci 的 polish 在"防过度改写"上**已强于 Figpad**(meaning_change
 - ⏳ **polish-sci 新建**:待设计确认后建(复用 revise-sci 强化后 common.py 检测器 + delegate_review;纯润色全文,红线保留引用/数值/基因名/统计量)。
 
 全部 opus 子代理产出经主 agent py_compile + JSON + em-dash + 功能 smoke 复核(含修掉代理在代码注释里写的 em-dash);每逻辑一 commit,5 技能镜像 opencode/codex 全 0。
+
+## 十九、polish-sci 新建(2026-06-16,commit bbfd108)— 学术技能升至 8 个
+
+✅ **polish-sci**:纯论文润色技能(无审稿意见、逐段全文润语言)。文件树:SKILL.md + references(dod_checklist.json[polish-dod PL-G1~G9] + polish_rules.json[被动阈值/不确定性梯度/红线]) + scripts(common.py 从 revise-sci 复制并加中文 certainty 模式 / delegate_review.py 字节复制 / atomize_manuscript / polish_units[pack+verify] / merge_manuscript[--docx 可选] / strict_gate / polish_report)。
+- 复用:revise-sci 强化后 common.py(数值守卫/语气校准/AI 套话禁词表)+ delegate_review 盲检(第 8 个接入)。
+- 红线:引用/数值/专名零改、meaning_changed 必 false;strict_gate fail-closed。
+- 端到端 smoke:正常润色 PASS;数值改错/语气升级/留 AI 套话/meaning 变 均 FAIL exit1。py_compile×7 通过、2 JSON 解析、delegate_review pack 打印 9 项。
+- 分工:gsw 写新稿 / revise-sci 意见驱动改片段 / polish-sci 纯润色全文,三者 description not_for 互斥。
+- 接入同步链:sync workflow 升 8 技能(paths/rm/checkout/add 四处+名称);镜像 opencode/codex;记忆 custom_skills_list 与 MEMORY 索引升 8。
+- 残留:polish-sci 的 common.py 因加中文 certainty 与 revise-sci 版不再字节一致(各自维护);docx 导出已实现但 smoke 只验 md 路径;语义层 meaning 守卫靠人工(DoD 已标)。
