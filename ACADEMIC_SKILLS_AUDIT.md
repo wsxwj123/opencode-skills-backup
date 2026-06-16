@@ -190,3 +190,7 @@
 **🟡 中危(待定)**:gsw(merge banner 假阳/working_titles 误读/passive 阈值 50-70 vs ≤30 矛盾/init 缺 abbreviations);sci2doc(Step0.5 outline 门禁无代码强制/缩略语正则/Anti-Drift 白名单冲突);review(PRISMA 不变式无校验/word_counter 硬编码字数);reviewer-response(consistency 双语匹配全量误报);nsfc(humanizer 规则空心化/字段契约未文档化);revise-sci(中文审稿解析退化)
 
 **🟢 优化方向**:软门禁(reviewer/compliance/coherence/缩写/anti-AI)脚本化,降低"走过场"风险;CRITICAL/PRISMA 不变式加机器兜底。
+
+**✅ 2026-06-16 全部修复**:🔴 死锁(revise-sci 参考文献导出 / reviewer-response p值·幂等·HTML·一致性)+ 🟡 全部(gsw banner/working_titles/passive 50-70/init;sci2doc outline门禁代码化/缩略语/白名单;review PRISMA不变式/字数;nsfc humanizer 7→15禁用词/字段契约)。
+
+**去 AI 三项(2026-06-16 新增)**:禁装饰性破折号 / 禁 scare quotes(自造词双引号引用)/ 禁解释性冒号——之前 7 技能基本零覆盖,现已补入**全部 7 技能** anti-AI 规则文字 + style_checker / check_quality / humanizer_zh 检测脚本(保守检测,容许少量假阳;保留术语首次定义、原文引用、比例/时间/标题等合法用法)。
