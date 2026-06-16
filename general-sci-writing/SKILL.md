@@ -58,7 +58,7 @@ license: Proprietary
 
 ### 1. 跨平台路径协商与自包含初始化 (Cross-Platform & Self-Contained Init)
 **项目必须自包含，严禁依赖 Skill 安装路径**（便于 Windows/Mac 迁移）。
-- **路径询问（Mandatory）**：`/init` 前必须先问用户保存路径——建议 Mac `~/Desktop/Manuscripts`，Windows `C:\Users\[User]\Desktop\Manuscripts`。
+- **路径询问（Mandatory）**：`/init` 前必须先问用户保存路径。建议 Mac `~/Desktop/Manuscripts`，Windows `C:\Users\[User]\Desktop\Manuscripts`。
 - **Command Logic**（便携部署：把运行所需文件拷进项目根，换机也能用）：
   1. `mkdir -p [Target_Path]/scripts [Target_Path]/configs [Target_Path]/manuscripts [Target_Path]/section_memory [Target_Path]/figures [Target_Path]/figure_analysis [Target_Path]/reviews [Target_Path]/submission`
   2. `cp [Skill_Path]/scripts/*.py [Target_Path]/scripts/`
@@ -81,12 +81,12 @@ license: Proprietary
   - ✅ `04_Results_3.1_Characterization.md`
   - ✅ `04_Results_3.2_Uptake.md`
   - ❌ `04_Results.md`
-- **🔴 修改/润色的唯一合法目标（铁律）**：任何对正文的修改、润色、改写、重组——**只能改 `manuscripts/*.md` 原子化文件**。**严禁修改**以下"派生/合并产物"（它们由脚本自动生成，下次 `/merge` 会覆盖你的修改、工作丢失）：
+- **🔴 修改/润色的唯一合法目标（铁律）**：任何对正文的修改、润色、改写、重组，**只能改 `manuscripts/*.md` 原子化文件**。**严禁修改**以下派生/合并产物（它们由脚本自动生成，下次 `/merge` 会覆盖你的修改、工作丢失）：
   - `manuscripts/Full_Manuscript.md`（`/merge` 合并稿）
   - `*.docx`（pandoc 转出物）
   - `figure_analysis/figure_*.md` 之外的拼接稿
-- **润色 workflow（强制）**：用户给你一段需修改的文本 → ① 先 `grep -rn "<原文片段前 8-15 字>" manuscripts/` 定位它在**哪个原子化文件**；② 命中 `Full_Manuscript.md` 等派生物 → **不要改它**，回到对应的原子化源文件改；③ 同一片段在多个原子化文件命中 → 停下问用户改哪个，不要猜；④ **grep 0 命中（项目未初始化或文本不在项目中）→ 进入「standalone 润色模式」**：明确告知用户"该文本未在当前项目找到，将做无状态润色（不写文件、不打快照），结果直接贴回；如需持久化请先 `/init` 后将文本写入对应 `manuscripts/0X_*.md`"——绝不静默写入新文件、绝不猜测归属；⑤ 改完提醒用户重跑 `/merge` 才能在合并稿/docx 中看到更新。
-- **自检（写入前必答）**：在 `Edit`/`Write` 任何 `.md` 前，自问"这是 `manuscripts/` 下的原子化源文件吗？还是合并稿/派生物？"——后者一律拒绝写入。
+- **润色 workflow（强制）**：用户给你一段需修改的文本 → ① 先 `grep -rn "<原文片段前 8-15 字>" manuscripts/` 定位它在**哪个原子化文件**；② 命中 `Full_Manuscript.md` 等派生物 → **不要改它**，回到对应的原子化源文件改；③ 同一片段在多个原子化文件命中 → 停下问用户改哪个，不要猜；④ **grep 0 命中（项目未初始化或文本不在项目中）→ 进入独立润色模式**：明确告知用户"该文本未在当前项目找到，将做无状态润色（不写文件、不打快照），结果直接贴回；如需持久化请先 `/init` 后将文本写入对应 `manuscripts/0X_*.md`"，绝不静默写入新文件、绝不猜测归属；⑤ 改完提醒用户重跑 `/merge` 才能在合并稿/docx 中看到更新。
+- **自检（写入前必答）**：在 `Edit`/`Write` 任何 `.md` 前，自问"这是 `manuscripts/` 下的原子化源文件吗？还是合并稿/派生物？"。后者一律拒绝写入。
 
 ### 4. 写入安全检查 (Anti-Overwrite Check)
 每次 `write_file` 前执行覆写自查（检查存在 → Diff → 备份/警告 → 报告）。完整细则见 `references/interaction-protocol.md §4`。
@@ -129,7 +129,7 @@ license: Proprietary
 
 ### 11. 强制交互结构 (Mandatory Response Architecture)
 每次回复（除极简确认外）必须含 3 部分：
-- **Part 1 执行内容**（用户可见）：对话 / 执行 / 写入结果。**若用户给了数据**：必加 `🧪 实验逻辑批判`——① Design Check（对照组合理？如有无空白载体对照）② Reliability（n 够？统计明确？）③ Consistency（Fig 间结论矛盾？）④ Verdict（明确 "Reliable" 或 "Flaw Detected"）。
+- **Part 1 执行内容**（用户可见）：对话 / 执行 / 写入结果。**若用户给了数据**：必加 `🧪 实验逻辑批判`，逐项核查 ① Design Check（对照组合理？如有无空白载体对照）② Reliability（n 够？统计明确？）③ Consistency（Fig 间结论矛盾？）④ Verdict（明确 "Reliable" 或 "Flaw Detected"）。
 - **Part 2 状态仪表盘**（默认内部维护，仅用户要审计日志/加载明细时输出）：Word Count（节/总，Key Section >500）、Data Logic（Pass/Flaw）、SI Loop（Pending 数）、Snapshot（Created/Skipped）+ State Persistence Log（仅列本轮更新的状态文件）。
 - **Part 3 深度交互**（用户可见）：反向拷问（<100 字犀利挑战）+ 你可能想知道（预测性建议/背景知识）。
 
@@ -196,7 +196,7 @@ license: Proprietary
 | NEJM / Lancet / JAMA | 250 词 **structured**（Background/Methods/Results/Conclusions）| 3000-3500 词 | 5 主图 + 5 表 | 文中（Methods 在 Results 前） |
 | BMC / PLOS ONE / Scientific Reports | 350 词 structured | 不限 | 不限 | 文中 |
 
-不在表内的期刊由 AI 上 journal 官网查 author guideline 后告知用户、写入 `project_config.word_limits`。Storyline 必须在期刊上限内编排，**严禁先写超 30% 再砍**——浪费的成本极高。
+不在表内的期刊由 AI 上 journal 官网查 author guideline 后告知用户、写入 `project_config.word_limits`。Storyline 必须在期刊上限内编排，**严禁先写超 30% 再砍**。
 
 **`/change-journal` 中途转投流程**：五步流程（查新刊限制→改 config→/check 字数→重跑 submission-pack→重组 Methods）见 `references/interaction-protocol.md`（`/change-journal` 节）。
 
@@ -206,11 +206,11 @@ license: Proprietary
 - Methods：0-5 篇（仅方法学原始文献）
 - 预估总数写入 storyline 输出表格，作为 Phase 3 检索目标
 
-**Title 写法规范（Mandatory，两阶段）**：title 是论文命门。storyline 阶段先出 **3 个工作 title 候选**（working titles，基于 storyline 主线，**允许后续调整**）；Phase 3 文献检索完成、知道领域 gap 后，在 Phase 8 写完 Discussion 时**回头精修 title**——此时才能体现真正的创新点定位。
-- **结构选**：① **Declarative**（"X improves Y in Z"——Nature 系偏好，最高接收率）② **Mechanism-flavored**（"X regulates Y via Z pathway"——Cell 系偏好）③ **Question form**（"Does X drive Y?"——较少用，仅 Perspective/Opinion 类）
+**Title 写法规范（Mandatory，两阶段）**：storyline 阶段先出 **3 个工作 title 候选**（working titles，基于 storyline 主线，**允许后续调整**）；Phase 3 文献检索完成、知道领域 gap 后，在 Phase 8 写完 Discussion 时**回头精修 title**，此时才能体现真正的创新点定位。
+- **结构选**：① **Declarative**（"X improves Y in Z"，Nature 系偏好，最高接收率）② **Mechanism-flavored**（"X regulates Y via Z pathway"，Cell 系偏好）③ **Question form**（"Does X drive Y?"，较少用，仅 Perspective/Opinion 类）
 - **硬约束**：≤ 期刊 title word limit（Nature ≤15 词；Cell ≤17 词；多数 ≤25 词）；**严禁**缩写（除 DNA/RNA/PCR 等极通用词）；**严禁** 'A study of / An investigation into / Studies on' 等老式开头（信号弱、明显学生气）；**严禁** 'Novel / First / Comprehensive' 等 self-promoting 词（编辑反感）。
 - **强制包含**：核心实体（具体到化合物/分子/疾病模型）+ 核心动作（improves/inhibits/activates/links）+ 必要语境（细胞类型 / 物种 / 临床场景）。
-- **核对**：选定后必须 cross-check storyline 主线（创新点）—— title 必须能从一句话浓缩主线得到，不能有"title 没体现的 Results"或"Results 没支撑的 title 承诺"。
+- **核对**：选定后必须 cross-check storyline 主线（创新点），title 必须能从一句话浓缩主线得到，不能有 title 没体现的 Results，也不能有 Results 没支撑的 title 承诺。
 
 > **[用户确认检查点 Mandatory]** 展示 storyline 草稿（章节标题、核心论点、关键图序、**各节预估引用数**、**3 个 title 候选**），等待用户明确确认后才进入 Phase 2.5。禁止在故事线未确认的情况下启动图集规划。
 
@@ -241,9 +241,9 @@ license: Proprietary
 > **[用户确认检查点 Mandatory]** 展示 Figure 1–N 规划表 + main/SI 分配 + 与 storyline 对齐确认（含是否需要回修 storyline），等待用户明确确认后才进入 Phase 3 文献检索。
 
 ### Phase 3: 文献检索 (`/literature`)
-分阶段检索（Phase 1核心，Phase 2写作时实时补充）。**执行前必须 `Read references/citation-policy.md`**——检索路由（生命科学 PubMed CLI / CS·AI paper-search）、Zero-Fabrication 9 条硬约束、引用类型按语境的完整细则都在那。
+分阶段检索（Phase 1核心，Phase 2写作时实时补充）。**执行前必须 `Read references/citation-policy.md`**，检索路由（生命科学 PubMed CLI / CS·AI paper-search）、Zero-Fabrication 9 条硬约束、引用类型按语境的完整细则都在那。
 
-**检索命令**：路由、命令模板（PubMed CLI / paper-search MCP）、Provider 白名单见 `references/citation-policy.md`（文献检索工具节）——Phase 3 执行前必须 `Read` 该文件。
+**检索命令**：路由、命令模板（PubMed CLI / paper-search MCP）、Provider 白名单见 `references/citation-policy.md`（文献检索工具节），Phase 3 执行前必须 `Read` 该文件。
 
 **中文文献支线**：AI发现→用户取证（路径A/B/C）→合规入库的完整流程见 `references/citation-policy.md`（中文文献支线节）。
 
@@ -252,7 +252,7 @@ license: Proprietary
 **阻断条件**：只要 `manual_review_queue.json` 非空，或报告存在 provider policy / bidirectional verification failure 相关失败项，都必须先处理后再写作。
 **退出条件（Escalation Protocol）**：若人工处理后条目仍无法核验（无法获取 DOI/PMID/S2 ID），则将该条目标记为 `status=dropped`，从 `literature_index.json` 中移除，并在写作时写入占位注释 `<!-- [REF_DROPPED: 原标题] -->`，待用户手动补充替代文献后再重新分配编号。最多处理 2 轮；若问题未解决，必须告知用户并给出可操作的替代文献检索建议，不得无限等待。
 
-**`REF_DROPPED` 占位的最终处置**：含 `REF_DROPPED` 占位的句子在 Phase 10 `/check` 阶段必须**单独列出**让用户决定 → ① 用户补替代文献 → 删占位 + 改正常 `[n]`；② 用户决定删该句 → 整句删除并检查上下文逻辑连贯；③ 用户决定弱化论点 → 删占位 + 改写为不依赖文献的描述性表述。**严禁带 `REF_DROPPED` 占位 `/merge`** —— 已纳入 Phase 10 占位扫描门禁（grep CITE_PENDING|DATA_PENDING|REF_DROPPED）。
+**`REF_DROPPED` 占位的最终处置**：含 `REF_DROPPED` 占位的句子在 Phase 10 `/check` 阶段必须**单独列出**让用户决定 → ① 用户补替代文献 → 删占位 + 改正常 `[n]`；② 用户决定删该句 → 整句删除并检查上下文逻辑连贯；③ 用户决定弱化论点 → 删占位 + 改写为不依赖文献的描述性表述。**严禁带 `REF_DROPPED` 占位 `/merge`**，已纳入 Phase 10 占位扫描门禁（grep CITE_PENDING|DATA_PENDING|REF_DROPPED）。
 **文献编号触发点（Mandatory）**：首轮检索完成、以及后续每一轮增量检索后，都必须执行"分配到小节 → 写入文献矩阵 → 全局重编号为连续 `1..N` → 同步落盘"，严禁未分配或仅追加到索引末尾就写正文；写某小节时只能引用该小节矩阵内文献。**完整分节重编号规则（首轮强制分配 + 后续增量同流程的逐条约束）见 `references/citation-policy.md`**。
 **脚本硬门禁**：`sync-literature --apply` 与 `write-cycle --finalize --refs-confirmed --sync-literature --sync-apply` 默认强制执行"矩阵重编号校验"；缺失矩阵或分配不完整将直接阻断落盘（仅调试可用 `--no-require-matrix-reindex` 临时放行）。
 
@@ -271,7 +271,7 @@ license: Proprietary
 
 **触发场景**：用户有 raw data、不确定该用什么统计检验（博士生最高频卡点，选错一篇文章基本报废）。
 
-**执行**：`Read references/stat-decision-tree.md` —— 含完整决策树（按数据类型/分组数/配对/分布）、5 条强制询问（正态性/方差齐性/样本量/配对/outlier）、报告模板与 4 条红线。输出的检验用 `add-stat-method` 落地到 `figures_database` 各 panel 的 `stat_test` 字段。
+**执行**：`Read references/stat-decision-tree.md`，含完整决策树（按数据类型/分组数/配对/分布）、5 条强制询问（正态性/方差齐性/样本量/配对/outlier）、报告模板与 4 条红线。输出的检验用 `add-stat-method` 落地到 `figures_database` 各 panel 的 `stat_test` 字段。
 
 ---
 
@@ -285,16 +285,16 @@ license: Proprietary
 1. **只读已符号化/已印出的信息**：分组标签、坐标轴文字与量纲、星号数量(`*/**/***`)、图面或图注印出的 P 值数字、误差棒有无、组间高低**方向**与趋势。
 2. **严禁视觉定量与判读**：不得从像素估算条带灰度、荧光/CLSM 强度、阳性率、共定位、转移灶/肿瘤数目等任何**未标注**的定量值；不得对 WB/HE/IHC/荧光/CLSM/拍照图做病理或表型**判读**；不得反推未印出的数值或 P 值。
 3. **不数散点**：散点图只读趋势与组间比较结果，**不清点数据点估算 n**。
-4. **读不到 = 问，不猜**：误差棒类型(SD/SEM/CI)、各组 n、星号阈值定义、看不清的小字——一律列入"❓待确认"问用户，严禁脑补。
+4. **读不到 = 问，不猜**：误差棒类型(SD/SEM/CI)、各组 n、星号阈值定义、看不清的小字，一律列入"❓待确认"问用户，严禁脑补。
 5. **讨论不脑补背景**：讨论草稿只写"基于用户提供的实验设计/假设、以及本图数据本身成立的推理"；需外部文献佐证处（段落首背景句、尾意义句）用占位注释 `<!-- [CITE_PENDING: 关键词] -->` 标记，留待 Phase 8/最终补引时按"文献真实性硬约束"真检索填充，补不到则问用户或转 `REF_DROPPED`。严禁用知识库充当已检索文献。
 6. **中文确认 → 英文写入**：每张小图读完，先用**中文**贴出"结果 + 讨论草稿"（含读到的分组 / 比较 / 趋势 + ❓待确认项）给用户核对；经用户确认 / 修正后，再翻译为**英文**写入 `figure_X.md`（文档落盘正文为英文，确认环节用中文）。
 
 **流程 (逐图循环)**：完整 8 步流程（进入→建档→逐张索取→读图中文草稿→确认英文写入→自检→下一张→收口）见 `references/figure-protocol.md`，进入 `/figure` 时 `Read` 取用；本节只留收口的执行命令与不可丢的约束。
 
 **收口命令（执行必需，每完成一个大 Figure 跑一次）**：
-- `python scripts/state_manager.py add-figure <one_figure.json>`——传**单个** figure 对象（`figure_id` 必需、`section` = storyline 的 section_id），锁内去重合并进 figures_database 并顺带同步 writing_progress/context_memory/storyline；核心定量读不到的项 `data_status="pending"`，对接 §2 熔断。**字段与条目示例见 figure-protocol.md。**
+- `python scripts/state_manager.py add-figure <one_figure.json>`：传**单个** figure 对象（`figure_id` 必需、`section` = storyline 的 section_id），锁内去重合并进 figures_database 并顺带同步 writing_progress/context_memory/storyline；核心定量读不到的项 `data_status="pending"`，对接 §2 熔断。**字段与条目示例见 figure-protocol.md。**
 - 缩略词扫描：对本 figure_{N}.md 新引入且未在 `abbreviations.json` 的 `Full Name (ABBR)`，逐个 `add-abbreviation`（否则 `/write` 写正文会重复展开）。
-- `python scripts/state_manager.py snapshot` 备份。**勿用 `postwrite`**——它有 prewrite gate（state_manager.py:2403），识图阶段没跑 write-cycle 会 `sys.exit(2)`。
+- `python scripts/state_manager.py snapshot` 备份。**勿用 `postwrite`**，它有 prewrite gate（state_manager.py:2403），识图阶段没跑 write-cycle 会 `sys.exit(2)`。
 
 **落盘模板**：`figure_analysis/figure_{N}.md` 模板与 `figures_database.json` 条目示例见 `references/figure-protocol.md`，收口落盘 / `add-figure` 时 `Read` 取用。（`data_status`：核心定量齐全=`ready`，缺核心项=`pending`；`section` 值必须 = storyline 的 section_id。）
 
@@ -302,17 +302,17 @@ license: Proprietary
 
 **红线重申**：本阶段严禁任何"AI 看像素得出的定量或诊断结论"。定量以用户数据 / 图面印出数字 / 图注为准；外部背景以真检索文献为准；二者缺一即停下问用户。
 
-**配图代码生成（opt-in，默认关）**：本阶段默认只做"识别用户已有实验图"（上述读图红线），**不**生成新图——基础实验用户自行作图。生成新图代码是与识图**并列的另一项可选能力**，二者互不混淆：仅当用户**明确要求**"生成配图/画图代码"（如生信、统计图场景）时启用。启用后：① 调用本地 matplotlib/seaborn skill 生成**可运行代码**（产出代码非图片，不替代识图、不写入 `figure_analysis/`）；② 遵循学术规范：按数据选图型（bar/boxplot/line/scatter+回归/**forest plot**/**funnel plot**（meta 分析用）/heatmap/network/concept map），APA 7.0 caption，色盲安全配色（viridis/cividis/Tol），300 DPI，轴标签带单位，**禁 3D 图与饼图**；③ 生成后由用户运行得图。
+**配图代码生成（opt-in，默认关）**：本阶段默认只做识别用户已有实验图（上述读图红线），**不**生成新图，基础实验用户自行作图。生成新图代码是与识图**并列的另一项可选能力**，二者互不混淆：仅当用户**明确要求**"生成配图/画图代码"（如生信、统计图场景）时启用。启用后：① 调用本地 matplotlib/seaborn skill 生成**可运行代码**（产出代码非图片，不替代识图、不写入 `figure_analysis/`）；② 遵循学术规范：按数据选图型（bar/boxplot/line/scatter+回归/**forest plot**/**funnel plot**（meta 分析用）/heatmap/network/concept map），APA 7.0 caption，色盲安全配色（viridis/cividis/Tol），300 DPI，轴标签带单位，**禁 3D 图与饼图**；③ 生成后由用户运行得图。
 
 ### Phase 7: 缩略词表管理 (`add-abbreviation`)
 **定位**：跨小节维护缩略词一致性，防止同一缩写 ROS 在 5 个章节各定义一次、或后半段直接用未定义缩写。
 
 **首次出现规则（Mandatory）**：
-- **EN**：`Full Name (ABBR)` —— 例：`reactive oxygen species (ROS)`
-- **CN**：`中文全称（英文全称, ABBR）` —— 例：`光动力疗法（Photodynamic Therapy, PDT）`
+- **EN**：`Full Name (ABBR)`，例：`reactive oxygen species (ROS)`
+- **CN**：`中文全称（英文全称, ABBR）`，例：`光动力疗法（Photodynamic Therapy, PDT）`
 - **后续使用**：直接用 ABBR，**严禁重复定义**。
-- **Title 严禁缩写**；**Abstract 独立**——即使正文已定义，Abstract 首次出现仍须重新展开（Abstract 通常独立阅读）。
-- **通用免定义白名单**（脚本同步）：DNA / RNA / PCR / HIV / WHO / FDA / NIH / ATP / pH / ELISA / qPCR / SD / SEM / CI 等——直接使用不展开。详见 `state_manager.py` 的 `UNIVERSAL_ABBREVIATIONS`。
+- **Title 严禁缩写**；**Abstract 独立**，即使正文已定义，Abstract 首次出现仍须重新展开（Abstract 通常独立阅读）。
+- **通用免定义白名单**（脚本同步）：DNA / RNA / PCR / HIV / WHO / FDA / NIH / ATP / pH / ELISA / qPCR / SD / SEM / CI 等，直接使用不展开。详见 `state_manager.py` 的 `UNIVERSAL_ABBREVIATIONS`。
 
 **写作时实时入库**：每节 `/write` 写完时，对该节首次定义的每个缩写，执行：
 ```bash
@@ -321,13 +321,13 @@ python scripts/state_manager.py add-abbreviation <one.json>
 ```
 该命令在 `FileLock` 下按 `abbr` 去重合并；**冲突拒绝**：同 abbr 但不同 full_name 直接 `sys.exit(2)` 报错（属科学错误，必须人工解决）。
 
-**写新节前查表**：开始 `/write` 任何小节前，先 `Read abbreviations.json` 拿已定义清单——已存在的缩写**直接用 ABBR，严禁重新展开**。
+**写新节前查表**：开始 `/write` 任何小节前，先 `Read abbreviations.json` 拿已定义清单。已存在的缩写**直接用 ABBR，严禁重新展开**。
 
 ### Phase 8: 逐节撰写 (融合模式 + 原子化文件 + SI循环)
 
 **核心指令**：`/write [section]`
 
-> **Methods 写作时机（门控）**：Methods 建议在**所有 Results 小节写完后、`/abstract` 前**用 `/write methods` 撰写——此时 `figures_database.json` 的 `stat_test`/`n`/试剂参数已随识图齐全，可一次性联动汇总（见 Phase 4 Methods 规范）。不要在 Results 之前写 Methods（统计方法尚不全）。
+> **Methods 写作时机（门控）**：Methods 建议在**所有 Results 小节写完后、`/abstract` 前**用 `/write methods` 撰写，此时 `figures_database.json` 的 `stat_test`/`n`/试剂参数已随识图齐全，可一次性联动汇总（见 Phase 4 Methods 规范）。不要在 Results 之前写 Methods（统计方法尚不全）。
 
 **原子化文件策略**：
 - **Target Path**: `manuscripts/{Chapter}_{Subsection}_{Keyword}.md`
@@ -342,7 +342,7 @@ python scripts/state_manager.py add-abbreviation <one.json>
 4. **Figure Caption Generation**: 在参考文献列表后，必须生成 "Figure Legends" 版块。
    - **Content**: 包含整体描述和分图说明 (e.g., "Figure 1. Characterization... (A) TEM image...").
    - **Strict Rules**: 统计图必须声明 "n=X"；显微镜图必须声明 "scale bar = X μm"。
-4b. **Figure Prompt Generation**：为需 AI 绘制的示意图/机制图生成结构化提示词——`Read references/writing-templates.md` 末节取 `[FIGURE PROMPT]` 模板与生成规则，append 到 `figures/figure_prompts.md`。（注意双轨：`figures_database.json` 是用户已有实验图的识图数据；`figures/figure_prompts.md` 是让 AI 帮画的图，二者不冲突。）
+4b. **Figure Prompt Generation**：为需 AI 绘制的示意图/机制图生成结构化提示词，`Read references/writing-templates.md` 末节取 `[FIGURE PROMPT]` 模板与生成规则，append 到 `figures/figure_prompts.md`。（注意双轨：`figures_database.json` 是用户已有实验图的识图数据；`figures/figure_prompts.md` 是让 AI 帮画的图，二者不冲突。）
 5. **SI Proactive Proposal**: AI 主动思考并建议 SI 数据。
 6. **User Feedback**: 用户确认。
 7. **Final Integration**: AI 重写该节，插入 SI 标记。
@@ -355,9 +355,9 @@ python scripts/state_manager.py add-abbreviation <one.json>
    1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate section-dod --files <本节文件>`
    2. **派一个独立子代理**(Claude Code 用 `academic-blind-reviewer`;其他平台派通用子代理)，把任务包原样给它、**不要给它本节的写作上下文**，要求按任务包返回 JSON 数组。
    3. 校验返回:`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate section-dod --return <子代理返回.json>`;退出码非 0(任一缺项/fail/无证据)= **fail-closed**,据子代理证据修复后重跑,**未过不得声明完成**。
-   - **降级路径**(当前环境无法派子代理时):主 agent 切换"审稿人视角"、清空对本节的写作记忆，逐项独立重核——绝不因"自己刚写完"默认通过；仍跑 `verify` 把关。
+   - **降级路径**(当前环境无法派子代理时):主 agent 切换审稿人视角、清空对本节的写作记忆，逐项独立重核，绝不因刚写完就默认通过；仍跑 `verify` 把关。
 
-   🔴 **进入下一节前置闸口**：上一节 `delegate_review verify` 必须 exit 0（含 G13 结构完整性），否则不得开始下一节撰写——写完即检，不过不进。
+   🔴 **进入下一节前置闸口**：上一节 `delegate_review verify` 必须 exit 0（含 G13 结构完整性），否则不得开始下一节撰写。写完即检，不过不进。
 
    下列清单与 `references/dod_checklist.json` 逐项对应(改清单先改 JSON),供人工对照;能脚本核的项子代理会先跑脚本:
 
@@ -393,7 +393,7 @@ python scripts/state_manager.py add-abbreviation <one.json>
 2. **Methods**（1-2句）：核心方法/策略概述
 3. **Results**（3-4句）：关键定量结果（必须含具体数值）
 4. **Conclusion**（1-2句）：核心结论与意义
-**禁止**：不引用文献 `[n]`；**Abstract 独立**——即使正文已在 `abbreviations.json` 定义过，Abstract 首次出现仍须重新展开为 `Full Name (ABBR)`（投稿规范，Abstract 独立阅读）；不出现"significantly"等无定量支撑的空话。
+**禁止**：不引用文献 `[n]`；**Abstract 独立**，即使正文已在 `abbreviations.json` 定义过，Abstract 首次出现仍须重新展开为 `Full Name (ABBR)`（投稿规范，Abstract 独立阅读）；不出现"significantly"等无定量支撑的空话。
 **输出文件**：`manuscripts/01_Abstract.md`
 
 ### Phase 10: 质量控制 (`/check`)
@@ -482,7 +482,7 @@ python scripts/state_manager.py add-abbreviation <one.json>
 
 ### Phase 14: 导师批注循环 (`/mentor-review`)
 
-**触发场景**：博士生写作真实工作流——写一节 → 给导师看 → 批注 → 改 → 再给 → 再改，循环 5-10 轮。本 phase 把这个循环结构化。
+**触发场景**：博士生写作真实工作流。写一节 → 给导师看 → 批注 → 改 → 再给 → 再改，循环 5-10 轮。本 phase 把这个循环结构化。
 
 **输入形式**：
 - **形式 A**：导师在 Word 上开 track changes 标注 → 用户导出 `.docx` 或截图 → 你需要 `Read` 后转 `reviews/mentor_comments_round{N}.md`

@@ -42,7 +42,7 @@ SQ vs KSQ: SQ is the broad open problem stated in P1; KSQ is the focused, answer
 ## Inputs Required
 Collect before execution:
 - Project basics: title, discipline code, project type, research attribute, duration, budget.
-- 🔴 **科学问题属性（四选一，强制）**：与上面的"研究属性"是**两个独立必填字段**，不可混为一谈。研究属性=分类评审的「自由探索类/目标导向类」；科学问题属性=申请书另一独立必填项，四类官方标准措辞如下，Phase 0 必须选定其一并写入 profile 的 `science_problem_attribute`：
+- 🔴 **科学问题属性（四选一，强制）**：与"研究属性"是两个独立必填字段。研究属性=分类评审的「自由探索类/目标导向类」；科学问题属性=申请书独立必填项，四类官方标准措辞如下，Phase 0 必须选定其一并写入 profile 的 `science_problem_attribute`：
   - 鼓励探索、突出原创
   - 聚焦前沿、独辟蹊径
   - 需求牵引、突破瓶颈
@@ -89,7 +89,7 @@ Apply these resolutions when references conflict:
 3. Merge order is fixed: references at the end of final merged manuscript.
 4. P2 should not include numbered literature markers; citation numbering is restricted to P1.
 
-(V-01 validation implementation note — SQ nodes carry no `mapped_to_h` field — moved to `references/02_核心机制.md` §2.3.)
+(V-01 validation implementation note: SQ nodes carry no `mapped_to_h` field. Moved to `references/02_核心机制.md` §2.3.)
 
 *Source: accumulated from operation feedback; last reviewed 2026-05.*
 
@@ -105,15 +105,15 @@ Follow phased gates in order:
    - Output: `sections/P1_立项依据.md` + `data/literature_index.json` (all P1 citations verified) + updated `context_memory.md`.
    **Citation Type by Context for P1 (立项依据，MANDATORY):** specific mechanistic/experimental claims (具体科学论点) must cite Original Articles as primary evidence; clinical evidence cites Clinical Trials at the same priority; preprints are last-resort, labeled `[Preprint]`, used only when no peer-reviewed equivalent exists. Full context-to-type mapping and the `role` taxonomy (gap_evidence / method_support / prior_work / comparison / background) live in `references/04_文献管理.md`.
 
-   **Phase 1 DoD（收口自检）— 未逐项确认通过，不得向用户声明"P1 完成"**
+   **Phase 1 DoD（收口自检）：未逐项确认通过，不得向用户声明 P1 完成**
 
-   **🔴 进入下一部分前置闸口（适用所有 Phase）：本部分 delegate_review verify 必须 exit 0（含结构完整性），否则不得进入下一部分撰写——写完即检，不过不进。**
+   **🔴 进入下一部分前置闸口（适用所有 Phase）：本部分 delegate_review verify 必须 exit 0（含结构完整性），否则不得进入下一部分撰写。写完即检，不过不进。**
 
-   **🔴 委托盲检（不得主 agent 自评）**：你刚写完 P1，自评会失真地默认通过、且易漏项。落盘前必须把 DoD 清单**委托给独立上下文的子代理盲检**，自己不直接打勾：
+   **🔴 委托盲检（不得主 agent 自评）**：P1 自评易漏项、易默认通过。落盘前必须把 DoD 清单**委托给独立上下文的子代理盲检**，自己不直接打勾：
    1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate p1-dod --files sections/P1_立项依据.md`
    2. **派一个独立子代理**（Claude Code 用 `academic-blind-reviewer`；其他平台派通用子代理），把任务包原样给它、**不要给它 P1 的写作上下文**，要求按任务包返回 JSON 数组。
    3. 校验返回：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate p1-dod --return <子代理返回.json>`；退出码非 0（任一缺项/fail/无证据）= **fail-closed**，据子代理证据修复后重跑，**未过不得声明完成**。
-   - **降级路径**（当前环境无法派子代理时）：主 agent 切换"审稿人视角"、清空对 P1 的写作记忆，逐项独立重核——绝不因"自己刚写完"默认通过；仍跑 `verify` 把关。
+   - **降级路径**（当前环境无法派子代理时）：主 agent 切换审稿人视角、清空对 P1 的写作记忆，逐项独立重核，绝不因刚写完而默认通过；仍跑 `verify` 把关。
 
    下列清单与 `references/dod_checklist.json` gate=`p1-dod` 逐项对应（改清单先改 JSON），供人工对照；能脚本核的项子代理会先跑脚本：
 
@@ -132,13 +132,13 @@ Follow phased gates in order:
    - Input: verified P1; H/O/RC/KSQ mapping counts from Phase 0; consistency_map.json with SQ entries.
    - consistency_map 条目结构（mapped_from_sq / mapped_to_objective / supports_method 等字段名）见 `references/02_核心机制.md` §2.2，按其字段名产出避免 validate 报错。
    - Output: `sections/P2_研究内容.md` + updated `data/consistency_map.json` (H→O→RC→KSQ→M→IN all links validated) + `sections/figure_prompts.md`.
-   - **V 规则分层说明（防"假通过"）：** Phase 2 门控仅验 V-01/V-02/V-03/V-04/V-05/V-08/V-10（H/O/RC/KSQ/IN 结构链路）。V-06（M→F）、V-07（F来源）、V-09（预算追溯）、V-11（代表作匹配）、V-12（备选方案）所依赖的 F 和预算字段在 Phase 2 时尚为空，不在此阶段验证——延迟到 Phase 7 `gate-check` 全量验证。Phase 2 出现这些规则"通过"仅因字段为空时默认 pass，不代表内容已合规。
+   - **V 规则分层说明（防假通过）：** Phase 2 门控仅验 V-01/V-02/V-03/V-04/V-05/V-08/V-10（H/O/RC/KSQ/IN 结构链路）。V-06（M→F）、V-07（F来源）、V-09（预算追溯）、V-11（代表作匹配）、V-12（备选方案）所依赖的 F 和预算字段在 Phase 2 时尚为空，不在此阶段验证，延迟到 Phase 7 `gate-check` 全量验证。Phase 2 出现这些规则通过仅因字段为空时默认 pass，不代表内容已合规。
    - Sub-content order: 研究假说(H) → 研究目标(O) → 研究内容(RC) → 关键科学问题(KSQ) → 研究方案与技术路线(M) → 特色与创新之处(IN) → 年度研究计划.
    - No literature numbers anywhere in P2. Paragraph narrative throughout; annual plan may use year-based paragraphs.
    - Every M must trace back to a specific RC; every IN must trace to RC and M.
    - **Figure Prompt Generation（AI绘图提示词）：** Phase 2 完成后，为技术路线图等必要图表生成绘图提示词，保存至 `sections/figure_prompts.md`。模板与生成规则见 `references/10_Figure_Prompt规范.md`。
 
-   **Phase 2 DoD（收口自检）— 未逐项确认通过，不得向用户声明"P2 完成"**
+   **Phase 2 DoD（收口自检）：未逐项确认通过，不得向用户声明 P2 完成**
 
    **🔴 委托盲检（不得主 agent 自评）**：落盘前委托独立子代理盲检：
    1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate p2-dod --files sections/P2_研究内容.md`
@@ -154,8 +154,8 @@ Follow phased gates in order:
    - [ ] ④占位符清零（CITE_PENDING/DATA_PENDING/【待AI】）
    - [ ] ⑤去 AI：`humanizer_zh.py scan` 无 ERROR，`rhythm-check` 无 `cn_sentence_too_long`
    - [ ] ⑥字数/页数在目标范围内
-   - [ ] ⑦V-06（M→F）/V-07（F 来源）/V-11（代表作匹配）/V-12（备选路线）**不在本阶段验证**（字段为空时默认 pass，不代表合规）——记录为"延迟到 Phase 7 gate-check"
-   - [ ] ⑧P2 末尾含独立"预期成果"小节（论文/专利/人才培养目标三类均有明确数字目标）
+   - [ ] ⑦V-06（M→F）/V-07（F 来源）/V-11（代表作匹配）/V-12（备选路线）**不在本阶段验证**（字段为空时默认 pass，不代表合规），延迟到 Phase 7 gate-check
+   - [ ] ⑧P2 末尾含独立预期成果小节（论文/专利/人才培养目标三类均有明确数字目标）
    - [ ] ⑨figure_prompts.md 已生成，技术路线图提示词映射到 ≥1 个 RC
 
 4. Phase 3: write P3 研究基础（4 sub-files）.
@@ -170,7 +170,7 @@ Follow phased gates in order:
    - **伦理审查（涉人类受试者/实验动物/生物安全/人类遗传资源时为硬项）：** P3_1 可行性分析须说明已获或计划申请的伦理审查批件（如医学伦理委员会、实验动物福利伦理、生物安全审批、人类遗传资源采集/保藏/利用审批），尚未取得的注明送审计划与时间节点。不涉及上述情形则无需展开。
    - P3_3 and P3_4 may use list format (tables allowed).
 
-   **Phase 3 DoD（收口自检）— 未逐项确认通过，不得向用户声明"P3 完成"**
+   **Phase 3 DoD（收口自检）：未逐项确认通过，不得向用户声明 P3 完成**
 
    **🔴 委托盲检（不得主 agent 自评）**：落盘前委托独立子代理盲检：
    1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate p3-dod --files sections/P3_1_研究基础与可行性分析.md sections/P3_2_工作条件.md sections/P3_3_正在承担的相关项目.md sections/P3_4_完成基金项目情况.md`
@@ -195,7 +195,7 @@ Follow phased gates in order:
    - Output: `sections/P4_其他需要说明的情况.md`.
    - Cover: concurrent grant applications, senior PI prior grants, postdoc status, AI usage declaration, ethics/biosafety/human-genetic-resource approvals (若涉及，与 P3_1 伦理说明呼应), any other required disclosures.
 
-   **Phase 4 DoD（收口自检）— 未逐项确认通过，不得向用户声明"P4 完成"**
+   **Phase 4 DoD（收口自检）：未逐项确认通过，不得向用户声明 P4 完成**
 
    **🔴 委托盲检（不得主 agent 自评）**：落盘前委托独立子代理盲检：
    1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate p4-dod --files sections/P4_其他需要说明的情况.md`
@@ -214,12 +214,12 @@ Follow phased gates in order:
 6. Phase 5: write 预算说明书（B1-B3）.
    - Input: P2 confirmed (M entries define budget items); project profile (budget_total, duration).
    - Output:
-     - `sections/B1_预算说明_直接费用.md` (equipment; materials; tests; travel/conference; publications; labor; consulting — three-line tables where required)
+     - `sections/B1_预算说明_直接费用.md` (equipment; materials; tests; travel/conference; publications; labor; consulting; three-line tables where required)
      - `sections/B2_预算说明_合作外拨.md` (co-institution allocation, or "无")
      - `sections/B3_预算说明_其他来源.md` (other funding sources)
    - Budget total must equal profile `budget_total`; each major budget item traces to an M entry.
 
-   **Phase 5 DoD（收口自检）— 未逐项确认通过，不得向用户声明"P5/预算 完成"**
+   **Phase 5 DoD（收口自检）：未逐项确认通过，不得向用户声明 P5/预算完成**
 
    **🔴 委托盲检（不得主 agent 自评）**：落盘前委托独立子代理盲检：
    1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate p5-dod --files sections/B1_预算说明_直接费用.md sections/B2_预算说明_合作外拨.md sections/B3_预算说明_其他来源.md`
@@ -240,7 +240,7 @@ Follow phased gates in order:
    - Output: `sections/00_摘要_中文.md` (≤400汉字) + `sections/00_摘要_英文.md` (≤300英文词).
    - Keywords must align with `consistency_map.keywords_trace`.
 
-   **Phase 6 DoD（收口自检）— 未逐项确认通过，不得向用户声明"摘要完成"**
+   **Phase 6 DoD（收口自检）：未逐项确认通过，不得向用户声明摘要完成**
 
    **🔴 委托盲检（不得主 agent 自评）**：落盘前委托独立子代理盲检：
    1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate p6-dod --files sections/00_摘要_中文.md sections/00_摘要_英文.md`
@@ -264,7 +264,7 @@ Follow phased gates in order:
    - Run `humanizer_zh.py scan-all` before final output.
    - Output: `output/申请书_合并.md` (merge order: 00摘要 → B1-B3预算 → P1 → P2 → P3_1~P3_4 → P4 → REF).
 
-   **Phase 7 DoD（收口自检）— 未逐项确认通过，不得向用户声明"全文终稿完成"**
+   **Phase 7 DoD（收口自检）：未逐项确认通过，不得向用户声明全文终稿完成**
 
    **🔴 委托盲检（不得主 agent 自评）**：merge 前委托独立子代理盲检：
    1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate p7-dod --files sections/P1_立项依据.md sections/P2_研究内容.md sections/P3_1_研究基础与可行性分析.md sections/P4_其他需要说明的情况.md sections/00_摘要_中文.md`
@@ -403,7 +403,7 @@ Load only what is needed:
 ## Output Contract
 Deliverables should include:
 - section files under `sections/` (canonical filenames):
-  `P1_立项依据.md`, `P2_研究内容.md`（含独立"预期成果"小节：论文/专利/人才培养目标），
+  `P1_立项依据.md`, `P2_研究内容.md`（含独立预期成果小节：论文/专利/人才培养目标），
   `P3_1_研究基础与可行性分析.md`, `P3_2_工作条件.md`, `P3_3_正在承担的相关项目.md`, `P3_4_完成基金项目情况.md`,
   `P4_其他需要说明的情况.md`,
   `B1_预算说明_直接费用.md`, `B2_预算说明_合作外拨.md`, `B3_预算说明_其他来源.md`,

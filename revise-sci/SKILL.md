@@ -1,6 +1,6 @@
 ---
 name: revise-sci
-description: 退稿/返修全管道——同时出逐条回复信+修改后正文docx+Patch修订。触发词：改稿、修改稿子、修订正文、退稿改进、返修、revise manuscript、major revision、minor revision、revise and resubmit、point-by-point response、revised manuscript。路由说明：与reviewer-response-sci区分——本技能同时改主稿+出回复包，后者只出回复不改稿；与gsw区分——gsw写新稿，本技能专处理已有稿子的审稿意见驱动修改。
+description: 退稿/返修全管道，同时出逐条回复信+修改后正文docx+Patch修订。触发词：改稿、修改稿子、修订正文、退稿改进、返修、revise manuscript、major revision、minor revision、revise and resubmit、point-by-point response、revised manuscript。路由说明：与reviewer-response-sci区分，本技能同时改主稿+出回复包，后者只出回复不改稿；与gsw区分，gsw写新稿，本技能专处理已有稿子的审稿意见驱动修改。
 ---
 
 # Revise-Sci
@@ -9,8 +9,8 @@ description: 退稿/返修全管道——同时出逐条回复信+修改后正�
 Use this skill to convert reviewer comments, the original manuscript, SI, and attachments into two formal deliverables: a revised manuscript and a structured `Response to Reviewers`, both in Markdown and Word.
 
 The workflow is script-gated. Do not skip steps. Do not fabricate experiments, data, statistics, or references.
-The comment parser supports both atomic `comment-unit` HTML and reviewer-simulator style report HTML with critique lists.
-The manuscript atomizer also recognizes numbered section headings such as `1`, `1.1`, and `2.3.4` even when the source Word paragraph style is not a formal heading style.
+The comment parser accepts both atomic `comment-unit` HTML and reviewer-simulator style report HTML with critique lists.
+The manuscript atomizer recognizes numbered section headings such as `1`, `1.1`, and `2.3.4` even when the source Word paragraph style is not a formal heading style.
 
 ## Mandatory Intake Before Any Full Pipeline Run
 When the user provides a `comments_path`, a `manuscript_docx_path`, or both, do **not** jump straight into `run_pipeline.py`.
@@ -21,16 +21,16 @@ Always run:
 python scripts/intake_router.py --comments <comments_path> --manuscript <manuscript_docx_path>
 ```
 
-Then, before doing any substantive revise work, the AI must explicitly tell the user:
+Before any substantive revise work, report to the user:
 - which `comments_input_mode` was detected;
 - which branch-specific workflow will be used next;
-- that the workflow will preserve the same atomicization, fragment-only rewrite, anti-AI polish, state-window, anti-forgetfulness, and hard-gate rules;
-- and must ask the user to confirm that routing decision **together with** the desired `project_root` / output path.
+- that the workflow preserves the same atomicization, fragment-only rewrite, anti-AI polish, state-window, anti-forgetfulness, and hard-gate rules;
+- then ask the user to confirm that routing decision **together with** the desired `project_root` / output path.
 
 If the input does **not** match any supported branch:
-- the AI must not proceed silently;
-- it must ask the user whether to map the input to an existing branch or create a new branch;
-- and any new branch must still preserve the same atomicization, fragment-only rewrite, anti-AI polish, state-window, anti-forgetfulness, and hard-gate rules.
+- do not proceed silently;
+- ask the user whether to map the input to an existing branch or create a new branch;
+- any new branch must still preserve the same atomicization, fragment-only rewrite, anti-AI polish, state-window, anti-forgetfulness, and hard-gate rules.
 
 If the user has **no reviewer comments** and only provides the manuscript:
 1. run `python scripts/intake_router.py --manuscript <manuscript_docx_path>`;
@@ -51,9 +51,9 @@ For `docx-review-letter`, the workflow must:
 2. capture reviewer-level `Overall statement / General assessment / Reviewer statement` text as reviewer-summary seeds, not as the first numbered comment;
 3. preserve those statement seeds into downstream response rendering so the exported response package can still show editor/reviewer context explicitly.
 
-For `reviewer-response-sci-html`, the workflow must not blindly trust the incoming response package. It should:
+For `reviewer-response-sci-html`, do not trust the incoming response package at face value:
 1. treat seeded response/revision content as structured hints rather than auto-approved final output;
-2. prioritize seeded location/original-excerpt hints when trying to localize the target paragraph;
+2. prioritize seeded location/original-excerpt hints when localizing the target paragraph;
 3. still rerun `revise -> polish -> literature/reference checks -> strict_gate` before delivery.
 
 ## Required Inputs
@@ -123,7 +123,7 @@ python scripts/run_pipeline.py --comments <comments_path> --manuscript <manuscri
 `--expected-comments-mode` is strongly recommended after the user confirms the branch chosen by `intake_router.py`. `preflight.py` will block execution if the confirmed mode and the detected mode do not match.
 
 ## Anti-Forgetfulness And Token-Budget Protocol
-`revise-sci` does **not** rely on loading the entire manuscript and all comments into one context window. It follows the same general control philosophy used by `article-writing`, `review-writing`, and `sci2doc`, but adapted for revise work:
+`revise-sci` does **not** load the entire manuscript and all comments into one context window. It follows the same control philosophy used by `article-writing`, `review-writing`, and `sci2doc`, adapted for revise work:
 
 1. **Intake-first routing**: route the comment source first, then lock the branch before loading anything large.
 2. **Section-paragraph atomicization**: only the target section and target paragraph are used for rewrite scope.
@@ -142,7 +142,7 @@ python scripts/state_manager.py --project-root <project_root> write-cycle --comm
 This command is the revise-sci equivalent of the section-scoped state loading in `article-writing`, `review-writing`, and `sci2doc`. It is the preferred context entry before any manual or AI-assisted change to a specific comment-linked paragraph.
 
 ## Patch 修订协议（可选的确定性修订路径）
-This is an **optional, additive** deterministic path for applying scope-locked edits. It does not replace the `atomize -> issue-matrix -> revise_units -> strict_gate` flow; use it when you need a hard guarantee that only the blocks you touched can change, and every other block stays byte-for-byte identical. Use it instead of having the model regenerate whole sections, which is the main source of scope creep / drift.
+This is an **optional, additive** deterministic path for applying scope-locked edits. It does not replace the `atomize -> issue-matrix -> revise_units -> strict_gate` flow. Use it when you need a hard guarantee that only the touched blocks can change and every other block stays byte-for-byte identical, rather than having the model regenerate whole sections (the main source of scope creep and drift).
 
 Protocol (four phases):
 1. **anchorize** — split the target draft into blank-line blocks, assign each a stable anchor id (`block-NNNN-<hash8>`), and write a block manifest (anchor -> exact original bytes + sha256 + byte offsets):
@@ -154,7 +154,7 @@ Protocol (four phases):
    ```bash
    python scripts/apply_revision_patch.py --manifest <block_manifest.json> --patch <patch.json> --output <revised.md>
    ```
-   If **any** entry's hash does not match (the block already changed), or the source draft drifted since anchorize, the whole patch set is **rejected**, nothing is written, and the script exits non-zero. There is no silent partial apply.
+   If **any** entry's hash does not match (the block already changed) or the source draft drifted since anchorize, the whole patch set is **rejected**, nothing is written, and the script exits non-zero. There is no silent partial apply.
 4. **finalizer** — `apply_revision_patch.py` reassembles the full draft from the original source, copying every unpatched byte verbatim (blocks, separators, and trailing-newline state preserved). Feed `<revised.md>` back into the normal `polish -> literature/reference checks -> strict_gate` flow before delivery.
 
 Rules:
@@ -181,14 +181,14 @@ Each comment must contain:
 - Missing information must be written as `Not provided by user` or `需作者确认`.
 - If a reviewer asks for new literature, only `paper-search` is allowed as the external provider family.
 - `paper_search_results_path` may be used to ingest confirmed paper-search results into citation-oriented comment handling.
-- `paper_search_results_path` is not trusted directly. It must first pass `citation_guard.py`, which performs dual verification using provider trace + identifier/title consistency evidence before the citations are allowed to auto-complete a comment.
+- `paper_search_results_path` is not trusted directly. It must first pass `citation_guard.py`, which performs dual verification using provider trace and identifier/title consistency evidence before citations can auto-complete a comment.
 - `build_literature_index.py` must convert validated citation support into review-writing style canonical artifacts: `data/literature_index.json` and `data/revision_claims.json`.
 - `matrix_manager.py` must derive `data/synthesis_matrix.json` from the canonical literature index and emit `data/synthesis_matrix_audit.json` before delivery.
 - `build_reference_registry.py` must extract the final manuscript reference list into canonical `data/reference_registry.json` and audit body-to-reference coverage into `data/reference_coverage_audit.json`.
 - `build_reference_registry.py` may import a fallback reference seed from `references_source_path` when the manuscript reference list is empty or absent.
 - If a manuscript already has a partial numeric `References` section, `build_reference_registry.py` should try to merge missing numbered entries from the detected legacy reference source instead of failing immediately.
 - If unresolved reference gaps still remain after registry rebuild, `build_reference_registry.py` must emit `reference_recovery_request.md` so the author knows exactly which source formats to provide next.
-- If no original or legacy reference source is available, the workflow must first ask the user whether to start a new literature-search-and-fill cycle; default state is `reference_search_decision=ask`, not silent auto-search.
+- If no original or legacy reference source is available, ask the user whether to start a new literature-search-and-fill cycle; default state is `reference_search_decision=ask`, not silent auto-search.
 - If the user approves new reference search, the search-and-fill path must follow the `review-writing` discipline: `paper-search` retrieval only, immediate `citation_guard.py` after each import batch, update canonical `data/literature_index.json`, then refresh `data/synthesis_matrix.json` / `data/synthesis_matrix_audit.json` before any new references can enter the manuscript.
 - If `reference_search_decision=approved` and reference gaps still exist, the skill must generate `reference_search_manifest.json` and `reference_search_task.md` so the approved search cycle is executable and auditable rather than implicit.
 - The approved search cycle should also emit `reference_search_strategy.json` and `reference_search_status.json` so search scope, provider policy, round model, and step status remain explicit and machine-checkable.
@@ -199,24 +199,24 @@ Each comment must contain:
 - Confirmed citation support must include an explicit anchor such as `target_section_heading`, `target_paragraph_index`, or `target_text`; otherwise the item stays in `needs_author_confirmation`.
 - If current materials are insufficient, keep the item in `needs_author_confirmation` instead of inventing a resolution.
 - Treat `completed` as a narrow state: only conservative text-only clarification or limitation edits with reliable paragraph localization may be auto-completed.
-- If paragraph localization is ambiguous and multiple candidates score similarly, the item must fall back to `needs_author_confirmation` instead of selecting a paragraph aggressively.
-- If a comment contains an explicit structured section hint such as `Section 4.2` or `4.2 节` but that hint cannot be matched to an existing section, the workflow must not fall back to lexical matching and must keep the item in `needs_author_confirmation`.
+- If paragraph localization is ambiguous and multiple candidates score similarly, fall back to `needs_author_confirmation` rather than selecting a paragraph aggressively.
+- If a comment contains an explicit structured section hint such as `Section 4.2` or `4.2 节` but that hint cannot be matched to an existing section, do not fall back to lexical matching; keep the item in `needs_author_confirmation`.
 - For Chinese-source reviewer comments, keep the original Chinese comment as the authoritative source block and render a separate English working summary instead of mislabeled bilingual fields.
 - `preflight.py` must record `comments_input_mode` so downstream steps and audit reports know whether the current run came from raw reviewer comments, reviewer-simulator HTML, reviewer-response-sci HTML, or already-atomic HTML.
 - `preflight.py` must also record `expected_comments_mode`, `context_token_budget`, and `context_tail_lines`; these values become part of the resume fingerprint.
-- `preflight.py` must fail fast when the user tries to run the full pipeline on an unsupported or unclassified comments source, rather than silently guessing a branch.
+- `preflight.py` must fail fast when the user runs the full pipeline on an unsupported or unclassified comments source, rather than silently guessing a branch.
 - `reviewer-response-sci` HTML inputs must be treated as response-rich seeds: `atomize_comments.py` should preserve the seeded response/revision fields, and `revise_units.py` should reuse them conservatively for localization and draft response blocks without bypassing manuscript rewrite constraints or hard gates.
 - Citation-only comments may be auto-completed only when confirmed `paper-search` results and formatted citation text are explicitly provided.
 - Citation-only comments may be auto-completed only when the row is `confirmed`, the citation guard marks it `guard_verified=true`, and the target anchor is explicit.
 - After manuscript merge, `reference_sync.py` must append or update the `References/参考文献` section using canonical `data/literature_index.json` and emit `reference_sync_report.json`.
 - When `author_confirmation_reason` is rendered into English, the translated reason must remain fully English with no leftover Chinese fragments.
-- For substantive requests such as new mechanism explanations, new evidence, new figures, or unresolved section matches, stop at `needs_author_confirmation`.
+- For substantive requests such as new mechanism explanations, new evidence, new figures, or unresolved section matches, stop at `needs_author_confirmation` and do not auto-complete.
 - `strict_gate.py` must verify comment coverage, response/manuscript/edit-plan consistency, atomic location completeness, provider-family policy, and per-comment evidence blocks before delivery.
-- `strict_gate.py` must also verify that every auto-completed citation comment is covered by `reference_sync_report.json`; otherwise delivery fails.
-- `strict_gate.py` must also verify that every auto-completed citation comment is present in both `data/literature_index.json` and `data/synthesis_matrix.json`, and that `data/synthesis_matrix_audit.json` reports no unresolved matrix gaps.
+- `strict_gate.py` must verify that every auto-completed citation comment is covered by `reference_sync_report.json`; otherwise delivery fails.
+- `strict_gate.py` must verify that every auto-completed citation comment is present in both `data/literature_index.json` and `data/synthesis_matrix.json`, and that `data/synthesis_matrix_audit.json` reports no unresolved matrix gaps.
 - `strict_gate.py` must fail delivery when `data/reference_coverage_audit.json` reports unresolved numeric citation gaps, even if the comment-level workflow itself completed.
 - `strict_gate.py` must parse `response_to_reviewers.docx` and verify that comment headings, response-section headings, and evidence-section headings are present for every comment block.
-- `strict_gate.py` must also verify that `reference_search_manifest.json`, `reference_search_strategy.json`, and `reference_search_status.json` are internally consistent with actual approved-search artifacts such as `paper_search_validated.json`, `paper_search_guard_report.json`, `data/literature_index.json`, `data/synthesis_matrix_audit.json`, and `reference_sync_report.json`.
+- `strict_gate.py` must verify that `reference_search_manifest.json`, `reference_search_strategy.json`, and `reference_search_status.json` are internally consistent with actual approved-search artifacts such as `paper_search_validated.json`, `paper_search_guard_report.json`, `data/literature_index.json`, `data/synthesis_matrix_audit.json`, and `reference_sync_report.json`.
 - `references_source_path` is optional. If not provided explicitly, the pipeline may auto-detect likely sources such as a same-title sibling manuscript docx with a populated `References` block, `<comments_dir>/data/literature_index.json`, attachment files named like `reference*`/`bibliography*`, or project-local seed files.
 - `references_source_path` auto-discovery should also inspect nearby versioned manuscript docx files inside shallow subdirectories of the manuscript folder when they share the same title and contain a usable `References` block.
 - `references_source_path` may also be a `.ris` file exported from a reference manager.
@@ -246,14 +246,14 @@ Each comment must contain:
 - The `opencode` fallback must write a preserved prompt file (`reference_search_opencode_prompt.md`) and an execution report (`reference_search_execution.json`) so the retrieval path remains auditable.
 - `strict_gate.py` and `final_consistency_report.md` should surface `reference_search_execution.json` state instead of hiding the actual execution mode.
 - Query hints for approved search should come not only from missing reference coverage but also from pending citation-oriented review comments that still point to `paper-search` as a required evidence source.
-- Lexical paragraph localization should use structured fields plus low-signal-token filtering and heading-weighted scoring; if the best lexical candidate is still low-confidence, keep the item in `needs_author_confirmation`.
+- Lexical paragraph localization should use structured fields with low-signal-token filtering and heading-weighted scoring; if the best lexical candidate is still low-confidence, keep the item in `needs_author_confirmation`.
 - Reviewer-response Word export should use dedicated body, reviewer-heading, label, and comment-heading styles, with improved spacing and Word-native table header shading, rather than leaving all blocks as generic paragraphs.
-- Automatic manuscript rewriting must stay at the changed-fragment level. `revise_units.py` should replace only the targeted sentence, or append only the new limitation sentence, instead of rewriting the entire paragraph.
-- A dedicated `polish` stage must run after `revise` and before literature/reference merge. This stage should consume only `revision_plan.raw_fragment`, never untouched original sentences.
-- The polishing stage should follow `article-writing`, `review-writing`, and `humanizer-zh` constraints together: direct evidence-bounded wording, no invented claims, no new citations, no banned AI phrases, no decorative transitions, and no paragraph-wide rewrite unless the new content is itself a new paragraph.
-- The polishing stage should emit `revision_polish_manifest.json`, `revision_polish_prompt.md`, and `revision_polish_execution.json` so the anti-AI prompt, driver mode, and candidate coverage remain auditable.
+- Automatic manuscript rewriting must stay at the changed-fragment level. `revise_units.py` should replace only the targeted sentence, or append only the new limitation sentence, rather than rewriting the entire paragraph.
+- A dedicated `polish` stage must run after `revise` and before literature/reference merge. This stage consumes only `revision_plan.raw_fragment`, never untouched original sentences.
+- The polishing stage must follow `article-writing`, `review-writing`, and `humanizer-zh` constraints together: direct evidence-bounded wording, no invented claims, no new citations, no banned AI phrases, no decorative transitions, and no paragraph-wide rewrite unless the new content is itself a new paragraph.
+- The polishing stage must emit `revision_polish_manifest.json`, `revision_polish_prompt.md`, and `revision_polish_execution.json` so the anti-AI prompt, driver mode, and candidate coverage remain auditable.
 - `strict_gate.py` must verify that completed revised fragments with a non-empty `revision_plan.scope` have polish state, a valid `polish_driver_mode`, and no residual banned AI-style markers.
-- The polishing prompt should be layered, not flat. It must include: role definition, non-negotiable edit/evidence/citation/length constraints, deep anti-AI rewriting protocol, and a JSON-only output contract.
+- The polishing prompt must be layered, not flat. It must include: role definition, non-negotiable edit/evidence/citation/length constraints, deep anti-AI rewriting protocol, and a JSON-only output contract.
 - **Polish anti-AI 去AI五项（适用于中英文改稿正文）：**
   1. **禁装饰性破折号**：禁用 —/——/em-dash 充当停顿、补充或强调（如"该结果——尽管样本量小——表明…"）；改用逗号、句号或拆为两句。连字符（"dose-response"）与数值范围不受限。中英文均适用。
   2. **禁 scare quotes**：禁用双引号包裹自造词或普通短语以暗示"新概念/反讽"；保留：术语首次定义、原始审稿人评论直接引用、已固化的术语隐喻。
@@ -270,12 +270,12 @@ Each comment must contain:
 
 **位置**：polish 完成后、`strict_gate.py` 运行前。**硬规则：清单未逐项确认通过，不得向用户声明"改稿完成"。**
 
-**🔴 委托盲检（不得主 agent 自评）**：你刚做完改稿，自评会失真地默认通过、且易漏项。`strict_gate.py` 运行前必须把 DoD 清单**委托给独立上下文的子代理盲检**，自己不直接打勾：
+**🔴 委托盲检（不得主 agent 自评）**：改稿完成后自评容易默认通过且漏项。`strict_gate.py` 运行前必须把 DoD 清单**委托给独立上下文的子代理盲检**，不得自己直接打勾：
 
 1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate revision-dod --files <改稿相关文件>`
 2. **派一个独立子代理**（Claude Code 用 `academic-blind-reviewer`；其他平台派通用子代理），把任务包原样给它、**不要给它本次改稿的写作上下文**，要求按任务包返回 JSON 数组。
 3. 校验返回：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate revision-dod --return <子代理返回.json>`；退出码非 0（任一缺项/fail/无证据）= **fail-closed**，据子代理证据修复后重跑，**未过不得声明改稿完成**。
-- **降级路径**（当前环境无法派子代理时）：主 agent 切换"审稿人视角"、清空对本次改稿的写作记忆，逐项独立重核——绝不因"自己刚改完"默认通过；仍跑 `verify` 把关。
+- **降级路径**（当前环境无法派子代理时）：主 agent 切换审稿人视角、清空对本次改稿的写作记忆，逐项独立重核，不得因"自己刚改完"而默认通过；仍跑 `verify` 把关。
 
 下列清单与 `references/dod_checklist.json` 逐项对应（**改清单先改 JSON，再同步此处散文**）；能脚本核的项子代理会先跑脚本：
 
@@ -290,7 +290,7 @@ Each comment must contain:
 | RV-G5 | 去 AI 五项（破折号/scare quotes/解释性冒号/英文≤30词/-ing从句/中文≤50字≤2层从句）通过 | `python scripts/strict_gate.py --project-root <project_root>` → `ai_style_flags_removed` 无残留；句长警告记录于 notes |
 | RV-G6 | 字数达标（改动前后正文字数在期刊要求范围内） | 人工或期刊要求核对 |
 
-🔴 收口前置闸口：`delegate_review verify` 必须 exit 0（含 RV-R8 结构完整性），否则不得声明改稿完成。
+🔴 收口前置闸口：`delegate_review verify` 必须 exit 0（含 RV-R8 结构完整性），否则不得声明改稿完成。任一项 fail 均为阻断。
 
 ### Revise-Sci 特有项（id: RV-R1 ~ RV-R8）
 
