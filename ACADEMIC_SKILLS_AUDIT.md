@@ -296,11 +296,13 @@
 - Q2 review 系统综述:已整合非分支——review_type 枚举(narrative/critical/scoping/systematic/why-how-what),共用 5 阶段主流程,systematic 仅按需挂接 PICO/PRISMA/RoB/GRADE(+可选 meta)。无需改结构。
 - Q4 revise-sci vs reviewer-response:前者重型全管道(回复+改后正文 docx+Patch哈希),后者轻量只出 HTML 回复包不改稿;上下游关系不冗余。
 
-**本轮要做(用户拍板)**
-1. ⬜ **sci2doc 学位区分**:解除"仅博士≥8万"硬锁;开头**询问学位类型 + 询问具体正文字数**(默认博士 5w/硕士 3w,可配置);**正文定义=摘要→正文结束(全文参考文献前),排除"论文综述"章及其参考文献**。改点:SKILL.md(去博士锁+询问+正文定义)、state_manager.py(动态字数门禁、degree_type、正文统计排除综述)、check_quality.py(动态 target + 页眉博士/硕士)、QUICK_START.md。
-2. ⬜ **sci2doc 通用材料库**:新增多格式(PDF/Word/Excel/md/图片)分析→结构化素材档(实验数据/方法/图表清单),供按章扩写引用。放 references/scripts,SKILL.md 只加触发点。
-3. ⬜ **触发词理清**:revise-sci description 补中文触发词(改稿/修改稿子/修订正文/退稿改进/返修);gsw 与 reviewer-response/revise 在 description 写清分工边界,降低误路由。
-4. ⬜ **所有 7 个学术 SKILL.md 去AI化**:移除 AI 腔/施压套话(如"任何偏离视为失败")/装饰破折号/scare quotes/解释性冒号/废话段(说白了/综上),提升文档可读性(对齐 darwin dim7)。注意:这是 skill 文本本身去AI,与"产品去AI"并行不冲突。
-5. ⬜ opus 实测新功能(学位区分 + 材料库,含自检)。
+**本轮要做(用户拍板)** — ✅ 全部完成(commit 516c3e8/5a8dd8e/7f458ea)
+1. ✅ **sci2doc 学位区分**:解除"仅博士≥8万"硬锁;开头**询问学位类型 + 询问具体正文字数**(默认博士 5w/硕士 3w,可配置);**正文定义=摘要→正文结束(全文参考文献前),排除"论文综述"章及其参考文献**。改点:SKILL.md(去博士锁+询问+正文定义)、state_manager.py(动态字数门禁、degree_type、正文统计排除综述)、check_quality.py(动态 target + 页眉博士/硕士)、QUICK_START.md。
+2. ✅ **sci2doc 通用材料库**:新增多格式(PDF/Word/Excel/md/图片)分析→结构化素材档(实验数据/方法/图表清单),供按章扩写引用。放 references/scripts,SKILL.md 只加触发点。
+3. ✅ **触发词理清**:revise-sci description 补中文触发词(改稿/修改稿子/修订正文/退稿改进/返修);gsw 与 reviewer-response/revise 在 description 写清分工边界,降低误路由。
+4. ✅ **所有 7 个学术 SKILL.md 去AI化**:移除 AI 腔/施压套话(如"任何偏离视为失败")/装饰破折号/scare quotes/解释性冒号/废话段(说白了/综上),提升文档可读性(对齐 darwin dim7)。注意:这是 skill 文本本身去AI,与"产品去AI"并行不冲突。
+5. ✅ opus 实测新功能(学位区分 + 材料库,含自检)。
 
 **仍挂起**:按需加载瘦身(darwin 指出 gsw/review/reviewer-simulator 偏长)、反例黑名单补强。
+
+**opus 实测发现 6 bug 并已修(commit 5a8dd8e)**:综述章作用域继承(子小节泄漏)、摘要计入正文、默认值按学位、degree白名单、material safe_name碰撞、exclude_from_body_count落地。独立复验通过。
