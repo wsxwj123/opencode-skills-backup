@@ -89,6 +89,64 @@ def _fetch_pubmed_by_pmid(pmid: str) -> dict[str, Any] | None:
     return {"title": str(result.get("title") or "").strip(), "pmid": str(pmid), "doi": doi, "retracted": is_retracted}
 
 
+TITLE_VERIFY_THRESHOLD = 0.8
+
+
+def _verify_title_exists(title: str) -> dict[str, Any] | None:
+    """Confirm a no-DOI/no-PMID citation maps to a real publication via by-title search.
+
+    Crossref by-title first, then Semantic Scholar (rate-limit prone) fallback.
+    Best match returned when similarity >= TITLE_VERIFY_THRESHOLD, else None.
+    Network failures (_http_get_json -> None) yield None -> fail-closed (caller
+    treats "no match" as not-verified -> FAIL).
+    """
+    if not title.strip():
+        return None
+
+    def _best_match(cands: list[tuple[str, str | None, str | None]], source: str) -> dict[str, Any] | None:
+        best: dict[str, Any] | None = None
+        for ct, cd, cp in cands:
+            if not ct:
+                continue
+            sim = _title_similarity(title, ct)
+            if best is None or sim > best["similarity"]:
+                best = {"source": source, "matched_title": ct, "similarity": sim, "doi": cd, "pmid": cp}
+        return best if (best and best["similarity"] >= TITLE_VERIFY_THRESHOLD) else None
+
+    cr = _http_get_json(
+        "https://api.crossref.org/works?" + urllib.parse.urlencode({"query.bibliographic": title, "rows": 5})
+    )
+    if cr and isinstance(cr.get("message"), dict):
+        cands = []
+        for it in cr["message"].get("items") or []:
+            if not isinstance(it, dict):
+                continue
+            t = (it.get("title") or [""])[0] if isinstance(it.get("title"), list) else ""
+            cands.append((str(t or ""), str(it.get("DOI") or "") or None, None))
+        m = _best_match(cands, "crossref-bytitle")
+        if m:
+            return m
+
+    ss = _http_get_json(
+        "https://api.semanticscholar.org/graph/v1/paper/search?"
+        + urllib.parse.urlencode({"query": title, "limit": 5, "fields": "title,externalIds"})
+    )
+    if ss and isinstance(ss.get("data"), list):
+        cands = []
+        for it in ss["data"]:
+            if not isinstance(it, dict):
+                continue
+            ext = it.get("externalIds") or {}
+            doi = (str(ext.get("DOI") or "") or None) if isinstance(ext, dict) else None
+            pmid = (str(ext.get("PubMed") or "") or None) if isinstance(ext, dict) else None
+            cands.append((str(it.get("title") or ""), doi, pmid))
+        m = _best_match(cands, "semanticscholar-bytitle")
+        if m:
+            return m
+
+    return None
+
+
 def _provider_family(citation: dict[str, Any]) -> str:
     raw = normalize_ws(
         str(citation.get("source_provider") or citation.get("provider_family") or citation.get("provider") or "")
@@ -155,6 +213,10 @@ def validate_citation(citation: dict[str, Any], *, online_check: bool) -> dict[s
     provider_family = _provider_family(citation)
     failure_reasons: list[str] = []
 
+    has_identifier = bool(doi or pmid)
+    title_verify = _verify_title_exists(title) if (online_check and not has_identifier and title) else None
+    title_verified = title_verify is not None
+
     if provider_family in FORBIDDEN_PROVIDER_FAMILIES:
         failure_reasons.append("source_provider_forbidden")
     elif provider_family not in ALLOWED_PROVIDER_FAMILIES:
@@ -163,8 +225,10 @@ def validate_citation(citation: dict[str, Any], *, online_check: bool) -> dict[s
         failure_reasons.append("title_missing")
     if not source_trace:
         failure_reasons.append("source_trace_missing")
-    if not doi and not pmid:
+    if not has_identifier and not title_verified:
         failure_reasons.append("identifier_missing")
+        if online_check and title:
+            failure_reasons.append("title_not_found_online")
     if doi and DOI_RE.match(doi) is None:
         failure_reasons.append("doi_format_invalid")
     if pmid and PMID_RE.match(pmid) is None:
@@ -201,6 +265,10 @@ def validate_citation(citation: dict[str, Any], *, online_check: bool) -> dict[s
     if retracted:
         failure_reasons.append("retracted")
 
+    # By-title match counts as secondary verification for no-identifier entries.
+    if title_verify and title_verify.get("matched_title"):
+        secondary_titles.append(normalize_ws(str(title_verify["matched_title"])))
+
     if not secondary_titles:
         failure_reasons.append("secondary_verification_missing")
 
@@ -227,6 +295,9 @@ def validate_citation(citation: dict[str, Any], *, online_check: bool) -> dict[s
         "secondary_titles": secondary_titles,
         "secondary_doi": secondary_doi,
         "secondary_pmid": secondary_pmid,
+        "title_verified": title_verified,
+        "title_verify_source": (title_verify.get("source") if title_verify else None),
+        "title_verify_similarity": (round(title_verify["similarity"], 3) if title_verify else None),
         "retracted": retracted,
     }
     return payload

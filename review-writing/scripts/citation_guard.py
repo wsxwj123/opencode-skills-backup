@@ -39,14 +39,36 @@ def save_json(path: Path, data: Any) -> None:
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def _http_get_json(url: str, timeout_sec: float = 8.0) -> dict[str, Any] | None:
+def _http_get_json(
+    url: str, timeout_sec: float = 8.0, *, retries: int = 2, backoff_sec: float = 1.5
+) -> dict[str, Any] | None:
+    """GET JSON with bounded retry/backoff.
+
+    Returns None on any failure (network, HTTP error, bad JSON). Callers MUST
+    treat None as "not verified" and never as a pass (fail-closed).
+    """
     req = urllib.request.Request(url, headers={"User-Agent": "citation-guard/1.0"})
-    try:
-        with urllib.request.urlopen(req, timeout=timeout_sec) as resp:
-            body = resp.read().decode("utf-8", errors="ignore")
-            return json.loads(body)
-    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, json.JSONDecodeError):
-        return None
+    attempt = 0
+    while True:
+        try:
+            with urllib.request.urlopen(req, timeout=timeout_sec) as resp:
+                body = resp.read().decode("utf-8", errors="ignore")
+                return json.loads(body)
+        except urllib.error.HTTPError as exc:
+            # Retry only on rate-limit / transient server errors.
+            if exc.code in (429, 500, 502, 503, 504) and attempt < retries:
+                time.sleep(backoff_sec * (2**attempt))
+                attempt += 1
+                continue
+            return None
+        except (urllib.error.URLError, TimeoutError):
+            if attempt < retries:
+                time.sleep(backoff_sec * (2**attempt))
+                attempt += 1
+                continue
+            return None
+        except json.JSONDecodeError:
+            return None
 
 
 def _normalize_title(title: str) -> str:
@@ -133,6 +155,83 @@ def _fetch_pubmed_by_pmid(pmid: str) -> dict[str, Any] | None:
     pubtypes = result.get("pubtype") or []
     is_retracted = any("retract" in str(x).lower() for x in pubtypes)
     return {"source": "pubmed", "title": title, "doi": doi, "pmid": str(pmid), "retracted": is_retracted}
+
+
+TITLE_VERIFY_THRESHOLD = 0.8
+
+
+def _verify_title_exists(title: str) -> dict[str, Any] | None:
+    """Confirm an entry with no DOI/PMID corresponds to a real publication.
+
+    Strategy: query Crossref by-title first; if it fails (None) or returns no
+    sufficiently-similar match, fall back to Semantic Scholar by-title.
+    Returns a match record {source, matched_title, similarity, doi, pmid} when a
+    candidate title clears TITLE_VERIFY_THRESHOLD, else None.
+
+    Network failures from _http_get_json are returned as None (fail-closed): the
+    caller treats "no match" identically to "not verified" → FAIL + manual queue.
+    Semantic Scholar is rate-limit prone; on its failure we have already tried
+    Crossref, so we simply return None rather than crashing.
+    """
+    if not title.strip():
+        return None
+
+    def _best_match(candidates: list[tuple[str, str | None, str | None]], source: str) -> dict[str, Any] | None:
+        best: dict[str, Any] | None = None
+        for cand_title, cand_doi, cand_pmid in candidates:
+            if not cand_title:
+                continue
+            sim = _title_similarity(title, cand_title)
+            if best is None or sim > best["similarity"]:
+                best = {
+                    "source": source,
+                    "matched_title": cand_title,
+                    "similarity": sim,
+                    "doi": cand_doi,
+                    "pmid": cand_pmid,
+                }
+        if best and best["similarity"] >= TITLE_VERIFY_THRESHOLD:
+            return best
+        return None
+
+    # 1) Crossref by-title
+    cr_url = (
+        "https://api.crossref.org/works?"
+        + urllib.parse.urlencode({"query.bibliographic": title, "rows": 5})
+    )
+    cr = _http_get_json(cr_url)
+    if cr and isinstance(cr.get("message"), dict):
+        items = cr["message"].get("items") or []
+        cands: list[tuple[str, str | None, str | None]] = []
+        for it in items:
+            if not isinstance(it, dict):
+                continue
+            t = (it.get("title") or [""])[0] if isinstance(it.get("title"), list) else ""
+            cands.append((str(t or ""), str(it.get("DOI") or "") or None, None))
+        match = _best_match(cands, "crossref-bytitle")
+        if match:
+            return match
+
+    # 2) Semantic Scholar by-title (fallback; rate-limit prone)
+    ss_url = (
+        "https://api.semanticscholar.org/graph/v1/paper/search?"
+        + urllib.parse.urlencode({"query": title, "limit": 5, "fields": "title,externalIds"})
+    )
+    ss = _http_get_json(ss_url)
+    if ss and isinstance(ss.get("data"), list):
+        cands = []
+        for it in ss["data"]:
+            if not isinstance(it, dict):
+                continue
+            ext = it.get("externalIds") or {}
+            doi = str(ext.get("DOI") or "") or None if isinstance(ext, dict) else None
+            pmid = str(ext.get("PubMed") or "") or None if isinstance(ext, dict) else None
+            cands.append((str(it.get("title") or ""), doi, pmid))
+        match = _best_match(cands, "semanticscholar-bytitle")
+        if match:
+            return match
+
+    return None
 
 
 def _normalize_index(raw: Any) -> tuple[list[dict[str, Any]], str]:
@@ -238,6 +337,16 @@ def validate_entry(
     crossref = _fetch_crossref_by_doi(doi) if (online_check and doi and doi_fmt_ok) else None
     pubmed = _fetch_pubmed_by_pmid(pmid) if (online_check and pmid and pmid_fmt_ok) else None
 
+    has_identifier = bool(doi or pmid)
+
+    # By-title verification: only when the entry carries NO DOI and NO PMID.
+    # Confirms the title corresponds to a real publication (Crossref/Semantic
+    # Scholar). Gray zone (no match / unreachable / offline) stays FAIL.
+    title_verify: dict[str, Any] | None = None
+    if online_check and not has_identifier and title:
+        title_verify = _verify_title_exists(title)
+    title_verified = title_verify is not None
+
     source_titles = []
     for rec in (mcp_record, pubmed, crossref):
         if rec and rec.get("title"):
@@ -296,7 +405,6 @@ def validate_entry(
             retracted = True
 
     has_traceability = bool(source_provider and source_id)
-    has_identifier = bool(doi or pmid)
 
     failure_reasons: list[str] = []
     if not title:
@@ -306,7 +414,12 @@ def validate_entry(
     elif provider_family and provider_family not in ALLOWED_PROVIDER_FAMILIES:
         failure_reasons.append("source_provider_not_allowed")
     if not has_identifier:
-        failure_reasons.append("identifier_missing")
+        # No DOI/PMID: only acceptable if by-title verification found a real,
+        # high-similarity match. Otherwise blocking (+ manual review below).
+        if not title_verified:
+            failure_reasons.append("identifier_missing")
+            if online_check and title:
+                failure_reasons.append("title_not_found_online")
     if title and source_titles and not title_match:
         failure_reasons.append("title_mismatch")
     if not crossref_title_ok:
@@ -332,7 +445,7 @@ def validate_entry(
             failure_reasons.append(mcp_fresh_reason or "mcp_stale")
     elif mcp_ok and (not mcp_fresh):
         failure_reasons.append("mcp_stale_warning")
-    if online_check and not (crossref or pubmed):
+    if online_check and has_identifier and not (crossref or pubmed):
         failure_reasons.append("source_unreachable")
 
     bidirectional_verification_failed = any(
@@ -344,7 +457,8 @@ def validate_entry(
         failure_reasons.append("manual_confirmation_required_bidirectional_failure")
 
     needs_manual_review = any(
-        r in {"title_mismatch", "id_mismatch", "mcp_stale", "mcp_timestamp_missing", "source_unreachable"}
+        r in {"title_mismatch", "id_mismatch", "mcp_stale", "mcp_timestamp_missing",
+              "source_unreachable", "identifier_missing", "title_not_found_online"}
         for r in failure_reasons
     ) or bidirectional_verification_failed
 
@@ -370,6 +484,8 @@ def validate_entry(
     if mcp_ok:
         score += 6 if mcp_fresh else -8
     score += (8 if (crossref or pubmed) else -8) if online_check else 4
+    if not has_identifier:
+        score += 12 if title_verified else -12
     if not crossref_title_ok:
         score -= 15
     if not pubmed_title_ok:
@@ -391,6 +507,10 @@ def validate_entry(
             "checked_at": now_utc.isoformat(),
             "title_match": title_match,
             "title_similarity": round(title_similarity, 4),
+            "title_verified": title_verified,
+            "title_verify_source": (title_verify.get("source") if title_verify else None),
+            "title_verify_similarity": (round(title_verify["similarity"], 4) if title_verify else None),
+            "title_verify_matched_title": (title_verify.get("matched_title") if title_verify else None),
             "crossref_title_similarity": round(crossref_title_sim, 4) if crossref_title_sim is not None else None,
             "pubmed_title_similarity": round(pubmed_title_sim, 4) if pubmed_title_sim is not None else None,
             "crossref_fetched_title": (crossref["title"] if crossref and crossref.get("title") else None),
@@ -494,7 +614,8 @@ def main() -> int:
         "provider_policy": {
             "allowed_provider_families": sorted(ALLOWED_PROVIDER_FAMILIES),
             "forbidden_provider_families": sorted(FORBIDDEN_PROVIDER_FAMILIES),
-            "no_identifier_policy": "manual_review_queue",
+            "no_identifier_policy": "crossref/semanticscholar_by_title_verify_else_manual_review_queue",
+            "title_verify_threshold": TITLE_VERIFY_THRESHOLD,
         },
     }
 
