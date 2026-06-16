@@ -32,7 +32,8 @@
         {
           "id": "R5",
           "name": "去 AI 合规",
-          "check": "零禁用词 + 单句 ≤30 词 + 无 trailing -ing 从句 + 被动 ≤30% + 无装饰性破折号 / scare quotes / 解释性冒号 + 同概念同段一致称谓（见 references/writing_guidelines.md §4）"
+          "check": "零禁用词 + 单句 ≤30 词 + 无 trailing -ing 从句 + 被动 ≤30% + 无装饰性破折号 / scare quotes / 解释性冒号 + 同概念同段一致称谓（见 references/writing_guidelines.md §4）。先跑 style_checker.py 量化兜底，命中的 issue 须改掉再人评（同概念同段称谓一致脚本不查，靠人评）",
+          "script": "python3 scripts/style_checker.py --file <本节文件> --passive-max 0.30"
         },
         {
           "id": "R6",

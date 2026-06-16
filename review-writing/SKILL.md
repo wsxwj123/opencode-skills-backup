@@ -595,6 +595,13 @@ If pending_sections is empty → all sections complete; proceed to Phase 4.
    - **D3 Evidence Density & Traceability:** 每个事实断言有引用、关键断言 ≥2 独立来源、证据类型与断言类型匹配（机制→原著，疗效→临床试验）。
    - **D4 Flow & Coherence:** 段首承接上段结论、本节有 setup→evidence→synthesis→implication 内在弧线、无可随意搬移的孤立段。
    - **D5 Anti-AI Compliance:** 零禁用词、句长有节奏（无连续 3 句近长）、被动句 ≤30%、无模板化转折开头。
+     **量化兜底（先跑脚本再人评）：** 委托盲评前先跑 style_checker 拿客观信号，命中的项必须先改掉，不要靠人眼漏掉。
+     ```bash
+     python3 scripts/style_checker.py --file drafts/section_01_01.md --passive-max 0.30
+     # 检查：forbidden_ai_phrases / long_sentence(>30词) / excessive_passive_voice(>30%)
+     #       / decorative_em_dash / scare_quotes / explanatory_colon_in_prose / trailing_ing_clause
+     # exit 0 = 通过(score≥阈值且无致命项)；非 0 = 据 issues 逐项修复后重跑
+     ```
    **优先委托独立 subagent 盲评**（消除自写自评偏差）：派一个 subagent，只给它 `drafts/section_XX_XX.md` 路径 + checklist，不给写作时的上下文，让它独立判定每项 Y/N 并返回结构化结果。无 subagent 能力的客户端 → 主 agent 自评，但必须切换到审稿人视角重新逐项核对（不默认通过）。
    **Gate:** 任何维度 ≥1 项失败 → 内部修订（最多 2 轮）。2 轮后仍失败 → **HALT**，输出结构化反馈（【问题】+ 证据锚点 + 根源分析 + 修复方向）。修订与 HALT 决策由主 agent 负责（不可委托）。
 
