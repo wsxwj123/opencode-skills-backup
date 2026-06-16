@@ -279,6 +279,10 @@ def main() -> int:
                 failures.append(f"{comment_id}: polish_meaning_changed must remain false")
             if unit.get("polish_locked_context_ok") is not True:
                 failures.append(f"{comment_id}: polish_locked_context_ok is false")
+            if unit.get("polish_numbers_ok") is not True:
+                failures.append(f"{comment_id}: polish_numbers_ok is false (numeric drift between raw and polished fragment)")
+            if unit.get("polish_certainty_ok") is not True:
+                failures.append(f"{comment_id}: polish_certainty_ok is false (cautious verb upgraded to a strong claim)")
 
         atomic_failures = missing_atomic_fields(unit)
         if atomic_failures:

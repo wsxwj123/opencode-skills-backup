@@ -53,6 +53,101 @@ AI_STYLE_BANNED_PATTERNS: tuple[tuple[str, str], ...] = (
     ("acts as", r"\bacts as\b"),
 )
 
+# MID: AI cliché term list aligned with general-sci-writing/scripts/style_checker.py
+# FORBIDDEN_EXACT, extended with the Chinese academic boilerplate terms that the
+# revise-sci polish fragment must also reject. English entries are matched
+# case-insensitively as whole phrases; Chinese entries are matched as substrings.
+AI_CLICHE_TERMS_EN: tuple[str, ...] = (
+    "delve into",
+    "comprehensive landscape",
+    "pivotal role",
+    "realm",
+    "tapestry",
+    "underscore",
+    "testament",
+    "it is well known",
+    "it is worth noting",
+    "it should be noted",
+    "importantly",
+    "interestingly",
+    "remarkably",
+    "notably",
+    "in recent years",
+    "a growing body of evidence",
+    "has garnered significant attention",
+    "plays a crucial role",
+    "a plethora of",
+    "myriad of",
+    "in the context of",
+    "shed light on",
+    "pave the way",
+    "of paramount importance",
+    "a key player",
+    "moreover",
+    "furthermore",
+)
+AI_CLICHE_TERMS_ZH: tuple[str, ...] = (
+    "值得注意的是",
+    "值得一提的是",
+    "众所周知",
+    "不言而喻",
+    "综上所述",
+    "总而言之",
+    "总的来说",
+    "毋庸置疑",
+    "显而易见",
+    "至关重要",
+    "举足轻重",
+    "深入探讨",
+    "近年来",
+    "随着……的发展",
+    "在……的背景下",
+    "为……奠定了基础",
+    "发挥着重要作用",
+    "扮演着重要角色",
+)
+
+# Pre-compiled whole-phrase matchers for the English cliché list.
+AI_CLICHE_PATTERNS_EN: tuple[tuple[str, Any], ...] = tuple(
+    (term, re.compile(r"\b" + re.escape(term) + r"\b", re.IGNORECASE)) for term in AI_CLICHE_TERMS_EN
+)
+
+# A: numeric token extractor for integers, decimals, percentages, p-values,
+# confidence intervals, sample sizes (n=N). Used by numeric_tokens_preserved.
+NUMERIC_TOKEN_RE = re.compile(
+    r"""
+    (?:
+        [pP]\s*[<>=≤≥]\s*\d*\.?\d+        # p-values: p=0.03, p < 0.001
+      | \b[nN]\s*=\s*\d+                   # sample sizes: n=42
+      | \b(?:95%?\s*)?CI\b                 # CI / 95% CI marker
+      | \d+(?:\.\d+)?\s*%                  # percentages: 12%, 3.5 %
+      | \d+(?:\.\d+)?                      # plain integers / decimals
+    )
+    """,
+    re.IGNORECASE | re.VERBOSE,
+)
+
+# B: cautious (hedging) verbs vs. strong (assertive) verbs. The guard only
+# blocks the upgrade direction (hedge -> strong claim), matching the
+# conservative philosophy of preserving evidence strength.
+CERTAINTY_HEDGE_PATTERNS: tuple[tuple[str, Any], ...] = (
+    ("may", re.compile(r"\bmay\b", re.IGNORECASE)),
+    ("might", re.compile(r"\bmight\b", re.IGNORECASE)),
+    ("could", re.compile(r"\bcould\b", re.IGNORECASE)),
+    ("suggests", re.compile(r"\bsuggest(?:s|ed)?\b", re.IGNORECASE)),
+    ("indicates", re.compile(r"\bindicate(?:s|d)?\b", re.IGNORECASE)),
+    ("is associated with", re.compile(r"\b(?:is|are|was|were)\s+associated with\b", re.IGNORECASE)),
+    ("appears", re.compile(r"\bappear(?:s|ed)?\b", re.IGNORECASE)),
+    ("is consistent with", re.compile(r"\b(?:is|are|was|were)\s+consistent with\b", re.IGNORECASE)),
+)
+CERTAINTY_STRONG_PATTERNS: tuple[tuple[str, Any], ...] = (
+    ("demonstrates", re.compile(r"\bdemonstrate(?:s|d)?\b", re.IGNORECASE)),
+    ("proves", re.compile(r"\bprove(?:s|d|n)?\b", re.IGNORECASE)),
+    ("establishes", re.compile(r"\bestablish(?:es|ed)?\b", re.IGNORECASE)),
+    ("confirms", re.compile(r"\bconfirm(?:s|ed)?\b", re.IGNORECASE)),
+    ("shows definitively", re.compile(r"\bshows? definitively\b", re.IGNORECASE)),
+)
+
 
 def normalize_ws(text: str) -> str:
     return re.sub(r"\s+", " ", text or "").strip()
@@ -111,7 +206,66 @@ def find_ai_style_markers(text: str) -> list[str]:
     sentences = re.split(r"(?<=[.!?])\s+", normalized)
     if any(len(s.split()) > 30 for s in sentences if s.strip()):
         markers.append("sentence >30 words")
+    # MID: AI cliché / boilerplate phrases (English whole-phrase + Chinese substring)
+    for term, pattern in AI_CLICHE_PATTERNS_EN:
+        if pattern.search(normalized):
+            markers.append(f"cliche: {term}")
+    for term in AI_CLICHE_TERMS_ZH:
+        bare = term.replace("……", "")
+        if bare and bare in normalized:
+            markers.append(f"cliche: {term}")
     return markers
+
+
+def numeric_tokens(text: str) -> set[str]:
+    """A: extract the set of numeric tokens (ints, decimals, %, p-values, CI, n=N)."""
+    normalized = normalize_ws(text)
+    found: set[str] = set()
+    for m in NUMERIC_TOKEN_RE.finditer(normalized):
+        token = re.sub(r"\s+", "", m.group(0)).lower()
+        if token:
+            found.add(token)
+    return found
+
+
+def numeric_tokens_preserved(raw: str, polished: str) -> dict[str, Any]:
+    """A: compare numeric token sets between the locked raw fragment and the
+    polished fragment. Fails when the polish introduces a numeric value that the
+    raw fragment did not contain, or drops a value the raw fragment had."""
+    raw_tokens = numeric_tokens(raw)
+    polished_tokens = numeric_tokens(polished)
+    introduced = sorted(polished_tokens - raw_tokens)
+    dropped = sorted(raw_tokens - polished_tokens)
+    return {
+        "ok": not introduced and not dropped,
+        "introduced": introduced,
+        "dropped": dropped,
+        "raw_tokens": sorted(raw_tokens),
+        "polished_tokens": sorted(polished_tokens),
+    }
+
+
+def detect_certainty_upgrade(raw: str, polished: str) -> dict[str, Any]:
+    """B: detect when a cautious hedging verb in the raw fragment is upgraded to
+    a strong assertive claim in the polished fragment. Only the upgrade direction
+    (weaker -> stronger) is blocked, preserving the conservative evidence stance."""
+    raw_norm = normalize_ws(raw)
+    polished_norm = normalize_ws(polished)
+    raw_hedges = {label for label, pattern in CERTAINTY_HEDGE_PATTERNS if pattern.search(raw_norm)}
+    raw_strong = {label for label, pattern in CERTAINTY_STRONG_PATTERNS if pattern.search(raw_norm)}
+    polished_strong = {label for label, pattern in CERTAINTY_STRONG_PATTERNS if pattern.search(polished_norm)}
+    raw_had_hedge = bool(raw_hedges)
+    raw_had_strong = bool(raw_strong)
+    # Newly introduced strong verbs that were not present in the raw fragment.
+    introduced_strong = sorted(polished_strong - raw_strong)
+    # Upgrade = raw leaned cautious (had a hedge, no strong verb) but the polished
+    # text now asserts a strong verb that was absent before.
+    upgraded = bool(raw_had_hedge and not raw_had_strong and introduced_strong)
+    return {
+        "ok": not upgraded,
+        "raw_hedges": sorted(raw_hedges),
+        "introduced_strong_verbs": introduced_strong,
+    }
 
 
 def polish_changed_text_locally(text: str) -> str:
