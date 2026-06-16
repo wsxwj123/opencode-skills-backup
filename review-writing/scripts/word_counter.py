@@ -10,7 +10,7 @@ import re
 #   **Word Count Target:** 600 words
 #   - Word Count Target: ~600
 _WC_PATTERN = re.compile(
-    r"word\s+count\s+target\s*[:：]\s*[~≈]?\s*(\d[\d,]*)\s*(words?|chars?|characters?|词|字)?",
+    r"word\s+count\s+target\s*[:：]\s*[*_]*\s*[~≈]?\s*(\d[\d,]*)\s*(words?|chars?|characters?|词|字)?",
     re.IGNORECASE,
 )
 

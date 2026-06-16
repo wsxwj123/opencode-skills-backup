@@ -305,6 +305,16 @@ def main():
         print(json.dumps({"ok": False, "error": f"dir not found: {md_dir}"}, ensure_ascii=False))
         sys.exit(1)
     files = sorted(md_dir.glob("*.md"))
+    # Skip merge-generated derivatives (Full_Manuscript.md / Draft_Round*_Manuscript.md):
+    # they carry the AUTO-GENERATED banner and duplicate the atomic sources, so
+    # scanning them yields false positives (e.g. banner em-dash flagged as chinese_punct).
+    files = [
+        f for f in files
+        if not (
+            f.name.lower() == "full_manuscript.md"
+            or (f.name.lower().startswith("draft_round") and f.name.lower().endswith("_manuscript.md"))
+        )
+    ]
     if not files:
         print(json.dumps({"ok": True, "status": "no_files", "manuscript_dir": str(md_dir)}, ensure_ascii=False))
         return 0
