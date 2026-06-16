@@ -154,7 +154,7 @@
 
 > 第三节第 4 点（AIGC 探测）引用本节。本技能强制中文输出、主审中文医学稿件，**中文特征为检测重点**。命中多项且分布密集时，应在技术审计中摘录原句作为证据并估算疑似比例，但须区分"AI 生成"与"作者写作习惯不佳"，措辞用"疑似 AIGC 痕迹"而非断言。
 
-**英文痕迹词/短语：** delve、pivotal、underscores、tapestry、intricate、realm、showcase、nuanced、leverage、robust（滥用）、meticulous、seamless、testament to、navigate the landscape、it is worth noting、a comprehensive understanding、plays a crucial role、in the realm of。
+**英文痕迹词/短语：** delve、pivotal、underscores、tapestry、intricate、realm、showcase、nuanced、leverage、robust（滥用）、meticulous、seamless、testament to、navigate the landscape、it is worth noting、a comprehensive understanding、plays a crucial role、in the realm of。此外，检测以下三类结构性标志：①装饰性破折号（— / ——用作停顿、补充或强调，而非连字符或范围号）；② scare quotes（双引号包裹自造词或普通短语以暗示"新概念/反讽"，而非首次定义术语或直接引用）；③解释性冒号（"概念: 解释"格式的装饰句式，而非比例/时间/列表引导/标题/图表标签等合法冒号）。
 
 **中文痕迹特征（重点）：**
 1. **空泛套话过渡句：** "综上所述""值得注意的是""不容忽视""众所周知""毋庸置疑""显而易见""总而言之""由此可见""不难发现"。
@@ -164,6 +164,11 @@
 5. **虚指与空范畴词：** "相关研究""一定程度上""某种意义上""诸多因素""各个方面""有关方面""一系列""等等",指代不落地、无具体对象。
 6. **过度礼貌/总结性收尾：** "希望本研究能为……提供参考/借鉴""为后续研究奠定基础""具有重要的理论与现实意义",空泛拔高而无具体支撑。
 7. **机械连接词密集：** "首先/其次/再次/最后""此外""然而""因此"在短段落内高频堆叠,逻辑实则平铺。
+
+**审稿意见自身去AI三项禁用（本技能输出的审稿报告同样适用）：**
+1. **禁装饰性破折号**：禁用 —/——/em-dash 充当停顿、补充或强调（如"该研究——尽管数据量有限——仍声称…"）。改用逗号、句号或拆句。连字符（如"dose-response"）与数值范围（"P<0.001"）不受限。中英文输出均适用。
+2. **禁 scare quotes**：禁用双引号包裹自造词或普通短语以暗示"新概念/反讽"（如将 "novel" 或 "robust" 加引号）。保留：术语首次定义（"心肌纤维化（myocardial fibrosis）"）、原文直接引用、已固化术语隐喻。
+3. **禁解释性冒号**：禁用"概念: 解释"或"概念：解释"格式的装饰句式（如"核心贡献：提出了一个新框架"）。合法冒号包括：比例（2:1）、时间（09:00）、列表引导（"需补实验包括："）、章节标题、图表标签（"图3A："）。
 
 **判定提示：** 单独出现某个词不构成 AIGC 证据（医学写作本就常用"综上所述"）；需结合**密度、句式雷同度、内容空心度**综合判断,并优先摘录"信息量低且结构高度模板化"的整句作为证据锚点。
 
