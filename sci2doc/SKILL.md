@@ -1,13 +1,13 @@
 ---
 name: sci2doc
-description: 用于将SCI论文材料转化为中文博士学位论文草稿，执行严格的章节结构、原子化Markdown工作流、门禁检查和版本回滚。当用户提到博士论文、博士学位论文、毕业论文、SCI转论文、doctoral thesis、dissertation 时优先调用。
+description: 用于将SCI论文材料转化为中文博士或硕士学位论文草稿，执行严格的章节结构、原子化Markdown工作流、门禁检查和版本回滚。当用户提到博士论文、硕士论文、学位论文、毕业论文、SCI转论文、doctoral thesis、master thesis、dissertation 时优先调用。
 ---
 
 # Sci2Doc
 
 ## Overview
 
-本技能仅适用于博士学位论文（正文 ≥8 万字 / ≥5 章），且需用户提供已成稿的 SCI 论文材料作为转化来源。若场景是硕士/本科论文，或用户没有可访问的 SCI 论文材料，主动退出本技能，不要套用本流程。
+本技能适用于博士或硕士学位论文，需用户提供已成稿的 SCI 论文材料作为转化来源。若用户没有可访问的 SCI 论文材料，或场景是本科毕业论文，主动退出本技能，不要套用本流程。
 
 This skill converts SCI paper materials (PDF/Word plus user context) into a Chinese doctoral thesis draft.
 
@@ -19,7 +19,7 @@ The workflow is built around:
 
 ## 快速流程索引 (Quick Workflow Index)
 
-执行前必看——全流程 7 步顺序如下，详细说明见各节。
+全流程 7 步顺序如下，详细说明见各节。
 
 | 步骤 | 操作 | 阻断条件 | 详见 |
 |------|------|----------|------|
@@ -54,7 +54,7 @@ The workflow is built around:
 
 ## Non-Negotiable Requirements
 
-1. Body text target is **at least 80,000 Chinese characters**.
+1. Body text target depends on degree type: **≥50,000 characters for doctoral**, **≥30,000 for master's** (defaults; confirmed with user at project start and written to profile as `body_target_chars`). These minimums can be raised by user agreement but not lowered below the floor.
 2. Chapter-level target allocation is **not hardcoded** and must be negotiated with the user for each project.
 3. Chinese abstract must be **1500-2500 characters**.
 4. Main structure is fixed:
@@ -63,7 +63,7 @@ The workflow is built around:
    - independent final Conclusion/Outlook chapter
    - total chapters >= 5
 5. References are unified at the end of the full thesis.
-6. Review article content is handled separately by the user and is out of this skill's body target scope.
+6. Body word count scope: abstract through end of body text (before full-thesis references). Chapters whose title matches "综述/文献综述/研究综述" (or their English equivalents) and their internal reference sections are **excluded** from body count. Full-thesis references are also excluded. This exclusion is implemented in `check_quality.py` via `classify_heading()` and can be overridden per-project with `format_profile.exclude_from_body_count` (list of chapter title strings).
 7. For research chapters, Results & Discussion must map to Methods experiment-by-experiment.
 8. One experiment must map to at least one standalone figure or table.
 9. Atomic markdown is mandatory: one subsection per `.md`, continuous numbering, merge before Word conversion.
@@ -140,6 +140,9 @@ ${save_path}/
 ├── 03_合并文档/             # 全文 docx 输出（merge-full --to-docx）
 ├── 03_合并文档_md/          # 全文 md 合并中间产物
 ├── 04_图表文件/             # 图表描述文件 + 自定义格式模板证据文件（AI/用户手动放置）
+├── materials/              # 原始材料素材档（material_ingest.py 生成，可选）
+│   ├── materials_archive.json  # 素材总索引
+│   └── <name>.md           # 每材料一个结构化素材档
 ├── .state/                 # gate-check 状态
 ├── backups/                # 快照备份 / section-snapshot（自动创建）
 ├── project_state.json      # 项目状态
@@ -203,11 +206,29 @@ Example entry:
 
 ### 0) Material Input Gate (Mandatory)
 
-Before initializing any project, verify:
+**Degree & target confirmation (must ask before anything else):**
+
+AI must ask the user two questions before proceeding:
+
+1. **Degree type**: doctoral (博士) or master's (硕士)?
+2. **Body word count target**: defaults are doctoral ≥50,000 / master's ≥30,000; confirm or let user specify a different number.
+
+Record answers into `thesis_profile.json > format_profile.degree_type` and `targets.body_target_chars` during `init` / `profile` step. Do not proceed to material extraction until both are confirmed.
+
+Before initializing any project, also verify:
 - Source materials (PDF/Word SCI papers + supplementary figures) are accessible at a known local path.
 - User has provided: thesis topic, research chapter count estimate, target university (or explicit consent to use CSU default).
 
 If source materials are missing or inaccessible, **stop and request them**. Do not proceed to Step 1.
+
+**[可选] 多格式原始材料落盘：** 若用户除 SCI 论文外还提供了其他原始材料（实验数据 Excel/CSV、组会笔记 md、参考 PDF/Word、结果图片等），在提取 SCI 论文文本前先运行材料落盘脚本，将素材分析写入 `materials/` 目录，供后续按章扩写取证引用：
+
+```bash
+python3 scripts/material_ingest.py --dir /path/to/raw_materials --save-path "${save_path}"
+# 或指定文件列表：--list file1.xlsx file2.md fig1.png
+```
+
+落盘完成后，`materials/materials_archive.json` 为素材总索引，每个材料对应一个 `materials/<name>.md`（含可引用要点、表结构/数值范围、图片待确认标记）。后续写作时，引用数值/结论必须能追溯到对应 entry，不得凭空生成。图片类材料标记 `pending_confirm`，须等用户口述或补充图内容后方可引用。详细规则见 `references/material_ingest_guide.md`。
 
 **SCI 论文内容提取（必做）：** 确认材料可访问后，在进入 Step 1 前，必须将 SCI 论文内容提取为可读文本：
 
@@ -222,7 +243,7 @@ If source materials are missing or inaccessible, **stop and request them**. Do n
 
 提取完成后，AI 应先通读全文摘要（Abstract）、结果（Results）、方法（Methods）三节，形成对实验内容的基本理解，再进入 Step 0.5。
 
-**SCI 自身参考文献导出（初始种子）：** 在通读的同时，同步扫描源 SCI 论文的 References 部分，将其中每条参考文献按 `literature_index.json` schema 格式整理为初始种子条目，`source_provider` 填 `"sci-source-seed"`，`verified` 填 `false`，写入项目的 `literature_index.json`（若文件已存在则 merge 而非覆盖）。这些种子作为 Step 3 文献检索的**待核验候选清单**（已带 DOI/PMID，省去重新构造检索式、确定检索目标的成本），而非可直接引用的来源。注意：`sci-source-seed` 不在 `citation_guard.py` 的合法 provider 白名单（`pubmed-cli` / `paper-search`）内——种子条目必须在 Step 3 以其 DOI/PMID 为目标经 `pubmed-cli` 或 `paper-search` 正式检索核验，核验通过后将 `source_provider` 更新为实际核验来源并置 `verified=true`，方可引用；未核验的种子不得进入正文。
+**SCI 自身参考文献导出（初始种子）：** 在通读的同时，同步扫描源 SCI 论文的 References 部分，将其中每条参考文献按 `literature_index.json` schema 格式整理为初始种子条目，`source_provider` 填 `"sci-source-seed"`，`verified` 填 `false`，写入项目的 `literature_index.json`（若文件已存在则 merge 而非覆盖）。这些种子作为 Step 3 文献检索的**待核验候选清单**（已带 DOI/PMID，省去重新构造检索式、确定检索目标的成本），而非可直接引用的来源。注意：`sci-source-seed` 不在 `citation_guard.py` 的合法 provider 白名单（`pubmed-cli` / `paper-search`）内。种子条目必须在 Step 3 以其 DOI/PMID 为目标经 `pubmed-cli` 或 `paper-search` 正式检索核验，核验通过后将 `source_provider` 更新为实际核验来源并置 `verified=true`，方可引用；未核验的种子不得进入正文。
 
 > 以下各步只列命令名 + 关键参数 + 门禁条件。**完整可复制 CLI（含所有 flag、占位符）见 `QUICK_START.md`。**
 
@@ -281,13 +302,13 @@ If source materials are missing or inaccessible, **stop and request them**. Do n
 
 **硬规则：以下各项未逐一确认通过，不得向用户声明"该节完成"。**
 
-**🔴 进入下一节前置闸口**：上一节 `delegate_review verify` 必须 exit 0（含结构完整性项 S6），否则不得开始下一节——写完即检，不过不进。
+**🔴 进入下一节前置闸口**：上一节 `delegate_review verify` 必须 exit 0（含结构完整性项 S6），否则不得开始下一节。写完即检，不过不进。
 
-**🔴 委托盲检（不得主 agent 自评）**：你刚写完本节，自评会失真地默认通过、且易漏项。落盘前必须把 DoD 清单**委托给独立上下文的子代理盲检**，自己不直接打勾：
+**🔴 委托盲检（不得主 agent 自评）**：落盘前必须把 DoD 清单**委托给独立上下文的子代理盲检**，自己不直接打勾：
 1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate section-dod --files <本节文件>`
 2. **派一个独立子代理**（Claude Code 用 `academic-blind-reviewer`；其他平台派通用子代理），把任务包原样给它、**不要给它本节的写作上下文**，要求按任务包返回 JSON 数组。
 3. 校验返回：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate section-dod --return <子代理返回.json>`；退出码非 0（任一缺项/fail/无证据）= **fail-closed**，据子代理证据修复后重跑，**未过不得声明完成**。
-- **降级路径**（当前环境无法派子代理时）：主 agent 切换"审稿人视角"、清空对本节的写作记忆，逐项独立重核——绝不因"自己刚写完"默认通过；仍跑 `verify` 把关。
+- **降级路径**（当前环境无法派子代理时）：主 agent 切换"审稿人视角"、清空对本节的写作记忆，逐项独立重核，不因"自己刚写完"默认通过；仍跑 `verify` 把关。
 
 下列清单与 `references/dod_checklist.json` gate=`section-dod` 逐项对应（改清单先改 JSON），供人工对照；能脚本核的项子代理会先跑脚本：
 
@@ -320,13 +341,13 @@ sci2doc 特有项：
 
 **硬规则：以下各项未逐一确认通过，不得向用户声明"该章完成"，不得进入 Step 7。**
 
-**🔴 进入下一章前置闸口**：上一章 `delegate_review verify` 必须 exit 0（含章结构完整性项 S8），否则不得开始下一章——写完即检，不过不进。
+**🔴 进入下一章前置闸口**：上一章 `delegate_review verify` 必须 exit 0（含章结构完整性项 S8），否则不得开始下一章。写完即检，不过不进。
 
-**🔴 委托盲检（不得主 agent 自评）**：章级闸口同样必须委托独立子代理盲检，不得主 agent 自评：
+**🔴 委托盲检（不得主 agent 自评）**：章级闸口同样委托独立子代理盲检，不得主 agent 自评：
 1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate chapter-dod --files <章节合并文件>`
 2. **派一个独立子代理**（Claude Code 用 `academic-blind-reviewer`；其他平台派通用子代理），把任务包原样给它、**不要给它本章的写作上下文**，要求按任务包返回 JSON 数组。
 3. 校验返回：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate chapter-dod --return <子代理返回.json>`；退出码非 0（任一缺项/fail/无证据）= **fail-closed**，据子代理证据修复后重跑，**未通过不得进入 Step 7**。
-- **降级路径**（当前环境无法派子代理时）：主 agent 切换"审稿人视角"、清空对本章的写作记忆，逐项独立重核——绝不因"自己刚写完"默认通过；仍跑 `verify` 把关。
+- **降级路径**（当前环境无法派子代理时）：主 agent 切换"审稿人视角"、清空对本章的写作记忆，逐项独立重核，不因"自己刚写完"默认通过；仍跑 `verify` 把关。
 
 下列清单与 `references/dod_checklist.json` gate=`chapter-dod` 逐项对应（改清单先改 JSON），供人工对照；能脚本核的项子代理会先跑脚本：
 
