@@ -679,6 +679,131 @@ with tempfile.TemporaryDirectory() as td:
     except SystemExit:
         case("N6.L4 2个allow开关-红字警告", False, "build 失败")
 
+# ============== Part O: v3.22.0 物理出卷反馈修复（P0-1/P0-2/P1-1/P1-2/P1-3）==============
+print("\n=== O. v3.22.0 物理出卷反馈修复 ===")
+
+# O1.P0-1：meta.figure='required' 且 paper 无 figure → exit 2
+with tempfile.TemporaryDirectory() as td:
+    proj = pathlib.Path(td) / "p"
+    (proj / "items").mkdir(parents=True)
+    (proj / "materials").mkdir()
+    (proj / "meta.json").write_text(_json.dumps({
+        "title":"t","expected_questions":1,"total":2}), encoding="utf-8")
+    (proj / "items" / "101_q01.json").write_text(_json.dumps({
+        "meta":{"num":"1","score":2,"figure":"required"},
+        "paper":[{"type":"question","num":"1","text":"导线下方放磁针..."}],
+        "answer":[]}, ensure_ascii=False), encoding="utf-8")
+    try:
+        with _ctx.redirect_stdout(_io.StringIO()) as buf_o, \
+             _ctx.redirect_stderr(_io.StringIO()) as buf_e:
+            A.cmd_build([str(proj), "--allow-length"])
+        case("O1.P0-1 figure:required+无figure-拒绝", False, "未退出")
+    except SystemExit as e:
+        combined = buf_o.getvalue() + buf_e.getvalue()
+        case("O1.P0-1 figure:required+无figure-拒绝",
+             e.code == 2 and "figure='required'" in combined)
+
+# O1b.P0-1：meta.figure='required' 且 paper 有 figure → 通过门禁
+with tempfile.TemporaryDirectory() as td:
+    proj = pathlib.Path(td) / "p"
+    (proj / "items").mkdir(parents=True)
+    (proj / "materials").mkdir()
+    (proj / "meta.json").write_text(_json.dumps({
+        "title":"t","expected_questions":1,"total":2}), encoding="utf-8")
+    (proj / "items" / "101_q01.json").write_text(_json.dumps({
+        "meta":{"num":"1","score":2,"figure":"required"},
+        "paper":[{"type":"question","num":"1","text":"导线下方放磁针..."},
+                 {"type":"figure","kind":"svg","spec":{"alt":"磁针"}}],
+        "answer":[]}, ensure_ascii=False), encoding="utf-8")
+    fig_errs = []
+    atom = A._read_json(str(proj / "items" / "101_q01.json"))
+    A._check_missing_figure(str(proj / "items" / "101_q01.json"), atom["paper"], fig_errs)
+    case("O1b.P0-1 figure:required+有figure-通过", not fig_errs)
+
+# O2.P0-2：连续相同 section 去重
+blocks = [
+    {"type":"section","text":"一、单项选择题"},
+    {"type":"section","text":"一、单项选择题"},
+    {"type":"section","text":"一、单项选择题"},
+    {"type":"answer","text":"1. A"},
+    {"type":"section","text":"二、多项选择题"},
+    {"type":"section","text":"二、多项选择题"},
+    {"type":"answer","text":"8. AC"},
+]
+deduped = A._dedup_consecutive_sections(blocks)
+section_count = sum(1 for b in deduped if b.get("type") == "section")
+case("O2.P0-2 连续section去重", section_count == 2)
+
+# O2b.P0-2：非连续 section（试卷→答案分组）保留
+blocks2 = [
+    {"type":"section","text":"一、单项选择题"},
+    {"type":"question","num":"1","text":"q1"},
+    {"type":"section","text":"二、多项选择题"},
+    {"type":"question","num":"8","text":"q8"},
+    {"type":"section","text":"一、单项选择题"},  # 答案侧重新分组，合法
+    {"type":"answer","text":"1. A"},
+]
+deduped2 = A._dedup_consecutive_sections(blocks2)
+case("O2b.P0-2 非连续section保留", sum(1 for b in deduped2 if b.get("type") == "section") == 3)
+
+# O3.P1-1：单选题同质数值前缀
+md, issues = A._gen_self_audit([
+    {"num":"3","kp":"力学","diff":"0.7","stem_len":50,"type":"单选",
+     "options":["A. 加速度为 5 m/s²", "B. 摩擦力为 10 N",
+                "C. 加速度为 2 m/s²", "D. 支持力小于重力"]},
+    {"num":"4","kp":"光学","diff":"0.7","stem_len":30,"type":"单选",
+     "options":["A. 折射角小于入射角", "B. 折射角大于入射角",
+                "C. 全反射不存在", "D. 光速更大"]},
+    {"num":"5","kp":"热学","diff":"0.6","stem_len":60,"type":"单选",
+     "options":["A. 压强增大", "B. 压强不变", "C. 体积减小", "D. 体积不变"]},
+])
+case("O3.P1-1 单选同质数值-issue", any("干扰项同质" in i and "题3" in i for i in issues))
+
+# O3b.P1-1：多选题不触发（题目本身要求挑多个正确）
+md_m, issues_m = A._gen_self_audit([
+    {"num":"10","kp":"打点","diff":"0.5","stem_len":120,"type":"多选",
+     "options":["A. 加速度为 5 m/s²", "B. 加速度为 10 m/s²",
+                "C. 加速度为 0.5 m/s²", "D. 加速度为 0 m/s²"]},
+])
+case("O3b.P1-1 多选不触发同质警告", not any("干扰项同质" in i for i in issues_m))
+
+# O4.P1-2：卷头声明 sin37 但无引用 → warn
+paper_o4 = [
+    {"type":"notice","items":["g=10 m/s²，sin37°=0.6，cos37°=0.8"]},
+    {"type":"section","text":"一、选择题"},
+    {"type":"question","num":"1","text":"匀速运动的物体..."},
+    {"type":"question","num":"2","text":"重力 G=20N，求加速度..."},
+]
+warns_o4 = A._check_header_constants(paper_o4, [])
+case("O4.P1-2 sin37声明无引用-warn", any("sin37°" in w for w in warns_o4))
+
+# O4b.P1-2：卷头声明 sin37 且有题引用 → 不警告
+paper_o4b = [
+    {"type":"notice","items":["sin37°=0.6"]},
+    {"type":"section","text":"一、选择题"},
+    {"type":"question","num":"1","text":"斜面倾角 37°，物体沿斜面下滑，求加速度（sin37°参与计算）..."},
+]
+warns_o4b = A._check_header_constants(paper_o4b, [])
+case("O4b.P1-2 sin37有引用-不警告", not any("sin37°" in w for w in warns_o4b))
+
+# O5.P1-3：卷头声明π取值但答案残留多个未数值化 π → warn
+paper_o5 = [{"type":"notice","items":["π取3.14"]}, {"type":"section","text":"一"}]
+ans_o5 = [
+    {"type":"answer","text":"E_max=100π V"},
+    {"type":"analysis","text":"有效值=50√2π V"},
+    {"type":"answer","text":"W=24000π² J"},
+]
+warns_o5 = A._check_header_constants(paper_o5, ans_o5)
+case("O5.P1-3 π未数值化-warn", any("π 表达式未给" in w for w in warns_o5))
+
+# O5b.P1-3：卷头声明π且答案数值化完整 → 不警告
+ans_o5b = [
+    {"type":"answer","text":"E_max=100π V≈314 V"},
+    {"type":"analysis","text":"有效值=50√2π V≈222 V"},
+]
+warns_o5b = A._check_header_constants(paper_o5, ans_o5b)
+case("O5b.P1-3 π数值化完整-不警告", not any("π 表达式未给" in w for w in warns_o5b))
+
 # 总结
 print(f"\n=== 总计 {len(PASS)}/{len(PASS)+len(FAIL)} 通过 ===")
 if FAIL:

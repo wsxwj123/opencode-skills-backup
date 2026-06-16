@@ -629,6 +629,16 @@ def cmd_build(args):
         # —— 缺图硬门禁：题干含"如图/图中/图所示"等图引用字样但 paper 无 figure 块 ——
         if is_question:
             _check_missing_figure(fp, p_blocks, figure_errors)
+            # v3.22.0 P0-1：meta.figure 显式声明门禁——理科电磁/光学/电路/受力/装置等
+            # 含图题型可能用纯文字描述"导线下方放磁针"绕过关键词扫描，必须显式声明 figure。
+            _fig_decl = str(m.get("figure", "")).lower().strip()
+            if _fig_decl in ("required", "yes", "true"):
+                _has_fig = any(isinstance(_b, dict) and _b.get("type") == "figure"
+                               for _b in p_blocks)
+                if not _has_fig:
+                    figure_errors.append(
+                        f"{os.path.basename(fp)}：meta.figure='{_fig_decl}' 声明此题需图，"
+                        f"但 paper 块里没有 figure 块——必须补图（SVG 或用户提供图片）。")
             # Bug-W-2：历史题干内嵌史料软提醒（warn，不阻断；机器无法判真伪）
             _check_embedded_history(fp, p_blocks, meta.get("subject", ""), warn)
 
@@ -664,12 +674,19 @@ def cmd_build(args):
             stems = " ".join(str(b.get("text") or b.get("stem") or "")
                              for b in p_blocks if isinstance(b, dict)
                              and b.get("type") in ("question", "stem"))
+            # v3.22.0 P1-1：收集选项以检测同质数值干扰项
+            _opts = []
+            for _b in p_blocks:
+                if isinstance(_b, dict) and _b.get("type") == "options":
+                    _opts = [str(x) for x in _b.get("items", [])]
+                    break
             quality_rows.append({
                 "num": str(m.get("num", "?")),
                 "kp": str(m.get("knowledge_point") or m.get("knowledge") or "未标"),
                 "diff": str(m.get("difficulty", "-")),
                 "stem_len": len(stems),
                 "type": str(m.get("type", "")),
+                "options": _opts,
             })
         if m.get("num"):
             nums.append(str(m["num"]))
@@ -856,6 +873,10 @@ def cmd_build(args):
         for ln in _tbl:
             print("  " + ln)
 
+    # —— v3.22.0 P1-2/P1-3：卷头常数声明使用率 + 答案数值规约 ——
+    _header_warns = _check_header_constants(paper, answers)
+    warn.extend(_header_warns)
+
     # —— Batch6-L3：Phase 3.5 自审表机器化 ——
     _audit_md, _audit_issues = _gen_self_audit(quality_rows)
     if _audit_md:
@@ -870,6 +891,11 @@ def cmd_build(args):
                 print("    " + it)
         else:
             print("  ✅ 自审通过（考点分布/难度梯度/题干长度均正常）")
+
+    # v3.22.0 P0-2：连续 section/sub 去重——多个 atom 各自打同名大题标题时，
+    # 拼接后会出现 "## 一、单项选择题" 紧邻重复，docx/md 均显示两次 H1。
+    paper = _dedup_consecutive_sections(paper)
+    answers = _dedup_consecutive_sections(answers)
 
     content = {
         "paper_path": os.path.join(proj, "build",
@@ -940,6 +966,36 @@ def cmd_build(args):
     print(f"    macOS:   open \"{build_dir}\"")
     print(f"    Windows: explorer \"{build_dir}\"")
     print(f"    Linux:   xdg-open \"{build_dir}\"")
+
+
+def _dedup_consecutive_sections(blocks):
+    """v3.22.0 P0-2：去除连续相同的 section/sub 块。
+    场景：q01-q07 每个 atom 文件都在 answer 里加了 {"type":"section","text":"一、单项选择题"}，
+    合并后变成 7 个连续相同 section → 答案文档出现 7 次 ## 一、单项选择题。
+    仅去重「紧邻相同」，不跨段去重（试卷"一、单选→二、多选"+答案"一、单选"的合法重复保留）。"""
+    out = []
+    last_section_text = None
+    last_sub_text = None
+    for b in blocks:
+        if not isinstance(b, dict):
+            out.append(b)
+            continue
+        t = b.get("type")
+        text = str(b.get("text", "")).strip()
+        if t == "section":
+            if text == last_section_text:
+                continue
+            last_section_text = text
+            last_sub_text = None  # 进新大题，sub 重置
+        elif t == "sub":
+            if text == last_sub_text:
+                continue
+            last_sub_text = text
+        else:
+            # 题目/材料/选项等会推进位置，但不重置 section/sub 记忆
+            pass
+        out.append(b)
+    return out
 
 
 def _write_markdown_bundle(path, paper_blocks, answer_blocks):
@@ -1450,6 +1506,69 @@ def _check_freshness(fp, meta, paper_blocks, materials_dir, subject, errors, war
                     f"当前热点；近 1-3 月报道最稳。")
 
 
+def _check_header_constants(paper_blocks, answer_blocks):
+    """v3.22.0 P1-2 + P1-3：扫描卷面注意事项里声明的常数（sin37°=0.6/g=10/π=3.14 等），
+    校验：
+      P1-2 题干引用率：声明了但全卷无题引用 → warn（冗余条件，建议删或新增引用题）
+      P1-3 答案数值化：卷头声明π取值，但 answer 出现"=数π"未给"≈数值"→ warn（高考规范）
+    返回 warn 列表（warn 级别，不阻断 build）。"""
+    warns = []
+    header_text = []
+    for b in paper_blocks[:50]:  # 卷头 50 块以内（注意事项/卷首说明）
+        if not isinstance(b, dict):
+            continue
+        t = b.get("type")
+        if t == "notice":
+            header_text.extend(str(x) for x in b.get("items", []))
+        elif t in ("para", "subtitle", "info"):
+            header_text.append(str(b.get("text", "")))
+        # 遇到第一个 section 就退出（已进入题目区）
+        if t == "section":
+            break
+    hdr = " ".join(header_text)
+    all_stem_text = " ".join(
+        str(b.get("text") or b.get("stem") or "") for b in paper_blocks
+        if isinstance(b, dict) and b.get("type") in ("question", "stem"))
+    all_answer_text = " ".join(
+        str(b.get("text") or "") for b in answer_blocks
+        if isinstance(b, dict) and b.get("type") in ("answer", "analysis", "para"))
+
+    # P1-2：三角函数常数声明使用率
+    for sym_match in re.finditer(r"(sin|cos|tan)\s*(\d{1,2})°?\s*[取=≈]\s*[\d.]+",
+                                 hdr, re.IGNORECASE):
+        func, deg = sym_match.group(1).lower(), sym_match.group(2)
+        # 在题干里查同名引用
+        if not re.search(rf"{func}\s*{deg}°?", all_stem_text, re.IGNORECASE):
+            warns.append(f"⚠️卷头声明的三角值 {func}{deg}° 全卷无题引用——属冗余条件，"
+                         f"建议删除（避免学生误以为必用）或新增引用题")
+
+    # P1-3：π/g 数值规约
+    # 若卷头声明 "π 取 3.14"，答案里出现"=纯π表达式"但无"≈数值"→ warn
+    pi_declared = bool(re.search(r"π\s*[取=≈]\s*\d", hdr))
+    if pi_declared and all_answer_text:
+        # 找形如 "= 数字π" 或 "= 数字π² 但 100 字内无 ≈ 数值
+        pi_expressions = list(re.finditer(r"=\s*[\d./*+\-√]*π[²³]?", all_answer_text))
+        unresolved = 0
+        for m_pi in pi_expressions:
+            tail = all_answer_text[m_pi.end():m_pi.end() + 80]
+            if not re.search(r"≈\s*[\d.]+", tail):
+                unresolved += 1
+        if unresolved >= 2:
+            warns.append(f"⚠️卷头声明π取值，但答案中 {unresolved} 处 π 表达式未给 ≈ 近似值"
+                         f"（如 'E=100π V' 应补 '≈314 V'）——高考规范要求最终答案给数值")
+
+    # P1-3 续：g 同理
+    g_declared = bool(re.search(r"\bg\s*[取=≈]\s*\d", hdr))
+    if g_declared and all_answer_text:
+        g_remains = len(re.findall(r"[=×*]\s*\d*\s*g(?![a-zA-Z])", all_answer_text))
+        # g 在答案表达式里通常会被替换为 10 或 9.8，残留过多说明未代入
+        if g_remains >= 5:
+            warns.append(f"⚠️卷头声明 g 取值，但答案 {g_remains} 处仍保留 g 符号未代入数值"
+                         f"——按高考规范须用声明值代入算出数值结果")
+
+    return warns
+
+
 def _gen_self_audit(quality_rows):
     """Batch6-L3 修复：Phase 3.5 自审表机器化。
     统计：考点重复、难度方差、题干长度分布。返回 markdown 字符串与 issue 列表。"""
@@ -1490,6 +1609,34 @@ def _gen_self_audit(quality_rows):
     if long_stem_n >= 3:
         issues.append(f"⚠️ 题干长度突变：{long_stem_n} 题题干长度>均值2.5倍，"
                       f"可能前后风格不统一")
+
+    # v3.22.0 P1-1：干扰项同质性检测——单选题中"X=数值1/X=数值2"型选项学生可秒杀
+    homogeneous = []
+    _opt_pat = re.compile(r"^\s*[A-DＡ-Ｄ][.．、)）]?\s*")
+    _prefix_pat = re.compile(r"^(.{2,18}?)(?:为|=|是|约为|约等于|大约)\s*[\d.]")
+    for r in quality_rows:
+        qtype = r.get("type", "")
+        # 多选题允许同前缀多数值（题目本身要求挑出多个正确数值），不报警
+        if "多选" in qtype or "多项" in qtype:
+            continue
+        opts = r.get("options", [])
+        if len(opts) < 3:
+            continue
+        prefixes = []
+        for opt in opts:
+            body = _opt_pat.sub("", str(opt)).strip()
+            m_pref = _prefix_pat.match(body)
+            if m_pref:
+                prefixes.append(m_pref.group(1).strip())
+        if prefixes:
+            pref_counter = Counter(prefixes)
+            dup_pref = [k for k, n in pref_counter.items() if n >= 2 and len(k) >= 2]
+            if dup_pref:
+                homogeneous.append(f"题{r['num']}：选项前缀『{', '.join(dup_pref)}』"
+                                   f"出现≥2次同质数值（学生可二选一秒杀）")
+    if homogeneous:
+        issues.append(f"⚠️ 干扰项同质：{len(homogeneous)} 题选项设计粗糙——"
+                      + "；".join(homogeneous[:4]))
 
     # 生成 markdown
     rows = ["| 题号 | 考点 | 难度 | 题干长度 | 题型 |", "|---|---|---|---|---|"]

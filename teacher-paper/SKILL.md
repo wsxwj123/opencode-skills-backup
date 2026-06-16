@@ -4,7 +4,7 @@ description: "教师智能出题技能 - 覆盖小学一年级到高三全科目
 user-invocable: true
 allowed-tools: [Read, Write, Edit, Bash, Agent, AskUserQuestion, WebFetch, WebSearch]
 metadata:
-  version: "3.21.0"
+  version: "3.22.0"
   author: "teacher-paper-skill"
 ---
 
@@ -403,7 +403,7 @@ python3 "<工程>/scripts/assemble.py" build "<工程>" [--pdf]
 > 答案解析要包含：客观题答案+错因，主观题采分点（"答出X点给X分"），作文评分等级标准，命题意图与教材关联。
 > 单题快速生成也可直接用 `make_paper.py content.json`（不走工程目录），但多资料/需迭代时一律用 assemble 原子化流程。
 
-### Phase 3.5：审题磨题（v3.21.0 已机器化）
+### Phase 3.5：审题磨题（v3.21.0 机器化 + v3.22.0 扩展）
 
 **目标**：在交给用户审之前，机器自动产出整卷质量自审表。
 
@@ -412,8 +412,17 @@ python3 "<工程>/scripts/assemble.py" build "<工程>" [--pdf]
 1. **考点覆盖统计**：依据 items meta `knowledge_point` 字段统计；任一考点重复 ≥3 次 → 🔴 自审 issue。
 2. **难度梯度统计**：依据 items meta `difficulty` 字段（0-1）统计均值/范围/跨度；跨度 <0.25 → 🔴 自审 issue（全卷难度均匀，缺分层）。
 3. **题干长度分布**：统计每题 question.text 长度；>3 题超均值 2.5 倍 → 🔴 自审 issue（前后风格突变）。
+4. **干扰项同质性**（v3.22.0 新增）：扫描单选题 options，若多个选项前缀相同（如"加速度为 5/加速度为 2"）→ 🔴 自审 issue（学生可二选一秒杀；多选题不触发）。
 
-build 末尾会打印自审 issue 清单（若有），逐题明细写入 `Phase3.5_自审表.md`。
+build 末尾还会打印**卷头常数使用率与数值规约 warn**（不阻断，仅提醒）：
+
+- **P1-2 卷头声明三角值/g/π 无引用** → warn"sin37° 全卷无题引用，属冗余条件"
+- **P1-3 答案残留 π 符号未数值化**（卷头声明π取值时）→ warn"E=100π V 应补 ≈314 V"
+
+**v3.22.0 新增的硬门禁**（exit 2 阻断）：
+
+- **P0-1 figure 字段显式声明**：理科电磁/光学/电路/受力/装置等含图题型，`items/NN_*.json` 的 meta 必须写 `"figure": "required"`；build 校验缺 figure block → exit 2。详见 `references/subjects/物理.md` 第 2 节"figure 字段硬声明"。
+- **P0-2 连续 section/sub 去重**：build 末尾自动去除 paper/answers 数组中紧邻重复的大题标题（多个 atom 各自打同名 section 时，docx/md 不再出现"## 一、单项选择题"重复行）。
 
 > **遇 🔴 自审 issue 必须返工对应 items 后重跑 build**——例如考点重复 → 改题改考点，难度均匀 → 重设难度系数。改完 build 自动重算自审表，全绿才能进 Phase 4。
 
