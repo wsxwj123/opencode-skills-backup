@@ -587,11 +587,16 @@ def cmd_build(args):
                 continue
             _seen_sec_prefix.add(_prefix)
         else:
-            # 题目/题材/子分隔 等非 section 文件按前缀去重
-            if _prefix in _seen_q_prefix:
-                warn.append(f"{_bn} 与同前缀题目/材料文件重复，已跳过（避免同号双题）")
+            # v3.24.0 R5 修复：题目/材料文件去重 key 用「完整基名去版本号」而非「仅数字前缀」。
+            # 旧版仅按数字前缀去重 → 同一大题的多道小题（101_q01..101_q07 前缀都是 101）
+            # 被误判重复，只保留 q01 丢掉其余 6 题（9/9 实测子代理全踩）。
+            # 新 key：101_q01.json→'101_q01'、101_q01_v2.json→'101_q01'（去 _v2 仍判重，
+            # 保留 Bug-B1 本意防同号双题），101_q02.json→'101_q02'（不再误伤同大题小题）。
+            _qkey = _q_dedup_key(_bn)
+            if _qkey in _seen_q_prefix:
+                warn.append(f"{_bn} 与 {_qkey} 同题重复（去版本号后同名），已跳过（避免同号双题）")
                 continue
-            _seen_q_prefix.add(_prefix)
+            _seen_q_prefix.add(_qkey)
         _deduped.append(_f)
     files = _deduped
     source_errors = []  # 阅读类素材真实性硬门禁的违规项
@@ -615,6 +620,16 @@ def cmd_build(args):
         a_blocks = atom.get("answer", [])
         if not isinstance(p_blocks, list) or not isinstance(a_blocks, list):
             parse_errors.append(f"{os.path.basename(fp)} 的 paper/answer 不是列表")
+            continue
+        # v3.24.0 R4：列表元素必须是 dict（block 对象）——否则 make_paper 渲染时
+        # b.get(...) 在字符串/数字上抛 AttributeError 崩溃（实测填空题写
+        # "answer":["4","不能"] 会绕过列表检查但在出 Word 时崩）。提前显式拦截。
+        _bad = [type(x).__name__ for x in (p_blocks + a_blocks) if not isinstance(x, dict)]
+        if _bad:
+            parse_errors.append(
+                f"{os.path.basename(fp)} 的 paper/answer 列表里有非对象元素（{', '.join(_bad[:3])}）"
+                f"——每个元素必须是 block 字典，如答案应写 "
+                f'{{"type":"answer","num":"1","text":"..."}}，不能直接写 "4" 或 ["4","不能"]。')
             continue
         # Batch6-L1：听力稿位置硬门禁——录音稿不能在 paper 字段（会让听力题退化为阅读题）
         for _b in p_blocks:
@@ -891,6 +906,9 @@ def cmd_build(args):
     # —— v3.22.0 P1-2/P1-3：卷头常数声明使用率 + 答案数值规约 ——
     _header_warns = _check_header_constants(paper, answers)
     warn.extend(_header_warns)
+
+    # —— v3.24.0 R2：figure 占位率预判（含图科目缺图却 exit 0 的盲区）——
+    warn.extend(_check_figure_placeholders(paper))
 
     # —— v3.23.0 P2-4：物理量合理性自检（偏转角/摩擦因数等数量级偏差）——
     # 仅理科类启用；语文/英语/政史地答案中"摩擦"等只是字面，不应触发数值检测
@@ -1577,6 +1595,42 @@ def _check_physical_plausibility(answer_blocks):
     return warns
 
 
+def _figure_is_placeholder(b):
+    """v3.24.0 R2：判断 figure 块是否「注定降级为文字占位」——
+    既无 src 图片、又无 kind=svg 的 svg 内容、又无可自动渲染的 kind，只有 alt。
+    这类块出 Word 时必然是 ［图：alt］ 文字，学生看不到真图。"""
+    spec = b.get("spec")
+    if not isinstance(spec, dict):
+        spec = b
+    if spec.get("src"):
+        return False
+    svg = spec.get("svg") or spec.get("xml")
+    if isinstance(svg, str) and "<svg" in svg:
+        return False
+    kind = str(spec.get("kind", "")).lower()
+    if kind in ("function", "geometry", "number_line", "bar", "line", "pie",
+                "scatter", "vector", "climate", "pyramid"):
+        return False
+    return True
+
+
+def _check_figure_placeholders(paper_blocks):
+    """v3.24.0 R2：统计 figure 块占位比例。超半数缺图 → 试卷不可印刷的强警告。
+    （地理/物理等含图科目实测：8/11 图仅 alt 占位仍 exit 0，老师拿到残卷而不自知。）"""
+    figs = [b for b in paper_blocks if isinstance(b, dict) and b.get("type") == "figure"]
+    if not figs:
+        return []
+    ph = [b for b in figs if _figure_is_placeholder(b)]
+    if not ph:
+        return []
+    pct = len(ph) / len(figs) * 100
+    base = f"⚠️ {len(ph)}/{len(figs)} 个图块无图源（仅 alt 文字占位，{pct:.0f}%）"
+    if pct >= 50:
+        return [base + "——超半数图缺失，试卷印出来这些题无图、学生无法作答！"
+                "请给 figure 块补 src=图片路径，或 kind=svg/function 等可自动渲染的内容。"]
+    return [base + "——这些题印出来无图，请补图片路径或可渲染的 SVG/函数描述。"]
+
+
 def _check_header_constants(paper_blocks, answer_blocks):
     """v3.22.0 P1-2 + P1-3：扫描卷面注意事项里声明的常数（sin37°=0.6/g=10/π=3.14 等），
     校验：
@@ -1864,8 +1918,19 @@ def _check_source(fp, meta, paper_blocks, materials_dir, errors, warn):
                           f"若确为用户手工提供，请把 meta.source 标为 '用户提供-<出处>'（去掉 URL）。")
             return
     elif not is_user:
-        warn.append(f"{name}：素材来源『{source}』非网络链接、无法用抓取凭证核验，"
-                    f"请人工核对该选文是否逐字属实。")
+        # v3.24.0 R3：兑现 SKILL.md 承诺的「两行手抄凭证识别」——非 URL 出处
+        # （纸质书/截图/教师线下转录）若 materials 文件头有 '来源：'+'抓取日期：'
+        # 两行裸文本凭证，视为合规人工担保，明确记录而非笼统"无法核验"。
+        # 注意：URL 来源仍走上面 is_url 分支强制 fetch 凭证，手抄不能替代（防默写补URL）。
+        _manual = _parse_manual_credential(src_doc)
+        if _manual and _manual.get("source"):
+            warn.append(f"{name}：素材附手抄凭证（来源『{_manual['source']}』"
+                        f"日期 {_manual.get('fetched_at', '—')}），已记录；手抄凭证无防篡改校验，"
+                        f"请人工担保选文逐字属实。")
+        else:
+            warn.append(f"{name}：素材来源『{source}』非网络链接、无法用抓取凭证核验，"
+                        f"请人工核对该选文是否逐字属实；线下素材可在 materials/ 文件头加两行"
+                        f"'来源：<出处>' 和 '抓取日期：YYYY-MM-DD' 留痕。")
     # 注：忠实节选「只能首尾连续删减」的子串校验已独立为硬门禁 _check_faithful_excerpt（build 调用）。
     # title-only 材料（有来源但无 paras 正文）：无原文可比，提示人工核对（完整性门禁另会拦缺正文）
     for b in mats:
@@ -1991,6 +2056,15 @@ def _sort_key(path):
     name = os.path.basename(path)
     m = re.match(r"(\d+)", name)
     return (int(m.group(1)) if m else 10 ** 9, name)
+
+
+def _q_dedup_key(basename):
+    """v3.24.0 R5：题目/材料文件去重标识 = 完整基名去扩展名去版本号后缀。
+    101_q01.json→'101_q01'、101_q01_v2.json→'101_q01'（去 _v2 仍判重）、
+    101_q02.json→'101_q02'（同大题不同小题不判重）。"""
+    stem = re.sub(r"\.(json|md)$", "", basename, flags=re.IGNORECASE)
+    stem = re.sub(r"_v\d+$", "", stem)
+    return stem
 
 
 def _read_json(path):
