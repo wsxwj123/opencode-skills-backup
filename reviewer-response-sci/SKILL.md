@@ -254,6 +254,23 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
 12. Sync unit state map to `project_root/logs/unit_state.json`.
 13. Write reproducibility snapshot to `project_root/logs/version_snapshot.json` (hashes for key scripts + outputs).
 
+## ❌ 反例黑名单（Anti-Patterns）
+
+- ❌ 越界改主稿或生成 Word track-changes 稿，本技能只出回复包（HTML），改稿一律落到 `manuscript_edit_plan.md` 由用户手工执行。
+- ❌ 虚构实验、统计或引用来回应意见；证据缺失时不写 `Not provided by user` 而是编造数据。
+- ❌ response_en 里承诺的动作（we added／clarified／revised）在 `modification_actions` 或 `revised_excerpt_en` 找不到落点（承诺↔落点不一致，consistency_check WARN 必须消除）。
+- ❌ 主 agent 自评承诺↔落点一致性与 DoD 清单，必须委托独立上下文子代理盲检，delegate_review verify 未 exit 0 就出具回复信。
+- ❌ 漏回任何一条意见，尤其把 Editor 意见并入某个 Reviewer，而非作为独立顶层节点。
+- ❌ 用 tavily、websearch 或 openalex（pyalex）查文献；生命医学不走 PubMed CLI、CS/AI 不走 paper-search MCP。
+- ❌ 并行发起检索请求，必须串行且相邻调用间隔 ≥1s。
+- ❌ 把 `revised_excerpt_en` 留作占位符、留空、或与 `original_excerpt_en` 完全相同（仅改标点也算未改），strict_gate 必拦。
+- ❌ 交付时残留 `待AI` / `AI_FILL_REQUIRED` / `[PENDING Step 7]` 占位符，或 Step 7 后漏跑 `aggregate-edit-plan` 回填 edit_plan。
+- ❌ 去 AI 三禁未过：装饰性破折号、scare quotes、解释性冒号；英文单句 >30 词或挂 -ing 分词从句，中文单句 >50 字或从句嵌套 >2 层。
+- ❌ 英文回复堆套话：空致谢（we greatly appreciate your insightful comments）、对冲词（it is important to note that）、≥3 条回复用同一模板开头。
+- ❌ 意见无法匹配到任何段落时硬编一个 location，而非置 `confidence=low` 并标 `needs_manual_revision`。
+- ❌ gate 失败时新建临时修复脚本（fix_gate_errors.py 之类）或逐个手跑 gate，应直接改 `units/*.json` 重跑且修复循环 ≤3 次。
+- ❌ Push back 策略的 unit 没有任何具体证据（引文／数据／方法学依据）就硬顶审稿人。
+
 ## Definition-of-Done: 回复包收口自检清单
 
 > **硬规则：清单未逐项确认通过，不得向用户声明"回复包完成"。** 能脚本核的项直接跑对应 gate；人工项逐条确认。

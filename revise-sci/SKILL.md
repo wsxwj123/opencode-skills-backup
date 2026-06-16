@@ -266,6 +266,22 @@ Each comment must contain:
 - `strict_gate.py` must fail if a polished revision reports `meaning_changed=true`, `scope_respected=false`, or if reconstructed paragraph text no longer preserves the locked prefix/suffix context.
 - `strict_gate.py` must also fail if `comments_input_mode` is unsupported, `expected_comments_mode` and detected mode diverge, or the required state-window artifacts are missing.
 
+## ❌ 反例黑名单（Anti-Patterns）
+
+- ❌ 跳过 `intake_router.py` 直接跑 `run_pipeline.py`，或输入源未分类／不支持仍硬跑（preflight 须 fail-fast，不得猜分支）。
+- ❌ 重写整段而非只改目标句或只追加新句（fragment-only，`revise_units.py` 只动 `revision_plan` 锁定的片段）。
+- ❌ 把全文加全部意见塞进一个上下文窗，违反防遗忘 token 预算，须用 comment-scoped state window 逐条加载。
+- ❌ 虚构实验、数据、统计或引用来回应意见；缺信息须写 `Not provided by user` 或 `需作者确认`。
+- ❌ 用 websearch／tavily／openalex 补文献；只允许 paper-search，且新引用须过 `citation_guard` 双向核验。
+- ❌ 段落定位模糊却硬选一个段落；多候选评分相近时须落 `needs_author_confirmation`，不得激进选段。
+- ❌ 把实质性请求（新机制／新证据／新图／未匹配章节）当 `completed` 自动收口；只有保守的纯文本澄清或限制句可 auto-complete。
+- ❌ Patch 修订哈希不符仍强行套用或自动重定位（fail-closed，整批拒绝、写空、退非零，不静默部分应用）。
+- ❌ 去 AI 五项未过：装饰破折号、scare quotes、解释性冒号、英文 >30 词或挂 -ing 从句、中文 >50 字或从句 >2 层。
+- ❌ 主 agent 自评 DoD 当通过；`strict_gate.py` 前须委托独立子代理盲检，verify 未 exit 0 不得声明改稿完成。
+- ❌ 退稿信漏回某条意见，或某 comment_id 在 `manuscript_edit_plan.md` 中无 revised_excerpt 落点。
+- ❌ 引文 `[n]` 与参考列表不对应、缺号或编号不连续就交付（`reference_coverage_audit.json` 须 ok=true）。
+- ❌ `--resume` 时输入指纹或脚本签名已变仍信任旧产物，而非 fail-fast 重建。
+
 ## Definition-of-Done (DoD) 自检清单（改稿收口）
 
 **位置**：polish 完成后、`strict_gate.py` 运行前。**硬规则：清单未逐项确认通过，不得向用户声明"改稿完成"。**
