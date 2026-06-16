@@ -1,7 +1,7 @@
-# 七个学术技能 · 审计与优化状态
+# 八个学术技能 · 审计与优化状态
 
 > 维护者:Claude Code · 最近更新:2026-06-16
-> 范围:general-sci-writing / review-writing / sci2doc / reviewer-simulator / reviewer-response-sci / nsfc-proposal / revise-sci
+> 范围:general-sci-writing / review-writing / sci2doc / reviewer-simulator / reviewer-response-sci / nsfc-proposal / revise-sci / polish-sci
 
 ## 一、已完成(2026-06-15 ~ 06-16,已 commit + push origin/main)
 
