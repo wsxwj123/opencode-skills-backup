@@ -295,6 +295,50 @@ def _trim_cn_prefix(cn_text):
     return trimmed
 
 
+# 英文句首功能词（出现在术语全称前但不属于术语本身）。
+# 仅用于修剪全称开头：句首代词/冠词/指示词/常见介词。
+# 不影响夹在术语中间的连接小词（如 Center for Disease Control 里的 for），
+# 因为修剪只从左侧逐词进行，遇到首个大写内容词即停。
+_EN_PREFIX_FUNCTION_WORDS = {
+    "we", "i", "the", "this", "that", "these", "those", "it", "they",
+    "here", "a", "an", "in", "of", "on", "for", "by", "to", "as", "at",
+    "our", "their", "its", "his", "her", "such",
+}
+
+
+def _trim_en_prefix(en_text):
+    """
+    修剪英文全称开头的句首功能词与小写词。
+
+    全称应以大写内容词为起点。从左逐词修剪：
+      - 首词属于句首功能词（We/The/This/In/Of...）→ 剥掉
+      - 首词全小写（如 used/is）→ 剥掉
+      - 首词为大写且非功能词 → 停止
+
+    例如: "We used Polymerase Chain Reaction" → "Polymerase Chain Reaction"
+          "The Blood Brain Barrier" → "Blood Brain Barrier"
+          "Center for Disease Control" → 不变（首词 Center 即大写内容词）
+    """
+    if not en_text:
+        return en_text
+    words = en_text.split()
+    idx = 0
+    while idx < len(words):
+        w = words[idx]
+        if w.lower() in _EN_PREFIX_FUNCTION_WORDS:
+            idx += 1
+            continue
+        if w[:1].islower():
+            idx += 1
+            continue
+        break
+    trimmed = " ".join(words[idx:])
+    # 修剪后为空（整串都是功能词/小写）则保留原文，避免误删
+    if not trimmed:
+        return en_text
+    return trimmed
+
+
 def extract_abbreviations(md_content):
     """
     从 Markdown 文本中提取缩略语定义。
@@ -330,7 +374,7 @@ def extract_abbreviations(md_content):
     for m in _PATTERN_EN_ABBR.finditer(md_content):
         en, abbr = m.group(1), m.group(2)
         if abbr not in found and _valid_abbr(abbr):
-            found[abbr] = {"abbr": abbr, "full_cn": "", "full_en": en}
+            found[abbr] = {"abbr": abbr, "full_cn": "", "full_en": _trim_en_prefix(en)}
 
     # 中文模式
     for m in _PATTERN_CN_ABBR.finditer(md_content):
