@@ -125,7 +125,8 @@
 | 6 | calibration FNR/FPR 校准 | reviewer-simulator 自报误差 | 中 | 可选 |
 | 7 | ⏸ deep-research/pipeline 全编排器 | —— | 重 | 不建议全盘移植:我方定位是单技能深做,非流水线产品;只借"阶段转换注入原则提醒"防 context rot |
 
-### 阶段二 · 已确认范围与详细计划(2026-06-16 用户确认)
+### 阶段二 · 已确认范围与详细计划(✅ 2026-06-16 全部完成)
+> 完成:2.1 系统综述方法学(PRISMA/RoB/meta/GRADE,review-writing)、2.2 配图 opt-in(gsw/sci2doc/review)、2.3 引用完整性增强(by-title 核验)、2.4 魔鬼代言人+calibration(reviewer-simulator)、2.5 Patch 修订(revise-sci)、2.6 WHY-HOW-WHAT(review-writing)。均实测通过。
 引入 6 项(配图 opt-in),编排器移阶段三不做。**总原则:补的功能尽量放 references/scripts,SKILL.md 只加触发点,不让主文件再膨胀(与瘦身协调)。每项改完实测、分批 commit。**
 
 **2.1 系统综述方法学 → review-writing(重点)**
