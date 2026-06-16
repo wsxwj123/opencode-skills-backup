@@ -359,3 +359,58 @@
 - T4 Figpad polish gap:revise-sci 的 polish 相比通用润色缺什么能力(opus 读 revise-sci polish 代码 + 已有 Figpad 结论)。
 - T5 缺失技能域:纯论文润色、图片生成(gpt-img2/生信图)是另起技能还是整合进现有?(现有已有 write/humanizer-zh、generate-image/gpt-image-2/comfyui/matplotlib/seaborn/scientific-visualization——评估是否够用 / 是否需学术专用封装)。
 - T6 状态文件 + 提交收尾。
+
+### 十七.1 T1+T2 执行结果(2026-06-16,8 opus 子代理,commit aa9ad39..38caf9e)
+
+**规律:darwin backlog 大半 STALE(早被修过,同 B4)。逐个核实后只有 5 处真 LIVE,已修。**
+
+| 技能 | flagged 项 | 判定 | 处置 |
+|---|---|---|---|
+| review-writing | PRISMA 不变式无校验 | STALE | 已实现 `_validate_prisma_invariants`(写入时校验+非阻断警告) |
+| review-writing | word_counter 硬编码 | **LIVE** | ✅ 修正则:`**Word Count Target:**` 加粗格式原被静默忽略回退默认,加 `[*_]*` |
+| revise-sci | 中文审稿解析退化 | **LIVE** | ✅ `atomize_comments.py` 编号正则补全角标点(．、、（4）),8段→4条正确 |
+| gsw | merge banner 假阳 | **LIVE** | ✅ style_checker/proofread 加 `is_merged_derivative` 过滤合并稿 |
+| gsw | passive阈值矛盾/working_titles/init-abbrev | STALE×3 | passive 全仓统一50-70%("≤30"实为单句词数,flag 误读);其余已实现 |
+| sci2doc | 缩略语氨基酸排除过宽 | **LIVE** | ✅ 收窄为仅排除标准三字母残基码+位点号,P53/Bcl2/Th1 不再误删 |
+| sci2doc | B3 init泄漏cwd/Step0.5门禁/Anti-Drift | STALE×3 | 已用 effective_root+abspath;preflight 已 fail-closed;白名单无冲突 |
+| nsfc | V-12 文档冲突(T1) | **LIVE(文档)** | ✅ 代码定论 V-12=ERROR每次全量算、Phase3起硬门控;改 SKILL.md+json 对齐,代码零改 |
+| nsfc | humanizer空心化/字段契约 | STALE×2 | 检测全生效;契约已集中于 references/02 §2.2 |
+
+全部改动已 py_compile + JSON 校验 + 新增行无 em-dash + 复核 diff 为外科改动;5 技能已镜像 opencode/codex(diff 全 0)。
+
+**核实中浮现、本轮未改的待决项(新发现,非原 flag)**:
+- reviewer-response:双语"承诺↔落点"校验偏松会**漏报**(英文承诺新增实验、实际只改图注却放行)。与原 flag(误报)相反。建议另开 backlog 收紧(需中文承诺↔落点语义比对,属新逻辑)。
+- sci2doc:缩略语英文全称无左边界会吞句首词(`We used Polymerase Chain Reaction (PCR)`)。修法有歧义,待定方向。
+- nsfc:代码无 phase 概念,V-12 的"Phase 2 不读其结论"靠操作者自觉;建议 Phase 2/3 门控改用 `validate-one <rule>` 精确取该阶段规则,机制上防"看全量输出误判"。需用户确认是否落地。
+
+### 十七.2 T4 Figpad polish gap 结论
+
+revise-sci 的 polish 在"防过度改写"上**已强于 Figpad**(meaning_changed/scope_respected/locked-context 三重硬门禁 + 去AI五项代码强制,均超 Figpad 软自检)。真缺口仅 3 个**片段级可门禁化**点,建议作为新增强(非 backlog):A 数值/统计值守卫(raw↔polished 数字 token 比对);B 不确定性动词校准(防谨慎动词升级为强断言,并需先验证 common.py:84 是否误删主动词 demonstrates);C Risk Flags 输出化(保留 fail,额外输出风险清单)。不补:全文自由润色、全文术语词典(违反 scope-lock)。
+
+### 十七.3 T5 缺失技能域结论
+
+- **纯论文润色 → 真缺**,建议新建轻量 `polish-sci`。`write`/`humanizer-zh` 目标函数相反(注入个性/删 hedging/被动改主动=有害),且无"引用/数值/基因名/统计量零改动"红线。不整合进 gsw(污染18-phase流)。反问待用户:独立技能 vs gsw 加"只润色"入口模式,取决于润色请求频率。
+- **图片生成 → 不缺**。scientific-schematics(机制图)+matplotlib/seaborn/scientific-visualization(生信统计图)+gsw/review 内置 opt-in 配图三层齐备;最多图型清单补一行 volcano/MA plot。
+
+### 十七.4 T3 跨技能 4 维一致性审计结论(opus,共享脚本 md5 取证)
+
+**已统一 2 维**:
+- 维度4 自检:**最统一**。`delegate_review.py` 7 份字节一致(md5 c8fe254a);7/7 接入委托盲检 + 结构完整性项 + 前置闸口 + dod_checklist 机器真源;gate 名 SKILL.md↔JSON 全对得上。前置闸口粒度差异(review/sim 用产物级)合理。
+- 维度1 流程:7/7 有骨架+确认点+门禁;写作类用交互式 HALT、流水线类用 Intake 前置+脚本串行 gate,差异合理。
+
+**3 个 HIGH 真缺口(宣称有实则脚本无)→ ✅ 全部补齐(commit dc7ec98/d6f349a/d71e141)**:
+- G1 review-writing 无去AI脚本 → ✅ 复用 gsw style_checker.py 适配综述(被动单向≤30%可配、扫drafts/、补单句>30词),接线 Phase3 D5+dod R5。smoke-test 脏稿命中全部/净稿满分。
+- G2 reviewer-simulator 无去AI脚本 → ✅ 复用 nsfc humanizer_zh.py + 新增 scan_report_humanize.py(剥HTML取正文再扫),接线第七步+dod B7。smoke-test 脏/净/端到端全过。
+- G3 nsfc citation_validator 缺 provider 白名单 → ✅ 用现成 search_source 字段加 FORBIDDEN_PROVIDER_FAMILIES(tavily/openalex 拦,pubmed/paper-search 过,缺字段保守放行)。
+  > 三处均 py_compile+JSON+功能 smoke 复核通过;新脚本含 em-dash 属检测正则(合法)。残留:被动正则偏严(可配+人评兜底)、provider 声明式校验固有边界(真论文+假标签查不出/缺字段可规避)——记录待你定是否收紧。
+
+**MID(记录,本轮不动)**:response/revise 去AI脚本缺 forbidden-word 黑名单(common.py 仅4词样例);citation_guard 三套实现(全功能/精简/nsfc validator)长期应收敛归一,避免改双向阈值要动3处。
+
+**可豁免差异(合理,不动)**:sci2doc/nsfc 无 -ing 检测(中文文体);中文技能无被动50-70%层;review/sim 前置闸口产物级。
+
+### 十七.5 待你拍板的决策(汇总)
+1. 纯论文润色:新建 `polish-sci` vs gsw 加"只润色"入口模式。
+2. revise-sci polish 三增强 A/B/C(数值守卫/不确定性动词校准/Risk Flags 输出)是否做。
+3. 新发现 3 项:reviewer-response 漏报收紧、sci2doc 英文全称吞句首词、nsfc validate-one 防误判。
+4. MID:response/revise 补禁词表、citation_guard 三实现收敛。
+5. (trivial)gsw/review 图型清单补 volcano/MA plot。
