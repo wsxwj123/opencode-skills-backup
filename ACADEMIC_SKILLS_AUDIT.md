@@ -345,3 +345,17 @@
 **结论:用户明确提出的每条逐技能问题均已闭环。** 唯一需你拍板的是 nsfc V-12 验证阶段(Phase 3 阻断 vs Phase 7 验证,究竟哪个权威)。
 
 **非用户提出、仍挂起的 darwin backlog**(供决定是否后续处理,本轮未动):① 第六节 B3(sci2doc init 前置页泄漏 cwd,行号已漂移待重核)+ 其余中危项(第190行清单:gsw passive 阈值矛盾、review PRISMA 无校验、reviewer-response 双语匹配误报、nsfc humanizer 空心化等);② 暂缓的 7 技能编排器;③ 激进瘦身(待目标行数)。
+
+## 十七、本轮范围(2026-06-16 用户拍板,执行中)
+
+**用户决策**:① darwin backlog **逐个核实+修复**(复杂代码用 opus 子代理);② **不再做 skill 瘦身**(彻底搁置);③ V-12 冲突要解释(已解释)。
+
+**V-12 冲突定论方向**:references(02/05/08)"阻断 Phase 3" 正确;SKILL.md(135/157)误把 V-12 与依赖 F/预算的 V-06/07/09/11 混为一类、误延后到 Phase 7。alternative_plan 只依赖 M(Phase 3 已写),不依赖后期字段。**修复方向:以代码实际执行点为准,改 SKILL.md 对齐 references**(opus 按代码定论)。
+
+**本轮新增任务(todolist)**:
+- T1 nsfc V-12:按代码实测确定真实执行点,改 SKILL.md/references 统一(opus)。
+- T2 darwin backlog 逐技能核实+修复(opus,每技能独立 dir 防冲突):sci2doc(B3 cwd 泄漏/Step0.5 outline 门禁无强制/缩略语正则/Anti-Drift 白名单)、gsw(passive 阈值 50-70 vs ≤30 矛盾/merge banner 假阳/working_titles 误读/init 缺 abbreviations)、review(PRISMA 不变式无校验/word_counter 硬编码)、reviewer-response(consistency 双语匹配误报)、nsfc(humanizer 空心化/字段契约未文档化)、revise-sci(中文审稿解析退化)。**先核实 live/stale(B4 即曾误标),只修 live。**
+- T3 跨技能一致性审计 + 实测:4 维(流程合理性 / 去AI化 / 文献反向验证 / 自检委托盲检)在 7 技能是否统一,缺口补齐(opus,在 T2 修复后审计)。
+- T4 Figpad polish gap:revise-sci 的 polish 相比通用润色缺什么能力(opus 读 revise-sci polish 代码 + 已有 Figpad 结论)。
+- T5 缺失技能域:纯论文润色、图片生成(gpt-img2/生信图)是另起技能还是整合进现有?(现有已有 write/humanizer-zh、generate-image/gpt-image-2/comfyui/matplotlib/seaborn/scientific-visualization——评估是否够用 / 是否需学术专用封装)。
+- T6 状态文件 + 提交收尾。
