@@ -377,6 +377,25 @@ Block progression when any of the following fails:
 Use atomic gate command for final checks:
 - `python scripts/state_manager.py --root . gate-check --sections-dir sections --index data/literature_index.json --p1 sections/P1_立项依据.md --ref sections/REF_参考文献.md --mcp-cache data/mcp_literature_cache.json --mcp-ttl-days 30 --require-mcp`
 
+### ❌ 反例黑名单（Anti-Patterns，门控人读版总览）
+
+- ❌ 把「科学问题属性」当成「研究属性」填，或四类官方措辞（鼓励探索·突出原创／聚焦前沿·独辟蹊径／需求牵引·突破瓶颈／共性导向·交叉融通）未在 Phase 0 选定写入 profile，会触发 gate-check `failed_at=profile` 阻断。
+- ❌ 跳过 Mode Handshake，未确认 Write Mode 或 Polish Mode 就直接开写、做诊断或跑文献核验。
+- ❌ H/O/RC/KSQ 不做严格 1:1 对应，出现交叉映射、数量不等或某个 SQ 没有对应的 H 与 KSQ（违反 V-01／V-02）。
+- ❌ 把研究目标写成问题、把关键科学问题写成动作，混淆“做什么”（O）与“回答什么”（KSQ）。
+- ❌ 创新点写成空话（“首次系统研究”“开创性”“革命性”），不追溯到具体 RC 和 M，无技术／方法／理论突破的实证（违反 V-05／FC-05）。
+- ❌ 给每个 M 留空 alternative_plan，或备选方案只写“调整参数”而无触发条件／替代方案／切换代价（违反 V-12，阻断 Phase 3）。
+- ❌ 可行性靠自夸撑场，每个方法 M 找不到来自 P3_1／P3_2 的可行性证据 F，预实验或代表作与 H/RC 方向对不上（违反 V-06／V-11）。
+- ❌ 虚构或不核验引用，PMID／DOI／标题不反查、跳过撤稿检查，或带着 `verified=false` 的文献进入 Phase 2。
+- ❌ 用 tavily、websearch、openalex／pyalex、webfetch 等通用工具检索文献证据，而非 PubMed CLI 或 paper-search MCP。
+- ❌ 并行发起检索请求，未串行执行、未保证连续调用间隔 ≥1 秒。
+- ❌ 在 P2 研究内容里使用文献编号引用 [n]，或把编号引用用在 P1 之外的部分。
+- ❌ 正文用项目符号或编号列表展开论述，而非段落式叙事（年度计划、P3_3／P3_4 清单、预算三线表是仅有的例外）。
+- ❌ 使用禁用句式与修辞：“不是…而是…”“不仅…而且…”“值得注意的是”“至关重要”“综上所述”、排比、比喻、反问、夸张。
+- ❌ 留下装饰性破折号、scare quotes、解释性冒号，或中文单句超 50 字、定语从句嵌套超 2 层（humanizer_zh／rhythm-check 报错）。
+- ❌ 超篇幅：正文 >30 页、中文摘要 >400 字、英文摘要 >300 词、P4 或 P3_4 >500 字。
+- ❌ 在任一 Phase 不跑委托盲检（或降级独立重核），主 agent 写完就自评打勾、verify 未 exit 0 就声明完成或执行 merge。
+
 Failure handling playbook:
 - `failed_at=profile`: 科学问题属性未选定或取值非四类官方措辞之一。回到 Phase 0 与用户确认四选一，写入 profile `science_problem_attribute`（`python scripts/state_manager.py --root . profile --json '{"science_problem_attribute":"聚焦前沿、独辟蹊径"}'`），再 re-run `gate-check`。
 - `failed_at=sync`: run `sync-all --auto-fix`, then re-run `gate-check`.

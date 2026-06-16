@@ -561,6 +561,25 @@ Priority rule: **chapter-based numbering takes precedence**. If a figure from SC
 5. Mistake: Overly mechanical AI text in final chapter.
    - Fix: run humanizer pass before finalize.
 
+## ❌ 反例黑名单（Anti-Patterns）
+
+- ❌ 把综述章及其内部参考文献节算进正文字数，标题含“综述／文献综述／研究综述”的章节须整章排除（`check_quality.py classify_heading()`）。
+- ❌ 把全文末尾的统一参考文献计入正文字数，正文范围只到正文结束、参考文献之前。
+- ❌ 不区分博士与硕士字数下限，博士正文 ≥50000、硕士 ≥30000，且只能上调不能跌破地板。
+- ❌ 看到 QUICK_START 的 init 示例就直接套 `--format-mode default_csu` 跑 init，未经用户确认样式即静默落成 CSU 格式并放行 docx 导出。
+- ❌ 在自定义信息不完整、状态仍为 `pending_template` 时生成 `.docx` 或跑格式验收，或手动绕过 `markdown_to_docx.py` 的拒绝。
+- ❌ `outline` 数组为空就进入 Style Selection Gate 与 Step 1，缺 `scientific_question` 或研究章 `core_argument`。
+- ❌ 把章节字数目标硬编码或在 init 后才定，应在 Step 0.5 与用户协商后写入 `chapter_targets`。
+- ❌ 引用 `citation_guard` 未核验的文献，或在 guard 报 `ok=false`、双向校验失败时继续写作而不入人工核验队列。
+- ❌ 用 `websearch` / `openalex-cli` / `tavily` 作为文献来源，或把 `sci-source-seed` 种子条目当可直接引用来源（须以 DOI／PMID 经 PubMed CLI 或 paper-search 正式核验）。
+- ❌ 并行发起文献检索调用，必须串行且相邻调用间隔 ≥1s。
+- ❌ 对图片材料做 OCR 或从文件名猜内容，图片一律 `pending_confirm`，须用户口述补充后才能引用。
+- ❌ 编造实验数据或参考文献，引用数值／结论必须可追溯到 `materials/` 对应 entry。
+- ❌ 跳过 `write-cycle` 预写门禁就写新小节，它是唯一加载跨章记忆的机制。
+- ❌ 把材料与方法、分组、统计等结构化数据写成散文段落，3 项以上同属性数据必须用 Markdown 管道三线表。
+- ❌ 主 agent 自评 DoD 清单代替独立子代理盲检，或上一节／上一章 `delegate_review verify` 未 exit 0 就开始下一节／下一章。
+- ❌ 把结果全部前置、后面集中讨论，研究章结果与讨论必须按实验逐一耦合，且每个实验至少配一张图或表。
+
 ## Acceptance Checklist
 
 格式类参数（字体/字号/边框/对齐/页眉页脚/摘要/目录间距等）由脚本硬编码并强制校验，**不在此复述**，以 `check_quality.py` 各类别通过为准。本清单只保留需人工确认的项：

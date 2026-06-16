@@ -625,27 +625,7 @@ If pending_sections is empty → all sections complete; proceed to Phase 4.
     3. 校验返回：`python3 scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate manuscript-dod --return <子代理返回.json>`；退出码非 0（任一缺项 / fail / 无证据）= **fail-closed**，据子代理证据修复后重跑，**未过不得声明完成**。
     - **降级路径**（当前环境无法派子代理时）：主 agent 切换审稿人视角、清空对本节的写作记忆，逐项独立重核，绝不因刚写完就默认通过；仍跑 `verify` 把关。
 
-    下列清单与 `references/dod_checklist.json` 逐项对应（改清单先改 JSON），供人工对照；能脚本核的项子代理会先跑脚本：
-
-    **通用 6 项（全节必过）：**
-    - [ ] ① **引文一一对应**：本节所有 `[N]` 均在 `literature_index.json`（或 Zotero gid 池）中有对应条目，无孤儿引用、无缺号。可用 `python3 scripts/validate_citations.py --drafts-dir drafts --index-path data/literature_index.json --fail-on-orphan` 核验。
-    - [ ] ② **citation_guard 已通过**：本节新增引用已过 `citation_guard.py`（白名单 pubmed-cli / paper-search，禁 websearch / tavily），guard 返回 exit 0。可对照 `data/citation_guard_report.json` 确认。
-    - [ ] ③ **符合 storyline / 主线**：本节内容对应 `outline.md` 中该节 RQ/PICO（或 PCC），无跑题、无与主线矛盾段落。
-    - [ ] ④ **占位符清零**：全文 `grep -n "CITE_PENDING\|DATA_PENDING\|【待AI\|待AI翻译\|\[TODO\]" drafts/section_*.md` 返回空。
-    - [ ] ⑤ **去 AI 合规**：零禁用词 + 单句 ≤30 词 + 无 trailing -ing 从句 + 被动 ≤30% + 无装饰性破折号 / scare quotes / 解释性冒号 + 同概念同段一致称谓（见 `references/writing_guidelines.md §4`）。
-    - [ ] ⑥ **字数达标**：`python3 scripts/word_counter.py --file drafts/section_XX_XX.md --language en`（或 cn）。关键节 >500 words / >1500 chars；支撑节 >200 words / >600 chars。
-
-    **review 特有项（每节收口必查）：**
-    - [ ] ⑦ **综合非罗列**：段落为综合论证，无"A did X, B did Y"式逐篇列举。
-    - [ ] ⑧ **矛盾仲裁**：若本节文献存在矛盾发现，已分析*为何*矛盾并给出立场或调和，不骑墙。
-    - [ ] ⑨ **引用类型匹配**：机制/实验声明 → 原著（不得以综述代替）；疗效声明 → 临床试验；新兴声明 → 预印本（标 `[Preprint]`）。
-    - [ ] ⑩ **检索日志已记录**：本节检索日志条目已写入 `data/search_log.json`（`state_manager.py append-search-log` 已执行）。
-    - [ ] ⑪ **概念框架图一致**：本节引用了 `figures/figure_index.md` 中的框架图（Figure 0），内容与图的 Node Mapping 不冲突。
-
-    **〔systematic 模式额外 3 项，仅 Review type = systematic 时检查〕：**
-    - [ ] ⑫ **PRISMA 计数自洽**：本节新筛文献已更新 PRISMA 计数（`state_manager.py set-screening-counts`），identified / deduplicated / screened / excluded / included 数字一致，排除原因表已补。
-    - [ ] ⑬ **RoB 已评级**：本节涉及的 RCT 已做 RoB 2，观察性研究已做 ROBINS-I，逐研究 RoB 表已更新（见 `references/systematic_review_methodology.md`）。
-    - [ ] ⑭ **GRADE 已分级**（Phase 4 前完成即可）：若本节有临床结局声明，GRADE 分级（high/moderate/low/very low + 升降级因素）已登记。
+    `manuscript-dod` gate 共 15 项（通用 6：引文一一对应 / citation_guard 已过 / 符合 storyline / 占位符清零 / 去 AI 合规 / 字数达标；review 特有 5：综合非罗列 / 矛盾仲裁 / 引用类型匹配 / 检索日志已记 / 框架图一致；systematic 额外 3：PRISMA 计数自洽 / RoB 已评级 / GRADE 已分级 + 结构完整性 R15）。**逐项内容与核验命令以 `references/dod_checklist.json` 为唯一真源**。上面 `pack` 步骤运行时会把该 gate 的每个 item（id / name / check / script）完整打印进盲检任务包，此处不再复述以免与 JSON 漂移。systematic 3 项仅 Review type = systematic 时检查。
 
 11. **HALT:** Output summary (content / logic / citation count / word count). Wait for "Continue".
 
