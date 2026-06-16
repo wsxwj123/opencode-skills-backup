@@ -171,3 +171,22 @@
 - 系统综述方法学:子系统大 → 独立 references + 模式开关,主文件最小,防 review-writing 膨胀
 - 引用完整性增强:改 6 份共享 citation_guard → 先 gsw 权威版改+测再同步,白名单政策不变
 - 配图 opt-in 默认关 → 不打扰基础实验用户
+
+## 八、端到端实测发现(2026-06-16,7 opus agent 真实驱动技能写内容)
+
+**验证用户判断**:每个技能**确实内置评审/质量闭环**(pipeline 无需独立)。两层:
+- 机器硬门禁(强·真拦):citation_guard 双向核验 + 撤稿检测、Patch 哈希、导出门禁、GB7714
+- AI 自觉软门禁(无脚本·靠纪律):compliance/reviewer/coherence/缩写扫描
+- reviewer-simulator 可直接作其他技能的下游评审(缺统一稿件交换格式)
+
+**评分**:reviewer-simulator 88 / nsfc 88 / sci2doc 82 / review-writing 80 / gsw 75 / reviewer-response 72 / revise-sci 70
+
+**亮点(实测真生效)**:nsfc 抓出真实撤稿文献 PMID32746878;reviewer-simulator 魔鬼代言人把"结果有效"稿从接收压到大修;revise-sci Patch 字节级不变+哈希拦截;sci2doc custom 导出门禁。
+
+**🔴 死锁级(真实使用必踩)**:
+- revise-sci:带编号参考文献的稿**无法过 strict_gate**(export `# References` 一级标题未判 references→剥掉"1."→gate 字面检测 startswith("1.") 必 FAIL)→ 修复中
+- reviewer-response:① risk_check 把合法 p 值当捏造**硬拦**(补统计场景不可交付)② build 非幂等,填完重跑**丢工作** ③ --resume 跳过 build→交付**陈旧 HTML** → 修复中
+
+**🟡 中危(待定)**:gsw(merge banner 假阳/working_titles 误读/passive 阈值 50-70 vs ≤30 矛盾/init 缺 abbreviations);sci2doc(Step0.5 outline 门禁无代码强制/缩略语正则/Anti-Drift 白名单冲突);review(PRISMA 不变式无校验/word_counter 硬编码字数);reviewer-response(consistency 双语匹配全量误报);nsfc(humanizer 规则空心化/字段契约未文档化);revise-sci(中文审稿解析退化)
+
+**🟢 优化方向**:软门禁(reviewer/compliance/coherence/缩写/anti-AI)脚本化,降低"走过场"风险;CRITICAL/PRISMA 不变式加机器兜底。
