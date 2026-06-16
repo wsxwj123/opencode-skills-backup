@@ -77,7 +77,7 @@ Academic literature retrieval follows topic-dependent routing (Mandatory):
    Tool names: `mcp__paper-search-mcp__search_pubmed`, `mcp__paper-search-mcp__search_arxiv`, `mcp__paper-search-mcp__search_biorxiv`, `mcp__paper-search-mcp__search_medrxiv`
 
 Do not use generic web search/fetch tools for citation evidence in proposal claims.
-**严禁** 使用 `tavily`、`websearch` 或 `openalex`（pyalex），无论有无 DOI/PMID.
+**严禁** 使用 `tavily`、`websearch` 或 `openalex`（pyalex），无论有无 DOI/PMID. 该禁令已脚本级强制：literature_index 条目的 `search_source` 字段若属上述被禁家族，`citation_validator.py` 触发 `source_provider_forbidden` 硬失败，与 DOI/PMID/标题核验同级阻断门禁。
 **Serial Search (MANDATORY):** Execute all retrieval calls sequentially (including both PubMed CLI and paper-search MCP). Never parallelize search requests. Enforce ≥1s interval between consecutive calls.
 
 ## Non-Conflict Canon (Conflict Resolution Rules)
@@ -364,6 +364,7 @@ The following fields are silently required by scripts. Missing them causes hard 
 |------|---------|--------|------------|
 | `verified_at` 或 `checked_at` | mcp_literature_cache.json 每条记录 | 写成 `retrieved_at` | `mcp_timestamp_missing`（HARD） |
 | `key_finding` | literature_index.json 每条 P1 引用条目 | 字段为空/缺失 | `context_mismatch`（SOFT） |
+| `search_source` | literature_index.json 每条 | 填 `tavily`/`websearch`/`openalex`/`pyalex` | `source_provider_forbidden`（HARD） |
 
 ## Quality Gates
 Block progression when any of the following fails:

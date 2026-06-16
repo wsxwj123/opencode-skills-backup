@@ -26,12 +26,15 @@ CIT_RE = re.compile(r"\[(\d+)\]")
 TITLE_TOKEN_RE = re.compile(r"[a-z0-9\u4e00-\u9fff]+")
 
 CACHE_SCHEMA_VERSION = "1.0"
+ALLOWED_PROVIDER_FAMILIES = {"paper-search", "pubmed-cli"}
+FORBIDDEN_PROVIDER_FAMILIES = {"tavily", "websearch", "openalex-cli"}
 HARD_FAIL_REASONS = {
     "retracted",
     "id_mismatch",
     "doi_invalid_or_unresolved",
     "pmid_invalid_or_unresolved",
     "identifier_missing",
+    "source_provider_forbidden",
     "mcp_unresolved",
     "mcp_stale",
     "mcp_timestamp_missing",
@@ -77,6 +80,34 @@ def _normalize_title(title: str) -> str:
 
 def _title_tokens(title: str) -> set[str]:
     return set(TITLE_TOKEN_RE.findall(_normalize_title(title)))
+
+
+def _provider_family(entry: dict[str, Any]) -> str | None:
+    """Map an entry's recorded retrieval source to a provider family.
+
+    Reads the existing literature_index field ``search_source`` (e.g. "pubmed"),
+    falling back to ``source_provider``/``provider`` if present. Returns None when
+    no source is recorded so absent provenance does not silently fail an entry.
+    """
+    raw = str(
+        entry.get("search_source")
+        or entry.get("source_provider")
+        or entry.get("provider")
+        or ""
+    ).strip().lower()
+    if not raw:
+        return None
+    if raw.startswith("paper-search"):
+        return "paper-search"
+    if raw.startswith("pubmed") or raw in ("edirect", "ncbi", "esearch", "crossref"):
+        return "pubmed-cli"
+    if raw.startswith("tavily"):
+        return "tavily"
+    if raw in ("openalex", "openalex-cli", "pyalex"):
+        return "openalex-cli"
+    if "websearch" in raw or "web-search" in raw or "web_search" in raw:
+        return "websearch"
+    return raw
 
 
 def _title_similarity(a: str, b: str) -> float:
@@ -309,6 +340,9 @@ def validate_entry(
     pmid = str(entry.get("pmid") or "").strip()
     title = (entry.get("title") or "").strip()
 
+    provider_family = _provider_family(entry)
+    provider_forbidden = provider_family in FORBIDDEN_PROVIDER_FAMILIES
+
     doi_fmt_ok = DOI_RE.match(doi) is not None if doi else None
     pmid_fmt_ok = PMID_RE.match(pmid) is not None if pmid else None
 
@@ -387,6 +421,8 @@ def validate_entry(
     }
 
     failure_reasons = []
+    if provider_forbidden:
+        failure_reasons.append("source_provider_forbidden")
     if not title:
         failure_reasons.append("title_missing")
     if title_match is False:
@@ -431,6 +467,8 @@ def validate_entry(
     verified = len(failure_reasons) == 0
 
     details = {
+        "provider_family": provider_family,
+        "provider_forbidden": provider_forbidden,
         "title_match": title_match,
         "title_similarity": round(title_similarity, 4),
         "doi_valid": doi_valid,
