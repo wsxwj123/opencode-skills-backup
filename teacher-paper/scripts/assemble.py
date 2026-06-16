@@ -328,11 +328,14 @@ def cmd_init(args):
     # 把技能脚本复制一份到工程 scripts/，之后在工程内跑，避免误改技能本体脚本。
     _copy_scripts(proj)
 
+    # v3.23.0 P2-2：preset 可声明 questions_range（如物理高考 [14,18]）作为软范围门禁
+    qrange = bp.get("questions_range") or opt.get("questions-range")
     meta = {
         "school": school, "year": "", "term": "",
         "grade": stage, "subject": subject, "exam_type": etype,
         "region": region, "total": total, "duration": duration,
         "expected_questions": questions,
+        "expected_questions_range": qrange,  # [min, max] 或 None
         "title": title,
         "subtitle": subtitle,
         "notice": notice,
@@ -707,17 +710,29 @@ def cmd_build(args):
 
     # 校验（expected_questions=0 表示题量未知/通用兜底/题量待定预设 → 跳过题量门禁，但仍校验总分）
     exp_q = meta.get("expected_questions", 21)
+    exp_q_range = meta.get("expected_questions_range")  # v3.23.0 P2-2：理科类预设的题量范围
     exp_total = meta.get("total", 120)
     if exp_q:
         if len(nums) != exp_q:
             parse_errors.append(f"题量 {len(nums)} ≠ 期望 {exp_q}（题号：{','.join(nums) or '无'}）")
         if abs(total - exp_total) > 0.01:
             warn.append(f"分值合计 {total:g} ≠ 期望 {exp_total}")
+    elif exp_q_range and isinstance(exp_q_range, list) and len(exp_q_range) == 2:
+        # v3.23.0 P2-2：范围门禁（理科高考题量浮动 ±2-3 题属正常）——
+        # 实得题量在 [min, max] → 通过（不警告，不必 --allow-incomplete）；
+        # 超出范围 → warn；总分仍按 exp_total 校验。
+        qmin, qmax = exp_q_range
+        if not (qmin <= len(nums) <= qmax):
+            warn.append(f"⚠️实得题量 {len(nums)} 超出预设范围 [{qmin}, {qmax}]——"
+                        f"按当年高考样卷应在此区间，请核对题型分布")
+        if total > 0 and abs(total - exp_total) > 0.01:
+            warn.append(f"分值合计 {total:g} ≠ 期望 {exp_total}")
     else:
-        # B6修复：题量未知时仍校验总分（total 来自预设，是可信期望值）；只跳过题量门禁。
-        warn.append(f"⚠️题量门禁已跳过（预设未指定固定题量）；"
+        # B6修复：题量未知 + 无范围声明 → 仍打 warn 提示规范化（适用于通用兜底）
+        warn.append(f"⚠️题量门禁已跳过（预设未指定固定题量或范围）；"
                     f"当前实得 {len(nums)} 题/合计 {total:g} 分，目标总分 {exp_total}。"
-                    f"请务必向用户确认大题题型与分值分布（或提供样卷 --blueprint-file）再定稿。")
+                    f"无需加 --allow-incomplete，但建议向用户确认大题题型与分值分布"
+                    f"（或提供样卷 --blueprint-file）再定稿。")
         if total > 0 and abs(total - exp_total) > 0.01:
             warn.append(f"分值合计 {total:g} ≠ 期望 {exp_total}（题量门禁跳过，但分值校验仍有效）")
     nums_norm = [n.lstrip("0") or "0" for n in nums]
@@ -876,6 +891,12 @@ def cmd_build(args):
     # —— v3.22.0 P1-2/P1-3：卷头常数声明使用率 + 答案数值规约 ——
     _header_warns = _check_header_constants(paper, answers)
     warn.extend(_header_warns)
+
+    # —— v3.23.0 P2-4：物理量合理性自检（偏转角/摩擦因数等数量级偏差）——
+    # 仅理科类启用；语文/英语/政史地答案中"摩擦"等只是字面，不应触发数值检测
+    if any(k in str(meta.get("subject", "")) for k in ("物理", "化学", "理科")):
+        _phys_warns = _check_physical_plausibility(answers)
+        warn.extend(_phys_warns)
 
     # —— Batch6-L3：Phase 3.5 自审表机器化 ——
     _audit_md, _audit_issues = _gen_self_audit(quality_rows)
@@ -1506,6 +1527,56 @@ def _check_freshness(fp, meta, paper_blocks, materials_dir, subject, errors, war
                     f"当前热点；近 1-3 月报道最稳。")
 
 
+def _kp_subprefix(kp):
+    """v3.23.0 P2-3：抽取考点的两级前缀做语义聚合。
+        '力学·牛顿第二定律' → '力学·牛顿'
+        '力学·斜面运动·动能定理' → '力学·斜面'
+        '力学·胡克定律' → '力学·胡克'
+    用于识别字符串不同但实质同源的考点（如不同题各自写"牛顿第二定律"/"牛顿定律"
+    会被旧版精确匹配漏过）。第二段取前2字保证细分类间仍能区分。"""
+    parts = re.split(r"[·•/·\-]+", str(kp))
+    if len(parts) >= 2:
+        first, second = parts[0].strip(), parts[1].strip()
+        if first and second:
+            return first + "·" + second[:2]
+    return str(kp).strip()
+
+
+def _check_physical_plausibility(answer_blocks):
+    """v3.23.0 P2-4：扫描答案中常见物理量的常识性偏差。
+    仅扫高频反模式（误判可控），不替代人工审卷：
+      - 偏转角 < 1°（带电粒子题现象不显著）
+      - 摩擦因数 > 1（物理不可能，常规物质 0.05-0.8）
+      - 加速度 > 1000 m/s²（除碰撞/原子物理，日常机械不可能）
+    返回 warn 列表（warn 级别，不阻断 build）。"""
+    warns = []
+    txt = " ".join(str(b.get("text") or "") for b in answer_blocks
+                   if isinstance(b, dict)
+                   and b.get("type") in ("answer", "analysis", "para"))
+    # 偏转角过小
+    seen_angles = set()
+    for m in re.finditer(r"(?:偏转角|α|θ\d?)\s*[≈=]\s*([\d.]+)\s*°", txt):
+        try:
+            val = float(m.group(1))
+            if 0 < val < 1.0 and val not in seen_angles:
+                seen_angles.add(val)
+                warns.append(f"⚠️答案出现偏转角 {val:g}° < 1°——物理现象不显著，"
+                             f"建议调整板间距/电压/电荷量等参数让偏转效果更明显")
+        except ValueError:
+            pass
+    # 摩擦因数 > 1
+    seen_mu = set()
+    for m in re.finditer(r"(?:μ|摩擦因?数)\s*[≈=]\s*([\d.]+)", txt):
+        try:
+            val = float(m.group(1))
+            if val > 1.0 and val not in seen_mu:
+                seen_mu.add(val)
+                warns.append(f"⚠️答案出现摩擦因数 μ={val:g} > 1——常规物质间应在 0.05-0.8，请核查数据自洽")
+        except ValueError:
+            pass
+    return warns
+
+
 def _check_header_constants(paper_blocks, answer_blocks):
     """v3.22.0 P1-2 + P1-3：扫描卷面注意事项里声明的常数（sin37°=0.6/g=10/π=3.14 等），
     校验：
@@ -1575,10 +1646,16 @@ def _gen_self_audit(quality_rows):
     if not quality_rows:
         return "", []
     issues = []
-    # 1) 考点重复（同考点 >2 次）
+    # 1) 考点重复（同考点 >2 次，精确匹配）
     from collections import Counter
     kp_counter = Counter(r["kp"] for r in quality_rows if r["kp"] not in ("未标", "-"))
     repeats = {k: c for k, c in kp_counter.items() if c >= 3}
+    # 1') v3.23.0 P2-3：按"主类·子类前缀"语义聚合，识别字符串不同但同源的考点
+    prefix_counter = Counter(_kp_subprefix(r["kp"]) for r in quality_rows
+                             if r["kp"] not in ("未标", "-"))
+    # 排除已被精确重复覆盖的（避免双倍计数）
+    sub_repeats = {k: c for k, c in prefix_counter.items()
+                   if c >= 3 and k not in repeats and "·" in k}
     # 2) 难度方差/分布
     diffs = []
     for r in quality_rows:
@@ -1603,6 +1680,11 @@ def _gen_self_audit(quality_rows):
     if repeats:
         issues.append(f"⚠️ 考点重复：{len(repeats)} 个考点出现≥3次："
                       + "、".join(f"{k}×{c}" for k, c in repeats.items()))
+    if sub_repeats:
+        # v3.23.0 P2-3：精确匹配漏过的同源考点（如"力学·牛顿第二定律"+"力学·牛顿定律"）
+        issues.append(f"⚠️ 同源考点重复：{len(sub_repeats)} 个『主类·子类』前缀出现≥3次："
+                      + "、".join(f"{k}*×{c}" for k, c in sub_repeats.items())
+                      + "（字符串不同但实质同源，考查同一知识点）")
     if diffs and diff_spread < 0.25:
         issues.append(f"⚠️ 难度梯度过窄：max-min={diff_spread:.2f}<0.25，全卷难度均匀"
                       f"（缺乏'基础送分→中档→拉分压轴'分层）")
