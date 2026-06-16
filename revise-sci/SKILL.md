@@ -268,27 +268,38 @@ Each comment must contain:
 
 ## Definition-of-Done (DoD) 自检清单（改稿收口）
 
-**位置**：polish 完成后、`strict_gate.py` 运行前，逐项人工或脚本确认。**硬规则：清单未逐项确认通过，不得向用户声明"改稿完成"。**
+**位置**：polish 完成后、`strict_gate.py` 运行前。**硬规则：清单未逐项确认通过，不得向用户声明"改稿完成"。**
 
-### 通用 6 项（全技能共用）
+**🔴 委托盲检（不得主 agent 自评）**：你刚做完改稿，自评会失真地默认通过、且易漏项。`strict_gate.py` 运行前必须把 DoD 清单**委托给独立上下文的子代理盲检**，自己不直接打勾：
 
-| # | 项目 | 核验方式 |
+1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate revision-dod --files <改稿相关文件>`
+2. **派一个独立子代理**（Claude Code 用 `academic-blind-reviewer`；其他平台派通用子代理），把任务包原样给它、**不要给它本次改稿的写作上下文**，要求按任务包返回 JSON 数组。
+3. 校验返回：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate revision-dod --return <子代理返回.json>`；退出码非 0（任一缺项/fail/无证据）= **fail-closed**，据子代理证据修复后重跑，**未过不得声明改稿完成**。
+- **降级路径**（当前环境无法派子代理时）：主 agent 切换"审稿人视角"、清空对本次改稿的写作记忆，逐项独立重核——绝不因"自己刚改完"默认通过；仍跑 `verify` 把关。
+
+下列清单与 `references/dod_checklist.json` 逐项对应（**改清单先改 JSON，再同步此处散文**）；能脚本核的项子代理会先跑脚本：
+
+### 通用 6 项（id: RV-G1 ~ RV-G6）
+
+| id | 项目 | 核验方式 |
 |---|------|---------|
-| G1 | 引文 `[n]` ↔ 参考列表一一对应，无孤儿引用、无缺号，编号连续 | `python scripts/build_reference_registry.py` → `data/reference_coverage_audit.json` ok=true |
-| G2 | 本轮新增引用已过 citation_guard 双重核验 | `python scripts/citation_guard.py` → ok=true，无 manual_review 条目 |
-| G3 | 改动符合原文 storyline / 主线（不跑题，不与原文主线矛盾） | 人工对照 `build_issue_matrix.py` 生成的 `issue_matrix.md` |
-| G4 | 占位符清零：无 `CITE_PENDING` / `DATA_PENDING` / `【待AI】` / `{{` 残留 | `grep -r "CITE_PENDING\|DATA_PENDING\|待AI\|{{" <project_root>/` 零命中 |
-| G5 | 去 AI 五项（破折号/scare quotes/解释性冒号/英文≤30词/-ing从句/中文≤50字≤2层从句）通过 | `python scripts/strict_gate.py --project-root <project_root>` → `ai_style_flags_removed` 无残留；句长警告记录于 notes |
-| G6 | 字数达标（改动前后正文字数在期刊要求范围内） | 人工或期刊要求核对 |
+| RV-G1 | 引文 `[n]` ↔ 参考列表一一对应，无孤儿引用、无缺号，编号连续 | `python scripts/build_reference_registry.py` → `data/reference_coverage_audit.json` ok=true |
+| RV-G2 | 本轮新增引用已过 citation_guard 双重核验 | `python scripts/citation_guard.py` → ok=true，无 manual_review 条目 |
+| RV-G3 | 改动符合原文 storyline / 主线（不跑题，不与原文主线矛盾） | 人工对照 `build_issue_matrix.py` 生成的 `issue_matrix.md` |
+| RV-G4 | 占位符清零：无 `CITE_PENDING` / `DATA_PENDING` / `【待AI】` / `{{` 残留 | `grep -r "CITE_PENDING\|DATA_PENDING\|待AI\|{{" <project_root>/` 零命中 |
+| RV-G5 | 去 AI 五项（破折号/scare quotes/解释性冒号/英文≤30词/-ing从句/中文≤50字≤2层从句）通过 | `python scripts/strict_gate.py --project-root <project_root>` → `ai_style_flags_removed` 无残留；句长警告记录于 notes |
+| RV-G6 | 字数达标（改动前后正文字数在期刊要求范围内） | 人工或期刊要求核对 |
 
-### Revise-Sci 特有项
+### Revise-Sci 特有项（id: RV-R1 ~ RV-R7）
 
-| # | 项目 | 核验方式 |
+| id | 项目 | 核验方式 |
 |---|------|---------|
-| R1 | `strict_gate.py` 通过（exit code 0） | `python scripts/strict_gate.py --project-root <project_root>` → `STRICT_GATE: PASS` |
-| R2 | `citation_guard.py` 双重核验通过（provider trace + identifier/title 一致性） | strict_gate 内含；或单独 `python scripts/citation_guard.py` |
-| R3 | Reference coverage 无缺口：`data/reference_coverage_audit.json` `ok=true`，无 unresolved numeric/author-year gap | `python scripts/build_reference_registry.py` → coverage_audit 直接读；或 strict_gate R1 覆盖 |
-| R4 | Patch 修订哈希一致（如使用 Patch 修订协议）：`apply_revision_patch.py` 未报告任何 hash mismatch，所有未触及 block 字节不变 | `python scripts/apply_revision_patch.py --manifest <block_manifest.json> --patch <patch.json> --output <revised.md>` exit code 0 |
-| R5 | Issue matrix 每条意见有对应改动：`issue_matrix.md` 每个 `comment_id` 在 `manuscript_edit_plan.md` 中有 revised_excerpt | strict_gate 内含 `comment_id not found in edit plan` 检查 |
+| RV-R1 | `strict_gate.py` 通过（exit code 0） | `python scripts/strict_gate.py --project-root <project_root>` → `STRICT_GATE: PASS` |
+| RV-R2 | Reference coverage 无缺口：`data/reference_coverage_audit.json` `ok=true`，无 unresolved numeric/author-year gap | `python scripts/build_reference_registry.py` → coverage_audit 直接读；或 RV-R1 覆盖 |
+| RV-R3 | Patch 修订哈希一致（如使用 Patch 修订协议）：`apply_revision_patch.py` 未报告任何 hash mismatch，所有未触及 block 字节不变（fail-closed，哈希不符则整批拒绝，不得静默部分应用）；未使用则标 na 并注明 | `python scripts/apply_revision_patch.py --manifest <block_manifest.json> --patch <patch.json> --output <revised.md>` exit code 0 |
+| RV-R4 | 退稿信每条意见有落点：`issue_matrix.md` 每个 `comment_id` 在 `manuscript_edit_plan.md` 中有 revised_excerpt | strict_gate 内含 `comment_id not found in edit plan` 检查 |
+| RV-R5 | 审稿意见已原子化：`atomize_comments.py` 完成，每条意见有 severity 字段，comment_id 唯一，无混合意见跨意见合并改动 | `python scripts/atomize_comments.py --dry-run` |
+| RV-R6 | polish 状态完整：所有含非空 revision_plan.scope 的片段已有 polish state，无 meaning_changed=true 或 scope_respected=false | `python scripts/polish_revisions.py --check-only` |
+| RV-R7 | response_to_reviewers.docx 结构完整：每个 comment block 都有 comment heading / response-section heading / evidence-section heading | `python scripts/export_docx.py --validate-response-structure` |
 
-> 能脚本核的项已标注命令；R4 仅在使用 Patch 修订协议时适用，跳过需在 notes 中注明原因。
+> 能脚本核的项已标注命令；RV-R3 仅在使用 Patch 修订协议时适用，跳过需在 notes 中注明原因。

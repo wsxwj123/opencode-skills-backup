@@ -1,0 +1,188 @@
+#!/usr/bin/env python3
+"""Blind review delegation helper for academic writing skills.
+
+固定"委托独立子代理盲检"的流程步骤,消除主 agent 自评失真 + 防止漏检。
+
+为什么需要:主 agent 带着写作上下文自评 DoD 会失真(默认自己写的都对)
+且容易漏项。本脚本把"委托盲检"拆成两个确定性步骤:
+
+  pack    读 checklist JSON 的指定 gate -> 打印给独立子代理的"盲检任务包"
+          (角色框定 + 待检文件 + 完整清单 + 返回格式),并写一份
+          .review_pkg_<gate>.json 记录本次期望裁决的 item id 集合。
+  verify  读子代理返回的 JSON + checklist -> 校验每个清单项都被裁决、
+          fail/na 附证据;任一缺项 / verdict=fail / 证据为空 -> 退出码 1
+          (fail-closed,阻断"声明本节完成")。
+
+checklist JSON 是 DoD 清单的唯一机器可读真源(SKILL.md 散文与之逐项对应),
+脚本固定步骤后,AI 即使失忆也不会漏检或自评放水。
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+from typing import Any
+
+VALID_VERDICTS = {"pass", "fail", "na"}
+
+
+def _load_json(path: str) -> Any:
+    p = Path(path)
+    if not p.exists():
+        sys.stderr.write(f"[delegate_review] 文件不存在: {path}\n")
+        sys.exit(2)
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        sys.stderr.write(f"[delegate_review] JSON 解析失败 {path}: {exc}\n")
+        sys.exit(2)
+
+
+def _get_gate(checklist: dict, gate: str) -> dict:
+    gates = checklist.get("gates", {})
+    if gate not in gates:
+        avail = ", ".join(sorted(gates)) or "(空)"
+        sys.stderr.write(f"[delegate_review] 未知 gate '{gate}'。可用: {avail}\n")
+        sys.exit(2)
+    return gates[gate]
+
+
+def _pkg_record_path(workdir: str, gate: str) -> Path:
+    return Path(workdir) / f".review_pkg_{gate}.json"
+
+
+def cmd_pack(args: argparse.Namespace) -> int:
+    checklist = _load_json(args.checklist)
+    skill = checklist.get("skill", "?")
+    gate = _get_gate(checklist, args.gate)
+    items = gate.get("items", [])
+    item_ids = [it["id"] for it in items]
+
+    # 写任务包记录(verify 用它确认 gate 一致 + 期望 id)
+    record = {"skill": skill, "gate": args.gate, "item_ids": item_ids, "files": args.files}
+    _pkg_record_path(args.workdir, args.gate).write_text(
+        json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+    # 打印给子代理的盲检任务包(纯文本,跨平台可粘贴)
+    lines: list[str] = []
+    lines.append(f"# 盲检任务包 · {skill} · gate={args.gate}")
+    lines.append(f"## {gate.get('title', args.gate)}")
+    if gate.get("applies_when"):
+        lines.append(f"适用条件:{gate['applies_when']}")
+    lines.append("")
+    lines.append("## 你的角色")
+    lines.append(
+        "你是独立审稿子代理,**没有本稿的写作上下文**。不得假设作者意图、"
+        "不得因'像是写好了'而默认通过。只依据下列文件的**实际内容**逐项裁决。"
+    )
+    lines.append("")
+    lines.append("## 待检文件")
+    for f in args.files:
+        lines.append(f"- {f}")
+    lines.append("")
+    lines.append("## 检查清单(逐项裁决,不得跳过)")
+    for it in items:
+        seg = f"- [{it['id']}] {it.get('name', '')}:{it.get('check', '')}"
+        if it.get("script"):
+            seg += f"  · 先跑脚本核:`{it['script']}`"
+        lines.append(seg)
+    lines.append("")
+    lines.append("## 返回格式(只返这个 JSON,不要别的文字)")
+    lines.append("```json")
+    lines.append(
+        json.dumps(
+            [{"id": item_ids[0] if item_ids else "X1", "verdict": "pass|fail|na", "evidence": "证据/原因"}],
+            ensure_ascii=False,
+        )
+    )
+    lines.append("```")
+    lines.append(
+        "规则:每个清单 id 必须出现一次;verdict ∈ {pass,fail,na};"
+        "verdict 为 fail 或 na 时 evidence 必填(指出文件位置/具体证据)。"
+    )
+    print("\n".join(lines))
+    return 0
+
+
+def cmd_verify(args: argparse.Namespace) -> int:
+    checklist = _load_json(args.checklist)
+    gate = _get_gate(checklist, args.gate)
+    expected = [it["id"] for it in gate.get("items", [])]
+
+    returned = _load_json(args.return_path)
+    if not isinstance(returned, list):
+        sys.stderr.write("[delegate_review] 子代理返回必须是 JSON 数组\n")
+        return 1
+
+    by_id: dict[str, dict] = {}
+    problems: list[str] = []
+    for entry in returned:
+        if not isinstance(entry, dict) or "id" not in entry:
+            problems.append(f"返回项格式非法: {entry!r}")
+            continue
+        by_id[entry["id"]] = entry
+
+    fails: list[str] = []
+    for eid in expected:
+        entry = by_id.get(eid)
+        if entry is None:
+            problems.append(f"缺漏未裁决: {eid}")
+            continue
+        verdict = entry.get("verdict")
+        if verdict not in VALID_VERDICTS:
+            problems.append(f"{eid}: verdict 非法 ({verdict!r})")
+            continue
+        evidence = (entry.get("evidence") or "").strip()
+        if verdict in {"fail", "na"} and not evidence:
+            problems.append(f"{eid}: verdict={verdict} 但 evidence 为空")
+        if verdict == "fail":
+            fails.append(f"{eid}: {evidence or '(无证据)'}")
+
+    extra = [k for k in by_id if k not in set(expected)]
+    if extra:
+        problems.append(f"返回了清单外的 id: {', '.join(extra)}")
+
+    ok = not problems and not fails
+    summary = {
+        "gate": args.gate,
+        "ok": ok,
+        "checked": len(expected),
+        "fails": fails,
+        "problems": problems,
+    }
+    print(json.dumps(summary, ensure_ascii=False, indent=2))
+    if not ok:
+        sys.stderr.write(
+            "[delegate_review] 盲检未通过(fail-closed):不得向用户声明本节/本报告完成。\n"
+        )
+        return 1
+    return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="盲检委托:固定委托独立子代理的流程步骤")
+    sub = parser.add_subparsers(dest="cmd", required=True)
+
+    p_pack = sub.add_parser("pack", help="生成盲检任务包")
+    p_pack.add_argument("--checklist", required=True, help="DoD 清单 JSON 路径")
+    p_pack.add_argument("--gate", required=True, help="清单内的 gate id")
+    p_pack.add_argument("--files", nargs="+", required=True, help="待检文件路径")
+    p_pack.add_argument("--workdir", default=".", help="任务包记录写入目录(默认 cwd)")
+    p_pack.set_defaults(func=cmd_pack)
+
+    p_ver = sub.add_parser("verify", help="校验子代理返回(fail-closed)")
+    p_ver.add_argument("--checklist", required=True, help="DoD 清单 JSON 路径")
+    p_ver.add_argument("--gate", required=True, help="清单内的 gate id")
+    p_ver.add_argument("--return", dest="return_path", required=True, help="子代理返回的 JSON 路径")
+    p_ver.add_argument("--workdir", default=".", help="任务包记录目录(默认 cwd)")
+    p_ver.set_defaults(func=cmd_verify)
+
+    args = parser.parse_args()
+    return args.func(args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

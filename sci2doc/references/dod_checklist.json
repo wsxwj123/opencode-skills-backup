@@ -1,0 +1,157 @@
+{
+  "skill": "sci2doc",
+  "note": "DoD 自检清单机器可读真源。delegate_review.py pack/verify 读此文件；SKILL.md 散文与各 item 逐项对应。改清单先改这里。",
+  "gates": {
+    "section-dod": {
+      "title": "节末 DoD 自检（落盘前委托独立子代理盲检）",
+      "applies_when": "每个正文小节落盘前；S1-S5 为 sci2doc 特有项，不含此场景的节标 na 并注明",
+      "items": [
+        {
+          "id": "G1",
+          "name": "引文编号连续",
+          "check": "引文 [n] 与参考列表一一对应，无孤儿编号、无缺号",
+          "script": "python scripts/atomic_md_workflow.py validate --chapter N"
+        },
+        {
+          "id": "G2",
+          "name": "citation_guard",
+          "check": "本节新增引用已过 citation_guard，报告 ok=true",
+          "script": "python scripts/citation_guard.py --offline --index data/literature_index.json"
+        },
+        {
+          "id": "G3",
+          "name": "主线对齐",
+          "check": "本节内容不跑题、不与 outline.core_argument 矛盾"
+        },
+        {
+          "id": "G4",
+          "name": "占位清零",
+          "check": "文中无 CITE_PENDING / DATA_PENDING / 【待AI】 / 【待翻译】 等未填占位符",
+          "script": "grep -nE 'CITE_PENDING|DATA_PENDING|【待AI】|【待翻译】' <本节文件> || echo CLEAN"
+        },
+        {
+          "id": "G5",
+          "name": "去AI通过",
+          "check": "check_quality.py check_writing_style() 零违规（含中文句长≤50字、AI禁词、破折号/scare quotes/解释性冒号）",
+          "script": "python scripts/check_quality.py <本节文件> --category writing_style"
+        },
+        {
+          "id": "G6",
+          "name": "字数达标",
+          "check": "本节字数贡献符合 chapter_targets 分配比例（估算）",
+          "script": "python scripts/count_words.py <本节文件>"
+        },
+        {
+          "id": "S1",
+          "name": "实验-方法映射完整",
+          "check": "[实验] EXP-N-M 与 [对应实验] EXP-N-M 成对出现，无悬空标记",
+          "script": "grep -nE '\\[实验\\]|\\[对应实验\\]' <本节文件>"
+        },
+        {
+          "id": "S2",
+          "name": "一实验≥一图表",
+          "check": "每个 [实验] EXP-N-M 对应至少一个 [图] 图N-X 或 [表] 表N-X"
+        },
+        {
+          "id": "S3",
+          "name": "三线表格式",
+          "check": "本节所有数据表使用 Markdown 管道语法，无散文替代",
+          "script": "python scripts/check_quality.py <本节文件> --category three_line_table"
+        },
+        {
+          "id": "S4",
+          "name": "缩略语首展",
+          "check": "本节新引入缩略语均已按 中文全称（English Full Name, ABBR）格式首展，已过 abbreviation_registry.py process",
+          "script": "python scripts/abbreviation_registry.py validate"
+        },
+        {
+          "id": "S5",
+          "name": "自我抄袭标注",
+          "check": "本节复用已发表 SCI 内容处已标注来源文献 [N] 及声明"
+        }
+      ]
+    },
+    "chapter-dod": {
+      "title": "章末 DoD 自检（提交下一步前委托独立子代理盲检）",
+      "applies_when": "每章合并完成、章后 self-check 后，进入 Step 7 finalize 前",
+      "items": [
+        {
+          "id": "G1",
+          "name": "全章引文编号连续",
+          "check": "全章引文编号连续，无孤儿、无缺号",
+          "script": "python scripts/atomic_md_workflow.py validate --chapter N"
+        },
+        {
+          "id": "G2",
+          "name": "全章citation_guard",
+          "check": "本章所有引用已过 citation_guard，报告 ok=true",
+          "script": "python scripts/citation_guard.py --offline --index data/literature_index.json"
+        },
+        {
+          "id": "G3",
+          "name": "全章主线对齐",
+          "check": "全章内容符合 outline 本章 core_argument，无跑题"
+        },
+        {
+          "id": "G4",
+          "name": "全章占位清零",
+          "check": "全章无 CITE_PENDING / DATA_PENDING / 【待AI】 等占位符",
+          "script": "grep -rn 'CITE_PENDING|DATA_PENDING|【待AI】|【待翻译】' <章节目录> || echo CLEAN"
+        },
+        {
+          "id": "G5",
+          "name": "全章去AI通过",
+          "check": "check_quality.py check_writing_style() 零违规（含中文句长、AI禁词、三项标点规范）",
+          "script": "python scripts/check_quality.py <章节合并docx> --category writing_style"
+        },
+        {
+          "id": "G6",
+          "name": "全章字数达标",
+          "check": "count_words.py 输出 ≥ chapter_targets[N]",
+          "script": "python scripts/count_words.py <章节目录>"
+        },
+        {
+          "id": "S1",
+          "name": "全章实验映射完整",
+          "check": "全章实验-方法映射完整，validate-experiment-map 通过",
+          "script": "python scripts/atomic_md_workflow.py validate-experiment-map --chapter N"
+        },
+        {
+          "id": "S2",
+          "name": "全章每实验≥图表",
+          "check": "全章每个实验对应至少一个图表，figure_registry validate 通过",
+          "script": "python scripts/figure_registry.py validate"
+        },
+        {
+          "id": "S3",
+          "name": "全章三线表格式",
+          "check": "全章所有三线表格式校验通过，check_quality 三线表类别零 error",
+          "script": "python scripts/check_quality.py <章节合并docx> --category three_line_table"
+        },
+        {
+          "id": "S4",
+          "name": "全章缩略语注册",
+          "check": "缩略语注册表已更新，本章无重复首展、无遗漏",
+          "script": "python scripts/abbreviation_registry.py validate"
+        },
+        {
+          "id": "S5",
+          "name": "GB/T 7714著录格式",
+          "check": "本章新引文已过 reference_renderer.py validate_all，零偏差",
+          "script": "python scripts/reference_renderer.py validate_all"
+        },
+        {
+          "id": "S6",
+          "name": "全章自我抄袭标注",
+          "check": "本章所有复用 SCI 来源处均有 [N] 引用 + 声明"
+        },
+        {
+          "id": "S7",
+          "name": "章后self-check通过",
+          "check": "atomic_md_workflow.py self-check 输出 ok=true，无 error 级问题",
+          "script": "python scripts/atomic_md_workflow.py self-check --target <章节合并docx>"
+        }
+      ]
+    }
+  }
+}

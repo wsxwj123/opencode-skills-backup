@@ -106,6 +106,15 @@ Follow phased gates in order:
    **Citation Type by Context for P1 (立项依据，MANDATORY):** specific mechanistic/experimental claims (具体科学论点) must cite Original Articles as primary evidence; clinical evidence cites Clinical Trials at the same priority; preprints are last-resort, labeled `[Preprint]`, used only when no peer-reviewed equivalent exists. Full context-to-type mapping and the `role` taxonomy (gap_evidence / method_support / prior_work / comparison / background) live in `references/04_文献管理.md`.
 
    **Phase 1 DoD（收口自检）— 未逐项确认通过，不得向用户声明"P1 完成"**
+
+   **🔴 委托盲检（不得主 agent 自评）**：你刚写完 P1，自评会失真地默认通过、且易漏项。落盘前必须把 DoD 清单**委托给独立上下文的子代理盲检**，自己不直接打勾：
+   1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate p1-dod --files sections/P1_立项依据.md`
+   2. **派一个独立子代理**（Claude Code 用 `academic-blind-reviewer`；其他平台派通用子代理），把任务包原样给它、**不要给它 P1 的写作上下文**，要求按任务包返回 JSON 数组。
+   3. 校验返回：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate p1-dod --return <子代理返回.json>`；退出码非 0（任一缺项/fail/无证据）= **fail-closed**，据子代理证据修复后重跑，**未过不得声明完成**。
+   - **降级路径**（当前环境无法派子代理时）：主 agent 切换"审稿人视角"、清空对 P1 的写作记忆，逐项独立重核——绝不因"自己刚写完"默认通过；仍跑 `verify` 把关。
+
+   下列清单与 `references/dod_checklist.json` gate=`p1-dod` 逐项对应（改清单先改 JSON），供人工对照；能脚本核的项子代理会先跑脚本：
+
    - [ ] ①引文 [n] ↔ REF 列表一一对应（无孤儿编号、无缺号、连续无断档）
    - [ ] ②本节新增引用已过 `citation_guard`（`python scripts/citation_validator.py verify-all`）
    - [ ] ③论述符合 SQ/H/KSQ 主线，未出现与 consistency_map 矛盾的表述
@@ -128,6 +137,15 @@ Follow phased gates in order:
    - **Figure Prompt Generation（AI绘图提示词）：** Phase 2 完成后，为技术路线图等必要图表生成绘图提示词，保存至 `sections/figure_prompts.md`。模板与生成规则见 `references/10_Figure_Prompt规范.md`。
 
    **Phase 2 DoD（收口自检）— 未逐项确认通过，不得向用户声明"P2 完成"**
+
+   **🔴 委托盲检（不得主 agent 自评）**：落盘前委托独立子代理盲检：
+   1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate p2-dod --files sections/P2_研究内容.md`
+   2. 派独立子代理（Claude Code 用 `academic-blind-reviewer`），不给写作上下文，要求返回 JSON 数组。
+   3. 校验：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate p2-dod --return <返回.json>`；非 0 = fail-closed，修复后重跑。
+   - **降级路径**：无法派子代理时，主 agent 切换审稿人视角逐项独立重核，仍跑 `verify`。
+
+   下列清单与 `references/dod_checklist.json` gate=`p2-dod` 逐项对应（改清单先改 JSON）：
+
    - [ ] ①H/O/RC/KSQ 1:1 映射无交叉（`consistency_mapper validate` V-01~V-05 全 PASS）
    - [ ] ②每个 M 可追溯到具体 RC，每个 IN 可追溯到 RC 和 M（V-08/V-10）
    - [ ] ③P2 全文无文献编号引用 [n]（grep `\[[0-9]` P2 返回空）
@@ -151,6 +169,15 @@ Follow phased gates in order:
    - P3_3 and P3_4 may use list format (tables allowed).
 
    **Phase 3 DoD（收口自检）— 未逐项确认通过，不得向用户声明"P3 完成"**
+
+   **🔴 委托盲检（不得主 agent 自评）**：落盘前委托独立子代理盲检：
+   1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate p3-dod --files sections/P3_1_研究基础与可行性分析.md sections/P3_2_工作条件.md sections/P3_3_正在承担的相关项目.md sections/P3_4_完成基金项目情况.md`
+   2. 派独立子代理（Claude Code 用 `academic-blind-reviewer`），不给写作上下文，要求返回 JSON 数组。
+   3. 校验：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate p3-dod --return <返回.json>`；非 0 = fail-closed。
+   - **降级路径**：同 Phase 1。
+
+   下列清单与 `references/dod_checklist.json` gate=`p3-dod` 逐项对应（改清单先改 JSON）：
+
    - [ ] ①四个子文件均已生成（P3_1/P3_2/P3_3/P3_4）
    - [ ] ②consistency_map 中每个 M 至少有一条 F（可行性条目）来自 P3_1 或 P3_2
    - [ ] ③P3_4 总结字数 ≤500 字（`word_counter` 核验）
@@ -167,6 +194,15 @@ Follow phased gates in order:
    - Cover: concurrent grant applications, senior PI prior grants, postdoc status, AI usage declaration, ethics/biosafety/human-genetic-resource approvals (若涉及，与 P3_1 伦理说明呼应), any other required disclosures.
 
    **Phase 4 DoD（收口自检）— 未逐项确认通过，不得向用户声明"P4 完成"**
+
+   **🔴 委托盲检（不得主 agent 自评）**：落盘前委托独立子代理盲检：
+   1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate p4-dod --files sections/P4_其他需要说明的情况.md`
+   2. 派独立子代理（Claude Code 用 `academic-blind-reviewer`），不给写作上下文，要求返回 JSON 数组。
+   3. 校验：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate p4-dod --return <返回.json>`；非 0 = fail-closed。
+   - **降级路径**：同 Phase 1。
+
+   下列清单与 `references/dod_checklist.json` gate=`p4-dod` 逐项对应（改清单先改 JSON）：
+
    - [ ] ①总字数 ≤500 字（`word_counter` 核验）
    - [ ] ②涉及伦理/生物安全/遗传资源的说明与 P3_1 无矛盾（人工核查呼应关系）
    - [ ] ③AI 使用声明已包含（若使用了 AI 辅助写作）
@@ -182,6 +218,15 @@ Follow phased gates in order:
    - Budget total must equal profile `budget_total`; each major budget item traces to an M entry.
 
    **Phase 5 DoD（收口自检）— 未逐项确认通过，不得向用户声明"P5/预算 完成"**
+
+   **🔴 委托盲检（不得主 agent 自评）**：落盘前委托独立子代理盲检：
+   1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate p5-dod --files sections/B1_预算说明_直接费用.md sections/B2_预算说明_合作外拨.md sections/B3_预算说明_其他来源.md`
+   2. 派独立子代理（Claude Code 用 `academic-blind-reviewer`），不给写作上下文，要求返回 JSON 数组。
+   3. 校验：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate p5-dod --return <返回.json>`；非 0 = fail-closed。
+   - **降级路径**：同 Phase 1。
+
+   下列清单与 `references/dod_checklist.json` gate=`p5-dod` 逐项对应（改清单先改 JSON）：
+
    - [ ] ①三个子文件均已生成（B1/B2/B3）
    - [ ] ②各项目预算求和 = profile `budget_total`（人工核算）
    - [ ] ③每个主要预算条目可追溯到至少一条 M 条目（V-09 人工确认）
@@ -194,6 +239,15 @@ Follow phased gates in order:
    - Keywords must align with `consistency_map.keywords_trace`.
 
    **Phase 6 DoD（收口自检）— 未逐项确认通过，不得向用户声明"摘要完成"**
+
+   **🔴 委托盲检（不得主 agent 自评）**：落盘前委托独立子代理盲检：
+   1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate p6-dod --files sections/00_摘要_中文.md sections/00_摘要_英文.md`
+   2. 派独立子代理（Claude Code 用 `academic-blind-reviewer`），不给写作上下文，要求返回 JSON 数组。
+   3. 校验：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate p6-dod --return <返回.json>`；非 0 = fail-closed。
+   - **降级路径**：同 Phase 1。
+
+   下列清单与 `references/dod_checklist.json` gate=`p6-dod` 逐项对应（改清单先改 JSON）：
+
    - [ ] ①中文摘要 ≤400 汉字（`word_counter` 核验）
    - [ ] ②英文摘要 ≤300 英文词（`word_counter` 核验）
    - [ ] ③摘要关键词与 `consistency_map.keywords_trace` 吻合（人工核查）
@@ -209,6 +263,15 @@ Follow phased gates in order:
    - Output: `output/申请书_合并.md` (merge order: 00摘要 → B1-B3预算 → P1 → P2 → P3_1~P3_4 → P4 → REF).
 
    **Phase 7 DoD（收口自检）— 未逐项确认通过，不得向用户声明"全文终稿完成"**
+
+   **🔴 委托盲检（不得主 agent 自评）**：merge 前委托独立子代理盲检：
+   1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate p7-dod --files sections/P1_立项依据.md sections/P2_研究内容.md sections/P3_1_研究基础与可行性分析.md sections/P4_其他需要说明的情况.md sections/00_摘要_中文.md`
+   2. 派独立子代理（Claude Code 用 `academic-blind-reviewer`），不给写作上下文，要求返回 JSON 数组。
+   3. 校验：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate p7-dod --return <返回.json>`；非 0 = fail-closed，**未过不得声明完成、不得 merge**。
+   - **降级路径**：同 Phase 1。
+
+   下列清单与 `references/dod_checklist.json` gate=`p7-dod` 逐项对应（改清单先改 JSON）：
+
    - [ ] ①`diagnosis_engine.py full-review` 无 ERROR 级问题
    - [ ] ②`consistency_mapper.py validate` V-01~V-12 全量验证 PASS（V-06/V-07/V-09/V-11/V-12 首次强制执行）
    - [ ] ③`gate-check --require-mcp` PASS（引文矩阵 / MCP 缓存 / 撤稿检测 / 科学问题属性）

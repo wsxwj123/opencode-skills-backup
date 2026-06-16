@@ -196,11 +196,42 @@ echo '{"citations": []}' > "$WORKROOT/data/citation_guard_report.json"
 完成第三步后，执行稿件内技术审计（逐项定义见 **`references/review_rubric.md` 第三节**）：AIGC 探测、文本重复、图表完整性（含图像造假模式核查）、参考文献审计；合规与透明度审计（伦理/注册/COI/数据可用性）按 **第五节** 逐项执行，适用所有稿件类型。
 
 
+**🔴 第四步半：并发多视角子代理盲评（核心——禁止主 agent 自评）**
+
+主 agent 带着通读/检索/合规审计的全量上下文直接扮演审稿人写意见，属于自评失真——视角单一、确认偏误、对自己通读时忽略的弱点默认通过。第五步与第五步半的实质分析工作必须改为**并发派出 N 个独立上下文子代理盲评**，每个子代理只知道自己的视角 rubric、不知道其他视角的结论：
+
+**委托协议（跨平台，Claude Code 与其他环境均适用）**：
+
+1. **确定评审视角集合**（依稿件类型从以下选取，默认全选）：
+   - 视角①：方法学审稿人——研究设计、对照组设置、偏倚控制、实验重复性
+   - 视角②：统计审稿人——统计方法选择合规性、效能、多重比较、结果报告规范（参照 rubric 第六节统计子清单）
+   - 视角③：领域专家——新颖性、与领域文献的关系、领域特定技术规范（细胞系/伦理/药学剂型等）
+   - 视角④：魔鬼代言人——核心论点漏洞、cherry-picking、确认偏误、过度解读、与文献矛盾（rubric 第八节）
+
+2. **并发派出（fan-out）**：为每个视角各派一个独立子代理，互不共享上下文、互不告知彼此结论（盲）。每个子代理的输入仅包含：
+   - 稿件路径（或全文文本）
+   - 该视角的 rubric 条目（仅本视角相关条目，不给其他视角的 rubric）
+   - 要求：按 rubric 条目逐项返回结构化 JSON，格式为 `[{"dimension": "条目名", "severity": "CRITICAL|MAJOR|MINOR|INFO", "finding": "具体证据与位置", "recommendation": "改进建议"}]`
+   - **禁止**：不得告知其他视角的已有发现，不得给出总体 verdict（这是主 agent 的职责）
+
+3. **Claude Code 调用方式**：用 `TaskCreate` 工具（或等效的 spawn_task）为每个视角创建独立任务，模型默认 `claude-sonnet-4-6`（除非用户指定），任务提示中包含视角 rubric 与稿件内容，task 之间无上下文共享。也可直接用 `academic-blind-reviewer` 预定义子代理（若已配置）。
+
+4. **主 agent 职责（汇总，不评审）**：收齐所有子代理的 JSON 返回后：
+   - 按 severity 合并去重（CRITICAL→大修/拒稿门禁，同一问题多视角均发现→升级 severity）
+   - 填入报告模板占位符（第五步"18点深度分析"结果来自子代理合并，第五步半"魔鬼代言人"结果来自视角④子代理）
+   - 跑 DoD 委托盲检（第七步后的 DoD 节）
+
+5. **降级路径**（当前环境无法派子代理时）：主 agent 逐视角切换——每切换一次向用户显式声明"现在切换为[视角X]视角，清空其他视角记忆"，在该视角内完成全部 rubric 条目后再切换下一个，**绝不让一个视角的判断在切换前污染下一视角的初始读稿印象**；各视角结果单独记录、最后合并。
+
+> **此协议段只定义委托框架，不替换以下内容**：第五步的18点深度分析框架、第五步半的五类对抗性审查条目、rubric 定义、报告模板占位符映射表——均原样保留，子代理按这些条目执行，主 agent 按这些框架汇总。
+
+
 第五步：18点深度分析(内部分析过程)
 
 按照 `references/review_rubric.md` 所列的18个分析点逐一进行内部分析（格式要求见第二部分详细度标准第3条）。
 - 统计严谨性（第 7 点）展开时，逐项过第六节统计审查子清单。
 - 原创研究同时检查第五节合规与透明度审计子清单。
+- **本步骤的实质分析结果来自第四步半各视角子代理的返回，主 agent 做结构化呈现与格式映射，不再重新评审。**
 **若第一步已识别为非原创类型(综述/Meta/病例报告/协议等),按 `references/review_rubric.md` 第四节路由表替换原创专属点(如5研究设计、7统计严谨性中的随机化/盲法)为对应规范要点,其余通用点照常;并在报告中显式说明所用规范,避免读者误以为漏审。**
 
 
@@ -234,7 +265,15 @@ echo '{"citations": []}' > "$WORKROOT/data/citation_guard_report.json"
 
 ### DoD 自检清单（报告收口，全部通过前禁止向用户声明"审稿报告完成"）
 
-> **硬规则**：以下各项未逐项确认通过，**不得向用户声明"审稿报告完成"**。能脚本核的项目在第七步已由 `validate_report_html.py` 覆盖；其余人工逐项确认。
+> **硬规则**：以下各项未逐项确认通过，**不得向用户声明"审稿报告完成"**。能脚本核的项目在第七步已由 `validate_report_html.py` 覆盖；其余委托独立子代理盲检。
+
+**🔴 委托盲检（不得主 agent 自评）**：你刚完成审稿分析，自评会失真地默认通过、且易漏项。报告交付前必须把 DoD 清单**委托给独立上下文的子代理盲检**，自己不直接打勾：
+1. 生成任务包：`python ~/.claude/skills/reviewer-simulator/scripts/delegate_review.py pack --checklist ~/.claude/skills/reviewer-simulator/references/dod_checklist.json --gate report-dod --files <生成的报告HTML路径>`
+2. **派一个独立子代理**（Claude Code 用 `academic-blind-reviewer`；其他平台派通用子代理，默认 sonnet 模型），把任务包原样给它、**不要给它本次审稿的分析上下文**，要求按任务包返回 JSON 数组。
+3. 校验返回：`python ~/.claude/skills/reviewer-simulator/scripts/delegate_review.py verify --checklist ~/.claude/skills/reviewer-simulator/references/dod_checklist.json --gate report-dod --return <子代理返回.json>`；退出码非 0（任一缺项/fail/无证据）= **fail-closed**，据子代理证据修复后重跑，**未过不得声明完成**。
+- **降级路径**（当前环境无法派子代理时）：主 agent 切换"质检视角"、清空对本次审稿分析的记忆，逐项独立重核——绝不因"自己刚审完"默认通过；仍跑 `verify` 把关。
+
+> 下列清单与 `references/dod_checklist.json` 逐项对应（改清单先改 JSON），供人工对照；能脚本核的项子代理会先跑脚本。
 
 **A. 脚本可核项（第七步 `validate_report_html.py` 覆盖，通过即✓）**
 - [ ] **A1 · 21占位符全替换**：`validate_report_html.py` 返回 `VALIDATION_OK`，无残留 `{{...}}`

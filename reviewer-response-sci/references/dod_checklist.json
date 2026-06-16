@@ -1,0 +1,84 @@
+{
+  "skill": "reviewer-response-sci",
+  "note": "DoD 自检清单机器可读真源。delegate_review.py pack/verify 读此文件；SKILL.md 散文与各 item 逐项对应。改清单先改这里。",
+  "gates": {
+    "response-dod": {
+      "title": "回复包收口自检（落盘前委托独立子代理盲检）",
+      "applies_when": "run_pipeline.py 退出码 0 后、向用户声明回复包完成前",
+      "items": [
+        {
+          "id": "RR1",
+          "name": "引文对应",
+          "check": "引文 [N] 与参考列表一一对应（无孤儿、无缺号、编号连续）",
+          "script": "python scripts/citation_ref_tracker.py --project-root ."
+        },
+        {
+          "id": "RR2",
+          "name": "citation_guard",
+          "check": "本次新增引用已过 citation_guard.py 核验（status == 'pass' 或无新增引用）",
+          "script": "python scripts/citation_guard.py --project-root . --offline"
+        },
+        {
+          "id": "RR3",
+          "name": "主线对齐",
+          "check": "全部回复内容符合投稿论文主线，无跑题、无与原稿结论矛盾的表述"
+        },
+        {
+          "id": "RR4",
+          "name": "占位清零",
+          "check": "无 '待AI' / 'AI_FILL_REQUIRED' / '[PENDING Step 7]' 占位符残留",
+          "script": "python scripts/final_content_gate.py --project-root ."
+        },
+        {
+          "id": "RR5",
+          "name": "去AI",
+          "check": "英文单句 ≤30 词、无 -ing 分词挂句、无套话禁词；中文单句 ≤50 字、从句 ≤2 层",
+          "script": "python scripts/risk_check.py --project-root ."
+        },
+        {
+          "id": "RR6",
+          "name": "字数达标",
+          "check": "每条 response_en ≥3 句且 ≤300 词；response_zh 信息等价"
+        },
+        {
+          "id": "RR7",
+          "name": "逐条覆盖",
+          "check": "每条审稿意见（含 Editor 意见）均有对应 unit，无遗漏（对照 Step 1.5 解析表）"
+        },
+        {
+          "id": "RR8",
+          "name": "Editor层独立",
+          "check": "Editor 意见为独立顶层节点，未并入任何 Reviewer（HTML TOC 核对）"
+        },
+        {
+          "id": "RR9",
+          "name": "Strategy基调",
+          "check": "每个 comment unit 的 content.strategy 字段均非空"
+        },
+        {
+          "id": "RR10",
+          "name": "承诺↔落点一致性",
+          "check": "response_en 里承诺的动作（we added/clarified/revised + 对象）能在 modification_actions 或 revised_excerpt_en 找到对应落点，WARN 数为 0",
+          "script": "python scripts/consistency_check.py --project-root ."
+        },
+        {
+          "id": "RR11",
+          "name": "edit_plan回填",
+          "check": "manuscript_edit_plan.md 无 '[PENDING Step 7]' 行（aggregate-edit-plan 退出码 0）",
+          "script": "python scripts/state_manager.py aggregate-edit-plan --project-root ."
+        },
+        {
+          "id": "RR12",
+          "name": "反驳有据",
+          "check": "所有 'Push back' 策略的 unit 均有至少一条具体证据（引文 / 数据 / 方法学依据）"
+        },
+        {
+          "id": "RR13",
+          "name": "各gate全通",
+          "check": "run_pipeline.py 退出码 0（strict_gate / final_content_gate / consistency_check / html_format_check / risk_check / citation_guard / citation_ref_tracker 全通）",
+          "script": "python scripts/run_pipeline.py --project-root . --output-html reviewer_response.html"
+        }
+      ]
+    }
+  }
+}
