@@ -415,8 +415,8 @@ def markdown_to_docx(
                 doc.add_heading(heading_text, level=2)
         elif line.startswith("# "):
             heading_text = line[2:]
-            in_references = False
-            in_abstract = False
+            in_references = heading_text.lower() in {"references", "reference", "参考文献"}
+            in_abstract = heading_text.lower() in {"abstract", "摘要"}
             if doc_kind == "manuscript" and not seen_title:
                 paragraph = doc.add_paragraph(style="ReviseSciTitle")
                 paragraph.add_run(heading_text).bold = True

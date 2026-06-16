@@ -91,14 +91,23 @@ def normalize_reviewer_label(text: str) -> str:
     match = re.search(r"reviewer\s*#?\s*(\d+)", text, flags=re.IGNORECASE)
     if match:
         return f"Reviewer #{int(match.group(1))}"
+    # 中文 reviewer 标题：审稿人1 / 评审人 2 等
+    zh_match = re.search(r"(?:审稿人|审稿者|评审人|评审者|审阅人)\s*[#＃]?\s*(\d+)", text)
+    if zh_match:
+        return f"Reviewer #{int(zh_match.group(1))}"
     return normalize_ws(text)
 
 
 def parse_reviewer_heading(text: str) -> tuple[str, str]:
+    # 英文：Reviewer #1 / Reviewer 1
     match = re.match(r"^(Reviewer\s*#?\s*\d+)\s*(?:[:：-]\s*(.+))?$", text, flags=re.IGNORECASE)
-    if not match:
-        return "", ""
-    return normalize_reviewer_label(match.group(1)), normalize_ws(match.group(2) or "")
+    if match:
+        return normalize_reviewer_label(match.group(1)), normalize_ws(match.group(2) or "")
+    # 中文：审稿人1 / 审稿人 #2 / 评审人3 等
+    zh_match = re.match(r"^((?:审稿人|审稿者|评审人|评审者|审阅人)\s*[#＃]?\s*\d+)\s*(?:[:：-]\s*(.+))?$", text)
+    if zh_match:
+        return normalize_reviewer_label(zh_match.group(1)), normalize_ws(zh_match.group(2) or "")
+    return "", ""
 
 
 def parse_editor_heading(text: str) -> tuple[str, str]:
@@ -210,13 +219,13 @@ def parse_docx_comments(path: Path) -> list[dict[str, str]]:
                 expect_prefatory_statement = False
             continue
         lowered = text.lower()
-        if lowered in {"major", "major comments", "major comment"}:
+        if lowered in {"major", "major comments", "major comment"} or any(kw in lowered for kw in ("主要问题", "重大问题", "关键问题")):
             flush_current()
             flush_statement()
             current_severity = "major"
             expect_prefatory_statement = False
             continue
-        if lowered in {"minor", "minor comments", "minor comment"}:
+        if lowered in {"minor", "minor comments", "minor comment"} or any(kw in lowered for kw in ("次要问题", "小问题", "建议修改")):
             flush_current()
             flush_statement()
             current_severity = "minor"
