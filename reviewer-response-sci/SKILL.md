@@ -90,10 +90,16 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
   - Empty appreciation: "we greatly appreciate your insightful comments", "this is an excellent suggestion"
   - Filler phrases: "in order to", "we would like to point out that", "as the reviewer rightly noted"
   - Structural repetition: ≥3 responses must not open with the same template sentence
+  - **English sentence length hard cap: each sentence in `response_en` and `revised_excerpt_en` must be ≤30 words.** If a sentence exceeds 30 words, split it. Do not achieve this by removing necessary content — restructure instead.
+  - **-ing participial clause ban:** do not attach a dangling -ing clause to the main clause with a comma (e.g., ", reflecting our commitment to…", ", ensuring that…", ", highlighting the importance of…"). Rewrite as a separate sentence or use a coordinating conjunction.
   - **Decorative em-dash ban:** do not use —/——/em-dash as a pause, parenthetical, or emphasis marker (e.g., "This result—while preliminary—suggests…"); use a comma, period, or split sentence instead. Hyphens in compound terms ("dose-response") and numeric ranges are not affected. Applies to both English and Chinese outputs.
   - **Scare-quote ban:** do not use quotation marks around coined words or ordinary phrases to imply novelty or irony (e.g., "robust" findings, "novel" approach). Retain quotes for: first-time term definitions, direct verbatim quotations from reviewer comments, and established idiomatic expressions.
   - **Explanatory-colon ban:** do not use the pattern "concept: explanation" as a decorative sentence structure (e.g., "Main revision: we added a new control group"). Legitimate colons include ratios (2:1), clock times, list lead-ins, section headings, and figure labels ("Figure 3A:").
-  - `risk_check.py` scans for these patterns automatically; WARN-level issues should be fixed before delivery
+  - `risk_check.py` scans for these patterns automatically (including sentence length and -ing clause detection); WARN-level issues should be fixed before delivery
+- **Chinese response style (中文回复规则):**
+  - **单句 ≤50 字硬上限。** 超 50 字的句子必须拆分；不得为凑长度补充冗余内容。
+  - **从句嵌套 ≤2 层。** 禁止三重嵌套（"因为…由于…鉴于…"类结构）。
+  - `risk_check.py` 对 `response_zh` 执行中文句长检测（WARN 级，>50 字告警）
 ### Domain Edge Cases
 - **Reviewer recommends acceptance without comments** ("I have no major/minor concerns"): create a single email-only response acknowledging the reviewer; do not generate an empty Major/Minor section.
 - **Two reviewers give contradictory suggestions** (e.g., R1 says "remove Section 3" vs R2 says "expand Section 3"): flag the conflict explicitly in both units' `notes_core_zh`; in the English response, acknowledge the divergence and state which direction is adopted with evidence-based justification. Add a `[CONFLICTING ADVICE]` marker in `manuscript_edit_plan.md`.
@@ -247,6 +253,28 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
 11. Write checkpoint + transaction logs to `project_root/logs/`.
 12. Sync unit state map to `project_root/logs/unit_state.json`.
 13. Write reproducibility snapshot to `project_root/logs/version_snapshot.json` (hashes for key scripts + outputs).
+
+## Definition-of-Done: 回复包收口自检清单
+
+> **硬规则：清单未逐项确认通过，不得向用户声明"回复包完成"。** 能脚本核的项直接跑对应 gate；人工项逐条确认。
+
+### 通用 6 项（全技能必过）
+- [ ] ① 引文 [N] ↔ 参考列表一一对应（无孤儿、无缺号、编号连续）→ `citation_ref_tracker.py`
+- [ ] ② 本次新增引用已过 `citation_guard.py`（`status == "pass"` 或无新增引用）
+- [ ] ③ 全部回复内容符合投稿论文主线（无跑题、无与原稿结论矛盾的表述）→ 人工
+- [ ] ④ 占位符清零（无 `待AI` / `AI_FILL_REQUIRED` / `[PENDING Step 7]`）→ `final_content_gate.py`
+- [ ] ⑤ 去 AI（英文单句 ≤30 词、无 -ing 分词挂句、无套话禁词；中文单句 ≤50 字、从句 ≤2 层）→ `risk_check.py` + 人工
+- [ ] ⑥ 字数达标（每条 response_en ≥3 句且 ≤300 词；response_zh 信息等价）→ 人工
+
+### reviewer-response 特有项
+- [ ] 逐条覆盖：每条审稿意见（含 Editor 意见）均有对应 unit，无遗漏 → 人工对照 Step 1.5 解析表
+- [ ] Editor 层独立：Editor 意见为独立顶层节点，未并入任何 Reviewer → HTML TOC 人工核对
+- [ ] Strategy 基调已定：每个 comment unit 的 `content.strategy` 字段均非空 → 人工（Step 1.7 确认后）
+- [ ] 承诺 ↔ 落点一致：`response_en` 里承诺的动作能在 `modification_actions` 或 `revised_excerpt_en` 找到对应落点 → `consistency_check.py`（WARN 需消除）
+- [ ] `edit_plan` 已聚合回填：`manuscript_edit_plan.md` 无 `[PENDING Step 7]` 行 → `aggregate-edit-plan` 脚本退出码 0
+- [ ] 反驳有据：所有 `Push back` 策略的 unit 均有至少一条具体证据（引文 / 数据 / 方法学依据）→ 人工
+- [ ] Citation registry 已核验：`citation_registry.json` 存在且 `citation_guard.py` 通过；若无新增引用，确认 `citation_registry.json` 的 `entries` 为空数组 → `citation_guard.py`
+- [ ] 各 gate 全通：`run_pipeline.py` 退出码 0（`strict_gate` / `final_content_gate` / `consistency_check` / `html_format_check` / `risk_check` / `citation_guard` / `citation_ref_tracker`）
 
 ## Re-Render Workflow
 After manual editing of any unit JSON:

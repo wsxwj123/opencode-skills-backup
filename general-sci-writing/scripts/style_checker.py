@@ -53,6 +53,19 @@ EXPLANATORY_COLON_RE = re.compile(
     r"(?<!\d)([A-Z][a-z]{2,}(?:\s[A-Za-z][a-z]{1,}){0,3})\s*:\s+[A-Za-z][a-z]"
 )
 
+# ── Trailing participial clause (禁 -ing 分词悬垂从句) ──────────────────────
+# Matches: ", <verb>ing" at end of sentence where verb is a common AI-typical
+# commentary participle. Only triggers on sentence-final position.
+TRAILING_ING_VERBS = (
+    r"reflecting|ensuring|highlighting|demonstrating|symbolizing|underscoring"
+    r"|suggesting|indicating|revealing|confirming|emphasizing|illustrating"
+    r"|showing|proving|signifying|supporting|implying"
+)
+TRAILING_ING_RE = re.compile(
+    rf",\s+(?:{TRAILING_ING_VERBS})\s+[a-z]",
+    re.IGNORECASE,
+)
+
 # ── Passive voice detection (simplified) ──────────────────────────────────────
 _BE_FORMS = r"(?:is|are|was|were|been|being|be)"
 _PAST_PARTICIPLE = r"(?:[a-z]+ed|[a-z]+en|[a-z]+t)\b"
@@ -278,6 +291,25 @@ def check_file(filepath: str) -> dict[str, Any]:
             "type": "explanatory_colon_in_prose",
             "severity": "low",
             "detail": f"{len(expl_colon_hits)} possible explanatory colon(s): {', '.join(repr(h) for h in expl_colon_hits[:3])}. Rewrite as a subordinate clause.",
+        })
+
+    # ── 10. Trailing -ing participial clause (禁 -ing 分词悬垂从句) ──────────
+    # Sentence-final ", reflecting/demonstrating/suggesting/..." is a hallmark
+    # AI pattern. We scan each sentence for the pattern.
+    trailing_ing_hits: list[str] = []
+    for sent in sentences:
+        m = TRAILING_ING_RE.search(sent)
+        if m:
+            trailing_ing_hits.append(sent[:80])
+    if trailing_ing_hits:
+        result["issues"].append({
+            "type": "trailing_ing_clause",
+            "severity": "medium",
+            "detail": (
+                f"{len(trailing_ing_hits)} trailing participial clause(s) detected "
+                f"(e.g. ', reflecting/demonstrating/suggesting …'). "
+                f"Rewrite as a new sentence. First hit: {repr(trailing_ing_hits[0])}"
+            ),
         })
 
     # ── Score calculation ─────────────────────────────────────────────────────

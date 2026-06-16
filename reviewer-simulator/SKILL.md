@@ -230,6 +230,27 @@ echo '{"citations": []}' > "$WORKROOT/data/citation_guard_report.json"
 5. 若校验未通过：不得自行静默修改报告后重新提交，必须向用户说明具体失败原因和位置，列出需要人工确认的条目，等待用户指令后再决定返工或带注释交付。
 
 
+---
+
+### DoD 自检清单（报告收口，全部通过前禁止向用户声明"审稿报告完成"）
+
+> **硬规则**：以下各项未逐项确认通过，**不得向用户声明"审稿报告完成"**。能脚本核的项目在第七步已由 `validate_report_html.py` 覆盖；其余人工逐项确认。
+
+**A. 脚本可核项（第七步 `validate_report_html.py` 覆盖，通过即✓）**
+- [ ] **A1 · 21占位符全替换**：`validate_report_html.py` 返回 `VALIDATION_OK`，无残留 `{{...}}`
+- [ ] **A2 · verdict 枚举合规**：`decisionVerdict` ∈ {拒稿/大修/小修/接收}，且与 `finalRecommendationText` 完全一致；`VERDICT_CLASS` 与 verdict 一一对应
+
+**B. 流程完整性（人工逐项）**
+- [ ] **B1 · CRITICAL 阻断逻辑**：若第五步半魔鬼代言人发现任一 CRITICAL 级问题，verdict ≠ "接收"（降为大修或拒稿），且 `{{RECOMMENDATION_RATIONALE}}` 中已显式说明触发原因与证据锚点
+- [ ] **B2 · 合规审计完整**：第四步技术合规审计（`references/review_rubric.md` 第五节）7项已逐项核查，缺项已写入第七节核心问题
+- [ ] **B3 · 统计子清单**：原创研究或 Meta 分析已执行统计审查子清单（rubric 第六节）6项；非原创研究此项标记"不适用（稿件类型：X）"
+- [ ] **B4 · 魔鬼代言人复查已执行**：第五步半五类对抗性审查（rubric 第八节）已完整执行，发现问题已合并至 `{{CRITICAL_ISSUES_HTML}}` 或 `{{FORENSIC_ANALYSIS_HTML}}`
+- [ ] **B5 · 给编辑保密意见**：`{{CONFIDENTIAL_EDITOR_HTML}}` 四项（直接拒稿建议/数据造假怀疑/私评新颖性/利益冲突提示）均有内容或明确写"无"，无项目遗漏
+- [ ] **B6 · 引文真实性**：报告正文中主动引据的外部文献（非稿件自带引用）已过 `citation_guard`，`ok=true` 或已标注"待核验"；未引外部文献时此项标记"无外部引文"
+- [ ] **B7 · 审稿意见本身去AI**：报告正文（含各 `{{*_HTML}}` 占位符填充内容）已逐项核查 rubric 第七节"审稿意见自身去AI"5项规则（三项禁用 + 中文句长 ≤50字 + 从句 ≤2层），无违规残留
+
+---
+
 第五部分：审稿报告输出格式
 
 必须严格按照以下结构输出,不可增删、不可改序。每个章节末尾标注其在 `assets/report_template.html` 中对应的占位符(填值规则见第十部分占位符映射表):
