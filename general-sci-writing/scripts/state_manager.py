@@ -655,6 +655,12 @@ def parse_literature_matrix(payload):
         "experiments", "methods_used", "datasets", "tables",
         "abbreviations", "authors", "affiliations", "tags", "labels",
         "citations_needed", "figure_ids", "figure_list", "si_figures",
+        # Top-level storyline narrative fields (Phase 2 output) — must not be
+        # mistaken for section ids when the whole storyline JSON is walked
+        "working_titles", "alternative_titles", "suggested_titles",
+        "narrative_arc", "story_arc", "story_flow", "narrative_flow",
+        "scope", "target_audience", "key_message", "main_message",
+        "abstract_draft", "abstract", "summary", "overview",
     }
 
     def add(section_id, refs):

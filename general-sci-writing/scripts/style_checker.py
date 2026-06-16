@@ -40,6 +40,19 @@ FORBIDDEN_PATTERNS = [
     re.compile(r"from\s+\w+\s+to\s+\w+", re.IGNORECASE),  # "from X to Y" pattern
 ]
 
+# ── Anti-AI: em-dash, scare quotes, explanatory colon ────────────────────────
+# Em-dash (U+2014 —) used decoratively in prose (not in code/URLs/math).
+EM_DASH_RE = re.compile(r"(?<!\d)—(?!\d)")
+# Scare quotes: double-quoted phrase of 1-4 words not preceded by numeric citation
+# context, to catch "synergistic", "perfect storm", etc.
+SCARE_QUOTE_RE = re.compile(r'(?<!\[)(?<!\d)"([A-Za-z][^"]{1,40})"(?!\s*:)')
+# Explanatory colon: "NounPhrase: Explanation" pattern in prose.
+# Matches: Title-case phrase (1-4 words) followed by ": " then another capital+lower word.
+# Excludes: digit before colon (ratio/time), all-caps acronym before colon.
+EXPLANATORY_COLON_RE = re.compile(
+    r"(?<!\d)([A-Z][a-z]{2,}(?:\s[A-Za-z][a-z]{1,}){0,3})\s*:\s+[A-Za-z][a-z]"
+)
+
 # ── Passive voice detection (simplified) ──────────────────────────────────────
 _BE_FORMS = r"(?:is|are|was|were|been|being|be)"
 _PAST_PARTICIPLE = r"(?:[a-z]+ed|[a-z]+en|[a-z]+t)\b"
@@ -162,15 +175,23 @@ def check_file(filepath: str) -> dict[str, Any]:
         })
 
     # ── 3. Passive voice ratio ────────────────────────────────────────────────
+    # Protocol (anti-ai-protocol.md P0#6): target 50–70%.
+    # < 40% = too colloquial; > 70% = stiff/repetitive.
     passive_count = sum(1 for s in sentences if PASSIVE_RE.search(s))
     passive_ratio = passive_count / len(sentences) if sentences else 0
     result["passive_ratio"] = round(passive_ratio, 3)
 
-    if passive_ratio > 0.35:
+    if passive_ratio > 0.70:
         result["issues"].append({
             "type": "excessive_passive_voice",
             "severity": "medium",
-            "detail": f"Passive ratio {passive_ratio:.1%} (target: ≤30%). Reduce passive constructions.",
+            "detail": f"Passive ratio {passive_ratio:.1%} (target: 50–70%). Too many passive constructions — style becomes stiff.",
+        })
+    elif passive_ratio < 0.40:
+        result["issues"].append({
+            "type": "insufficient_passive_voice",
+            "severity": "medium",
+            "detail": f"Passive ratio {passive_ratio:.1%} (target: 50–70%). Too few passive constructions — reads too colloquial for SCI prose.",
         })
 
     # ── 4. Forbidden words/phrases ────────────────────────────────────────────
@@ -214,14 +235,49 @@ def check_file(filepath: str) -> dict[str, Any]:
         })
 
     # ── 6. Bullet point check (正文禁用) ─────────────────────────────────────
+    # Exclude Vancouver-style reference lines (number. AuthorText YYYY) from
+    # the numbered-list count — _extract_prose strips the References section
+    # only when headed by a markdown heading; fallback: skip lines that look
+    # like bibliography entries (contain a 4-digit year).
     bullet_lines = re.findall(r"^[\s]*[-*]\s+\w", prose, re.MULTILINE)
-    numbered_lines = re.findall(r"^[\s]*\d+\.\s+\w", prose, re.MULTILINE)
+    _all_numbered = re.findall(r"^[\s]*\d+\.\s+.+", prose, re.MULTILINE)
+    _ref_like = re.compile(r"\b(19|20)\d{2}\b")
+    numbered_lines = [ln for ln in _all_numbered if not _ref_like.search(ln)]
     bullet_count = len(bullet_lines) + len(numbered_lines)
     if bullet_count > 0:
         result["issues"].append({
             "type": "bullet_points_in_prose",
             "severity": "high",
             "detail": f"{bullet_count} bullet/numbered list lines detected in prose body.",
+        })
+
+    # ── 7. Decorative em-dash (禁装饰性破折号) ───────────────────────────────
+    em_dash_count = len(EM_DASH_RE.findall(prose))
+    if em_dash_count >= 1:
+        result["issues"].append({
+            "type": "decorative_em_dash",
+            "severity": "medium",
+            "detail": f"{em_dash_count} em-dash(es) (—) detected. Replace with comma, period, or restructure sentence.",
+        })
+
+    # ── 8. Scare quotes (禁挂引号暗示新概念) ──────────────────────────────────
+    scare_hits = SCARE_QUOTE_RE.findall(prose)
+    # Filter obvious false positives: ALL CAPS acronyms, or phrases ≥5 words
+    scare_hits = [h for h in scare_hits if len(h.split()) <= 4 and not h.isupper()]
+    if len(scare_hits) >= 1:
+        result["issues"].append({
+            "type": "scare_quotes",
+            "severity": "medium",
+            "detail": f"{len(scare_hits)} likely scare-quote phrase(s): {', '.join(repr(h) for h in scare_hits[:3])}. Remove quotes unless direct citation or established term.",
+        })
+
+    # ── 9. Explanatory colon in prose (禁解释性冒号) ──────────────────────────
+    expl_colon_hits = EXPLANATORY_COLON_RE.findall(prose)
+    if len(expl_colon_hits) >= 1:
+        result["issues"].append({
+            "type": "explanatory_colon_in_prose",
+            "severity": "low",
+            "detail": f"{len(expl_colon_hits)} possible explanatory colon(s): {', '.join(repr(h) for h in expl_colon_hits[:3])}. Rewrite as a subordinate clause.",
         })
 
     # ── Score calculation ─────────────────────────────────────────────────────

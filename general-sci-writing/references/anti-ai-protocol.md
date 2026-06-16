@@ -6,7 +6,7 @@
 
 ## 目标读者画像
 
-以美国 STEM 博士研究生（PhD candidate）日常阅读、自然书写的水平为基准——朴素、平实、信息密度优先；笔触受 Nature 资深编辑把关（Role 设定不变），但**克制使用编辑级精炼修辞**，避免炫技。
+以美国 STEM 博士研究生（PhD candidate）日常阅读、自然书写的水平为基准，朴素、平实、信息密度优先；笔触受 Nature 资深编辑把关（Role 设定不变），但**克制使用编辑级精炼修辞**，避免炫技。
 
 ## 禁词表 (The "Stop" List)
 
@@ -17,7 +17,7 @@
 
 ## 🔴 禁修辞 (No Rhetorical Devices)
 
-严禁文学性修辞——隐喻、拟人、明喻、夸张、对偶、设问、引经据典等。例外：领域内已固化的术语隐喻（如 "molecular switch"、"signaling cascade"）保留；新造的、装饰性的修辞一律删。
+严禁文学性修辞，即隐喻、拟人、明喻、夸张、对偶、设问、引经据典等。例外：领域内已固化的术语隐喻（如 "molecular switch"、"signaling cascade"）保留；新造的、装饰性的修辞一律删。
 
 ## 🔴 禁生僻词 (No Obscure Vocabulary)
 
@@ -27,12 +27,12 @@
 
 ## 🔴 禁造词 (No Neologisms)
 
-严禁拼接新词或自造缩略——所有词、所有缩写必须能在权威词典 / 领域教科书 / 已发表文献中找到原型。首次出现的缩写必须给全称（如 "extracellular vesicles (EVs)"）。AI 凭语感造的新组合词（"transformomics"、"diseasability" 之类）一律删。
+严禁拼接新词或自造缩略。所有词、所有缩写必须能在权威词典 / 领域教科书 / 已发表文献中找到原型。首次出现的缩写必须给全称（如 "extracellular vesicles (EVs)"）。AI 凭语感造的新组合词（"transformomics"、"diseasability" 之类）一律删。
 
 ## 🔴 禁长难句 (No Long/Complex Sentences)
 
 - **硬上限：单句 ≤ 30 词**（含从句）。超过即拆。
-- **从句深度 ≤ 2 层**——禁止"主句套定语从句套状语从句"三层嵌套。
+- **从句深度 ≤ 2 层**，禁止"主句套定语从句套状语从句"三层嵌套。
 - 一句话只承担一个核心论点，复合论点拆成两句。
 
 ## 🔴 被动为主 (Passive Voice as Primary)
@@ -42,6 +42,50 @@
 - Discussion 表达作者推断 / 主观判断 → 可适当主动（"We propose..."、"These data suggest..."），但仍以被动为主。
 - 被动 < 40% 视为过于口语化；> 70% 视为冗余呆板，均扣分。
 
+## 🔴 禁装饰性破折号 (No Decorative Em-dashes)
+
+严禁用 em-dash（—、——）做停顿、补充说明或强调。改用逗号、句号或拆句处理。
+
+**合法保留的连字符/横线用途（不属于本条禁止范围）**：
+- 连字符（hyphen `-`）：复合词 / 术语（如 dose-response, T-cell, non-significant）。
+- 数字范围号（–，en-dash）：数值范围（如 5–10 mg, 2020–2023）。
+
+**违规示例 → 修正**：
+- ✗ "The model predicted high efficacy — a finding that requires further validation."
+- ✓ "The model predicted high efficacy, though further validation is required."
+- ✗ "Three factors were identified — dose, timing, and formulation."
+- ✓ "Three factors were identified: dose, timing, and formulation." （列举引导用冒号合法）
+
+## 🔴 禁 Scare Quotes（挂引号暗示新概念）
+
+严禁用双引号包裹自造词、普通短语或非直接引用内容，以暗示"这是一个新概念/反讽"。这是 AI 写作的典型痕迹。
+
+**合法保留**：
+- 首次引入领域内已固化的术语隐喻（如首次的 "molecular switch"，之后不再加引号）。
+- 直接引用原文（quote）。
+- 已固化行业术语（如 "off-label" use，文献中已普遍使用）。
+
+**违规示例 → 修正**：
+- ✗ "The results suggest a 'synergistic' interaction between the two pathways."
+- ✓ "The results suggest synergy between the two pathways."
+- ✗ "This creates a 'perfect storm' for resistance development."
+- ✓ "This creates conditions that favor resistance development."
+
+## 🔴 禁解释性冒号（No Explanatory Colons in Prose）
+
+严禁在正文句子中用"概念: 解释"格式插入装饰性冒号，用以暗示"深刻定义"或"特别说明"。这类冒号通常可直接删掉或改为从句。
+
+**合法保留的冒号用途**：
+- 比例（1:10）、时间（08:30）、图表标签（Figure 1: ）。
+- 真正的列举引导（见后跟三项以上的并列列表）。
+- 节标题 / 方法子标题（Methods: Cell culture）。
+
+**违规示例 → 修正**：
+- ✗ "The key limitation: sample size was insufficient for subgroup analysis."
+- ✓ "The key limitation was that sample size was insufficient for subgroup analysis."
+- ✗ "Our approach: integrating pharmacokinetic modeling with in vivo data."
+- ✓ "We integrated pharmacokinetic modeling with in vivo data."
+
 ## 写作范式
 
 - **数据驱动 (Data-First)**：用数据说话，拒绝 "significant effect" 这种空话，必须写 "5-fold increase (P<0.001)"。
@@ -49,22 +93,22 @@
 
 ## 句长节奏
 
-- 同段落内混合**短句（≤12 词）**与**中句（15-25 词）**——不要求 25-40 词的长句（与"禁长难句"统一）。
-- 严禁连续 3 句以上句长相近（差异 < 5 词）——避免 AI 式齐整。
+- 同段落内混合**短句（≤12 词）**与**中句（15-25 词）**，不要求 25-40 词的长句（与"禁长难句"统一）。
+- 严禁连续 3 句以上句长相近（差异 < 5 词），避免 AI 式齐整。
 - 同一概念在同段落不重复同表述，用同义替换或结构重组。
 - 改写后段落长度控制在原文 ±15% 以内。
 - 连续段落首句禁用相同句式（如连续 "This study..."、"The results..."、"We found..."）。
 
 ## 深度改写策略 (Anti-Similarity Protocol)
 
-- **词汇层 (Lexical)**：术语不动；术语周围的非术语通用词降到 PhD 平实层（如 `significant → clear/large`，不再升级为 `pronounced/marked/substantial`——那是编辑级修饰，违反目标读者画像）。禁止直接使用原始文献完整短语（≥4 连续词），必须拆解重构。
+- **词汇层 (Lexical)**：术语不动；术语周围的非术语通用词降到 PhD 平实层（如 `significant → clear/large`，不再升级为 `pronounced/marked/substantial`，那是编辑级修饰，违反目标读者画像）。禁止直接使用原始文献完整短语（≥4 连续词），必须拆解重构。
 - **句法层 (Syntactic)**：被动为主；将因果从句拆为独立句而非套层从句。禁止模板化过渡（"Furthermore"、"In addition"、"Moreover"），改用逻辑内嵌或自然连接（"Because..."、"This in turn..."）。
 - **结构层 (Structural)**：允许调整段内论点顺序（不破逻辑链）；可适度插入作者推断句（"This likely reflects..."、"One plausible explanation is..."）模拟真人推理痕迹。
 
 ## 自我审查
 
-输出任何段落前，必须运行自检（句长 / 句长方差 / 段首重复 / 被动占比 / 是否含修辞、生僻词、造词）；`/check` 阶段跑 `style_checker.py` 量化打分作为客观兜底。
+输出任何段落前，必须运行自检（句长 / 句长方差 / 段首重复 / 被动占比 / 是否含修辞、生僻词、造词、em-dash、scare quotes、解释性冒号）；`/check` 阶段跑 `style_checker.py` 量化打分作为客观兜底。
 
 ## 学科语感适配（可选）
 
-如当前研究方向的 `configs/*.json` 含 `writing_style` 字段（目前 `drug_delivery` / `computer_science` 有），写作时优先读取并遵循其语态偏好、推荐/避免动词、过渡短语和句长范围；**未配置该字段时使用本协议通用规则即可，不报错**——本协议已自给自足。
+如当前研究方向的 `configs/*.json` 含 `writing_style` 字段（目前 `drug_delivery` / `computer_science` 有），写作时优先读取并遵循其语态偏好、推荐/避免动词、过渡短语和句长范围；**未配置该字段时使用本协议通用规则即可，不报错**，本协议已自给自足。
