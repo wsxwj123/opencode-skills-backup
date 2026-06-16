@@ -1971,11 +1971,14 @@ def profile_manage(
     references_min_count = targets.get("references_min_count")
     min_chapter_count = targets.get("min_chapters")
 
-    if body_chars is not None and int(body_chars) < 80000:
+    _degree_type = format_profile.get("degree_type", "")
+    _is_master = "硕士" in str(_degree_type)
+    _body_min = 30000 if _is_master else 50000
+    if body_chars is not None and int(body_chars) < _body_min:
         raise StateFileError(
             path=path,
             reason="invalid_profile",
-            detail=f"body_target_chars ({body_chars}) must be >= 80000",
+            detail=f"body_target_chars ({body_chars}) must be >= {_body_min} for {'master' if _is_master else 'doctoral'} thesis",
         )
 
     if min_chars is not None and int(min_chars) < 1500:

@@ -48,7 +48,9 @@ def classify_heading(text):
         "review": [
             rf"^{chapter_prefix_cn}综述$",
             rf"^{chapter_prefix_cn}文献综述$",
+            rf"^{chapter_prefix_cn}研究综述$",
             rf"^{chapter_prefix_en}literaturereview$",
+            rf"^{chapter_prefix_en}reviewofliterature$",
         ],
         "references": [
             rf"^{chapter_prefix_cn}参考文献$",
