@@ -443,6 +443,8 @@ Priority rule: **chapter-based numbering takes precedence**. If a figure from SC
 
 原图在源 PDF 中不可用或需重绘时，按 `references/figure_prompt_template.md` 为每张图生成 Figure Prompt 块，存入 `${save_path}/figure_prompts.md` 并标 `[RECONSTRUCTED]`。所有元素描述须来自图注与 Results 文本，**不得编造实验数据**。
 
+**配图代码生成（opt-in，默认关）**：与上述 Figure Prompt 并列的另一可选项，默认不生成配图（基础实验用户自行作图）。仅当用户**明确要求**"生成配图/画图代码"（如生信、统计图场景）时启用。启用后：① 调用本地 matplotlib/seaborn skill 生成**可运行代码**（产出代码非图片）；② 遵循学术规范：按数据选图型（bar/boxplot/line/scatter+回归/**forest plot**/**funnel plot**（meta 分析用）/heatmap/network/concept map），APA 7.0 caption，色盲安全配色（viridis/cividis/Tol），300 DPI，轴标签带单位，**禁 3D 图与饼图**；③ 生成后由用户运行得图。
+
 ## Common Mistakes
 
 1. Mistake: Hardcoding chapter targets without user negotiation.
