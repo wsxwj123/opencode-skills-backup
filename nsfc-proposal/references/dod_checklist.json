@@ -15,7 +15,7 @@
         {
           "id": "N2",
           "name": "citation_guard",
-          "check": "本节新增引用已过 citation_validator.py verify-all（ok=true）",
+          "check": "本节新增引用已过 citation_validator.py verify-all（ok=true）；provider 白名单已脚本级强制，search_source 属 tavily/websearch/openalex(pyalex) 的条目触发 source_provider_forbidden 硬失败",
           "script": "python scripts/citation_validator.py verify-all --index data/literature_index.json --p1 sections/P1_立项依据.md"
         },
         {

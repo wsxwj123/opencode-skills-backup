@@ -12,6 +12,7 @@ All scripts are in `[project]/scripts/` (copied from skill directory during Phas
 | `export_bibtex.py` | BibTeX export from literature_index.json | None/EndNote |
 | `matrix_manager.py` | Section-claim evidence matrix: bootstrap + focus | None |
 | `word_counter.py` | Count words/chars in draft files | All |
+| `style_checker.py` | Anti-AI style gate (DoD R5): forbidden words, >30-word sentences, passive >30%, em-dash, scare quotes, explanatory colon, trailing -ing. `--passive-max` configurable (review default 0.30) | All |
 | `validate_citations.py` | DOI/PMID online validation | All |
 | `citation_guard.py` | Anti-hallucination guard | All |
 | `check_global_citation_sequence.py` | Verify global [1..N] citation continuity | All |
