@@ -1227,12 +1227,49 @@ def append_search_log(section, search_query, database, n_hits, n_screened,
     print(f"✅ Search log entry added: section={section}, db={database}, hits={n_hits}, screened={n_screened}")
 
 
+def _validate_prisma_invariants(sc):
+    """Check PRISMA flow ordering invariants. Returns list of violation messages (empty = OK).
+
+    Rules:
+      deduplicated ≤ identified
+      screened     ≤ deduplicated
+      included     ≤ screened
+      excluded == screened - included  (when all three are non-zero)
+    """
+    violations = []
+    ident = sc.get("identified", 0) or 0
+    dedup = sc.get("deduplicated", 0) or 0
+    screen = sc.get("screened", 0) or 0
+    excl = sc.get("excluded", 0) or 0
+    incl = sc.get("included", 0) or 0
+
+    if dedup > ident:
+        violations.append(f"deduplicated ({dedup}) > identified ({ident})")
+    if screen > dedup:
+        violations.append(f"screened ({screen}) > deduplicated ({dedup})")
+    if incl > screen:
+        violations.append(f"included ({incl}) > screened ({screen})")
+    # Only check excluded consistency when screened/included/excluded are all set (non-zero)
+    if screen > 0 and (incl > 0 or excl > 0):
+        expected_excl = screen - incl
+        if excl != expected_excl:
+            violations.append(
+                f"excluded ({excl}) ≠ screened - included ({screen} - {incl} = {expected_excl})"
+            )
+    return violations
+
+
 def set_screening_counts(state_path="state.json", **counts):
     """Set/update PRISMA screening counts in state.json (systematic review mode).
 
     Stores the 5 PRISMA-flow stages under screening_counts:
     {identified, deduplicated, screened, excluded, included}. Only the stages passed as
     non-None kwargs are mutated; the rest are preserved. All other state keys are untouched.
+
+    PRISMA invariants are validated after applying the update:
+      deduplicated ≤ identified, screened ≤ deduplicated, included ≤ screened,
+      excluded == screened - included. Violations are printed as warnings but do NOT
+      block the write (so partial multi-step updates can proceed stage by stage).
     """
     state = _load_workflow_state(state_path)
     sc = state.setdefault("screening_counts", {
@@ -1243,7 +1280,15 @@ def set_screening_counts(state_path="state.json", **counts):
     for stage in ("identified", "deduplicated", "screened", "excluded", "included"):
         val = counts.get(stage)
         if val is not None:
+            if not isinstance(val, int) or val < 0:
+                raise SystemExit(f"Error: {stage} must be a non-negative integer, got {val!r}")
             sc[stage] = val
+    violations = _validate_prisma_invariants(sc)
+    if violations:
+        print("⚠️  PRISMA invariant violation(s) detected:")
+        for v in violations:
+            print(f"   • {v}")
+        print("   State written anyway — fix counts before generating PRISMA flow diagram.")
     _atomic_write_text(state_path, json.dumps(state, indent=2, ensure_ascii=False))
     print(f"✅ state.json: screening_counts={json.dumps(sc, ensure_ascii=False)} (other fields preserved)")
 

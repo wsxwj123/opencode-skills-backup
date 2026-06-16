@@ -62,6 +62,23 @@ High-impact reviews are not summaries; they are arguments.
 - **Syntactic:** Alternate active/passive. Embed causality. No templated transitions.
 - **Structural:** Alternate "claim-then-evidence" vs "evidence-then-claim". Insert judgment sentences ("This likely reflects…").
 
+### Three Additional AI-Marker Bans
+
+**1. Decorative em-dashes (—)**
+- **Ban:** Using — or —— as a pause, supplement, or emphasis device (e.g., "The result was clear—cells died").
+- **Allowed:** Hyphens in compound modifiers (dose-dependent), numeric ranges (1990–2005), and en-dashes in structured labels.
+- **Fix:** Recast as a comma, period, or separate sentence. "The result was clear—cells died" → "The result was clear: cells died at 48 h."
+
+**2. Scare quotes on ordinary phrases**
+- **Ban:** Wrapping a self-coined word or plain phrase in double quotes to signal novelty or irony (e.g., "precision" approaches, a "crosstalk" between pathways).
+- **Allowed:** First-definition of a term being formally introduced ("molecular switch" is used here to denote…), direct quotation from a cited source, already-fixed technical metaphors cited in the literature.
+- **Fix:** Either commit to the term without quotes, or introduce it with an explicit definition clause.
+
+**3. Explanatory colons as decoration**
+- **Ban:** "Concept: explanation" sentence structure used as a stylistic flourish (e.g., "The implication is stark: resistance emerges rapidly").
+- **Allowed:** Ratios and times (3:1, 12:00), list introductions ("Three criteria were applied:"), figure/table captions ("Figure 1: …"), section headings.
+- **Fix:** Merge into a subordinate clause or split into two sentences. "The implication is stark: resistance emerges rapidly" → "Resistance emerges rapidly, which has a stark implication for treatment sequencing."
+
 ### Abbreviation / Acronym Management
 - **First-use rule (EN):** `Full Name (ABBR)` on first occurrence in the manuscript body. Subsequent uses → ABBR only.
 - **First-use rule (CN):** `中文全称（英文全称, ABBR）` on first occurrence. Example: `光动力疗法（Photodynamic Therapy, PDT）`.
