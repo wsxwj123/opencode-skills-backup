@@ -51,7 +51,8 @@
         {
           "id": "B7",
           "name": "审稿意见本身去AI",
-          "check": "报告正文（含各 *_HTML 占位符填充内容）已逐项核查 rubric 第七节'审稿意见自身去AI'5项规则（三项禁用 + 中文句长 ≤50字 + 从句 ≤2层），无违规残留"
+          "check": "报告正文（含各 *_HTML 占位符填充内容）已逐项核查 rubric 第七节'审稿意见自身去AI'5项规则（三项禁用 + 中文句长 ≤50字 + 从句 ≤2层），无违规残留。先跑脚本核三禁+超50字（exit 0=HUMANIZE_OK），脚本无法判定的从句≤2层等再人工核",
+          "script": "python ~/.claude/skills/reviewer-simulator/scripts/scan_report_humanize.py <报告HTML路径>"
         },
         {
           "id": "B8",

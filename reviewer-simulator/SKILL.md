@@ -251,12 +251,16 @@ echo '{"citations": []}' > "$WORKROOT/data/citation_guard_report.json"
 在输出最终HTML前,必须执行以下校验命令并确保通过。**脚本位于技能安装目录（≠用户 CWD），须用其绝对路径 `$SKILL_DIR/scripts/...` 调用**（`$SKILL_DIR` 见第三部分 CITATION_GUARD_RULE，本技能固定安装于 `~/.claude/skills/reviewer-simulator`）：
 `python "$SKILL_DIR/scripts/validate_report_html.py" <生成后的报告HTML路径>`
 
+紧接着对同一 HTML 跑审稿意见去AI脚本（B7 兜底，剥离 head/script/style/footer 后抽正文文本喂 humanizer）：
+`python "$SKILL_DIR/scripts/scan_report_humanize.py" <生成后的报告HTML路径>`
+
 硬门禁:
 1. 若存在未替换占位符(如`{{...}}`),必须终止交付并返工。
 2. 头部`VERDICT_TEXT`与第十部分`FINAL_RECOMMENDATION`必须一致且只能为"拒稿/大修/小修/接收"之一。
-3. 仅当校验通过才允许提交最终报告。
-4. 若 `$SKILL_DIR/scripts/validate_report_html.py` 路径不存在或执行报错，必须在报告头部注明"[自动校验不可用，已人工核查占位符与VERDICT一致性]"，并逐项人工确认上述三条门禁，不得静默跳过。
-5. 若校验未通过：不得自行静默修改报告后重新提交，必须向用户说明具体失败原因和位置，列出需要人工确认的条目，等待用户指令后再决定返工或带注释交付。
+3. `scan_report_humanize.py` 必须返回 `HUMANIZE_OK`（exit 0）；若返回 `HUMANIZE_FAILED`，说明报告正文存在装饰破折号/scare quotes/解释性冒号/超50字中文长句，须按输出逐项改写正文后重跑，未过不得交付。脚本无法判定的"从句≤2层"仍由 B7 盲检人工核。
+4. 仅当上述校验全部通过才允许提交最终报告。
+5. 若 `$SKILL_DIR/scripts/validate_report_html.py` 或 `scan_report_humanize.py` 路径不存在或执行报错，必须在报告头部注明"[自动校验不可用，已人工核查占位符与VERDICT一致性及去AI三禁]"，并逐项人工确认上述门禁，不得静默跳过。
+6. 若校验未通过：不得自行静默修改报告后重新提交，必须向用户说明具体失败原因和位置，列出需要人工确认的条目，等待用户指令后再决定返工或带注释交付。
 
 
 ---
@@ -285,7 +289,7 @@ echo '{"citations": []}' > "$WORKROOT/data/citation_guard_report.json"
 - [ ] **B4 · 魔鬼代言人复查已执行**：第五步半五类对抗性审查（rubric 第八节）已完整执行，发现问题已合并至 `{{CRITICAL_ISSUES_HTML}}` 或 `{{FORENSIC_ANALYSIS_HTML}}`
 - [ ] **B5 · 给编辑保密意见**：`{{CONFIDENTIAL_EDITOR_HTML}}` 四项（直接拒稿建议/数据造假怀疑/私评新颖性/利益冲突提示）均有内容或明确写"无"，无项目遗漏
 - [ ] **B6 · 引文真实性**：报告正文中主动引据的外部文献（非稿件自带引用）已过 `citation_guard`，`ok=true` 或已标注"待核验"；未引外部文献时此项标记"无外部引文"
-- [ ] **B7 · 审稿意见本身去AI**：报告正文（含各 `{{*_HTML}}` 占位符填充内容）已逐项核查 rubric 第七节"审稿意见自身去AI"5项规则（三项禁用 + 中文句长 ≤50字 + 从句 ≤2层），无违规残留
+- [ ] **B7 · 审稿意见本身去AI**：报告正文（含各 `{{*_HTML}}` 占位符填充内容）已逐项核查 rubric 第七节"审稿意见自身去AI"5项规则（三项禁用 + 中文句长 ≤50字 + 从句 ≤2层），无违规残留。**先跑脚本核三禁+超50字**：`python ~/.claude/skills/reviewer-simulator/scripts/scan_report_humanize.py <报告HTML路径>` 须 `HUMANIZE_OK`（exit 0）；脚本不覆盖的"从句 ≤2层"再人工核
 - [ ] **B8 · 报告结构完整性**：审稿报告含全部规定区块（稿件概要/合规审计/契合度/18点分析/魔鬼代言人/核心问题/给编辑保密意见/回复草案），无缺块、无空区块；且多视角并发盲评的所有视角发现均已汇入，无遗漏视角
 
 ---
