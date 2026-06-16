@@ -1,6 +1,6 @@
 ---
 name: reviewer-response-sci
-description: 用于SCI审稿意见逐条回复的全流程技能，适用于期刊大修/小修阶段，只出回复包（HTML），不改主稿。触发词：审稿意见回复、回复审稿人、回复reviewer、response letter、回复信、rebuttal、逐条回复、Response to Reviewer、revise and resubmit、R&R、reviewer comments。路由说明：与revise-sci区分——本技能只出回复包不改主稿，需同时改主稿并出修订稿docx请用revise-sci；与reviewer-simulator区分——本技能针对已收到的意见写回复，后者是模拟生成审稿意见。
+description: 用于SCI审稿意见逐条回复的全流程技能，适用于期刊大修/小修阶段，只出回复包（HTML），不改主稿。触发词：审稿意见回复、回复审稿人、回复reviewer、response letter、回复信、rebuttal、逐条回复、Response to Reviewer、revise and resubmit、R&R、reviewer comments。路由说明：与revise-sci区分，本技能只出回复包不改主稿，需同时改主稿并出修订稿docx请用revise-sci；与reviewer-simulator区分，本技能针对已收到的意见写回复，后者是模拟生成审稿意见。
 ---
 
 # Reviewer Response SCI
@@ -35,14 +35,14 @@ Default behavior if user does not specify a custom location:
 > **主交付 = 回复包**（给编辑的总览邮件 + 各审稿人 point-by-point 回复，最终渲染为单文件分层 HTML）。
 > **修改稿 track-changes 需用户手工补**：本技能生成回复文档，不产出 Word track-changes 版本；用户应以 `manuscript_edit_plan.md` 为操作指南，在 Word 中手动启用修订模式完成改稿。若用户要求 track-changes 稿件，解释此限制并推荐使用 `manuscript_edit_plan.md`。
 
-**主交付物 = 单文件分层 HTML**（左侧层级 TOC + 右侧内容，单页可见）。TOC 顶层节点为 **Editor（若有）+ Reviewer #1/#2/...**，Editor 排在所有 Reviewer 之前；编辑信里的 editor comment（字数/格式/伦理声明/数据可用性/利益冲突/统计复核等）作为**独立顶层 Editor 节点**呈现，与各 Reviewer 并列，**不得并入任何 Reviewer**。**全部 UI 由 `scripts/build_full_package.py` 的 `render_html()` 生成**——TOC 层级、严重度背景色、折叠/展开、可拖拽分割线、`复制` 按钮、`localStorage` 持久化、各 box 布局均已硬编码，**AI 无需手工实现 HTML**。完整 UI 验收对照细则见 `references/output-template.md`。
+**主交付物 = 单文件分层 HTML**（左侧层级 TOC + 右侧内容，单页可见）。TOC 顶层节点为 **Editor（若有）+ Reviewer #1/#2/...**，Editor 排在所有 Reviewer 之前；编辑信里的 editor comment（字数/格式/伦理声明/数据可用性/利益冲突/统计复核等）作为**独立顶层 Editor 节点**呈现，与各 Reviewer 并列，**不得并入任何 Reviewer**。**全部 UI 由 `scripts/build_full_package.py` 的 `render_html()` 生成**，TOC 层级、严重度背景色、折叠/展开、可拖拽分割线、`复制` 按钮、`localStorage` 持久化、各 box 布局均已硬编码，**AI 无需手工实现 HTML**。完整 UI 验收对照细则见 `references/output-template.md`。
 
 AI 真正要产出的是每条 comment unit 的**内容字段**（脚本只写占位符，AI 填真值）：
 - 审稿人意图：原始意见(EN) + 中文直译（直译不意译）+ 中文意图理解（摘要，非粘贴英文原文）。直译/中文回应必须由当前模型直接产出，脚本不自动出译文、只留占位符。
 - Response：中文回复 + 对应英文（非逐字翻译）。
 - 修改候选：revised EN 段落（聚焦匹配句周围片段）+ 中文译文；无修改写 `无`；定位字段（unit_id/路径/段落与句子 index）随 unit 写入。
 - 修改说明：动作列表（添加/删除/修改+原因）+ `🔴 Core`/`🟡 Support` 汇总。
-- 证据/图片：**Figure Prompt Block** — 审稿人明确要求改/新增图片时，按 `references/figure-prompt-template.md` 生成结构化提示词，存入对应 comment unit JSON 的 `content.figure_prompt`。
+- 证据/图片：**Figure Prompt Block**，审稿人明确要求改/新增图片时，按 `references/figure-prompt-template.md` 生成结构化提示词，存入对应 comment unit JSON 的 `content.figure_prompt`。
 
 ## Atomic JSON Contract
 Project layout:
@@ -90,7 +90,7 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
   - Empty appreciation: "we greatly appreciate your insightful comments", "this is an excellent suggestion"
   - Filler phrases: "in order to", "we would like to point out that", "as the reviewer rightly noted"
   - Structural repetition: ≥3 responses must not open with the same template sentence
-  - **English sentence length hard cap: each sentence in `response_en` and `revised_excerpt_en` must be ≤30 words.** If a sentence exceeds 30 words, split it. Do not achieve this by removing necessary content — restructure instead.
+  - **English sentence length hard cap: each sentence in `response_en` and `revised_excerpt_en` must be ≤30 words.** If a sentence exceeds 30 words, split it. Do not achieve this by removing necessary content; restructure instead.
   - **-ing participial clause ban:** do not attach a dangling -ing clause to the main clause with a comma (e.g., ", reflecting our commitment to…", ", ensuring that…", ", highlighting the importance of…"). Rewrite as a separate sentence or use a coordinating conjunction.
   - **Decorative em-dash ban:** do not use —/——/em-dash as a pause, parenthetical, or emphasis marker (e.g., "This result—while preliminary—suggests…"); use a comma, period, or split sentence instead. Hyphens in compound terms ("dose-response") and numeric ranges are not affected. Applies to both English and Chinese outputs.
   - **Scare-quote ban:** do not use quotation marks around coined words or ordinary phrases to imply novelty or irony (e.g., "robust" findings, "novel" approach). Retain quotes for: first-time term definitions, direct verbatim quotations from reviewer comments, and established idiomatic expressions.
@@ -193,7 +193,7 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
      - paragraph index
      - one Word-search key sentence (`Word Find key sentence`)
      - exact to-be-replaced snippet (if available)
-     - `revised text to insert` (EN, and ZH if provided) — **此列 Step 5 时留占位符 `[PENDING Step 7]`；Step 7 完成后运行 `python3 scripts/state_manager.py aggregate-edit-plan --project-root <root>` 自动聚合回填**。
+     - `revised text to insert` (EN, and ZH if provided)：**此列 Step 5 时留占位符 `[PENDING Step 7]`；Step 7 完成后运行 `python3 scripts/state_manager.py aggregate-edit-plan --project-root <root>` 自动聚合回填**。
      - action type (`添加` / `删除` / `修改`)
    - When multiple comments map to the same paragraph, merge into one ordered block with sub-items.
    - If a comment is global (language polishing, full-figure consistency), put it in a separate `Global edits` section and explicitly mark as non-localized.
@@ -258,14 +258,14 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
 
 > **硬规则：清单未逐项确认通过，不得向用户声明"回复包完成"。** 能脚本核的项直接跑对应 gate；人工项逐条确认。
 
-**🔴 委托盲检（不得主 agent 自评）**：你刚写完回复包，自评会失真地默认通过、且易漏项。**承诺↔落点一致性尤其如此**——主 agent 写了回复再自核"承诺有没有落地"几乎必然失真。`run_pipeline.py` 退出码 0 后、声明完成前，必须把 DoD 清单**委托给独立上下文的子代理盲检**，自己不直接打勾：
+**🔴 委托盲检（不得主 agent 自评）**：你刚写完回复包，自评会失真地默认通过、且易漏项。**承诺↔落点一致性尤其如此**，主 agent 写了回复再自核"承诺有没有落地"几乎必然失真。`run_pipeline.py` 退出码 0 后、声明完成前，必须把 DoD 清单**委托给独立上下文的子代理盲检**，自己不直接打勾：
 
 🔴 出具前置闸口：delegate_review verify 必须 exit 0（含 RR14 结构完整性），否则不得向用户出具 response letter。
 
 1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate response-dod --files <project_root>/units/*.json`
 2. **派一个独立子代理**（Claude Code 用 `academic-blind-reviewer`；其他平台派通用子代理），把任务包原样给它、**不要给它回复包的写作上下文**，要求按任务包返回 JSON 数组。
 3. 校验返回：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate response-dod --return <子代理返回.json>`；退出码非 0（任一缺项/fail/无证据）= **fail-closed**，据子代理证据修复后重跑，**未过不得声明完成**。
-- **降级路径**（当前环境无法派子代理时）：主 agent 切换"审稿人视角"、清空对回复包的写作记忆，逐项独立重核——绝不因"自己刚写完"默认通过；仍跑 `verify` 把关。
+- **降级路径**（当前环境无法派子代理时）：主 agent 切换"审稿人视角"、清空对回复包的写作记忆，逐项独立重核，不得因"自己刚写完"默认通过；仍跑 `verify` 把关。
 
 下列清单与 `references/dod_checklist.json` 逐项对应（**改清单先改 JSON**，此处仅供人工对照；能脚本核的项子代理会先跑脚本）：
 
@@ -301,7 +301,7 @@ After manual editing of any unit JSON:
    - If gate fails, fix the offending `units/*.json` directly and re-run from step 2. Do not skip.
 
 ## Scripts
-**入口：** `scripts/run_pipeline.py` —— 一站式串行执行 preflight → build → 全部 gate → consistency report → html gate。5 个必需参数：`--comments` / `--manuscript` / `--si`（可选）/ `--project-root` / `--output-html`。
+**入口：** `scripts/run_pipeline.py`，一站式串行执行 preflight → build → 全部 gate → consistency report → html gate。5 个必需参数：`--comments` / `--manuscript` / `--si`（可选）/ `--project-root` / `--output-html`。
 
 最小可执行示例（占位符首轮预览，加 `--allow-placeholder` 放宽内容门禁出骨架；正式交付去掉该 flag）：
 ```bash
@@ -329,12 +329,12 @@ Re-Render 单独脚本：`render_from_atomic_json.py`（重渲）、`state_manag
 
 ## References
 按需加载，不要全部预加载：
-- Atomic schema: `references/atomic-unit-schema.json` — 单元 JSON 结构定义（原子化构建时参考）
-- Atomic workflow: `references/atomic-workflow.md` — 原子化流程详细说明（首次使用或遇到异常时）
-- HTML structural skeleton: `references/html-template-full.html` — 主交付物布局骨架（grid + sidebar + content 结构）；实际渲染由 `scripts/build_full_package.py` 的 `render_html()` 生成完整 UI（含折叠/展开、拖拽分割线、复制按钮、severity 背景色、localStorage 持久化）
-- Single-comment fill template: `references/html-template.html` — 单条 comment 的占位符填充骨架，仅配合 `html-fill-guide.md` 手工填单页时使用；与上面的整包骨架 `html-template-full.html` 不同
-- Output contract: `references/output-template.md` — 输出规范（核对交付物结构时）
-- Decision rules and sentence patterns: `references/decision-rules.md` — 回复措辞决策规则（撰写英文回复时）
-- HTML filling notes: `references/html-fill-guide.md` — `html-template.html` 占位符填写注意事项（手工填单页或渲染异常时）
-- Figure prompt template: `references/figure-prompt-template.md` — 图片修改/新增时的结构化提示词模板（Output Contract 第3块图片需求时）
-- Consistency rules: `references/consistency-rules.json` — `consistency_check.py` 默认加载的一致性规则集（无需手动引用，gate 自动读取）
+- Atomic schema: `references/atomic-unit-schema.json`，单元 JSON 结构定义（原子化构建时参考）
+- Atomic workflow: `references/atomic-workflow.md`，原子化流程详细说明（首次使用或遇到异常时）
+- HTML structural skeleton: `references/html-template-full.html`，主交付物布局骨架（grid + sidebar + content 结构）；实际渲染由 `scripts/build_full_package.py` 的 `render_html()` 生成完整 UI（含折叠/展开、拖拽分割线、复制按钮、severity 背景色、localStorage 持久化）
+- Single-comment fill template: `references/html-template.html`，单条 comment 的占位符填充骨架，仅配合 `html-fill-guide.md` 手工填单页时使用；与上面的整包骨架 `html-template-full.html` 不同
+- Output contract: `references/output-template.md`，输出规范（核对交付物结构时）
+- Decision rules and sentence patterns: `references/decision-rules.md`，回复措辞决策规则（撰写英文回复时）
+- HTML filling notes: `references/html-fill-guide.md`，`html-template.html` 占位符填写注意事项（手工填单页或渲染异常时）
+- Figure prompt template: `references/figure-prompt-template.md`，图片修改/新增时的结构化提示词模板（Output Contract 第3块图片需求时）
+- Consistency rules: `references/consistency-rules.json`，`consistency_check.py` 默认加载的一致性规则集（无需手动引用，gate 自动读取）

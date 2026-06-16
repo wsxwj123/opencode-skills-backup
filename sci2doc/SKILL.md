@@ -19,7 +19,7 @@ The workflow is built around:
 
 ## 快速流程索引 (Quick Workflow Index)
 
-执行前必看——全流程 7 步顺序如下，详细说明见各节。
+全流程 7 步顺序如下，详细说明见各节。
 
 | 步骤 | 操作 | 阻断条件 | 详见 |
 |------|------|----------|------|
@@ -243,7 +243,7 @@ python3 scripts/material_ingest.py --dir /path/to/raw_materials --save-path "${s
 
 提取完成后，AI 应先通读全文摘要（Abstract）、结果（Results）、方法（Methods）三节，形成对实验内容的基本理解，再进入 Step 0.5。
 
-**SCI 自身参考文献导出（初始种子）：** 在通读的同时，同步扫描源 SCI 论文的 References 部分，将其中每条参考文献按 `literature_index.json` schema 格式整理为初始种子条目，`source_provider` 填 `"sci-source-seed"`，`verified` 填 `false`，写入项目的 `literature_index.json`（若文件已存在则 merge 而非覆盖）。这些种子作为 Step 3 文献检索的**待核验候选清单**（已带 DOI/PMID，省去重新构造检索式、确定检索目标的成本），而非可直接引用的来源。注意：`sci-source-seed` 不在 `citation_guard.py` 的合法 provider 白名单（`pubmed-cli` / `paper-search`）内——种子条目必须在 Step 3 以其 DOI/PMID 为目标经 `pubmed-cli` 或 `paper-search` 正式检索核验，核验通过后将 `source_provider` 更新为实际核验来源并置 `verified=true`，方可引用；未核验的种子不得进入正文。
+**SCI 自身参考文献导出（初始种子）：** 在通读的同时，同步扫描源 SCI 论文的 References 部分，将其中每条参考文献按 `literature_index.json` schema 格式整理为初始种子条目，`source_provider` 填 `"sci-source-seed"`，`verified` 填 `false`，写入项目的 `literature_index.json`（若文件已存在则 merge 而非覆盖）。这些种子作为 Step 3 文献检索的**待核验候选清单**（已带 DOI/PMID，省去重新构造检索式、确定检索目标的成本），而非可直接引用的来源。注意：`sci-source-seed` 不在 `citation_guard.py` 的合法 provider 白名单（`pubmed-cli` / `paper-search`）内。种子条目必须在 Step 3 以其 DOI/PMID 为目标经 `pubmed-cli` 或 `paper-search` 正式检索核验，核验通过后将 `source_provider` 更新为实际核验来源并置 `verified=true`，方可引用；未核验的种子不得进入正文。
 
 > 以下各步只列命令名 + 关键参数 + 门禁条件。**完整可复制 CLI（含所有 flag、占位符）见 `QUICK_START.md`。**
 
@@ -302,13 +302,13 @@ python3 scripts/material_ingest.py --dir /path/to/raw_materials --save-path "${s
 
 **硬规则：以下各项未逐一确认通过，不得向用户声明"该节完成"。**
 
-**🔴 进入下一节前置闸口**：上一节 `delegate_review verify` 必须 exit 0（含结构完整性项 S6），否则不得开始下一节——写完即检，不过不进。
+**🔴 进入下一节前置闸口**：上一节 `delegate_review verify` 必须 exit 0（含结构完整性项 S6），否则不得开始下一节。写完即检，不过不进。
 
-**🔴 委托盲检（不得主 agent 自评）**：你刚写完本节，自评会失真地默认通过、且易漏项。落盘前必须把 DoD 清单**委托给独立上下文的子代理盲检**，自己不直接打勾：
+**🔴 委托盲检（不得主 agent 自评）**：落盘前必须把 DoD 清单**委托给独立上下文的子代理盲检**，自己不直接打勾：
 1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate section-dod --files <本节文件>`
 2. **派一个独立子代理**（Claude Code 用 `academic-blind-reviewer`；其他平台派通用子代理），把任务包原样给它、**不要给它本节的写作上下文**，要求按任务包返回 JSON 数组。
 3. 校验返回：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate section-dod --return <子代理返回.json>`；退出码非 0（任一缺项/fail/无证据）= **fail-closed**，据子代理证据修复后重跑，**未过不得声明完成**。
-- **降级路径**（当前环境无法派子代理时）：主 agent 切换"审稿人视角"、清空对本节的写作记忆，逐项独立重核——绝不因"自己刚写完"默认通过；仍跑 `verify` 把关。
+- **降级路径**（当前环境无法派子代理时）：主 agent 切换"审稿人视角"、清空对本节的写作记忆，逐项独立重核，不因"自己刚写完"默认通过；仍跑 `verify` 把关。
 
 下列清单与 `references/dod_checklist.json` gate=`section-dod` 逐项对应（改清单先改 JSON），供人工对照；能脚本核的项子代理会先跑脚本：
 
@@ -341,13 +341,13 @@ sci2doc 特有项：
 
 **硬规则：以下各项未逐一确认通过，不得向用户声明"该章完成"，不得进入 Step 7。**
 
-**🔴 进入下一章前置闸口**：上一章 `delegate_review verify` 必须 exit 0（含章结构完整性项 S8），否则不得开始下一章——写完即检，不过不进。
+**🔴 进入下一章前置闸口**：上一章 `delegate_review verify` 必须 exit 0（含章结构完整性项 S8），否则不得开始下一章。写完即检，不过不进。
 
-**🔴 委托盲检（不得主 agent 自评）**：章级闸口同样必须委托独立子代理盲检，不得主 agent 自评：
+**🔴 委托盲检（不得主 agent 自评）**：章级闸口同样委托独立子代理盲检，不得主 agent 自评：
 1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate chapter-dod --files <章节合并文件>`
 2. **派一个独立子代理**（Claude Code 用 `academic-blind-reviewer`；其他平台派通用子代理），把任务包原样给它、**不要给它本章的写作上下文**，要求按任务包返回 JSON 数组。
 3. 校验返回：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate chapter-dod --return <子代理返回.json>`；退出码非 0（任一缺项/fail/无证据）= **fail-closed**，据子代理证据修复后重跑，**未通过不得进入 Step 7**。
-- **降级路径**（当前环境无法派子代理时）：主 agent 切换"审稿人视角"、清空对本章的写作记忆，逐项独立重核——绝不因"自己刚写完"默认通过；仍跑 `verify` 把关。
+- **降级路径**（当前环境无法派子代理时）：主 agent 切换"审稿人视角"、清空对本章的写作记忆，逐项独立重核，不因"自己刚写完"默认通过；仍跑 `verify` 把关。
 
 下列清单与 `references/dod_checklist.json` gate=`chapter-dod` 逐项对应（改清单先改 JSON），供人工对照；能脚本核的项子代理会先跑脚本：
 

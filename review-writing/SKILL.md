@@ -69,7 +69,7 @@ why_how_what_note: |
 
 ## Role & Core Philosophy
 
-Expert academic consultant for high-impact literature reviews (Nature Reviews, Cell, Lancet Digital Health). Combines biomedicine and CS/AI domain expertise with elite writing skills.
+Expert academic consultant for high-impact literature reviews (Nature Reviews, Cell, Lancet Digital Health). Combines biomedicine and CS/AI domain expertise with rigorous writing practice.
 
 - **Synthesis, not Summary:** Connect and contrast studies. Build new theoretical frameworks.
 - **Arbitration:** Identify contradictions and analyze *why* they exist.
@@ -115,13 +115,13 @@ Detection is **capability-based**, NOT client-name-based:
 | 1st (CS/AI) | paper-search MCP (`search_arxiv`, `search_pubmed`) | CS, AI, pure engineering |
 | 2nd | paper-search MCP (`search_google_scholar`) | Papers not found on PubMed or arXiv; cross-disciplinary; grey literature |
 | 3rd | paper-search MCP (`search_arxiv`, `search_pubmed`) | Fallback when PubMed CLI unavailable |
-| Exception | ChatGPT Browsing tool | If current client is ChatGPT web with Browsing — can directly access PubMed/Scholar |
+| Exception | ChatGPT Browsing tool | If current client is ChatGPT web with Browsing, it can directly access PubMed/Scholar |
 
 > **Google Scholar补充规则：** PubMed检索完成后，若某节文献数量仍不足或主题偏交叉学科（工程/社科/政策），追加 `search_google_scholar` 补搜。Google Scholar收录范围更广，PubMed未收录的会议论文、技术报告、交叉学科期刊通常可在此找到。但Google Scholar无DOI强制要求，获取记录后须通过 `validate_citations.py --live` 验证。
 
 **Detection:** Check AI tool list for `search_pubmed`/`search_arxiv`/`search_google_scholar` → paper-search MCP available ✅
 
-**Forbidden:** `websearch`, `tavily`, generic web search tools — DO NOT use for academic retrieval.
+**Forbidden:** `websearch`, `tavily`, generic web search tools. Do not use them for academic retrieval.
 Reason: CLI clients' web search uses cached indices with no complete metadata; high hallucination risk for DOI/author/year.
 
 **PubMed CLI command** (read `pubmed_proxy` from `outline.md`):
@@ -170,7 +170,7 @@ Before any **writing / search / import / Zotero-mutating** action, ask exactly *
 **Do not proceed until user explicitly selects a mode.**
 
 > **Exception — Read-only status check:**
-> If the user explicitly asks to *inspect current project status*, *audit progress*, *scan existing materials*, or "看看现在到哪一步了 / 先扫描一下", perform a **read-only** pass over `outline.md`, `state.json`, `drafts/`, `data/`, and `scripts/` first, then present a status report. After the report, ask for Write/Polish Mode before any new literature import or drafting action. If `state.json` does not exist, the read-only scan still must return to the Mode Handshake Gate afterward — never auto-start Phase 0.
+> If the user explicitly asks to *inspect current project status*, *audit progress*, *scan existing materials*, or "看看现在到哪一步了 / 先扫描一下", perform a **read-only** pass over `outline.md`, `state.json`, `drafts/`, `data/`, and `scripts/` first, then present a status report. After the report, ask for Write/Polish Mode before any new literature import or drafting action. If `state.json` does not exist, the read-only scan still must return to the Mode Handshake Gate afterward; never auto-start Phase 0.
 > Read-only means: no file writes, no Zotero API mutations, no search calls.
 
 > **Route map:**
@@ -246,7 +246,7 @@ Run the 8-step environment detection (📖 full commands in `references/env_chec
 |-------------|-----------|---------------------|
 | 0 Python < 3.7 | **YES** | Abort; guide upgrade (python.org / `brew install python` / `winget install Python.Python.3`). |
 | 1 curl missing | **YES** | System-level issue; resolve before continuing (Windows: curl ships with PowerShell 5.1+). |
-| 2 git missing | No | Not blocking — all Git Checkpoints silently skip (`git_available: false`); recommend install for rollback. |
+| 2 git missing | No | Not blocking. All Git Checkpoints silently skip (`git_available: false`); recommend install for rollback. |
 | 3 Zotero/pyzotero (Zotero mode) | **YES** (Zotero mode) | `pip install pyzotero`; install Zotero desktop. None/EndNote mode → skip Step 3. |
 | 4 edirect missing (Medical/Bio) | No | Auto-fallback to paper-search MCP → write `search_fallback: paper-search-mcp`; Windows → WSL or fallback. |
 | 5 PubMed unreachable | No | Auto-scan proxy ports; if all fail → fallback to paper-search MCP, notify user. |
@@ -280,7 +280,7 @@ If `--status` lists multiple libraries (personal + group), show the list and ask
 
 ### 0.5 Initialize Project Files
 
-After all checks pass. Run `scripts/init_project.py` — it creates the folder structure,
+After all checks pass, run `scripts/init_project.py`. It creates the folder structure,
 copies the 9 active scripts, writes `state.json` + `outline.md` (templates below), and runs
 `git init` + the initial `[review] Phase 0: project initialized` commit (skips git silently if
 unavailable). Cross-platform (pure pathlib, no heredoc).
@@ -309,14 +309,14 @@ python3 "[SKILL_DIR]/scripts/init_project.py" \
 > **⚠️ Working directory rule:** All commands in Phase 1–4 are run from inside `[PROJECT_BASE]/[TITLE]/`.
 > After initialization: `cd "[PROJECT_BASE]/[TITLE]"` (the script prints this path).
 >
-> **Note:** Phase 0.5 only creates folder structure + copies scripts + writes state.json/outline.md. Zotero collection tree (`--init`) is NOT run here — it runs in Phase 1 (Write Mode) or Phase 0-P Step 5 (Polish Mode).
+> **Note:** Phase 0.5 only creates folder structure + copies scripts + writes state.json/outline.md. Zotero collection tree (`--init`) is NOT run here; it runs in Phase 1 (Write Mode) or Phase 0-P Step 5 (Polish Mode).
 
 The script writes `[TITLE]/state.json`:
 ```json
 {"phase": 0, "completed_sections": [], "zotero_root_key": ""}
 ```
 
-…and the `[TITLE]/outline.md` template (AI fills Parameters/Environment fields after Phase 0.1–0.4). Template auto-generated by `init_project.py` — do NOT recreate manually. Key fields: Title / Target Journal / Language / Reference Manager / Review Type / Word Count Target / Citation Requirements / Discipline / os / git_available / pubmed_proxy / zotero_lib_id / search_fallback / subagent_model / RQ-PICO / Outline sections / Current Status.
+…and the `[TITLE]/outline.md` template (AI fills Parameters/Environment fields after Phase 0.1–0.4). The template is auto-generated by `init_project.py`; do NOT recreate it manually. Key fields: Title / Target Journal / Language / Reference Manager / Review Type / Word Count Target / Citation Requirements / Discipline / os / git_available / pubmed_proxy / zotero_lib_id / search_fallback / subagent_model / RQ-PICO / Outline sections / Current Status.
 
 ---
 
@@ -364,10 +364,10 @@ Format: `[review] Phase X.Step: <description>`. 📖 消息表 + Rollback 命令
 ## Phase 1: Outline Confirmation + Collection Tree
 
 **Start: Read `outline.md` + `state.json`. If state.json shows phase≥1, skip.**
-**Polish Mode: if `state.json` contains `"mode": "polish"`, skip Phase 1 entirely — go to Phase 3.**
+**Polish Mode: if `state.json` contains `"mode": "polish"`, skip Phase 1 entirely and go to Phase 3.**
 
 1. **Define RQ/PICO** (or PCC for scoping review) with user first. Write to `outline.md`.
-   - RQ/PICO 是提纲的语义锚点：研究问题明确后，提纲各节才能有检验标准。
+   - RQ/PICO 是提纲的语义锚点，研究问题明确后，提纲各节才能有检验标准。
    - Scoping review：用 PCC 框架（Population / Concept / Context）替代 PICO。
 2. **Propose outline structure** based on RQ/PICO: "Funnel" Introduction + "Thematic" Body. (≤2 hierarchy levels)
 3. **Confirm outline with user.** Update `outline.md`.
@@ -398,13 +398,13 @@ Format: `[review] Phase X.Step: <description>`. 📖 消息表 + Rollback 命令
 
 6. **Initialize Zotero collections (Zotero mode):**
    ```bash
-   # First check if collection tree already exists (idempotent — safe on re-entry):
+   # First check if collection tree already exists (idempotent, safe on re-entry):
    ROOT_KEY=$(python3 scripts/zotero_manager.py --status --find-root-title "[TITLE]" \
      --lib-id LIB_ID --api-key API_KEY 2>/dev/null) && echo "Root exists: $ROOT_KEY" \
      || python3 scripts/zotero_manager.py --init --title "[TITLE]" --outline outline.md \
         --lib-id LIB_ID --api-key API_KEY
    ```
-   - `--find-root-title` exit 0 → root already exists (stdout = key, reuse it); exit 3 → no match, the `||` branch runs `--init`; exit 4 → ambiguous (multiple same-named roots), stdout lists candidate keys — **stop and ask user to pick** rather than letting `--init` create a duplicate.
+   - `--find-root-title` exit 0 → root already exists (stdout = key, reuse it); exit 3 → no match, the `||` branch runs `--init`; exit 4 → ambiguous (multiple same-named roots), stdout lists candidate keys. **Stop and ask user to pick** rather than letting `--init` create a duplicate.
    - Creates root collection + subcollections matching outline hierarchy.
 7. **Initialize index files (None/EndNote mode):**
    ```bash
@@ -448,7 +448,7 @@ for each section in outline.md (e.g., section ID = "2.1"):
       # 检索日志写入 data/search_log.json（独立文件，不影响 literature_index.json）
   2b. [相关性筛选] 入库前逐篇判断（不得"搜到即入库"），保留条件：标题/摘要与本节 RQ/PICO（或 PCC）直接相关。排除标记（language / off_topic / quality / outdated）— 📖 详见 `references/scripts_reference.md` § Phase 2 入库前相关性筛选。最终保留的才进入 `tmp/papers_X_X.json`。
   3. Save metadata to tmp/papers_X_X.json  (e.g., section 1.1 → tmp/papers_1_1.json)
-  4. Write papers (run ONLY the branch matching the project's Reference Manager — they are alternatives, not sequential):
+  4. Write papers (run ONLY the branch matching the project's Reference Manager; they are alternatives, not sequential):
      [Zotero] python3 scripts/zotero_manager.py --add-batch \
        --section "X.X" --papers tmp/papers_X_X.json \
        --root-key ROOT_KEY --index data/literature_index.json \
@@ -531,7 +531,7 @@ python3 scripts/state_manager.py set-phase --phase 3
 **Polish Mode branch (if `state.json` contains `"mode": "polish"`):**
 ```
 Before starting any section, read state.json → pending_sections:
-  missing → no draft exists: run Round 1 search (same as Phase 2 per-section loop Steps 2-6) INLINE here, then proceed to step 1 below. Do NOT navigate back to Phase 2 — all search+write happens within this Phase 3 section loop
+  missing → no draft exists: run Round 1 search (same as Phase 2 per-section loop Steps 2-6) INLINE here, then proceed to step 1 below. Do NOT navigate back to Phase 2; all search+write happens within this Phase 3 section loop.
   rewrite → existing draft exists in drafts/section_XX_XX.md: read it as context, then fully rewrite
   polish  → existing draft exists in drafts/section_XX_XX.md: read it; fix ONLY AI-flags + thin citations;
             keep structure and arguments intact; do NOT overwrite with fresh draft
@@ -554,13 +554,13 @@ If pending_sections is empty → all sections complete; proceed to Phase 4.
 
 2. **Round 2 search** (targeted, ≥5 additional papers for specific claims):
    - **Write Mode:** triggered when Phase 2 found <10 papers for this section, or the writer identifies specific claims that lack supporting evidence during Step 4 drafting
-   - **Polish Mode `rewrite`:** RECOMMENDED — run targeted search if diagnosis flagged citations/500w < 2
+   - **Polish Mode `rewrite`:** RECOMMENDED. Run targeted search if diagnosis flagged citations/500w < 2.
    - **Polish Mode `polish`:** only if Phase 0-P Step 3 diagnosis flagged citations/500w < 2
    - **`keep` sections:** skip
    - If user explicitly requests Round 2 for any section → execute regardless of above criteria
    - Add new papers same way as Phase 2 (batch add + dedup).
 
-3. **Figure — MANDATORY read then write:**
+3. **Figure (MANDATORY): read then write.**
    a. **Read** `figures/figure_index.md` → find existing entries where `Section: [SectionID]`. If an entry exists, load its Caption and Key Message as writing context for Step 4.
    b. **Write** (append) new figure definition if not yet defined for this section:
    ```
@@ -573,12 +573,12 @@ If pending_sections is empty → all sections complete; proceed to Phase 4.
    > `figures/figure_index.md` is the canonical figure registry for ALL modes (Write, Polish, None). It is NOT inside `drafts/`.
 
 4. **Draft:** Write to `drafts/section_XX_XX.md` (zero-pad each part to 2 digits, e.g., section 1.1 → `drafts/section_01_01.md`, section 2.10 → `drafts/section_02_10.md`). Paragraphs only. Citation format `[N]` (N = gid).
-   - **Reference the figure caption from Step 3a** — the draft must describe and introduce the figure using its planned caption and key message.
+   - **Reference the figure caption from Step 3a.** The draft must describe and introduce the figure using its planned caption and key message.
    - Apply Anti-AI Writing rules (English or Chinese mode per outline.md).
    - Synthesis not summary; arbitration of contradictions; alternate claim/evidence order.
-   - **Abbreviation rule:** First occurrence of any abbreviation in this section must use "Full Name (ABBR)" format. If the abbreviation was already defined in a previous section, use ABBR directly. `exports/abbreviation_list.md` does not exist yet (it is generated in Phase 4 Step 4c) — to check prior definitions, grep the already-written `drafts/section_*.md` files for the `Full Name (ABBR)` pattern.
+   - **Abbreviation rule:** First occurrence of any abbreviation in this section must use "Full Name (ABBR)" format. If the abbreviation was already defined in a previous section, use ABBR directly. `exports/abbreviation_list.md` does not exist yet (it is generated in Phase 4 Step 4c); to check prior definitions, grep the already-written `drafts/section_*.md` files for the `Full Name (ABBR)` pattern.
 
-5. **Citation spot-check** (lightweight, runs per-section — catches hallucinated `[N]` before Reviewer Simulator):
+5. **Citation spot-check** (lightweight, runs per-section; catches hallucinated `[N]` before Reviewer Simulator):
    ```bash
    # Scans all drafts/ but only this section's file matters (previous sections already passed).
    # --fail-on-orphan exits non-zero if any [N] in draft has no match in literature_index.json.
@@ -589,13 +589,13 @@ If pending_sections is empty → all sections complete; proceed to Phase 4.
    - Does NOT do online DOI/PMID verification here (that's Phase 4 `citation_guard.py`'s job).
    - [Zotero mode] Also cross-check against `--get-section` output: every gid used in draft should appear in the section's Zotero collection.
 
-6. **Reviewer Simulator** — 执行 5 维度 16 项 Y/N checklist（📖 完整 16 项详见 `references/reviewer_checklist.md`）。5 个维度（每项任一 N 即该维度失败）：
-   - **D1 Novelty & Contribution** — 是否提出新框架/假说/视角，明写"gap→contribution"，不只是罗列已有工作。
-   - **D2 Arbitration & Critical Analysis** — 是否识别 ≥1 处文献矛盾，分析*为何*矛盾，并给出立场或调和解释（不骑墙）。
-   - **D3 Evidence Density & Traceability** — 每个事实断言有引用、关键断言 ≥2 独立来源、证据类型与断言类型匹配（机制→原著，疗效→临床试验）。
-   - **D4 Flow & Coherence** — 段首承接上段结论、本节有 setup→evidence→synthesis→implication 内在弧线、无可随意搬移的孤立段。
-   - **D5 Anti-AI Compliance** — 零禁用词、句长有节奏（无连续 3 句近长）、被动句 ≤30%、无模板化转折开头。
-   **优先委托独立 subagent 盲评**（消除"自写自评"偏差）：派一个 subagent，只给它 `drafts/section_XX_XX.md` 路径 + checklist，不给写作时的上下文，让它独立判定每项 Y/N 并返回结构化结果。无 subagent 能力的客户端 → 主 agent 自评，但必须切换到"审稿人视角"重新逐项核对（不默认通过）。
+6. **Reviewer Simulator:** 执行 5 维度 16 项 Y/N checklist（📖 完整 16 项详见 `references/reviewer_checklist.md`）。5 个维度（每项任一 N 即该维度失败）：
+   - **D1 Novelty & Contribution:** 是否提出新框架/假说/视角，明写 gap→contribution，不只是罗列已有工作。
+   - **D2 Arbitration & Critical Analysis:** 是否识别 ≥1 处文献矛盾，分析为何矛盾，并给出立场或调和解释（不骑墙）。
+   - **D3 Evidence Density & Traceability:** 每个事实断言有引用、关键断言 ≥2 独立来源、证据类型与断言类型匹配（机制→原著，疗效→临床试验）。
+   - **D4 Flow & Coherence:** 段首承接上段结论、本节有 setup→evidence→synthesis→implication 内在弧线、无可随意搬移的孤立段。
+   - **D5 Anti-AI Compliance:** 零禁用词、句长有节奏（无连续 3 句近长）、被动句 ≤30%、无模板化转折开头。
+   **优先委托独立 subagent 盲评**（消除自写自评偏差）：派一个 subagent，只给它 `drafts/section_XX_XX.md` 路径 + checklist，不给写作时的上下文，让它独立判定每项 Y/N 并返回结构化结果。无 subagent 能力的客户端 → 主 agent 自评，但必须切换到审稿人视角重新逐项核对（不默认通过）。
    **Gate:** 任何维度 ≥1 项失败 → 内部修订（最多 2 轮）。2 轮后仍失败 → **HALT**，输出结构化反馈（【问题】+ 证据锚点 + 根源分析 + 修复方向）。修订与 HALT 决策由主 agent 负责（不可委托）。
 
 7. **Word count check:**
@@ -605,7 +605,7 @@ If pending_sections is empty → all sections complete; proceed to Phase 4.
    Key sections target: >500 words (EN) / >1,500 chars (CN); Supporting: >200 words / >600 chars.
    **If user explicitly requested a shorter length** (e.g., "~800 characters"): defer to user's request; treat the skill's minimums as guidance for quality, not a hard gate. Do not loop-prompt the user to write more if they have already confirmed their target length.
 
-8. **Update state.json — MANDATORY, do not skip:**
+8. **Update state.json (MANDATORY, do not skip):**
    ```bash
    python3 scripts/state_manager.py complete-section --section X.X
    # Adds X.X to completed_sections AND removes it from any pending_sections bucket (Polish Mode),
@@ -615,15 +615,15 @@ If pending_sections is empty → all sections complete; proceed to Phase 4.
 
 9. **Git Checkpoint** (见复用块, msg: `[review] Phase 3: section X.X draft complete`)
 
-10. **DoD 自检清单 — 硬规则：逐项确认通过后才可声明"本节完成"，不得跳过任何一项。**
+10. **DoD 自检清单（硬规则）：逐项确认通过后才可声明本节完成，不得跳过任何一项。**
 
-    **🔴 进入下一节前置闸口：上一节 delegate_review verify 必须 exit 0（含 R15 结构完整性），否则不得开始下一节撰写——写完即检，不过不进。**
+    **🔴 进入下一节前置闸口：上一节 delegate_review verify 必须 exit 0（含 R15 结构完整性），否则不得开始下一节撰写。写完即检，不过不进。**
 
     **🔴 委托盲检（不得主 agent 自评）**：你刚写完本节，自评会失真地默认通过、且易漏项。落盘前必须把 DoD 清单**委托给独立上下文的子代理盲检**，自己不直接打勾：
     1. 生成任务包：`python3 scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate manuscript-dod --files <本节文件> --workdir .`
     2. **派一个独立子代理**（Claude Code 用 `academic-blind-reviewer`；其他平台派通用子代理），把任务包原样给它、**不要给它本节的写作上下文**，要求按任务包返回 JSON 数组。
     3. 校验返回：`python3 scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate manuscript-dod --return <子代理返回.json>`；退出码非 0（任一缺项 / fail / 无证据）= **fail-closed**，据子代理证据修复后重跑，**未过不得声明完成**。
-    - **降级路径**（当前环境无法派子代理时）：主 agent 切换"审稿人视角"、清空对本节的写作记忆，逐项独立重核——绝不因"自己刚写完"默认通过；仍跑 `verify` 把关。
+    - **降级路径**（当前环境无法派子代理时）：主 agent 切换审稿人视角、清空对本节的写作记忆，逐项独立重核，绝不因刚写完就默认通过；仍跑 `verify` 把关。
 
     下列清单与 `references/dod_checklist.json` 逐项对应（改清单先改 JSON），供人工对照；能脚本核的项子代理会先跑脚本：
 
@@ -664,7 +664,7 @@ Generate prompts for every entry in `figures/figure_index.md`. Write output to `
 
 **Start: Read `outline.md` + `state.json`. If state.json shows phase=4 and completed=true, skip.**
 
-**⚠️ MANDATORY entry gate — block Phase 4 when pending sections remain (Polish Mode):**
+**⚠️ MANDATORY entry gate: block Phase 4 when pending sections remain (Polish Mode):**
 ```bash
 python3 scripts/state_manager.py check-pending
 ```
@@ -687,7 +687,7 @@ Write Mode has no `pending_sections` field so this gate is a no-op (no key → e
    # OR state.json marks citations as not imported
    python3 -c "import json,pathlib; s=json.loads(pathlib.Path('state.json').read_text(encoding='utf-8')); exit(0 if s.get('citations_imported') is False else 1)" && echo "GUARD: citations_imported=false → skip 2a-2b"
    ```
-   **引用总量校验（警告性，不阻断 —— 尊重用户自定的短篇长度）:**
+   **引用总量校验（警告性，不阻断；尊重用户自定的短篇长度）:**
    ```bash
    python3 scripts/state_manager.py count-citations --drafts-dir drafts --threshold 150
    ```
@@ -748,7 +748,7 @@ Write Mode has no `pending_sections` field so this gate is a no-op (no key → e
 5c. **元数据块（导出前补全）：** 在 `exports/Final_Review.md` 末尾追加 Manuscript Metadata 块（search cutoff / databases / COI / funding）。
    📖 字段模板详见 `references/writing_guidelines.md` §7。
 
-6. **Update state.json — merge, do NOT overwrite:**
+6. **Update state.json (merge, do NOT overwrite):**
    ```bash
    python3 scripts/state_manager.py set-phase --phase 4 --completed true
    ```
