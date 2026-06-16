@@ -414,3 +414,15 @@ revise-sci 的 polish 在"防过度改写"上**已强于 Figpad**(meaning_change
 3. 新发现 3 项:reviewer-response 漏报收紧、sci2doc 英文全称吞句首词、nsfc validate-one 防误判。
 4. MID:response/revise 补禁词表、citation_guard 三实现收敛。
 5. (trivial)gsw/review 图型清单补 volcano/MA plot。
+
+## 十八、决策落地批次(2026-06-16,commit cddaf3e..625e45e)
+
+**用户拍板**:polish-sci 新建 / revise-sci A/B/C 都做 / 补 volcano+MA / 补 response·revise 禁词表 / 不做 citation_guard 收敛(澄清:citation_guard 只有 4/7 共享 gsw 版,response·revise·nsfc 是各自变体,收敛=重构,暂不做)。
+
+- ✅ 新发现 3 项修复:sci2doc 英文全称剥句首功能词(_trim_en_prefix);reviewer-response 漏报收紧(SUBSTANTIVE_ADD_RE,仅新增类承诺,6 组 smoke 含上轮误报形态确认不复发);nsfc validate 加 `--phase/--rules` 过滤(PHASE_RULES),并把 V-10 移出 phase2/3(它含 M被F覆盖检查、F 早期为空必假阳,结构子检查与 V-01/02/08 重叠不漏)。
+- ✅ trivial:gsw/review 图型清单补 volcano/MA plot。
+- ✅ revise-sci polish 三增强:A 数值守卫(numeric_tokens_preserved)/B 不确定性动词校准(detect_certainty_upgrade,且核实 trailing-ing 正则不误删主动词=STALE 无 bug)/C Risk Flags 输出(polish_risk_flags,保留 fail);+MID 补 AI 套话禁词表(find_ai_style_markers)。均加 strict_gate 校验项 + smoke。
+- ✅ MID:reviewer-response risk_check 补 forbidden_ai_phrase 禁词表(23 英+14 中,去重防双报,WARN 级)。
+- ⏳ **polish-sci 新建**:待设计确认后建(复用 revise-sci 强化后 common.py 检测器 + delegate_review;纯润色全文,红线保留引用/数值/基因名/统计量)。
+
+全部 opus 子代理产出经主 agent py_compile + JSON + em-dash + 功能 smoke 复核(含修掉代理在代码注释里写的 em-dash);每逻辑一 commit,5 技能镜像 opencode/codex 全 0。
