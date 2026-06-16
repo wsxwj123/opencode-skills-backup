@@ -1225,6 +1225,16 @@ def main() -> int:
         "si_docx": str(Path(args.si).resolve()) if args.si else "",
     }
 
+    def _is_filled_unit(path: Path) -> bool:
+        """Return True if the unit JSON exists and has been filled (no AI_FILL_REQUIRED placeholders)."""
+        if not path.exists():
+            return False
+        try:
+            text = path.read_text(encoding="utf-8")
+            return "AI_FILL_REQUIRED" not in text
+        except Exception:
+            return False
+
     units: list[dict[str, Any]] = []
     email_unit = build_email_unit(src, email_text)
     write_json(units_dir / "000_email.json", email_unit)
@@ -1232,12 +1242,19 @@ def main() -> int:
 
     order = 1
     for row in rows:
-        unit = build_comment_unit(order, row, src, manuscript_units, si_units)
         safe_reviewer = row.reviewer.replace(" ", "").replace("#", "")
         num = f"{int(row.number):02d}" if row.number.isdigit() else row.number
         fname = f"{order:03d}_{safe_reviewer}_{row.section}_{num}.json"
-        write_json(units_dir / fname, unit)
-        units.append(unit)
+        unit_path = units_dir / fname
+        if _is_filled_unit(unit_path):
+            # Unit already filled by AI — preserve existing content, just reload for index/HTML.
+            existing = json.loads(unit_path.read_text(encoding="utf-8"))
+            units.append(existing)
+            print(f"SKIP (already filled): {unit_path.name}")
+        else:
+            unit = build_comment_unit(order, row, src, manuscript_units, si_units)
+            write_json(unit_path, unit)
+            units.append(unit)
         order += 1
 
     index_data = build_index(units)
