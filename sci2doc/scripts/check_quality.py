@@ -34,12 +34,12 @@ except Exception:  # pragma: no cover
     from thesis_profile import build_format_render_context, load_profile
 
 try:
-    from shared_utils import normalize_text, heading_level, classify_heading, infer_project_root_for_profile
+    from shared_utils import normalize_text, heading_level, classify_heading, infer_project_root_for_profile, classify_paragraphs_with_chapter_scope
 except ImportError:  # pragma: no cover
     script_dir = os.path.dirname(os.path.abspath(__file__))
     if script_dir not in sys.path:
         sys.path.insert(0, script_dir)
-    from shared_utils import normalize_text, heading_level, classify_heading, infer_project_root_for_profile
+    from shared_utils import normalize_text, heading_level, classify_heading, infer_project_root_for_profile, classify_paragraphs_with_chapter_scope
 
 try:
     from abbreviation_registry import load_registry, extract_abbreviations, validate_cross_references
@@ -109,30 +109,30 @@ def line_spacing_pt(paragraph):
     return None
 
 
-def check_word_count(doc, body_target_chars=80000, review_target_chars=0, review_in_scope=False):
-    """检查字数是否达标"""
+def check_word_count(doc, body_target_chars=80000, review_target_chars=0, review_in_scope=False, extra_exclude=None):
+    """检查字数是否达标（使用章作用域继承分类，摘要计入正文）"""
     issues = []
-    
+
     total_chinese = 0
     review_chinese = 0
-    current_section_type = "body"
-    
-    for para in doc.paragraphs:
-        text = para.text.strip()
-        if not text:
-            continue
 
-        lvl = heading_level(getattr(para.style, "name", ""))
+    para_stream = (
+        (para.text.strip(), heading_level(getattr(para.style, "name", "")))
+        for para in doc.paragraphs
+        if para.text.strip()
+    )
+
+    for text, lvl, sec_type in classify_paragraphs_with_chapter_scope(para_stream, extra_exclude=extra_exclude):
         if lvl is not None:
-            current_section_type = classify_heading(text)
-            continue
+            continue  # 标题行本身不计字数
 
         chars = sum(1 for char in text if '\u4e00' <= char <= '\u9fff')
-        if current_section_type == "review":
+        if sec_type == "review":
             review_chinese += chars
-        elif current_section_type in {"references", "toc", "abstract", "acknowledgement", "appendix", "achievements", "declaration", "abbreviation_table"}:
+        elif sec_type in {"references", "toc", "acknowledgement", "appendix", "achievements", "declaration", "abbreviation_table"}:
             continue
         else:
+            # body and abstract both count
             total_chinese += chars
     
     # 检查正文字数
