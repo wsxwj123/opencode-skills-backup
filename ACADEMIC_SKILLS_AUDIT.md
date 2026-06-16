@@ -223,8 +223,10 @@
 1. ✅ **补 DoD 自检清单**(第九节)到 **7 技能**收口处 + "未全过不得汇报完成"硬规则(2026-06-16)
 2. ✅ **去 AI 完整化**(第十节):中文句长 ≤50 字/英文 ≤30 词/-ing 从句/被动按文体区分/中英文禁词同步——多数有脚本检测(style_checker/check_quality/humanizer_zh/risk_check/common.py)(2026-06-16)
 3. ⬜(暂缓)阶段三:7 技能编排器
-4. ⬜ **自检/评审委托独立子代理**(见第十二节):7 技能的自检/评审环节从主 agent 改为委托独立子代理 + `.claude/agents/` 预定义盲评 agent + **每步脚本固定**(任务包生成 + 返回校验,防失忆/遗漏)
-5. ⬜ 实施后:**git commit(回滚点)→ darwin 评估**各技能(合理性/守规/按需加载是否稀释注意力)→ 按需加载优化
+4. ✅ **自检/评审委托独立子代理**(见第十二、十三节):7 技能 DoD 自检改委托独立子代理盲检 + `.claude/agents/academic-blind-reviewer` 预定义 + delegate_review.py pack/verify 脚本固定(2026-06-16)
+5. ✅ 实施后 git commit + darwin 7 judge 盲评(见第十三节);⬜ 按需加载优化(各技能 SKILL.md 可瘦身,见第十三节短板,待后续)
+6. ✅ **新功能:结构完整性前置闸口**(见第十三节)——写完即检、verify 未 exit0 不得进下一节;opus 双向实测通过(2026-06-16)
+7. ⬜ 反例黑名单补强(darwin 共性短板:多数技能缺"❌不要做什么"集中清单);⬜ SKILL.md 按需加载瘦身(gsw/review/reviewer-simulator 偏长)
 
 ## 十二、自检/评审委托独立子代理(用户要求 + 三平台调研,2026-06-16)
 > 备注:去 AI 的"中英文"指**最终产品(论文/标书)的语言**,非 skill 文本。
@@ -255,3 +257,34 @@
 **每步脚本固定**:委托前脚本生成"子代理任务包"(稿件路径+checklist+约束);委托后脚本校验返回(结构化完整性)+ 写状态文件——防失忆/遗漏。
 
 **不确定项(调研标注,实施时验证)**:OpenCode 真实并行度、Codex 从 skill 文件触发子代理的稳定性、OpenCode 结构化返回可靠性——故降级路径必须保留。
+
+## 十三、实施落地 + Darwin 评估 + 新功能(2026-06-16,已 commit)
+
+**实施(委托盲检落地,commit 7e288a7 / cd95b2a)**
+- 地基:`delegate_review.py`(pack 生成盲检任务包 + 返回路径约定;verify 校验返回 fail-closed,缺项/fail/无证据→exit1)+ `.claude/agents/academic-blind-reviewer.md`(限 Read/Glob/Grep/Bash,JSON 输出)
+- 7 技能各建 `references/dod_checklist.json`(DoD 机器可读真源)+ SKILL.md DoD 闸口改委托盲检 + 降级路径;delegate_review.py 7 份字节一致(md5 c8fe254)
+- reviewer-simulator 额外:多视角评审改"并发 N 独立子代理盲评"(第四步半协议)
+
+**Darwin 7 judge 盲评结果(9 维 rubric,满分100)**
+| 技能 | 分 | 守规(委托盲检/citation白名单/去AI) | 主短板 |
+|---|---|---|---|
+| general-sci-writing | 74 | 全✅ | SKILL.md 594行偏长可瘦~100 |
+| review-writing | 81 | 全✅ | DoD散文与json双写、Step4未显式触发三禁 |
+| sci2doc | 77.5 | ✅ | scare quotes正则漏中英混合 |
+| reviewer-simulator | 72 | ⚠ | 多视角并发依赖平台子代理能力(降级时隔离失真) |
+| reviewer-response-sci | 77 | ⚠→已修 | (原)三禁宣而不检、RR13命令缺参 |
+| nsfc-proposal | 78 | ⚠→已修 | (原)9个DoD命令flag虚构 |
+| revise-sci | 65 | ❌→已修 | (原)5个DoD命令虚构、检查点🔴少 |
+
+**Darwin 暴露的系统性 bug + 修复(commit a5e27be)**
+- ⚠ 扩散时子代理在 dod_checklist 虚构脚本命令(flag/子命令不存在,一跑就 argparse error → 盲检无法核验、fail-closed 失效)。逐项 --help 核验后全修:review(R10/R12)、sci2doc(--category/validate_all)、nsfc(N1/N9/N47/6字数项 summary→count)、reviewer-response(RR13)、revise(RV-G3/R4/R5/R6/R7)。独立检查器复核无残留虚构。
+- 去AI"宣而不检":reviewer-response risk_check.py 补三禁、revise common.py 补 scare-quote+解释性冒号,均自测检出。
+- reviewer-simulator validate_report_html.py 补 VERDICT_CLASS 校验(A2 门禁)。
+- **教训**:扩散脚本命令必须独立 --help 核验签名,不能只查脚本文件存在。
+
+**新功能#4:结构完整性前置闸口(commit a5e27be)**
+- 各 gate 加"结构完整性"item(gsw G13/review R15/sci2doc S6+S8/简 B8/response RR14/nsfc N52-58/revise RV-R8):对照 storyline/outline 逐结构组件核对(如 Discussion 四段含强制 Limitations),缺段即 fail。
+- SKILL.md 加显性前置闸口:**上一节 verify 必须 exit0(含结构完整性)才能进下一节——写完即检,不过不进**。
+- **opus 双向实测通过**:缺 Limitations 段→G13 fail→verify exit1 拦截;四段齐全→G13 pass→exit0 放行,无误拦。
+
+**自检流程启动时机**:每节/每章/每部分**落盘后、进入下一节前**(写作类);报告/letter **出具前**(审稿/回复类)。机制=主 agent 写完→pack→派独立子代理盲检→verify;exit≠0 则据证据修复重检,**未过不得声明完成/不得进下一节**。
