@@ -9,6 +9,38 @@ import re
 import sys
 from pathlib import Path
 
+# ---------------------------------------------------------------------------
+# Sentence-length and -ing clause helpers
+# ---------------------------------------------------------------------------
+EN_SENTENCE_WORD_LIMIT = 30
+ZH_SENTENCE_CHAR_LIMIT = 50
+
+
+def _split_en_sentences(text: str) -> list[str]:
+    """Very conservative English sentence splitter (period/!/?).
+    Avoids splitting "Fig. 3A", "vs.", "et al.", "e.g.", "i.e." etc.
+    """
+    # Protect common abbreviations
+    text = re.sub(r'\b(Fig|fig|No|no|vs|Vol|vol|et al|e\.g|i\.e|Dr|Prof|Mr|Mrs|Ms|Jr|Sr|etc)\.',
+                  r'\1<DOT>', text)
+    parts = re.split(r'(?<=[.!?])\s+(?=[A-Z])', text)
+    return [p.replace('<DOT>', '.').strip() for p in parts if p.strip()]
+
+
+def _count_words(sentence: str) -> int:
+    return len(sentence.split())
+
+
+def _split_zh_sentences(text: str) -> list[str]:
+    """Split Chinese text on sentence-ending punctuation."""
+    parts = re.split(r'(?<=[。！？；])', text)
+    return [p.strip() for p in parts if p.strip()]
+
+
+def _count_zh_chars(sentence: str) -> int:
+    """Count only CJK + ASCII non-space chars (excludes punctuation-only spans)."""
+    return len(re.sub(r'\s', '', sentence))
+
 # Categories prefixed with "ai_" are only applied to comment units, not email units.
 RISK_PATTERNS = {
     "fabricated_experiment": [
@@ -48,10 +80,55 @@ RISK_PATTERNS = {
         r"we completely agree with the reviewer",
         r"this is (indeed )?an excellent (point|suggestion|observation)",
     ],
+    # Comma + -ing participial dangling clause (AI signature pattern).
+    # Match ", <word(s)> <verb>ing" where the -ing verb is at the clause start.
+    # Excludes legitimate list items and figure labels by requiring lowercase after comma.
+    "ai_ing_clause": [
+        r",\s+(?:thus|thereby|hence|therefore\s+)?(?:\w+\s+){0,3}\b\w+ing\b(?:\s+(?:that|the|our|its|this|a|an)\b)",
+        r",\s+(?:reflecting|ensuring|highlighting|demonstrating|confirming|indicating|suggesting|showing|providing|allowing|enabling|supporting|strengthening|underscoring|emphasizing)\b",
+    ],
 }
 
-AI_STYLE_CATEGORIES = {"ai_hedging", "ai_appreciation", "ai_filler"}
+AI_STYLE_CATEGORIES = {"ai_hedging", "ai_appreciation", "ai_filler", "ai_ing_clause"}
 FABRICATION_CATEGORIES = {"fabricated_experiment", "fabricated_statistics"}
+
+
+def _check_en_sentence_length(units: list[dict]) -> list[tuple[str, str, str]]:
+    """Flag English sentences exceeding EN_SENTENCE_WORD_LIMIT words (WARN)."""
+    hits: list[tuple[str, str, str]] = []
+    for unit in units:
+        uid = unit.get("unit_id", "?")
+        content = unit.get("content", {})
+        for field in ("response_en", "revised_excerpt_en"):
+            text = str(content.get(field, ""))
+            if not text or text in ("无", "N/A", ""):
+                continue
+            for sent in _split_en_sentences(text):
+                wc = _count_words(sent)
+                if wc > EN_SENTENCE_WORD_LIMIT:
+                    preview = sent[:80] + ("…" if len(sent) > 80 else "")
+                    hits.append((uid, "en_sentence_too_long",
+                                 f"{field}: {wc} words: \"{preview}\""))
+    return hits
+
+
+def _check_zh_sentence_length(units: list[dict]) -> list[tuple[str, str, str]]:
+    """Flag Chinese sentences exceeding ZH_SENTENCE_CHAR_LIMIT chars (WARN)."""
+    hits: list[tuple[str, str, str]] = []
+    for unit in units:
+        uid = unit.get("unit_id", "?")
+        content = unit.get("content", {})
+        for field in ("response_zh", "revised_excerpt_zh"):
+            text = str(content.get(field, ""))
+            if not text or text in ("无", "N/A", ""):
+                continue
+            for sent in _split_zh_sentences(text):
+                cc = _count_zh_chars(sent)
+                if cc > ZH_SENTENCE_CHAR_LIMIT:
+                    preview = sent[:60] + ("…" if len(sent) > 60 else "")
+                    hits.append((uid, "zh_sentence_too_long",
+                                 f"{field}: {cc} chars: \"{preview}\""))
+    return hits
 
 
 def _check_structural_repetition(units: list[dict]) -> list[tuple[str, str]]:
@@ -142,6 +219,11 @@ def main() -> int:
         # Structural repetition check across comment units only
         for cat, msg in _check_structural_repetition(comment_units):
             all_hits.append(("cross-unit", cat, msg))
+        # Sentence-length checks (WARN-level, both EN and ZH)
+        for uid, cat, msg in _check_en_sentence_length(comment_units):
+            all_hits.append((uid, cat, msg))
+        for uid, cat, msg in _check_zh_sentence_length(comment_units):
+            all_hits.append((uid, cat, msg))
     elif args.file:
         text = Path(args.file).read_text(encoding="utf-8")
         for cat, pat in scan_text(text):
