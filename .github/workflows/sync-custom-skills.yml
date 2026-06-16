@@ -11,6 +11,7 @@ on:
       - 'nsfc-proposal/**'
       - 'reviewer-simulator/**'
       - 'sci2doc/**'
+      - 'revise-sci/**'
 
 jobs:
   sync:
@@ -23,7 +24,7 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Sync 6 custom skills to custom-skills branch
+      - name: Sync 7 custom skills to custom-skills branch
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -33,14 +34,14 @@ jobs:
 
           # 删除旧版，从 main 拉取最新
           rm -rf general-sci-writing review-writing reviewer-response-sci \
-                 nsfc-proposal reviewer-simulator sci2doc
+                 nsfc-proposal reviewer-simulator sci2doc revise-sci
           git checkout main -- \
                  general-sci-writing review-writing reviewer-response-sci \
-                 nsfc-proposal reviewer-simulator sci2doc
+                 nsfc-proposal reviewer-simulator sci2doc revise-sci
 
           # 有变化才提交
           git add general-sci-writing review-writing reviewer-response-sci \
-                  nsfc-proposal reviewer-simulator sci2doc
+                  nsfc-proposal reviewer-simulator sci2doc revise-sci
           if git diff --staged --quiet; then
             echo "No changes to custom skills, skipping commit."
           else
