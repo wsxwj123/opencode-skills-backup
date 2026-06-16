@@ -132,6 +132,21 @@ def parse_statement_label(text: str) -> tuple[bool, str]:
     return False, ""
 
 
+# Numbered-comment delimiters. ASCII plus full-width variants (．、）：) common in
+# Chinese review letters. The顿号 (、) and full-width period (．) are frequent list
+# markers that the original ASCII-only character class missed.
+_NUMBERED_PREFIX = re.compile(
+    r"^(?:comment\s*)?(\d+)\s*[\.\)\:\-．）、：]\s*(.+)$",
+    flags=re.IGNORECASE,
+)
+# Parenthesized numbering at line start, e.g. (4) or （4）.
+_PARENS_NUMBERED_PREFIX = re.compile(r"^[（(]\s*(\d+)\s*[）)]\s*(.+)$")
+
+
+def numbered_comment_match(text: str):
+    return _NUMBERED_PREFIX.match(text) or _PARENS_NUMBERED_PREFIX.match(text)
+
+
 def parse_docx_comments(path: Path) -> list[dict[str, str]]:
     rows = read_docx_paragraphs(path)
     comments: list[dict[str, str]] = []
@@ -239,7 +254,7 @@ def parse_docx_comments(path: Path) -> list[dict[str, str]]:
             current_statement_text = [statement_trailing] if statement_trailing else []
             expect_prefatory_statement = False
             continue
-        match = re.match(r"^(?:comment\s*)?(\d+)\s*[\.\)\:\-]\s*(.+)$", text, flags=re.IGNORECASE)
+        match = numbered_comment_match(text)
         if match:
             flush_current()
             flush_statement()
