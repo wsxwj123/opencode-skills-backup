@@ -585,7 +585,7 @@ Priority rule: **chapter-based numbering takes precedence**. If a figure from SC
 格式类参数（字体/字号/边框/对齐/页眉页脚/摘要/目录间距等）由脚本硬编码并强制校验，**不在此复述**，以 `check_quality.py` 各类别通过为准。本清单只保留需人工确认的项：
 
 - [ ] `check_quality.py --enforce-full-structure` 各类别（三线表 / 引用格式 / 标点 / 缩略语 / 字体字号 / 页眉页脚 / **参考文献著录格式**）全部通过
-- [ ] Body target >= 80,000 且各章字数已与用户协商并写入 profile
+- [ ] Body target 达到学位地板值（博士 >= 50,000 / 硕士 >= 30,000，或用户在 Step 0.5 协商的更高值）且各章字数已写入 profile
 - [ ] 结构满足：引言 + 研究章 + 结论，总章数 >= 5；参考文献统一在全文末尾
 - [ ] 原子化工作流：编号校验通过、章节自检已跑、小节快照已建、快照/回滚可用
 - [ ] Humanization pass 已完成（humanizer-zh 或人工清单）
