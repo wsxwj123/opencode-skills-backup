@@ -285,21 +285,24 @@ Each comment must contain:
 |---|------|---------|
 | RV-G1 | 引文 `[n]` ↔ 参考列表一一对应，无孤儿引用、无缺号，编号连续 | `python scripts/build_reference_registry.py` → `data/reference_coverage_audit.json` ok=true |
 | RV-G2 | 本轮新增引用已过 citation_guard 双重核验 | `python scripts/citation_guard.py` → ok=true，无 manual_review 条目 |
-| RV-G3 | 改动符合原文 storyline / 主线（不跑题，不与原文主线矛盾） | 人工对照 `build_issue_matrix.py` 生成的 `issue_matrix.md` |
+| RV-G3 | 改动符合原文 storyline / 主线（不跑题，不与原文主线矛盾） | 人工对照 `issue_matrix.md` 逐段核查（无脚本可自动核验） |
 | RV-G4 | 占位符清零：无 `CITE_PENDING` / `DATA_PENDING` / `【待AI】` / `{{` 残留 | `grep -r "CITE_PENDING\|DATA_PENDING\|待AI\|{{" <project_root>/` 零命中 |
 | RV-G5 | 去 AI 五项（破折号/scare quotes/解释性冒号/英文≤30词/-ing从句/中文≤50字≤2层从句）通过 | `python scripts/strict_gate.py --project-root <project_root>` → `ai_style_flags_removed` 无残留；句长警告记录于 notes |
 | RV-G6 | 字数达标（改动前后正文字数在期刊要求范围内） | 人工或期刊要求核对 |
 
-### Revise-Sci 特有项（id: RV-R1 ~ RV-R7）
+🔴 收口前置闸口：`delegate_review verify` 必须 exit 0（含 RV-R8 结构完整性），否则不得声明改稿完成。
+
+### Revise-Sci 特有项（id: RV-R1 ~ RV-R8）
 
 | id | 项目 | 核验方式 |
 |---|------|---------|
 | RV-R1 | `strict_gate.py` 通过（exit code 0） | `python scripts/strict_gate.py --project-root <project_root>` → `STRICT_GATE: PASS` |
 | RV-R2 | Reference coverage 无缺口：`data/reference_coverage_audit.json` `ok=true`，无 unresolved numeric/author-year gap | `python scripts/build_reference_registry.py` → coverage_audit 直接读；或 RV-R1 覆盖 |
 | RV-R3 | Patch 修订哈希一致（如使用 Patch 修订协议）：`apply_revision_patch.py` 未报告任何 hash mismatch，所有未触及 block 字节不变（fail-closed，哈希不符则整批拒绝，不得静默部分应用）；未使用则标 na 并注明 | `python scripts/apply_revision_patch.py --manifest <block_manifest.json> --patch <patch.json> --output <revised.md>` exit code 0 |
-| RV-R4 | 退稿信每条意见有落点：`issue_matrix.md` 每个 `comment_id` 在 `manuscript_edit_plan.md` 中有 revised_excerpt | strict_gate 内含 `comment_id not found in edit plan` 检查 |
-| RV-R5 | 审稿意见已原子化：`atomize_comments.py` 完成，每条意见有 severity 字段，comment_id 唯一，无混合意见跨意见合并改动 | `python scripts/atomize_comments.py --dry-run` |
-| RV-R6 | polish 状态完整：所有含非空 revision_plan.scope 的片段已有 polish state，无 meaning_changed=true 或 scope_respected=false | `python scripts/polish_revisions.py --check-only` |
-| RV-R7 | response_to_reviewers.docx 结构完整：每个 comment block 都有 comment heading / response-section heading / evidence-section heading | `python scripts/export_docx.py --validate-response-structure` |
+| RV-R4 | 退稿信每条意见有落点：`issue_matrix.md` 每个 `comment_id` 在 `manuscript_edit_plan.md` 中有 revised_excerpt | `python scripts/strict_gate.py --project-root <project_root>`（strict_gate 内含此检查，RV-R1 通过则本项通过） |
+| RV-R5 | 审稿意见已原子化：`atomize_comments.py` 在 pipeline 中已运行，每条意见有 severity 字段，comment_id 唯一，无混合意见跨意见合并改动 | 人工确认 `state/comment_registry.json` 已生成且 comment_id 唯一（`atomize_comments.py` 无 --dry-run flag，须通过 pipeline 正式运行核验） |
+| RV-R6 | polish 状态完整：所有含非空 revision_plan.scope 的片段已有 polish state，无 meaning_changed=true 或 scope_respected=false | `python scripts/strict_gate.py --project-root <project_root>`（strict_gate 内含此检查，RV-R1 通过则本项通过） |
+| RV-R7 | response_to_reviewers.docx 结构完整：每个 comment block 都有 comment heading / response-section heading / evidence-section heading | `python scripts/strict_gate.py --project-root <project_root>`（strict_gate 解析 docx 核验结构，RV-R1 通过则本项通过） |
+| RV-R8 | 结构完整性：改后稿件结构完整（原结构无破坏、参考文献编号连续、response 各 unit 三要素齐全）；退稿信每条意见在 edit_plan 中有落点无遗漏 | `python scripts/strict_gate.py --project-root <project_root>`（RV-R1 通过则本项通过）；或人工逐段核查 |
 
-> 能脚本核的项已标注命令；RV-R3 仅在使用 Patch 修订协议时适用，跳过需在 notes 中注明原因。
+> RV-R3 仅在使用 Patch 修订协议时适用，跳过需在 notes 中注明原因。RV-R4/R6/R7/R8 已由 strict_gate 覆盖，RV-R1 通过即视为通过；RV-R5 须确认 pipeline 正式运行产出 comment_registry.json。

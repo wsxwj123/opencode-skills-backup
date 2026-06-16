@@ -103,7 +103,13 @@ def cmd_pack(args: argparse.Namespace) -> int:
         "规则:每个清单 id 必须出现一次;verdict ∈ {pass,fail,na};"
         "verdict 为 fail 或 na 时 evidence 必填(指出文件位置/具体证据)。"
     )
+    lines.append("")
+    return_path = str(Path(args.workdir) / f".review_return_{args.gate}.json")
+    lines.append(f"## 返回写到这个文件(约定路径,主 agent 据此跑 verify)")
+    lines.append(return_path)
     print("\n".join(lines))
+    # 同时把约定路径打到 stderr,方便主 agent 脚本直接取用而不必解析任务包
+    sys.stderr.write(f"RETURN_PATH={return_path}\n")
     return 0
 
 
@@ -176,11 +182,14 @@ def main() -> int:
     p_ver = sub.add_parser("verify", help="校验子代理返回(fail-closed)")
     p_ver.add_argument("--checklist", required=True, help="DoD 清单 JSON 路径")
     p_ver.add_argument("--gate", required=True, help="清单内的 gate id")
-    p_ver.add_argument("--return", dest="return_path", required=True, help="子代理返回的 JSON 路径")
+    p_ver.add_argument("--return", dest="return_path", default=None,
+                       help="子代理返回的 JSON 路径(默认用 pack 约定的 .review_return_<gate>.json)")
     p_ver.add_argument("--workdir", default=".", help="任务包记录目录(默认 cwd)")
     p_ver.set_defaults(func=cmd_verify)
 
     args = parser.parse_args()
+    if getattr(args, "cmd", None) == "verify" and not args.return_path:
+        args.return_path = str(Path(args.workdir) / f".review_return_{args.gate}.json")
     return args.func(args)
 
 

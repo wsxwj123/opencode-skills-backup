@@ -281,6 +281,8 @@ If source materials are missing or inaccessible, **stop and request them**. Do n
 
 **硬规则：以下各项未逐一确认通过，不得向用户声明"该节完成"。**
 
+**🔴 进入下一节前置闸口**：上一节 `delegate_review verify` 必须 exit 0（含结构完整性项 S6），否则不得开始下一节——写完即检，不过不进。
+
 **🔴 委托盲检（不得主 agent 自评）**：你刚写完本节，自评会失真地默认通过、且易漏项。落盘前必须把 DoD 清单**委托给独立上下文的子代理盲检**，自己不直接打勾：
 1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate section-dod --files <本节文件>`
 2. **派一个独立子代理**（Claude Code 用 `academic-blind-reviewer`；其他平台派通用子代理），把任务包原样给它、**不要给它本节的写作上下文**，要求按任务包返回 JSON 数组。
@@ -317,6 +319,8 @@ sci2doc 特有项：
 #### 🔴 每章收口自检清单（Definition of Done · 章级）
 
 **硬规则：以下各项未逐一确认通过，不得向用户声明"该章完成"，不得进入 Step 7。**
+
+**🔴 进入下一章前置闸口**：上一章 `delegate_review verify` 必须 exit 0（含章结构完整性项 S8），否则不得开始下一章——写完即检，不过不进。
 
 **🔴 委托盲检（不得主 agent 自评）**：章级闸口同样必须委托独立子代理盲检，不得主 agent 自评：
 1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate chapter-dod --files <章节合并文件>`

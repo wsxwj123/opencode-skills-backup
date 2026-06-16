@@ -5,6 +5,12 @@ from pathlib import Path
 
 VALID = {'拒稿', '大修', '小修', '接收'}
 PH_RE = re.compile(r"{{\s*[A-Z0-9_]+\s*}}")
+VERDICT_CLASS_MAP = {
+    '拒稿': 'verdict-reject',
+    '大修': 'verdict-major',
+    '小修': 'verdict-minor',
+    '接收': 'verdict-accept',
+}
 
 def text_of_id(html: str, element_id: str):
     m = re.search(rf'id="{re.escape(element_id)}"[^>]*>(.*?)</', html, flags=re.S)
@@ -12,6 +18,15 @@ def text_of_id(html: str, element_id: str):
         return None
     text = re.sub(r'<[^>]+>', '', m.group(1))
     return text.strip()
+
+def classes_of_id(html: str, element_id: str):
+    """Return list of CSS classes on the element with given id."""
+    m = re.search(rf'id="{re.escape(element_id)}"[^>]*class="([^"]*)"', html)
+    if not m:
+        m = re.search(rf'class="([^"]*)"[^>]*id="{re.escape(element_id)}"', html)
+    if not m:
+        return []
+    return m.group(1).split()
 
 def normalize(v: str | None):
     if v is None:
@@ -42,14 +57,29 @@ def main():
     if header_verdict in VALID and final_recommendation in VALID and header_verdict != final_recommendation:
         errors.append(f'Verdict mismatch: header={header_verdict}, section10={final_recommendation}')
 
+    # A2: VERDICT_CLASS must match verdict one-to-one
+    verdict_classes = classes_of_id(html, 'decisionVerdict')
+    if header_verdict in VALID:
+        expected_class = VERDICT_CLASS_MAP[header_verdict]
+        found_verdict_classes = [c for c in verdict_classes if c.startswith('verdict-')]
+        if not found_verdict_classes:
+            errors.append(f'VERDICT_CLASS missing: expected "{expected_class}" on #decisionVerdict, found no verdict-* class')
+        elif expected_class not in found_verdict_classes:
+            errors.append(
+                f'VERDICT_CLASS mismatch: verdict="{header_verdict}" expects class "{expected_class}", '
+                f'but found {found_verdict_classes}'
+            )
+
     if errors:
         print('VALIDATION_FAILED')
         for e in errors:
             print('- ' + e)
         raise SystemExit(1)
 
+    expected_class = VERDICT_CLASS_MAP.get(header_verdict, '?')
     print('VALIDATION_OK')
     print(f'- verdict: {header_verdict}')
+    print(f'- verdict_class: {expected_class}')
     print(f'- final_recommendation: {final_recommendation}')
 
 if __name__ == '__main__':

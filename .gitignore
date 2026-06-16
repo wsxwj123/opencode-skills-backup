@@ -16,3 +16,7 @@ node_modules/
 
 # social-clip 优化计划:本地留档,不入库
 social-clip/OPTIMIZATION_PLAN.md
+
+# 盲检委托产物(delegate_review.py 运行时生成,属项目工作目录,不应进技能库)
+.review_pkg_*.json
+.review_return_*.json
