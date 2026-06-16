@@ -925,6 +925,35 @@ def preflight_validate_state(project_root, chapter=None, strict=False, origin="m
     if not dep_result["ok"]:
         ok = False
 
+    # ── outline 门禁：outline 非空且含 scientific_question ──
+    state_path = resolve_path(project_root, "project_state.json")
+    if os.path.exists(state_path):
+        try:
+            ps = safe_json_load(state_path, default={})
+            outline = ps.get("outline", [])
+            has_scientific_question = bool(ps.get("scientific_question", "").strip())
+            outline_ok = isinstance(outline, list) and len(outline) > 0 and has_scientific_question
+            if not outline_ok:
+                ok = False
+                if not isinstance(outline, list) or len(outline) == 0:
+                    checks.append({
+                        "key": "outline_nonempty",
+                        "file": state_path,
+                        "exists": True,
+                        "parse_ok": False,
+                        "error": "outline 为空，不得进入 Step 1（须先完成 Step 0.5 研究主线设计）",
+                    })
+                if not has_scientific_question:
+                    checks.append({
+                        "key": "outline_scientific_question",
+                        "file": state_path,
+                        "exists": True,
+                        "parse_ok": False,
+                        "error": "project_state.json 缺少 scientific_question 字段，不得进入 Step 1",
+                    })
+        except Exception as _e_outline:
+            warnings.append(f"outline-check-error:{_e_outline}")
+
     chapter_docs = glob.glob(resolve_path(project_root, "02_分章节文档/*.docx"))
     chapter_info = {
         "chapter": str(chapter) if chapter is not None else None,

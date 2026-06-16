@@ -619,6 +619,23 @@ _STYLE_CHECKS = [
         '使用了过度书面化或套话表述',
         '用平实语言替代，如"因此""可以确认"等'
     ),
+    (
+        # scare quotes（恐惧引号）：双引号/引号包裹 2-10 字中文短语，暗示"新概念"
+        # 保守检测：只报引号内全部是中文字符的情况（术语定义、固化术语通常有英文或括号）
+        re.compile(r'"[一-鿿]{2,10}"|"[一-鿿]{2,10}"|“[一-鿿]{2,10}”'),
+        'warning', '引号规范',
+        '疑似 scare quotes（引号包裹普通中文短语以暗示特殊概念）',
+        '仅在术语首次定义、原文引用、已固化术语时使用引号；普通叙述不应使用引号强调'
+    ),
+    (
+        # 解释性冒号（装饰句式）：纯中文词后跟中文冒号+中文内容（非图表标签/数值场景）
+        # 排除：图N-N: / 表N-N: 前缀（前面是数字或图/表字符），或冒号后跟数字
+        # 注意：保守检测，列表引导（"以下三点："）也会命中，属可接受误报
+        re.compile(r'(?:[^表图\d]|^)([\u4e00-\u9fff]{2,15}：)(?=[\u4e00-\u9fff])'),
+        'warning', '标点规范',
+        '疑似解释性冒号（"概念：解释"装饰句式）',
+        '合法冒号场景：图表标签(表2-1：)、比例(1:2)、数值；正文装饰句式"概念：解释"应改写为陈述句'
+    ),
 ]
 
 # 排比检测：连续3个以上句子以相同模式开头
@@ -634,6 +651,8 @@ def check_writing_style(doc):
     - 主观夸大表述
     - 过度书面化/生僻词
     - 排比句式
+    - scare quotes（引号包裹普通中文短语）
+    - 解释性冒号（"概念：解释"装饰句式）
     """
     issues = []
     in_references = False
@@ -1091,10 +1110,34 @@ def check_abbreviation_consistency(doc, project_root=None):
                 "HPLC", "SEM", "TEM", "XRD", "XPS", "BET", "DLS", "TGA", "DSC",
                 "IC50", "EC50", "LD50", "ED50",
             }
+            # 英文标题词白名单（首字母大写的普通英语词，非学术缩略语）
+            _TITLE_WORD_RE = re.compile(
+                r'^(?:A|An|The|Is|Are|Was|Were|Be|Has|Have|Had|'
+                r'This|That|These|Those|'
+                r'Of|In|On|At|For|And|But|Or|Not|No|Nor|'
+                r'Its|Their|Our|His|Her|'
+                r'By|To|With|From|Into|Than|After|Before|Between|'
+                r'Cancer|Tumor|Tumour|Cell|Cells|Gene|Genes|Protein|Proteins|'
+                r'Study|Role|Effect|Effects|Impact|Analysis|Review|'
+                r'Carcinoma|Sarcoma|Lymphoma|Leukemia|'
+                r'Expression|Regulation|Activation|Inhibition|'
+                r'Treatment|Therapy|Mechanism|Pathway|Signaling|'
+                r'Human|Mouse|Rat|'
+                r'Figure|Table|Fig|[A-Z])$'
+            )
             for abbr in standalone_abbrs:
                 if len(abbr) < 2:
                     continue
                 if abbr in common_words:
+                    continue
+                # 跳过英文标题词
+                if _TITLE_WORD_RE.match(abbr):
+                    continue
+                # 跳过含连字符的化合物名（如 YKL-5-、SB-4-等药物/化合物编号）
+                if '-' in abbr:
+                    continue
+                # 跳过氨基酸位点标记（如 Ser5 Thr7）：字母后跟数字
+                if re.match(r'^[A-Z][a-z]{0,3}\d+$', abbr):
                     continue
                 if abbr not in registry and abbr.upper() not in {k.upper() for k in registry}:
                     # 只报告出现3次以上的未注册缩写
