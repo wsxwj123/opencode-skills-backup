@@ -1,0 +1,65 @@
+{
+  "skill": "polish-sci",
+  "note": "DoD 润色收口清单机器可读真源。delegate_review.py pack/verify 读此文件;SKILL.md 散文与各 item 逐项对应。改清单先改这里,再同步 SKILL.md 散文。",
+  "gates": {
+    "polish-dod": {
+      "title": "润色收口 DoD(strict_gate 运行前委托独立子代理盲检)",
+      "applies_when": "polish_units verify 完成后、strict_gate.py 运行前",
+      "items": [
+        {
+          "id": "PL-G1",
+          "name": "数值保留",
+          "check": "每段 polished_text 的数值/统计量/p值/CI/n=N/百分比/单位集合与原文一字不差,无增删",
+          "script": "python scripts/strict_gate.py --project-root ."
+        },
+        {
+          "id": "PL-G2",
+          "name": "无语气升级",
+          "check": "不确定性动词未被升级(hedge->strong),保守证据立场不变",
+          "script": "python scripts/strict_gate.py --project-root ."
+        },
+        {
+          "id": "PL-G3",
+          "name": "引用保留",
+          "check": "引用标记 [n] 与 DOI 集合在润色前后完全一致,无丢失、无新增、无错位",
+          "script": "python scripts/strict_gate.py --project-root ."
+        },
+        {
+          "id": "PL-G4",
+          "name": "去AI五项",
+          "check": "无修辞性破折号 / scare quotes / 解释性冒号 / 英文单句>30词 / -ing 拖尾从句;中文单句>50字;AI 套话禁词无残留(find_ai_style_markers 无 marker)",
+          "script": "python scripts/strict_gate.py --project-root ."
+        },
+        {
+          "id": "PL-G5",
+          "name": "meaning 未变",
+          "check": "每段 meaning_changed=false,只改语言表达,不改内容/数据/结论;基因/蛋白/试剂名一字未动。此项部分机器核(数值/引用),语义层须人工逐段对照原文",
+          "script": "python scripts/strict_gate.py --project-root ."
+        },
+        {
+          "id": "PL-G6",
+          "name": "逐段全覆盖",
+          "check": "每段都已被润色(无 PLACEHOLDER 残留),无遗漏段落;units_index 中每个 idx 都有对应 polished 单元",
+          "script": "python scripts/strict_gate.py --project-root ."
+        },
+        {
+          "id": "PL-G7",
+          "name": "被动语态合区间",
+          "check": "各段被动语态比例落在 section_type 目标区间附近(区间为软目标,methods/results 可较高,intro/discussion 偏低);明显超界的段落已复核",
+          "script": "python scripts/polish_units.py verify --project-root ."
+        },
+        {
+          "id": "PL-G8",
+          "name": "术语一致",
+          "check": "人工确认同一概念/缩写/术语全文用词前后一致,润色未引入同义替换造成的术语漂移"
+        },
+        {
+          "id": "PL-G9",
+          "name": "结构完整性",
+          "check": "合并后 polished_manuscript.md 段落顺序与小节结构与原稿一致,无段落丢失/错位/重复;引用编号连续",
+          "script": "python scripts/strict_gate.py --project-root ."
+        }
+      ]
+    }
+  }
+}
