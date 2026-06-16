@@ -107,6 +107,8 @@ Follow phased gates in order:
 
    **Phase 1 DoD（收口自检）— 未逐项确认通过，不得向用户声明"P1 完成"**
 
+   **🔴 进入下一部分前置闸口（适用所有 Phase）：本部分 delegate_review verify 必须 exit 0（含结构完整性），否则不得进入下一部分撰写——写完即检，不过不进。**
+
    **🔴 委托盲检（不得主 agent 自评）**：你刚写完 P1，自评会失真地默认通过、且易漏项。落盘前必须把 DoD 清单**委托给独立上下文的子代理盲检**，自己不直接打勾：
    1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate p1-dod --files sections/P1_立项依据.md`
    2. **派一个独立子代理**（Claude Code 用 `academic-blind-reviewer`；其他平台派通用子代理），把任务包原样给它、**不要给它 P1 的写作上下文**，要求按任务包返回 JSON 数组。
@@ -120,10 +122,10 @@ Follow phased gates in order:
    - [ ] ③论述符合 SQ/H/KSQ 主线，未出现与 consistency_map 矛盾的表述
    - [ ] ④占位符清零（grep `CITE_PENDING\|DATA_PENDING\|【待` P1 返回空）
    - [ ] ⑤去 AI：`python scripts/humanizer_zh.py scan sections/P1_立项依据.md` 无 ERROR，WARNING 已逐条处理或标注豁免理由；`rhythm-check` 无 `cn_sentence_too_long`
-   - [ ] ⑥字数在目标范围内（`python scripts/word_counter.py summary sections/P1_立项依据.md`）
+   - [ ] ⑥字数在目标范围内（`python scripts/word_counter.py count sections/P1_立项依据.md`）
    - [ ] ⑦H/O/RC/KSQ 与 P1 中 SQ 表述一致（V-01；`python scripts/consistency_mapper.py --path data/consistency_map.json validate` 无 ERROR）
    - [ ] ⑧科学问题属性四选一已在 profile 中写入且与 P1 论述对应
-   - [ ] ⑨撤稿检测：所有 PMID 已过撤稿核查（`python scripts/citation_validator.py verify-all --retraction-check`）
+   - [ ] ⑨撤稿检测：所有 PMID 已过撤稿核查（`python scripts/citation_validator.py verify-all --index data/literature_index.json --p1 sections/P1_立项依据.md`，撤稿检测已内置）
 
 3. Phase 2: write P2 研究内容（contains all sub-content: H/O/RC/KSQ, methods, innovations, annual plan）.
    - 每节先跑 `python scripts/state_manager.py --root . write-cycle --section P2`（逐节预算/上下文注入的预写门控，完整参数见 references/08）；不得跳过直接硬写。

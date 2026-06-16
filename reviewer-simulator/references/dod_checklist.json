@@ -10,13 +10,13 @@
           "id": "A1",
           "name": "21占位符全替换",
           "check": "validate_report_html.py 返回 VALIDATION_OK，无残留 {{...}}",
-          "script": "python scripts/validate_report_html.py <报告HTML路径>"
+          "script": "python ~/.claude/skills/reviewer-simulator/scripts/validate_report_html.py <报告HTML路径>"
         },
         {
           "id": "A2",
           "name": "verdict 枚举合规",
           "check": "decisionVerdict ∈ {拒稿/大修/小修/接收}，且与 finalRecommendationText 完全一致；VERDICT_CLASS 与 verdict 一一对应",
-          "script": "python scripts/validate_report_html.py <报告HTML路径>"
+          "script": "python ~/.claude/skills/reviewer-simulator/scripts/validate_report_html.py <报告HTML路径>"
         },
         {
           "id": "B1",
@@ -52,6 +52,11 @@
           "id": "B7",
           "name": "审稿意见本身去AI",
           "check": "报告正文（含各 *_HTML 占位符填充内容）已逐项核查 rubric 第七节'审稿意见自身去AI'5项规则（三项禁用 + 中文句长 ≤50字 + 从句 ≤2层），无违规残留"
+        },
+        {
+          "id": "B8",
+          "name": "报告结构完整性",
+          "check": "审稿报告含全部规定区块（稿件概要/合规审计/契合度/18点分析/魔鬼代言人/核心问题/给编辑保密意见/回复草案），无缺块、无空区块；且多视角并发盲评的所有视角发现均已汇入，无遗漏视角"
         }
       ]
     }

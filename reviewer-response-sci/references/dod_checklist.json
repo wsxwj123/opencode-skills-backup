@@ -75,8 +75,13 @@
         {
           "id": "RR13",
           "name": "各gate全通",
-          "check": "run_pipeline.py 退出码 0（strict_gate / final_content_gate / consistency_check / html_format_check / risk_check / citation_guard / citation_ref_tracker 全通）",
-          "script": "python scripts/run_pipeline.py --project-root . --output-html reviewer_response.html"
+          "check": "各独立 gate 退出码均为 0（strict_gate / final_content_gate / consistency_check / risk_check / citation_guard / citation_ref_tracker 全通）",
+          "script": "python scripts/strict_gate.py --project-root . && python scripts/final_content_gate.py --project-root . && python scripts/consistency_check.py --project-root . && python scripts/risk_check.py --project-root . && python scripts/citation_guard.py --project-root . --offline && python scripts/citation_ref_tracker.py --project-root ."
+        },
+        {
+          "id": "RR14",
+          "name": "结构完整性",
+          "check": "每个 response unit 结构完整（审稿意见原文+回复正文+修改证据/落点定位 三要素齐全），无空 unit；letter 整体覆盖每条意见无遗漏"
         }
       ]
     }

@@ -271,6 +271,7 @@ echo '{"citations": []}' > "$WORKROOT/data/citation_guard_report.json"
 1. 生成任务包：`python ~/.claude/skills/reviewer-simulator/scripts/delegate_review.py pack --checklist ~/.claude/skills/reviewer-simulator/references/dod_checklist.json --gate report-dod --files <生成的报告HTML路径>`
 2. **派一个独立子代理**（Claude Code 用 `academic-blind-reviewer`；其他平台派通用子代理，默认 sonnet 模型），把任务包原样给它、**不要给它本次审稿的分析上下文**，要求按任务包返回 JSON 数组。
 3. 校验返回：`python ~/.claude/skills/reviewer-simulator/scripts/delegate_review.py verify --checklist ~/.claude/skills/reviewer-simulator/references/dod_checklist.json --gate report-dod --return <子代理返回.json>`；退出码非 0（任一缺项/fail/无证据）= **fail-closed**，据子代理证据修复后重跑，**未过不得声明完成**。
+🔴 报告出具前置闸口：delegate_review verify 必须 exit 0（含 B8 结构完整性 + 所有视角已汇总），否则不得向用户出具审稿报告。
 - **降级路径**（当前环境无法派子代理时）：主 agent 切换"质检视角"、清空对本次审稿分析的记忆，逐项独立重核——绝不因"自己刚审完"默认通过；仍跑 `verify` 把关。
 
 > 下列清单与 `references/dod_checklist.json` 逐项对应（改清单先改 JSON），供人工对照；能脚本核的项子代理会先跑脚本。
@@ -287,6 +288,7 @@ echo '{"citations": []}' > "$WORKROOT/data/citation_guard_report.json"
 - [ ] **B5 · 给编辑保密意见**：`{{CONFIDENTIAL_EDITOR_HTML}}` 四项（直接拒稿建议/数据造假怀疑/私评新颖性/利益冲突提示）均有内容或明确写"无"，无项目遗漏
 - [ ] **B6 · 引文真实性**：报告正文中主动引据的外部文献（非稿件自带引用）已过 `citation_guard`，`ok=true` 或已标注"待核验"；未引外部文献时此项标记"无外部引文"
 - [ ] **B7 · 审稿意见本身去AI**：报告正文（含各 `{{*_HTML}}` 占位符填充内容）已逐项核查 rubric 第七节"审稿意见自身去AI"5项规则（三项禁用 + 中文句长 ≤50字 + 从句 ≤2层），无违规残留
+- [ ] **B8 · 报告结构完整性**：审稿报告含全部规定区块（稿件概要/合规审计/契合度/18点分析/魔鬼代言人/核心问题/给编辑保密意见/回复草案），无缺块、无空区块；且多视角并发盲评的所有视角发现均已汇入，无遗漏视角
 
 ---
 

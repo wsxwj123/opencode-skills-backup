@@ -58,8 +58,7 @@
         {
           "id": "R10",
           "name": "检索日志已记录",
-          "check": "本节检索日志条目已写入 data/search_log.json（state_manager.py append-search-log 已执行）",
-          "script": "python3 scripts/state_manager.py append-search-log --dry-run"
+          "check": "本节检索日志条目已写入 data/search_log.json（state_manager.py append-search-log 已执行）；子代理核验：python3 -c \"import json,pathlib; log=json.loads(pathlib.Path('data/search_log.json').read_text(encoding='utf-8')); print('entries:', len(log))\" 确认条目数非 0"
         },
         {
           "id": "R11",
@@ -70,7 +69,7 @@
           "id": "R12",
           "name": "PRISMA 计数自洽",
           "check": "[仅 systematic] 本节新筛文献已更新 PRISMA 计数（state_manager.py set-screening-counts），identified / deduplicated / screened / excluded / included 数字一致，排除原因表已补",
-          "script": "python3 scripts/state_manager.py set-screening-counts --dry-run"
+          "script": "python3 scripts/state_manager.py get-screening-counts"
         },
         {
           "id": "R13",
@@ -81,6 +80,11 @@
           "id": "R14",
           "name": "GRADE 已分级",
           "check": "[仅 systematic，Phase 4 前完成即可] 若本节有临床结局声明，GRADE 分级（high/moderate/low/very low + 升降级因素）已登记"
+        },
+        {
+          "id": "R15",
+          "name": "结构完整性",
+          "check": "本节包含其文体/storyline 规定的全部结构组件，无缺段/空标题/未填骨架；综述各节符合规定结构（引言漏斗、主体主题段有论点-证据-小结、结论有展望）。子代理对照 outline.md 对应 section 逐组件核对"
         }
       ]
     }

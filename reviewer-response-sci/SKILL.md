@@ -260,6 +260,8 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
 
 **🔴 委托盲检（不得主 agent 自评）**：你刚写完回复包，自评会失真地默认通过、且易漏项。**承诺↔落点一致性尤其如此**——主 agent 写了回复再自核"承诺有没有落地"几乎必然失真。`run_pipeline.py` 退出码 0 后、声明完成前，必须把 DoD 清单**委托给独立上下文的子代理盲检**，自己不直接打勾：
 
+🔴 出具前置闸口：delegate_review verify 必须 exit 0（含 RR14 结构完整性），否则不得向用户出具 response letter。
+
 1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate response-dod --files <project_root>/units/*.json`
 2. **派一个独立子代理**（Claude Code 用 `academic-blind-reviewer`；其他平台派通用子代理），把任务包原样给它、**不要给它回复包的写作上下文**，要求按任务包返回 JSON 数组。
 3. 校验返回：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate response-dod --return <子代理返回.json>`；退出码非 0（任一缺项/fail/无证据）= **fail-closed**，据子代理证据修复后重跑，**未过不得声明完成**。
@@ -283,7 +285,8 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
 - [ ] `edit_plan` 已聚合回填：`manuscript_edit_plan.md` 无 `[PENDING Step 7]` 行 → `aggregate-edit-plan` 脚本退出码 0
 - [ ] 反驳有据：所有 `Push back` 策略的 unit 均有至少一条具体证据（引文 / 数据 / 方法学依据）→ 人工
 - [ ] Citation registry 已核验：`citation_registry.json` 存在且 `citation_guard.py` 通过；若无新增引用，确认 `citation_registry.json` 的 `entries` 为空数组 → `citation_guard.py`
-- [ ] 各 gate 全通：`run_pipeline.py` 退出码 0（`strict_gate` / `final_content_gate` / `consistency_check` / `html_format_check` / `risk_check` / `citation_guard` / `citation_ref_tracker`）
+- [ ] 各 gate 全通：各独立 gate 脚本退出码均为 0（`strict_gate` / `final_content_gate` / `consistency_check` / `risk_check` / `citation_guard` / `citation_ref_tracker`）→ 见 RR13
+- [ ] 结构完整性（RR14）：每个 response unit 结构完整（审稿意见原文 + 回复正文 + 修改证据/落点定位 三要素齐全），无空 unit；letter 整体覆盖每条意见无遗漏 → 人工
 
 ## Re-Render Workflow
 After manual editing of any unit JSON:

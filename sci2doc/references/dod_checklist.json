@@ -32,8 +32,7 @@
         {
           "id": "G5",
           "name": "去AI通过",
-          "check": "check_quality.py check_writing_style() 零违规（含中文句长≤50字、AI禁词、破折号/scare quotes/解释性冒号）",
-          "script": "python scripts/check_quality.py <本节文件> --category writing_style"
+          "check": "check_quality.py check_writing_style() 零违规（含中文句长≤50字、AI禁词、破折号/scare quotes/解释性冒号）。节末 md 需先合并为 docx 后可跑脚本；无 docx 时人工逐条目视核查"
         },
         {
           "id": "G6",
@@ -56,7 +55,7 @@
           "id": "S3",
           "name": "三线表格式",
           "check": "本节所有数据表使用 Markdown 管道语法，无散文替代",
-          "script": "python scripts/check_quality.py <本节文件> --category three_line_table"
+          "script": "python scripts/check_quality.py <节合并.docx>"
         },
         {
           "id": "S4",
@@ -68,6 +67,11 @@
           "id": "S5",
           "name": "自我抄袭标注",
           "check": "本节复用已发表 SCI 内容处已标注来源文献 [N] 及声明"
+        },
+        {
+          "id": "S6",
+          "name": "结构完整性",
+          "check": "本节含其规定的全部结构组件，无缺段/空标题/未填骨架，符合该节在中文博论章节结构中的定位。子代理对照 outline 逐组件核对"
         }
       ]
     },
@@ -102,7 +106,7 @@
           "id": "G5",
           "name": "全章去AI通过",
           "check": "check_quality.py check_writing_style() 零违规（含中文句长、AI禁词、三项标点规范）",
-          "script": "python scripts/check_quality.py <章节合并docx> --category writing_style"
+          "script": "python scripts/check_quality.py <章节合并.docx>"
         },
         {
           "id": "G6",
@@ -126,7 +130,7 @@
           "id": "S3",
           "name": "全章三线表格式",
           "check": "全章所有三线表格式校验通过，check_quality 三线表类别零 error",
-          "script": "python scripts/check_quality.py <章节合并docx> --category three_line_table"
+          "script": "python scripts/check_quality.py <章节合并.docx>"
         },
         {
           "id": "S4",
@@ -138,7 +142,7 @@
           "id": "S5",
           "name": "GB/T 7714著录格式",
           "check": "本章新引文已过 reference_renderer.py validate_all，零偏差",
-          "script": "python scripts/reference_renderer.py validate_all"
+          "script": "python scripts/reference_renderer.py --index data/literature_index.json --validate-only"
         },
         {
           "id": "S6",
@@ -149,7 +153,12 @@
           "id": "S7",
           "name": "章后self-check通过",
           "check": "atomic_md_workflow.py self-check 输出 ok=true，无 error 级问题",
-          "script": "python scripts/atomic_md_workflow.py self-check --target <章节合并docx>"
+          "script": "python scripts/atomic_md_workflow.py self-check --target <章节合并.docx>"
+        },
+        {
+          "id": "S8",
+          "name": "章结构完整性",
+          "check": "本章各节齐全、层级完整（引言/方法/结果/讨论或学科对应结构），无缺节、无空章节标题、章末小结齐全"
         }
       ]
     }

@@ -87,9 +87,30 @@ RISK_PATTERNS = {
         r",\s+(?:thus|thereby|hence|therefore\s+)?(?:\w+\s+){0,3}\b\w+ing\b(?:\s+(?:that|the|our|its|this|a|an)\b)",
         r",\s+(?:reflecting|ensuring|highlighting|demonstrating|confirming|indicating|suggesting|showing|providing|allowing|enabling|supporting|strengthening|underscoring|emphasizing)\b",
     ],
+    # Decorative em-dash ban: —/—— used as pause/parenthetical/emphasis.
+    # Excludes: hyphens in compound terms, numeric ranges (e.g. 1–10), citation ranges.
+    # Pattern: text—text where surrounded by word chars (not purely numeric ranges).
+    "ai_em_dash": [
+        r"(?<=[a-zA-Z一-鿿,;])\s*[—―][—―]?\s*(?=[a-zA-Z一-鿿])",
+    ],
+    # Scare-quote ban: ordinary phrases wrapped in quotation marks to imply novelty/irony.
+    # Excludes: first-use term definitions, reviewer verbatim quotes, idiomatic expressions.
+    # Covers ASCII double-quotes (") and curly/smart quotes ("").
+    # Heuristic: quoted phrase <=30 chars, not preceded by "termed/called/so-called/defined as".
+    "ai_scare_quote": [
+        r'(?<!termed\s)(?<!called\s)(?<!so-called\s)(?<!defined as\s)"(?![\d])[A-Za-z][^"]{1,30}"(?!\s+(?:et al\.|[A-Z]))',
+        r'(?<!termed\s)(?<!called\s)(?<!so-called\s)(?<!defined as\s)"(?![\d])[A-Za-z一-鿿][^"]{1,30}"',
+    ],
+    # Explanatory-colon ban: "concept: explanation" as decorative sentence structure.
+    # Legitimate colons: ratios (2:1), times (10:30), list lead-ins ending sentence, section headings, figure labels.
+    # Heuristic: colon within a sentence (not at end), preceded by a noun/phrase (not a digit), followed by lowercase/Chinese.
+    "ai_explanatory_colon": [
+        r'(?<!\d):\s+(?=[a-z一-鿿])(?!(?:\d|\w+://|//))(?!(?:e\.g\.|i\.e\.|etc\.|vs\.))',
+    ],
 }
 
-AI_STYLE_CATEGORIES = {"ai_hedging", "ai_appreciation", "ai_filler", "ai_ing_clause"}
+AI_STYLE_CATEGORIES = {"ai_hedging", "ai_appreciation", "ai_filler", "ai_ing_clause",
+                       "ai_em_dash", "ai_scare_quote", "ai_explanatory_colon"}
 FABRICATION_CATEGORIES = {"fabricated_experiment", "fabricated_statistics"}
 
 

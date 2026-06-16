@@ -83,6 +83,30 @@ def find_ai_style_markers(text: str) -> list[str]:
         markers.append("trailing -ing clause")
     if re.search(r",\s*(?:reflecting|ensuring|highlighting|suggesting|demonstrating|indicating|revealing)\b", normalized, flags=re.IGNORECASE):
         markers.append("trailing -ing clause")
+    # Scare quotes: ordinary phrase (≥2 non-empty words) wrapped in double quotes
+    # Exclusions: single technical term in quotes (likely a defined term/acronym), citations "[n]"
+    for m in re.finditer(r'"([^"]{2,60})"', normalized):
+        quoted = m.group(1).strip()
+        # skip if it looks like a citation marker or pure number
+        if re.fullmatch(r"[\d,\s]+", quoted):
+            continue
+        # flag when the quoted content is ≥2 words (scare-quote pattern)
+        if len(quoted.split()) >= 2:
+            markers.append("scare quotes")
+            break
+    # Explanatory colon: "Concept: explanation" — colon followed by a lowercase or sentence-starting word
+    # Legitimate colons: ratios (1:2), time (10:30), list introduction after verb, headings
+    # Heuristic: flag "word/phrase: word(s)" where the part before colon is ≤6 words and
+    # the part after colon is a sentence fragment (starts with a word, not a number/abbreviation)
+    for m in re.finditer(r"\b([A-Za-z][^:]{2,40}):\s+([A-Za-z][a-z])", normalized):
+        before = m.group(1).strip()
+        # skip legitimate patterns: headings at start of text, figure labels, etc.
+        if re.search(r"^(fig|figure|table|eq|equation|note|step)\b", before, re.IGNORECASE):
+            continue
+        before_words = before.split()
+        if 1 <= len(before_words) <= 6:
+            markers.append("explanatory colon")
+            break
     # Sentence length: warn when any sentence exceeds 30 words (soft check)
     sentences = re.split(r"(?<=[.!?])\s+", normalized)
     if any(len(s.split()) > 30 for s in sentences if s.strip()):

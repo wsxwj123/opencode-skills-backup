@@ -17,7 +17,8 @@
         {"id": "G9", "name": "实验逻辑批判", "check": "Part 1 实验逻辑批判 Verdict 为 Reliable(非 Flaw Detected)"},
         {"id": "G10", "name": "节末Vancouver", "check": "本节文件末尾附有该节所引文献的 Vancouver 格式列表"},
         {"id": "G11", "name": "未超期刊字数", "check": "正文章节累计字数 ≤ project_config.word_limits 的对应上限"},
-        {"id": "G12", "name": "只改原子化源", "check": "本次写入目标为 manuscripts/ 下原子化源文件,非 Full_Manuscript.md / .docx"}
+        {"id": "G12", "name": "只改原子化源", "check": "本次写入目标为 manuscripts/ 下原子化源文件,非 Full_Manuscript.md / .docx"},
+        {"id": "G13", "name": "结构完整性", "check": "本节包含其文体/storyline 规定的全部结构组件,无缺段/空标题/未填骨架;且符合该节类型规定结构(Introduction 漏斗式;Discussion 主要发现→文献对比+机制→Limitations→Outlook 四段;Methods 必备子节)。子代理对照 storyline.json 对应 section 的结构要求逐组件核对"}
       ]
     }
   }

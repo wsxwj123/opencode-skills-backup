@@ -617,6 +617,8 @@ If pending_sections is empty → all sections complete; proceed to Phase 4.
 
 10. **DoD 自检清单 — 硬规则：逐项确认通过后才可声明"本节完成"，不得跳过任何一项。**
 
+    **🔴 进入下一节前置闸口：上一节 delegate_review verify 必须 exit 0（含 R15 结构完整性），否则不得开始下一节撰写——写完即检，不过不进。**
+
     **🔴 委托盲检（不得主 agent 自评）**：你刚写完本节，自评会失真地默认通过、且易漏项。落盘前必须把 DoD 清单**委托给独立上下文的子代理盲检**，自己不直接打勾：
     1. 生成任务包：`python3 scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate manuscript-dod --files <本节文件> --workdir .`
     2. **派一个独立子代理**（Claude Code 用 `academic-blind-reviewer`；其他平台派通用子代理），把任务包原样给它、**不要给它本节的写作上下文**，要求按任务包返回 JSON 数组。

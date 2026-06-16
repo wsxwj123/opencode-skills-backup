@@ -357,6 +357,8 @@ python scripts/state_manager.py add-abbreviation <one.json>
    3. 校验返回:`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate section-dod --return <子代理返回.json>`;退出码非 0(任一缺项/fail/无证据)= **fail-closed**,据子代理证据修复后重跑,**未过不得声明完成**。
    - **降级路径**(当前环境无法派子代理时):主 agent 切换"审稿人视角"、清空对本节的写作记忆，逐项独立重核——绝不因"自己刚写完"默认通过；仍跑 `verify` 把关。
 
+   🔴 **进入下一节前置闸口**：上一节 `delegate_review verify` 必须 exit 0（含 G13 结构完整性），否则不得开始下一节撰写——写完即检，不过不进。
+
    下列清单与 `references/dod_checklist.json` 逐项对应(改清单先改 JSON),供人工对照;能脚本核的项子代理会先跑脚本:
 
    **通用 6 项**（能脚本核的项挂脚本，不可跳过）：
@@ -374,6 +376,7 @@ python scripts/state_manager.py add-abbreviation <one.json>
    - [ ] **⑩节末 Vancouver**：本节文件末尾附有该节所引用文献的 Vancouver 格式列表
    - [ ] **⑪未超期刊字数**：见 ⑥，正文章节累计字数 ≤ `project_config.word_limits` 的 Results+Discussion 上限
    - [ ] **⑫只改原子化源**：本次写入的目标文件为 `manuscripts/` 下的原子化源文件，非 `Full_Manuscript.md` / `.docx`（见 §3）
+   - [ ] **⑬结构完整性**：本节包含其文体/storyline 规定的全部结构组件，无缺段/空标题/未填骨架；且符合该节类型规定结构（Introduction 漏斗式；Discussion 主要发现→文献对比+机制→Limitations→Outlook 四段；Methods 必备子节）。子代理对照 `storyline.json` 对应 section 的结构要求逐组件核对
 10. **Safety Write**: 用户 OK 后写入文件 → 智能快照。回退手段：若落盘后用户反悔，`/rollback` 到上一个 snapshot 或直接 Edit 改原子化文件（参见 §3 润色 workflow）。
 
 **Discussion 段落结构 / Online Methods vs STAR Methods**：写 Discussion 或 Methods 章节前 `Read references/writing-templates.md` 对应小节。要点：Discussion 走"主要发现总结→文献对比+机制→**Limitations（强制，缺即退稿高频）**→Outlook"四段式；Methods 按 target_journal 选 Online Methods（Nature 精简版+完整版后置）或 STAR Methods（Cell 五段结构）。
