@@ -223,3 +223,35 @@
 1. ✅ **补 DoD 自检清单**(第九节)到 **7 技能**收口处 + "未全过不得汇报完成"硬规则(2026-06-16)
 2. ✅ **去 AI 完整化**(第十节):中文句长 ≤50 字/英文 ≤30 词/-ing 从句/被动按文体区分/中英文禁词同步——多数有脚本检测(style_checker/check_quality/humanizer_zh/risk_check/common.py)(2026-06-16)
 3. ⬜(暂缓)阶段三:7 技能编排器
+4. ⬜ **自检/评审委托独立子代理**(见第十二节):7 技能的自检/评审环节从主 agent 改为委托独立子代理 + `.claude/agents/` 预定义盲评 agent + **每步脚本固定**(任务包生成 + 返回校验,防失忆/遗漏)
+5. ⬜ 实施后:**git commit(回滚点)→ darwin 评估**各技能(合理性/守规/按需加载是否稀释注意力)→ 按需加载优化
+
+## 十二、自检/评审委托独立子代理(用户要求 + 三平台调研,2026-06-16)
+> 备注:去 AI 的"中英文"指**最终产品(论文/标书)的语言**,非 skill 文本。
+
+**核心原则**:技能的自检/评审**不由主 agent 执行**——主 agent 带着写作上下文自评会**失真 + 注意力稀释**(截图实证:reviewer-simulator 用主 agent 直接审,无隔离)。改为**委托独立上下文的子代理**;流程每步用**脚本固定**防 AI 失忆遗漏。
+
+**三平台子代理机制(调研结论)**:
+| 维度 | Claude Code | Codex | OpenCode |
+|---|---|---|---|
+| 上下文隔离 | 最严(单向,只返最终消息) | 独立 context | session 级(较粗) |
+| 并行 | subagents + agent teams(实验性) | 自动并行 max_threads=6 + CSV 批量 | 弱(顺序为主) |
+| 自定义 agent | `.claude/agents/` YAML(最全) | `.codex/agents/` TOML | `.opencode/agents/` |
+| 技能内触发 | 自然语言即可(最稳) | 需显式 "spawn" | `@mention` 较稳 |
+| 结构化返回 | 系统 prompt 要 JSON | CSV+schema(有协议) | 无保证 |
+
+**委托方案(按技能目的:单子代理 vs 并行 team)**:
+- **评审多视角**(reviewer-simulator):**并发 N 个独立子代理盲评**(每角色独立上下文、互不知情)→ 主 agent 汇总。**不用 agent team**(对抗讨论是噪音 + team 实验性 + token 高)
+- **reviewer-response 一致性核验**:单子代理盲评
+- **写作自检 DoD**(gsw/sci2doc/review/nsfc 每节):**单子代理盲检,顺序逐节**(节间有逻辑依赖,并行易漏检);例外:同一节多维度(格式/证据/语言)可并发 fan-out(token 3x,仅 Abstract/Discussion 等高优先级)
+- **对抗辩论**(可选升级):agent team,仅 Claude Code + 需用户确认
+- **结论**:绝大多数用"独立子代理盲评/盲检",隔离是核心、不是并行
+
+**跨平台可移植写法**:SKILL.md 用**纯自然语言**描述委托——
+- 优先路径:派独立子代理,只给稿件路径 + checklist、**不给写作上下文**、要求结构化(JSON)返回
+- 降级路径(无子代理能力):主 agent 切换"审稿人视角" + 清空工作记忆重核,不因"自己刚写完"默认通过
+- Claude Code 额外:`.claude/agents/blind-reviewer.md` 预定义(tools 限 Read/Glob、model、输出 JSON)强化精确性;Codex 并行用 CSV 批量;OpenCode 用 `@mention`
+
+**每步脚本固定**:委托前脚本生成"子代理任务包"(稿件路径+checklist+约束);委托后脚本校验返回(结构化完整性)+ 写状态文件——防失忆/遗漏。
+
+**不确定项(调研标注,实施时验证)**:OpenCode 真实并行度、Codex 从 skill 文件触发子代理的稳定性、OpenCode 结构化返回可靠性——故降级路径必须保留。
