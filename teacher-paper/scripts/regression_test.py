@@ -804,6 +804,92 @@ ans_o5b = [
 warns_o5b = A._check_header_constants(paper_o5, ans_o5b)
 case("O5b.P1-3 π数值化完整-不警告", not any("π 表达式未给" in w for w in warns_o5b))
 
+# ============== Part P: v3.23.0 P2 系列（题量范围/前缀聚合/物理量自检）==============
+print("\n=== P. v3.23.0 P2 系列 ===")
+
+# P1.P2-2：题量在 questions_range 内 → 不打题量 warn，不需 --allow-incomplete
+with tempfile.TemporaryDirectory() as td:
+    proj = pathlib.Path(td) / "p"
+    (proj / "items").mkdir(parents=True)
+    (proj / "materials").mkdir()
+    (proj / "meta.json").write_text(_json.dumps({
+        "title":"t", "expected_questions":0,
+        "expected_questions_range":[14, 18],
+        "total":100, "subject":"物理"}), encoding="utf-8")
+    # 写 15 道题，命中 [14,18] 范围
+    for i in range(1, 16):
+        atom = _json.dumps({
+            "meta":{"num":str(i),"score":(100//15) if i<=14 else 100-(100//15)*14},
+            "paper":[{"type":"question","num":str(i),"text":f"Q{i}"}],
+            "answer":[]}, ensure_ascii=False)
+        (proj / "items" / f"{100+i:03d}_q{i:02d}.json").write_text(atom, encoding="utf-8")
+    try:
+        with _ctx.redirect_stdout(_io.StringIO()) as buf_o, \
+             _ctx.redirect_stderr(_io.StringIO()) as buf_e:
+            A.cmd_build([str(proj)])
+        combined = buf_o.getvalue() + buf_e.getvalue()
+        case("P1.P2-2 15题在[14,18]范围内-无范围warn",
+             "超出预设范围" not in combined and "题量门禁已跳过" not in combined)
+    except SystemExit as e:
+        case("P1.P2-2 15题在[14,18]范围内-无范围warn", False, f"exit {e.code}")
+
+# P2.P2-2：题量超出范围 → 触发 warn（仍能 build）
+with tempfile.TemporaryDirectory() as td:
+    proj = pathlib.Path(td) / "p"
+    (proj / "items").mkdir(parents=True)
+    (proj / "materials").mkdir()
+    (proj / "meta.json").write_text(_json.dumps({
+        "title":"t", "expected_questions":0,
+        "expected_questions_range":[14, 18],
+        "total":100, "subject":"物理"}), encoding="utf-8")
+    for i in range(1, 11):  # 10 题，低于 [14,18]
+        (proj / "items" / f"{100+i:03d}_q{i:02d}.json").write_text(_json.dumps({
+            "meta":{"num":str(i),"score":10},
+            "paper":[{"type":"question","num":str(i),"text":f"Q{i}"}],
+            "answer":[]}, ensure_ascii=False), encoding="utf-8")
+    try:
+        with _ctx.redirect_stdout(_io.StringIO()) as buf_o, \
+             _ctx.redirect_stderr(_io.StringIO()) as buf_e:
+            A.cmd_build([str(proj)])
+        combined = buf_o.getvalue() + buf_e.getvalue()
+        case("P2.P2-2 10题超出[14,18]范围-warn",
+             "超出预设范围 [14, 18]" in combined)
+    except SystemExit:
+        case("P2.P2-2 10题超出[14,18]范围-warn", False, "build 失败")
+
+# P3.P2-3：考点前缀聚合识别同源
+md_p3, issues_p3 = A._gen_self_audit([
+    {"num":"3","kp":"力学·牛顿第二定律","diff":"0.72","stem_len":76,"type":"单选","options":[]},
+    {"num":"8","kp":"力学·牛顿定律","diff":"0.55","stem_len":22,"type":"多选","options":[]},
+    {"num":"13","kp":"力学·牛顿运动定律","diff":"0.55","stem_len":108,"type":"计算","options":[]},
+    {"num":"4","kp":"光学·全反射","diff":"0.7","stem_len":27,"type":"单选","options":[]},
+])
+case("P3.P2-3 同源考点前缀聚合-issue",
+     any("同源考点" in i and "力学·牛顿" in i for i in issues_p3))
+
+# P3b.P2-3：_kp_subprefix 抽取正确
+case("P3b.P2-3 前缀抽取 力学·牛顿第二定律→力学·牛顿",
+     A._kp_subprefix("力学·牛顿第二定律") == "力学·牛顿")
+case("P3c.P2-3 前缀抽取 力学·斜面运动·动能定理→力学·斜面",
+     A._kp_subprefix("力学·斜面运动·动能定理") == "力学·斜面")
+
+# P4.P2-4：偏转角 < 1° → warn
+ans_p4 = [{"type":"answer","text":"偏转角 α=0.57°，几乎水平"}]
+warns_p4 = A._check_physical_plausibility(ans_p4)
+case("P4.P2-4 偏转角0.57°<1°-warn",
+     any("偏转角" in w and "0.57" in w for w in warns_p4))
+
+# P4b.P2-4：摩擦因数 > 1 → warn
+ans_p4b = [{"type":"analysis","text":"由 μ=1.2 代入..."}]
+warns_p4b = A._check_physical_plausibility(ans_p4b)
+case("P4b.P2-4 摩擦因数1.2>1-warn",
+     any("摩擦因数" in w and "1.2" in w for w in warns_p4b))
+
+# P4c.P2-4：正常物理量 → 不警告
+ans_p4c = [{"type":"answer","text":"偏转角 α=15°，μ=0.3，加速度 a=2 m/s²"}]
+warns_p4c = A._check_physical_plausibility(ans_p4c)
+case("P4c.P2-4 正常物理量-不警告", not warns_p4c)
+
 # 总结
 print(f"\n=== 总计 {len(PASS)}/{len(PASS)+len(FAIL)} 通过 ===")
 if FAIL:

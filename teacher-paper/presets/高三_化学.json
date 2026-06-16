@@ -6,6 +6,7 @@
   "total": 100,
   "duration": 75,
   "questions": 0,
+  "questions_range": [16, 20],
   "subtitle": "（满分：100分　时间：75分钟）",
   "skeleton": [
     ["100_sec_单选", "一、单项选择题（本题共14小题，每小题3分，共42分。每小题只有一个选项符合题目要求）"],
