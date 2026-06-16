@@ -19,6 +19,35 @@
 
 严禁文学性修辞，即隐喻、拟人、明喻、夸张、对偶、设问、引经据典等。例外：领域内已固化的术语隐喻（如 "molecular switch"、"signaling cascade"）保留；新造的、装饰性的修辞一律删。
 
+## 🔴 禁 -ing 分词悬垂从句 (No Trailing Participial Clauses)
+
+严禁在句尾加逗号 + 现在分词（-ing）做补充说明，即"主句, reflecting/ensuring/highlighting/demonstrating/symbolizing/underscoring/suggesting/indicating/revealing …"句型。这是 AI 写作最高频痕迹之一：用悬垂分词从句追加"意义评论"，显得刻意。
+
+**违规示例 → 修正**：
+- ✗ "Treatment reduced tumor volume by 60%, demonstrating the therapeutic efficacy of the nanoparticle system."
+- ✓ "Treatment reduced tumor volume by 60%. These data demonstrate the therapeutic efficacy of the nanoparticle system."
+- ✗ "Expression levels were elevated in all three cohorts, suggesting dysregulation of the pathway."
+- ✓ "Expression levels were elevated in all three cohorts, consistent with pathway dysregulation."
+
+**合法保留**：句首或句中位置的 -ing 从句（"Using flow cytometry, we..."）不属于本条限制。
+
+`style_checker.py` 的 `TRAILING_ING_RE` 检测本条，见 `/check`。
+
+## 🔴 系动词回避 (Avoid "Serves as / Features / Offers" Substitutions)
+
+严禁用 "serves as / features / offers / boasts / presents" 替代简单系动词 "is / has"。AI 写作惯用这类"高级感"替换，实为冗余。
+
+**违规示例 → 修正**：
+- ✗ "The scaffold serves as a drug reservoir." → ✓ "The scaffold is a drug reservoir."
+- ✗ "The model features three key parameters." → ✓ "The model has three key parameters."
+- ✗ "The approach offers unprecedented precision." → ✓ "The approach achieves high precision." （同时去掉 "unprecedented"）
+
+## 🔴 同段保持一致称谓 (Consistent Terminology Within Paragraph)
+
+同一科学概念在同一段落内只用一种称谓，不刻意换同义词（如 "nanoparticles → nanocarriers → nanoformulation"）。AI 为"避免重复"而频繁换词，反而造成概念漂移，影响精确性。
+- 例外：两个词已在领域中通用互换（如 "exosomes / extracellular vesicles"）且已在首次使用时标注关系，则允许。
+- 段间过渡、标题与正文中的术语变换同样须保持一致，除非刻意区分两个不同的概念。
+
 ## 🔴 禁生僻词 (No Obscure Vocabulary)
 
 - 通用动词/形容词用平实词：用 `show / find / use / large / small`，不用 `elucidate / unveil / pronounced / substantial`；用 `cause / lead to`，不用 `precipitate / engender`。

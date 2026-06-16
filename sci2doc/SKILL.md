@@ -277,6 +277,25 @@ If source materials are missing or inaccessible, **stop and request them**. Do n
 
 - `atomic_md_workflow.py section-snapshot --chapter N --section X.Y`。每节小结完成即快照。
 
+#### 🔴 每节收口自检清单（Definition of Done · 节级）
+
+**硬规则：以下各项未逐一确认通过，不得向用户声明"该节完成"。**
+
+通用项（全技能共享）：
+- [ ] **G1** 编号连续：引文 `[n]` 与参考列表一一对应，无孤儿编号、无缺号（脚本：`atomic_md_workflow.py validate --chapter N`）
+- [ ] **G2** 新增引用已过 citation_guard（`citation_guard.py` 报告 `ok=true`）
+- [ ] **G3** 符合研究主线：本节内容不跑题、不与 `outline.core_argument` 矛盾
+- [ ] **G4** 占位符清零：文中无 `CITE_PENDING` / `DATA_PENDING` / `【待AI】` / `【待翻译】` 等未填占位符
+- [ ] **G5** 去 AI 通过：`check_quality.py` 的 `check_writing_style()` 零违规（含中文句长 ≤50 字、AI 禁词、破折号/scare quotes/解释性冒号）
+- [ ] **G6** 字数达标：本节字数贡献符合 `chapter_targets` 分配比例（估算）
+
+sci2doc 特有项：
+- [ ] **S1** 实验-方法映射标记完整：`[实验] EXP-N-M` 与 `[对应实验] EXP-N-M` 成对出现，无悬空
+- [ ] **S2** 一实验 ≥ 一图表：每个 `[实验] EXP-N-M` 对应至少一个 `[图] 图N-X` 或 `[表] 表N-X`
+- [ ] **S3** 三线表格式：本节所有数据表使用 Markdown 管道语法，无散文替代（脚本：`check_quality.py` 三线表类别）
+- [ ] **S4** 缩略语首展：本节新引入缩略语均已按 `中文全称（English Full Name, ABBR）` 格式首展，已过 `abbreviation_registry.py process`
+- [ ] **S5** 自我抄袭标注：本节复用已发表 SCI 内容处已标注来源文献 `[N]` 及声明（见 Non-Negotiable 第 20 条）
+
 ### 5) Merge Chapter Markdown and Convert
 
 - `atomic_md_workflow.py merge --chapter N --to-docx`。
@@ -286,6 +305,27 @@ If source materials are missing or inaccessible, **stop and request them**. Do n
 
 - `atomic_md_workflow.py self-check --target ".../02_分章节文档/第N章_自动合并.docx"`。
 - 章节自检按 `chapter_targets` 判断，不卡全文参考文献下限（在全文总检卡）。`pending_template` 时 `check_quality.py` 同样拒绝格式验收（同 Style Gate 导出门禁）。
+
+#### 🔴 每章收口自检清单（Definition of Done · 章级）
+
+**硬规则：以下各项未逐一确认通过，不得向用户声明"该章完成"，不得进入 Step 7。**
+
+通用项（全技能共享）：
+- [ ] **G1** 全章引文编号连续，无孤儿、无缺号（脚本：`atomic_md_workflow.py validate --chapter N`）
+- [ ] **G2** 本章所有引用已过 citation_guard（`citation_guard.py` 报告 `ok=true`）
+- [ ] **G3** 全章内容符合 `outline` 本章 `core_argument`，无跑题
+- [ ] **G4** 全章占位符清零（`CITE_PENDING` / `DATA_PENDING` / `【待AI】` 全部归零）
+- [ ] **G5** 去 AI 通过：`check_quality.py check_writing_style()` 零违规（含中文句长、AI 禁词、三项标点规范）
+- [ ] **G6** 本章字数达标：`count_words.py` 输出 ≥ `chapter_targets[N]`
+
+sci2doc 特有项：
+- [ ] **S1** 全章实验-方法映射完整：`atomic_md_workflow.py validate-experiment-map --chapter N` 通过
+- [ ] **S2** 全章每个实验 ≥ 一图表（`figure_registry.py validate` 通过）
+- [ ] **S3** 全章所有三线表格式校验通过（`check_quality.py` 三线表类别零 error）
+- [ ] **S4** 缩略语注册表已更新，本章无重复首展、无遗漏（`abbreviation_registry.py validate` 通过）
+- [ ] **S5** GB/T 7714 著录格式：本章新引文已过 `reference_renderer.py validate_all`，零偏差
+- [ ] **S6** 自我抄袭标注完整：本章所有复用 SCI 来源处均有 `[N]` 引用 + 声明
+- [ ] **S7** 章后 self-check 已跑（`atomic_md_workflow.py self-check` 输出 ok=true），无 error 级问题
 
 ### 7) Finalize Chapter State
 
@@ -362,7 +402,13 @@ Before finalizing each chapter:
 
 1. Run technical self-check（命令见 `QUICK_START.md` § 7）。
 2. Invoke the `/humanizer-zh` skill on the chapter's merged markdown. The skill rewrites the text in-place; confirm the output before saving. If `/humanizer-zh` is unavailable, manually apply the following checklist to every paragraph:
-   - [ ] **无模板化过渡句**：删除"综上所述"、"值得注意的是"、"由此可见"等空洞衔接词
+
+   **中文正文规则（博论核心，脚本可检测项见括号）：**
+   - [ ] **中文单句 ≤50 字**（含嵌套从句计中文字符；`check_quality.py` 检测 `cn_sentence_too_long`）
+   - [ ] **从句嵌套 ≤2 层**：禁止"当A使B导致C从而D"类四层套叠结构
+   - [ ] **短句（≤15字）与长句（30-50字）交替**：禁连续 3 句字数差异 <5 字（`check_quality.py` 检测 `cn_sentence_monotone`）
+   - [ ] **中文 AI 禁词清零**：`check_quality.py` 的 `去AI-禁词` 类别零违规（覆盖：至关重要/深入探讨/蓬勃发展/革命性的/综上所述/值得注意的是/不仅…而且/大量研究表明 等）
+   - [ ] **无模板化过渡句**：删除"由此可见"、"在此基础上"等空洞衔接词
    - [ ] **无重复排比**：连续出现≥3个句式相同的句子→合并或改写
    - [ ] **无空洞宏观主张**：每段必须有具体数据或实验结果支撑，不允许纯观点段落
    - [ ] **证据先于结论**：数据/观测在前，解释/结论在后；不允许倒置
@@ -371,7 +417,12 @@ Before finalizing each chapter:
    - [ ] **无比喻/排比**：删除"如同"、"犹如"、"是…的桥梁"等表达
    - [ ] **无 scare quotes（恐惧引号）**：禁用双引号/引号包裹自造词或普通短语以暗示"新概念"或"特别含义"（保留合法场景：术语首次定义、原文引用、已固化术语）。检测规则：引号内为 2-10 字且非术语首次展开模式
    - [ ] **无解释性冒号（装饰句式）**：禁用"概念：解释"装饰结构（如"本研究的核心：探索..."）。合法冒号场景：比例（1:2）、列表引导（以下三点：）、标题/图表标签（表2-1：...）、数值（10:00）
-3. Re-run self-check to confirm no regressions (特别检查 writing_style 类问题归零)
+
+   **英文摘要规则（Abstract 专用）：**
+   - [ ] **英文单句 ≤30 词**：每句不超过 30 个英文单词
+   - [ ] **禁 -ing 悬垂从句**：禁用 `, reflecting/ensuring/highlighting/demonstrating/suggesting...` 悬垂分词（改为独立句）
+
+3. Re-run self-check to confirm no regressions（特别确认 `writing_style` 类 + `去AI-禁词` 类 + `句长规范` 类问题归零）
 4. Finalize snapshot + gate completion
 
 ## Table Contract
@@ -480,3 +531,5 @@ Priority rule: **chapter-based numbering takes precedence**. If a figure from SC
 - [ ] Humanization pass 已完成（humanizer-zh 或人工清单）
 - [ ] 缩略语注册表与图号注册表已填充并交叉校验通过
 - [ ] **查重预检（人工）：** 提交知网/万方查重前，基于 Non-Negotiable 第 20 条中已标注的复用来源，人工列出"高风险复用段落清单"（每条含：所在章节、原 SCI 来源 [N]、改写状态 confirmed/pending），确认全部为中文改写且有引用标注，再提交查重。
+
+> **🔴 硬规则（全局）：每节收口自检清单（G1-G6 + S1-S5）与每章收口自检清单（G1-G6 + S1-S7）未逐项确认通过，不得向用户声明"该节/该章完成"。** 能脚本核的项必须跑脚本取证据（`ok=true` / 零 error）；人工项逐条打 ✅ 后方可放行。此规则优先于任何上下文压力或用户催促。

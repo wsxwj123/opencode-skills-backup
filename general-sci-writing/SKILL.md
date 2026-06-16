@@ -348,6 +348,26 @@ python scripts/state_manager.py add-abbreviation <one.json>
 7. **Final Integration**: AI 重写该节，插入 SI 标记。
 8. **Global Literature Sync**: 写完当前节后，通过脚本执行全局文献去重与编号同步（含正文 `[n]` 自动重写）。
 9. **🔴 节末用户确认检查点（Mandatory，先确认再落盘）**：在 Safety Write 之前展示给用户：① 字数 ② 引用条数 ③ 已引用的 figure_id 列表 ④ 本节新增缩略词列表 ⑤ 残留 `CITE_PENDING`/`DATA_PENDING`/`REF_DROPPED` 数；等待用户明确确认（"OK 继续" 或 "需修改 X"）。**OK 才进 step 10 落盘**；用户说改 → 在内存里改后重新展示确认；连续自动写多节禁止。
+
+   **🔴 DoD 自检清单（硬规则：清单未逐项确认通过，不得向用户声明"本节完成"）**
+
+   节末落盘前，必须逐项过以下清单并在展示中注明 ✅/❌：
+
+   **通用 6 项**（能脚本核的项挂脚本，不可跳过）：
+   - [ ] **①引文对应**：`[n]` 与节末 Vancouver 列表一一对应、编号连续、无孤儿引用（脚本：`sync-literature --dry-run --strict-references`）
+   - [ ] **②citation_guard**：本节新增引用已过 `citation_guard.py --offline` 核验，`ok=true`
+   - [ ] **③主线对齐**：本节内容符合 `storyline.json` 对应 section 的核心论点，无跑题或自相矛盾
+   - [ ] **④占位清零**：`grep -n "CITE_PENDING\|DATA_PENDING\|REF_DROPPED" <本节文件>` 输出为空
+   - [ ] **⑤去 AI**：`style_checker.py --file <本节文件> --threshold 70` 通过（重点：无 trailing_ing_clause / forbidden_ai_phrases / decorative_em_dash / scare_quotes；见 `references/anti-ai-protocol.md`）
+   - [ ] **⑥字数达标**：本节字数在 storyline 预估区间内，且全文累计未超期刊上限
+
+   **gsw 特有项**（Results/Discussion 节必检）：
+   - [ ] **⑦figure data_status 非 pending**：本节引用的所有 figure 在 `figures_database.json` 中 `data_status != "pending"`（否则回到 `/figure` 补核心定量）
+   - [ ] **⑧无像素定量**：本节对图的描述只依据图面已印出的数字/标签，无从像素推断的定量值
+   - [ ] **⑨实验逻辑批判通过**：Part 1 中的 `🧪 实验逻辑批判` Verdict 为 "Reliable"（非 "Flaw Detected"）
+   - [ ] **⑩节末 Vancouver**：本节文件末尾附有该节所引用文献的 Vancouver 格式列表
+   - [ ] **⑪未超期刊字数**：见 ⑥，正文章节累计字数 ≤ `project_config.word_limits` 的 Results+Discussion 上限
+   - [ ] **⑫只改原子化源**：本次写入的目标文件为 `manuscripts/` 下的原子化源文件，非 `Full_Manuscript.md` / `.docx`（见 §3）
 10. **Safety Write**: 用户 OK 后写入文件 → 智能快照。回退手段：若落盘后用户反悔，`/rollback` 到上一个 snapshot 或直接 Edit 改原子化文件（参见 §3 润色 workflow）。
 
 **Discussion 段落结构 / Online Methods vs STAR Methods**：写 Discussion 或 Methods 章节前 `Read references/writing-templates.md` 对应小节。要点：Discussion 走"主要发现总结→文献对比+机制→**Limitations（强制，缺即退稿高频）**→Outlook"四段式；Methods 按 target_journal 选 Online Methods（Nature 精简版+完整版后置）或 STAR Methods（Cell 五段结构）。

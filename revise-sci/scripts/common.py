@@ -81,6 +81,12 @@ def find_ai_style_markers(text: str) -> list[str]:
         markers.append("rhetorical question")
     if re.search(r",\s*(?:thus|thereby|therefore)\s+[A-Za-z-]+ing\b", normalized, flags=re.IGNORECASE):
         markers.append("trailing -ing clause")
+    if re.search(r",\s*(?:reflecting|ensuring|highlighting|suggesting|demonstrating|indicating|revealing)\b", normalized, flags=re.IGNORECASE):
+        markers.append("trailing -ing clause")
+    # Sentence length: warn when any sentence exceeds 30 words (soft check)
+    sentences = re.split(r"(?<=[.!?])\s+", normalized)
+    if any(len(s.split()) > 30 for s in sentences if s.strip()):
+        markers.append("sentence >30 words")
     return markers
 
 

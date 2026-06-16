@@ -641,6 +641,42 @@ _STYLE_CHECKS = [
 # 排比检测：连续3个以上句子以相同模式开头
 _PARALLELISM_MIN_COUNT = 3
 
+# ---------------------------------------------------------------------------
+# 中文 AI 禁词表（博论正文高频 AI 套话，参考 nsfc-proposal/scripts/humanizer_zh.py）
+# 格式：(compiled_regex, category, message, suggestion)
+# ---------------------------------------------------------------------------
+_CN_AI_BANNED = [
+    # 空洞修饰词
+    (re.compile(r'至关重要|举足轻重|不可或缺'), '去AI-禁词', '空洞修饰词：至关重要/举足轻重/不可或缺', '用具体数据替代形容词'),
+    (re.compile(r'具有重要的.{0,15}意义和.{0,15}价值'), '去AI-禁词', '套话：具有重要的...意义和...价值', '删除或改写为具体贡献陈述'),
+    # 新闻体套话
+    (re.compile(r'日益增长|蓬勃发展|方兴未艾'), '去AI-禁词', '新闻体套话：日益增长/蓬勃发展/方兴未艾', '替换为具体数据或趋势描述'),
+    # 空洞动词
+    (re.compile(r'深入探讨|系统研究|全面分析'), '去AI-禁词', '空洞动词：深入探讨/系统研究/全面分析', '改为具体研究行为，如"比较X与Y的差异"'),
+    # 机械过渡
+    (re.compile(r'综上所述|总而言之'), '去AI-禁词', '机械过渡：综上所述/总而言之', '用事实句结束段落，不用总结套话'),
+    (re.compile(r'在此基础上|鉴于此'), '去AI-禁词', 'AI 过渡句：在此基础上/鉴于此', '直接写因果关系'),
+    (re.compile(r'值得注意的是|需要指出的是'), '去AI-禁词', 'AI 提示语：值得注意的是/需要指出的是', '删除提示语，直接给结论/证据'),
+    # 夸张修辞
+    (re.compile(r'革命性的|颠覆性的|突破性的'), '去AI-禁词', '夸张修辞：革命性的/颠覆性的/突破性的', '用数据/事实说明程度'),
+    # AI 句式：不是…而是
+    (re.compile(r'不是.{1,25}?而是'), '去AI-禁词', 'AI 对比模板：不是…而是', '改为直接陈述句'),
+    # AI 句式：不仅…而且
+    (re.compile(r'不仅.{1,25}?[，,].{1,25}?而且'), '去AI-禁词', 'AI 递进模板：不仅…而且', '拆成两句事实陈述'),
+    # 模糊表述
+    (re.compile(r'大量研究表明'), '去AI-禁词', '模糊归因：大量研究表明', '改为明确作者+文献编号'),
+    (re.compile(r'越来越多的证据'), '去AI-禁词', '模糊归因：越来越多的证据', '具体引用几项关键证据'),
+    (re.compile(r'广泛应用'), '去AI-禁词', '模糊表述：广泛应用', '列出具体应用场景'),
+]
+
+# ---------------------------------------------------------------------------
+# 中文单句字符数上限
+# ---------------------------------------------------------------------------
+_CN_SENT_MAX_CHARS = 50  # 单句 >50 中文字符报 cn_sentence_too_long
+_CN_SENT_SHORT_MAX = 15  # ≤15 字视为"短句"
+_CN_SENT_LONG_MIN = 30   # ≥30 字视为"长句"
+_CN_SENT_MONOTONE_DIFF = 5  # 连续3句长度差 <5 字报单调警告
+
 
 def check_writing_style(doc):
     """
@@ -691,6 +727,58 @@ def check_writing_style(doc):
                     'message': f'{message}：...{snippet}...',
                     'suggestion': suggestion,
                 })
+
+        # ── 中文 AI 禁词检测 ──────────────────────────────────────────────
+        for pattern, category, message, suggestion in _CN_AI_BANNED:
+            for m in pattern.finditer(text):
+                start = max(0, m.start() - 8)
+                end = min(len(text), m.end() + 8)
+                snippet = text[start:end]
+                issues.append({
+                    'level': 'warning',
+                    'category': category,
+                    'message': f'{message}：...{snippet}...',
+                    'suggestion': suggestion,
+                })
+
+        # ── 中文句长检测 ──────────────────────────────────────────────────
+        # 按中文句末标点（。！？）切句；空句跳过；只数中文字符
+        cn_sentences_in_para = re.split(r'[。！？]', text)
+        cn_lens = []
+        for s in cn_sentences_in_para:
+            s = s.strip()
+            if not s:
+                continue
+            cn_char_count = len(re.findall(r'[一-鿿]', s))
+            if cn_char_count < 4:
+                continue  # 忽略过短残句（如引用编号后的残余）
+            cn_lens.append(cn_char_count)
+            if cn_char_count > _CN_SENT_MAX_CHARS:
+                # 截取snippet（最多显示40字）
+                snippet = s[:40] + ('…' if len(s) > 40 else '')
+                issues.append({
+                    'level': 'warning',
+                    'category': '句长规范',
+                    'message': f'中文单句过长（{cn_char_count} 字 > {_CN_SENT_MAX_CHARS} 字上限）：{snippet}',
+                    'suggestion': '拆分长句：每句 ≤50 中文字符，从句嵌套 ≤2 层',
+                    'code': 'cn_sentence_too_long',
+                })
+        # 连续3句长度变化 <5 字（单调句式告警）
+        if len(cn_lens) >= 3:
+            for k in range(len(cn_lens) - 2):
+                trio = cn_lens[k:k+3]
+                if max(trio) - min(trio) < _CN_SENT_MONOTONE_DIFF:
+                    issues.append({
+                        'level': 'info',
+                        'category': '句长规范',
+                        'message': (
+                            f'连续 3 句字数差异 <{_CN_SENT_MONOTONE_DIFF} 字（{trio}），'
+                            '句式单调，建议短句（≤15字）与长句（30-50字）交替'
+                        ),
+                        'suggestion': '调整句子长度节奏：短句(<15字)与长句(30-50字)交替出现',
+                        'code': 'cn_sentence_monotone',
+                    })
+                    break  # 每段只报一次
 
         # 收集句子用于排比检测（按句号/分号切分）
         sentences = re.split(r'[。；;]', text)

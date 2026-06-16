@@ -173,6 +173,11 @@ def scan_text(text: str, allow_lists: bool = False) -> dict:
     return {"count": len(issues), "issues": issues}
 
 
+def _count_cn_chars(s: str) -> int:
+    """计算字符串中中文字符数（用于句长硬上限判断）。"""
+    return sum(1 for c in s if "一" <= c <= "鿿")
+
+
 def rhythm_check(text: str) -> dict:
     paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
     issues = []
@@ -181,6 +186,23 @@ def rhythm_check(text: str) -> dict:
     for idx, para in enumerate(paragraphs, 1):
         sents = [s for s in re.split(r"[。！？!?]", para) if s.strip()]
         lens = [len(s.strip()) for s in sents]
+
+        # ── 中文句长硬上限（≤50 中文字符）────────────────────────────────
+        for sent_idx, sent in enumerate(sents, 1):
+            cn_len = _count_cn_chars(sent)
+            if cn_len > 50:
+                issues.append(
+                    {
+                        "paragraph": idx,
+                        "sentence": sent_idx,
+                        "type": "cn_sentence_too_long",
+                        "cn_chars": cn_len,
+                        "text": sent.strip()[:60] + ("…" if len(sent.strip()) > 60 else ""),
+                        "suggestion": "中文单句超50字，拆分为两句或精简从句（目标≤50中文字符）",
+                    }
+                )
+
+        # ── 连续3句长度差异 <5字（节奏单调）────────────────────────────
         for j in range(len(lens) - 2):
             window = lens[j : j + 3]
             if max(window) - min(window) < 5:

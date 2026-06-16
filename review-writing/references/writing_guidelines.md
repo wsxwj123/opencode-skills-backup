@@ -47,9 +47,11 @@ High-impact reviews are not summaries; they are arguments.
 ### English Mode
 - **Ban List:** Moreover, Crucial, Landscape, Tapestry, Realm, Pivot, Foster, Underscore, Delve into, Spearhead
 - **Phrases to Avoid:** It is worth noting, In conclusion, As mentioned above, Serves as, Acts as
-- **Structure Ban:** No "Not only...but also"; No "From A to B"; No trailing "-ing" clauses
-- **Rhythm:** Mix short sentences (≤12 words) with long (25–40 words). NEVER 3+ consecutive similar-length sentences.
-- **Voice:** Active preferred, passive ≤30% per paragraph.
+- **Structure Ban:** No "Not only...but also"; No "From A to B"; No trailing "-ing" clauses (e.g., ban ", reflecting a shift toward…"; ban ", ensuring that…"; ban ", highlighting the importance of…" — recast as a new finite clause or sentence).
+- **Sentence length — HARD LIMIT:** Single sentence (including all subordinate clauses) ≤30 words. Any sentence exceeding 30 words must be split before submission. This applies to all subordinate clause constructions, not just main clauses.
+- **Rhythm:** Mix short sentences (≤12 words) with mid-range (25–30 words). NEVER 3+ consecutive similar-length sentences.
+- **Voice (review-specific):** For literature reviews: active voice is primary; passive ≤30% per paragraph. This differs from original research articles where passive is 50–70% (methods/results). Do not apply the 50–70% norm to reviews.
+- **Synonym cycling — ban:** Within the same paragraph, use one consistent term for each concept. Do not cycle synonyms (e.g., do not alternate "tumor microenvironment / TME / cancer stroma" within one paragraph — pick one and use it). Cycle across paragraphs is acceptable for stylistic variety.
 - **Transitions:** Ban "Furthermore / In addition / Moreover" bolted-on. Embed causality into main clause.
 
 ### Chinese Mode

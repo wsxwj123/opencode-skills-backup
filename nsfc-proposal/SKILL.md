@@ -104,6 +104,18 @@ Follow phased gates in order:
    - Input: confirmed project profile (title, discipline, H/O/RC/KSQ mapping counts).
    - Output: `sections/P1_立项依据.md` + `data/literature_index.json` (all P1 citations verified) + updated `context_memory.md`.
    **Citation Type by Context for P1 (立项依据，MANDATORY):** specific mechanistic/experimental claims (具体科学论点) must cite Original Articles as primary evidence; clinical evidence cites Clinical Trials at the same priority; preprints are last-resort, labeled `[Preprint]`, used only when no peer-reviewed equivalent exists. Full context-to-type mapping and the `role` taxonomy (gap_evidence / method_support / prior_work / comparison / background) live in `references/04_文献管理.md`.
+
+   **Phase 1 DoD（收口自检）— 未逐项确认通过，不得向用户声明"P1 完成"**
+   - [ ] ①引文 [n] ↔ REF 列表一一对应（无孤儿编号、无缺号、连续无断档）
+   - [ ] ②本节新增引用已过 `citation_guard`（`python scripts/citation_validator.py verify-all`）
+   - [ ] ③论述符合 SQ/H/KSQ 主线，未出现与 consistency_map 矛盾的表述
+   - [ ] ④占位符清零（grep `CITE_PENDING\|DATA_PENDING\|【待` P1 返回空）
+   - [ ] ⑤去 AI：`python scripts/humanizer_zh.py scan sections/P1_立项依据.md` 无 ERROR，WARNING 已逐条处理或标注豁免理由；`rhythm-check` 无 `cn_sentence_too_long`
+   - [ ] ⑥字数在目标范围内（`python scripts/word_counter.py summary sections/P1_立项依据.md`）
+   - [ ] ⑦H/O/RC/KSQ 与 P1 中 SQ 表述一致（V-01；`python scripts/consistency_mapper.py --path data/consistency_map.json validate` 无 ERROR）
+   - [ ] ⑧科学问题属性四选一已在 profile 中写入且与 P1 论述对应
+   - [ ] ⑨撤稿检测：所有 PMID 已过撤稿核查（`python scripts/citation_validator.py verify-all --retraction-check`）
+
 3. Phase 2: write P2 研究内容（contains all sub-content: H/O/RC/KSQ, methods, innovations, annual plan）.
    - 每节先跑 `python scripts/state_manager.py --root . write-cycle --section P2`（逐节预算/上下文注入的预写门控，完整参数见 references/08）；不得跳过直接硬写。
    - Input: verified P1; H/O/RC/KSQ mapping counts from Phase 0; consistency_map.json with SQ entries.
@@ -114,6 +126,18 @@ Follow phased gates in order:
    - No literature numbers anywhere in P2. Paragraph narrative throughout; annual plan may use year-based paragraphs.
    - Every M must trace back to a specific RC; every IN must trace to RC and M.
    - **Figure Prompt Generation（AI绘图提示词）：** Phase 2 完成后，为技术路线图等必要图表生成绘图提示词，保存至 `sections/figure_prompts.md`。模板与生成规则见 `references/10_Figure_Prompt规范.md`。
+
+   **Phase 2 DoD（收口自检）— 未逐项确认通过，不得向用户声明"P2 完成"**
+   - [ ] ①H/O/RC/KSQ 1:1 映射无交叉（`consistency_mapper validate` V-01~V-05 全 PASS）
+   - [ ] ②每个 M 可追溯到具体 RC，每个 IN 可追溯到 RC 和 M（V-08/V-10）
+   - [ ] ③P2 全文无文献编号引用 [n]（grep `\[[0-9]` P2 返回空）
+   - [ ] ④占位符清零（CITE_PENDING/DATA_PENDING/【待AI】）
+   - [ ] ⑤去 AI：`humanizer_zh.py scan` 无 ERROR，`rhythm-check` 无 `cn_sentence_too_long`
+   - [ ] ⑥字数/页数在目标范围内
+   - [ ] ⑦V-06（M→F）/V-07（F 来源）/V-11（代表作匹配）/V-12（备选路线）**不在本阶段验证**（字段为空时默认 pass，不代表合规）——记录为"延迟到 Phase 7 gate-check"
+   - [ ] ⑧P2 末尾含独立"预期成果"小节（论文/专利/人才培养目标三类均有明确数字目标）
+   - [ ] ⑨figure_prompts.md 已生成，技术路线图提示词映射到 ≥1 个 RC
+
 4. Phase 3: write P3 研究基础（4 sub-files）.
    - 每节先跑 `python scripts/state_manager.py --root . write-cycle --section P3_1`（其余子节同理 P3_2/P3_3/P3_4；逐节预算/上下文注入的预写门控，完整参数见 references/08）；不得跳过直接硬写。
    - Input: P2 confirmed; team CV, platform data, and prior publications from Phase 0 profile.
@@ -125,11 +149,30 @@ Follow phased gates in order:
    - Each M in consistency_map must have at least one feasibility entry (F) sourced from P3_1 or P3_2.
    - **伦理审查（涉人类受试者/实验动物/生物安全/人类遗传资源时为硬项）：** P3_1 可行性分析须说明已获或计划申请的伦理审查批件（如医学伦理委员会、实验动物福利伦理、生物安全审批、人类遗传资源采集/保藏/利用审批），尚未取得的注明送审计划与时间节点。不涉及上述情形则无需展开。
    - P3_3 and P3_4 may use list format (tables allowed).
+
+   **Phase 3 DoD（收口自检）— 未逐项确认通过，不得向用户声明"P3 完成"**
+   - [ ] ①四个子文件均已生成（P3_1/P3_2/P3_3/P3_4）
+   - [ ] ②consistency_map 中每个 M 至少有一条 F（可行性条目）来自 P3_1 或 P3_2
+   - [ ] ③P3_4 总结字数 ≤500 字（`word_counter` 核验）
+   - [ ] ④涉及人类受试者/动物/生物安全/遗传资源时，P3_1 含伦理审查说明或送审计划
+   - [ ] ⑤占位符清零
+   - [ ] ⑥去 AI：P3_1/P3_2 已过 `humanizer_zh.py scan`，无 ERROR；`rhythm-check` 无 `cn_sentence_too_long`
+   - [ ] ⑦H/O/RC/KSQ 与 P1/P2 一致性未因 P3 新增内容产生新矛盾（`consistency_mapper validate` 仍 PASS）
+   - [ ] ⑧代表作与 H/RC 方向匹配（V-11 人工确认：每篇代表作能对应至少一条 H 或 RC）
+
 5. Phase 4: write P4 其他需要说明的情况（≤500字）.
    - 每节先跑 `python scripts/state_manager.py --root . write-cycle --section P4`（逐节预算/上下文注入的预写门控，完整参数见 references/08）；不得跳过直接硬写。
    - Input: P3 confirmed.
    - Output: `sections/P4_其他需要说明的情况.md`.
    - Cover: concurrent grant applications, senior PI prior grants, postdoc status, AI usage declaration, ethics/biosafety/human-genetic-resource approvals (若涉及，与 P3_1 伦理说明呼应), any other required disclosures.
+
+   **Phase 4 DoD（收口自检）— 未逐项确认通过，不得向用户声明"P4 完成"**
+   - [ ] ①总字数 ≤500 字（`word_counter` 核验）
+   - [ ] ②涉及伦理/生物安全/遗传资源的说明与 P3_1 无矛盾（人工核查呼应关系）
+   - [ ] ③AI 使用声明已包含（若使用了 AI 辅助写作）
+   - [ ] ④占位符清零
+   - [ ] ⑤去 AI：`humanizer_zh.py scan` 无 ERROR；`rhythm-check` 无 `cn_sentence_too_long`
+
 6. Phase 5: write 预算说明书（B1-B3）.
    - Input: P2 confirmed (M entries define budget items); project profile (budget_total, duration).
    - Output:
@@ -137,16 +180,44 @@ Follow phased gates in order:
      - `sections/B2_预算说明_合作外拨.md` (co-institution allocation, or "无")
      - `sections/B3_预算说明_其他来源.md` (other funding sources)
    - Budget total must equal profile `budget_total`; each major budget item traces to an M entry.
+
+   **Phase 5 DoD（收口自检）— 未逐项确认通过，不得向用户声明"P5/预算 完成"**
+   - [ ] ①三个子文件均已生成（B1/B2/B3）
+   - [ ] ②各项目预算求和 = profile `budget_total`（人工核算）
+   - [ ] ③每个主要预算条目可追溯到至少一条 M 条目（V-09 人工确认）
+   - [ ] ④直接费用各类别说明完整（设备/材料/测试/差旅/出版/劳务/咨询）
+   - [ ] ⑤占位符清零
+
 7. Phase 6: write 中英文摘要（abstract-last, based on full draft）.
    - Input: all sections P1–P4 confirmed; run `python scripts/state_manager.py --root . load --global` for full-text summary.
    - Output: `sections/00_摘要_中文.md` (≤400汉字) + `sections/00_摘要_英文.md` (≤300英文词).
    - Keywords must align with `consistency_map.keywords_trace`.
+
+   **Phase 6 DoD（收口自检）— 未逐项确认通过，不得向用户声明"摘要完成"**
+   - [ ] ①中文摘要 ≤400 汉字（`word_counter` 核验）
+   - [ ] ②英文摘要 ≤300 英文词（`word_counter` 核验）
+   - [ ] ③摘要关键词与 `consistency_map.keywords_trace` 吻合（人工核查）
+   - [ ] ④摘要中的 H/O/RC/KSQ 表述与正文各 Phase 一致（V-01~V-05 范围内，人工核查）
+   - [ ] ⑤占位符清零
+   - [ ] ⑥去 AI：`humanizer_zh.py scan sections/00_摘要_中文.md` 无 ERROR；`rhythm-check` 无 `cn_sentence_too_long`
+
 8. Phase 7: 全文自审与终稿 + merge.
    - Input: all sections (00, B1-B3, P1-P4, REF) confirmed.
    - Run `diagnosis_engine.py full-review` and `consistency_mapper.py validate` (完整参数见 Script Entry Points); fix all ERROR-level issues.
    - Run `python scripts/word_counter.py summary sections` and `python scripts/state_manager.py --root . page-estimate --sections-dir sections`; if >30 pages, trim specific locations.
    - Run `humanizer_zh.py scan-all` before final output.
    - Output: `output/申请书_合并.md` (merge order: 00摘要 → B1-B3预算 → P1 → P2 → P3_1~P3_4 → P4 → REF).
+
+   **Phase 7 DoD（收口自检）— 未逐项确认通过，不得向用户声明"全文终稿完成"**
+   - [ ] ①`diagnosis_engine.py full-review` 无 ERROR 级问题
+   - [ ] ②`consistency_mapper.py validate` V-01~V-12 全量验证 PASS（V-06/V-07/V-09/V-11/V-12 首次强制执行）
+   - [ ] ③`gate-check --require-mcp` PASS（引文矩阵 / MCP 缓存 / 撤稿检测 / 科学问题属性）
+   - [ ] ④页数 ≤30 页（`page-estimate` 核验；超出则已按报告定位修剪）
+   - [ ] ⑤`humanizer_zh.py scan-all` 无 ERROR，WARNING 已逐条处理或标注豁免理由；无 `cn_sentence_too_long`
+   - [ ] ⑥全文占位符清零（CITE_PENDING/DATA_PENDING/【待AI】/【待翻译】）
+   - [ ] ⑦V-11 代表作：每篇代表作能对应 ≥1 条 H 或 RC（`consistency_mapper validate` + 人工确认）
+   - [ ] ⑧V-12 备选路线：每条主研究路线（M）含 ≥1 条备选方案或风险应对措施
+   - [ ] ⑨合并顺序正确（00摘要 → B1-B3 → P1 → P2 → P3_1~P3_4 → P4 → REF），输出文件存在且可读
 
 At each phase:
 - snapshot

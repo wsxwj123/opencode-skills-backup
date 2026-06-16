@@ -254,12 +254,41 @@ Each comment must contain:
 - The polishing stage should emit `revision_polish_manifest.json`, `revision_polish_prompt.md`, and `revision_polish_execution.json` so the anti-AI prompt, driver mode, and candidate coverage remain auditable.
 - `strict_gate.py` must verify that completed revised fragments with a non-empty `revision_plan.scope` have polish state, a valid `polish_driver_mode`, and no residual banned AI-style markers.
 - The polishing prompt should be layered, not flat. It must include: role definition, non-negotiable edit/evidence/citation/length constraints, deep anti-AI rewriting protocol, and a JSON-only output contract.
-- **Polish anti-AI 去AI三项（适用于中英文改稿正文）：**
+- **Polish anti-AI 去AI五项（适用于中英文改稿正文）：**
   1. **禁装饰性破折号**：禁用 —/——/em-dash 充当停顿、补充或强调（如"该结果——尽管样本量小——表明…"）；改用逗号、句号或拆为两句。连字符（"dose-response"）与数值范围不受限。中英文均适用。
   2. **禁 scare quotes**：禁用双引号包裹自造词或普通短语以暗示"新概念/反讽"；保留：术语首次定义、原始审稿人评论直接引用、已固化的术语隐喻。
   3. **禁解释性冒号**：禁用"概念: 解释"或"Concept: explanation"格式的装饰句式；合法冒号包括比例、时间、列表引导、标题、图表标签。
-  - `strict_gate.py` 的 `ai_style_flags_removed` 校验应涵盖以上三类标志；若 polished 片段仍含这三类用法，视为残留禁用标志，门禁必须报告。
+  4. **英文单句 ≤30 词硬上限**：polished 片段中任何独立英文句子（以 `.!/? ` 分界）词数不得超过 30 词；超限须拆句，不得用分号逃避拆句。**禁止 -ing 分词从句作假分析**：形如 `, reflecting …` / `, ensuring …` / `, highlighting …` / `, suggesting …` 的尾置 -ing 从句禁止用于添加未经数据支撑的推断；已有明确证据锚点的 participial phrase 不受此限。`find_ai_style_markers` 中 "trailing -ing clause" 检测已覆盖以 `,\s*(thus|thereby|therefore)\s+[a-z-]+ing` 模式；追加覆盖 `, (reflecting|ensuring|highlighting|suggesting|demonstrating|indicating|revealing)\b` 模式。
+  5. **中文单句 ≤50 字、从句 ≤2 层**（如正文含中文）：任何中文句子（句号/问号/感叹号分界）字数不得超过 50 字；嵌套从句层数不超过 2 层（如"A（B（C））"为第 3 层，须拆分）。连续 3 句字数差异 <5 字时应主动变换句长。
+  - `strict_gate.py` 的 `ai_style_flags_removed` 校验应涵盖以上五类标志；若 polished 片段仍含这五类用法，视为残留禁用标志，门禁必须报告。句长规则为软警告（脚本报告超限数量），不单独阻断 strict_gate，但必须在 `notes` 字段记录。
 - `revision_plan` should carry `locked_prefix`, `locked_suffix`, `evidence_boundary_note`, and `citation_strings` so the polishing step can preserve untouched context explicitly rather than infer it.
 - The polishing output schema should include `edit_decision`, `meaning_changed`, `scope_respected`, `ai_style_flags_removed`, and `notes`.
 - `strict_gate.py` must fail if a polished revision reports `meaning_changed=true`, `scope_respected=false`, or if reconstructed paragraph text no longer preserves the locked prefix/suffix context.
 - `strict_gate.py` must also fail if `comments_input_mode` is unsupported, `expected_comments_mode` and detected mode diverge, or the required state-window artifacts are missing.
+
+## Definition-of-Done (DoD) 自检清单（改稿收口）
+
+**位置**：polish 完成后、`strict_gate.py` 运行前，逐项人工或脚本确认。**硬规则：清单未逐项确认通过，不得向用户声明"改稿完成"。**
+
+### 通用 6 项（全技能共用）
+
+| # | 项目 | 核验方式 |
+|---|------|---------|
+| G1 | 引文 `[n]` ↔ 参考列表一一对应，无孤儿引用、无缺号，编号连续 | `python scripts/build_reference_registry.py` → `data/reference_coverage_audit.json` ok=true |
+| G2 | 本轮新增引用已过 citation_guard 双重核验 | `python scripts/citation_guard.py` → ok=true，无 manual_review 条目 |
+| G3 | 改动符合原文 storyline / 主线（不跑题，不与原文主线矛盾） | 人工对照 `build_issue_matrix.py` 生成的 `issue_matrix.md` |
+| G4 | 占位符清零：无 `CITE_PENDING` / `DATA_PENDING` / `【待AI】` / `{{` 残留 | `grep -r "CITE_PENDING\|DATA_PENDING\|待AI\|{{" <project_root>/` 零命中 |
+| G5 | 去 AI 五项（破折号/scare quotes/解释性冒号/英文≤30词/-ing从句/中文≤50字≤2层从句）通过 | `python scripts/strict_gate.py --project-root <project_root>` → `ai_style_flags_removed` 无残留；句长警告记录于 notes |
+| G6 | 字数达标（改动前后正文字数在期刊要求范围内） | 人工或期刊要求核对 |
+
+### Revise-Sci 特有项
+
+| # | 项目 | 核验方式 |
+|---|------|---------|
+| R1 | `strict_gate.py` 通过（exit code 0） | `python scripts/strict_gate.py --project-root <project_root>` → `STRICT_GATE: PASS` |
+| R2 | `citation_guard.py` 双重核验通过（provider trace + identifier/title 一致性） | strict_gate 内含；或单独 `python scripts/citation_guard.py` |
+| R3 | Reference coverage 无缺口：`data/reference_coverage_audit.json` `ok=true`，无 unresolved numeric/author-year gap | `python scripts/build_reference_registry.py` → coverage_audit 直接读；或 strict_gate R1 覆盖 |
+| R4 | Patch 修订哈希一致（如使用 Patch 修订协议）：`apply_revision_patch.py` 未报告任何 hash mismatch，所有未触及 block 字节不变 | `python scripts/apply_revision_patch.py --manifest <block_manifest.json> --patch <patch.json> --output <revised.md>` exit code 0 |
+| R5 | Issue matrix 每条意见有对应改动：`issue_matrix.md` 每个 `comment_id` 在 `manuscript_edit_plan.md` 中有 revised_excerpt | strict_gate 内含 `comment_id not found in edit plan` 检查 |
+
+> 能脚本核的项已标注命令；R4 仅在使用 Patch 修订协议时适用，跳过需在 notes 中注明原因。
