@@ -281,6 +281,16 @@ If source materials are missing or inaccessible, **stop and request them**. Do n
 
 **硬规则：以下各项未逐一确认通过，不得向用户声明"该节完成"。**
 
+**🔴 进入下一节前置闸口**：上一节 `delegate_review verify` 必须 exit 0（含结构完整性项 S6），否则不得开始下一节——写完即检，不过不进。
+
+**🔴 委托盲检（不得主 agent 自评）**：你刚写完本节，自评会失真地默认通过、且易漏项。落盘前必须把 DoD 清单**委托给独立上下文的子代理盲检**，自己不直接打勾：
+1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate section-dod --files <本节文件>`
+2. **派一个独立子代理**（Claude Code 用 `academic-blind-reviewer`；其他平台派通用子代理），把任务包原样给它、**不要给它本节的写作上下文**，要求按任务包返回 JSON 数组。
+3. 校验返回：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate section-dod --return <子代理返回.json>`；退出码非 0（任一缺项/fail/无证据）= **fail-closed**，据子代理证据修复后重跑，**未过不得声明完成**。
+- **降级路径**（当前环境无法派子代理时）：主 agent 切换"审稿人视角"、清空对本节的写作记忆，逐项独立重核——绝不因"自己刚写完"默认通过；仍跑 `verify` 把关。
+
+下列清单与 `references/dod_checklist.json` gate=`section-dod` 逐项对应（改清单先改 JSON），供人工对照；能脚本核的项子代理会先跑脚本：
+
 通用项（全技能共享）：
 - [ ] **G1** 编号连续：引文 `[n]` 与参考列表一一对应，无孤儿编号、无缺号（脚本：`atomic_md_workflow.py validate --chapter N`）
 - [ ] **G2** 新增引用已过 citation_guard（`citation_guard.py` 报告 `ok=true`）
@@ -309,6 +319,16 @@ sci2doc 特有项：
 #### 🔴 每章收口自检清单（Definition of Done · 章级）
 
 **硬规则：以下各项未逐一确认通过，不得向用户声明"该章完成"，不得进入 Step 7。**
+
+**🔴 进入下一章前置闸口**：上一章 `delegate_review verify` 必须 exit 0（含章结构完整性项 S8），否则不得开始下一章——写完即检，不过不进。
+
+**🔴 委托盲检（不得主 agent 自评）**：章级闸口同样必须委托独立子代理盲检，不得主 agent 自评：
+1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate chapter-dod --files <章节合并文件>`
+2. **派一个独立子代理**（Claude Code 用 `academic-blind-reviewer`；其他平台派通用子代理），把任务包原样给它、**不要给它本章的写作上下文**，要求按任务包返回 JSON 数组。
+3. 校验返回：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate chapter-dod --return <子代理返回.json>`；退出码非 0（任一缺项/fail/无证据）= **fail-closed**，据子代理证据修复后重跑，**未通过不得进入 Step 7**。
+- **降级路径**（当前环境无法派子代理时）：主 agent 切换"审稿人视角"、清空对本章的写作记忆，逐项独立重核——绝不因"自己刚写完"默认通过；仍跑 `verify` 把关。
+
+下列清单与 `references/dod_checklist.json` gate=`chapter-dod` 逐项对应（改清单先改 JSON），供人工对照；能脚本核的项子代理会先跑脚本：
 
 通用项（全技能共享）：
 - [ ] **G1** 全章引文编号连续，无孤儿、无缺号（脚本：`atomic_md_workflow.py validate --chapter N`）

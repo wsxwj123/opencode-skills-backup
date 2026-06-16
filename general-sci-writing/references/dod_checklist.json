@@ -1,0 +1,25 @@
+{
+  "skill": "general-sci-writing",
+  "note": "DoD 自检清单机器可读真源。delegate_review.py pack/verify 读此文件;SKILL.md 散文与各 item 逐项对应。改清单先改这里。",
+  "gates": {
+    "section-dod": {
+      "title": "节末 DoD 自检(落盘前委托独立子代理盲检)",
+      "applies_when": "每个正文章节落盘前;G7-G11 仅 Results/Discussion 节必检,其余节标 na 并注明",
+      "items": [
+        {"id": "G1", "name": "引文对应", "check": "[n] 与节末 Vancouver 列表一一对应、编号连续、无孤儿引用", "script": "python scripts/state_manager.py sync-literature --dry-run --strict-references"},
+        {"id": "G2", "name": "citation_guard", "check": "本节新增引用已过核验 ok=true", "script": "python scripts/citation_guard.py --offline --index data/literature_index.json"},
+        {"id": "G3", "name": "主线对齐", "check": "本节内容符合 storyline.json 对应 section 的核心论点,无跑题或自相矛盾"},
+        {"id": "G4", "name": "占位清零", "check": "本节文件内无 CITE_PENDING / DATA_PENDING / REF_DROPPED 残留", "script": "grep -nE 'CITE_PENDING|DATA_PENDING|REF_DROPPED' <本节文件> || echo CLEAN"},
+        {"id": "G5", "name": "去AI", "check": "无 trailing_ing_clause / forbidden_ai_phrases / decorative_em_dash / scare_quotes / explanatory_colon;英文单句≤30词;被动比例按文体(原创50-70%)", "script": "python scripts/style_checker.py --file <本节文件> --threshold 70"},
+        {"id": "G6", "name": "字数达标", "check": "本节字数在 storyline 预估区间内,且全文累计未超期刊上限"},
+        {"id": "G7", "name": "figure data_status", "check": "本节引用的所有 figure 在 figures_database.json 中 data_status != pending"},
+        {"id": "G8", "name": "无像素定量", "check": "对图的描述只依据图面已印出的数字/标签,无从像素推断的定量值"},
+        {"id": "G9", "name": "实验逻辑批判", "check": "Part 1 实验逻辑批判 Verdict 为 Reliable(非 Flaw Detected)"},
+        {"id": "G10", "name": "节末Vancouver", "check": "本节文件末尾附有该节所引文献的 Vancouver 格式列表"},
+        {"id": "G11", "name": "未超期刊字数", "check": "正文章节累计字数 ≤ project_config.word_limits 的对应上限"},
+        {"id": "G12", "name": "只改原子化源", "check": "本次写入目标为 manuscripts/ 下原子化源文件,非 Full_Manuscript.md / .docx"},
+        {"id": "G13", "name": "结构完整性", "check": "本节包含其文体/storyline 规定的全部结构组件,无缺段/空标题/未填骨架;且符合该节类型规定结构(Introduction 漏斗式;Discussion 主要发现→文献对比+机制→Limitations→Outlook 四段;Methods 必备子节)。子代理对照 storyline.json 对应 section 的结构要求逐组件核对"}
+      ]
+    }
+  }
+}

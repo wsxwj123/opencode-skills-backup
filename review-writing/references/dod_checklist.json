@@ -1,0 +1,92 @@
+{
+  "skill": "review-writing",
+  "note": "DoD 自检清单机器可读真源。delegate_review.py pack/verify 读此文件；SKILL.md 散文与各 item 逐项对应。改清单先改这里。",
+  "gates": {
+    "manuscript-dod": {
+      "title": "节末 DoD 自检（落盘前委托独立子代理盲检）",
+      "applies_when": "每个正文章节落盘前；⑫⑬⑭仅 Review type = systematic 时检查，其余类型标 na 并注明",
+      "items": [
+        {
+          "id": "R1",
+          "name": "引文一一对应",
+          "check": "本节所有 [N] 均在 literature_index.json（或 Zotero gid 池）中有对应条目，无孤儿引用、无缺号",
+          "script": "python3 scripts/validate_citations.py --drafts-dir drafts --index-path data/literature_index.json --fail-on-orphan"
+        },
+        {
+          "id": "R2",
+          "name": "citation_guard 已通过",
+          "check": "本节新增引用已过 citation_guard.py（白名单 pubmed-cli / paper-search，禁 websearch / tavily），guard 返回 exit 0；可对照 data/citation_guard_report.json 确认",
+          "script": "python3 scripts/citation_guard.py --offline --index data/literature_index.json"
+        },
+        {
+          "id": "R3",
+          "name": "符合 storyline / 主线",
+          "check": "本节内容对应 outline.md 中该节 RQ/PICO（或 PCC），无跑题、无与主线矛盾段落"
+        },
+        {
+          "id": "R4",
+          "name": "占位符清零",
+          "check": "全文 grep -n 'CITE_PENDING|DATA_PENDING|【待AI|待AI翻译|[TODO]' drafts/section_*.md 返回空",
+          "script": "grep -nE 'CITE_PENDING|DATA_PENDING|【待AI|待AI翻译|\\[TODO\\]' drafts/section_*.md || echo CLEAN"
+        },
+        {
+          "id": "R5",
+          "name": "去 AI 合规",
+          "check": "零禁用词 + 单句 ≤30 词 + 无 trailing -ing 从句 + 被动 ≤30% + 无装饰性破折号 / scare quotes / 解释性冒号 + 同概念同段一致称谓（见 references/writing_guidelines.md §4）"
+        },
+        {
+          "id": "R6",
+          "name": "字数达标",
+          "check": "关键节 >500 words / >1500 chars；支撑节 >200 words / >600 chars",
+          "script": "python3 scripts/word_counter.py --file <本节文件> --language en"
+        },
+        {
+          "id": "R7",
+          "name": "综合非罗列",
+          "check": "段落为综合论证，无\"A did X, B did Y\"式逐篇列举"
+        },
+        {
+          "id": "R8",
+          "name": "矛盾仲裁",
+          "check": "若本节文献存在矛盾发现，已分析为何矛盾并给出立场或调和，不骑墙"
+        },
+        {
+          "id": "R9",
+          "name": "引用类型匹配",
+          "check": "机制/实验声明 → 原著（不得以综述代替）；疗效声明 → 临床试验；新兴声明 → 预印本（标 [Preprint]）"
+        },
+        {
+          "id": "R10",
+          "name": "检索日志已记录",
+          "check": "本节检索日志条目已写入 data/search_log.json（state_manager.py append-search-log 已执行）；子代理核验：python3 -c \"import json,pathlib; log=json.loads(pathlib.Path('data/search_log.json').read_text(encoding='utf-8')); print('entries:', len(log))\" 确认条目数非 0"
+        },
+        {
+          "id": "R11",
+          "name": "概念框架图一致",
+          "check": "本节引用了 figures/figure_index.md 中的框架图（Figure 0），内容与图的 Node Mapping 不冲突"
+        },
+        {
+          "id": "R12",
+          "name": "PRISMA 计数自洽",
+          "check": "[仅 systematic] 本节新筛文献已更新 PRISMA 计数（state_manager.py set-screening-counts），identified / deduplicated / screened / excluded / included 数字一致，排除原因表已补",
+          "script": "python3 scripts/state_manager.py get-screening-counts"
+        },
+        {
+          "id": "R13",
+          "name": "RoB 已评级",
+          "check": "[仅 systematic] 本节涉及的 RCT 已做 RoB 2，观察性研究已做 ROBINS-I，逐研究 RoB 表已更新（见 references/systematic_review_methodology.md）"
+        },
+        {
+          "id": "R14",
+          "name": "GRADE 已分级",
+          "check": "[仅 systematic，Phase 4 前完成即可] 若本节有临床结局声明，GRADE 分级（high/moderate/low/very low + 升降级因素）已登记"
+        },
+        {
+          "id": "R15",
+          "name": "结构完整性",
+          "check": "本节包含其文体/storyline 规定的全部结构组件，无缺段/空标题/未填骨架；综述各节符合规定结构（引言漏斗、主体主题段有论点-证据-小结、结论有展望）。子代理对照 outline.md 对应 section 逐组件核对"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "skill": "reviewer-simulator",
+  "note": "DoD 自检清单机器可读真源。delegate_review.py pack/verify 读此文件；SKILL.md 散文与各 item 逐项对应。改清单先改这里。",
+  "gates": {
+    "report-dod": {
+      "title": "审稿报告收口 DoD 盲检（报告交付前委托独立子代理盲检）",
+      "applies_when": "第六步生成审稿报告后、向用户交付前；validate_report_html.py 已通过是前提",
+      "items": [
+        {
+          "id": "A1",
+          "name": "21占位符全替换",
+          "check": "validate_report_html.py 返回 VALIDATION_OK，无残留 {{...}}",
+          "script": "python ~/.claude/skills/reviewer-simulator/scripts/validate_report_html.py <报告HTML路径>"
+        },
+        {
+          "id": "A2",
+          "name": "verdict 枚举合规",
+          "check": "decisionVerdict ∈ {拒稿/大修/小修/接收}，且与 finalRecommendationText 完全一致；VERDICT_CLASS 与 verdict 一一对应",
+          "script": "python ~/.claude/skills/reviewer-simulator/scripts/validate_report_html.py <报告HTML路径>"
+        },
+        {
+          "id": "B1",
+          "name": "CRITICAL 阻断逻辑",
+          "check": "若第五步半魔鬼代言人发现任一 CRITICAL 级问题，verdict ≠ '接收'（降为大修或拒稿），且 RECOMMENDATION_RATIONALE 中已显式说明触发原因与证据锚点"
+        },
+        {
+          "id": "B2",
+          "name": "合规审计完整",
+          "check": "第四步技术合规审计（references/review_rubric.md 第五节）7项已逐项核查，缺项已写入第七节核心问题"
+        },
+        {
+          "id": "B3",
+          "name": "统计子清单",
+          "check": "原创研究或 Meta 分析已执行统计审查子清单（rubric 第六节）6项；非原创研究此项标记'不适用（稿件类型：X）'"
+        },
+        {
+          "id": "B4",
+          "name": "魔鬼代言人复查已执行",
+          "check": "第五步半五类对抗性审查（rubric 第八节）已完整执行，发现问题已合并至 CRITICAL_ISSUES_HTML 或 FORENSIC_ANALYSIS_HTML"
+        },
+        {
+          "id": "B5",
+          "name": "给编辑保密意见",
+          "check": "CONFIDENTIAL_EDITOR_HTML 四项（直接拒稿建议/数据造假怀疑/私评新颖性/利益冲突提示）均有内容或明确写'无'，无项目遗漏"
+        },
+        {
+          "id": "B6",
+          "name": "引文真实性",
+          "check": "报告正文中主动引据的外部文献（非稿件自带引用）已过 citation_guard，ok=true 或已标注'待核验'；未引外部文献时此项标记'无外部引文'"
+        },
+        {
+          "id": "B7",
+          "name": "审稿意见本身去AI",
+          "check": "报告正文（含各 *_HTML 占位符填充内容）已逐项核查 rubric 第七节'审稿意见自身去AI'5项规则（三项禁用 + 中文句长 ≤50字 + 从句 ≤2层），无违规残留"
+        },
+        {
+          "id": "B8",
+          "name": "报告结构完整性",
+          "check": "审稿报告含全部规定区块（稿件概要/合规审计/契合度/18点分析/魔鬼代言人/核心问题/给编辑保密意见/回复草案），无缺块、无空区块；且多视角并发盲评的所有视角发现均已汇入，无遗漏视角"
+        }
+      ]
+    }
+  }
+}

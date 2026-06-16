@@ -617,6 +617,16 @@ If pending_sections is empty → all sections complete; proceed to Phase 4.
 
 10. **DoD 自检清单 — 硬规则：逐项确认通过后才可声明"本节完成"，不得跳过任何一项。**
 
+    **🔴 进入下一节前置闸口：上一节 delegate_review verify 必须 exit 0（含 R15 结构完整性），否则不得开始下一节撰写——写完即检，不过不进。**
+
+    **🔴 委托盲检（不得主 agent 自评）**：你刚写完本节，自评会失真地默认通过、且易漏项。落盘前必须把 DoD 清单**委托给独立上下文的子代理盲检**，自己不直接打勾：
+    1. 生成任务包：`python3 scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate manuscript-dod --files <本节文件> --workdir .`
+    2. **派一个独立子代理**（Claude Code 用 `academic-blind-reviewer`；其他平台派通用子代理），把任务包原样给它、**不要给它本节的写作上下文**，要求按任务包返回 JSON 数组。
+    3. 校验返回：`python3 scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate manuscript-dod --return <子代理返回.json>`；退出码非 0（任一缺项 / fail / 无证据）= **fail-closed**，据子代理证据修复后重跑，**未过不得声明完成**。
+    - **降级路径**（当前环境无法派子代理时）：主 agent 切换"审稿人视角"、清空对本节的写作记忆，逐项独立重核——绝不因"自己刚写完"默认通过；仍跑 `verify` 把关。
+
+    下列清单与 `references/dod_checklist.json` 逐项对应（改清单先改 JSON），供人工对照；能脚本核的项子代理会先跑脚本：
+
     **通用 6 项（全节必过）：**
     - [ ] ① **引文一一对应**：本节所有 `[N]` 均在 `literature_index.json`（或 Zotero gid 池）中有对应条目，无孤儿引用、无缺号。可用 `python3 scripts/validate_citations.py --drafts-dir drafts --index-path data/literature_index.json --fail-on-orphan` 核验。
     - [ ] ② **citation_guard 已通过**：本节新增引用已过 `citation_guard.py`（白名单 pubmed-cli / paper-search，禁 websearch / tavily），guard 返回 exit 0。可对照 `data/citation_guard_report.json` 确认。

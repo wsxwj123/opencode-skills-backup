@@ -258,7 +258,18 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
 
 > **硬规则：清单未逐项确认通过，不得向用户声明"回复包完成"。** 能脚本核的项直接跑对应 gate；人工项逐条确认。
 
-### 通用 6 项（全技能必过）
+**🔴 委托盲检（不得主 agent 自评）**：你刚写完回复包，自评会失真地默认通过、且易漏项。**承诺↔落点一致性尤其如此**——主 agent 写了回复再自核"承诺有没有落地"几乎必然失真。`run_pipeline.py` 退出码 0 后、声明完成前，必须把 DoD 清单**委托给独立上下文的子代理盲检**，自己不直接打勾：
+
+🔴 出具前置闸口：delegate_review verify 必须 exit 0（含 RR14 结构完整性），否则不得向用户出具 response letter。
+
+1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate response-dod --files <project_root>/units/*.json`
+2. **派一个独立子代理**（Claude Code 用 `academic-blind-reviewer`；其他平台派通用子代理），把任务包原样给它、**不要给它回复包的写作上下文**，要求按任务包返回 JSON 数组。
+3. 校验返回：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate response-dod --return <子代理返回.json>`；退出码非 0（任一缺项/fail/无证据）= **fail-closed**，据子代理证据修复后重跑，**未过不得声明完成**。
+- **降级路径**（当前环境无法派子代理时）：主 agent 切换"审稿人视角"、清空对回复包的写作记忆，逐项独立重核——绝不因"自己刚写完"默认通过；仍跑 `verify` 把关。
+
+下列清单与 `references/dod_checklist.json` 逐项对应（**改清单先改 JSON**，此处仅供人工对照；能脚本核的项子代理会先跑脚本）：
+
+### 通用 6 项（全技能必过，对应 RR1–RR6）
 - [ ] ① 引文 [N] ↔ 参考列表一一对应（无孤儿、无缺号、编号连续）→ `citation_ref_tracker.py`
 - [ ] ② 本次新增引用已过 `citation_guard.py`（`status == "pass"` 或无新增引用）
 - [ ] ③ 全部回复内容符合投稿论文主线（无跑题、无与原稿结论矛盾的表述）→ 人工
@@ -266,15 +277,16 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
 - [ ] ⑤ 去 AI（英文单句 ≤30 词、无 -ing 分词挂句、无套话禁词；中文单句 ≤50 字、从句 ≤2 层）→ `risk_check.py` + 人工
 - [ ] ⑥ 字数达标（每条 response_en ≥3 句且 ≤300 词；response_zh 信息等价）→ 人工
 
-### reviewer-response 特有项
+### reviewer-response 特有项（对应 RR7–RR13）
 - [ ] 逐条覆盖：每条审稿意见（含 Editor 意见）均有对应 unit，无遗漏 → 人工对照 Step 1.5 解析表
 - [ ] Editor 层独立：Editor 意见为独立顶层节点，未并入任何 Reviewer → HTML TOC 人工核对
 - [ ] Strategy 基调已定：每个 comment unit 的 `content.strategy` 字段均非空 → 人工（Step 1.7 确认后）
-- [ ] 承诺 ↔ 落点一致：`response_en` 里承诺的动作能在 `modification_actions` 或 `revised_excerpt_en` 找到对应落点 → `consistency_check.py`（WARN 需消除）
+- [ ] 承诺 ↔ 落点一致：`response_en` 里承诺的动作能在 `modification_actions` 或 `revised_excerpt_en` 找到对应落点 → `consistency_check.py`（WARN 需消除）**[此项必须由独立子代理核，主 agent 不得自评]**
 - [ ] `edit_plan` 已聚合回填：`manuscript_edit_plan.md` 无 `[PENDING Step 7]` 行 → `aggregate-edit-plan` 脚本退出码 0
 - [ ] 反驳有据：所有 `Push back` 策略的 unit 均有至少一条具体证据（引文 / 数据 / 方法学依据）→ 人工
 - [ ] Citation registry 已核验：`citation_registry.json` 存在且 `citation_guard.py` 通过；若无新增引用，确认 `citation_registry.json` 的 `entries` 为空数组 → `citation_guard.py`
-- [ ] 各 gate 全通：`run_pipeline.py` 退出码 0（`strict_gate` / `final_content_gate` / `consistency_check` / `html_format_check` / `risk_check` / `citation_guard` / `citation_ref_tracker`）
+- [ ] 各 gate 全通：各独立 gate 脚本退出码均为 0（`strict_gate` / `final_content_gate` / `consistency_check` / `risk_check` / `citation_guard` / `citation_ref_tracker`）→ 见 RR13
+- [ ] 结构完整性（RR14）：每个 response unit 结构完整（审稿意见原文 + 回复正文 + 修改证据/落点定位 三要素齐全），无空 unit；letter 整体覆盖每条意见无遗漏 → 人工
 
 ## Re-Render Workflow
 After manual editing of any unit JSON:
