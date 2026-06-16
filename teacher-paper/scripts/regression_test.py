@@ -890,6 +890,95 @@ ans_p4c = [{"type":"answer","text":"偏转角 α=15°，μ=0.3，加速度 a=2 m
 warns_p4c = A._check_physical_plausibility(ans_p4c)
 case("P4c.P2-4 正常物理量-不警告", not warns_p4c)
 
+# ============== Part Q: v3.24.0 全科实测反馈修复（R1-R5）==============
+print("\n=== Q. v3.24.0 全科实测反馈修复 ===")
+
+# Q1.R5：同大题多小题（同数字前缀不同 qNN）不再被去重丢题
+case("Q1.R5 101_q01去重key", A._q_dedup_key("101_q01.json") == "101_q01")
+case("Q1b.R5 101_q01_v2去版本号判重", A._q_dedup_key("101_q01_v2.json") == "101_q01")
+case("Q1c.R5 101_q02不同小题", A._q_dedup_key("101_q02.json") == "101_q02")
+
+with tempfile.TemporaryDirectory() as td:
+    proj = pathlib.Path(td) / "p"
+    (proj / "items").mkdir(parents=True)
+    (proj / "materials").mkdir()
+    (proj / "meta.json").write_text(_json.dumps({
+        "title":"t", "expected_questions":7, "total":28, "subject":"物理"}), encoding="utf-8")
+    # 7 道题全用 101_ 前缀（旧版会去重到 1 题，新版保留 7 题）
+    for i in range(1, 8):
+        (proj / "items" / f"101_q{i:02d}.json").write_text(_json.dumps({
+            "meta":{"num":str(i),"score":4},
+            "paper":[{"type":"question","num":str(i),"text":f"Q{i}"}],
+            "answer":[{"type":"answer","num":str(i),"text":"A"}]}, ensure_ascii=False),
+            encoding="utf-8")
+    try:
+        with _ctx.redirect_stdout(_io.StringIO()) as buf_o, \
+             _ctx.redirect_stderr(_io.StringIO()) as buf_e:
+            A.cmd_build([str(proj)])
+        combined = buf_o.getvalue() + buf_e.getvalue()
+        case("Q2.R5 同前缀7小题不丢题", "题量 7" in combined or "题量7" in combined.replace(" ",""))
+    except SystemExit as e:
+        case("Q2.R5 同前缀7小题不丢题", False, f"exit {e.code}: 仍被误判丢题")
+
+# Q3.R4：paper/answer 列表元素非 dict → parse_errors 显式拦截
+with tempfile.TemporaryDirectory() as td:
+    proj = pathlib.Path(td) / "p"
+    (proj / "items").mkdir(parents=True)
+    (proj / "materials").mkdir()
+    (proj / "meta.json").write_text(_json.dumps({
+        "title":"t", "expected_questions":1, "total":2}), encoding="utf-8")
+    (proj / "items" / "101_q01.json").write_text(_json.dumps({
+        "meta":{"num":"1","score":2},
+        "paper":[{"type":"question","num":"1","text":"Q"}],
+        "answer":["4","不能"]}, ensure_ascii=False), encoding="utf-8")  # answer 元素是字符串
+    try:
+        with _ctx.redirect_stdout(_io.StringIO()) as buf_o:
+            A.cmd_build([str(proj)])
+        case("Q3.R4 answer字符串元素-拒绝", False, "未退出")
+    except SystemExit as e:
+        out = buf_o.getvalue()
+        case("Q3.R4 answer字符串元素-拒绝", e.code == 2 and "非对象元素" in out)
+
+# Q4.R1：figure 块 spec 非 dict 不崩（make_paper 健壮性）—— 直接调 _render_figure
+import make_paper as MK
+from docx import Document
+_doc = Document()
+try:
+    MK._render_figure(_doc, "<svg>裸字符串当spec</svg>")  # 错误写法
+    case("Q4.R1 figure spec字符串不崩", True)
+except Exception as e:
+    case("Q4.R1 figure spec字符串不崩", False, f"崩溃: {type(e).__name__}")
+
+# Q5.R2：figure 占位率统计
+paper_q5 = [
+    {"type":"figure","alt":"等高线图"},          # 占位（无src无svg无kind）
+    {"type":"figure","alt":"区域图"},            # 占位
+    {"type":"figure","kind":"svg","svg":"<svg>…</svg>","alt":"有图"},  # 非占位
+]
+warns_q5 = A._check_figure_placeholders(paper_q5)
+case("Q5.R2 占位率统计67%-warn",
+     any("2/3" in w for w in warns_q5))
+# 全部有图 → 不warn
+paper_q5b = [{"type":"figure","src":"x.png","alt":"图"},
+             {"type":"figure","kind":"function","funcs":["x"],"alt":"图"}]
+case("Q5b.R2 全有图-不警告", not A._check_figure_placeholders(paper_q5b))
+
+# Q6.R3：手抄凭证（非URL出处）被 _check_source 识别为合规
+with tempfile.TemporaryDirectory() as td:
+    mats = pathlib.Path(td) / "materials"
+    mats.mkdir(parents=True)
+    (mats / "手抄_政治素材.md").write_text(
+        "来源：人民日报2026年6月评论员文章\n抓取日期：2026-06-01\n\n正文内容若干……",
+        encoding="utf-8")
+    errs, wn = [], []
+    meta_q6 = {"subject":"思想政治", "source":"人民日报2026年6月评论员文章",
+               "source_file":"手抄_政治素材.md"}
+    paper_q6 = [{"type":"material","title":"时政材料","paras":["正文内容若干……"]},
+                {"type":"question","num":"1","text":"分析..."}]
+    A._check_source("101_q01.json", meta_q6, paper_q6, str(mats), errs, wn)
+    case("Q6.R3 手抄凭证非URL-合规不拒",
+         not errs and any("手抄凭证" in w for w in wn))
+
 # 总结
 print(f"\n=== 总计 {len(PASS)}/{len(PASS)+len(FAIL)} 通过 ===")
 if FAIL:

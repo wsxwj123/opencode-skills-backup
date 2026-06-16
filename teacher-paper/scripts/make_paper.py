@@ -273,10 +273,18 @@ FIG_DIR = None
 
 
 def _render_figure(doc, spec):
-    """插入配图。本技能聚焦文科纯文字卷，不自动生成图形；此块仅用于偶发的
-    用户提供图片（如历史地图/地理图表）：① spec.src 指向已有图片 → 直接插入；
-    ② 否则降级为 "［图：alt］" 文字占位，绝不阻断出卷。
-    （理科自动配图不在范围；保留 make_figure 钩子仅为向前兼容，缺失即降级。）"""
+    """插入配图，三级优先：① spec.src 指向已有图片文件 → 直接插入；
+    ② 否则调 make_figure.render_figure 按 spec.kind 自动渲染
+    （function/geometry/number_line/bar/line/pie/scatter/vector/climate/pyramid/svg，
+    需本机有 matplotlib，svg 另需 PyMuPDF）→ 成功则插入；
+    ③ 都不行 → 降级 "［图：alt］" 文字占位，绝不阻断出卷。
+    v3.24.0 R1：spec 必须是 dict；若上游误传字符串（如把 "<svg>" 直接当 spec），
+    转成占位而非在 spec.get(...) 处崩溃。"""
+    if not isinstance(spec, dict):
+        # 上游写法错误：figure 块的 spec 不是对象（常见把 svg 字符串直接当 spec）
+        add_para(doc, "［图：spec 格式错误，请按 figure 块规范填写］",
+                 align="center", size=9, space_after=4)
+        return
     src = spec.get("src")
     width = spec.get("width_cm", 6.0)
     png = None
