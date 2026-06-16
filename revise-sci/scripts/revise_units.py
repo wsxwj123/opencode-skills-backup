@@ -967,6 +967,17 @@ def render_comment_record(unit: dict) -> str:
             "",
         ]
     )
+    polish_risk_flags = unit.get("polish_risk_flags") or []
+    if polish_risk_flags:
+        lines.extend(
+            [
+                "## 6) Polish Risk Flags",
+                "",
+            ]
+        )
+        for flag in polish_risk_flags:
+            lines.append(f"- [{flag.get('type', '')}] {flag.get('fragment_id', '')}: {flag.get('detail', '')}")
+        lines.append("")
     return "\n".join(lines)
 
 
