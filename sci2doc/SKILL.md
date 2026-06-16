@@ -1,13 +1,13 @@
 ---
 name: sci2doc
-description: 用于将SCI论文材料转化为中文博士学位论文草稿，执行严格的章节结构、原子化Markdown工作流、门禁检查和版本回滚。当用户提到博士论文、博士学位论文、毕业论文、SCI转论文、doctoral thesis、dissertation 时优先调用。
+description: 用于将SCI论文材料转化为中文博士或硕士学位论文草稿，执行严格的章节结构、原子化Markdown工作流、门禁检查和版本回滚。当用户提到博士论文、硕士论文、学位论文、毕业论文、SCI转论文、doctoral thesis、master thesis、dissertation 时优先调用。
 ---
 
 # Sci2Doc
 
 ## Overview
 
-本技能仅适用于博士学位论文（正文 ≥8 万字 / ≥5 章），且需用户提供已成稿的 SCI 论文材料作为转化来源。若场景是硕士/本科论文，或用户没有可访问的 SCI 论文材料，主动退出本技能，不要套用本流程。
+本技能适用于博士或硕士学位论文，需用户提供已成稿的 SCI 论文材料作为转化来源。若用户没有可访问的 SCI 论文材料，或场景是本科毕业论文，主动退出本技能，不要套用本流程。
 
 This skill converts SCI paper materials (PDF/Word plus user context) into a Chinese doctoral thesis draft.
 
@@ -54,7 +54,7 @@ The workflow is built around:
 
 ## Non-Negotiable Requirements
 
-1. Body text target is **at least 80,000 Chinese characters**.
+1. Body text target depends on degree type: **≥50,000 characters for doctoral**, **≥30,000 for master's** (defaults; confirmed with user at project start and written to profile as `body_target_chars`). These minimums can be raised by user agreement but not lowered below the floor.
 2. Chapter-level target allocation is **not hardcoded** and must be negotiated with the user for each project.
 3. Chinese abstract must be **1500-2500 characters**.
 4. Main structure is fixed:
@@ -63,7 +63,7 @@ The workflow is built around:
    - independent final Conclusion/Outlook chapter
    - total chapters >= 5
 5. References are unified at the end of the full thesis.
-6. Review article content is handled separately by the user and is out of this skill's body target scope.
+6. Body word count scope: abstract through end of body text (before full-thesis references). Chapters whose title matches "综述/文献综述/研究综述" (or their English equivalents) and their internal reference sections are **excluded** from body count. Full-thesis references are also excluded. This exclusion is implemented in `check_quality.py` via `classify_heading()` and can be overridden per-project with `format_profile.exclude_from_body_count` (list of chapter title strings).
 7. For research chapters, Results & Discussion must map to Methods experiment-by-experiment.
 8. One experiment must map to at least one standalone figure or table.
 9. Atomic markdown is mandatory: one subsection per `.md`, continuous numbering, merge before Word conversion.
@@ -140,6 +140,9 @@ ${save_path}/
 ├── 03_合并文档/             # 全文 docx 输出（merge-full --to-docx）
 ├── 03_合并文档_md/          # 全文 md 合并中间产物
 ├── 04_图表文件/             # 图表描述文件 + 自定义格式模板证据文件（AI/用户手动放置）
+├── materials/              # 原始材料素材档（material_ingest.py 生成，可选）
+│   ├── materials_archive.json  # 素材总索引
+│   └── <name>.md           # 每材料一个结构化素材档
 ├── .state/                 # gate-check 状态
 ├── backups/                # 快照备份 / section-snapshot（自动创建）
 ├── project_state.json      # 项目状态
@@ -203,11 +206,29 @@ Example entry:
 
 ### 0) Material Input Gate (Mandatory)
 
-Before initializing any project, verify:
+**Degree & target confirmation (must ask before anything else):**
+
+AI must ask the user two questions before proceeding:
+
+1. **Degree type**: doctoral (博士) or master's (硕士)?
+2. **Body word count target**: defaults are doctoral ≥50,000 / master's ≥30,000; confirm or let user specify a different number.
+
+Record answers into `thesis_profile.json > format_profile.degree_type` and `targets.body_target_chars` during `init` / `profile` step. Do not proceed to material extraction until both are confirmed.
+
+Before initializing any project, also verify:
 - Source materials (PDF/Word SCI papers + supplementary figures) are accessible at a known local path.
 - User has provided: thesis topic, research chapter count estimate, target university (or explicit consent to use CSU default).
 
 If source materials are missing or inaccessible, **stop and request them**. Do not proceed to Step 1.
+
+**[可选] 多格式原始材料落盘：** 若用户除 SCI 论文外还提供了其他原始材料（实验数据 Excel/CSV、组会笔记 md、参考 PDF/Word、结果图片等），在提取 SCI 论文文本前先运行材料落盘脚本，将素材分析写入 `materials/` 目录，供后续按章扩写取证引用：
+
+```bash
+python3 scripts/material_ingest.py --dir /path/to/raw_materials --save-path "${save_path}"
+# 或指定文件列表：--list file1.xlsx file2.md fig1.png
+```
+
+落盘完成后，`materials/materials_archive.json` 为素材总索引，每个材料对应一个 `materials/<name>.md`（含可引用要点、表结构/数值范围、图片待确认标记）。后续写作时，引用数值/结论必须能追溯到对应 entry，不得凭空生成。图片类材料标记 `pending_confirm`，须等用户口述或补充图内容后方可引用。详细规则见 `references/material_ingest_guide.md`。
 
 **SCI 论文内容提取（必做）：** 确认材料可访问后，在进入 Step 1 前，必须将 SCI 论文内容提取为可读文本：
 

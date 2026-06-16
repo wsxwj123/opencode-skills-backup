@@ -2116,7 +2116,10 @@ def check_header_footer(doc, format_context=None):
     FONT_SIZE_TOL = 0.5
     DISTANCE_TOL = Cm(0.2)
     format_context = format_context or {}
-    expected_header_left_text = format_context.get("header_left_text", "中南大学博士学位论文")
+    _degree_label = format_context.get("degree_type", "博士学位论文")
+    _univ = format_context.get("university_name", "中南大学")
+    _default_header = f"{_univ}{_degree_label}"
+    expected_header_left_text = format_context.get("header_left_text", _default_header)
     expected_header_distance_cm = format_context.get("header_distance_cm", 1.5)
     expected_footer_distance_cm = format_context.get("footer_distance_cm", 1.75)
     style_profile = format_context.get("style_profile", {}) if isinstance(format_context, dict) else {}
@@ -2624,7 +2627,10 @@ def main():
             print(f"❌ 配置加载失败：{payload['message']}")
         sys.exit(1)
     targets = profile.get("targets", {}) if isinstance(profile, dict) else {}
-    body_target = int(args.body_target if args.body_target is not None else targets.get("body_target_chars", 80000))
+    _fmt_profile = profile.get("format_profile", {}) if isinstance(profile, dict) else {}
+    _degree_type = str(_fmt_profile.get("degree_type", ""))
+    _default_body = 30000 if "硕士" in _degree_type else 50000
+    body_target = int(args.body_target if args.body_target is not None else targets.get("body_target_chars", _default_body))
     review_in_scope = bool(args.review_in_scope or targets.get("review_in_scope", False))
     review_target = int(args.review_target if args.review_target is not None else targets.get("review_target_chars", 0))
     references_min_count = int(
