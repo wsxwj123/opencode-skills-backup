@@ -70,5 +70,7 @@
     "max_snapshots": 10
   },
 
-  "si_database_template": []
+  "si_database_template": [],
+
+  "abbreviations_template": []
 }

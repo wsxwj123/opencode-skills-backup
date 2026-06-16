@@ -150,7 +150,12 @@ ${save_path}/
 ├── figures_index.json      # 图表引用索引
 ├── figure_map.json         # SCI图号→论文图号映射（自动生成）
 ├── history_log.json        # 操作历史
-└── abbreviation_registry.json  # 缩写注册表（自动生成）
+├── abbreviation_registry.json  # 缩写注册表（自动生成）
+├── mcp_literature_cache.json   # MCP 文献检索缓存（citation_guard 自动生成）
+├── citation_guard_report.json  # citation_guard 运行报告（自动生成）
+├── manual_review_queue.json    # 待人工核验引用队列（citation_guard 自动生成）
+├── verification_run_log.json   # citation_guard 运行日志（自动生成）
+└── references_rendered.md      # GB/T 7714 著录渲染输出（reference_renderer 自动生成）
 ```
 
 ### Anti-Drift Rule (Mandatory)
@@ -361,9 +366,11 @@ Before finalizing each chapter:
    - [ ] **无重复排比**：连续出现≥3个句式相同的句子→合并或改写
    - [ ] **无空洞宏观主张**：每段必须有具体数据或实验结果支撑，不允许纯观点段落
    - [ ] **证据先于结论**：数据/观测在前，解释/结论在后；不允许倒置
-   - [ ] **无破折号（——）**：改用逗号、句号或拆句
+   - [ ] **无破折号（——）**：改用逗号、句号或拆句（注意：连字符 `-` 不在此限）
    - [ ] **无修辞疑问/反问**：所有句子必须陈述句
    - [ ] **无比喻/排比**：删除"如同"、"犹如"、"是…的桥梁"等表达
+   - [ ] **无 scare quotes（恐惧引号）**：禁用双引号/引号包裹自造词或普通短语以暗示"新概念"或"特别含义"（保留合法场景：术语首次定义、原文引用、已固化术语）。检测规则：引号内为 2-10 字且非术语首次展开模式
+   - [ ] **无解释性冒号（装饰句式）**：禁用"概念：解释"装饰结构（如"本研究的核心：探索..."）。合法冒号场景：比例（1:2）、列表引导（以下三点：）、标题/图表标签（表2-1：...）、数值（10:00）
 3. Re-run self-check to confirm no regressions (特别检查 writing_style 类问题归零)
 4. Finalize snapshot + gate completion
 

@@ -90,6 +90,9 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
   - Empty appreciation: "we greatly appreciate your insightful comments", "this is an excellent suggestion"
   - Filler phrases: "in order to", "we would like to point out that", "as the reviewer rightly noted"
   - Structural repetition: ≥3 responses must not open with the same template sentence
+  - **Decorative em-dash ban:** do not use —/——/em-dash as a pause, parenthetical, or emphasis marker (e.g., "This result—while preliminary—suggests…"); use a comma, period, or split sentence instead. Hyphens in compound terms ("dose-response") and numeric ranges are not affected. Applies to both English and Chinese outputs.
+  - **Scare-quote ban:** do not use quotation marks around coined words or ordinary phrases to imply novelty or irony (e.g., "robust" findings, "novel" approach). Retain quotes for: first-time term definitions, direct verbatim quotations from reviewer comments, and established idiomatic expressions.
+  - **Explanatory-colon ban:** do not use the pattern "concept: explanation" as a decorative sentence structure (e.g., "Main revision: we added a new control group"). Legitimate colons include ratios (2:1), clock times, list lead-ins, section headings, and figure labels ("Figure 3A:").
   - `risk_check.py` scans for these patterns automatically; WARN-level issues should be fixed before delivery
 ### Domain Edge Cases
 - **Reviewer recommends acceptance without comments** ("I have no major/minor concerns"): create a single email-only response acknowledging the reviewer; do not generate an empty Major/Minor section.
