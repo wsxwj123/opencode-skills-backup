@@ -194,3 +194,32 @@
 **✅ 2026-06-16 全部修复**:🔴 死锁(revise-sci 参考文献导出 / reviewer-response p值·幂等·HTML·一致性)+ 🟡 全部(gsw banner/working_titles/passive 50-70/init;sci2doc outline门禁代码化/缩略语/白名单;review PRISMA不变式/字数;nsfc humanizer 7→15禁用词/字段契约)。
 
 **去 AI 三项(2026-06-16 新增)**:禁装饰性破折号 / 禁 scare quotes(自造词双引号引用)/ 禁解释性冒号——之前 7 技能基本零覆盖,现已补入**全部 7 技能** anti-AI 规则文字 + style_checker / check_quality / humanizer_zh 检测脚本(保守检测,容许少量假阳;保留术语首次定义、原文引用、比例/时间/标题等合法用法)。
+
+## 九、部分完成自检清单(Definition-of-Done,待补入各技能收口)
+**硬规则**:清单未逐项确认通过,**不得向用户声明"该部分完成"**。能脚本核的项挂已有脚本一键跑;人工项逐项确认。
+
+**通用 6 项(全技能)**:① 引文 [n]↔参考列表一一对应(无孤儿/无缺号,编号连续)② 本部分新增引用已过 citation_guard ③ 符合 storyline/主线(不跑题、不与主线矛盾)④ 占位符清零(CITE_PENDING/DATA_PENDING/【待AI】)⑤ 去 AI(三项+句长+禁词,见第十节)⑥ 字数达标。
+
+**技能特有项**:
+- **gsw**(每节收口):figure data_status 非 pending+无像素定量+实验逻辑批判+节末 Vancouver 列表+未超期刊字数+只改原子化源
+- **review**(每节收口):综合非罗列+矛盾仲裁+引用类型匹配+检索日志+概念框架图一致;〔systematic〕PRISMA 自洽/RoB/GRADE
+- **sci2doc**(节+章收口):编号连续+实验-方法映射+一实验≥一图表+三线表+缩略语首展+GB7714 著录+自我抄袭标注+章后 self-check
+- **reviewer-simulator**(报告收口):21 占位符+verdict 枚举+CRITICAL 阻断+合规审计+统计子清单+魔鬼代言人+给编辑保密意见
+- **reviewer-response**(unit+整包收口):逐条覆盖(Editor 独立)+strategy 基调+承诺↔落点一致+edit_plan 回填+反驳有据+citation registry+各 gate
+- **nsfc**(每部分 Phase 收口):H/O/RC/KSQ 一致性(V01-12)+科学问题属性论证+V11 代表作+V12 备选路线+撤稿检测+预期成果段
+
+## 十、去 AI 完整化(对照 humanizer-zh,2026-06-16 调研,5 层:句/词/修辞/结构/标点)
+**🔴 最大空白(用户明确担心:长难句/复杂句易暴露 AI):**
+- 中文句长无任何硬上限——6 技能全缺 → 补:**中文单句 ≤50 字、从句嵌套 ≤2 层、短长句交替(连续 3 句差异 <5 字告警)**+脚本检测
+- 英文单句 ≤30 词硬上限——仅 gsw 有 → 同步到 review/sci2doc/reviewer-response/revise
+- -ing 分词从句(", reflecting/ensuring/highlighting…")——仅 review 提及 → 推广 5 技能 + style_checker 正则
+**⚠️ 标准割裂(需按文体区分,不一刀切):**
+- 被动语态:gsw 50-70%(原始研究)vs review ≤30%(综述)→ 在规则里明确"原始研究 50-70% / 综述 ≤30%"
+- 中/英文 AI 禁词表只部分技能有脚本 → 同步(英文表→review/sci2doc;中文表→gsw/sci2doc)
+**P1-P2 补充**:同义词循环(同概念同段保持一致称谓)、系动词回避(is/has 不替成 serves as/features)、公式化"挑战与展望"结构、粗体过度、表情符号、模糊归因。
+**已充分覆盖(无需动)**:破折号/scare quotes/解释性冒号(三项 6 技能全有脚本)、三段式/否定排比/比喻夸张/正文列表。
+
+## 十一、TODO(下一步执行)
+1. ✅ **补 DoD 自检清单**(第九节)到 **7 技能**收口处 + "未全过不得汇报完成"硬规则(2026-06-16)
+2. ✅ **去 AI 完整化**(第十节):中文句长 ≤50 字/英文 ≤30 词/-ing 从句/被动按文体区分/中英文禁词同步——多数有脚本检测(style_checker/check_quality/humanizer_zh/risk_check/common.py)(2026-06-16)
+3. ⬜(暂缓)阶段三:7 技能编排器
