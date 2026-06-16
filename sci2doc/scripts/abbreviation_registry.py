@@ -223,6 +223,13 @@ def update_entry(project_root, abbr, full_cn=None, full_en=None, chapter=None, s
 # 自动提取缩略语（从 Markdown 文本中）
 # ---------------------------------------------------------------------------
 
+# 标准氨基酸三字母残基代码（用于排除 Ser5 / Thr7 / Pro12 这类位点标记，
+# 而非误删 P53 / Bcl2 / Th1 等真实缩略语）
+_AMINO_ACID_CODES = {
+    "Ala", "Arg", "Asn", "Asp", "Cys", "Gln", "Glu", "Gly", "His", "Ile",
+    "Leu", "Lys", "Met", "Phe", "Pro", "Ser", "Thr", "Trp", "Tyr", "Val",
+}
+
 # 匹配模式：
 #   中文模式: "聚合酶链式反应（PCR）" 或 "聚合酶链式反应(PCR)"
 #   英文模式: "Polymerase Chain Reaction (PCR)" 或 "PCR（Polymerase Chain Reaction）"
@@ -301,14 +308,15 @@ def extract_abbreviations(md_content):
         """
         缩略语有效性校验：
         1. 必须包含至少一个大写字母
-        2. 排除纯下标编号模式（如 Ser5 / Thr7 / Pro3），这类是氨基酸位点标记而非缩略语
-           规则：2-4 个大写/小写字母后跟纯数字结尾 → 不视为缩略语
+        2. 排除氨基酸位点标记（如 Ser5 / Thr7 / Pro12），即标准三字母残基代码后跟纯数字。
+           仅排除已知残基代码，避免误删 P53 / Bcl2 / Th1 等真实缩略语。
         """
         import re as _re
         if not any(c.isupper() for c in abbr):
             return False
-        # 排除"氨基酸/位点下标"：如 Ser5 Thr7 Pro12 — 字母部分全为单词（首字母大写+小写）后跟数字
-        if _re.match(r'^[A-Z][a-z]{0,3}\d+$', abbr):
+        # 排除"氨基酸位点标记"：标准三字母残基代码（Ser/Thr/Pro...）后跟纯数字
+        site_match = _re.match(r'^([A-Z][a-z]{2})\d+$', abbr)
+        if site_match and site_match.group(1) in _AMINO_ACID_CODES:
             return False
         return True
 
