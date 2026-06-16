@@ -306,3 +306,24 @@
 **仍挂起**:按需加载瘦身(darwin 指出 gsw/review/reviewer-simulator 偏长)、反例黑名单补强。
 
 **opus 实测发现 6 bug 并已修(commit 5a8dd8e)**:综述章作用域继承(子小节泄漏)、摘要计入正文、默认值按学位、degree白名单、material safe_name碰撞、exclude_from_body_count落地。独立复验通过。
+
+## 十五、反例黑名单补强 + 瘦身 + 同步链修复(2026-06-16,commit 901eb8a/cb44d82)
+
+**反例黑名单(darwin 共性短板)** — ✅ 6 技能补齐
+- 现状核查:仅 review-writing 已有"绝对禁止"块;其余 6 个全缺集中黑名单。
+- 做法:每技能派 sonnet 子代理从**自身文档真实失败模式**提炼 8~16 条 ❌(非通用套话),我手写 revise-sci 的;均去 AI(用"／"与全角括号,无装饰破折号/scare quotes/解释性冒号)。放置:gsw 写作禁忌内、sci2doc Common Mistakes 后、reviewer-simulator 特殊注意事项后(无序号避免冲突一二三)、reviewer-response 收口前、nsfc Quality Gates 后、revise-sci DoD 前。
+- opus 独立对抗审计(真实性/矛盾性/去AI三项逐条核)。
+
+**瘦身(反向拷问后只做真冗余)**:这些 SKILL.md 已是高度"📖 pointer+references"按需加载结构,行数长 ≠ 注意力稀释,不空砍执行主线。仅清理 review-writing DoD 与 dod_checklist.json **逐字重复的 15 项清单**(pack 运行本就完整打印,已实测验证 15/15),收敛为指针+分组总览,-18 行。其余文件未动。
+
+**同步链修复(Q2+Q3 根因)**:`.github/workflows/sync-custom-skills.yml` 原仅同步 6 技能、**漏 revise-sci**(paths/rm/checkout/add 四处都缺)。已四处补齐 + 名称 6→7。push main 触发 Action 成功,**custom-skills 分支现含全部 7 技能含 revise-sci**(已 gh api 验证)。
+
+**三平台同步(Q1)**:claude=唯一源已与 origin/main 同步;opencode/codex 本是纯文件副本,本轮 commit 前落后 10~34 处,已 rsync 重新镜像(排除 .git/.system/.github/.review_*),**7 技能三处现 diff 全 0**。
+
+**Figpad 调研(Q4 整合问)**:Figpad/academic-writing-polisher 是纯指令零代码 skill、MIT-0、能力远低于 revise-sci(后者 25 脚本全管道),**不建议整合**,唯一可借鉴 Risk Flags 观念。revise-sci 是审稿意见驱动改稿(非全文润色),polish 仅作用于被改片段;**有原子化拆分**(atomize_manuscript.py + comment-scoped state window),但围绕意见落点,非 sci2doc 式 materials/ 全量素材库。
+
+**opus 黑名单审计结果**:6 个黑名单逐条核真实性/矛盾性/去AI三项,**全部 PASS,无编造/无矛盾/无 AI 痕迹**,每条都能在正文或 references 找到对应规则。
+
+**审计附带揪出 2 处既有文档矛盾(非黑名单引入)**:
+- ✅ **已修**:sci2doc Acceptance Checklist 残留 `Body target >= 80,000`(解除博士锁时漏改),与新博硕地板(50000/30000)冲突 → 改为学位地板值表述。
+- ⏳ **待用户定**:nsfc V-12 验证阶段冲突——SKILL.md 正文称 V-12 延到 Phase 7 验、Phase 2 不验;references(02/05/08)定义 V-12 "阻断 Phase 3"。黑名单对齐了 references。究竟哪个阶段是权威,需领域决策后统一,本轮不擅改。
