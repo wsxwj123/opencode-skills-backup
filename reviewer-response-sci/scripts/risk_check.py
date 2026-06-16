@@ -107,10 +107,55 @@ RISK_PATTERNS = {
     "ai_explanatory_colon": [
         r'(?<!\d):\s+(?=[a-z一-鿿])(?!(?:\d|\w+://|//))(?!(?:e\.g\.|i\.e\.|etc\.|vs\.))',
     ],
+    # AI cliché phrase blacklist (EN + ZH). Aligned with general-sci-writing
+    # style_checker.py FORBIDDEN_EXACT. Only phrases NOT already covered by
+    # ai_hedging / ai_filler above are listed here, to avoid double-flagging
+    # one sentence under two categories.
+    "forbidden_ai_phrase": [
+        # ── English (gsw FORBIDDEN_EXACT, minus hedging/filler overlaps) ──
+        r"\bmoreover\b",
+        r"\bfurthermore\b",
+        r"\bdelve into\b",
+        r"\bcomprehensive landscape\b",
+        r"\bpivotal role\b",
+        r"\brealm\b",
+        r"\btapestry\b",
+        r"\bunderscore[sd]?\b",
+        r"\ba testament to\b",
+        r"\btestament\b",
+        r"\binterestingly\b",
+        r"\bremarkably\b",
+        r"\bin recent years\b",
+        r"\ba growing body of evidence\b",
+        r"\bhas garnered significant attention\b",
+        r"\bplays? a crucial role\b",
+        r"\ba plethora of\b",
+        r"\bmyriad of\b",
+        r"\bin the context of\b",
+        r"\bshed[s]? light on\b",
+        r"\bpave[sd]? the way\b",
+        r"\bof paramount importance\b",
+        r"\ba key player\b",
+        # ── Chinese AI cliché ──
+        r"值得注意的是",
+        r"综上所述",
+        r"众所周知",
+        r"不言而喻",
+        r"显而易见",
+        r"毋庸置疑",
+        r"总而言之",
+        r"总的来说",
+        r"在.{0,8}的背景下",
+        r"发挥着?(?:至关重要|关键|重要|举足轻重)的作用",
+        r"扮演着?(?:重要|关键)的角色",
+        r"日益(?:增长|凸显|受到)",
+        r"近年来",
+    ],
 }
 
 AI_STYLE_CATEGORIES = {"ai_hedging", "ai_appreciation", "ai_filler", "ai_ing_clause",
-                       "ai_em_dash", "ai_scare_quote", "ai_explanatory_colon"}
+                       "ai_em_dash", "ai_scare_quote", "ai_explanatory_colon",
+                       "forbidden_ai_phrase"}
 FABRICATION_CATEGORIES = {"fabricated_experiment", "fabricated_statistics"}
 
 
