@@ -264,6 +264,11 @@ Each comment must contain:
 - `revision_plan` should carry `locked_prefix`, `locked_suffix`, `evidence_boundary_note`, and `citation_strings` so the polishing step can preserve untouched context explicitly rather than infer it.
 - The polishing output schema should include `edit_decision`, `meaning_changed`, `scope_respected`, `ai_style_flags_removed`, and `notes`.
 - `strict_gate.py` must fail if a polished revision reports `meaning_changed=true`, `scope_respected=false`, or if reconstructed paragraph text no longer preserves the locked prefix/suffix context.
+- **Polish 片段级守卫（A/B/C/MID，仅比对锁定的 `raw_fragment` 与 `polished_fragment` 两个字符串，不破坏 scope-lock）：**
+  - **A 数值守卫**：`common.numeric_tokens_preserved(raw, polished)` 抽取数字 token（整数/小数/百分比/p 值如 `p=0.03`/`CI`/`n=N`）并比对集合。polished 引入原片段没有的新数值，或丢失原有数值，视为 numeric drift。`polish_revisions.py` 写入 `polish_numbers_ok`，`strict_gate.py` 不通过则 fail。
+  - **B 不确定性动词校准**：`common.detect_certainty_upgrade(raw, polished)` 只拦截证据强度被升高的方向。谨慎动词（may/might/could/suggests/indicates/is associated with/appears/is consistent with）被升级为强断言（demonstrates/proves/establishes/confirms/shows definitively）即判越权加强，符合保守哲学。写入 `polish_certainty_ok`，`strict_gate.py` 不通过则 fail。
+  - **C Risk Flags**：上述拦截在 fail 之外额外输出结构化清单 `polish_risk_flags: [{type: numeric_drift|certainty_upgrade|overstatement|invented_claim, fragment_id, detail}]`，写入每个 unit、`revision_polish_execution.json` 与对应 `comment_records/<id>.md`。**fail 行为保留，不放行。**
+  - **MID 禁词表**：`common.AI_CLICHE_TERMS_EN`（与 `general-sci-writing/scripts/style_checker.py` 的 `FORBIDDEN_EXACT` 对齐：moreover/delve into/it is worth noting 等）+ `AI_CLICHE_TERMS_ZH`（值得注意的是/综上所述等），由 `find_ai_style_markers` 在 polished 片段上检测套话词，命中归入 overstatement 风险并阻断门禁。
 - `strict_gate.py` must also fail if `comments_input_mode` is unsupported, `expected_comments_mode` and detected mode diverge, or the required state-window artifacts are missing.
 
 ## ❌ 反例黑名单（Anti-Patterns）
@@ -318,7 +323,8 @@ Each comment must contain:
 | RV-R4 | 退稿信每条意见有落点：`issue_matrix.md` 每个 `comment_id` 在 `manuscript_edit_plan.md` 中有 revised_excerpt | `python scripts/strict_gate.py --project-root <project_root>`（strict_gate 内含此检查，RV-R1 通过则本项通过） |
 | RV-R5 | 审稿意见已原子化：`atomize_comments.py` 在 pipeline 中已运行，每条意见有 severity 字段，comment_id 唯一，无混合意见跨意见合并改动 | 人工确认 `state/comment_registry.json` 已生成且 comment_id 唯一（`atomize_comments.py` 无 --dry-run flag，须通过 pipeline 正式运行核验） |
 | RV-R6 | polish 状态完整：所有含非空 revision_plan.scope 的片段已有 polish state，无 meaning_changed=true 或 scope_respected=false | `python scripts/strict_gate.py --project-root <project_root>`（strict_gate 内含此检查，RV-R1 通过则本项通过） |
+| RV-R9 | polish 片段级守卫通过：每个 polished 片段 `polish_numbers_ok=true`（无数值漂移/丢失）、`polish_certainty_ok=true`（谨慎动词未被升级为强断言）、无套话禁词残留；`polish_risk_flags` 已落盘到 unit / `revision_polish_execution.json` / `comment_records/<id>.md` | `python scripts/strict_gate.py --project-root <project_root>`（strict_gate 内含 A/B/MID 三项检查，RV-R1 通过则本项通过） |
 | RV-R7 | response_to_reviewers.docx 结构完整：每个 comment block 都有 comment heading / response-section heading / evidence-section heading | `python scripts/strict_gate.py --project-root <project_root>`（strict_gate 解析 docx 核验结构，RV-R1 通过则本项通过） |
 | RV-R8 | 结构完整性：改后稿件结构完整（原结构无破坏、参考文献编号连续、response 各 unit 三要素齐全）；退稿信每条意见在 edit_plan 中有落点无遗漏 | `python scripts/strict_gate.py --project-root <project_root>`（RV-R1 通过则本项通过）；或人工逐段核查 |
 
-> RV-R3 仅在使用 Patch 修订协议时适用，跳过需在 notes 中注明原因。RV-R4/R6/R7/R8 已由 strict_gate 覆盖，RV-R1 通过即视为通过；RV-R5 须确认 pipeline 正式运行产出 comment_registry.json。
+> RV-R3 仅在使用 Patch 修订协议时适用，跳过需在 notes 中注明原因。RV-R4/R6/R7/R8/R9 已由 strict_gate 覆盖，RV-R1 通过即视为通过；RV-R5 须确认 pipeline 正式运行产出 comment_registry.json。

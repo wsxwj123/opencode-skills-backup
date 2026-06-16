@@ -14,8 +14,10 @@ from typing import Any
 import revise_units
 from common import (
     build_section_markdown,
+    detect_certainty_upgrade,
     find_ai_style_markers,
     normalize_ws,
+    numeric_tokens_preserved,
     polish_changed_text_locally,
     read_json,
     write_json,
@@ -385,10 +387,12 @@ def main() -> int:
 
     processed_units: list[dict[str, Any]] = []
     polished_comment_ids: list[str] = []
+    all_risk_flags: list[dict[str, Any]] = []
     for unit_path, unit in zip(units_paths, units):
         plan = unit.get("revision_plan") or {}
         if unit.get("status") == "completed" and plan.get("scope") not in {"", "none", None}:
             payload_row = fragment_map.get(unit.get("comment_id", ""), {})
+            locked_raw_fragment = normalize_ws(plan.get("raw_fragment", ""))
             raw_fragment = normalize_ws(payload_row.get("polished_fragment") or plan.get("raw_fragment", ""))
             polished_fragment = polish_changed_text_locally(raw_fragment)
             polished_paragraph = apply_polished_fragment(plan, polished_fragment)
@@ -409,7 +413,56 @@ def main() -> int:
                 (not locked_prefix or polished_paragraph.startswith(locked_prefix))
                 and (not locked_suffix or polished_paragraph.endswith(locked_suffix))
             )
-            unit["polish_guard_ok"] = len(guard_markers) == 0 and unit["polish_scope_respected"] and unit["polish_meaning_changed"] is False
+
+            comment_id = unit.get("comment_id", "")
+            # A: numeric drift guard, compares locked raw fragment vs polished fragment.
+            numeric_check = numeric_tokens_preserved(locked_raw_fragment, polished_fragment)
+            unit["polish_numbers_ok"] = numeric_check["ok"]
+            # B: certainty-upgrade guard, blocks hedge to strong-claim upgrades.
+            certainty_check = detect_certainty_upgrade(locked_raw_fragment, polished_fragment)
+            unit["polish_certainty_ok"] = certainty_check["ok"]
+
+            # C: structured risk flags (fail behavior preserved; flags are additive).
+            risk_flags: list[dict[str, Any]] = []
+            if not numeric_check["ok"]:
+                detail_parts = []
+                if numeric_check["introduced"]:
+                    detail_parts.append(f"introduced {numeric_check['introduced']}")
+                if numeric_check["dropped"]:
+                    detail_parts.append(f"dropped {numeric_check['dropped']}")
+                risk_flags.append({
+                    "type": "numeric_drift",
+                    "fragment_id": comment_id,
+                    "detail": "; ".join(detail_parts),
+                })
+            if not certainty_check["ok"]:
+                risk_flags.append({
+                    "type": "certainty_upgrade",
+                    "fragment_id": comment_id,
+                    "detail": f"hedge {certainty_check['raw_hedges']} upgraded to {certainty_check['introduced_strong_verbs']}",
+                })
+            if guard_markers:
+                risk_flags.append({
+                    "type": "overstatement",
+                    "fragment_id": comment_id,
+                    "detail": f"banned AI-style markers: {guard_markers}",
+                })
+            if unit["polish_meaning_changed"] is not False or unit["polish_scope_respected"] is not True:
+                risk_flags.append({
+                    "type": "invented_claim",
+                    "fragment_id": comment_id,
+                    "detail": "polish driver reported meaning change or scope violation",
+                })
+            unit["polish_risk_flags"] = risk_flags
+            all_risk_flags.extend(risk_flags)
+
+            unit["polish_guard_ok"] = (
+                len(guard_markers) == 0
+                and unit["polish_scope_respected"]
+                and unit["polish_meaning_changed"] is False
+                and numeric_check["ok"]
+                and certainty_check["ok"]
+            )
             polished_comment_ids.append(unit.get("comment_id"))
         else:
             unit["polish_applied"] = False
@@ -418,6 +471,9 @@ def main() -> int:
             unit["polish_scope_respected"] = True
             unit["polish_meaning_changed"] = False
             unit["polish_locked_context_ok"] = True
+            unit["polish_numbers_ok"] = True
+            unit["polish_certainty_ok"] = True
+            unit["polish_risk_flags"] = []
         processed_units.append(unit)
         write_json(unit_path, unit)
         write_text(project_root / "comment_records" / f"{unit['comment_id']}.md", revise_units.render_comment_record(unit))
@@ -436,6 +492,7 @@ def main() -> int:
 
     execution["candidate_count"] = len(candidates)
     execution["polished_comment_ids"] = polished_comment_ids
+    execution["polish_risk_flags"] = all_risk_flags
     write_json(project_root / "revision_polish_execution.json", execution)
     print(json.dumps({"ok": True, "driver_mode": driver_mode, "candidate_count": len(candidates)}, ensure_ascii=False))
     return 0
