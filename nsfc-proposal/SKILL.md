@@ -132,7 +132,7 @@ Follow phased gates in order:
    - Input: verified P1; H/O/RC/KSQ mapping counts from Phase 0; consistency_map.json with SQ entries.
    - consistency_map 条目结构（mapped_from_sq / mapped_to_objective / supports_method 等字段名）见 `references/02_核心机制.md` §2.2，按其字段名产出避免 validate 报错。
    - Output: `sections/P2_研究内容.md` + updated `data/consistency_map.json` (H→O→RC→KSQ→M→IN all links validated) + `sections/figure_prompts.md`.
-   - **V 规则分层说明（防假通过）：** Phase 2 门控仅验 V-01/V-02/V-03/V-04/V-05/V-08/V-10（H/O/RC/KSQ/IN 结构链路）。V-06（M→F）、V-07（F来源）、V-09（预算追溯）、V-11（代表作匹配）、V-12（备选方案）所依赖的 F 和预算字段在 Phase 2 时尚为空，不在此阶段验证，延迟到 Phase 7 `gate-check` 全量验证。Phase 2 出现这些规则通过仅因字段为空时默认 pass，不代表内容已合规。
+   - **V 规则分层说明（防假通过）：** Phase 2 门控只读取 V-01/V-02/V-03/V-04/V-05/V-08/V-10（H/O/RC/KSQ/IN 结构链路）的结果。注意 `consistency_mapper validate` 每次都全量计算 V-01~V-12，对缺字段的 M 条目 V-06（M→F）/V-12（备选方案）会直接报 ERROR（非"空字段默认 pass"），因此 Phase 2 只看上述结构链路规则、不读 V-06/V-12 的结论，不得据全量输出声称已通过。V-06（M→F）、V-07（F来源）、V-09（预算追溯）、V-11（代表作匹配）依赖 F/预算字段，分别在 Phase 3/Phase 5 填齐后才有意义，强制点在 Phase 7 `gate-check`；V-12 只依赖 M 的 alternative_plan 字段，该字段在 Phase 3 Step 3.1 撰写，**V-12 自 Phase 3 起即为 ERROR 硬门控**（gate-check 也会复验）。
    - Sub-content order: 研究假说(H) → 研究目标(O) → 研究内容(RC) → 关键科学问题(KSQ) → 研究方案与技术路线(M) → 特色与创新之处(IN) → 年度研究计划.
    - No literature numbers anywhere in P2. Paragraph narrative throughout; annual plan may use year-based paragraphs.
    - Every M must trace back to a specific RC; every IN must trace to RC and M.
@@ -154,7 +154,7 @@ Follow phased gates in order:
    - [ ] ④占位符清零（CITE_PENDING/DATA_PENDING/【待AI】）
    - [ ] ⑤去 AI：`humanizer_zh.py scan` 无 ERROR，`rhythm-check` 无 `cn_sentence_too_long`
    - [ ] ⑥字数/页数在目标范围内
-   - [ ] ⑦V-06（M→F）/V-07（F 来源）/V-11（代表作匹配）/V-12（备选路线）**不在本阶段验证**（字段为空时默认 pass，不代表合规），延迟到 Phase 7 gate-check
+   - [ ] ⑦V-06（M→F）/V-07（F 来源）/V-09（预算追溯）/V-11（代表作匹配）依赖 F/预算字段，本阶段不读其结论（全量 validate 会对空字段报 ERROR，非默认 pass），强制点在 Phase 7 gate-check；V-12（备选路线）只依赖 M.alternative_plan，自 Phase 3 起为 ERROR 硬门控
    - [ ] ⑧P2 末尾含独立预期成果小节（论文/专利/人才培养目标三类均有明确数字目标）
    - [ ] ⑨figure_prompts.md 已生成，技术路线图提示词映射到 ≥1 个 RC
 

@@ -108,8 +108,8 @@
         },
         {
           "id": "N16",
-          "name": "V-06/V-07/V-11/V-12 延迟标注",
-          "check": "V-06（M→F）/V-07（F来源）/V-11（代表作匹配）/V-12（备选路线）已记录为'延迟到 Phase 7 gate-check'，不在本阶段误判为通过（人工确认）"
+          "name": "V-06/V-07/V-09/V-11 延迟标注，V-12 归 Phase 3",
+          "check": "V-06（M→F）/V-07（F来源）/V-09（预算追溯）/V-11（代表作匹配）依赖 F/预算字段，本阶段不读其结论，强制点在 Phase 7 gate-check；V-12（备选路线）只依赖 M.alternative_plan，自 Phase 3 起为 ERROR 硬门控，不属于 Phase 7 才首验之列。注意全量 validate 会对空字段直接报 ERROR（非默认 pass），不得据此误判通过（人工确认）"
         },
         {
           "id": "N17",
@@ -321,7 +321,7 @@
         {
           "id": "N44",
           "name": "V-01~V-12 全量验证",
-          "check": "consistency_mapper.py validate V-01~V-12 全量验证 PASS（V-06/V-07/V-09/V-11/V-12 首次强制执行）",
+          "check": "consistency_mapper.py validate V-01~V-12 全量验证 PASS（V-06/V-07/V-09/V-11 首次强制执行；V-12 自 Phase 3 起已强制，此处复验）",
           "script": "python scripts/consistency_mapper.py --path data/consistency_map.json validate"
         },
         {
