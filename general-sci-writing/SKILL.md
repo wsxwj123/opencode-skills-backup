@@ -302,7 +302,7 @@ license: Proprietary
 
 **红线重申**：本阶段严禁任何"AI 看像素得出的定量或诊断结论"。定量以用户数据 / 图面印出数字 / 图注为准；外部背景以真检索文献为准；二者缺一即停下问用户。
 
-**配图代码生成（opt-in，默认关）**：本阶段默认只做识别用户已有实验图（上述读图红线），**不**生成新图，基础实验用户自行作图。生成新图代码是与识图**并列的另一项可选能力**，二者互不混淆：仅当用户**明确要求**"生成配图/画图代码"（如生信、统计图场景）时启用。启用后：① 调用本地 matplotlib/seaborn skill 生成**可运行代码**（产出代码非图片，不替代识图、不写入 `figure_analysis/`）；② 遵循学术规范：按数据选图型（bar/boxplot/line/scatter+回归/**forest plot**/**funnel plot**（meta 分析用）/heatmap/network/concept map），APA 7.0 caption，色盲安全配色（viridis/cividis/Tol），300 DPI，轴标签带单位，**禁 3D 图与饼图**；③ 生成后由用户运行得图。
+**配图代码生成（opt-in，默认关）**：本阶段默认只做识别用户已有实验图（上述读图红线），**不**生成新图，基础实验用户自行作图。生成新图代码是与识图**并列的另一项可选能力**，二者互不混淆：仅当用户**明确要求**"生成配图/画图代码"（如生信、统计图场景）时启用。启用后：① 调用本地 matplotlib/seaborn skill 生成**可运行代码**（产出代码非图片，不替代识图、不写入 `figure_analysis/`）；② 遵循学术规范：按数据选图型（bar/boxplot/line/scatter+回归/**forest plot**/**funnel plot**（meta 分析用）/**volcano plot**·**MA plot**（差异表达用）/heatmap/network/concept map），APA 7.0 caption，色盲安全配色（viridis/cividis/Tol），300 DPI，轴标签带单位，**禁 3D 图与饼图**；③ 生成后由用户运行得图。
 
 ### Phase 7: 缩略词表管理 (`add-abbreviation`)
 **定位**：跨小节维护缩略词一致性，防止同一缩写 ROS 在 5 个章节各定义一次、或后半段直接用未定义缩写。

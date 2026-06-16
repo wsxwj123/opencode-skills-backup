@@ -64,6 +64,17 @@ def main() -> int:
         r"(?: [\w]+){0,5})",
         re.IGNORECASE,
     )
+    # Signal that the promise claims newly added substantive content (a new
+    # experiment / dataset / figure / analysis), not a mere wording tweak.
+    # Only these promises get the stricter landing-evidence requirement below.
+    SUBSTANTIVE_ADD_RE = re.compile(
+        r"\b(?:added|new|newly|additional|included|incorporated|expanded|performed|conducted|carried out)\b"
+        r".{0,40}?"
+        r"\b(?:experiment|experiments|assay|assays|analysis|analyses|dataset|datasets|data|"
+        r"figure|figures|panel|panels|table|tables|cohort|sample|samples|replicate|replicates|"
+        r"measurement|measurements|test|tests|model|models|group|groups|control|controls)\b",
+        re.IGNORECASE,
+    )
     for u in units:
         if u.get("section") == "email":
             continue
@@ -104,11 +115,38 @@ def main() -> int:
                 or a.get("reason", "").strip() not in {"", "【待AI填写：添加/删除/修改及原因】"}
                 for a in mod_actions
             )
+            zh_fallback_ok = zh_fields_filled and actions_have_type
+
+            # 3) Tighten the Chinese fallback for "newly added substantive content"
+            #    promises. Filled-and-non-placeholder is too weak: a promise to add
+            #    a new experiment must leave an add-landing somewhere, not just a
+            #    non-empty Chinese field on an unrelated caption tweak. We require
+            #    the landing point (action_type / target / reason / revised excerpt,
+            #    EN or ZH) to carry an addition signal; a landing that is purely a
+            #    wording / unit / typo fix carries none and is downgraded to WARN.
+            #    Non-substantive promises (clarified/corrected/updated wording) keep
+            #    the original lenient fallback so genuine bilingual matches do not
+            #    become false positives.
+            if zh_fallback_ok and SUBSTANTIVE_ADD_RE.search(promise):
+                revised_zh = c.get("revised_excerpt_zh", "")
+                landing_text = " ".join(
+                    [a.get("action_type", "") + a.get("target", "") + a.get("reason", "") for a in mod_actions]
+                    + [revised, revised_zh]
+                ).lower()
+                has_add_action = any(a.get("action_type", "").strip() == "添加" for a in mod_actions)
+                landing_has_add_signal = bool(
+                    re.search(
+                        r"添加|新增|新加|增设|补充|加入|纳入|added|new\b|newly|additional|"
+                        r"included|incorporated|expanded|extra",
+                        landing_text,
+                    )
+                )
+                zh_fallback_ok = has_add_action or landing_has_add_signal
 
             found = (
                 found_in_actions_en
                 or found_in_revised_en
-                or (zh_fields_filled and actions_have_type)
+                or zh_fallback_ok
             )
 
             if not found and revised.strip() not in {"", "无", "N/A"}:
