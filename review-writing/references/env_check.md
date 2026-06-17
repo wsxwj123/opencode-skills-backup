@@ -93,7 +93,7 @@ PUBMED_TEST="https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubme
 DIRECT=$(curl -s --max-time 4 "$PUBMED_TEST" 2>/dev/null | grep -c "Count" || echo 0)
 PROXY_PORT=""
 if [ "$DIRECT" -eq 0 ]; then
-  for port in 7897 7890 1080 8080 8888; do
+  for port in 7890 1080 8080 8888; do
     R=$(curl -s --proxy "http://127.0.0.1:$port" --max-time 4 "$PUBMED_TEST" 2>/dev/null | grep -c "Count" || echo 0)
     if [ "$R" -gt 0 ]; then PROXY_PORT=$port; break; fi
   done

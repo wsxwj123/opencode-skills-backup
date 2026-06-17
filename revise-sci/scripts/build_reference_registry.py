@@ -450,7 +450,7 @@ def search_query_hints(project_root: Path, state: dict, report: dict) -> list[di
                     headings.append(heading)
     hints: list[dict] = []
     if title:
-        hints.append({"type": "manuscript_title", "query": f"{title} review pulmonary disease extracellular vesicles"})
+        hints.append({"type": "manuscript_title", "query": f"{title} review"})
     for heading in headings[:5]:
         hints.append({"type": "section_heading", "query": heading})
     for key in report.get("missing_author_year_citations", [])[:10]:

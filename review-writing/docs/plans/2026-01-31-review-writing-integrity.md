@@ -18,7 +18,7 @@
 **Goal:** Define the mandatory fields for data extraction in basic research reviews.
 
 **Files:**
-- Create: `/Users/wsxwj/.config/opencode/skills/review-writing/data/matrix_schema.json` (Template)
+- Create: `~/.config/opencode/skills/review-writing/data/matrix_schema.json` (Template)
 
 **Step 1: Define Fields**
 Create a JSON file with `columns` definition:
@@ -43,7 +43,7 @@ Add a `_meta` field explaining how to use this schema (e.g., "Fill this row for 
 **Goal:** Detect when `[n]` in text doesn't match `global_id` in database.
 
 **Files:**
-- Create: `/Users/wsxwj/.config/opencode/skills/review-writing/scripts/validate_citations.py`
+- Create: `~/.config/opencode/skills/review-writing/scripts/validate_citations.py`
 
 **Step 1: Script Logic**
 - Scan all `drafts/*.md` files.
@@ -67,7 +67,7 @@ Add a `_meta` field explaining how to use this schema (e.g., "Fill this row for 
 **Goal:** Allow exporting ONLY the citations actually used in the drafts.
 
 **Files:**
-- Modify: `/Users/wsxwj/.config/opencode/skills/review-writing/scripts/export_bibtex.py`
+- Modify: `~/.config/opencode/skills/review-writing/scripts/export_bibtex.py`
 
 **Step 1: Add `--clean` flag**
 - Update `export_bibtex.py` to accept `--clean`.
@@ -84,7 +84,7 @@ Add a `_meta` field explaining how to use this schema (e.g., "Fill this row for 
 **Goal:** Enforce the new Matrix and Validation steps.
 
 **Files:**
-- Modify: `/Users/wsxwj/.config/opencode/skills/review-writing/SKILL.md`
+- Modify: `~/.config/opencode/skills/review-writing/SKILL.md`
 
 **Step 1: Update Phase 2 (Synthesis)**
 - "Before drafting, you MUST fill the **Synthesis Matrix** using the schema in `data/matrix_schema.json`. Ensure you extract 'Release Mechanism' and 'Admin Route'."

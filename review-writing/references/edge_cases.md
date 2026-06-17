@@ -6,7 +6,7 @@
 | Preprint / no DOI | Dedup falls back to title fuzzy match |
 | Multiple Zotero libraries | `--status` lists all; user selects; write to outline.md |
 | Windows, no edirect | Prompt WSL install or fallback to paper-search MCP |
-| Proxy port varies | Auto-scan 7897/7890/1080/8080/8888; write result to outline.md |
+| Proxy port varies | Auto-scan 7890/1080/8080/8888; write result to outline.md |
 | API key forgotten (cross-session) | outline.md stores lib_id only; ask api_key at start |
 | Zotero Web API rate limit | PyZotero auto-waits; batch add ≤50 items per call |
 | Zotero --dedup gid 失同步 | --dedup 只改 Zotero 标签，不更新 literature_index.json。正常流程不需要 --dedup（--add-batch 已去重）。如果手动运行了 --dedup，必须用 --get-section 逐节获取新 gid 并手动同步到 literature_index.json |

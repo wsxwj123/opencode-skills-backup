@@ -51,6 +51,13 @@ _SECTION_NAME_RE = re.compile(
     re.IGNORECASE,
 )
 _ABSTRACT_LEADIN_RE = re.compile(r"^(abstract|摘要)\s*[.:：]", re.IGNORECASE)
+# 机构/地址行常以编号开头(如 "3 Hunan Key Laboratory of …"),含机构实体词则不算章节标题。
+_AFFILIATION_HINT_RE = re.compile(
+    r"\b(?:universit|institut|laborator|hospital|college|faculty|academ|ministr)\w*"
+    r"|\b(?:department|school|center|centre|division)\s+(?:of|for)\b"
+    r"|大学|学院|研究院|研究所|重点实验室|实验室|医院",
+    re.IGNORECASE,
+)
 
 
 def looks_like_heading(text: str) -> bool:
@@ -59,7 +66,11 @@ def looks_like_heading(text: str) -> bool:
     if not t or len(t.split()) > 10:
         return False
     core = re.sub(r"^\d+(?:\.\d+)*\.?\s*", "", t).strip().rstrip(".．")
-    if _NUMBERED_HEADING_RE.match(t) and 1 <= len(core.split()) <= 8:
+    if (
+        _NUMBERED_HEADING_RE.match(t)
+        and 1 <= len(core.split()) <= 8
+        and not _AFFILIATION_HINT_RE.search(t)  # 编号机构行不算标题
+    ):
         return True
     if _SECTION_NAME_RE.match(core) and len(core.split()) <= 6:
         return True
