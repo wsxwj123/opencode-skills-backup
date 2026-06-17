@@ -43,7 +43,10 @@ def main():
 
     errors = []
 
-    placeholders = sorted(set(PH_RE.findall(html)))
+    # 剥离 <script>/<style> 区后再扫占位符，对齐模板 JS unresolvedPlaceholders() 的行为：
+    # 模板自带的预览检测脚本硬编码了 {{...}} 字面量，不剥离会误报为未替换占位符。
+    html_no_code = re.sub(r'<(script|style)\b[^>]*>.*?</\1>', '', html, flags=re.S | re.I)
+    placeholders = sorted(set(PH_RE.findall(html_no_code)))
     if placeholders:
         errors.append('Unreplaced placeholders found: ' + ', '.join(placeholders[:12]) + (' ...' if len(placeholders) > 12 else ''))
 
