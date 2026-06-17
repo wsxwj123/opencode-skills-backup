@@ -38,6 +38,50 @@ def infer_section_type(heading: str) -> str:
     return "other"
 
 
+# 内容式标题识别:许多 docx/稿子的标题不是 Word Heading 样式,而是普通短段落
+# (如 "1. Introduction" / "2.1 Foo" / "Experimental Section")。
+_NUMBERED_HEADING_RE = re.compile(r"^\d+(?:\.\d+)*\.?\s+\S")
+_SECTION_NAME_RE = re.compile(
+    r"^(abstract|introduction|background|results?(?:\s+and\s+discussion)?|discussion|"
+    r"conclusions?|summary|methods?|materials\s+and\s+methods|methodology|"
+    r"experimental(?:\s+section)?|references|acknowledge?ments|keywords|"
+    r"supporting\s+information|author\s+contributions?|conflicts?\s+of\s+interest|"
+    r"data\s+availability|"
+    r"摘要|引言|前言|背景|方法|材料与方法|实验(?:部分)?|结果(?:与讨论)?|讨论|结论|参考文献|关键词)$",
+    re.IGNORECASE,
+)
+_ABSTRACT_LEADIN_RE = re.compile(r"^(abstract|摘要)\s*[.:：]", re.IGNORECASE)
+
+
+def looks_like_heading(text: str) -> bool:
+    """非样式化的章节标题判定:短段落 + (编号开头 或 整行就是已知章节名)。"""
+    t = normalize_ws(text)
+    if not t or len(t.split()) > 10:
+        return False
+    core = re.sub(r"^\d+(?:\.\d+)*\.?\s*", "", t).strip().rstrip(".．")
+    if _NUMBERED_HEADING_RE.match(t) and 1 <= len(core.split()) <= 8:
+        return True
+    if _SECTION_NAME_RE.match(core) and len(core.split()) <= 6:
+        return True
+    return False
+
+
+# 非散文章节:其内容是清单/条目(参考文献、致谢、作者贡献、利益冲突、数据可用性、
+# 补充材料、资助),不做语言润色,去AI/句长检测对它们不适用。
+_NONPROSE_SECTION_RE = re.compile(
+    r"^(references?|bibliography|acknowledge?ments?|author\s+contributions?|"
+    r"conflicts?\s+of\s+interest|competing\s+interests?|data\s+availability|"
+    r"supporting\s+information|supplementary(?:\s+\w+)?|funding|abbreviations?|"
+    r"参考文献|致谢|作者贡献|利益冲突|数据可用性|补充材料|资助|缩略语)$",
+    re.IGNORECASE,
+)
+
+
+def is_nonprose_section(heading: str) -> bool:
+    core = re.sub(r"^\d+(?:\.\d+)*\.?\s*", "", normalize_ws(heading)).strip().rstrip(".．:：")
+    return bool(_NONPROSE_SECTION_RE.match(core))
+
+
 def is_markdown_heading(line: str) -> bool:
     return bool(re.match(r"^#{1,6}\s+\S", line))
 
@@ -88,19 +132,29 @@ def build_units(blocks: list[dict]) -> list[dict]:
     units: list[dict] = []
     current_heading = ""
     current_type = "other"
+    current_prose = True
     idx = 0
     for block in blocks:
-        if block["kind"] == "heading":
+        # 样式化标题,或内容上像未样式化的章节标题,都当作标题处理
+        if block["kind"] == "heading" or (
+            block["kind"] == "para" and looks_like_heading(block["text"])
+        ):
             current_heading = block["text"]
             current_type = infer_section_type(current_heading)
+            current_prose = not is_nonprose_section(current_heading)
             continue
         raw = block["text"]
+        # Abstract 常以行内引导词起头("Abstract. ..."),正文与标题同段,单独归类
+        is_abstract = bool(_ABSTRACT_LEADIN_RE.match(raw))
+        unit_type = "abstract" if is_abstract else current_type
         units.append(
             {
                 "idx": idx,
                 "raw_text": raw,
                 "heading": current_heading,
-                "section_type": current_type,
+                "section_type": unit_type,
+                # prose=False 的段落(参考文献/致谢等)只保留不润色,去AI/句长检测豁免
+                "prose": True if is_abstract else current_prose,
                 "has_citation": bool(CITATION_RE.search(raw)),
                 "has_numeric": bool(numeric_tokens(raw)),
                 "word_count": len(raw.split()),

@@ -141,6 +141,7 @@ def cmd_pack(args: argparse.Namespace) -> int:
             {
                 "idx": idx,
                 "section_type": section_type,
+                "prose": unit.get("prose", True),
                 "raw_text": unit["raw_text"],
                 "polished_text": unit["raw_text"],
                 "meaning_changed": False,
@@ -158,13 +159,14 @@ def cmd_pack(args: argparse.Namespace) -> int:
     return 0
 
 
-def validate_unit(raw: str, polished: str, rules: dict, section_type: str) -> dict:
+def validate_unit(raw: str, polished: str, rules: dict, section_type: str, is_nonprose: bool = False) -> dict:
     num = numeric_tokens_preserved(raw, polished)
     cert = detect_certainty_upgrade(raw, polished)
     raw_cites = citation_set(raw)
     pol_cites = citation_set(polished)
     cites_ok = raw_cites == pol_cites
-    ai_markers = find_ai_style_markers(polished)
+    # 非散文(参考文献/作者名单/图注等)保留原文不润色,去AI/句长检测不适用;红线仍查
+    ai_markers = [] if is_nonprose else find_ai_style_markers(polished)
     flags: list[str] = []
     if not num["ok"]:
         flags.append(f"numeric changed introduced={num['introduced']} dropped={num['dropped']}")
@@ -174,7 +176,8 @@ def validate_unit(raw: str, polished: str, rules: dict, section_type: str) -> di
         flags.append(f"citation set changed lost={sorted(raw_cites - pol_cites)} added={sorted(pol_cites - raw_cites)}")
     if ai_markers:
         flags.append(f"ai markers: {ai_markers}")
-    flags.extend(long_sentence_flags(polished, rules))
+    if not is_nonprose:
+        flags.extend(long_sentence_flags(polished, rules))
     return {
         "numbers_ok": num["ok"],
         "certainty_ok": cert["ok"],
@@ -203,7 +206,8 @@ def cmd_verify(args: argparse.Namespace) -> int:
         raw = unit["raw_text"]
         polished = unit.get("polished_text", "")
         meaning_changed = bool(unit.get("meaning_changed", False))
-        report = validate_unit(raw, polished, rules, unit.get("section_type", "other"))
+        is_nonprose = unit.get("prose") is False or unit.get("polished_by") == "unchanged-nonprose"
+        report = validate_unit(raw, polished, rules, unit.get("section_type", "other"), is_nonprose)
         unit_ok = (
             report["numbers_ok"]
             and report["certainty_ok"]
