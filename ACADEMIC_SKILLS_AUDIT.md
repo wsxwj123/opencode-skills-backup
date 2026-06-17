@@ -509,3 +509,16 @@ revise-sci 的 polish 在"防过度改写"上**已强于 Figpad**(meaning_change
 - T18 状态文件+记忆+learnings+提交+镜像。
 
 **复杂代码用 opus 子代理;每步实测;红线:索引是辅助不替代红线核验。**
+
+## 二十四、索引提取器落地 + reviewer-simulator 真稿审稿实测(2026-06-17,commit ec1be6f..)
+
+**用户 Q3 落地**:建共享 `manuscript_index.py`(自包含、3摄入技能字节一致 md5 fc8d66ca),成稿原子化时反向抽 figure_index(图+图注+引用段+孤儿)+ reference_index([n]→参考条目→引用段+孤儿)+ 人读 manuscript_index.md。接入 polish-sci(步1.5)、revise-sci(pipeline+run_pipeline单入口best-effort)、reviewer-simulator(第四步技术审计辅助)。AdvMat 实测三技能一致:9图0孤儿 / 116参考 / 19孤儿引用(列而未引,真实断层)。
+
+**用户 Q1/Q2 实测结论**:
+- polish-sci ✅ 原子化正确(234段)、全管道跑通(前轮)。
+- revise-sci:atomize 拆 27 节正确(修了 affiliation 行首数字误判 T16);完整流程需审稿意见(仅稿是 intake 中间态)。
+- **reviewer-simulator ✅ 真稿完整审稿跑通**:强制门→data初始化→索引辅助审计(实质用于问题9)→全文提取(263段)→空index豁免→四视角(顺序模拟,嵌套限制)→13区块HTML报告→validate OK→去AI OK→DoD盲检ok,判大修。
+
+**真稿暴露并修的关键 bug**:`validate_report_html.py` 扫占位符含模板 `<script>` 里的 `{{...}}` 字面量→**每份正确报告都被误判FAIL**(门禁形同虚设/反而全卡)。修:扫描前剥 script/style。验证 broken→exit1 / 正常→exit0 / REGRESSION_OK。
+
+**残留**:reviewer-simulator 四视角真实运行应为并发子代理(测试环境嵌套限制降为顺序);其余技能真稿端到端仍未逐一(已测 polish-sci 全程 + reviewer-simulator 全程 + revise-sci 原子化)。
