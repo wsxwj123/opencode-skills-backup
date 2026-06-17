@@ -20,6 +20,13 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+import sys as _sys
+
+_SCRIPTS_DIR = str(Path(__file__).resolve().parent)
+if _SCRIPTS_DIR not in _sys.path:
+    _sys.path.insert(0, _SCRIPTS_DIR)
+import citation_guard_core as core
+
 DOI_RE = re.compile(r"^10\.\d{4,9}/[-._;()/:A-Z0-9]+$", re.IGNORECASE)
 PMID_RE = re.compile(r"^\d{4,10}$")
 CIT_RE = re.compile(r"\[(\d+)\]")
@@ -340,113 +347,81 @@ def validate_entry(
     pmid = str(entry.get("pmid") or "").strip()
     title = (entry.get("title") or "").strip()
 
+    # Provider family stays in this adapter (reads search_source + back-compat
+    # fallback). core only accepts an already-mapped family string.
     provider_family = _provider_family(entry)
     provider_forbidden = provider_family in FORBIDDEN_PROVIDER_FAMILIES
 
-    doi_fmt_ok = DOI_RE.match(doi) is not None if doi else None
-    pmid_fmt_ok = PMID_RE.match(pmid) is not None if pmid else None
-
+    # MCP resolution / freshness is nsfc-specific (dual-track cache) and kept
+    # local; core's require_mcp path is bypassed (require_mcp=False below).
     mcp_record = _resolve_mcp_record(entry, mcp_index or {}) if mcp_index else None
-    mcp_title = str((mcp_record or {}).get("title") or "").strip()
     mcp_ok = bool(mcp_record)
     mcp_fresh, mcp_fresh_reason = _is_mcp_fresh(mcp_record or {}, mcp_ttl_days, now_utc) if mcp_ok else (False, None)
 
-    crossref_attempted = bool(online_check and doi and doi_fmt_ok)
-    pubmed_attempted = bool(online_check and pmid and pmid_fmt_ok)
-    crossref = _fetch_crossref_by_doi(doi) if crossref_attempted else None
-    pubmed = _fetch_pubmed_by_pmid(pmid) if pubmed_attempted else None
-
-    source_titles = []
-    if mcp_title:
-        source_titles.append(("mcp", mcp_title))
-    if pubmed and pubmed.get("title"):
-        source_titles.append(("pubmed", str(pubmed["title"])))
-    if crossref and crossref.get("title"):
-        source_titles.append(("crossref", str(crossref["title"])))
-
-    title_match = False
-    title_similarity = 0.0
-    if source_titles:
-        sims = [(_titles_match(title, st)[1], src) for src, st in source_titles]
-        title_similarity = max((s for s, _ in sims), default=0.0)
-        title_match = title_similarity >= 0.72
-
-    pmid_match: bool | None
-    if pmid:
-        if not pmid_fmt_ok:
-            pmid_match = False
-        else:
-            mcp_pmid = str((mcp_record or {}).get("pmid") or "").strip()
-            http_ok_for_pmid = pubmed is not None if online_check else True
-            mcp_ok_for_pmid = (mcp_pmid == pmid) if mcp_record and mcp_pmid else True
-            pmid_match = http_ok_for_pmid and mcp_ok_for_pmid
-    else:
-        pmid_match = None
-
-    doi_valid: bool | None
-    if doi:
-        if not doi_fmt_ok:
-            doi_valid = False
-        else:
-            mcp_doi = str((mcp_record or {}).get("doi") or "").strip().lower()
-            http_ok_for_doi = crossref is not None if online_check else True
-            mcp_ok_for_doi = (mcp_doi == doi.lower()) if mcp_record and mcp_doi else True
-            doi_valid = http_ok_for_doi and mcp_ok_for_doi
-    else:
-        doi_valid = None
-
-    id_cross_match = True
-    if doi and pmid and pubmed and pubmed.get("doi"):
-        id_cross_match = str(pubmed.get("doi")).lower() == doi.lower()
-
-    retracted = bool(entry.get("retracted", False))
-    if mcp_record and bool(mcp_record.get("retracted", False)):
-        retracted = True
-    if crossref and crossref.get("retracted"):
-        retracted = True
-    if pubmed and pubmed.get("retracted"):
-        retracted = True
-
+    # P1 citation-context check is nsfc-specific and kept local.
     context_check = _context_check(entry, p1_text)
 
-    http_ok = bool(crossref or pubmed) if online_check else True
+    # Delegate single-entry verification (title / DOI / PMID / cross-match /
+    # retraction / provider) to the shared core. require_identifier=True keeps
+    # the nsfc rule that an entry with no DOI/PMID hard-fails.
+    entry_normalized = {
+        "title": title,
+        "doi": doi,
+        "pmid": pmid,
+        "provider_family": provider_family or "",
+        "source_id": doi or pmid or "",
+        "year": entry.get("year"),
+        "retracted": bool(entry.get("retracted", False))
+        or bool((mcp_record or {}).get("retracted", False)),
+    }
+    core_result = core.validate_core(
+        entry_normalized,
+        online=online_check,
+        require_mcp=False,
+        mcp_record=mcp_record,
+        require_identifier=True,
+        mcp_ttl_days=mcp_ttl_days,
+        now_utc=now_utc,
+    )
+    core_details = core_result.get("details", {})
+
+    # Map core's reason vocabulary back to nsfc's. Only reasons nsfc already
+    # classifies (hard/soft) are adopted; core-only reasons (source_trace_missing,
+    # year_unreasonable, per-source title splits, etc.) are not surfaced here so
+    # the hard/soft/info semantics and pass/fail status are unchanged.
+    _adoptable = HARD_FAIL_REASONS | SOFT_FAIL_REASONS
+    failure_reasons = [r for r in core_result.get("failure_reasons", []) if r in _adoptable]
+
+    # Pull derived signals from core's details for the nsfc details contract.
+    title_match = bool(core_details.get("title_match"))
+    title_similarity = float(core_details.get("title_similarity") or 0.0)
+    doi_valid = core_details.get("doi_valid")
+    pmid_match = core_details.get("pmid_match")
+    id_cross_match = bool(core_details.get("id_cross_match", True))
+    retracted = bool(core_details.get("retracted", False))
+    core_sources = core_details.get("sources", {})
+    crossref = bool(core_sources.get("crossref"))
+    pubmed = bool(core_sources.get("pubmed"))
+    http_ok = (crossref or pubmed) if online_check else True
+
     sources = {
         "mcp": bool(mcp_record),
-        "crossref": bool(crossref),
-        "pubmed": bool(pubmed),
-        "crossref_attempted": crossref_attempted,
-        "pubmed_attempted": pubmed_attempted,
+        "crossref": crossref,
+        "pubmed": pubmed,
+        "crossref_attempted": bool(online_check and doi and DOI_RE.match(doi)),
+        "pubmed_attempted": bool(online_check and pmid and PMID_RE.match(pmid)),
         "online_check": online_check,
         "mcp_ttl_days": mcp_ttl_days,
     }
 
-    failure_reasons = []
-    if provider_forbidden:
-        failure_reasons.append("source_provider_forbidden")
-    if not title:
-        failure_reasons.append("title_missing")
-    if title_match is False:
-        failure_reasons.append("title_mismatch")
-    if doi_valid is False:
-        failure_reasons.append("doi_invalid_or_unresolved")
-    if pmid_match is False:
-        failure_reasons.append("pmid_invalid_or_unresolved")
-    if not id_cross_match:
-        failure_reasons.append("id_mismatch")
-    if retracted is True:
-        failure_reasons.append("retracted")
-    if not doi and not pmid:
-        failure_reasons.append("identifier_missing")
+    # nsfc-specific failure reasons (MCP track + P1 context) appended locally,
+    # preserving the original "no MCP record => hard fail" semantics.
     if context_check is False:
         failure_reasons.append("context_mismatch")
-
     if not mcp_ok:
         failure_reasons.append("mcp_unresolved")
     elif not mcp_fresh:
         failure_reasons.append(mcp_fresh_reason or "mcp_stale")
-
-    if online_check and not http_ok:
-        failure_reasons.append("source_unreachable")
 
     levels = _classify_failure_reasons(failure_reasons)
     needs_manual_review = bool(levels["soft"])
