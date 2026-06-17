@@ -436,3 +436,18 @@ revise-sci 的 polish 在"防过度改写"上**已强于 Figpad**(meaning_change
 - 分工:gsw 写新稿 / revise-sci 意见驱动改片段 / polish-sci 纯润色全文,三者 description not_for 互斥。
 - 接入同步链:sync workflow 升 8 技能(paths/rm/checkout/add 四处+名称);镜像 opencode/codex;记忆 custom_skills_list 与 MEMORY 索引升 8。
 - 残留:polish-sci 的 common.py 因加中文 certainty 与 revise-sci 版不再字节一致(各自维护);docx 导出已实现但 smoke 只验 md 路径;语义层 meaning 守卫靠人工(DoD 已标)。
+
+## 二十、citation_guard 全统一(2026-06-16/17,commit 49b2b08)— 方案B 共享核心
+
+用户明确要求所有文献反验证技能统一。**方案B**:抽 `citation_guard_core.py`(反幻觉策略原语,纯函数,无 IO/argparse)为**唯一真源**,7 技能各留薄适配层。不用方案A(单一字节文件)因 nsfc 是被 import 的库+有 P1 矩阵业务、且 7 技能 6 套产出契约+4 种数据模型,强行字节统一会炸管道+塞死代码。
+
+- **core**(md5 `805f0321`,7 份字节一致):provider 白名单(allow paper-search/pubmed-cli,禁 websearch/openalex-cli/tavily)、DOI·PMID 在线核验、无 ID 时 by-title 存在性、逐源 title 0.72、撤稿、year、HTTP 重试;`validate_core(...,require_identifier=False,prefetched=None)` 两开关。核验强度取基准版为下限,outlier 只增强不削弱。
+- **基准 4**(gsw/review/sci2doc/reviewer-simulator):适配层保 `report.ok` 契约,重构前后契约 before==after 零漂移。
+- **reviewer-response**:保顶层 status 契约 + **空 registry=放行**业务语义 + 补 allowlist(旧仅黑名单漏未知 provider)。
+- **revise-sci**(最高危):两层 loader + prefetched 防 429 + 保 `summary.all_rows_guard_verified`/per-citation `guard_verified` 3 处消费契约 + 空=拦(`bool(rows)` 初值)fail-closed 不削弱。
+- **nsfc**:最克制,仅 `validate_entry` 核验段调 core(`require_identifier=True` 保无 ID 硬失败),reason 翻译过滤保三级语义;`matrix_check`/`verify_all`/`extract_citation_numbers` 等 import API + `search_source` 字段 + 默认 paper-search 兼容全留,`diagnosis_engine`/`state_manager` import 零回归(还顺带修了离线误报 title_mismatch 旧 bug)。
+- **polish-sci 豁免**(只冻结原引用集合不引新文献)。
+- **CI 守卫**:sync workflow 加步骤断言 7 份 core md5 一致,漂移即阻断同步(防今后改 core 漏同步)。
+- 改阈值只需改 core + 重新镜像即全局生效。8 opus 子代理(1 个中途 API 死亡但只复制了 core 无损、已重启),全部经主 agent md5+编译+import+契约+smoke 复核;7 技能镜像 opencode/codex 全 0。
+
+> 教训:子代理 API 中途死亡可能留半成品,重启前必须先查工作树状态(本次 nsfc 仅复制 core 未改 validator=无损,重启即可)。
