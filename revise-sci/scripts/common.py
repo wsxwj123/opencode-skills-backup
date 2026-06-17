@@ -567,6 +567,16 @@ def find_same_title_reference_docx(manuscript_path: Path | None) -> Path | None:
     return siblings[0][1]
 
 
+# 机构/地址行常以编号开头(如 "3 Hunan Key Laboratory of …"),易被编号标题正则误吞。
+# 含明确机构实体词则判为 affiliation,不算章节标题(词数阈值挡不住较短机构名)。
+_AFFILIATION_HINT_RE = re.compile(
+    r"\b(?:universit|institut|laborator|hospital|college|faculty|academ|ministr)\w*"
+    r"|\b(?:department|school|center|centre|division)\s+(?:of|for)\b"
+    r"|大学|学院|研究院|研究所|重点实验室|实验室|医院",
+    re.IGNORECASE,
+)
+
+
 def is_heading(row: dict[str, Any]) -> bool:
     style_name = row.get("style_name", "").lower()
     text = row.get("text", "")
@@ -574,7 +584,8 @@ def is_heading(row: dict[str, Any]) -> bool:
         return True
     if (
         re.match(r"^\d+(?:\.\d+)*\.?\s+\S+", text)
-        and len(text.split()) <= 12  # 真标题短;"3 Hunan Key Laboratory…"这类行首数字的长单位地址不算
+        and len(text.split()) <= 12  # 真标题短(粗筛)
+        and not _AFFILIATION_HINT_RE.search(text)  # "3 Hunan Key Laboratory…"等机构行排除(阈值挡不住短机构名)
         and not re.match(r"^(fig|figure|table)\b", text, flags=re.IGNORECASE)
         and not looks_like_reference_entry(text)
     ):
