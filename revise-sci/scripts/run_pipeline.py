@@ -484,6 +484,14 @@ def main() -> int:
         if args.si:
             atomize_doc_args.extend(["--si", args.si])
         run_step(atomize_doc_args)
+    # 反向抽取图/参考交叉索引(figure_index/reference_index/manuscript_index.md),辅助产物,失败不阻断主流程
+    try:
+        subprocess.run(
+            [py, str(script_dir / "manuscript_index.py"), "--manuscript", args.manuscript, "--project-root", args.project_root],
+            text=True, capture_output=True, timeout=180,
+        )
+    except Exception:
+        pass
     if not args.resume or not has_issue_index(project_root):
         run_step([py, str(script_dir / "build_issue_matrix.py"), "--project-root", args.project_root])
     if not args.resume or not has_state_outputs(project_root):
