@@ -25,6 +25,21 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Assert citation_guard_core.py is byte-identical across all skills
+        run: |
+          # 唯一真源守卫:7 个文献反验证技能共享同一份 citation_guard_core.py。
+          # 任一份漂移(改 core 漏同步某技能)即失败,阻断 custom-skills 同步。
+          mapfile -t cores < <(find general-sci-writing review-writing sci2doc reviewer-simulator \
+            reviewer-response-sci revise-sci nsfc-proposal -name citation_guard_core.py | sort)
+          if [ "${#cores[@]}" -ne 7 ]; then
+            echo "::error::expected 7 citation_guard_core.py, found ${#cores[@]}"; printf '%s\n' "${cores[@]}"; exit 1
+          fi
+          uniq_count=$(md5sum "${cores[@]}" | awk '{print $1}' | sort -u | wc -l)
+          if [ "$uniq_count" -ne 1 ]; then
+            echo "::error::citation_guard_core.py diverged across skills:"; md5sum "${cores[@]}"; exit 1
+          fi
+          echo "✅ all 7 citation_guard_core.py identical ($(md5sum "${cores[0]}" | awk '{print $1}'))"
+
       - name: Sync 8 custom skills to custom-skills branch
         run: |
           git config user.name "github-actions[bot]"
