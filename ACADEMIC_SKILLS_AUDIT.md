@@ -537,7 +537,12 @@ revise-sci 的 polish 在"防过度改写"上**已强于 Figpad**(meaning_change
 | Q3b | nsfc 是否问实验设计 | **部分——真弱点**。有 Mode Handshake+Inputs Required(basics/科学问题属性四选一/materials/约束);**缺结构化追问实验设计·技术路线·预实验数据的交互环节**,M(技术路线)由 Phase2 AI 据 H/O/RC 展开,靠每 Phase 停顿确认+V-12 备选路线兜底 |
 | Q5 | polish-sci vs 其他 polish mode | **纯语言锁内容 vs 混合返修**。polish-sci 只动语言,红线锁死引文/数字/基因名,不补内容不检索;review/nsfc 的 polish 会改写+补缺失节+检索 |
 | Q6 | 图片如何提取落盘(9 张主图) | **真缺口:无图片导出落盘功能**。manuscript_index.py/atomize_manuscript.py 全是纯文本正则,只抽"Figure N+图注文字+引用它的 unit"写进 figure_index.json,**不解码/不导出图片二进制**;sci2doc material_ingest.process_image 只对用户单独给的图片文件记路径+大小,**不从 docx 内部解压 word/media/ 嵌入图**。9 张主图的图注/引用关系被索引,**图片本身未落盘到 figures/** |
-| Q4 | revise-sci opus 实测基本功能 | **进行中(后台 opus 子代理),完成补录** |
+| Q4 | revise-sci opus 实测基本功能 | **完成**。26/26 语法通过、关键 CLI --help 正常、docx 原子化(5节)+manuscript_index 跑通。发现 2 bug:**high**=短机构名"3 Hunan Key Laboratory…"(8词)被 `is_heading` 误判标题并被相邻空 section flush **静默吞掉**(上轮 T16 的 `≤12 词` 防护挡不住短机构名)→**已修**;**mid**=`atomize_manuscript/atomize_comments` 仅吃 .docx,非 docx 输入抛 `PackageNotFoundError` 无友好报错(契约性缺陷,暂记录待用户拍板) |
+
+**Q4 high bug 修复(2026-06-17):** root cause=编号标题正则 + 仅靠词数阈值,8 词机构名漏过。正解=**加机构词排除**(`_AFFILIATION_HINT_RE`:universit/institut/laborator/hospital/college/faculty/academ/ministr + department/school/center/centre/division of-for + 中文 大学/学院/研究院/研究所/重点实验室/实验室/医院)。改两处(两技能同隐患,实现位置不同):
+- `revise-sci/common.py is_heading` 编号分支(≤12词粗筛后追加机构词排除)
+- `polish-sci/atomize_manuscript.py looks_like_heading` 编号分支(≤8词后追加机构词排除;polish 阈值更紧但 7 词机构名仍会漏,AdvMat 真机构名更长才侥幸没暴露)
+回归 PASS:机构名(8词/系/center for)排除 + 真标题(含"Materials and Methods"多词/3.1子标题/Results and Discussion)保留,两技能各 7/7。
 
 **两个待决真缺口(待用户拍板,未动手):**
 1. **图片导出落盘**:docx 可解压 `word/media/` 或 python-docx inline_shapes 导出嵌入图到 `figures/`(技术简单);PDF 需 PyMuPDF(较麻烦)。价值:sci2doc 转学位论文把原图搬进产物有实际用;审稿/润色类不读像素,现有图注索引已够。
