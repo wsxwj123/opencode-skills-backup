@@ -451,3 +451,30 @@ revise-sci 的 polish 在"防过度改写"上**已强于 Figpad**(meaning_change
 - 改阈值只需改 core + 重新镜像即全局生效。8 opus 子代理(1 个中途 API 死亡但只复制了 core 无损、已重启),全部经主 agent md5+编译+import+契约+smoke 复核;7 技能镜像 opencode/codex 全 0。
 
 > 教训:子代理 API 中途死亡可能留半成品,重启前必须先查工作树状态(本次 nsfc 仅复制 core 未改 validator=无损,重启即可)。
+
+## 二十一、权威·当前未完成/未解决/未实测清单(截至 2026-06-17)
+
+> 本节为**最新权威状态**,优先于前面各节的散落标记。特别地:**第三节 B1-B13 表格里残留的"待修"单元格已过时**——经第六节"全修"+2026-06-17 抽查(B1 三文件已改 OPTIONAL_STATE_FILES+建目录;B2 已中英双语 severity;B5 已改 openalex FORBIDDEN;B7 已 sys.exit 传播)确认 B1-B13 均已修,表格未回填而已。
+
+### A. 未完成的功能(开发层面)
+- **A1 7 技能编排器**(deep-research 前置 / academic-pipeline 端到端):一直"暂缓不做"。决定=不做(定位是单技能深做,非流水线产品)。
+- **A2 SKILL.md 瘦身**:用户明确**不做了**。关闭。
+- **A3 可选借鉴点(从未做)**:Generator-Evaluator Contract(盲承诺→可见评分防漂移)、Style Calibration(用户历史论文提个人学风作软约束)、disclosure(按期刊生成 AI 使用声明)、integrity_verification_agent(7 类 AI 失败模式独立核查层,比 citation_guard 更宽)。状态=未做、可选。已做的借鉴点:Devil's Advocate+calibration(reviewer-simulator)、Patch 修订(revise)、WHY-HOW-WHAT+系统综述(review)、配图 opt-in。
+
+### B. 未解决的问题(已知、有意保留或待定)
+- **B-语义守卫**:所有润色/改稿技能(revise-sci/polish-sci/reviewer-response)的"换词是否改了论点"meaning 守卫**只能靠人工逐段对照**,无脚本能查(本质局限,已在各 DoD 标注人工核)。
+- **B-citation_guard 声明式边界**:provider 白名单只验声明的 source_provider/search_source,**真论文+假来源标签查不出**;nsfc 缺字段→默认放行(可被"不写字段"规避)。保守设计,未收紧。
+- **B-core 收紧副作用**:统一后 core 比旧版更严,历史"勉强通过"的引用条目首次跑可能多拦几条(预期收紧,非回归);response 适配层有意过滤 `source_trace_missing` 以保旧 pass 语义。
+- **B-polish A 数值守卫盲区**:同值不同表示(0.5↔50%、p=0.03↔p<0.05)会被判漂移误 fail(保守误报方向,人工经 risk_flags 放行)。
+- **B-去AI脚本固有误报**:近年来/realm/testament、被动正则偏严等可能误报,均 WARN 不阻断。
+- **B-缩略语全称**:全称真以功能词开头(如 The Hague Institute)会被误剥(罕见,可接受权衡)。
+- **B-文档低危待核**:sci2doc GB/T 7714(DOI 前双空格/外文作者姓+名缩写)格式偏差是否已修待核;nsfc `tests/` 目录承诺未实现。
+
+### C. 未实测的(重点)
+- **C1 真实完整稿端到端**:所有 8 技能都只经过**子代理构造样例的 smoke/单元测**,**没有用一份真实完整论文/标书从头跑完整管道**。polish-sci 本次跑了 2 段样例端到端(正负向通过),但非真实长稿。
+- **C2 在线文献核验(--live)**:citation_guard 全部用 `--offline` 测;**真打 Crossref/eutils 的在线行为未实测**(需联网+代理),线上重试/限流靠 core 逻辑未真实验证。
+- **C3 docx 导出**:polish-sci `--docx`、其余技能 docx 导出多数只验 md 路径,docx 实际渲染未实跑。
+- **C4 委托盲检真实子代理**:delegate_review 的 pack/verify 脚本已测,但"派真实独立子代理读稿返 JSON"的完整闭环未在真实任务里跑过。
+
+### 建议下一步(若继续)
+按价值:C1 真实稿端到端(最能暴露跳步/集成问题)> C2 在线核验抽测 > A3 可选借鉴点(integrity_verification_agent 最有价值)。B 类多为有意的保守设计或本质局限,非缺陷。
