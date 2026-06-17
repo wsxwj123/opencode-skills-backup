@@ -478,3 +478,17 @@ revise-sci 的 polish 在"防过度改写"上**已强于 Figpad**(meaning_change
 
 ### 建议下一步(若继续)
 按价值:C1 真实稿端到端(最能暴露跳步/集成问题)> C2 在线核验抽测 > A3 可选借鉴点(integrity_verification_agent 最有价值)。B 类多为有意的保守设计或本质局限,非缺陷。
+
+## 二十二、polish-sci 真实稿端到端实测(C1+C3,2026-06-17,commit 96c39ba/fbaa120)
+
+用真实 `manuscript_AdvancedMaterials.docx`(25MB,234 段)跑 polish-sci 完整管道。**这是首次真实长稿端到端**,一次暴露 4 类样例测不出的集成 bug,全部已修:
+
+1. **非 Word 样式标题识别失效**:真实稿"1. Introduction"等是普通段落→section_type 全 other。修:`looks_like_heading` 内容式识别(编号/已知章节名)+ abstract 行内引导特判 + `prose` 标志。
+2. **门禁对非散文误判(35 处假阳)**:参考文献(116段)/作者名单的冒号、范围、问句标题被去AI检测拦。修:非散文(`prose=false` 或 `polished_by=unchanged-nonprose`)豁免去AI/句长,红线(数值/引用/语气/meaning)仍对全部单元查。
+3. **句长硬拦过严**:方法学合法长句(浓度梯度/参数列表)被硬拦。修:句长 >30词 改软警告(记入报告不阻断,本就声明软检查)。
+4. **from-A-to-B 假阳**:`from 24 to 72 h` 数值范围被当 AI 修辞。修:span 含数字即合法范围不判;同款 FP 已传播修 `revise-sci/common.py`。
+
+**最终结果**:全稿 strict_gate **PASS 234/234**(exit 0);merge 出 77KB md;**docx 导出 docx_ok=true(C3 实测过)**;report 列 17 条句长软警告供人工取舍;红线抽查(42-45°C / 2 of 6 / alpha-1-antitrypsin / pBV220-PelB-PPE-His / [99] / 50 passages)全保留;标题作者顺序完整。润色成品已交付用户 Desktop。
+**结构 prose 标志全新跑验证**:119 非散文 / 115 散文,pack 存根带 prose,独立于润色器标签生效。
+
+→ 第二十一节 C1(真实稿端到端)、C3(docx 导出)状态更新为 ✅ 已实测(以 polish-sci 为例)。其余技能的真实稿端到端仍未逐一做(C1 仅 polish-sci 完成)。
