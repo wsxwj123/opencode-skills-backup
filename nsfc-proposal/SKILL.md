@@ -99,7 +99,43 @@ Apply these resolutions when references conflict:
 Follow phased gates in order:
 1. Phase 0: initialize project profile, section targets, mapping cardinality.
    - 🔴 **必须选定「科学问题属性」四选一**（四类官方措辞见 Inputs Required 节），写入 profile `science_problem_attribute`。注意与「研究属性（自由探索类/目标导向类）」区分，二者是独立字段。未选定将在 Phase 7 `gate-check` 触发 `failed_at=profile` 阻断。
-2. Phase 1: write P1 with full citation pipeline and verification.
+
+2. **Phase 0.5: 实验设计与技术路线结构化问询**（H/O/RC/KSQ mapping count 确定后、P1 撰写前的强制问询环节）
+   - **触发时机**：Phase 0 完成 mapping count（RC 数量）确定 → Phase 0.5 → Phase 1。问询主体在主 agent 与用户对话，不写脚本。
+   - **静默跳过禁令**：若主 agent 判断用户已在 Phase 0 自然语言中提供了实验设计细节、信息已充足，**不得静默跳过**，必须先用 ✓ 列表向用户回放当前已收集的设计信息（按下文 5 字段分类逐 RC 列出），并明确询问"是否需要补充或修正？是否同意以此为依据进入 Phase 1？"，用户显式确认后方可跳过追问环节，但仍须落盘 `data/experimental_design.json`。
+   - **逐 RC 结构化追问（5 字段）**：对每个已立项的 RC（数量等于 Phase 0 mapping count），按顺序逐条追问：
+     1. **实验/方法路径（methods）**：关键步骤、关键技术、关键试剂/仪器/动物模型或细胞系/样本来源。
+     2. **预实验数据（preliminary_data）**：已有数据（图/表/统计数）vs 待补数据；已有数据说明出处（本课题组/合作单位/文献）。
+     3. **可行性证据（feasibility）**：团队相关经验、依托平台/设备、合作单位、配套资金或前期项目支撑。
+     4. **备选方案（alternative_plan）**：主路线失败时的触发条件、替代技术路线、切换代价（V-12 备选路线的实质内容，Phase 2 将直接复用）。
+     5. **伦理审查（ethics）**：是否涉及人类受试者 / 实验动物 / 生物安全 / 人类遗传资源；任一涉及则说明审批状态（已获批号 / 已送审待批 / 计划送审时间节点）；均不涉及则填 "N/A 不涉及"。
+   - **落盘**：把追问结果结构化写入 `data/experimental_design.json`，结构如下（每个 RC 一条 entry）：
+     ```json
+     {
+       "metadata": {"schema_version": "1.0", "collected_at": "YYYY-MM-DDTHH:MM:SS+08:00"},
+       "entries": [
+         {
+           "rc_id": "RC-1",
+           "methods": ["步骤1：...", "步骤2：..."],
+           "preliminary_data": "已有/待补 + 数据出处",
+           "feasibility": "团队/平台/合作/资金证据",
+           "alternative_plan": "触发条件 + 替代方案 + 切换代价",
+           "ethics": "涉及类型 + 审批状态 / 或 N/A 不涉及"
+         }
+       ]
+     }
+     ```
+   - **下游约束**：Phase 2 撰写 M（研究方案与技术路线）和 Phase 3 撰写 P3_1 可行性时，必须先 `Read data/experimental_design.json` 作为事实依据，禁止脑补；M.alternative_plan 字段（V-12 依赖）直接来自本 JSON 的 `alternative_plan` 字段。
+
+   **Phase 0.5 DoD（收口自检）：未逐项确认通过，不得进入 Phase 1**
+
+   - [ ] ①`data/experimental_design.json` 已生成，`entries` 数量等于 Phase 0 mapping count（每个 RC 一条）
+   - [ ] ②每个 entry 的 `methods`、`feasibility`、`alternative_plan` 三个字段非空（不接受 "待定"/"TBD" 等占位符）
+   - [ ] ③`preliminary_data` 字段明确区分了"已有"与"待补"，已有数据标注了出处
+   - [ ] ④`ethics` 字段：涉及人/动物/生物安全/遗传资源任一情形者，已说明审批状态（含批号或送审计划时间节点）；均不涉及者填 "N/A 不涉及"
+   - [ ] ⑤用户已显式确认 `experimental_design.json` 覆盖全部 RC、设计无遗漏（回放 ✓ 列表 + 用户书面同意）
+
+3. Phase 1: write P1 with full citation pipeline and verification.
    - 每节先跑 `python scripts/state_manager.py --root . write-cycle --section P1`（逐节预算/上下文注入的预写门控，完整参数见 references/08）；不得跳过直接硬写。
    - Input: confirmed project profile (title, discipline, H/O/RC/KSQ mapping counts).
    - Output: `sections/P1_立项依据.md` + `data/literature_index.json` (all P1 citations verified) + updated `context_memory.md`.
@@ -127,9 +163,10 @@ Follow phased gates in order:
    - [ ] ⑧科学问题属性四选一已在 profile 中写入且与 P1 论述对应
    - [ ] ⑨撤稿检测：所有 PMID 已过撤稿核查（`python scripts/citation_validator.py verify-all --index data/literature_index.json --p1 sections/P1_立项依据.md`，撤稿检测已内置）
 
-3. Phase 2: write P2 研究内容（contains all sub-content: H/O/RC/KSQ, methods, innovations, annual plan）.
+4. Phase 2: write P2 研究内容（contains all sub-content: H/O/RC/KSQ, methods, innovations, annual plan）.
    - 每节先跑 `python scripts/state_manager.py --root . write-cycle --section P2`（逐节预算/上下文注入的预写门控，完整参数见 references/08）；不得跳过直接硬写。
-   - Input: verified P1; H/O/RC/KSQ mapping counts from Phase 0; consistency_map.json with SQ entries.
+   - **撰写 M（研究方案与技术路线）前必须 `Read data/experimental_design.json` 作为事实依据**，禁止脑补；每个 M 的 alternative_plan（V-12 字段）直接来自该 JSON 对应 RC 的 `alternative_plan`。
+   - Input: verified P1; H/O/RC/KSQ mapping counts from Phase 0; consistency_map.json with SQ entries; `data/experimental_design.json` 全量 RC 设计。
    - consistency_map 条目结构（mapped_from_sq / mapped_to_objective / supports_method 等字段名）见 `references/02_核心机制.md` §2.2，按其字段名产出避免 validate 报错。
    - Output: `sections/P2_研究内容.md` + updated `data/consistency_map.json` (H→O→RC→KSQ→M→IN all links validated) + `sections/figure_prompts.md`.
    - **V 规则分层说明（机制级防假通过）：** Phase 2 门控统一用 `python scripts/consistency_mapper.py --path data/consistency_map.json validate --phase 2`，该参数只计算且只报 V-01/V-02/V-03/V-04/V-05/V-08/V-10（H/O/RC/KSQ/IN 结构链路），从机制上不输出 V-06/V-12 的结论，无需靠自觉跳读全量。V-06（M→F）、V-07（F来源）、V-09（预算追溯）、V-11（代表作匹配）依赖 F/预算字段，分别在 Phase 3/Phase 5 填齐后才有意义，强制点在 Phase 7 `gate-check`；V-12 只依赖 M 的 alternative_plan 字段，该字段在 Phase 3 Step 3.1 撰写，自 Phase 3 起进入 `--phase 3` 集合并为 ERROR 硬门控（gate-check 也会复验）。
@@ -158,7 +195,7 @@ Follow phased gates in order:
    - [ ] ⑧P2 末尾含独立预期成果小节（论文/专利/人才培养目标三类均有明确数字目标）
    - [ ] ⑨figure_prompts.md 已生成，技术路线图提示词映射到 ≥1 个 RC
 
-4. Phase 3: write P3 研究基础（4 sub-files）.
+5. Phase 3: write P3 研究基础（4 sub-files）.
    - 每节先跑 `python scripts/state_manager.py --root . write-cycle --section P3_1`（其余子节同理 P3_2/P3_3/P3_4；逐节预算/上下文注入的预写门控，完整参数见 references/08）；不得跳过直接硬写。
    - Input: P2 confirmed; team CV, platform data, and prior publications from Phase 0 profile.
    - Output:
@@ -189,7 +226,7 @@ Follow phased gates in order:
    - [ ] ⑦H/O/RC/KSQ 与 P1/P2 一致性未因 P3 新增内容产生新矛盾，且 V-12 备选路线已就位（`consistency_mapper validate --phase 3` 仍 PASS）
    - [ ] ⑧代表作与 H/RC 方向匹配（V-11 人工确认：每篇代表作能对应至少一条 H 或 RC）
 
-5. Phase 4: write P4 其他需要说明的情况（≤500字）.
+6. Phase 4: write P4 其他需要说明的情况（≤500字）.
    - 每节先跑 `python scripts/state_manager.py --root . write-cycle --section P4`（逐节预算/上下文注入的预写门控，完整参数见 references/08）；不得跳过直接硬写。
    - Input: P3 confirmed.
    - Output: `sections/P4_其他需要说明的情况.md`.
@@ -211,7 +248,7 @@ Follow phased gates in order:
    - [ ] ④占位符清零
    - [ ] ⑤去 AI：`humanizer_zh.py scan` 无 ERROR；`rhythm-check` 无 `cn_sentence_too_long`
 
-6. Phase 5: write 预算说明书（B1-B3）.
+7. Phase 5: write 预算说明书（B1-B3）.
    - Input: P2 confirmed (M entries define budget items); project profile (budget_total, duration).
    - Output:
      - `sections/B1_预算说明_直接费用.md` (equipment; materials; tests; travel/conference; publications; labor; consulting; three-line tables where required)
@@ -235,7 +272,7 @@ Follow phased gates in order:
    - [ ] ④直接费用各类别说明完整（设备/材料/测试/差旅/出版/劳务/咨询）
    - [ ] ⑤占位符清零
 
-7. Phase 6: write 中英文摘要（abstract-last, based on full draft）.
+8. Phase 6: write 中英文摘要（abstract-last, based on full draft）.
    - Input: all sections P1–P4 confirmed; run `python scripts/state_manager.py --root . load --global` for full-text summary.
    - Output: `sections/00_摘要_中文.md` (≤400汉字) + `sections/00_摘要_英文.md` (≤300英文词).
    - Keywords must align with `consistency_map.keywords_trace`.
@@ -257,7 +294,7 @@ Follow phased gates in order:
    - [ ] ⑤占位符清零
    - [ ] ⑥去 AI：`humanizer_zh.py scan sections/00_摘要_中文.md` 无 ERROR；`rhythm-check` 无 `cn_sentence_too_long`
 
-8. Phase 7: 全文自审与终稿 + merge.
+9. Phase 7: 全文自审与终稿 + merge.
    - Input: all sections (00, B1-B3, P1-P4, REF) confirmed.
    - Run `diagnosis_engine.py full-review` and `consistency_mapper.py validate` (完整参数见 Script Entry Points); fix all ERROR-level issues.
    - Run `python scripts/word_counter.py summary sections` and `python scripts/state_manager.py --root . page-estimate --sections-dir sections`; if >30 pages, trim specific locations.
