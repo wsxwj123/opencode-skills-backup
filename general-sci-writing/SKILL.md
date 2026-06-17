@@ -335,6 +335,7 @@ python scripts/state_manager.py add-abbreviation <one.json>
 
 **执行流程**：
 0. **Scoped Load (Mandatory)**: 先执行章节局部加载命令，确保只读当前章节。
+0b. **🔴 figure_analysis 加载门禁 (Mandatory，脚本兜底)**：跑 `python scripts/figure_analysis_gate.py --section [section_id] --root .`。该 gate 比对 `figures_database.json` 中该节涉及的 figure，确认每张 `figure_analysis/figure_{N}.md` 存在、非空、无 `❓待确认` 残留；任一未就绪 → 脚本 exit 1，**禁止开写**，先回 `/figure` 补齐再回来。Introduction/Methods 等无 figure 的小节脚本自然放行（exit 0）。过 gate 后**必须显式 `Read` 本节对应的 `figure_analysis/figure_{N}.md`**（write-cycle 不自动加载，见 §13 白名单第 7 项），作为 Results/Discussion 的事实依据。
 1. **Pre-Write Check**: 检查数据完整性。
 2. **Drafting (Main)**: 撰写包含 Main Figures 和 References 的初稿。
    - **Citation Format**: 严格使用 `[n]`。
@@ -377,6 +378,7 @@ python scripts/state_manager.py add-abbreviation <one.json>
    - [ ] **⑪未超期刊字数**：见 ⑥，正文章节累计字数 ≤ `project_config.word_limits` 的 Results+Discussion 上限
    - [ ] **⑫只改原子化源**：本次写入的目标文件为 `manuscripts/` 下的原子化源文件，非 `Full_Manuscript.md` / `.docx`（见 §3）
    - [ ] **⑬结构完整性**：本节包含其文体/storyline 规定的全部结构组件，无缺段/空标题/未填骨架；且符合该节类型规定结构（Introduction 漏斗式；Discussion 主要发现→文献对比+机制→Limitations→Outlook 四段；Methods 必备子节）。子代理对照 `storyline.json` 对应 section 的结构要求逐组件核对
+   - [ ] **⑭figure_analysis 加载**：本节涉及的 figure 在 `figures_database.json` 中均有对应 `figure_analysis/figure_{N}.md` 文件、非空、无 `❓待确认` 残留（脚本：`python scripts/figure_analysis_gate.py --section [section_id] --root .` 必须 exit 0）
 10. **Safety Write**: 用户 OK 后写入文件 → 智能快照。回退手段：若落盘后用户反悔，`/rollback` 到上一个 snapshot 或直接 Edit 改原子化文件（参见 §3 润色 workflow）。
 
 **Discussion 段落结构 / Online Methods vs STAR Methods**：写 Discussion 或 Methods 章节前 `Read references/writing-templates.md` 对应小节。要点：Discussion 走"主要发现总结→文献对比+机制→**Limitations（强制，缺即退稿高频）**→Outlook"四段式；Methods 按 target_journal 选 Online Methods（Nature 精简版+完整版后置）或 STAR Methods（Cell 五段结构）。
@@ -409,7 +411,7 @@ python scripts/state_manager.py add-abbreviation <one.json>
 4c. `python scripts/proofread.py --manuscript-dir manuscripts --report proofread_report.json --threshold 70` — 机械错误。**阻断**：avg_score<70 → 按 report 中 `issues` 字段逐条修后重跑。
 5. `grep -rn "CITE_PENDING\|DATA_PENDING\|REF_DROPPED" manuscripts/ figure_analysis/ 2>/dev/null` — 占位扫描。**阻断**：非空 → 必须按 §REF_DROPPED 三种处置补齐。
 6. 防误改合并稿门禁：`[ ! -f manuscripts/Full_Manuscript.md ] || grep -q "AUTO-GENERATED" manuscripts/Full_Manuscript.md` — **阻断**：banner 不在 → 合并稿被手改过，需 `/merge` 重生成。
-7. **缩略词一致性扫描**（在合并稿上）：① 裸用但未定义的缩写 ② 同一缩写在多个章节重复展开 ③ 已定义但全文未使用。与 `abbreviations.json` 交叉比对。通用缩写（DNA/RNA/PCR 等）跳过。**阻断**：① ② 类违规必修。
+7. `python scripts/abbreviation_consistency.py --root .` — 缩略词一致性扫描（脚本化，不再纯靠 AI 自评）。检测：① **重复定义** 同一缩写在多个 manuscript 文件首次定义；② **未定义就用** 直接用 ABBR 但 `abbreviations.json` 缺、且不在 `UNIVERSAL_ABBREVIATIONS` 白名单；③ **Title 出现缩写**（Title 严禁缩写）。**阻断**：脚本 exit 非 0 → 必修后重跑。通用缩写（DNA/RNA/PCR 等）自动跳过。脚本未覆盖的"已定义但全文未使用"等冗余项可人工补查。
 
 **全部通过 → 进 Phase 10.5 合规门禁**；任一阻断 → 修复后重跑该步及之后步骤。
 

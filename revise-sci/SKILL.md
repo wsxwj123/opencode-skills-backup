@@ -92,6 +92,7 @@ Always produce:
 - `data/reference_coverage_audit.json`
 - `figure_index.json` / `reference_index.json`,反向抽取的图、参考交叉索引(每项含 cited_by 与 orphan_type)
 - `manuscript_index.md`,人读版图/参考索引与孤儿汇总。启发式抽取,作审查辅助而非红线核验
+- `figures/figure_NN.<ext>` + `figures/image_manifest.json`,从源 docx `word/media/` 解出的内嵌图(按 zip 出现顺序命名),供最终返修 docx 嵌回。仅二进制搬运,不做 OCR/图像识别;非 docx 输入则目录可能为空
 
 ## Pipeline
 Run the scripts in this exact order:
@@ -102,6 +103,7 @@ python scripts/preflight.py ...
 python scripts/atomize_comments.py ...
 python scripts/atomize_manuscript.py ...
 python scripts/manuscript_index.py --manuscript <manuscript_docx_path> --project-root <project_root> --units-dir units   # 反向抽取图/参考交叉索引,辅助图文一致性与引用完整性核查
+python scripts/extract_docx_images.py --manuscript <manuscript_docx_path> --project-root <project_root>   # 抠出 docx 内嵌图到 figures/,供最终返修 docx 嵌回(best-effort,非 docx 输入自动 no-op)
 python scripts/build_issue_matrix.py ...
 python scripts/state_manager.py --project-root <project_root> refresh
 python scripts/citation_guard.py ...   # if paper_search_results_path is provided

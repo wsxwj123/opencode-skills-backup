@@ -492,6 +492,14 @@ def main() -> int:
         )
     except Exception:
         pass
+    # 抠出 docx 内嵌图到 figures/,供最终 docx 嵌回。best-effort,失败/无图都不阻断
+    try:
+        subprocess.run(
+            [py, str(script_dir / "extract_docx_images.py"), "--manuscript", args.manuscript, "--project-root", args.project_root],
+            text=True, capture_output=True, timeout=120,
+        )
+    except Exception:
+        pass
     if not args.resume or not has_issue_index(project_root):
         run_step([py, str(script_dir / "build_issue_matrix.py"), "--project-root", args.project_root])
     if not args.resume or not has_state_outputs(project_root):
