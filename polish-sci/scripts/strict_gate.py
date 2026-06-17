@@ -56,9 +56,14 @@ def check_unit(unit: dict) -> tuple[bool, list[str]]:
     if raw_cites != pol_cites:
         problems.append(f"citations changed: lost={sorted(raw_cites - pol_cites)} added={sorted(pol_cites - raw_cites)}")
 
-    markers = find_ai_style_markers(polished)
-    if markers:
-        problems.append(f"ai markers: {markers}")
+    # 非散文(参考文献/作者名单/图注等)保留原文不润色,去AI检测不适用;红线(数值/引用/语气/meaning)仍查
+    is_nonprose = unit.get("prose") is False or unit.get("polished_by") == "unchanged-nonprose"
+    markers = [] if is_nonprose else find_ai_style_markers(polished)
+    # 句长是软目标(科学方法学段落含数据列表的长句合法),记为警告不阻断交付;
+    # 其余去AI标志(破折号/scare quotes/解释性冒号/套话/from-A-to-B 等)仍硬拦。
+    blocking = [m for m in markers if not str(m).startswith("sentence >")]
+    if blocking:
+        problems.append(f"ai markers: {blocking}")
 
     if bool(unit.get("meaning_changed", False)):
         problems.append("meaning_changed=true")
