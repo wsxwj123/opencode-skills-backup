@@ -11,7 +11,7 @@ from pathlib import Path
 from common import discover_global_skill, global_skill_install_paths
 
 
-DEFAULT_BACKUP_REPO = "https://github.com/wsxwj123/opencode-skills-backup.git"
+DEFAULT_BACKUP_REPO = ""  # 配置为你自己的技能备份仓库 git URL；留空则跳过自动安装
 
 
 def clone_skill_subdir(repo_url: str, skill_name: str, destination_root: Path) -> Path:

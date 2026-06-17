@@ -19,7 +19,7 @@
 **Goal:** Ensure every paper has a unique, sequential `global_id`.
 
 **Files:**
-- Modify: `/Users/wsxwj/.config/opencode/skills/review-writing/scripts/state_manager.py`
+- Modify: `~/.config/opencode/skills/review-writing/scripts/state_manager.py`
 
 **Step 1: Modify `update` function**
 - When adding new papers to `literature_index.json`:
@@ -43,7 +43,7 @@
 **Goal:** Convert the JSON index to a format Zotero can read.
 
 **Files:**
-- Create: `/Users/wsxwj/.config/opencode/skills/review-writing/scripts/export_bibtex.py`
+- Create: `~/.config/opencode/skills/review-writing/scripts/export_bibtex.py`
 
 **Step 1: Script Logic**
 - Read `literature_index.json`.
@@ -70,7 +70,7 @@
 **Goal:** Teach AI to respect the global numbering system.
 
 **Files:**
-- Modify: `/Users/wsxwj/.config/opencode/skills/review-writing/SKILL.md`
+- Modify: `~/.config/opencode/skills/review-writing/SKILL.md`
 
 **Step 1: Update Core Protocol**
 - **Citation Rule:** "You must use the `global_id` provided in the context (e.g., `[15]`). Do NOT re-number papers starting from 1 for each chapter."

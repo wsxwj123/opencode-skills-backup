@@ -17,7 +17,7 @@
 **Goal:** Embed the 7 requirements into the skill definition.
 
 **Files:**
-- Modify: `/Users/wsxwj/.config/opencode/skills/review-writing/SKILL.md`
+- Modify: `~/.config/opencode/skills/review-writing/SKILL.md`
 
 **Step 1: Rewrite "Core Interactive Protocol"**
 - **Protocol 1 (State):** "Before EVERY response, run `state_manager.py load`. After EVERY response, run `state_manager.py update` AND `snapshot`."
