@@ -522,3 +522,25 @@ revise-sci 的 polish 在"防过度改写"上**已强于 Figpad**(meaning_change
 **真稿暴露并修的关键 bug**:`validate_report_html.py` 扫占位符含模板 `<script>` 里的 `{{...}}` 字面量→**每份正确报告都被误判FAIL**(门禁形同虚设/反而全卡)。修:扫描前剥 script/style。验证 broken→exit1 / 正常→exit0 / REGRESSION_OK。
 
 **残留**:reviewer-simulator 四视角真实运行应为并发子代理(测试环境嵌套限制降为顺序);其余技能真稿端到端仍未逐一(已测 polish-sci 全程 + reviewer-simulator 全程 + revise-sci 原子化)。
+
+## 二十五、用户 6 问逐技能核查(2026-06-17)
+
+**用户问:每个技能流程是否完整、自检是否都在。逐项核查(读真实 SKILL.md/脚本,非凭记忆):**
+
+| # | 问题 | 核查结论 |
+|---|------|----------|
+| Q1a | gsw Phase4 是什么 | **模板库非流程步骤**。写各章前 `Read references/writing-templates.md`:Intro 五层漏斗 / Methods 可重复性硬清单(货号·RRID·STR·IACUC·accession·IRB·版本+种子·参数·统计独立) / Discussion 四段式(含强制 Limitations) / Online vs STAR 按期刊 / Figure Prompt |
+| Q1b | gsw Phase2.5 vs Phase6 冲突? | **不冲突不合并,职责正交**。2.5=图集规划(文献检索前·无图文件·定 Figure 1-N 骨架与 main/SI);6=识图(写作时逐节·用户逐张发真图·出结果讨论草稿)。已内置 6→2.5 迭代回路 |
+| Q1c | gsw 自检为何看不到 | **有,在 Phase8 逐节收口**(SKILL.md:352-362):DoD 清单+委托盲检(delegate_review+academic-blind-reviewer)+进入下一节前置闸口(verify exit0)。总览没展开 Phase8 子项故未显现 |
+| Q2 | review polish mode 原子拆分?自检? | **都有**。Phase0-P Step2 按标题层级原子拆分→drafts/section_XX_XX.md(用户确认后才写);自检在 Phase3 收口(manuscript-dod 15项+盲检+前置闸口),polish 路由到 Phase3 故共用 |
+| Q3a | nsfc 自检为何看不到 | **有,且 8 技能里最密**:P1-P7 每个 Phase 独立 DoD+委托盲检+fail-closed+前置闸口。总览只 grep 顶层"Execution Workflow"未展开 Phase 内联,故显得简短 |
+| Q3b | nsfc 是否问实验设计 | **部分——真弱点**。有 Mode Handshake+Inputs Required(basics/科学问题属性四选一/materials/约束);**缺结构化追问实验设计·技术路线·预实验数据的交互环节**,M(技术路线)由 Phase2 AI 据 H/O/RC 展开,靠每 Phase 停顿确认+V-12 备选路线兜底 |
+| Q5 | polish-sci vs 其他 polish mode | **纯语言锁内容 vs 混合返修**。polish-sci 只动语言,红线锁死引文/数字/基因名,不补内容不检索;review/nsfc 的 polish 会改写+补缺失节+检索 |
+| Q6 | 图片如何提取落盘(9 张主图) | **真缺口:无图片导出落盘功能**。manuscript_index.py/atomize_manuscript.py 全是纯文本正则,只抽"Figure N+图注文字+引用它的 unit"写进 figure_index.json,**不解码/不导出图片二进制**;sci2doc material_ingest.process_image 只对用户单独给的图片文件记路径+大小,**不从 docx 内部解压 word/media/ 嵌入图**。9 张主图的图注/引用关系被索引,**图片本身未落盘到 figures/** |
+| Q4 | revise-sci opus 实测基本功能 | **进行中(后台 opus 子代理),完成补录** |
+
+**两个待决真缺口(待用户拍板,未动手):**
+1. **图片导出落盘**:docx 可解压 `word/media/` 或 python-docx inline_shapes 导出嵌入图到 `figures/`(技术简单);PDF 需 PyMuPDF(较麻烦)。价值:sci2doc 转学位论文把原图搬进产物有实际用;审稿/润色类不读像素,现有图注索引已够。
+2. **nsfc 实验设计问询**:可补一个 Phase 0.5「实验设计/技术路线/预实验」结构化问询环节,替代当前"AI 据 H/O/RC 自行展开 M"。
+
+**设计哲学说明**:gsw/sci2doc 的"AI 不读像素"(Zero-Hallucination 读图红线)是当初不做自动抠图的原因——图由用户逐张提供+口述确认。
