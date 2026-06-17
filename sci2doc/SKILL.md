@@ -241,6 +241,14 @@ python3 scripts/material_ingest.py --dir /path/to/raw_materials --save-path "${s
 - **Word 格式** → 使用 `/docx` skill 或直接 Read 工具读取文件内容
 - **网络来源（DOI 可访问）** → 使用 `/fetch-everything` skill 抓取全文
 
+**[docx 源稿专用] 内嵌图抠出（必做于 atomic_md_workflow 之前）：** 若 SCI 论文是 docx 格式，运行下面这一步把 docx 内嵌图按出现顺序解到 `figures/`，供后续按章节嵌图与 `figure_registry.py` 使用（非 docx 输入自动 no-op，安全可重复运行）：
+
+```bash
+python3 scripts/extract_docx_images.py --manuscript /path/to/source.docx --project-root "${save_path}"
+```
+
+产出：`figures/figure_NN.<ext>` + `figures/image_manifest.json`。脚本只搬运二进制，不做 OCR / 图像识别；图片对应到章节图号的映射仍走 `figure_registry.py` 注册流程。
+
 提取完成后，AI 应先通读全文摘要（Abstract）、结果（Results）、方法（Methods）三节，形成对实验内容的基本理解，再进入 Step 0.5。
 
 **SCI 自身参考文献导出（初始种子）：** 在通读的同时，同步扫描源 SCI 论文的 References 部分，将其中每条参考文献按 `literature_index.json` schema 格式整理为初始种子条目，`source_provider` 填 `"sci-source-seed"`，`verified` 填 `false`，写入项目的 `literature_index.json`（若文件已存在则 merge 而非覆盖）。这些种子作为 Step 3 文献检索的**待核验候选清单**（已带 DOI/PMID，省去重新构造检索式、确定检索目标的成本），而非可直接引用的来源。注意：`sci-source-seed` 不在 `citation_guard.py` 的合法 provider 白名单（`pubmed-cli` / `paper-search`）内。种子条目必须在 Step 3 以其 DOI/PMID 为目标经 `pubmed-cli` 或 `paper-search` 正式检索核验，核验通过后将 `source_provider` 更新为实际核验来源并置 `verified=true`，方可引用；未核验的种子不得进入正文。

@@ -549,3 +549,58 @@ revise-sci 的 polish 在"防过度改写"上**已强于 Figpad**(meaning_change
 2. **nsfc 实验设计问询**:可补一个 Phase 0.5「实验设计/技术路线/预实验」结构化问询环节,替代当前"AI 据 H/O/RC 自行展开 M"。
 
 **设计哲学说明**:gsw/sci2doc 的"AI 不读像素"(Zero-Hallucination 读图红线)是当初不做自动抠图的原因——图由用户逐张提供+口述确认。
+
+## 第二十六节 第三轮：4 个 high/mid 项并行修复（2026-06-17）
+
+### 已完成（4 个 opus 子代理并行）
+
+**A. revise-sci 真稿 reviewer-html intake 端到端实测（PASS）**
+材料：/Users/wsxwj/Desktop/manuscript_AdvancedMaterials.docx + 上轮生成的 _review_report.html
+17 阶段全部跑通，strict_gate PASS。intake 5 字段（comment_title/problem_description/evidence_anchor/root_cause/author_strategy）完整保留。20 评论 + 27 段 + 9 图 + 116 引文索引齐。
+新发现 4 bug：
+- **B1 high**：build_reference_registry.py 只认数字 [n] 风格，看不懂作者-年份风格（如 BRAY F, LAVERSANNE M ... 2024），AdvMat 116 条参考被识别为 0 条；且 strict_gate 在 references_section_found=false 时 coverage_audit vacuously PASS（更危险）—— 待修
+- B2 mid：R1-Major-08 因"Advanced Materials"字面匹配被锚到 References 段，锚定算法应给 References 段降权 —— 待修
+- B3/B4 low：build_reference_registry --output-md 必填未文档化；revise_units 缺 --comment-id 调试入口 —— 待修
+
+**B. nsfc 新增 Phase 0.5「实验设计与技术路线结构化问询」**
+nsfc-proposal/SKILL.md +45/-8 行。新流程节点：Phase 0 → 0.5 → 1。
+- 触发时机：Phase 0 mapping count 确定后强制问询；信息充足可"✓回放确认"省略追问但不得静默跳过
+- 逐 RC 5 字段：methods / preliminary_data / feasibility / alternative_plan / ethics
+- 落盘 data/experimental_design.json（schema_version 1.0 + entries[]）
+- Phase 2 写 M 前必须 Read 该 JSON；V-12 alternative_plan 直接复用
+- 新增 5 项 DoD（全为人工/语义核验，无脚本可执行项）
+
+**C. 3 技能 docx 抠图脚本统一落地**
+新脚本 extract_docx_images.py 三份字节一致（md5=ea0a8cd5），分别放 polish-sci/revise-sci/sci2doc 的 scripts/ 下。
+- 解压 docx 内 word/media/ 所有图到 figures/figure_NN.<ext>（保留扩展 png/jpeg/...）
+- 同步出 image_manifest.json
+- 不做 OCR、不读像素，贴合"AI 不读像素"哲学
+- 集成：polish Pipeline 加 1.6 步、revise run_pipeline.py best-effort try/except、sci2doc Step 0 docx 专用门
+- AdvMat 真稿测试：10 张全抠出（1 jpeg 头图 + 9 主图，体量 1–6MB）
+- PDF 抠图（PyMuPDF）留 TODO
+
+**D. gsw 流程 2 个 high 缺口已补**
+新脚本 figure_analysis_gate.py + abbreviation_consistency.py 进 general-sci-writing/scripts/。
+- Phase 8 step 0b 加 figure_analysis 加载硬门禁（缺/未就绪 exit 1）
+- Phase 10 step 7 缩略词从 AI 自评升级为脚本化（重复定义/未定义就用/Title 出现缩写）
+- DoD 新增 G14/G15，dod_checklist.json 同步加 script 字段
+- 冒烟 8 case ALL PASS
+
+### 本轮 commit（fd38beb 之后）
+预期 1 个 commit：feat(skills): 第三轮流程完整性补强（nsfc Phase0.5 + docx抠图 + gsw闸门 + revise-sci真稿测）
+含：
+- nsfc-proposal/SKILL.md
+- polish-sci/SKILL.md + scripts/extract_docx_images.py
+- revise-sci/SKILL.md + scripts/extract_docx_images.py + scripts/run_pipeline.py
+- sci2doc/SKILL.md + scripts/extract_docx_images.py
+- general-sci-writing/SKILL.md + references/dod_checklist.json + scripts/figure_analysis_gate.py + scripts/abbreviation_consistency.py
+- ACADEMIC_SKILLS_AUDIT.md（本节）
+
+### 遗留（下一窗口）
+1. revise-sci B1 high（build_reference_registry 作者-年份风格盲点 + strict_gate vacuous PASS）
+2. revise-sci B2 mid（锚定算法 References 段降权）
+3. revise-sci B3/B4 low（CLI 文档化、单条调试入口）
+4. PDF 抠图（PyMuPDF）
+5. nsfc Phase 0.5 真稿实测尚未做
+6. AdvMat/Hunan 测试稿专名在 AUDIT 文档自身的泛化（不影响发布，sync workflow 不带 AUDIT）
+7. 流程审计组2 报的 reviewer-response-sci 委托独立盲检未强制化（一致性缺口）
