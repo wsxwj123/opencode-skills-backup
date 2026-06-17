@@ -194,6 +194,10 @@ echo '{"citations": []}' > "$WORKROOT/data/citation_guard_report.json"
 
 完成第三步后，执行稿件内技术审计（逐项定义见 **`references/review_rubric.md` 第三节**）：AIGC 探测、文本重复、图表完整性（含图像造假模式核查）、参考文献审计；合规与透明度审计（伦理/注册/COI/数据可用性）按 **第五节** 逐项执行，适用所有稿件类型。
 
+**图表完整性与参考文献审计的辅助索引（执行前先跑）：** 用脚本反向抽取稿件的图、参考交叉索引，为图文一致性与引用完整性核查提供逐项依据（孤儿图、孤儿引用、列而未引）。脚本用安装目录绝对路径，输出锚定 `$WORKROOT`（本技能无原子化步骤，故不带 `--units-dir`，cited_by 退化为正文段号 pN）：
+`python "$SKILL_DIR/scripts/manuscript_index.py" --manuscript <稿件 docx 或 md> --project-root "$WORKROOT"`
+产出 `$WORKROOT/figure_index.json`、`$WORKROOT/reference_index.json`、`$WORKROOT/manuscript_index.md`。结果为启发式抽取，作审计辅助而非红线核验：图表完整性审计据 `figure_index.json` 核对每图是否有图注、是否被正文引用（`orphan_type`）；参考文献审计据 `reference_index.json` 核对孤儿引用（列而未引 `entry_not_cited`、引而无条目 `cited_no_entry`）。
+
 
 **🔴 第四步半：并发多视角子代理盲评（禁止主 agent 自评）**
 

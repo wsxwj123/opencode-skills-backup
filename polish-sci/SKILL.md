@@ -44,6 +44,9 @@ not_for(以下情况不要用本技能):
 # 1. 原子化:把稿子按段落拆成 units/<idx>.json
 python scripts/atomize_manuscript.py --manuscript <input.md|docx> --project-root <root>
 
+# 1.5 反向抽取图/参考交叉索引(图文一致性与引用完整性的审查辅助)
+python scripts/manuscript_index.py --manuscript <input> --project-root <root> --units-dir units
+
 # 2. 生成逐段润色任务包(含 section_type 的被动目标区间 + 句长上限 + 红线)
 python scripts/polish_units.py pack --project-root <root> --intensity standard
 
@@ -81,6 +84,8 @@ python scripts/polish_report.py --project-root <root>
 
 ## Output Contract
 - `units/<idx>.json`,原子化单元(原文 + section_type + 引用/数值标记)。
+- `figure_index.json` / `reference_index.json`,反向抽取的图、参考交叉索引(每项含 cited_by 与 orphan_type)。
+- `manuscript_index.md`,人读版图/参考索引与孤儿汇总。启发式抽取,作审查辅助而非红线核验。
 - `polish_manifest.json`,逐段润色任务包。
 - `polished/<idx>.json`,逐段润色结果 + polish_risk_flags。
 - `polished_manuscript.md`,合并后的润色稿。docx 为可选导出(`--docx`,需 python-docx;失败仅警告,md 仍产出)。
