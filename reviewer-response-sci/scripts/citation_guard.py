@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
 """Citation verification guard for reviewer-response-sci.
 
-Validates entries in citation_registry.json (new references added during
-reviewer response) against CrossRef / PubMed APIs.  Adapted from
-review-writing/scripts/citation_guard.py with simplified interface.
+Thin adapter over the shared citation_guard_core.py (single source of truth for
+verification logic). This layer owns: loading citation_registry.json's flat
+entries[] table, normalizing each entry to the core schema, calling validate_core,
+and writing the top-level report contract this skill's pipeline reads.
+
+The report contract is unchanged from the previous standalone implementation:
+run_pipeline.py and SKILL.md判定通过用顶层 status == "pass"，判定撤稿用顶层
+retracted > 0（无 report.ok 嵌套层）。CLI flags are unchanged.
 
 Usage:
     python citation_guard.py --project-root /path/to/project
@@ -15,237 +20,60 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import time
-import urllib.error
-import urllib.parse
-import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-DOI_RE = re.compile(r"^10\.\d{4,9}/[-._;()/:A-Z0-9]+$", re.IGNORECASE)
-PMID_RE = re.compile(r"^\d{4,10}$")
-TITLE_TOKEN_RE = re.compile(r"[a-z0-9一-鿿]+")
-
-FORBIDDEN_PROVIDERS = {"websearch", "web-search", "web_search", "tavily", "openalex", "openalex-cli"}
+from citation_guard_core import _provider_family, validate_core
 
 
-def _http_get_json(url: str, timeout_sec: float = 8.0) -> dict[str, Any] | None:
-    req = urllib.request.Request(url, headers={"User-Agent": "citation-guard/1.0"})
-    try:
-        with urllib.request.urlopen(req, timeout=timeout_sec) as resp:
-            body = resp.read().decode("utf-8", errors="ignore")
-            return json.loads(body)
-    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, json.JSONDecodeError):
-        return None
+def _normalize_entry(entry: dict[str, Any]) -> dict[str, Any]:
+    """Map a flat registry entry to the core's normalized schema.
 
-
-def _normalize_title(title: str) -> str:
-    t = title.lower().strip()
-    t = re.sub(r"[^a-z0-9一-鿿]+", " ", t)
-    return re.sub(r"\s+", " ", t).strip()
-
-
-def _title_tokens(title: str) -> set[str]:
-    return set(TITLE_TOKEN_RE.findall(_normalize_title(title)))
-
-
-def _title_similarity(a: str, b: str) -> float:
-    na, nb = _normalize_title(a), _normalize_title(b)
-    if not na or not nb:
-        return 0.0
-    if na == nb:
-        return 1.0
-    ta, tb = _title_tokens(a), _title_tokens(b)
-    jacc = (len(ta & tb) / len(ta | tb)) if ta and tb else 0.0
-    short = min(len(na), len(nb)) / max(len(na), len(nb))
-    contain_bonus = 0.1 if (na in nb or nb in na) else 0.0
-    return min(1.0, 0.75 * jacc + 0.25 * short + contain_bonus)
-
-
-def _fetch_crossref_by_doi(doi: str) -> dict[str, Any] | None:
-    encoded = urllib.parse.quote(doi, safe="")
-    payload = _http_get_json(f"https://api.crossref.org/works/{encoded}")
-    if not payload or "message" not in payload:
-        return None
-    msg = payload["message"]
-    title = (msg.get("title") or [""])[0] if isinstance(msg.get("title"), list) else ""
-    relation = msg.get("relation") or {}
-    is_retracted = isinstance(relation, dict) and any("retract" in str(k).lower() for k in relation.keys())
-    return {"source": "crossref", "title": title or "", "doi": doi, "retracted": is_retracted}
-
-
-def _fetch_pubmed_by_pmid(pmid: str) -> dict[str, Any] | None:
-    payload = _http_get_json(
-        f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id={pmid}&retmode=json"
-    )
-    if not payload or "result" not in payload:
-        return None
-    result = payload["result"].get(str(pmid))
-    if not isinstance(result, dict):
-        return None
-    title = result.get("title") or ""
-    article_ids = result.get("articleids") or []
-    doi = None
-    for aid in article_ids:
-        if isinstance(aid, dict) and str(aid.get("idtype", "")).lower() == "doi":
-            doi = aid.get("value")
-            break
-    pubtypes = result.get("pubtype") or []
-    is_retracted = any("retract" in str(x).lower() for x in pubtypes)
-    return {"source": "pubmed", "title": title, "doi": doi, "pmid": str(pmid), "retracted": is_retracted}
-
-
-TITLE_VERIFY_THRESHOLD = 0.8
-
-
-def _verify_title_exists(title: str) -> dict[str, Any] | None:
-    """Confirm a no-DOI/no-PMID entry maps to a real publication via by-title search.
-
-    Tries Crossref by-title, then Semantic Scholar (rate-limit prone) as fallback.
-    Returns the best match record when similarity >= TITLE_VERIFY_THRESHOLD, else
-    None. Network failures (_http_get_json -> None) yield None: fail-closed, the
-    caller treats "no match" as not-verified -> FAIL.
+    The field-name bridge stays in this adapter. This skill's registry uses
+    source_provider, which core expects as provider_family (already a family).
     """
-    if not title.strip():
-        return None
-
-    def _best_match(cands: list[tuple[str, str | None, str | None]], source: str) -> dict[str, Any] | None:
-        best: dict[str, Any] | None = None
-        for ct, cd, cp in cands:
-            if not ct:
-                continue
-            sim = _title_similarity(title, ct)
-            if best is None or sim > best["similarity"]:
-                best = {"source": source, "matched_title": ct, "similarity": sim, "doi": cd, "pmid": cp}
-        return best if (best and best["similarity"] >= TITLE_VERIFY_THRESHOLD) else None
-
-    cr = _http_get_json(
-        "https://api.crossref.org/works?" + urllib.parse.urlencode({"query.bibliographic": title, "rows": 5})
-    )
-    if cr and isinstance(cr.get("message"), dict):
-        cands = []
-        for it in cr["message"].get("items") or []:
-            if not isinstance(it, dict):
-                continue
-            t = (it.get("title") or [""])[0] if isinstance(it.get("title"), list) else ""
-            cands.append((str(t or ""), str(it.get("DOI") or "") or None, None))
-        m = _best_match(cands, "crossref-bytitle")
-        if m:
-            return m
-
-    ss = _http_get_json(
-        "https://api.semanticscholar.org/graph/v1/paper/search?"
-        + urllib.parse.urlencode({"query": title, "limit": 5, "fields": "title,externalIds"})
-    )
-    if ss and isinstance(ss.get("data"), list):
-        cands = []
-        for it in ss["data"]:
-            if not isinstance(it, dict):
-                continue
-            ext = it.get("externalIds") or {}
-            doi = (str(ext.get("DOI") or "") or None) if isinstance(ext, dict) else None
-            pmid = (str(ext.get("PubMed") or "") or None) if isinstance(ext, dict) else None
-            cands.append((str(it.get("title") or ""), doi, pmid))
-        m = _best_match(cands, "semanticscholar-bytitle")
-        if m:
-            return m
-
-    return None
+    return {
+        "title": entry.get("title"),
+        "doi": entry.get("doi"),
+        "pmid": entry.get("pmid"),
+        "provider_family": _provider_family(str(entry.get("source_provider") or "")),
+        "source_id": entry.get("source_id") or entry.get("source_provider"),
+        "year": entry.get("year"),
+        "retracted": entry.get("retracted", False),
+    }
 
 
 def validate_entry(entry: dict[str, Any], *, online: bool) -> dict[str, Any]:
-    """Validate a single citation registry entry."""
-    title = str(entry.get("title") or "").strip()
-    doi = str(entry.get("doi") or "").strip()
-    pmid = str(entry.get("pmid") or "").strip()
-    provider = str(entry.get("source_provider") or "").strip().lower()
+    """Validate one registry entry via the shared core, then shape the per-entry
+    result back into this skill's existing structure.
 
-    doi_fmt_ok = DOI_RE.match(doi) is not None if doi else None
-    pmid_fmt_ok = PMID_RE.match(pmid) is not None if pmid else None
+    Note: source_trace_missing from core is downgraded here. This skill's registry
+    does not always carry both provider and source_id, and traceability is not part
+    of the historical pass criterion for reviewer-response; the previous standalone
+    guard never failed on it. Provider allow/forbid, identifier, title, DOI/PMID,
+    and retraction checks remain authoritative.
+    """
+    normalized = _normalize_entry(entry)
+    core = validate_core(normalized, online=online)
+    details = core.get("details", {})
 
-    crossref = _fetch_crossref_by_doi(doi) if (online and doi and doi_fmt_ok) else None
-    pubmed = _fetch_pubmed_by_pmid(pmid) if (online and pmid and pmid_fmt_ok) else None
-
-    has_identifier = bool(doi or pmid)
-
-    # By-title verification only when entry has NO DOI and NO PMID.
-    title_verify = _verify_title_exists(title) if (online and not has_identifier and title) else None
-    title_verified = title_verify is not None
-
-    # Title similarity check against external sources
-    source_titles = []
-    for rec in (pubmed, crossref):
-        if rec and rec.get("title"):
-            source_titles.append(str(rec["title"]))
-    title_sim = max((_title_similarity(title, st) for st in source_titles), default=0.0)
-    title_match = bool(source_titles) and title_sim >= 0.72
-
-    failures: list[str] = []
-
-    if not title:
-        failures.append("title_missing")
-    if provider in FORBIDDEN_PROVIDERS:
-        failures.append("forbidden_provider")
-    if not has_identifier and not title_verified:
-        failures.append("no_identifier")
-        if online and title:
-            failures.append("title_not_found_online")
-    if doi and not doi_fmt_ok:
-        failures.append("doi_format_invalid")
-    if pmid and not pmid_fmt_ok:
-        failures.append("pmid_format_invalid")
-    if online and doi and doi_fmt_ok and crossref is None:
-        failures.append("doi_unresolvable")
-    if online and pmid and pmid_fmt_ok and pubmed is None:
-        failures.append("pmid_unresolvable")
-    if title and source_titles and not title_match:
-        failures.append("title_mismatch")
-
-    # DOI/PMID cross-match
-    if doi and pmid and pubmed and pubmed.get("doi"):
-        if str(pubmed["doi"]).lower() != doi.lower():
-            failures.append("doi_pmid_cross_mismatch")
-
-    # Retraction
-    retracted = bool(entry.get("retracted", False))
-    for rec in (pubmed, crossref):
-        if rec and rec.get("retracted"):
-            retracted = True
-    if retracted:
-        failures.append("retracted")
-
-    # Confidence score
-    score = 0.0
-    score += title_sim * 35
-    if doi_fmt_ok is True:
-        score += 18 if (crossref is not None or not online) else -5
-    if pmid_fmt_ok is True:
-        score += 18 if (pubmed is not None or not online) else -5
-    if doi and pmid and pubmed and pubmed.get("doi"):
-        score += 10 if str(pubmed["doi"]).lower() == doi.lower() else -12
-    if provider and provider not in FORBIDDEN_PROVIDERS:
-        score += 6
-    elif provider in FORBIDDEN_PROVIDERS:
-        score -= 20
-    if not has_identifier:
-        score += 12 if title_verified else -12
-    if retracted:
-        score -= 60
-    confidence = int(max(0, min(100, round(score))))
+    failures = [r for r in core["failure_reasons"] if r != "source_trace_missing"]
+    verified = len(failures) == 0
+    retracted = bool(details.get("retracted"))
 
     return {
         "ref_number": entry.get("ref_number"),
-        "title": title,
-        "doi": doi,
-        "pmid": pmid,
-        "verified": len(failures) == 0,
-        "confidence": confidence,
-        "title_similarity": round(title_sim, 4),
-        "title_verified": title_verified,
-        "title_verify_source": (title_verify.get("source") if title_verify else None),
-        "title_verify_similarity": (round(title_verify["similarity"], 4) if title_verify else None),
+        "title": normalized["title"] and str(normalized["title"]).strip() or "",
+        "doi": str(entry.get("doi") or "").strip(),
+        "pmid": str(entry.get("pmid") or "").strip(),
+        "verified": verified,
+        "confidence": core["confidence"],
+        "title_similarity": details.get("title_similarity", 0.0),
+        "title_verified": details.get("title_verified", False),
+        "title_verify_source": details.get("title_verify_source"),
+        "title_verify_similarity": details.get("title_verify_similarity"),
         "failures": failures,
         "retracted": retracted,
     }
@@ -272,6 +100,9 @@ def main() -> int:
         return 1
 
     entries = registry.get("entries", [])
+    # Business semantic: an empty registry is a valid PASS. Reviewer responses
+    # often add no new references; do not let the core's empty policy turn this
+    # into a failure. Explicit branch, handled in the adapter.
     if not entries:
         print("CITATION_GUARD: PASS (empty registry)")
         return 0
