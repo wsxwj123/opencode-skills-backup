@@ -492,3 +492,20 @@ revise-sci 的 polish 在"防过度改写"上**已强于 Figpad**(meaning_change
 **结构 prose 标志全新跑验证**:119 非散文 / 115 散文,pack 存根带 prose,独立于润色器标签生效。
 
 → 第二十一节 C1(真实稿端到端)、C3(docx 导出)状态更新为 ✅ 已实测(以 polish-sci 为例)。其余技能的真实稿端到端仍未逐一做(C1 仅 polish-sci 完成)。
+
+## 二十三、本轮计划(2026-06-17 用户批准):成稿索引提取 + 摄入技能真稿实测
+
+**用户拍板**:做"原子化时建 figure/reference 交叉索引";reviewer-simulator/revise-sci 用 AdvMat 真稿测。
+
+**背景(实测证据)**:
+- polish-sci 原子化 AdvMat ✅(234段);revise-sci `atomize_manuscript` 拆 28 节基本对,但**前置页第3条单位"3 Hunan Key Laboratory…"被误判为标题**(行首数字);reviewer-simulator **不做原子化**(整篇读入设计)。
+- 摄入类(polish/revise/simulator)目前 atomize 只拆节,**没有从成稿反向抽 figure+图注、[n]+参考文献的交叉索引**(写作类 gsw/review 边写边建,摄入类缺)。
+
+**要做(todolist)**:
+- T14 建**共享 manuscript_index 提取器**(DRY,一份真源):`figure_index`(Figure N + 图注 + 引用它的 unit)+ `reference_index`([n]→参考条目→引用 unit,标孤儿:引而未列/列而未引)。定位=审阅辅助+完整性提示,启发式解析"好但非100%"。
+- T15 接入 polish-sci / revise-sci / reviewer-simulator 的 atomize/ingest(reviewer-simulator 加一个轻量"抽索引"步以支撑图文/引文审计)。
+- T16 修 revise-sci 前置页 affiliation 行首数字误判为标题(实测发现的小 bug)。
+- T17 用 AdvMat 实测:三技能索引正确性 + **reviewer-simulator 完整审稿跑通(Q2)**。
+- T18 状态文件+记忆+learnings+提交+镜像。
+
+**复杂代码用 opus 子代理;每步实测;红线:索引是辅助不替代红线核验。**
