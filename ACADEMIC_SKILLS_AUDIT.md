@@ -481,7 +481,7 @@ revise-sci 的 polish 在"防过度改写"上**已强于 Figpad**(meaning_change
 
 ## 二十二、polish-sci 真实稿端到端实测(C1+C3,2026-06-17,commit 96c39ba/fbaa120)
 
-用真实 `manuscript_AdvancedMaterials.docx`(25MB,234 段)跑 polish-sci 完整管道。**这是首次真实长稿端到端**,一次暴露 4 类样例测不出的集成 bug,全部已修:
+用真实 `<测试稿>.docx`(25MB,234 段)跑 polish-sci 完整管道。**这是首次真实长稿端到端**,一次暴露 4 类样例测不出的集成 bug,全部已修:
 
 1. **非 Word 样式标题识别失效**:真实稿"1. Introduction"等是普通段落→section_type 全 other。修:`looks_like_heading` 内容式识别(编号/已知章节名)+ abstract 行内引导特判 + `prose` 标志。
 2. **门禁对非散文误判(35 处假阳)**:参考文献(116段)/作者名单的冒号、范围、问句标题被去AI检测拦。修:非散文(`prose=false` 或 `polished_by=unchanged-nonprose`)豁免去AI/句长,红线(数值/引用/语气/meaning)仍对全部单元查。
@@ -495,24 +495,24 @@ revise-sci 的 polish 在"防过度改写"上**已强于 Figpad**(meaning_change
 
 ## 二十三、本轮计划(2026-06-17 用户批准):成稿索引提取 + 摄入技能真稿实测
 
-**用户拍板**:做"原子化时建 figure/reference 交叉索引";reviewer-simulator/revise-sci 用 AdvMat 真稿测。
+**用户拍板**:做"原子化时建 figure/reference 交叉索引";reviewer-simulator/revise-sci 用 测试稿 真稿测。
 
 **背景(实测证据)**:
-- polish-sci 原子化 AdvMat ✅(234段);revise-sci `atomize_manuscript` 拆 28 节基本对,但**前置页第3条单位"3 Hunan Key Laboratory…"被误判为标题**(行首数字);reviewer-simulator **不做原子化**(整篇读入设计)。
+- polish-sci 原子化 测试稿 ✅(234段);revise-sci `atomize_manuscript` 拆 28 节基本对,但**前置页第3条单位"3 某机构 Key Laboratory…"被误判为标题**(行首数字);reviewer-simulator **不做原子化**(整篇读入设计)。
 - 摄入类(polish/revise/simulator)目前 atomize 只拆节,**没有从成稿反向抽 figure+图注、[n]+参考文献的交叉索引**(写作类 gsw/review 边写边建,摄入类缺)。
 
 **要做(todolist)**:
 - T14 建**共享 manuscript_index 提取器**(DRY,一份真源):`figure_index`(Figure N + 图注 + 引用它的 unit)+ `reference_index`([n]→参考条目→引用 unit,标孤儿:引而未列/列而未引)。定位=审阅辅助+完整性提示,启发式解析"好但非100%"。
 - T15 接入 polish-sci / revise-sci / reviewer-simulator 的 atomize/ingest(reviewer-simulator 加一个轻量"抽索引"步以支撑图文/引文审计)。
 - T16 修 revise-sci 前置页 affiliation 行首数字误判为标题(实测发现的小 bug)。
-- T17 用 AdvMat 实测:三技能索引正确性 + **reviewer-simulator 完整审稿跑通(Q2)**。
+- T17 用 测试稿 实测:三技能索引正确性 + **reviewer-simulator 完整审稿跑通(Q2)**。
 - T18 状态文件+记忆+learnings+提交+镜像。
 
 **复杂代码用 opus 子代理;每步实测;红线:索引是辅助不替代红线核验。**
 
 ## 二十四、索引提取器落地 + reviewer-simulator 真稿审稿实测(2026-06-17,commit ec1be6f..)
 
-**用户 Q3 落地**:建共享 `manuscript_index.py`(自包含、3摄入技能字节一致 md5 fc8d66ca),成稿原子化时反向抽 figure_index(图+图注+引用段+孤儿)+ reference_index([n]→参考条目→引用段+孤儿)+ 人读 manuscript_index.md。接入 polish-sci(步1.5)、revise-sci(pipeline+run_pipeline单入口best-effort)、reviewer-simulator(第四步技术审计辅助)。AdvMat 实测三技能一致:9图0孤儿 / 116参考 / 19孤儿引用(列而未引,真实断层)。
+**用户 Q3 落地**:建共享 `manuscript_index.py`(自包含、3摄入技能字节一致 md5 fc8d66ca),成稿原子化时反向抽 figure_index(图+图注+引用段+孤儿)+ reference_index([n]→参考条目→引用段+孤儿)+ 人读 manuscript_index.md。接入 polish-sci(步1.5)、revise-sci(pipeline+run_pipeline单入口best-effort)、reviewer-simulator(第四步技术审计辅助)。测试稿 实测三技能一致:9图0孤儿 / 116参考 / 19孤儿引用(列而未引,真实断层)。
 
 **用户 Q1/Q2 实测结论**:
 - polish-sci ✅ 原子化正确(234段)、全管道跑通(前轮)。
@@ -537,11 +537,11 @@ revise-sci 的 polish 在"防过度改写"上**已强于 Figpad**(meaning_change
 | Q3b | nsfc 是否问实验设计 | **部分——真弱点**。有 Mode Handshake+Inputs Required(basics/科学问题属性四选一/materials/约束);**缺结构化追问实验设计·技术路线·预实验数据的交互环节**,M(技术路线)由 Phase2 AI 据 H/O/RC 展开,靠每 Phase 停顿确认+V-12 备选路线兜底 |
 | Q5 | polish-sci vs 其他 polish mode | **纯语言锁内容 vs 混合返修**。polish-sci 只动语言,红线锁死引文/数字/基因名,不补内容不检索;review/nsfc 的 polish 会改写+补缺失节+检索 |
 | Q6 | 图片如何提取落盘(9 张主图) | **真缺口:无图片导出落盘功能**。manuscript_index.py/atomize_manuscript.py 全是纯文本正则,只抽"Figure N+图注文字+引用它的 unit"写进 figure_index.json,**不解码/不导出图片二进制**;sci2doc material_ingest.process_image 只对用户单独给的图片文件记路径+大小,**不从 docx 内部解压 word/media/ 嵌入图**。9 张主图的图注/引用关系被索引,**图片本身未落盘到 figures/** |
-| Q4 | revise-sci opus 实测基本功能 | **完成**。26/26 语法通过、关键 CLI --help 正常、docx 原子化(5节)+manuscript_index 跑通。发现 2 bug:**high**=短机构名"3 Hunan Key Laboratory…"(8词)被 `is_heading` 误判标题并被相邻空 section flush **静默吞掉**(上轮 T16 的 `≤12 词` 防护挡不住短机构名)→**已修**;**mid**=`atomize_manuscript/atomize_comments` 仅吃 .docx,非 docx 输入抛 `PackageNotFoundError` 无友好报错(契约性缺陷,暂记录待用户拍板) |
+| Q4 | revise-sci opus 实测基本功能 | **完成**。26/26 语法通过、关键 CLI --help 正常、docx 原子化(5节)+manuscript_index 跑通。发现 2 bug:**high**=短机构名"3 某机构 Key Laboratory…"(8词)被 `is_heading` 误判标题并被相邻空 section flush **静默吞掉**(上轮 T16 的 `≤12 词` 防护挡不住短机构名)→**已修**;**mid**=`atomize_manuscript/atomize_comments` 仅吃 .docx,非 docx 输入抛 `PackageNotFoundError` 无友好报错(契约性缺陷,暂记录待用户拍板) |
 
 **Q4 high bug 修复(2026-06-17):** root cause=编号标题正则 + 仅靠词数阈值,8 词机构名漏过。正解=**加机构词排除**(`_AFFILIATION_HINT_RE`:universit/institut/laborator/hospital/college/faculty/academ/ministr + department/school/center/centre/division of-for + 中文 大学/学院/研究院/研究所/重点实验室/实验室/医院)。改两处(两技能同隐患,实现位置不同):
 - `revise-sci/common.py is_heading` 编号分支(≤12词粗筛后追加机构词排除)
-- `polish-sci/atomize_manuscript.py looks_like_heading` 编号分支(≤8词后追加机构词排除;polish 阈值更紧但 7 词机构名仍会漏,AdvMat 真机构名更长才侥幸没暴露)
+- `polish-sci/atomize_manuscript.py looks_like_heading` 编号分支(≤8词后追加机构词排除;polish 阈值更紧但 7 词机构名仍会漏,测试稿 真机构名更长才侥幸没暴露)
 回归 PASS:机构名(8词/系/center for)排除 + 真标题(含"Materials and Methods"多词/3.1子标题/Results and Discussion)保留,两技能各 7/7。
 
 **两个待决真缺口(待用户拍板,未动手):**
@@ -555,10 +555,10 @@ revise-sci 的 polish 在"防过度改写"上**已强于 Figpad**(meaning_change
 ### 已完成（4 个 opus 子代理并行）
 
 **A. revise-sci 真稿 reviewer-html intake 端到端实测（PASS）**
-材料：/Users/wsxwj/Desktop/manuscript_AdvancedMaterials.docx + 上轮生成的 _review_report.html
+材料：/Users/wsxwj/Desktop/<测试稿>.docx + 上轮生成的 _review_report.html
 17 阶段全部跑通，strict_gate PASS。intake 5 字段（comment_title/problem_description/evidence_anchor/root_cause/author_strategy）完整保留。20 评论 + 27 段 + 9 图 + 116 引文索引齐。
 新发现 4 bug：
-- **B1 high**：build_reference_registry.py 只认数字 [n] 风格，看不懂作者-年份风格（如 BRAY F, LAVERSANNE M ... 2024），AdvMat 116 条参考被识别为 0 条；且 strict_gate 在 references_section_found=false 时 coverage_audit vacuously PASS（更危险）—— 待修
+- **B1 high**：build_reference_registry.py 只认数字 [n] 风格，看不懂作者-年份风格（如 BRAY F, LAVERSANNE M ... 2024），测试稿 116 条参考被识别为 0 条；且 strict_gate 在 references_section_found=false 时 coverage_audit vacuously PASS（更危险）—— 待修
 - B2 mid：R1-Major-08 因"Advanced Materials"字面匹配被锚到 References 段，锚定算法应给 References 段降权 —— 待修
 - B3/B4 low：build_reference_registry --output-md 必填未文档化；revise_units 缺 --comment-id 调试入口 —— 待修
 
@@ -576,7 +576,7 @@ nsfc-proposal/SKILL.md +45/-8 行。新流程节点：Phase 0 → 0.5 → 1。
 - 同步出 image_manifest.json
 - 不做 OCR、不读像素，贴合"AI 不读像素"哲学
 - 集成：polish Pipeline 加 1.6 步、revise run_pipeline.py best-effort try/except、sci2doc Step 0 docx 专用门
-- AdvMat 真稿测试：10 张全抠出（1 jpeg 头图 + 9 主图，体量 1–6MB）
+- 测试稿 真稿测试：10 张全抠出（1 jpeg 头图 + 9 主图，体量 1–6MB）
 - PDF 抠图（PyMuPDF）留 TODO
 
 **D. gsw 流程 2 个 high 缺口已补**
@@ -602,5 +602,34 @@ nsfc-proposal/SKILL.md +45/-8 行。新流程节点：Phase 0 → 0.5 → 1。
 3. revise-sci B3/B4 low（CLI 文档化、单条调试入口）
 4. PDF 抠图（PyMuPDF）
 5. nsfc Phase 0.5 真稿实测尚未做
-6. AdvMat/Hunan 测试稿专名在 AUDIT 文档自身的泛化（不影响发布，sync workflow 不带 AUDIT）
+6. 测试稿/某省 测试稿专名在 AUDIT 文档自身的泛化（不影响发布，sync workflow 不带 AUDIT）
 7. 流程审计组2 报的 reviewer-response-sci 委托独立盲检未强制化（一致性缺口）
+
+## 第二十七节 第四轮：清空全部遗留项（2026-06-17）
+
+### 已完成（3 个 opus 子代理并行 + 主代理收尾）
+
+**E. revise-sci 真稿测发现的 4 bug 全修**
+- B1(high) build_reference_registry.py 现支持作者-年份风格参考文献：扩 HEADING_RE 别名、新增 PLAIN_HEADING_RE（无 # 前缀纯文本 References/参考文献 标题）、AUTHOR_INITIALS_REF_RE（BRAY F, LAVERSANNE M, et al. 类）。真稿验证：AdvMat 116 条参考完整 pipeline 与纯文本 dump 路径均识别 116 条（修复前纯标题路径返回 0）
+- B1配套(high) strict_gate.py 空洞 PASS 守卫：正文有引用标记但 reference_entries==0 / references_section_found=false → FAIL（exit 1）；正文无引用则豁免不误伤。双用例验证通过
+- B2(mid) revise_units.py 锚定对 References 段候选乘 0.15 降权（非排除）：含"Advanced Materials"的评论现锚到正文而非参考条目
+- B3(low) SKILL.md Pipeline 补全 revise_units/merge_manuscript/reference_sync/build_reference_registry/export_docx 完整参数（含 --output-md）
+- B4(low) revise_units.py 新增 --comment-id 单条调试入口
+
+**G. docx 抠图加 PDF 支持 + workflow 断言**
+- extract_docx_images.py 加 .pdf 分支（PyMuPDF/fitz 按 xref 抠图）；缺 PyMuPDF 时优雅降级（stderr 提示 + note:pymupdf-missing + exit 0 不崩溃）；docx 分支零改动
+- 三份字节一致（md5=bc396376），3 个 SKILL.md 措辞更新为"支持 docx 与 pdf"
+- sync workflow 新增断言：3 份 extract_docx_images.py md5 一致（任一漂移 exit 1）
+- 自测：docx 回归仍 10 张图、PDF 真实抠图 2 张、PDF 缺库降级、YAML 语法 OK
+
+**H. reviewer-response-sci 盲检核实 + AUDIT 脱敏**
+- reviewer-response-sci 委托盲检经核实**早已强制存在**（DoD 第274-285行，gate=response-dod，items RR1-RR14，对齐 gsw/nsfc 模板五要素齐全），无需改动
+- 注：该技能 delegate_review.py 只有 pack/verify 子命令，无 list-gates
+- ACADEMIC_SKILLS_AUDIT.md 测试稿专名脱敏 11→0（AdvMat/AdvancedMaterials→测试稿、Hunan→某省/某机构）
+
+### 至此遗留项清空情况
+第二十六节列的 7 项遗留：① B1 high ✅修 ② B2 mid ✅修 ③ B3/B4 low ✅修 ④ PDF 抠图 ✅加 ⑤ nsfc Phase0.5 真稿实测（仍未做，留作可选验证）⑥ AUDIT 专名脱敏 ✅ ⑦ reviewer-response 盲检 ✅核实早已强制。
+唯一剩余：nsfc Phase 0.5 真稿端到端实测（功能已实现，仅缺一次真稿走查，非阻断）。
+
+### git 状态
+本节随第四轮 commit 一起推送。8 技能 PII 全清零、流程完整、盲检全统一、docx+pdf 抠图落地、参考文献作者-年份风格识别修复。

@@ -40,6 +40,21 @@ jobs:
           fi
           echo "✅ all 7 citation_guard_core.py identical ($(md5sum "${cores[0]}" | awk '{print $1}'))"
 
+      - name: Assert extract_docx_images.py is byte-identical across all skills
+        run: |
+          # 唯一真源守卫:polish-sci/revise-sci/sci2doc 共享同一份 extract_docx_images.py。
+          # 任一份漂移(改抠图脚本漏同步某技能)即失败,阻断 custom-skills 同步。
+          mapfile -t extractors < <(find polish-sci revise-sci sci2doc \
+            -name extract_docx_images.py | sort)
+          if [ "${#extractors[@]}" -ne 3 ]; then
+            echo "::error::expected 3 extract_docx_images.py, found ${#extractors[@]}"; printf '%s\n' "${extractors[@]}"; exit 1
+          fi
+          uniq_count=$(md5sum "${extractors[@]}" | awk '{print $1}' | sort -u | wc -l)
+          if [ "$uniq_count" -ne 1 ]; then
+            echo "::error::extract_docx_images.py diverged across skills:"; md5sum "${extractors[@]}"; exit 1
+          fi
+          echo "✅ all 3 extract_docx_images.py identical ($(md5sum "${extractors[0]}" | awk '{print $1}'))"
+
       - name: Sync 8 custom skills to custom-skills branch
         run: |
           git config user.name "github-actions[bot]"

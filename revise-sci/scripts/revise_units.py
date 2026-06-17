@@ -78,6 +78,10 @@ SECTION_ROLE_HINTS: dict[str, tuple[str, ...]] = {
     "references": ("references", "reference", "bibliography"),
 }
 
+# Down-weight (not exclude) literal matches that land inside the References
+# section, so a journal-name collision cannot mis-anchor a substantive comment.
+REFERENCES_SECTION_MATCH_WEIGHT = 0.15
+
 ABSTRACT_COMMENT_ROLE_KEYWORDS: dict[str, tuple[str, ...]] = {
     "front": (
         "abstract",
@@ -208,11 +212,20 @@ def best_location(comment_text: str, section_index: dict) -> tuple[dict[str, Any
     for section in sections:
         heading_salient = salient_tokens(section.get("heading", ""))
         heading_all = tokenize(section.get("heading", ""))
+        # Substantive review comments almost never target a reference list entry
+        # itself; a literal token match against a journal name inside References
+        # (e.g. "Advanced Materials, 2020") must not out-score the real body
+        # paragraph. Down-weight (do not exclude) candidates in the References
+        # section so they only win when nothing else matches.
+        section_weight = REFERENCES_SECTION_MATCH_WEIGHT if infer_section_role(section.get("heading", "")) == "references" else 1.0
         for paragraph in section.get("paragraphs", []):
             paragraph_salient = salient_tokens(paragraph["text"])
             paragraph_all = tokenize(paragraph["text"])
             paragraph_hits = len(query_salient.intersection(paragraph_salient)) * 3 + len(query_all.intersection(paragraph_all))
             heading_hits = len(query_salient.intersection(heading_salient)) * 4 + len(query_all.intersection(heading_all)) * 2
+            if section_weight != 1.0:
+                paragraph_hits = int(paragraph_hits * section_weight)
+                heading_hits = int(heading_hits * section_weight)
             score = paragraph_hits + heading_hits
             scored.append((score, heading_hits, paragraph_hits, section, paragraph))
     if not scored:
@@ -1117,6 +1130,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Populate units, comment records, response markdown, and edit plan")
     parser.add_argument("--project-root", required=True)
     parser.add_argument("--paper-search-results", default="")
+    parser.add_argument("--comment-id", default="", help="Process only the unit with this comment_id (debug aid); default processes all units")
     args = parser.parse_args()
 
     project_root = Path(args.project_root)
@@ -1125,6 +1139,12 @@ def main() -> int:
     paper_search_path = args.paper_search_results or str(project_root / "paper_search_validated.json")
     paper_search_map = load_paper_search_map(paper_search_path if Path(paper_search_path).exists() else "")
     units_paths = sorted((project_root / "units").glob("*.json"))
+    target_comment_id = normalize_ws(args.comment_id)
+    if target_comment_id:
+        units_paths = [p for p in units_paths if normalize_ws(str(read_json(p, {}).get("comment_id", ""))) == target_comment_id]
+        if not units_paths:
+            print(json.dumps({"ok": False, "error": f"no unit found with comment_id {target_comment_id}"}, ensure_ascii=False))
+            return 1
     comment_records_dir = project_root / "comment_records"
     comment_records_dir.mkdir(parents=True, exist_ok=True)
     state = read_json(project_root / "project_state.json", {})

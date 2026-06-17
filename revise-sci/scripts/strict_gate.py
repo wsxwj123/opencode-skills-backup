@@ -217,6 +217,18 @@ def main() -> int:
             failures.append(f"missing reference artifact: {artifact.name}")
     if isinstance(reference_coverage, dict) and not reference_coverage.get("ok", True):
         failures.append("reference coverage audit reports unresolved citation coverage gaps")
+    # Guard against a vacuous PASS: when the manuscript body carries in-text
+    # citations but the reference registry came up empty (or no references
+    # section was located), the coverage audit must not be treated as clean.
+    # Manuscripts with no in-text citations at all are legitimately exempt.
+    if isinstance(reference_coverage, dict):
+        has_in_text_citations = bool(reference_coverage.get("cited_numbers")) or bool(reference_coverage.get("author_year_citations"))
+        registry_empty = int(reference_coverage.get("reference_entries", 0) or 0) == 0
+        references_section_found = bool(reference_coverage.get("references_section_found", False))
+        if has_in_text_citations and registry_empty:
+            failures.append("manuscript has in-text citations but the reference registry is empty (no reference entries were recognized)")
+        elif has_in_text_citations and not references_section_found:
+            failures.append("manuscript has in-text citations but no references section was located")
     if any((project_root / name).exists() for name in ("paper_search_results.json", "paper_search_validated.json", "paper_search_guard_report.json")) and reference_search_decision != "approved":
         failures.append("paper-search artifacts exist but reference_search_decision is not approved")
     if isinstance(reference_coverage, dict) and reference_coverage.get("reference_search_required") and reference_coverage.get("reference_search_decision") == "ask":

@@ -9,7 +9,11 @@ from pathlib import Path
 from common import autodiscover_reference_source, docx_title_hint, normalize_ws, read_docx_paragraphs, read_json, write_json, write_text
 
 
-HEADING_RE = re.compile(r"^\s{0,3}#{1,6}\s*(references|reference|参考文献)\s*$", re.IGNORECASE)
+HEADING_RE = re.compile(r"^\s{0,3}#{1,6}\s*(references|reference|参考文献|bibliography|cited literature|literature cited)\s*$", re.IGNORECASE)
+# Plain (non-markdown) references heading, e.g. a bare "References" line produced
+# from a .docx/.txt source that carries no markdown "#" prefix. Optional leading
+# numbering ("4 References", "5. References") is tolerated.
+PLAIN_HEADING_RE = re.compile(r"^\s{0,3}(?:\d+(?:\.\d+)*\.?\s+)?(references|reference|参考文献|bibliography|cited literature|literature cited)\s*$", re.IGNORECASE)
 NEXT_HEADING_RE = re.compile(r"^\s{0,3}#{1,6}\s+\S+")
 NUMBERED_REF_RE = re.compile(r"^\s*(\d+)[\.\)]\s+(.*)$")
 INLINE_NUMERIC_CITATION_RE = re.compile(r"\[(\d+(?:\s*[-,–]\s*\d+)*)\]")
@@ -18,16 +22,38 @@ AUTHOR_YEAR_NARRATIVE_RE = re.compile(r"\b([A-Z][A-Za-z'`-]+(?:\s+et al\.)?)\s*\
 AUTHOR_YEAR_IN_MULTI_PAREN_RE = re.compile(r"([A-Z][A-Za-z'`-]+(?:\s+et al\.)?),\s*((?:19|20)\d{2}[a-z]?)")
 REFERENCE_YEAR_RE = re.compile(r"\b(?:19|20)\d{2}[a-z]?\b")
 AUTHOR_LIKE_RE = re.compile(r"^[A-Z][A-Za-z'`-]+,\s")
+# Author-year reference entry where the surname leads with initials following,
+# e.g. "BRAY F, LAVERSANNE M, SUNG H, et al. ..." or "Smith J, Doe A. ...".
+# This covers the GB/T author-year style that AUTHOR_LIKE_RE (Surname,\s) misses.
+AUTHOR_INITIALS_REF_RE = re.compile(r"^[A-Z][A-Za-z'`-]+\s+[A-Z](?:[\s.,;-]|$)")
+
+
+def _entries_follow_heading(lines: list[str], start: int, end: int) -> bool:
+    """At least one line after the heading must look like a reference entry."""
+    for line in lines[start + 1 : end]:
+        if normalize_ws(line) and looks_like_reference_entry(line):
+            return True
+    return False
 
 
 def split_reference_section(text: str) -> tuple[str, list[str], bool]:
     lines = text.splitlines()
-    start = None
     end = len(lines)
+    # Prefer an explicit markdown heading (pipeline-built section md).
+    start = None
     for idx, line in enumerate(lines):
         if HEADING_RE.match(line):
             start = idx
             break
+    # Fallback: a bare "References"/"参考文献" line with no markdown prefix
+    # (e.g. a .docx/.txt reference source that lost its heading style). Only
+    # accept it when the following block actually contains reference entries,
+    # so a stray "References" mention in body text is not misread as a heading.
+    if start is None:
+        for idx, line in enumerate(lines):
+            if PLAIN_HEADING_RE.match(line) and _entries_follow_heading(lines, idx, len(lines)):
+                start = idx
+                break
     if start is None:
         return text, [], False
     for idx in range(start + 1, len(lines)):
@@ -57,6 +83,8 @@ def looks_like_reference_entry(text: str) -> bool:
     if REFERENCE_YEAR_RE.search(normalized):
         return True
     if AUTHOR_LIKE_RE.search(normalized):
+        return True
+    if AUTHOR_INITIALS_REF_RE.match(normalized):
         return True
     if " et al." in normalized:
         return True
