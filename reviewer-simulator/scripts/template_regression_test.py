@@ -61,7 +61,7 @@ def snapshot(html: str):
         'decision': decision.group(0) if decision else '',
         'footer': footer.group(0) if footer else '',
         'has_placeholder': bool(PH_RE.search(html)),
-        'has_ip_notice': 'wsxwj123' in html,
+        'has_ip_notice': 'Reviewer Simulator' in html,
         'has_print_css': '@media print' in html,
     }
 

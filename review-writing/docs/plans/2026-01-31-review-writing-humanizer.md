@@ -17,7 +17,7 @@
 **Goal:** Enforce human-like writing at the prompt level.
 
 **Files:**
-- Modify: `/Users/wsxwj/.config/opencode/skills/review-writing/SKILL.md`
+- Modify: `~/.config/opencode/skills/review-writing/SKILL.md`
 
 **Step 1: Add "Anti-AI Writing Style" Section**
 Insert this under "FINAL SYSTEM ENFORCEMENT":
@@ -43,7 +43,7 @@ Insert this under "FINAL SYSTEM ENFORCEMENT":
 **Goal:** Make the reviewer check for AI-isms.
 
 **Files:**
-- Modify: `/Users/wsxwj/.config/opencode/skills/review-writing/templates/review_critique.md`
+- Modify: `~/.config/opencode/skills/review-writing/templates/review_critique.md`
 
 **Step 1: Add "Turing Test Check"**
 Add a new section:

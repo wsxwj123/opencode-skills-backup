@@ -8,7 +8,7 @@ from pathlib import Path
 from common import detect_comments_input_mode, discover_global_skill, normalize_ws, write_json, write_text
 
 
-REVIEWER_SIMULATOR_INSTALL_SOURCE = "https://github.com/wsxwj123/opencode-skills-backup/tree/main/reviewer-simulator"
+REVIEWER_SIMULATOR_INSTALL_SOURCE = ""  # 配置为你自己的技能备份仓库 reviewer-simulator 子目录 URL；留空则跳过自动安装
 
 MODE_LABELS = {
     "docx-review-comments": "普通结构化审稿意见 Word",

@@ -8,8 +8,8 @@
 1. **判断学科类型**：
    - 生命科学 / 医学 / 临床 / 生化 / 药学 → **首选 PubMed CLI**
    - CS / AI / 工程 / 物理 / 跨学科 → **首选 paper-search MCP**（arXiv/Google Scholar）
-2. **PubMed CLI**（生命科学首选）：`esearch`/`efetch`/`einfo`（路径 `~/edirect/`），必须带 `< /dev/null`，走代理 `http_proxy=http://127.0.0.1:7897`。
-   - 示例：`export http_proxy=http://127.0.0.1:7897 && esearch -db pubmed -query "xxx" < /dev/null | efetch -format abstract`
+2. **PubMed CLI**（生命科学首选）：`esearch`/`efetch`/`einfo`（路径 `~/edirect/`），必须带 `< /dev/null`，走代理 `http_proxy=http://127.0.0.1:<PROXY_PORT>`。
+   - 示例：`export http_proxy=http://127.0.0.1:<PROXY_PORT> && esearch -db pubmed -query "xxx" < /dev/null | efetch -format abstract`
    - 可用性检查：若 `~/edirect/esearch` 不存在，自动安装：`sh -c "$(curl -fsSL https://ftp.ncbi.nlm.nih.gov/entrez/entrezdirect/install-edirect.sh)"`
 3. **paper-search MCP**（CS/AI首选 / 预印本 / PubMed无结果时fallback）：`mcp__paper-search-mcp__search_arxiv`、`mcp__paper-search-mcp__search_pubmed` 等。
 4. **严禁**：`tavily`、`websearch`、`openalex`（pyalex）— 无论有无 DOI/PMID。

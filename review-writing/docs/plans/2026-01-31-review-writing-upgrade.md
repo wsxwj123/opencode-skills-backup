@@ -18,7 +18,7 @@
 **Goal:** Prevent token overflow by implementing "Smart Loading" and "Memory Compaction".
 
 **Files:**
-- Modify: `/Users/wsxwj/.config/opencode/skills/review-writing/scripts/state_manager.py`
+- Modify: `~/.config/opencode/skills/review-writing/scripts/state_manager.py`
 
 **Step 1: Implement `compact_memory` function**
 Add a function that reads `context_memory.md`, identifies completed sections (older than N turns or marked as "Archived"), and replaces detailed logs with a high-level summary.
@@ -41,7 +41,7 @@ Create a test file `tests/test_state_manager.py` (temporary) to verify that a la
 **Goal:** Allow dynamic refactoring of the review outline without breaking the project state.
 
 **Files:**
-- Create: `/Users/wsxwj/.config/opencode/skills/review-writing/scripts/scope_manager.py`
+- Create: `~/.config/opencode/skills/review-writing/scripts/scope_manager.py`
 
 **Step 1: Define `ScopeManager` class**
 - `load_storyline()`: Read `storyline.md` and parse it into a structured object (sections, status, key points).
@@ -63,7 +63,7 @@ Verify that modifying the storyline updates `storyline.md` correctly and preserv
 **Goal:** Provide the "Reviewer Simulator" with specific criteria for high-impact reviews.
 
 **Files:**
-- Create: `/Users/wsxwj/.config/opencode/skills/review-writing/templates/review_critique.md`
+- Create: `~/.config/opencode/skills/review-writing/templates/review_critique.md`
 
 **Step 1: Define Critique Dimensions**
 Create a markdown template with sections:
@@ -84,7 +84,7 @@ Create a markdown template with sections:
 **Goal:** Enforce the new workflows in the main skill definition.
 
 **Files:**
-- Modify: `/Users/wsxwj/.config/opencode/skills/review-writing/SKILL.md`
+- Modify: `~/.config/opencode/skills/review-writing/SKILL.md`
 
 **Step 1: Add Phase 2.1 "Figure First"**
 Insert a step before "Drafting":

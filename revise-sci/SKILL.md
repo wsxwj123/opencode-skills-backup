@@ -36,7 +36,7 @@ If the user has **no reviewer comments** and only provides the manuscript:
 1. run `python scripts/intake_router.py --manuscript <manuscript_docx_path>`;
 2. ask whether to use `reviewer-simulator` first to generate reviewer comments;
 3. check global availability using `python scripts/ensure_global_skill.py --skill-name reviewer-simulator`;
-4. if the skill is missing and the user confirms installation, install it from `https://github.com/wsxwj123/opencode-skills-backup/tree/main/reviewer-simulator` before invoking that branch.
+4. if the skill is missing and the user confirms installation, install it from your own skills backup repository (reviewer-simulator subdirectory) before invoking that branch.
 
 ## Comment Input Modes
 - `docx-review-comments`: ordinary reviewer comments exported from email or web into a `.docx`. The parser expects reviewer / major-minor / numbered-comment structure and keeps multiline comments inside one unit.
