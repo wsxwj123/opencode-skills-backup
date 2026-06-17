@@ -1,172 +1,34 @@
 #!/usr/bin/env python3
+"""revise-sci citation guard (adapter over shared citation_guard_core).
+
+This file is the skill-specific adapter: it owns CLI flags, the two-level
+results[] -> row.citations[] loader, identifier extraction from free-text
+``source`` fields, the produced report/exit-code contract, and the report
+writing. All actual verification logic lives in citation_guard_core.validate_core
+(single source of truth; re-mirror that file to change thresholds globally).
+
+Output contract (3 downstream consumers depend on it, do not drift):
+  - paper_search_guard_report.json -> summary.all_rows_guard_verified
+    (read by build_reference_registry.py and strict_gate.py)
+  - each citation's guard_verified flag (read by revise_units.py)
+  - paper_search_validated.json (the --write-back equivalent)
+Exit code 2 when not all rows verified and --allow-unverified absent; else 0.
+"""
+
 from __future__ import annotations
 
 import argparse
 import json
 import re
-import urllib.error
-import urllib.parse
-import urllib.request
 from pathlib import Path
 from typing import Any
 
 from common import normalize_ws, read_json, write_json
-
-
-DOI_RE = re.compile(r"^10\.\d{4,9}/[-._;()/:A-Z0-9]+$", re.IGNORECASE)
-PMID_RE = re.compile(r"^\d{4,10}$")
-TITLE_TOKEN_RE = re.compile(r"[a-z0-9\u4e00-\u9fff]+")
-ALLOWED_PROVIDER_FAMILIES = {"paper-search", "pubmed-cli"}
-FORBIDDEN_PROVIDER_FAMILIES = {"websearch", "openalex-cli", "tavily"}
-
-
-def _http_get_json(url: str, timeout_sec: float = 8.0) -> dict[str, Any] | None:
-    req = urllib.request.Request(url, headers={"User-Agent": "revise-sci-citation-guard/1.0"})
-    try:
-        with urllib.request.urlopen(req, timeout=timeout_sec) as resp:
-            return json.loads(resp.read().decode("utf-8", errors="ignore"))
-    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, json.JSONDecodeError):
-        return None
-
-
-def _normalize_title(title: str) -> str:
-    text = title.lower().strip()
-    text = re.sub(r"[^a-z0-9\u4e00-\u9fff]+", " ", text)
-    return re.sub(r"\s+", " ", text).strip()
-
-
-def _title_tokens(title: str) -> set[str]:
-    return set(TITLE_TOKEN_RE.findall(_normalize_title(title)))
-
-
-def _title_similarity(a: str, b: str) -> float:
-    na = _normalize_title(a)
-    nb = _normalize_title(b)
-    if not na or not nb:
-        return 0.0
-    if na == nb:
-        return 1.0
-    ta = _title_tokens(a)
-    tb = _title_tokens(b)
-    if not ta or not tb:
-        return 0.0
-    jacc = len(ta & tb) / len(ta | tb)
-    short = min(len(na), len(nb)) / max(len(na), len(nb))
-    contain_bonus = 0.1 if (na in nb or nb in na) else 0.0
-    return min(1.0, 0.75 * jacc + 0.25 * short + contain_bonus)
-
-
-def _fetch_crossref_by_doi(doi: str) -> dict[str, Any] | None:
-    payload = _http_get_json(f"https://api.crossref.org/works/{urllib.parse.quote(doi, safe='')}")
-    if not payload or "message" not in payload:
-        return None
-    msg = payload["message"]
-    title = (msg.get("title") or [""])[0] if isinstance(msg.get("title"), list) else ""
-    returned_doi = str(msg.get("DOI") or doi).strip()
-    relation = msg.get("relation") or {}
-    is_retracted = isinstance(relation, dict) and any("retract" in str(k).lower() for k in relation.keys())
-    return {"title": title or "", "doi": returned_doi, "retracted": is_retracted}
-
-
-def _fetch_pubmed_by_pmid(pmid: str) -> dict[str, Any] | None:
-    payload = _http_get_json(
-        "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?"
-        + urllib.parse.urlencode({"db": "pubmed", "id": pmid, "retmode": "json"})
-    )
-    if not payload or "result" not in payload:
-        return None
-    result = payload["result"].get(str(pmid))
-    if not isinstance(result, dict):
-        return None
-    article_ids = result.get("articleids") or []
-    doi = ""
-    for item in article_ids:
-        if isinstance(item, dict) and str(item.get("idtype", "")).lower() == "doi":
-            doi = str(item.get("value") or "").strip()
-            break
-    pubtypes = result.get("pubtype") or []
-    is_retracted = any("retract" in str(x).lower() for x in pubtypes)
-    return {"title": str(result.get("title") or "").strip(), "pmid": str(pmid), "doi": doi, "retracted": is_retracted}
-
-
-TITLE_VERIFY_THRESHOLD = 0.8
-
-
-def _verify_title_exists(title: str) -> dict[str, Any] | None:
-    """Confirm a no-DOI/no-PMID citation maps to a real publication via by-title search.
-
-    Crossref by-title first, then Semantic Scholar (rate-limit prone) fallback.
-    Best match returned when similarity >= TITLE_VERIFY_THRESHOLD, else None.
-    Network failures (_http_get_json -> None) yield None -> fail-closed (caller
-    treats "no match" as not-verified -> FAIL).
-    """
-    if not title.strip():
-        return None
-
-    def _best_match(cands: list[tuple[str, str | None, str | None]], source: str) -> dict[str, Any] | None:
-        best: dict[str, Any] | None = None
-        for ct, cd, cp in cands:
-            if not ct:
-                continue
-            sim = _title_similarity(title, ct)
-            if best is None or sim > best["similarity"]:
-                best = {"source": source, "matched_title": ct, "similarity": sim, "doi": cd, "pmid": cp}
-        return best if (best and best["similarity"] >= TITLE_VERIFY_THRESHOLD) else None
-
-    cr = _http_get_json(
-        "https://api.crossref.org/works?" + urllib.parse.urlencode({"query.bibliographic": title, "rows": 5})
-    )
-    if cr and isinstance(cr.get("message"), dict):
-        cands = []
-        for it in cr["message"].get("items") or []:
-            if not isinstance(it, dict):
-                continue
-            t = (it.get("title") or [""])[0] if isinstance(it.get("title"), list) else ""
-            cands.append((str(t or ""), str(it.get("DOI") or "") or None, None))
-        m = _best_match(cands, "crossref-bytitle")
-        if m:
-            return m
-
-    ss = _http_get_json(
-        "https://api.semanticscholar.org/graph/v1/paper/search?"
-        + urllib.parse.urlencode({"query": title, "limit": 5, "fields": "title,externalIds"})
-    )
-    if ss and isinstance(ss.get("data"), list):
-        cands = []
-        for it in ss["data"]:
-            if not isinstance(it, dict):
-                continue
-            ext = it.get("externalIds") or {}
-            doi = (str(ext.get("DOI") or "") or None) if isinstance(ext, dict) else None
-            pmid = (str(ext.get("PubMed") or "") or None) if isinstance(ext, dict) else None
-            cands.append((str(it.get("title") or ""), doi, pmid))
-        m = _best_match(cands, "semanticscholar-bytitle")
-        if m:
-            return m
-
-    return None
-
-
-def _provider_family(citation: dict[str, Any]) -> str:
-    raw = normalize_ws(
-        str(citation.get("source_provider") or citation.get("provider_family") or citation.get("provider") or "")
-    ).lower()
-    if not raw:
-        return "paper-search"  # default when field absent (backwards compat)
-    if raw.startswith("paper-search"):
-        return "paper-search"
-    if raw.startswith("pubmed") or raw in ("edirect", "ncbi", "esearch"):
-        return "pubmed-cli"
-    if raw.startswith("tavily"):
-        return "tavily"
-    if raw in ("openalex", "openalex-cli", "pyalex"):
-        return "openalex-cli"
-    if "websearch" in raw or "web-search" in raw or "web_search" in raw:
-        return "websearch"
-    return raw
+from citation_guard_core import _provider_family, validate_core
 
 
 def _extract_identifier(citation: dict[str, Any]) -> tuple[str, str]:
+    """Pull DOI/PMID from explicit fields, falling back to the free-text source."""
     doi = normalize_ws(str(citation.get("doi") or ""))
     pmid = normalize_ws(str(citation.get("pmid") or ""))
     source = normalize_ws(str(citation.get("source") or citation.get("source_id") or ""))
@@ -181,7 +43,25 @@ def _extract_identifier(citation: dict[str, Any]) -> tuple[str, str]:
     return doi, pmid
 
 
-def build_reference_entry(citation: dict[str, Any]) -> str:
+def _raw_provider(citation: dict[str, Any]) -> str:
+    """Provider field is one of three; default empty -> core treats as unknown.
+
+    Note: original adapter defaulted absent provider to "paper-search" for
+    backwards compat. Preserved here so legacy rows without a provider field are
+    not penalized as source_provider_not_allowed.
+    """
+    raw = normalize_ws(
+        str(
+            citation.get("source_provider")
+            or citation.get("provider_family")
+            or citation.get("provider")
+            or ""
+        )
+    )
+    return raw or "paper-search"
+
+
+def build_reference_entry(citation: dict[str, Any], doi: str, pmid: str) -> str:
     authors = citation.get("authors") or []
     if isinstance(authors, list):
         authors_text = ", ".join(str(x).strip() for x in authors if str(x).strip())
@@ -190,7 +70,6 @@ def build_reference_entry(citation: dict[str, Any]) -> str:
     title = normalize_ws(str(citation.get("title") or "Untitled"))
     journal = normalize_ws(str(citation.get("journal") or citation.get("venue") or ""))
     year = normalize_ws(str(citation.get("year") or ""))
-    doi, pmid = _extract_identifier(citation)
     parts = []
     if authors_text:
         parts.append(f"{authors_text}.")
@@ -206,99 +85,87 @@ def build_reference_entry(citation: dict[str, Any]) -> str:
     return " ".join(parts).strip()
 
 
+def _build_prefetched(citation: dict[str, Any], title: str) -> dict[str, Any]:
+    """Reuse entry-carried verification data to avoid hammering APIs.
+
+    The original adapter only hit Crossref/PubMed when an entry lacked a
+    secondary title. We preserve that laziness by feeding any entry-provided
+    verified_title / crossref_title / pubmed_title (and matching ids) into the
+    core's ``prefetched`` cache so three-round bulk verification does not trip
+    Crossref/PubMed rate limits (429).
+    """
+    prefetched: dict[str, Any] = {}
+    crossref_title = normalize_ws(str(citation.get("crossref_title") or citation.get("verified_title") or ""))
+    pubmed_title = normalize_ws(str(citation.get("pubmed_title") or ""))
+    verified_doi = normalize_ws(str(citation.get("verified_doi") or citation.get("crossref_doi") or ""))
+    verified_pmid = normalize_ws(str(citation.get("verified_pmid") or citation.get("pubmed_pmid") or ""))
+    if crossref_title:
+        prefetched["crossref"] = {
+            "source": "crossref",
+            "title": crossref_title,
+            "doi": verified_doi or None,
+            "pmid": None,
+            "retracted": bool(citation.get("retracted", False)),
+        }
+    if pubmed_title:
+        prefetched["pubmed"] = {
+            "source": "pubmed",
+            "title": pubmed_title,
+            "doi": verified_doi or None,
+            "pmid": verified_pmid or None,
+            "retracted": bool(citation.get("retracted", False)),
+        }
+    return prefetched
+
+
 def validate_citation(citation: dict[str, Any], *, online_check: bool) -> dict[str, Any]:
+    """Normalize one citation, run validate_core, re-emit in the legacy contract."""
     title = normalize_ws(str(citation.get("title") or ""))
-    source_trace = normalize_ws(str(citation.get("source_id") or citation.get("source") or ""))
+    source_id = normalize_ws(str(citation.get("source_id") or citation.get("source") or ""))
     doi, pmid = _extract_identifier(citation)
-    provider_family = _provider_family(citation)
-    failure_reasons: list[str] = []
+    provider_family = _provider_family(_raw_provider(citation))
 
-    has_identifier = bool(doi or pmid)
-    title_verify = _verify_title_exists(title) if (online_check and not has_identifier and title) else None
-    title_verified = title_verify is not None
+    entry = {
+        "title": title,
+        "doi": doi,
+        "pmid": pmid,
+        "provider_family": provider_family,
+        "source_id": source_id,
+        "year": citation.get("year"),
+        "retracted": bool(citation.get("retracted", False)),
+    }
+    prefetched = _build_prefetched(citation, title)
 
-    if provider_family in FORBIDDEN_PROVIDER_FAMILIES:
-        failure_reasons.append("source_provider_forbidden")
-    elif provider_family not in ALLOWED_PROVIDER_FAMILIES:
-        failure_reasons.append("source_provider_not_allowed")
-    if not title:
-        failure_reasons.append("title_missing")
-    if not source_trace:
-        failure_reasons.append("source_trace_missing")
-    if not has_identifier and not title_verified:
-        failure_reasons.append("identifier_missing")
-        if online_check and title:
-            failure_reasons.append("title_not_found_online")
-    if doi and DOI_RE.match(doi) is None:
-        failure_reasons.append("doi_format_invalid")
-    if pmid and PMID_RE.match(pmid) is None:
-        failure_reasons.append("pmid_format_invalid")
+    result = validate_core(
+        entry,
+        online=online_check,
+        prefetched=prefetched,
+    )
 
-    secondary_titles = []
-    secondary_doi = normalize_ws(str(citation.get("verified_doi") or citation.get("crossref_doi") or ""))
-    secondary_pmid = normalize_ws(str(citation.get("verified_pmid") or citation.get("pubmed_pmid") or ""))
-    for key in ("verified_title", "crossref_title", "pubmed_title"):
-        value = normalize_ws(str(citation.get(key) or ""))
-        if value:
-            secondary_titles.append(value)
+    details = result["details"]
+    secondary_titles = [
+        t for t in (details.get("crossref_fetched_title"), details.get("pubmed_fetched_title")) if t
+    ]
+    if details.get("title_verify_matched_title"):
+        secondary_titles.append(str(details["title_verify_matched_title"]))
 
-    crossref_rec = None
-    pubmed_rec = None
-    if online_check:
-        if doi and not secondary_titles:
-            crossref_rec = _fetch_crossref_by_doi(doi)
-            if crossref_rec:
-                secondary_titles.append(normalize_ws(crossref_rec.get("title", "")))
-                secondary_doi = secondary_doi or normalize_ws(crossref_rec.get("doi", ""))
-        if pmid and not secondary_titles:
-            pubmed_rec = _fetch_pubmed_by_pmid(pmid)
-            if pubmed_rec:
-                secondary_titles.append(normalize_ws(pubmed_rec.get("title", "")))
-                secondary_pmid = secondary_pmid or normalize_ws(pubmed_rec.get("pmid", ""))
-                secondary_doi = secondary_doi or normalize_ws(pubmed_rec.get("doi", ""))
-
-    # Retraction check
-    retracted = bool(citation.get("retracted", False))
-    for rec in (crossref_rec, pubmed_rec):
-        if rec and rec.get("retracted"):
-            retracted = True
-    if retracted:
-        failure_reasons.append("retracted")
-
-    # By-title match counts as secondary verification for no-identifier entries.
-    if title_verify and title_verify.get("matched_title"):
-        secondary_titles.append(normalize_ws(str(title_verify["matched_title"])))
-
-    if not secondary_titles:
-        failure_reasons.append("secondary_verification_missing")
-
-    title_similarity = max((_title_similarity(title, st) for st in secondary_titles), default=0.0)
-    if secondary_titles and title_similarity < 0.72:
-        failure_reasons.append("title_mismatch")
-
-    if doi and secondary_doi and doi.lower() != secondary_doi.lower():
-        failure_reasons.append("doi_mismatch")
-    if pmid and secondary_pmid and pmid != secondary_pmid:
-        failure_reasons.append("pmid_mismatch")
-
-    verified = not failure_reasons
     payload = dict(citation)
     payload["provider_family"] = provider_family
     payload["doi"] = doi
     payload["pmid"] = pmid
-    payload["retracted"] = retracted
-    payload["guard_verified"] = verified
-    payload["reference_entry"] = build_reference_entry(payload)
+    payload["retracted"] = details.get("retracted", False)
+    payload["guard_verified"] = result["verified"]
+    payload["reference_entry"] = build_reference_entry(payload, doi, pmid)
     payload["verification_details"] = {
-        "title_similarity": round(title_similarity, 3),
-        "failure_reasons": failure_reasons,
+        "title_similarity": details.get("title_similarity", 0.0),
+        "failure_reasons": result["failure_reasons"],
+        "confidence": result["confidence"],
+        "needs_manual_review": result["needs_manual_review"],
         "secondary_titles": secondary_titles,
-        "secondary_doi": secondary_doi,
-        "secondary_pmid": secondary_pmid,
-        "title_verified": title_verified,
-        "title_verify_source": (title_verify.get("source") if title_verify else None),
-        "title_verify_similarity": (round(title_verify["similarity"], 3) if title_verify else None),
-        "retracted": retracted,
+        "title_verified": details.get("title_verified", False),
+        "title_verify_source": details.get("title_verify_source"),
+        "title_verify_similarity": details.get("title_verify_similarity"),
+        "retracted": details.get("retracted", False),
     }
     return payload
 
@@ -319,7 +186,7 @@ def main() -> int:
     rows = payload.get("results", []) if isinstance(payload, dict) else payload
 
     validated_rows = []
-    # Fail-closed: empty rows means no citations verified — treat as unverified
+    # Fail-closed. Empty rows means no citations verified, so treat as unverified.
     all_rows_guard_verified = bool(rows)
     verified_citation_count = 0
     total_citation_count = 0
@@ -332,6 +199,8 @@ def main() -> int:
             total_citation_count += 1
             if checked["guard_verified"]:
                 verified_citation_count += 1
+        # row_guard_verified ties the business-state row.confirmed flag to the
+        # per-citation guard result (adapter-level; not a core concern).
         row_guard_verified = bool(row.get("confirmed")) and bool(citations) and all(c["guard_verified"] for c in citations)
         if not row_guard_verified:
             all_rows_guard_verified = False
