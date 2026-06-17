@@ -47,7 +47,7 @@ python scripts/atomize_manuscript.py --manuscript <input.md|docx> --project-root
 # 1.5 反向抽取图/参考交叉索引(图文一致性与引用完整性的审查辅助)
 python scripts/manuscript_index.py --manuscript <input> --project-root <root> --units-dir units
 
-# 1.6 抠图落盘(把 docx 内嵌图片解到 figures/,供最终 docx 嵌回;非 docx 输入会自动 no-op)
+# 1.6 抠图落盘(支持 docx 与 pdf,把内嵌图片解到 figures/,供最终 docx 嵌回;pdf 需 PyMuPDF,缺失则优雅跳过;其他非 docx/pdf 输入会自动 no-op)
 python scripts/extract_docx_images.py --manuscript <input> --project-root <root>
 
 # 2. 生成逐段润色任务包(含 section_type 的被动目标区间 + 句长上限 + 红线)

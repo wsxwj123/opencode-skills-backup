@@ -241,7 +241,7 @@ python3 scripts/material_ingest.py --dir /path/to/raw_materials --save-path "${s
 - **Word 格式** → 使用 `/docx` skill 或直接 Read 工具读取文件内容
 - **网络来源（DOI 可访问）** → 使用 `/fetch-everything` skill 抓取全文
 
-**[docx 源稿专用] 内嵌图抠出（必做于 atomic_md_workflow 之前）：** 若 SCI 论文是 docx 格式，运行下面这一步把 docx 内嵌图按出现顺序解到 `figures/`，供后续按章节嵌图与 `figure_registry.py` 使用（非 docx 输入自动 no-op，安全可重复运行）：
+**[docx/pdf 源稿] 内嵌图抠出（必做于 atomic_md_workflow 之前）：** 支持 docx 与 pdf，运行下面这一步把内嵌图按出现顺序解到 `figures/`，供后续按章节嵌图与 `figure_registry.py` 使用（pdf 需 PyMuPDF，缺失则优雅跳过；其他非 docx/pdf 输入自动 no-op，安全可重复运行）：
 
 ```bash
 python3 scripts/extract_docx_images.py --manuscript /path/to/source.docx --project-root "${save_path}"
