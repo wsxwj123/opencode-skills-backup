@@ -572,7 +572,12 @@ def is_heading(row: dict[str, Any]) -> bool:
     text = row.get("text", "")
     if style_name.startswith("heading"):
         return True
-    if re.match(r"^\d+(?:\.\d+)*\.?\s+\S+", text) and not re.match(r"^(fig|figure|table)\b", text, flags=re.IGNORECASE) and not looks_like_reference_entry(text):
+    if (
+        re.match(r"^\d+(?:\.\d+)*\.?\s+\S+", text)
+        and len(text.split()) <= 12  # 真标题短;"3 Hunan Key Laboratory…"这类行首数字的长单位地址不算
+        and not re.match(r"^(fig|figure|table)\b", text, flags=re.IGNORECASE)
+        and not looks_like_reference_entry(text)
+    ):
         return True
     if len(text.split()) <= 8 and text.lower() in {
         "abstract",
