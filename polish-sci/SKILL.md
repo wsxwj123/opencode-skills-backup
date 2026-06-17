@@ -87,14 +87,19 @@ python scripts/polish_report.py --project-root <root>
 - `polish_change_report.md`,逐段改动 + 风险 flag + 未改原因。
 
 ## Anti-AI 规则(检测见 common.py)
-去AI检测由 `find_ai_style_markers`(scripts/common.py)统一执行,润色后残留即记 flag,strict_gate 拦截。必禁:
+去AI检测由 `find_ai_style_markers`(scripts/common.py)统一执行,润色后残留即记 flag,strict_gate 拦截。**硬拦项**:
 - 修辞性破折号 `—`。
 - scare quotes(普通短语裹双引号)。
 - 解释性冒号(概念冒号后接句子片段)。
-- 英文单句>30词、中文单句>50字。
 - `-ing` 拖尾从句(`, thereby ...ing` / `, reflecting ...`)。
 - AI 套话禁词表(delve into、pivotal role、underscore、It is worth noting that 等,中英双语,见 common.py 的 AI_CLICHE 表)。
-- `not only...but also`、`from A to B`、修辞问句。
+- `not only...but also`、`from A to B`(仅修辞铺陈;`from 24 to 72 h` 这类数值/时间范围不算)、修辞问句。
+
+**软警告项(记入报告,不阻断交付)**:英文单句>30词 / 中文单句>50字。科学方法学段落常含数据列表的合法长句,strict_gate 不因句长阻断,只在 `polish_change_report.md` 列出供人工取舍。
+
+**非散文豁免**:参考文献、作者名单、单位、资助、关键词、致谢、图表标题、纯数据清单等(atomize 标 `prose=false` 或润色器标 `polished_by=unchanged-nonprose`)保留原文不润色,**去AI/句长检测对它们不适用**(否则参考文献标题里的冒号/范围/问句会被误判);红线(数值/引用/语气/meaning)仍对全部单元核验。
+
+> atomize 能识别**非 Word 样式的标题**(`1. Introduction` / `2.1 Foo` / 已知章节名等普通段落),据此推断 section_type 与 prose 标志。子小节按名无法归类时退回 other(只影响软性被动目标)。
 
 本 SKILL.md 文本自身也遵守上述去AI规则。
 
@@ -105,7 +110,7 @@ python scripts/polish_report.py --project-root <root>
 - **PL-G1 数值保留**,每段数值/统计量集合与原文一字不差。
 - **PL-G2 无语气升级**,不确定性动词未被升级。
 - **PL-G3 引用保留**,引用标记与 DOI 集合前后一致。
-- **PL-G4 去AI五项**,find_ai_style_markers 无残留。
+- **PL-G4 去AI**,散文单元 find_ai_style_markers 无硬拦残留(句长为软警告不阻断;非散文单元豁免)。
 - **PL-G5 meaning 未变**,每段 meaning_changed=false,专名未动,语义层人工逐段对照。
 - **PL-G6 逐段全覆盖**,无 PLACEHOLDER 残留,无遗漏段落。
 - **PL-G7 被动语态合区间**,各段被动比例落在 section_type 目标区间附近。
