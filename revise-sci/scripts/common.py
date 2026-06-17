@@ -170,7 +170,9 @@ def find_ai_style_markers(text: str) -> list[str]:
         markers.append("em dash")
     if re.search(r"\bnot only\b.*\bbut also\b", normalized, flags=re.IGNORECASE):
         markers.append("not only...but also")
-    if re.search(r"\bfrom\s+[A-Za-z0-9].+?\s+to\s+[A-Za-z0-9]", normalized, flags=re.IGNORECASE):
+    # AI 修辞 "from X to Y";排除数值/时间/量纲范围(from 24 to 72 h / from 0 to 200 nM):含数字即合法范围,非修辞
+    _fa = re.search(r"\bfrom\s+[A-Za-z0-9].{0,60}?\s+to\s+[A-Za-z0-9]\w*", normalized, flags=re.IGNORECASE)
+    if _fa and not re.search(r"\d", _fa.group(0)):
         markers.append("from A to B")
     if "?" in normalized:
         markers.append("rhetorical question")
