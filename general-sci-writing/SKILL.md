@@ -335,6 +335,7 @@ python scripts/state_manager.py add-abbreviation <one.json>
 
 **执行流程**：
 0. **Scoped Load (Mandatory)**: 先执行章节局部加载命令，确保只读当前章节。
+0a. **🔴 开写前置闸门 (Mandatory，脚本硬拦截)**：开写任何 section 前必须先跑 `python3 scripts/prewrite_gate.py --section [section_id] --root .`，exit≠0 禁止开写。它统一硬检查：上一节完成（`writing_progress.json` 该节最新 status=done）、故事线就位（`storyline.json` 含本节）、素材就位（subprocess 调 `figure_analysis_gate.py`）、上一节占位符清零（无 `CITE_PENDING`/`DATA_PENDING`/`【待`）、缩略词一致（subprocess 调 `abbreviation_consistency.py`）；上一节盲检未落盘则降级 warning 提示人工确认，不阻断。过此闸门后再走下面 0b。
 0b. **🔴 figure_analysis 加载门禁 (Mandatory，脚本兜底)**：跑 `python scripts/figure_analysis_gate.py --section [section_id] --root .`。该 gate 比对 `figures_database.json` 中该节涉及的 figure，确认每张 `figure_analysis/figure_{N}.md` 存在、非空、无 `❓待确认` 残留；任一未就绪 → 脚本 exit 1，**禁止开写**，先回 `/figure` 补齐再回来。Introduction/Methods 等无 figure 的小节脚本自然放行（exit 0）。过 gate 后**必须显式 `Read` 本节对应的 `figure_analysis/figure_{N}.md`**（write-cycle 不自动加载，见 §13 白名单第 7 项），作为 Results/Discussion 的事实依据。
 1. **Pre-Write Check**: 检查数据完整性。
 2. **Drafting (Main)**: 撰写包含 Main Figures 和 References 的初稿。
@@ -388,8 +389,57 @@ python scripts/state_manager.py add-abbreviation <one.json>
 2. **即时讨论 (Discussion)**：机制解释 + 文献对比 + 意义阐述。
 3. **深度控制**：Key Section > 500词，Supporting Section ~200词。
 
+### Phase 8.6: 目标期刊风格深度学习 (`/journal-study`)
+
+**定位**：所有 Results/Discussion 小节写完（Phase 8）之后、`/abstract`（Phase 9）之前触发；若项目已生成主图集终稿则紧接其后。深度学习目标期刊近 5 年高分论文/综述的取材、摘要写法、行文风格、图表规范，产出对标学习报告，**指导 Phase 9 abstract 与 Phase 10 正文润色对齐目标刊调性**。
+
+**为什么做**：同一科学内容在不同期刊的呈现差异巨大（abstract 是否结构化、被动比例、图序惯例、是否要 one-sentence summary）。靠记忆猜目标刊风格会跑偏；用真实近 5 年代表作锚定风格特征，让 abstract/正文/图表一次到位，降低 desk reject 风险。
+
+**前置**：`project_config.json` 已定 `target_journal`；与 `storyline.json` 的目标刊一致。
+
+**执行步骤**：
+1. **选取代表作（≥5 篇近 5 年）**：检索目标期刊近 5 年高被引/代表性论文或综述（与本稿主题相近优先）。检索走 `references/citation-policy.md` 既定路由（生命科学 PubMed CLI / CS·AI paper-search），**严禁 websearch/tavily/openalex**。每篇记录 DOI 或 PMID。
+2. **🔴 真实性核验（红线，缺一不可）**：每篇代表作必须过 `python scripts/citation_guard.py --index journal_study/journal_study_index.json --mcp-cache mcp_literature_cache.json --require-mcp --report journal_study/journal_study_guard.json` 验证真实存在、不编造，每篇 `verified=true`。未过核验的篇目不得写入报告。
+3. **四维特征提取（只学公开风格，不复制科学内容）**：逐篇提炼 ① abstract 结构特征（是否结构化/段数/是否含定量/word limit）② 行文风格特征（被动比例/句长/时态/术语密度/是否第一人称）③ 图表规范（主图张数惯例/panel 命名/Source Data 要求/配色与排版倾向）④ 格式偏好（引用格式/one-sentence summary/Highlights/Methods 形式 Online vs STAR）。**🔴 防抄袭红线**：只抽象公开的风格/结构特征，严禁复制目标文的具体句子、科学论断或数据。
+4. **生成可操作建议（≥5 条）**：每条建议明确映射到 `abstract` / `正文` / `图表` 之一，形如"abstract 改为四段结构化、≤200 词"、"正文被动比例提至 60%"、"主图控制在 5 张、panel 用大写字母"。
+5. **落盘**：写入 `journal_study/target_journal_study.json`。
+
+**输出文件**：`journal_study/target_journal_study.json`，字段：
+```json
+{
+  "target_journal": "<与 storyline.json 一致>",
+  "recent_representative_papers": [
+    {"title": "...", "doi_or_pmid": "...", "year": 2023, "verified": true}
+  ],
+  "abstract_structure_features": "...",
+  "writing_style_features": "...",
+  "figure_conventions": "...",
+  "format_preferences": "...",
+  "actionable_recommendations": [
+    {"recommendation": "...", "maps_to": "abstract|正文|图表"}
+  ]
+}
+```
+（`recent_representative_papers` ≥5 篇，每篇带 DOI/PMID + `verified=true`；四维特征非空；`actionable_recommendations` ≥5 条。）
+
+**🔴 红线**：① 对标文必须 `citation_guard --require-mcp` 验证真实存在、不编造，每篇 `verified=true`；② 只学公开风格特征，严禁复制具体科学内容或句子（防抄袭）；③ `target_journal` 须与 `storyline.json` 一致；④ 占位符（`{{}}`/`TBD`/空字段）清零。
+
+**🔴 DoD 自检（gate `journal-study-dod`，落盘前委托独立子代理盲检，不得主 agent 自评）**：
+1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate journal-study-dod --files journal_study/target_journal_study.json`
+2. 派独立子代理（Claude Code 用 `academic-blind-reviewer`），不给写作上下文，要求按任务包返回 JSON 数组。
+3. 校验：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate journal-study-dod --return <子代理返回.json>`；退出码非 0 = **fail-closed**，据证据修复后重跑，未过不得声明完成、不得进 Phase 9。
+
+清单各项（与 `references/dod_checklist.json` 的 `journal-study-dod` 逐项对应）：
+- [ ] **JS1 代表作数量**：`recent_representative_papers` ≥5 篇且均为近 5 年
+- [ ] **JS2 真实性核验**：每篇过 `citation_guard --require-mcp` 且 `verified=true`、带 DOI/PMID（脚本：见步骤 2）
+- [ ] **JS3 四维特征非空**：abstract_structure / writing_style / figure_conventions / format_preferences 四字段均非空
+- [ ] **JS4 可操作建议**：`actionable_recommendations` ≥5 条，每条 `maps_to` ∈ {abstract, 正文, 图表}
+- [ ] **JS5 目标刊一致**：`target_journal` 与 `storyline.json` 的目标刊一致
+- [ ] **JS6 防抄袭**：报告只含风格/结构特征，无目标文原句或具体科学论断/数据
+- [ ] **JS7 占位清零**：无 `{{}}`/`TBD`/空必填字段
+
 ### Phase 9: 摘要撰写 (`/abstract`)
-**时机**：全部正文章节完成后、质量控制前。Abstract 是全文的压缩精华，必须最后写。
+**时机**：全部正文章节完成、`/journal-study`（Phase 8.6）产出对标报告后、质量控制前。Abstract 是全文的压缩精华，必须最后写。**写前 `Read journal_study/target_journal_study.json`，按其 `abstract_structure_features` 与 `maps_to=abstract` 的 actionable_recommendations 对齐目标刊摘要调性。**
 **结构**（严格遵循目标期刊 word limit，默认 ≤250 词）：
 1. **Background**（1-2句）：研究背景与未解决问题
 2. **Methods**（1-2句）：核心方法/策略概述
@@ -413,6 +463,8 @@ python scripts/state_manager.py add-abbreviation <one.json>
 6. 防误改合并稿门禁：`[ ! -f manuscripts/Full_Manuscript.md ] || grep -q "AUTO-GENERATED" manuscripts/Full_Manuscript.md` — **阻断**：banner 不在 → 合并稿被手改过，需 `/merge` 重生成。
 7. `python scripts/abbreviation_consistency.py --root .` — 缩略词一致性扫描（脚本化，不再纯靠 AI 自评）。检测：① **重复定义** 同一缩写在多个 manuscript 文件首次定义；② **未定义就用** 直接用 ABBR 但 `abbreviations.json` 缺、且不在 `UNIVERSAL_ABBREVIATIONS` 白名单；③ **Title 出现缩写**（Title 严禁缩写）。**阻断**：脚本 exit 非 0 → 必修后重跑。通用缩写（DNA/RNA/PCR 等）自动跳过。脚本未覆盖的"已定义但全文未使用"等冗余项可人工补查。
 
+**润色对齐目标刊**：本阶段去 AI/校对的同时，`Read journal_study/target_journal_study.json`，按 `maps_to=正文`/`maps_to=图表` 的 actionable_recommendations 调整正文行文风格与图表呈现，使其贴合目标刊调性（不改科学内容，仅调风格/结构）。
+
 **全部通过 → 进 Phase 10.5 合规门禁**；任一阻断 → 修复后重跑该步及之后步骤。
 
 ### Phase 10.5: 投稿前合规门禁 (`/compliance-check`)
@@ -421,7 +473,7 @@ python scripts/state_manager.py add-abbreviation <one.json>
 
 **执行前必须 `Read references/compliance-gate.md`** — 六项判定细则与阻断条件完整定义在那里。
 
-**六项合规检查（缺一阻断，逐项输出 ✅/❌ + 缺失说明）**：
+**七项合规检查（缺一阻断，逐项输出 ✅/❌ + 缺失说明）**：
 
 1. **伦理批号**（IACUC/IRB）— 涉及动物/人体无批号即阻断
 2. **临床试验注册号**（NCT/ChiCTR 等）— 前瞻性临床研究无注册号即阻断（ICMJE 强制）
@@ -429,6 +481,7 @@ python scripts/state_manager.py add-abbreviation <one.json>
 4. **统计报告完整性**（精确 P 值/效应量+95%CI/多重比较校正）— 推断统计研究主要结果缺 CI 即阻断
 5. **署名合规性**（ICMJE 四准则）— 挂名作者须提请用户确认修正
 6. **Reviewer COI 回避**（近 3 年合作/同单位/导师-学生）— 明显 COI 未回避即阻断
+7. **Keywords**（投稿关键词列表）— `submission/keywords.txt` 缺失，或关键词数量不符目标刊规则（一般 3-6 个）即阻断投稿包导出
 
 **执行**：无专用脚本，逐项交互核查；报告规范部分 `Read templates/reporting_checklists.json` 取 checklist。**输出** `submission/compliance_report.md`。
 
@@ -443,13 +496,15 @@ python scripts/state_manager.py add-abbreviation <one.json>
 
 **流程（细则见 `references/submission-guide.md`，执行本阶段时必须先 `Read` 它）**：
 1. **Read 模板**：`Read templates/submission_package.json`（8 类模板 + 投稿 checklist）+ `Read references/submission-guide.md`（逐项询问明细 / CRediT 11 类分配 / Source Data 规范 / Acks 模板 / 报告 checklist 映射）。
-2. **建目录**：`mkdir -p submission/`；下分 `cover_letter.md`、`statements.md`（DAS+Code+CRediT+COI+Funding 合并）、`highlights.md`、`graphical_abstract/`。
+2. **建目录**：`mkdir -p submission/`；下分 `cover_letter.md`、`statements.md`（DAS+Code+CRediT+COI+Funding 合并）、`highlights.md`、`keywords.txt`、`graphical_abstract/`。
 3. **逐项询问 → 填模板**：按 guide 第 1 节主动问全部字段，**不要静默用空白**。
 4. **替换占位符**：所有 `{{VAR}}` 必须替换成实际值；**严禁保留 `{{}}` 占位**就交付。
-5. **跑 checklist**：投稿 checklist（guide 第 2 节期刊适配）+ 报告规范 checklist（guide 第 3 节）+ Source Data（guide 第 4 节）逐项 ✅/❌，缺项补到全 ✅。
-6. **输出**：`submission/submission_checklist.md`（含逐项 status + 报告 checklist 状态 + Source Data sheet 命名核对）+ 各 markdown 模板。
+5. **🔴 Keywords（强制产出）**：产出 `submission/keywords.txt`，3-6 个投稿关键词（符合目标刊数量规则），与 title/abstract 主题一致，避免与标题词完全重复，生命科学优先选 MeSH 词。选词规则见 `references/submission-guide.md` 第 8 节。
+6. **跑 checklist**：投稿 checklist（guide 第 2 节期刊适配）+ 报告规范 checklist（guide 第 3 节）+ Source Data（guide 第 4 节）逐项 ✅/❌，缺项补到全 ✅。
+7. **输出**：`submission/submission_checklist.md`（含逐项 status + 报告 checklist 状态 + Source Data sheet 命名核对 + Keywords 数量核对）+ 各 markdown 模板 + `submission/keywords.txt`。
+8. **DoD 核查**：对照 `references/dod_checklist.json` 的 `submission-pack-dod` gate 逐项核对（SP1 无占位 / SP2 Keywords 3-6 个 / SP3 Source Data 对应 / SP4 Funding·Acks 不空）；其中 Keywords 缺失或数量不符由 Phase 10.5 强制阻断。
 
-**红线（详见 guide 第 7 节）**：严禁 `{{VAR}}` 残留 / 伪造 reviewer 邮箱 / 瞒报 COI；Funding 无则写 "no specific external funding" 不留空；**Source Data 数值必须与图对应**（不一致即学术不端嫌疑）；Acks 不能空。
+**红线（详见 guide 第 7 节）**：严禁 `{{VAR}}` 残留 / 伪造 reviewer 邮箱 / 瞒报 COI；Funding 无则写 "no specific external funding" 不留空；**Source Data 数值必须与图对应**（不一致即学术不端嫌疑）；Acks 不能空；**Keywords 必须产出且数量符合目标刊（3-6 个），缺失或数量不符即阻断投稿包导出（见 Phase 10.5）**。
 
 ### Phase 12: Presubmission Inquiry（仅 Nature/Cell/Science 系列，可选但强烈建议）
 
@@ -543,9 +598,10 @@ python scripts/state_manager.py add-abbreviation <one.json>
 | `/figure` | Figure 识图与讨论 | 逐张读图→读图清单确认→存 `figure_analysis/figure_{N}.md` 作正文依据；只读符号化信息，读不到问用户（见 Phase 6） |
 | `/rename-figure` | 重整 figure 编号 | 全局改名 + 同步 figures_database/storyline/正文/识图文件，支持 --dry-run（脚本 rename-figure） |
 | `/write` | 撰写章节 | **章节局部读取 + 自我修正 + 智能快照** |
+| `/journal-study` | 目标期刊风格深度学习 | 正文写完、abstract 前：学近 5 年代表作风格→出 `journal_study/target_journal_study.json`，指导 abstract/正文/图表对齐目标刊（见 Phase 8.6） |
 | `/abstract` | 撰写摘要 | 全文完成后最后写，≤250词，含定量结果 |
-| `/compliance-check` | 投稿前合规门禁 | /check 通过后强制执行：伦理批号+试验注册号+报告规范+统计完整性+ICMJE署名+reviewer COI，缺一阻断（见 Phase 10.5） |
-| `/submission-pack` | 投稿包准备 | Cover letter+DAS+CRediT+COI+Funding+Highlights+eTOC+Graphical Abstract+Source Data+Acks+checklist（见 Phase 11） |
+| `/compliance-check` | 投稿前合规门禁 | /check 通过后强制执行：伦理批号+试验注册号+报告规范+统计完整性+ICMJE署名+reviewer COI+Keywords，缺一阻断（见 Phase 10.5） |
+| `/submission-pack` | 投稿包准备 | Cover letter+DAS+CRediT+COI+Funding+Highlights+Keywords+eTOC+Graphical Abstract+Source Data+Acks+checklist（见 Phase 11） |
 | `/presubmission-inquiry` | Nature/Cell 系预审询函 | ≤1 页 inquiry,省 4-6 周等审稿（见 Phase 12） |
 | `/proofread` | 机械错误最终校对 | 拼写/中文标点/单位/术语一致性/数字格式/Methods 时态(脚本 proofread.py) |
 | `/mentor-review` | 导师批注循环 | 录入批注→逐条执行→改动追踪→重审准备→轮次管理（见 Phase 14） |
