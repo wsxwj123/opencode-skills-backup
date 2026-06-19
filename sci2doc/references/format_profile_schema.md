@@ -8,7 +8,7 @@
 
 Before any project initialization or drafting, the AI **must** present exactly two style options and require the user to choose one:
 
-1. `默认设置` — use the built-in Central South University (中南大学) doctoral thesis style.
+1. `默认设置` — use the built-in default doctoral thesis style template.
 2. `自定义样式` — user must provide the target university plus detailed Word formatting requirements and/or reference template materials.
 
 Rules:
@@ -23,8 +23,8 @@ Rules:
   - `format_profile.degree_type`
 - For requirement-driven customization, AI should prefer writing structured rules into `format_profile.style_profile` when the user provides explicit font/size/spacing/table/front-matter requirements instead of a `.docx/.dotx` file.
 - `pending_template` projects may continue collecting requirements and drafting source markdown, but **must not** generate `.docx` or run final format acceptance.
-- Do not silently inherit CSU layout numbers when switching a project from `default_csu` to `custom`. Missing structured custom layout fields mean `pending_template`, not `ready`.
-- Built-in automated Word formatting defaults to CSU only for `default_csu`. For `custom ready`, scripts must read local structured fields instead of hardcoded CSU constants.
+- Do not silently inherit the built-in default layout numbers when switching a project from `default_generic` to `custom`. Missing structured custom layout fields mean `pending_template`, not `ready`.
+- Built-in automated Word formatting applies the default template only for `default_generic`. For `custom ready`, scripts must read local structured fields instead of hardcoded default constants.
 - Custom template evidence files should be stored under `04_图表文件/` or referenced by absolute path in `format_profile.source_template_files`.
 - `state_manager.py init` and `state_manager.py profile` must automatically render managed front matter files into:
   - `atomic_md/封面.md`
@@ -50,7 +50,7 @@ The thesis target profile is stored in:
 - `thesis_profile.json`
 
 The style choice and formatting gate are also stored there:
-- `format_profile.mode`: `default_csu` | `custom`
+- `format_profile.mode`: `default_generic` | `custom`
 - `format_profile.status`: `ready` | `pending_template`
 - `format_profile.source_template_files`
 - `format_profile.requirements_summary`

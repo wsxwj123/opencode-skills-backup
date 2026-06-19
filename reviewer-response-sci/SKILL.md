@@ -70,7 +70,7 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
 - Keep tone professional and non-defensive.
 - English reviewer responses must be fluent and natural, with low AI-style phrasing.
 - Prefer short sentences for clear, natural rhythm; avoid long complex sentences by default, but do not split mechanically.
-- If a reviewer comment requires adding references, literature retrieval follows topic-dependent routing: ① determine field — life science/medicine → PubMed CLI first (`esearch`/`efetch`, `~/edirect/`, `< /dev/null`, proxy `http://127.0.0.1:<PROXY_PORT>`); CS/AI/engineering → paper-search MCP first (`mcp__paper-search-mcp__search_arxiv` etc.) ② fallback to the other when primary yields no results. Auto-install PubMed CLI if `~/edirect/esearch` missing: `sh -c "$(curl -fsSL https://ftp.ncbi.nlm.nih.gov/entrez/entrezdirect/install-edirect.sh)"`.
+- If a reviewer comment requires adding references, literature retrieval follows topic-dependent routing: ① determine field — life science/medicine → PubMed CLI first (`esearch`/`efetch`, `~/edirect/`, `< /dev/null`, proxy `http://127.0.0.1:<PROXY_PORT>`); CS/AI/engineering → paper-search MCP first (`mcp__paper-search-mcp__search_arxiv` etc.) ② fallback to the other when primary yields no results. Auto-install PubMed CLI if `~/edirect/esearch` missing: `sh -c "$(curl -fsSL https://ftp.ncbi.nlm.nih.gov/entrez/entrezdirect/install-edirect.sh)"`. **Windows:** the `sh`/`curl` installer and `< /dev/null` are not available in native cmd/PowerShell — run PubMed CLI under WSL, or skip it and use the paper-search MCP fallback instead.
 - **严禁** 使用 `tavily`、`websearch` 或 `openalex`（pyalex）进行文献检索。
 - **Serial Search (MANDATORY):** Execute all retrieval calls sequentially (PubMed CLI and paper-search MCP alike). Never parallelize search requests. Enforce ≥1s interval between consecutive calls.
 - Do not create ad-hoc fixer scripts (e.g., `fix_gate_errors.py`, temporary patch scripts) during normal runs.
@@ -116,6 +116,7 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
   1. **分步**：先 `build_full_package.py` 出骨架（无条件写占位符、不跑 gate）→ AI 填 `units/*.json` → 再 `run_pipeline.py` 跑全部 gate；
   2. **串起**：一条 `run_pipeline.py` 走完 build→gate（首轮占位符会被门禁拦下，按报告填 units 后重跑）。
 - 下列编号步骤是**逻辑顺序说明**，多数由脚本代劳；User Checkpoint 之间 AI 需停下确认。
+- **跨平台命令说明（一次性）：** 本节及后续所有 `python3 scripts/...` 命令在 Windows 上请用 `python` 或 `py` 代替 `python3`（macOS/Linux 保持 `python3`）。
 
 1. Parse all reviewer comments from `comments_docx_path`. The parser (`split_reviewer_blocks`) recognizes both `Reviewer #N` blocks and **Editor blocks** (`Editor:`, `Editor Comments`, `Comments from the Editor`, `Editorial Comments`, `编辑意见`, `编辑要求` 等) as **top-level nodes**. Editor comments become an independent `reviewer="Editor"` group, never merged into a reviewer.
 1.5. **[User Checkpoint]** Print parsed comment summary table:

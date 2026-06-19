@@ -16,13 +16,13 @@ pip3 install pdfminer.six
 
 ## 2. 初始化项目
 
-🔴 运行 init 前必须先与用户确认样式（见 3.1）。`--format-mode` 默认 `default_csu`，会静默落成中南大学格式并立即放行 docx 导出——**不要省略该参数把它当默认值跑**，必须显式传入用户已确认的样式：
+🔴 运行 init 前必须先与用户确认样式（见 3.1）。`--format-mode` 默认 `default_generic`，会静默落成内置默认模板格式并立即放行 docx 导出——**不要省略该参数把它当默认值跑**，必须显式传入用户已确认的样式：
 
 ```bash
-# 用户确认用默认中南大学格式后：
+# 用户确认用内置默认模板格式后：
 python3 scripts/state_manager.py --project-root "${save_path}" init \
   --title "论文题目" --author "作者" --major "专业" \
-  --format-mode default_csu
+  --format-mode default_generic
 
 # 用户选自定义、但模板信息尚不完整时（保持 pending_template，禁止导出 docx）：
 python3 scripts/state_manager.py --project-root "${save_path}" init \
@@ -43,7 +43,7 @@ python3 scripts/state_manager.py --project-root "${save_path}" profile \
 
 ## 3.1 样式二选一
 
-- `默认设置`：直接使用内置中南大学博士论文格式。
+- `默认设置`：直接使用内置默认博士论文格式模板。
 - `自定义样式`：必须先写入院校、页边距、页眉页脚距离，以及详细文字规范或模板证据。
 
 如果自定义信息不完整，项目状态会自动保持为 `pending_template`，允许继续整理 markdown，但禁止导出 `.docx` 和格式验收。

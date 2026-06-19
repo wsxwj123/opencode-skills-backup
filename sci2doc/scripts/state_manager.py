@@ -1539,7 +1539,7 @@ def init_project(
     major="",
     source_paper="",
     copy_local_scripts=False,
-    format_mode="default_csu",
+    format_mode="default_generic",
     format_status=None,
     university_name=None,
     degree_type=None,
@@ -2106,7 +2106,7 @@ def parse_args():
     init_p.add_argument("--no-copy-local-scripts", dest="copy_local_scripts",
                         action="store_false",
                         help="不拷脚本进项目（脚本从技能目录原地跑）")
-    init_p.add_argument("--format-mode", choices=["default_csu", "custom"], default="default_csu")
+    init_p.add_argument("--format-mode", choices=["default_generic", "custom"], default="default_generic")
     init_p.add_argument("--format-status", choices=["ready", "pending_template"])
     init_p.add_argument("--university-name", default=None)
     init_p.add_argument("--degree-type", default=None)
@@ -2173,7 +2173,7 @@ def parse_args():
         default=[],
         help="Set chapter target using '<chapter>:<chars>', repeatable",
     )
-    profile_p.add_argument("--format-mode", choices=["default_csu", "custom"], help="Set style mode")
+    profile_p.add_argument("--format-mode", choices=["default_generic", "custom"], help="Set style mode")
     profile_p.add_argument("--format-status", choices=["ready", "pending_template"], help="Set style status")
     profile_p.add_argument("--university-name", help="Set university name for custom mode")
     profile_p.add_argument("--degree-type", help="Set degree type for custom mode")

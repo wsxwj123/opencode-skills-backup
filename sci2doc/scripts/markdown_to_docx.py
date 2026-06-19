@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Markdown 转 Word 工具（默认应用中南大学样式，支持自定义格式配置）
+Markdown 转 Word 工具（默认应用内置模板样式，支持自定义格式配置）
 
 功能：
 1. 解析 Markdown 文本
 2. 转换为 Word 文档
-3. 自动应用论文格式配置（默认中南大学博士论文样式）
+3. 自动应用论文格式配置（默认内置默认博士论文样式）
 4. 处理图表占位符
 
 作者：Sci2Doc Team
@@ -82,7 +82,7 @@ def _load_render_context(project_root):
         "page_margins_cm": {"top": 2.54, "bottom": 2.54, "left": 3.17, "right": 3.17},
         "header_distance_cm": 1.5,
         "footer_distance_cm": 1.75,
-        "header_left_text": "中南大学博士学位论文",
+        "header_left_text": "示例大学博士学位论文",
         "style_profile": normalize_style_profile(None) if normalize_style_profile is not None else {},
     }
     if load_profile is None or build_format_render_context is None:
@@ -228,31 +228,31 @@ def _apply_paragraph_style_from_spec(paragraph, spec, word_style=None, set_text_
             run.font.color.rgb = RGBColor(0, 0, 0)
 
 
-def apply_csu_heading1_style(paragraph, render_context=None):
+def apply_default_heading1_style(paragraph, render_context=None):
     """应用一级标题样式"""
     spec = _resolve_style_profile(render_context).get("heading1", {})
     _apply_paragraph_style_from_spec(paragraph, spec, word_style="Heading 1", set_text_black=True)
 
 
-def apply_csu_heading2_style(paragraph, render_context=None):
+def apply_default_heading2_style(paragraph, render_context=None):
     """应用二级标题样式"""
     spec = _resolve_style_profile(render_context).get("heading2", {})
     _apply_paragraph_style_from_spec(paragraph, spec, word_style="Heading 2")
 
 
-def apply_csu_heading3_style(paragraph, render_context=None):
+def apply_default_heading3_style(paragraph, render_context=None):
     """应用三级标题样式"""
     spec = _resolve_style_profile(render_context).get("heading3", {})
     _apply_paragraph_style_from_spec(paragraph, spec, word_style="Heading 3")
 
 
-def apply_csu_normal_style(paragraph, render_context=None):
+def apply_default_normal_style(paragraph, render_context=None):
     """应用正文样式"""
     spec = _resolve_style_profile(render_context).get("body", {})
     _apply_paragraph_style_from_spec(paragraph, spec, word_style="Normal")
 
 
-def apply_csu_caption_style(paragraph, render_context=None, caption_key="figure_caption"):
+def apply_default_caption_style(paragraph, render_context=None, caption_key="figure_caption"):
     """应用图表题注样式"""
     spec = _resolve_style_profile(render_context).get(caption_key, {})
     _apply_paragraph_style_from_spec(paragraph, spec)
@@ -666,7 +666,7 @@ def create_three_line_table(doc, headers, rows, caption=None, render_context=Non
     # 添加标题（如果有）
     if caption:
         cap_para = doc.add_paragraph(caption)
-        apply_csu_caption_style(cap_para, render_context=render_context, caption_key="table_caption")
+        apply_default_caption_style(cap_para, render_context=render_context, caption_key="table_caption")
 
     num_cols = len(headers)
     num_rows = 1 + len(rows)
@@ -828,7 +828,7 @@ def markdown_to_docx(md_content, output_path, chapter_num=None, project_root=Non
         # 设置页眉
         setup_header(
             section,
-            render_context.get("header_left_text", "中南大学博士学位论文"),
+            render_context.get("header_left_text", "示例大学博士学位论文"),
             header_right_text,
             distance_cm=render_context.get("header_distance_cm", 1.5),
             style_spec=_resolve_style_profile(render_context).get("header", {}),
@@ -879,7 +879,7 @@ def markdown_to_docx(md_content, output_path, chapter_num=None, project_root=Non
                 if line_type_cur != 'empty':
                     # 非空行且不是表格行 → caption 后面没有紧跟管道表格
                     cap_para = doc.add_paragraph(table_caption)
-                    apply_csu_caption_style(cap_para, render_context=render_context, caption_key="table_caption")
+                    apply_default_caption_style(cap_para, render_context=render_context, caption_key="table_caption")
                     table_caption = None
                     # 继续处理当前行（不 skip）
 
@@ -890,19 +890,19 @@ def markdown_to_docx(md_content, output_path, chapter_num=None, project_root=Non
             
             elif line_type == 'heading1':
                 para = doc.add_heading(content, level=1)
-                apply_csu_heading1_style(para, render_context=render_context)
+                apply_default_heading1_style(para, render_context=render_context)
             
             elif line_type == 'heading2':
                 para = doc.add_heading(content, level=2)
-                apply_csu_heading2_style(para, render_context=render_context)
+                apply_default_heading2_style(para, render_context=render_context)
             
             elif line_type == 'heading3':
                 para = doc.add_heading(content, level=3)
-                apply_csu_heading3_style(para, render_context=render_context)
+                apply_default_heading3_style(para, render_context=render_context)
             
             elif line_type == 'figure':
                 para = doc.add_paragraph(content)
-                apply_csu_caption_style(para, render_context=render_context, caption_key="figure_caption")
+                apply_default_caption_style(para, render_context=render_context, caption_key="figure_caption")
             
             elif line_type == 'table':
                 # 表格占位符 [表 X-X：标题] — 可能是后续 Markdown 表格的标题
@@ -913,7 +913,7 @@ def markdown_to_docx(md_content, output_path, chapter_num=None, project_root=Non
                 if content:
                     cleaned = strip_bold_markers(content)
                     para = doc.add_paragraph(cleaned)
-                    apply_csu_normal_style(para, render_context=render_context)
+                    apply_default_normal_style(para, render_context=render_context)
 
         # 文件末尾：刷新残留的表格
         if table_buffer:
@@ -989,7 +989,7 @@ def main():
     """命令行入口"""
     import argparse
     
-    parser = argparse.ArgumentParser(description='Markdown 转 Word（默认 CSU，可读取自定义格式配置）')
+    parser = argparse.ArgumentParser(description='Markdown 转 Word（默认内置模板，可读取自定义格式配置）')
     parser.add_argument('input', help='输入 Markdown 文件路径')
     parser.add_argument('-o', '--output', help='输出 Word 文件路径（可选）')
     parser.add_argument('-c', '--chapter', type=int, help='章节号（可选）')

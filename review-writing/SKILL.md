@@ -536,7 +536,9 @@ Format: `[review] Phase X.Step: <description>`. 📖 消息表 + Rollback 命令
 
 ---
 
-## Phase 2: Round 1 Literature Search + Real-Time Write
+## Phase 2: 系统主检索（Systematic Main Search）+ Real-Time Write
+
+> （探索性检索已在 Phase 1.5 完成，本阶段是系统化主检索。）
 
 **Start: Read `outline.md` + `state.json`. Skip sections already in `completed_sections`.**
 > **主线依据（防丢主线）：** 开写前 Read `data/research_gap.json`，取 `selected` 的 gap/选题方向作为本轮检索与写作的综述主线，确保不偏离 Phase 1.5 选定的核心 gap。
@@ -648,7 +650,7 @@ python3 scripts/state_manager.py set-phase --phase 3
 **Polish Mode branch (if `state.json` contains `"mode": "polish"`):**
 ```
 Before starting any section, read state.json → pending_sections:
-  missing → no draft exists: run Round 1 search (same as Phase 2 per-section loop Steps 2-6) INLINE here, then proceed to step 1 below. Do NOT navigate back to Phase 2; all search+write happens within this Phase 3 section loop.
+  missing → no draft exists: run systematic main search (same as Phase 2 per-section loop Steps 2-6) INLINE here, then proceed to step 1 below. Do NOT navigate back to Phase 2; all search+write happens within this Phase 3 section loop.
   rewrite → existing draft exists in drafts/section_XX_XX.md: read it as context, then fully rewrite
   polish  → existing draft exists in drafts/section_XX_XX.md: read it; fix ONLY AI-flags + thin citations;
             keep structure and arguments intact; do NOT overwrite with fresh draft

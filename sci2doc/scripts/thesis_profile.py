@@ -11,9 +11,9 @@ import os
 import tempfile
 
 DEFAULT_FORMAT_PROFILE = {
-    "mode": "default_csu",
+    "mode": "default_generic",
     "status": "ready",
-    "university_name": "中南大学",
+    "university_name": "示例大学",
     "degree_type": "博士学位论文",
     "source_template_files": [],
     "requirements_summary": [],
@@ -30,9 +30,9 @@ DEFAULT_PAGE_MARGINS_CM = {
 
 DEFAULT_HEADER_DISTANCE_CM = 1.5
 DEFAULT_FOOTER_DISTANCE_CM = 1.75
-DEFAULT_GRADUATE_SCHOOL_NAME = "中南大学研究生院"
-DEFAULT_DECLARATION_SCHOOL_NAME = "中南大学"
-DEFAULT_SCHOOL_CODE = "10533"
+DEFAULT_GRADUATE_SCHOOL_NAME = "示例大学研究生院"
+DEFAULT_DECLARATION_SCHOOL_NAME = "示例大学"
+DEFAULT_SCHOOL_CODE = "[学校代码]"
 ALLOWED_PAGE_NUMBER_FORMATS = {"decimal", "lowerRoman", "upperRoman", "lowerLetter", "upperLetter"}
 
 DEFAULT_PAGE_NUMBERING = {
@@ -660,8 +660,8 @@ def validate_format_profile_patch(format_profile):
     unknown = set(format_profile.keys()) - allowed_keys
     if unknown:
         _raise_validation_error(f"format_profile.{sorted(unknown)[0]}", f"one of {sorted(allowed_keys)}", "unknown field")
-    if "mode" in format_profile and format_profile["mode"] not in {"default_csu", "custom"}:
-        _raise_validation_error("format_profile.mode", "'default_csu' or 'custom'", format_profile["mode"])
+    if "mode" in format_profile and format_profile["mode"] not in {"default_generic", "custom"}:
+        _raise_validation_error("format_profile.mode", "'default_generic' or 'custom'", format_profile["mode"])
     if "status" in format_profile and format_profile["status"] not in {"ready", "pending_template"}:
         _raise_validation_error("format_profile.status", "'ready' or 'pending_template'", format_profile["status"])
     for key in (
@@ -899,9 +899,9 @@ def normalize_format_profile(raw_profile=None):
     merged = deep_merge(DEFAULT_FORMAT_PROFILE, raw_profile)
     explicit_allow_docx_generation = raw_profile.get("allow_docx_generation") if "allow_docx_generation" in raw_profile else None
 
-    mode = str(merged.get("mode", "default_csu")).strip() or "default_csu"
-    if mode not in {"default_csu", "custom"}:
-        mode = "default_csu"
+    mode = str(merged.get("mode", "default_generic")).strip() or "default_generic"
+    if mode not in {"default_generic", "custom"}:
+        mode = "default_generic"
 
     status = str(merged.get("status", "ready")).strip() or "ready"
     if status not in {"ready", "pending_template"}:
@@ -912,11 +912,11 @@ def normalize_format_profile(raw_profile=None):
     missing_requirements = _normalize_string_list(merged.get("missing_requirements"))
 
     university_name = str(merged.get("university_name", "")).strip()
-    if mode == "default_csu" and not university_name:
-        university_name = "中南大学"
+    if mode == "default_generic" and not university_name:
+        university_name = "示例大学"
 
     degree_type = str(merged.get("degree_type", "")).strip()
-    if mode == "default_csu" and not degree_type:
+    if mode == "default_generic" and not degree_type:
         degree_type = "博士学位论文"
 
     page_margins_cm = _normalize_page_margins(raw_profile.get("page_margins_cm"))
@@ -929,7 +929,7 @@ def normalize_format_profile(raw_profile=None):
     style_profile = normalize_style_profile(raw_profile.get("style_profile"))
     page_numbering = _normalize_page_numbering(raw_profile.get("page_numbering"))
 
-    if mode == "default_csu":
+    if mode == "default_generic":
         status = "ready"
         missing_requirements = []
         allow_docx_generation = True
@@ -997,7 +997,7 @@ def normalize_format_profile(raw_profile=None):
 def build_format_render_context(raw_format_profile=None):
     format_profile = normalize_format_profile(raw_format_profile)
     page_margins = format_profile.get("page_margins_cm") or {}
-    university_name = format_profile.get("university_name") or "中南大学"
+    university_name = format_profile.get("university_name") or "示例大学"
     degree_type = format_profile.get("degree_type") or "博士学位论文"
 
     return {

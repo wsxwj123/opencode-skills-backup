@@ -9,7 +9,7 @@
 | `scripts/check_quality.py` | Quality validation: fonts/spacing/structure/tables/figures | 1200+ |
 | `scripts/abbreviation_registry.py` | Abbreviation lifecycle: extract/register/strip/validate | 840+ |
 | `scripts/count_words.py` | Markdown word counting: file/chapter/full thesis | 590+ |
-| `scripts/markdown_to_docx.py` | MD→Word conversion with CSU formatting | 420+ |
+| `scripts/markdown_to_docx.py` | MD→Word conversion with built-in default formatting | 420+ |
 | `scripts/merge_chapters.py` | Docx merging with TOC/header/footer | 380+ |
 | `scripts/merge_documents.py` | Compatibility wrapper for merge | 50+ |
 | `scripts/figure_registry.py` | Figure numbering: register/validate/cross-validate/export | 400+ |

@@ -1342,7 +1342,7 @@ def _style_spec_to_quality_spec(style_spec, label, match):
 
 def check_word_format_compliance(doc, format_context=None):
     """
-    全面检查 Word 文档格式是否符合中南大学博士论文规范。
+    全面检查 Word 文档格式是否符合内置默认模板规范。
     检查页面布局、字体、字号、行距、缩进、段前段后间距等。
     """
     issues = []
@@ -2117,7 +2117,7 @@ def check_header_footer(doc, format_context=None):
     DISTANCE_TOL = Cm(0.2)
     format_context = format_context or {}
     _degree_label = format_context.get("degree_type", "博士学位论文")
-    _univ = format_context.get("university_name", "中南大学")
+    _univ = format_context.get("university_name", "示例大学")
     _default_header = f"{_univ}{_degree_label}"
     expected_header_left_text = format_context.get("header_left_text", _default_header)
     expected_header_distance_cm = format_context.get("header_distance_cm", 1.5)

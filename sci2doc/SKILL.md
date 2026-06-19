@@ -25,7 +25,7 @@ The workflow is built around:
 |------|------|----------|------|
 | **0. 材料确认** | 确认源材料可访问、用户提供论文题目/章数/院校 | 材料缺失 → 停止 | `### 0) Material Input Gate` |
 | **0.5. 研究主线设计** | 产出科学问题→贡献→章节映射表；协商章节字数目标；写入 `outline` | `outline` 为空 → 不得进入 Step 1 | `### 0.5) Research Storyline Design` |
-| **1. 样式选择** | 询问 CSU默认 or 自定义；写入 `thesis_profile.json` | 自定义信息不完整 → `pending_template` | `## Style Selection Gate` |
+| **1. 样式选择** | 询问 内置默认模板 or 自定义；写入 `thesis_profile.json` | 自定义信息不完整 → `pending_template` | `## Style Selection Gate` |
 | **2. 初始化项目** | `state_manager.py init`；验证 profile；章节字数已在 Step 0.5 协商 | profile 缺字段 → 不允许生成 docx | `### 1) Initialize Project` |
 | **3. 文献检索** | 学科路由（生命科学→PubMed CLI / CS/AI→paper-search MCP）；运行 citation_guard | guard `ok=false` → 停止写作 | `## Citation Zero-Hallucination Gate` |
 | **4. 预写门禁** | `write-cycle --chapter N` 加载跨章记忆 | 每章每节必做，不可跳过 | `### 2) Prewrite Gate` |
@@ -41,10 +41,10 @@ The workflow is built around:
 
 初始化或起草前，AI **必须** 让用户在两种样式中二选一：
 
-1. `默认设置` — 内置中南大学（CSU）博士学位论文格式。
+1. `默认设置` — 内置默认学位论文模板（通用格式，可自定义为任意院校）。机构字段为占位符（`示例大学`/`[学校代码]`），用户应替换为本校信息。
 2. `自定义样式` — 用户须提供目标院校 + 详细 Word 格式要求和/或模板证据文件。
 
-🔴 **CHECKPOINT（阻断 init）：** 未与用户明确确认样式前，**不得运行 `state_manager.py init`**。即使用户可能想用默认 CSU，也必须先得到用户对"就用中南大学默认格式"的明确确认，再带样式参数运行 init。**禁止** 因看到 QUICK_START 的 init 示例就直接套用默认 `--format-mode default_csu` 跑 init（该默认会静默落成 CSU 格式且立即放行 docx 导出）。
+🔴 **CHECKPOINT（阻断 init）：** 未与用户明确确认样式前，**不得运行 `state_manager.py init`**。即使用户可能想用内置默认模板，也必须先得到用户对"就用内置默认模板"的明确确认，再带样式参数运行 init。**禁止** 因看到 QUICK_START 的 init 示例就直接套用默认 `--format-mode default_generic` 跑 init（该默认会静默落成内置模板格式且立即放行 docx 导出）。
 
 **硬门禁：** 自定义信息不完整的项目标记为 `pending_template`，可继续整理 markdown，但 **不得生成 `.docx`、不得运行格式验收**。`custom` 仅在写入结构化布局字段后才能转为 `ready`，否则保持 `pending_template`。
 
@@ -98,9 +98,11 @@ Rules:
 - Every cited entry must carry traceability fields (`source_provider` + `source_id`) and DOI/PMID whenever available.
 
 **Topic-dependent routing (MANDATORY):**
-- Life science / medicine / clinical / biochemistry / pharmacology → **PubMed CLI first** (`esearch`/`efetch`/`einfo`, `~/edirect/`, requires `< /dev/null`, proxy `http://127.0.0.1:<PROXY_PORT>`). Auto-install if missing: `sh -c "$(curl -fsSL https://ftp.ncbi.nlm.nih.gov/entrez/entrezdirect/install-edirect.sh)"`.
+- Life science / medicine / clinical / biochemistry / pharmacology → **PubMed CLI first** (`esearch`/`efetch`/`einfo`, `~/edirect/`, requires `< /dev/null`, proxy `http://127.0.0.1:<PROXY_PORT>`). Auto-install if missing: `sh -c "$(curl -fsSL https://ftp.ncbi.nlm.nih.gov/entrez/entrezdirect/install-edirect.sh)"`. **Windows:** edirect 在 Windows PowerShell/CMD 不可用，用 WSL bash，或自动回退 paper-search MCP。
 - CS / AI / engineering / physics / interdisciplinary → **paper-search MCP first** (`mcp__paper-search-mcp__search_arxiv` etc.).
 - Fallback to the other source when primary yields no results.
+
+> **跨平台命令说明：** 本文档内联的 `python3 scripts/xxx.py` 命令在 Windows 上用 `python` 或 `py` 代替 `python3`。
 
 `literature_index.json` 必需字段 schema 见 `references/format_profile_schema.md § literature_index.json schema`。
 
@@ -218,7 +220,7 @@ Record answers into `thesis_profile.json > format_profile.degree_type` and `targ
 
 Before initializing any project, also verify:
 - Source materials (PDF/Word SCI papers + supplementary figures) are accessible at a known local path.
-- User has provided: thesis topic, research chapter count estimate, target university (or explicit consent to use CSU default).
+- User has provided: thesis topic, research chapter count estimate, target university (or explicit consent to use the built-in default template).
 
 If source materials are missing or inaccessible, **stop and request them**. Do not proceed to Step 1.
 
@@ -287,7 +289,7 @@ python3 scripts/extract_docx_images.py --manuscript /path/to/source.docx --proje
 
 ### 1) Initialize Project
 
-- `state_manager.py init`：先二选一样式。`--format-mode default_csu` 或 `--format-mode custom`（+ `--university-name` / `--degree-type` / `--template-source` / `--missing-requirement`）。
+- `state_manager.py init`：先二选一样式。`--format-mode default_generic` 或 `--format-mode custom`（+ `--university-name` / `--degree-type` / `--template-source` / `--missing-requirement`）。
 - `state_manager.py profile --show` 验证；`render-front-matter` 手动重渲前置页；`profile --body-target/--abstract-min/--chapter-target ...` 写入已协商好的各章字数目标（应在 Step 0.5 中已与用户确定）。
 - 自定义结构化布局字段不全 → 保持 `pending_template`（最小必填字段见 `## Style Selection Gate`）。
 - init / profile 必须自动刷新 managed front matter；无 managed marker 的用户改写文件不得覆盖。用户在聊天里给的详细要求应转成 JSON 经 `--format-profile-json` / `--project-info-json` 写入，而非仅留在 prose memory。
@@ -512,9 +514,9 @@ Three-line tables are mandatory in (but not limited to):
 
 边框参数（pt 值）与题注字体字号见 `references/word-format-spec.md § Three-Line Table Borders`；格式由 `check_quality.py` 强制校验（无竖线，顶/底线 1.5pt，表头线 0.5pt）。
 
-## Word Format Specification (CSU Standard)
+## Word Format Specification (Built-in Default Template)
 
-完整字体、字号、页边距、页眉页脚、三线表边框等参数详见 `references/word-format-spec.md`（中南大学博士学位论文标准，由 `markdown_to_docx.py` 硬编码实现，`check_quality.py` 强制校验）。
+完整字体、字号、页边距、页眉页脚、三线表边框等参数详见 `references/word-format-spec.md`（内置默认博士学位论文版面标准，由 `markdown_to_docx.py` 硬编码实现，`check_quality.py` 强制校验）。
 
 ## Figure Numbering Contract
 
@@ -576,7 +578,7 @@ Priority rule: **chapter-based numbering takes precedence**. If a figure from SC
 - ❌ 把综述章及其内部参考文献节算进正文字数，标题含“综述／文献综述／研究综述”的章节须整章排除（`check_quality.py classify_heading()`）。
 - ❌ 把全文末尾的统一参考文献计入正文字数，正文范围只到正文结束、参考文献之前。
 - ❌ 不区分博士与硕士字数下限，博士正文 ≥50000、硕士 ≥30000，且只能上调不能跌破地板。
-- ❌ 看到 QUICK_START 的 init 示例就直接套 `--format-mode default_csu` 跑 init，未经用户确认样式即静默落成 CSU 格式并放行 docx 导出。
+- ❌ 看到 QUICK_START 的 init 示例就直接套 `--format-mode default_generic` 跑 init，未经用户确认样式即静默落成内置模板格式并放行 docx 导出。
 - ❌ 在自定义信息不完整、状态仍为 `pending_template` 时生成 `.docx` 或跑格式验收，或手动绕过 `markdown_to_docx.py` 的拒绝。
 - ❌ `outline` 数组为空就进入 Style Selection Gate 与 Step 1，缺 `scientific_question` 或研究章 `core_argument`。
 - ❌ 把章节字数目标硬编码或在 init 后才定，应在 Step 0.5 与用户协商后写入 `chapter_targets`。
