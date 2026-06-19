@@ -1,6 +1,6 @@
-# Word Format Specification — CSU Doctoral Thesis Standard
+# Word Format Specification — Built-in Default Doctoral Thesis Standard
 
-`markdown_to_docx.py` applies Central South University (中南大学) doctoral thesis formatting. All values below are authoritative — they are hardcoded in the converter and enforced by `check_quality.py`.
+`markdown_to_docx.py` applies the built-in default doctoral thesis formatting. All values below are authoritative — they are hardcoded in the converter and enforced by `check_quality.py`.
 
 ## Page Layout
 
@@ -37,11 +37,11 @@
 
 Every run must set both `w:name` (Latin) and `w:eastAsia` (CJK) via `set_run_font()`. This prevents Word from falling back to Calibri or other unexpected fonts when mixing Chinese and English text.
 
-## Page Header & Footer (CSU 2022)
+## Page Header & Footer
 
 | Element | Content | Font | Size | Position |
 |---------|---------|------|------|----------|
-| 页眉左侧 | "中南大学博士学位论文" | 宋体 + TNR | 五号 (10.5pt) | 距顶端 1.5cm |
+| 页眉左侧 | "<大学名>博士学位论文"（默认模板示例 "示例大学博士学位论文"） | 宋体 + TNR | 五号 (10.5pt) | 距顶端 1.5cm |
 | 页眉右侧 | "第X章 章名" | 宋体 + TNR | 五号 (10.5pt) | 右对齐 Tab |
 | 页脚 | PAGE 域页码 | Times New Roman | 小五 (9pt) | 居中，距底端 1.75cm |
 

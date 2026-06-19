@@ -1,8 +1,8 @@
 [
   {
     "id": 1,
-    "prompt": "我有3篇已发表的SCI文章，研究方向都是纳米药物递送，想把它们整合成我的博士学位论文（中南大学格式）。怎么开始？",
-    "expected": "skill应触发：Step 0 材料输入确认、Style Selection Gate（询问默认CSU格式还是自定义），然后初始化项目结构、state_manager init，说明原子化工作流"
+    "prompt": "我有3篇已发表的SCI文章，研究方向都是纳米药物递送，想把它们整合成我的博士学位论文（用内置默认格式）。怎么开始？",
+    "expected": "skill应触发：Step 0 材料输入确认、Style Selection Gate（询问内置默认格式还是自定义），然后初始化项目结构、state_manager init，说明原子化工作流"
   },
   {
     "id": 2,
@@ -12,6 +12,6 @@
   {
     "id": 3,
     "prompt": "论文已经写完了，怎么生成最终的Word文档？",
-    "expected": "skill应触发：检查所有质量门（citation_guard/论文结构完整性/格式符合性检查）、运行atomic_md_workflow.py merge-full → markdown_to_docx.py生成Word、按CSU格式规范输出03_合并文档/完整博士论文.docx，并说明check_quality.py校验步骤"
+    "expected": "skill应触发：检查所有质量门（citation_guard/论文结构完整性/格式符合性检查）、运行atomic_md_workflow.py merge-full → markdown_to_docx.py生成Word、按内置默认格式规范输出03_合并文档/完整博士论文.docx，并说明check_quality.py校验步骤"
   }
 ]
