@@ -478,6 +478,11 @@ Format: `[review] Phase X.Step: <description>`. 📖 消息表 + Rollback 命令
 
 **HALT. 向用户展示 candidate_topics / gaps / novelty_risk，等用户确认选题方向后再进 Phase 1.6。**
 
+5. **🔴 选定主线落盘衔接（防长会话丢主线，HALT 确认后必做）：** 用户确认选题方向后，立即把"选定的综述主线（选题方向 + 核心 gap）"显式固化，作为 Phase 2/3 的主线依据，不靠隐式记忆：
+   - 在 `research_gap.json` 被选中的 gap/candidate_topic 上加 `"selected": true` 标记；
+   - 同时把"选定主线 = 选题方向 + 核心 gap 一句话"写入 `outline.md` 顶部的主线锚点区（无则在文件首行新增 `## 综述主线（锚点）` 区块）。
+   - 落盘后再补一次 Git Checkpoint。
+
 ---
 
 ## Phase 1.6: Benchmark Review Library + Framing Guide（Write Mode only）
@@ -534,6 +539,7 @@ Format: `[review] Phase X.Step: <description>`. 📖 消息表 + Rollback 命令
 ## Phase 2: Round 1 Literature Search + Real-Time Write
 
 **Start: Read `outline.md` + `state.json`. Skip sections already in `completed_sections`.**
+> **主线依据（防丢主线）：** 开写前 Read `data/research_gap.json`，取 `selected` 的 gap/选题方向作为本轮检索与写作的综述主线，确保不偏离 Phase 1.5 选定的核心 gap。
 > **Phase gate:** if `state.json` does not exist or `phase < 1` → HALT; tell user "Phase 0 init must be completed first (run Phase 0.5 to create outline.md and state.json)"; do not proceed.
 
 ### Search Priority by Discipline
@@ -629,7 +635,7 @@ python3 scripts/state_manager.py set-phase --phase 2
 
 ## Phase 3: Section-by-Section Writing
 
-**Entry: Read `outline.md` + `state.json` first. If `state.json` phase < 3 (Write Mode), update to phase=3:**
+**Entry: Read `outline.md` + `state.json` first. 并 Read `data/research_gap.json` 取 `selected` 的 gap/选题方向作为综述主线依据，开写各节须围绕该核心 gap，不偏离 Phase 1.5 选定的主线。If `state.json` phase < 3 (Write Mode), update to phase=3:**
 ```bash
 # Only run if current phase < 3 (read state.json first; Polish Mode already enters at phase=3).
 # Do NOT regress a phase=4 project back to 3.
@@ -653,7 +659,7 @@ If pending_sections is empty → all sections complete; proceed to Phase 4.
 
 ### Per-Section Cycle
 
-0. **🔴 开写前置闸门 (Mandatory，脚本硬拦截)**：开写本 section 前必须先跑 `python3 scripts/prewrite_gate.py --section X.X --root .`，exit≠0 禁止开写。它统一硬检查：上一节完成（上一节 ∈ `state.json.completed_sections`）、大纲就位（`outline.md` 含本节标题）、素材就位（`data/synthesis_matrix.json` 本节文献矩阵非空）、上一节占位符清零（`drafts/` 无 `CITE_PENDING`/`DATA_PENDING`/`【待`）；上一节盲检（`.review_return_manuscript-dod.json`）未落盘则降级 warning 提示人工确认，不阻断。Polish Mode `keep` 节跳过本节循环故无需跑。
+0. **🔴 开写前置闸门 (Mandatory，脚本硬拦截)**：开写本 section 前必须先跑 `python3 scripts/prewrite_gate.py --section X.X --root .`，exit≠0 禁止开写。它统一硬检查：上一节完成（上一节 ∈ `state.json.completed_sections`）、大纲就位（`outline.md` 含本节标题）、素材就位（`data/synthesis_matrix.json` 本节文献矩阵非空）、上一节占位符清零（`drafts/` 无 `CITE_PENDING`/`DATA_PENDING`/`【待`）；上一节盲检结果（`.review_pass/<上一节>.json`）缺失即 prewrite_gate 硬拦 exit 1，禁止开写；必须先跑 delegate_review verify --section <上一节> 落盘通过标记。Polish Mode `keep` 节跳过本节循环故无需跑。
 
 1. **Load context:**
    ```
