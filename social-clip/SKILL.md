@@ -26,7 +26,7 @@ description: >
 | 知乎/微博/豆瓣 | ✅ autocli search(登录态) | ✅ autocli read | read 提图 | yt-dlp(若视频) | 🟡 尽力(脆弱) |
 | YouTube/抖音/其他 | autocli search / 给链接 | autocli read | read 提图 | yt-dlp 字幕优先 | 🟡 尽力 |
 | Reddit | ✅ autocli search | ✅ autocli read | read 提图 | 🟡 yt-dlp(若视频) | ✅ autocli read **直接带帖子+评论(满血)** |
-| 微信公众号 | ❌ 无 | 🟡 autocli weixin download / fetch 单篇 | read 提图 | — | ❌ 全网无方案 |
+| 微信公众号 | ❌ 无 | ✅ autocli weixin download / fetch 单篇 | read 提图 | — | —(按需不取) |
 | 网易云音乐 | ✅ curl 免加密接口 | ✅ 歌词(原词/译/罗马音) | 🟡 封面图 | ❌ 下音频需加密 | ✅ 热门+分页 |
 
 - **后端原则**:非小红书平台一律先试 `autocli`(复用本机 Chrome 登录态,对登录墙站点远比隐身抓取可靠),无对应命令/抓空再降级 `fetch-everything`,再不行 🛑 HALT 告知用户。
