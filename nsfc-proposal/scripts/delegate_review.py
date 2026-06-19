@@ -113,6 +113,24 @@ def cmd_pack(args: argparse.Namespace) -> int:
     return 0
 
 
+def _project_root_for_verify(args: argparse.Namespace) -> str:
+    """推导 .review_pass 落盘的项目根。
+
+    优先级:--root 显式 > --workdir(pack 约定的项目根目录) >
+    --return 父目录 > --checklist 父目录。确保与 prewrite_gate 读取的
+    <root>/.review_pass/ 落在同一项目根。
+    """
+    if getattr(args, "root", None):
+        return args.root
+    if getattr(args, "workdir", None) and args.workdir != ".":
+        return args.workdir
+    if getattr(args, "return_path", None):
+        return str(Path(args.return_path).resolve().parent)
+    if getattr(args, "checklist", None):
+        return str(Path(args.checklist).resolve().parent)
+    return args.workdir or "."
+
+
 def cmd_verify(args: argparse.Namespace) -> int:
     checklist = _load_json(args.checklist)
     gate = _get_gate(checklist, args.gate)
@@ -165,6 +183,21 @@ def cmd_verify(args: argparse.Namespace) -> int:
             "[delegate_review] 盲检未通过(fail-closed):不得向用户声明本节/本报告完成。\n"
         )
         return 1
+    # 全过且提供了 --section 时,落盘通过标记供下一节 prewrite_gate 硬校验。
+    # 标记写入失败不改变 verify 结果(仍 exit 0),仅打 warning。
+    if getattr(args, "section", None):
+        try:
+            root = _project_root_for_verify(args)
+            pass_dir = Path(root) / ".review_pass"
+            pass_dir.mkdir(parents=True, exist_ok=True)
+            marker = {"passed": True, "gate": args.gate, "section": args.section}
+            (pass_dir / f"{args.section}.json").write_text(
+                json.dumps(marker, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+        except OSError as exc:
+            sys.stderr.write(
+                f"[delegate_review] 警告:盲检通过标记落盘失败({exc});verify 结果不受影响。\n"
+            )
     return 0
 
 
@@ -185,6 +218,10 @@ def main() -> int:
     p_ver.add_argument("--return", dest="return_path", default=None,
                        help="子代理返回的 JSON 路径(默认用 pack 约定的 .review_return_<gate>.json)")
     p_ver.add_argument("--workdir", default=".", help="任务包记录目录(默认 cwd)")
+    p_ver.add_argument("--section", default=None,
+                       help="本次盲检对应的 section id;提供后全过会在 <root>/.review_pass/<section>.json 落盘通过标记(供下一节 prewrite_gate 硬校验)。不传则行为与旧版完全一致")
+    p_ver.add_argument("--root", default=None,
+                       help=".review_pass 落盘的项目根(默认推导自 --workdir/--return/--checklist)")
     p_ver.set_defaults(func=cmd_verify)
 
     args = parser.parse_args()

@@ -149,7 +149,7 @@ Follow phased gates in order:
    **🔴 委托盲检（不得主 agent 自评）**：P1 自评易漏项、易默认通过。落盘前必须把 DoD 清单**委托给独立上下文的子代理盲检**，自己不直接打勾：
    1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate p1-dod --files sections/P1_立项依据.md`
    2. **派一个独立子代理**（Claude Code 用 `academic-blind-reviewer`；其他平台派通用子代理），把任务包原样给它、**不要给它 P1 的写作上下文**，要求按任务包返回 JSON 数组。
-   3. 校验返回：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate p1-dod --return <子代理返回.json>`；退出码非 0（任一缺项/fail/无证据）= **fail-closed**，据子代理证据修复后重跑，**未过不得声明完成**。
+   3. 校验返回：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate p1-dod --return <子代理返回.json> --section P1 --root <项目根>`；退出码非 0（任一缺项/fail/无证据）= **fail-closed**，据子代理证据修复后重跑，**未过不得声明完成**。verify 通过会落盘 `.review_pass/P1.json`，下一部分 `prewrite_gate.py` 跨 Phase 时会**硬校验**它（缺失即拒绝开写）。
    - **降级路径**（当前环境无法派子代理时）：主 agent 切换审稿人视角、清空对 P1 的写作记忆，逐项独立重核，绝不因刚写完而默认通过；仍跑 `verify` 把关。
 
    下列清单与 `references/dod_checklist.json` gate=`p1-dod` 逐项对应（改清单先改 JSON），供人工对照；能脚本核的项子代理会先跑脚本：
@@ -182,7 +182,7 @@ Follow phased gates in order:
    **🔴 委托盲检（不得主 agent 自评）**：落盘前委托独立子代理盲检：
    1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate p2-dod --files sections/P2_研究内容.md`
    2. 派独立子代理（Claude Code 用 `academic-blind-reviewer`），不给写作上下文，要求返回 JSON 数组。
-   3. 校验：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate p2-dod --return <返回.json>`；非 0 = fail-closed，修复后重跑。
+   3. 校验：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate p2-dod --return <返回.json> --section P2 --root <项目根>`；非 0 = fail-closed，修复后重跑。verify 通过会落盘 `.review_pass/P2.json`，P3_1 开写时 `prewrite_gate.py` 会**硬校验**它。
    - **降级路径**：无法派子代理时，主 agent 切换审稿人视角逐项独立重核，仍跑 `verify`。
 
    下列清单与 `references/dod_checklist.json` gate=`p2-dod` 逐项对应（改清单先改 JSON）：
@@ -215,7 +215,7 @@ Follow phased gates in order:
    **🔴 委托盲检（不得主 agent 自评）**：落盘前委托独立子代理盲检：
    1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate p3-dod --files sections/P3_1_研究基础与可行性分析.md sections/P3_2_工作条件.md sections/P3_3_正在承担的相关项目.md sections/P3_4_完成基金项目情况.md`
    2. 派独立子代理（Claude Code 用 `academic-blind-reviewer`），不给写作上下文，要求返回 JSON 数组。
-   3. 校验：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate p3-dod --return <返回.json>`；非 0 = fail-closed。
+   3. 校验：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate p3-dod --return <返回.json> --section P3_1 --root <项目根>`；非 0 = fail-closed。verify 通过会落盘 `.review_pass/P3_1.json`（代表 P3 整体盲检；P3_2/P3_3/P3_4 同 Phase 内不单独硬校验）。
    - **降级路径**：同 Phase 1。
 
    下列清单与 `references/dod_checklist.json` gate=`p3-dod` 逐项对应（改清单先改 JSON）：
