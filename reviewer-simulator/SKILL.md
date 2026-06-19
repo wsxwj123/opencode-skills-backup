@@ -431,7 +431,7 @@ AIGC率过高或涉嫌造假
 | `{{REFERENCES_HTML}}` | 第五部分十一、引用文献，`<li>` 列表项序列；若无则填 `<li>无</li>` |
 | `{{CONFIDENTIAL_EDITOR_HTML}}` | 第五部分十二、给编辑的保密意见，HTML 片段（四项分条输出，见第十二节定义；本节内容对作者保密） |
 | `{{REBUTTAL_DRAFT_HTML}}` | 第五部分十三、逐条回复草案，HTML 片段 |
-| `{{GENERATION_TIMESTAMP}}` | 页脚生成时间戳。生成规则：报告产出时刻，格式 `YYYY-MM-DD HH:MM`（本地时区即可），可由 `date '+%Y-%m-%d %H:%M'` 取得；与 `{{DATE}}` 区别在于带时分 |
+| `{{GENERATION_TIMESTAMP}}` | 页脚生成时间戳。生成规则：报告产出时刻，格式 `YYYY-MM-DD HH:MM`（本地时区即可），可由 `python -c "import datetime; print(datetime.datetime.now().strftime('%Y-%m-%d %H:%M'))"` 取得（跨平台；Mac/Linux 亦可 `date '+%Y-%m-%d %H:%M'`，Windows 不要用 `date`，它是改系统时间的交互命令）；与 `{{DATE}}` 区别在于带时分 |
 
 
 十一、引用文献 → `{{REFERENCES_HTML}}`

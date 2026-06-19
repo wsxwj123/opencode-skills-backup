@@ -1,3 +1,9 @@
+import sys as _sys
+try:  # Windows GBK 控制台/管道捕获下 emoji print 防 UnicodeEncodeError
+    _sys.stdout.reconfigure(encoding="utf-8")
+    _sys.stderr.reconfigure(encoding="utf-8")
+except Exception:
+    pass
 import argparse
 import json
 import os
@@ -83,6 +89,16 @@ def ensure_lock_dir():
 
 def process_alive(pid):
     if not isinstance(pid, int) or pid <= 0:
+        return False
+    if sys.platform == "win32":
+        # Windows 无 os.kill(pid, 0) 存活语义(会落到 except 恒返 False 使锁误判为陈旧),
+        # 改用 kernel32 OpenProcess 查询存活。标准调用,未在 Windows 真机实测。
+        import ctypes
+        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+        handle = ctypes.windll.kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+        if handle:
+            ctypes.windll.kernel32.CloseHandle(handle)
+            return True
         return False
     try:
         os.kill(pid, 0)

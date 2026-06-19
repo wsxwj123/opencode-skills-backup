@@ -18,6 +18,12 @@ The AI fills outline.md Parameters/Environment fields AFTER this runs (this only
 the template skeleton, identical to the previous inline version).
 """
 
+import sys as _sys
+try:  # Windows GBK 控制台/管道捕获下 emoji print 防 UnicodeEncodeError
+    _sys.stdout.reconfigure(encoding="utf-8")
+    _sys.stderr.reconfigure(encoding="utf-8")
+except Exception:
+    pass
 import argparse
 import pathlib
 import shutil
