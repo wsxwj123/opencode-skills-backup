@@ -633,3 +633,29 @@ nsfc-proposal/SKILL.md +45/-8 行。新流程节点：Phase 0 → 0.5 → 1。
 
 ### git 状态
 本节随第四轮 commit 一起推送。8 技能 PII 全清零、流程完整、盲检全统一、docx+pdf 抠图落地、参考文献作者-年份风格识别修复。
+
+## 第二十八节 自检脚本化闭环 + 综述功能补缺 + 投稿包（2026-06-19）
+
+### 背景
+用户核心诉求：自检不能靠 AI 自觉、要脚本硬拦；并对标小红书"21-skill 综述"补功能缺口。本轮两个 commit 完成。中途用户删本地 ~50 技能导致并发写入被抹，已用"两阶段目录隔离 + 落盘后 git 验证"重做成功。
+
+### commit 412dc5a（已 push）
+- prewrite_gate.py（gsw/review/sci2doc/nsfc）：开写每节前硬拦 6 项机械合规——上一节完成/故事线大纲/素材就位(gsw subprocess 复用 figure_analysis_gate+abbreviation_consistency)/占位符清零/缩略词一致/上一节盲检(当时仅warn)。
+- review-writing 补 3 Phase：1.5 研究空白识别(research_gap.json) / 1.6 对标综述库+framing_guide / 5 投稿包(Cover Letter/Title Page/CRediT/COI/Funding/DAS/Keywords)。state_manager VALID_PHASES+路由表同步，3 新 gate。
+- gsw：Phase 8.6 目标期刊风格深度学习(gate journal-study-dod)；Keywords 设为 submission-pack 强制产出+Phase10.5 compliance 阻断。
+
+### commit（本节）：盲检 warning→脚本硬拦
+- delegate_review.py（8 份全改 byte 一致 md5 6b569ca0）：verify 新增可选 --section/--root；全过且传 --section 时落盘 <root>/.review_pass/<section>.json；不传 --section 与旧版逐字节等价(向后兼容)。
+- 4 份 prewrite_gate.py：「上一节盲检通过」从 warning 升级硬检查——读上一节 .review_pass 标记，缺失即 FAIL exit 1 拒绝开写；第一节 N/A。
+- 4 份 SKILL.md：盲检 verify 命令加 --section+说明。
+- nsfc 特殊：盲检按 Phase 粒度，硬检查仅跨 Phase 边界生效(P3 子节内部一次性盲检，同 Phase prev 判 N/A)。
+
+### 闭环达成
+开写前置自检 6 项全部脚本硬拦(含最关键盲检)，AI 无法静默跳过。
+
+### 对标小红书 21-skill：功能覆盖
+原缺 4 项本轮补齐：研究空白识别/对标综述库/目标刊风格学习/Cover Letter(并入投稿包)。架构裁决：不拆 21 独立 skill(底层脚本已共享+上层场景化是正确形态)。
+
+### 遗留(下一窗口,非阻断)
+1. 新增各 Phase(研究空白/对标库/目标刊/投稿包/Phase0.5)真稿端到端实测
+2. nsfc Phase 0.5 真稿实测

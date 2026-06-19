@@ -15,9 +15,10 @@ section_id ∈ {P1, P2, P3_1, P3_2, P3_3, P3_4}（固定写作顺序）。
    - P2/P3_1：必须有 data/experimental_design.json（entries 非空）
    - P2 起：consistency_map 须含 M（methodologies）条目
 4. 占位符清零：上一节 sections 文件无 CITE_PENDING/DATA_PENDING/【待 残留
+5. 上一节盲检通过：<root>/.review_pass/<上一节>.json 存在且 passed:true
+   （由 delegate_review.py verify --section <上一节> 落盘）；缺失 → 硬拦
 
 降级 warning（不阻断）：
-- 上一节盲检：.review_return_<gate>.json 未落盘 → 提示人工确认
 - 缩略词一致：nsfc 无独立 abbreviation 脚本 → skip 并注明
 
 输出：stdout 一行 JSON {"ok":bool,"section":...,"checks":[...],"warnings":[...]}
@@ -45,16 +46,6 @@ SECTION_FILE_PREFIX = {
     "P3_2": "P3_2_",
     "P3_3": "P3_3_",
     "P3_4": "P3_4_",
-}
-
-# section_id -> 盲检 gate 名（P3_* 共用 p3-dod）
-SECTION_GATE = {
-    "P1": "p1-dod",
-    "P2": "p2-dod",
-    "P3_1": "p3-dod",
-    "P3_2": "p3-dod",
-    "P3_3": "p3-dod",
-    "P3_4": "p3-dod",
 }
 
 
@@ -193,17 +184,28 @@ def main():
             failures.append("consistency_map has no M (methodologies) entries; P3 must build on P2's M")
             checks.append({"name": "methodologies_M", "ok": False})
 
-    # ---- warning: 上一节盲检落盘 ----
-    if known_section:
-        idx = SECTION_ORDER.index(section)
-        if idx > 0:
-            prev = SECTION_ORDER[idx - 1]
-            prev_gate = SECTION_GATE.get(prev)
-            blind_path = os.path.join(root, f".review_return_{prev_gate}.json")
-            if os.path.exists(blind_path):
-                checks.append({"name": "blind_review", "ok": True, "note": f"{prev_gate} return found"})
+    # ---- check: 上一节盲检通过并落盘（硬，仅跨 Phase 边界生效） ----
+    # nsfc 盲检按 Phase(p1/p2/p3/...)粒度，P3_1..P3_4 同属 P3 Phase 一次性盲检，
+    # 内部子节间无独立盲检契约 → 同 Phase 内 prev 不硬校验。仅 P2→需 P1、
+    # P3_1→需 P2 这类跨 Phase 边界硬校验上一 Phase 的盲检通过标记。
+    if known_section and SECTION_ORDER.index(section) > 0:
+        prev = SECTION_ORDER[SECTION_ORDER.index(section) - 1]
+        same_phase = prev.split("_")[0] == section.split("_")[0]
+        if same_phase:
+            checks.append({"name": "blind_review", "ok": True,
+                          "note": f"prev {prev} in same Phase, single blind review, N/A"})
+        else:
+            pass_path = os.path.join(root, ".review_pass", f"{prev}.json")
+            marker = _load_json(pass_path)
+            if isinstance(marker, dict) and marker.get("passed") is True:
+                checks.append({"name": "blind_review", "ok": True, "prev": prev})
             else:
-                warnings.append(f"no .review_return_{prev_gate}.json on disk; previous-section blind review must be confirmed manually")
+                failures.append(
+                    f"previous section {prev!r} blind review not passed or marker missing; "
+                    f"run: delegate_review.py verify --section {prev}")
+                checks.append({"name": "blind_review", "ok": False, "prev": prev})
+    elif known_section:
+        checks.append({"name": "blind_review", "ok": True, "note": "first section, N/A"})
 
     # ---- check 4: 占位符清零（上一节文件；P1 无上一节则扫已写的 sections/*.md） ----
     files_to_scan = []

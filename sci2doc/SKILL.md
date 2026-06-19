@@ -316,7 +316,7 @@ python3 scripts/extract_docx_images.py --manuscript /path/to/source.docx --proje
 **🔴 委托盲检（不得主 agent 自评）**：落盘前必须把 DoD 清单**委托给独立上下文的子代理盲检**，自己不直接打勾：
 1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate section-dod --files <本节文件>`
 2. **派一个独立子代理**（Claude Code 用 `academic-blind-reviewer`；其他平台派通用子代理），把任务包原样给它、**不要给它本节的写作上下文**，要求按任务包返回 JSON 数组。
-3. 校验返回：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate section-dod --return <子代理返回.json>`；退出码非 0（任一缺项/fail/无证据）= **fail-closed**，据子代理证据修复后重跑，**未过不得声明完成**。
+3. 校验返回：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate section-dod --return <子代理返回.json> --section <当前节号如3.2> --root <项目根>`；退出码非 0（任一缺项/fail/无证据）= **fail-closed**，据子代理证据修复后重跑，**未过不得声明完成**。verify 通过会落盘 `.review_pass/<当前节号>.json`，下一节 `prewrite_gate.py` 会**硬校验**它（缺失即拒绝开写）。
 - **降级路径**（当前环境无法派子代理时）：主 agent 切换"审稿人视角"、清空对本节的写作记忆，逐项独立重核，不因"自己刚写完"默认通过；仍跑 `verify` 把关。
 
 下列清单与 `references/dod_checklist.json` gate=`section-dod` 逐项对应（改清单先改 JSON），供人工对照；能脚本核的项子代理会先跑脚本：
