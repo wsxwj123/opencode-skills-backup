@@ -140,6 +140,7 @@ ${save_path}/
 ├── 03_合并文档/             # 全文 docx 输出（merge-full --to-docx）
 ├── 03_合并文档_md/          # 全文 md 合并中间产物
 ├── 04_图表文件/             # 图表描述文件 + 自定义格式模板证据文件（AI/用户手动放置）
+├── scripts/                # 技能脚本副本（init 自包含拷入；SKILL 命令 `python3 scripts/xxx.py` 即指向此处）
 ├── materials/              # 原始材料素材档（material_ingest.py 生成，可选）
 │   ├── materials_archive.json  # 素材总索引
 │   └── <name>.md           # 每材料一个结构化素材档

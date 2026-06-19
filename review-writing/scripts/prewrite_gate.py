@@ -43,11 +43,19 @@ def _load_json(path):
 
 
 def load_outline_order(root):
-    """从 outline.md 解析 section id 顺序（沿用 state_manager 的标题解析规则）。"""
+    """从 outline.md 解析「可写小节」id 顺序。
+
+    只纳入真正可写的小节（带子编号，如 1.1 / 2.3）。其余标题一律不计入顺序链：
+    - 章级标题（纯 `1`/`2`，来自 `### 1. Introduction`）——否则第一个小节 1.1
+      的「上一节」会被误判成章标题 `1`，而 `1` 永不进 completed_sections → 1.1 卡死；
+    - 配置段标题（`## Parameters`/`## Outline (...)` 等模板里的非小节标题）——
+      否则它们会混进顺序链，同样污染第一个可写小节的「上一节」判定。
+    这样 outline 模板下 order = ['1.1','1.2','2.1',...]，1.1 即第一个、idx==0 放行。
+    """
     path = os.path.join(root, "outline.md")
     if not os.path.exists(path):
         return []
-    id_pattern = re.compile(r"^(\d+(?:\.\d+)?)\b")
+    subsection_pattern = re.compile(r"^(\d+\.\d+)\b")
     order = []
     try:
         with open(path, "r", encoding="utf-8") as f:
@@ -61,8 +69,9 @@ def load_outline_order(root):
         title = m.group(2).strip()
         if not title:
             continue
-        id_match = id_pattern.match(title)
-        order.append(id_match.group(1) if id_match else title)
+        sub_match = subsection_pattern.match(title)
+        if sub_match:
+            order.append(sub_match.group(1))
     return order
 
 
