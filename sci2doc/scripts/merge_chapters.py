@@ -115,7 +115,7 @@ def _load_render_context(project_root=None):
         "page_margins_cm": {"top": 2.54, "bottom": 2.54, "left": 3.17, "right": 3.17},
         "header_distance_cm": 1.5,
         "footer_distance_cm": 1.75,
-        "header_left_text": "中南大学博士学位论文",
+        "header_left_text": "示例大学博士学位论文",
         "page_numbering": {
             "front_matter": {"format": "lowerRoman", "start": 1},
             "body": {"format": "decimal", "start": 1},
@@ -414,9 +414,9 @@ def _classify_para_zone(para_text):
     return None
 
 
-def add_header_footer(doc, thesis_title, university_name="中南大学", project_root=None):
+def add_header_footer(doc, thesis_title, university_name="示例大学", project_root=None):
     """
-    添加页眉页脚（中南大学 2022 规范），按章节分节。
+    添加页眉页脚（内置默认模板规范），按章节分节。
 
     流程：
     1. 扫描所有 Heading 1 段落，在其前方插入分节符

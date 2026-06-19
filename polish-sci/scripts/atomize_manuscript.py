@@ -51,7 +51,7 @@ _SECTION_NAME_RE = re.compile(
     re.IGNORECASE,
 )
 _ABSTRACT_LEADIN_RE = re.compile(r"^(abstract|摘要)\s*[.:：]", re.IGNORECASE)
-# 机构/地址行常以编号开头(如 "3 Hunan Key Laboratory of …"),含机构实体词则不算章节标题。
+# 机构/地址行常以编号开头(如 "3 X University / X Key Laboratory of …"),含机构实体词则不算章节标题。
 _AFFILIATION_HINT_RE = re.compile(
     r"\b(?:universit|institut|laborator|hospital|college|faculty|academ|ministr)\w*"
     r"|\b(?:department|school|center|centre|division)\s+(?:of|for)\b"

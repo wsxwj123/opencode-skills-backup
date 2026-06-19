@@ -132,7 +132,7 @@ def _build_placeholder_map(project_root):
     return {
         "CLASSIFICATION": _text("classification"),
         "UDC": _text("udc"),
-        "SCHOOL_CODE": str(format_context.get("school_code", "10533")),
+        "SCHOOL_CODE": str(format_context.get("school_code", "[学校代码]")),
         "STUDENT_ID": _text("student_id"),
         "UNIVERSITY_NAME": str(format_context.get("university_name", "")),
         "DEGREE_TYPE": str(format_context.get("degree_type", "")),
@@ -241,7 +241,7 @@ def _apply_doc_layout(doc, render_context, header_right_text=""):
     section.right_margin = Cm(page_margins.get("right", 3.17))
     setup_header(
         section,
-        render_context.get("header_left_text", "中南大学博士学位论文"),
+        render_context.get("header_left_text", "示例大学博士学位论文"),
         header_right_text,
         distance_cm=render_context.get("header_distance_cm", 1.5),
         style_spec=render_context.get("style_profile", {}).get("header", {}),
@@ -286,10 +286,10 @@ def _render_special_docx(spec, project_root, docx_path, placeholders):
             heading.text = ""
             heading.add_run(fm_spec.get("title_text", "主要缩略语对照表"))
             body = doc.add_paragraph(fm_spec.get("empty_text", "暂无已注册缩略语"))
-            from markdown_to_docx import apply_csu_heading1_style, apply_csu_normal_style
+            from markdown_to_docx import apply_default_heading1_style, apply_default_normal_style
 
-            apply_csu_heading1_style(heading, render_context=render_context)
-            apply_csu_normal_style(body, render_context=render_context)
+            apply_default_heading1_style(heading, render_context=render_context)
+            apply_default_normal_style(body, render_context=render_context)
     else:
         raise ValueError(f"unsupported docx render kind: {kind}")
     docx_path.parent.mkdir(parents=True, exist_ok=True)

@@ -72,6 +72,7 @@ Academic literature retrieval follows topic-dependent routing (Mandatory):
 2. **PubMed CLI** (life science primary): Use `esearch`/`efetch`/`einfo` (path `~/edirect/`). Must append `< /dev/null`, use proxy `http_proxy=http://127.0.0.1:<PROXY_PORT>`.
    Example: `export http_proxy=http://127.0.0.1:<PROXY_PORT> && esearch -db pubmed -query "xxx" < /dev/null | efetch -format abstract`
    Auto-install if `~/edirect/esearch` missing: `sh -c "$(curl -fsSL https://ftp.ncbi.nlm.nih.gov/entrez/entrezdirect/install-edirect.sh)"`
+   **Windows:** edirect does not run in PowerShell/CMD. Use WSL bash, or fall back to paper-search MCP.
 
 3. **paper-search MCP** (CS/AI primary / preprints / fallback when PubMed yields no results):
    Tool names: `mcp__paper-search-mcp__search_pubmed`, `mcp__paper-search-mcp__search_arxiv`, `mcp__paper-search-mcp__search_biorxiv`, `mcp__paper-search-mcp__search_medrxiv`
@@ -79,6 +80,8 @@ Academic literature retrieval follows topic-dependent routing (Mandatory):
 Do not use generic web search/fetch tools for citation evidence in proposal claims.
 **严禁** 使用 `tavily`、`websearch` 或 `openalex`（pyalex），无论有无 DOI/PMID. 该禁令已脚本级强制：literature_index 条目的 `search_source` 字段若属上述被禁家族，`citation_validator.py` 触发 `source_provider_forbidden` 硬失败，与 DOI/PMID/标题核验同级阻断门禁。
 **Serial Search (MANDATORY):** Execute all retrieval calls sequentially (including both PubMed CLI and paper-search MCP). Never parallelize search requests. Enforce ≥1s interval between consecutive calls.
+
+> **Windows note:** all `python3 scripts/...` commands below use `python` or `py` instead of `python3` on Windows.
 
 ## Non-Conflict Canon (Conflict Resolution Rules)
 > These rules resolve specific contradictions discovered during operation. When any instruction in SKILL.md or its references conflicts with a rule here, this section takes precedence.
