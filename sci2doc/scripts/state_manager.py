@@ -2100,7 +2100,12 @@ def parse_args():
     init_p.add_argument("--supervisor", default="")
     init_p.add_argument("--major", default="")
     init_p.add_argument("--source-paper", default="")
-    init_p.add_argument("--copy-local-scripts", action="store_true")
+    init_p.add_argument("--copy-local-scripts", dest="copy_local_scripts",
+                        action="store_true", default=True,
+                        help="把技能 scripts/*.py 拷进项目 scripts/（自包含，默认开启）")
+    init_p.add_argument("--no-copy-local-scripts", dest="copy_local_scripts",
+                        action="store_false",
+                        help="不拷脚本进项目（脚本从技能目录原地跑）")
     init_p.add_argument("--format-mode", choices=["default_csu", "custom"], default="default_csu")
     init_p.add_argument("--format-status", choices=["ready", "pending_template"])
     init_p.add_argument("--university-name", default=None)

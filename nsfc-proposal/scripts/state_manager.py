@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 import argparse
+import glob
 import json
+import os
 import re
 import shutil
 from datetime import datetime, timezone
@@ -98,6 +100,16 @@ def append_context(root: Path, content: str) -> None:
 def init_project(root: Path) -> None:
     for d in ["sections", "output", "data", ".state", "snapshots"]:
         (root / d).mkdir(parents=True, exist_ok=True)
+
+    # 自包含：把技能 scripts/*.py 全量拷进项目 scripts/，使 SKILL 命令
+    # `python3 scripts/xxx.py` 在项目目录可直接运行（state_manager 还 import 同目录
+    # consistency_mapper/diagnosis_engine/citation_validator/word_counter，必须全量拷）。
+    src_dir = Path(__file__).resolve().parent
+    dst_dir = root / "scripts"
+    if src_dir.resolve() != dst_dir.resolve():
+        dst_dir.mkdir(parents=True, exist_ok=True)
+        for src in glob.glob(str(src_dir / "*.py")):
+            shutil.copy2(src, dst_dir / os.path.basename(src))
 
     save_json(root / "proposal_profile.json", DEFAULT_PROFILE)
     save_json(root / "data/literature_index.json", {"metadata": {"verification_status": "pending"}, "entries": []})

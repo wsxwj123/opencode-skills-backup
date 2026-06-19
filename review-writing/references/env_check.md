@@ -128,7 +128,8 @@ skill_dir = pathlib.Path('[SKILL_DIR]')  # AI substitutes actual path
 required = ['zotero_manager.py','export_bibtex.py',
             'matrix_manager.py','word_counter.py','citation_guard.py',
             'validate_citations.py','check_global_citation_sequence.py',
-            'citation_utils.py','state_manager.py']  # keep aligned with Phase 0.5 REQUIRED_SCRIPTS
+            'citation_utils.py','citation_guard_core.py','state_manager.py',
+            'prewrite_gate.py','delegate_review.py','style_checker.py']  # keep aligned with Phase 0.5 REQUIRED_SCRIPTS
 missing = [s for s in required if not (skill_dir/'scripts'/s).exists()]
 if missing:
     print(f'❌ Missing scripts: {missing}')

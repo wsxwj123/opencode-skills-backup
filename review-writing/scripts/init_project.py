@@ -34,7 +34,11 @@ REQUIRED_SCRIPTS = [
     "validate_citations.py",
     "check_global_citation_sequence.py",
     "citation_utils.py",
+    "citation_guard_core.py",  # imported by citation_guard.py
     "state_manager.py",  # used in Phase 2.5 None Mode (reindex) + set-phase/complete-section
+    "prewrite_gate.py",  # Phase 3 Per-Section Cycle 开写前置闸门
+    "delegate_review.py",  # Phase 3 section-dod 盲检委托 pack/verify
+    "style_checker.py",  # 去 AI 风格检测
 ]
 
 STATE_JSON = '{"phase": 0, "completed_sections": [], "zotero_root_key": ""}\n'
