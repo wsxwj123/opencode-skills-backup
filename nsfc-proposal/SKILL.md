@@ -165,7 +165,7 @@ Follow phased gates in order:
    - [ ] ⑨撤稿检测：所有 PMID 已过撤稿核查（`python scripts/citation_validator.py verify-all --index data/literature_index.json --p1 sections/P1_立项依据.md`，撤稿检测已内置）
 
 4. Phase 2: write P2 研究内容（contains all sub-content: H/O/RC/KSQ, methods, innovations, annual plan）.
-   - **🔴 开写前置闸门 (Mandatory，脚本硬拦截)**：开写前先跑 `python3 scripts/prewrite_gate.py --section P2 --root .`，exit≠0 禁止开写（硬检查 P1 完成、`consistency_map` 就位、`data/experimental_design.json` entries 非空、占位符清零；P2 正是产出 M 的阶段，M 尚空只降级 warning）。
+   - **🔴 开写前置闸门 (Mandatory，脚本硬拦截)**：开写前先跑 `python3 scripts/prewrite_gate.py --section P2 --root .`，exit≠0 禁止开写（硬检查 P1 完成、`consistency_map` 就位、`data/experimental_design.json` entries 非空、占位符清零；P2←P1 跨 Phase，缺 `.review_pass/P1.json` 盲检标记即硬拦 exit 1，须先跑 `delegate_review verify --section P1` 落盘；P2 正是产出 M 的阶段，M 尚空只降级 warning）。
    - 每节先跑 `python scripts/state_manager.py --root . write-cycle --section P2`（逐节预算/上下文注入的预写门控，完整参数见 references/08）；不得跳过直接硬写。
    - **撰写 M（研究方案与技术路线）前必须 `Read data/experimental_design.json` 作为事实依据**，禁止脑补；每个 M 的 alternative_plan（V-12 字段）直接来自该 JSON 对应 RC 的 `alternative_plan`。
    - Input: verified P1; H/O/RC/KSQ mapping counts from Phase 0; consistency_map.json with SQ entries; `data/experimental_design.json` 全量 RC 设计。
@@ -198,7 +198,7 @@ Follow phased gates in order:
    - [ ] ⑨figure_prompts.md 已生成，技术路线图提示词映射到 ≥1 个 RC
 
 5. Phase 3: write P3 研究基础（4 sub-files）.
-   - **🔴 开写前置闸门 (Mandatory，脚本硬拦截)**：每个子节开写前先跑 `python3 scripts/prewrite_gate.py --section P3_1 --root .`（其余子节同理 P3_2/P3_3/P3_4），exit≠0 禁止开写（硬检查上一节完成、`consistency_map` 含 M、占位符清零；P3_1 额外要求 `data/experimental_design.json` 非空；上一节盲检未落盘降级 warning）。
+   - **🔴 开写前置闸门 (Mandatory，脚本硬拦截)**：每个子节开写前先跑 `python3 scripts/prewrite_gate.py --section P3_1 --root .`（其余子节同理 P3_2/P3_3/P3_4），exit≠0 禁止开写（硬检查上一节完成、`consistency_map` 含 M、占位符清零；P3_1 额外要求 `data/experimental_design.json` 非空；盲检按 Phase 粒度：P3_1←P2 跨 Phase，缺 `.review_pass/P2.json` 硬拦 exit 1；P3_2/P3_3/P3_4 同属 P3 一次性盲检，同 Phase N/A 不拦）。
    - 每节先跑 `python scripts/state_manager.py --root . write-cycle --section P3_1`（其余子节同理 P3_2/P3_3/P3_4；逐节预算/上下文注入的预写门控，完整参数见 references/08）；不得跳过直接硬写。
    - Input: P2 confirmed; team CV, platform data, and prior publications from Phase 0 profile.
    - Output:
