@@ -102,8 +102,8 @@
         {
           "id": "G2",
           "name": "与 literature_index 一致",
-          "check": "research_gap.json 引用的所有 [n] 均存在于 literature_index.json，无孤儿编号、无凭空捏造的文献条目",
-          "script": "python3 -c \"import json,pathlib; gaps=json.loads(pathlib.Path('data/research_gap.json').read_text(encoding='utf-8')); ids={e['global_id'] for e in json.loads(pathlib.Path('data/literature_index.json').read_text(encoding='utf-8'))}; used={r for g in gaps.get('gaps',[]) for r in g.get('support_refs',[])} | {r for h in gaps.get('hotspots',[]) for r in (h.get('support_refs') or [])}; orphans=used-ids; print('ORPHANS:', sorted(orphans)) if orphans else print('NO_ORPHANS')\""
+          "check": "research_gap.json 引用的所有 [n]（覆盖 gaps/hotspots/candidate_topics 的 support_refs 与 controversies 的 side_a_refs/side_b_refs）均存在于 literature_index.json，无孤儿编号、无凭空捏造的文献条目",
+          "script": "python3 -c \"import json,pathlib; gaps=json.loads(pathlib.Path('data/research_gap.json').read_text(encoding='utf-8')); ids={e['global_id'] for e in json.loads(pathlib.Path('data/literature_index.json').read_text(encoding='utf-8'))}; used={r for g in gaps.get('gaps',[]) for r in (g.get('support_refs') or [])} | {r for h in gaps.get('hotspots',[]) for r in (h.get('support_refs') or [])} | {r for c in gaps.get('candidate_topics',[]) for r in (c.get('support_refs') or [])} | {r for v in gaps.get('controversies',[]) for r in (v.get('side_a_refs') or []) + (v.get('side_b_refs') or [])}; orphans=used-ids; print('ORPHANS:', sorted(orphans)) if orphans else print('NO_ORPHANS')\""
         },
         {
           "id": "G3",

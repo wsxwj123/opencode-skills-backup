@@ -335,7 +335,7 @@ python scripts/state_manager.py add-abbreviation <one.json>
 
 **执行流程**：
 0. **Scoped Load (Mandatory)**: 先执行章节局部加载命令，确保只读当前章节。
-0a. **🔴 开写前置闸门 (Mandatory，脚本硬拦截)**：开写任何 section 前必须先跑 `python3 scripts/prewrite_gate.py --section [section_id] --root .`，exit≠0 禁止开写。它统一硬检查：上一节完成（`writing_progress.json` 该节最新 status=done）、故事线就位（`storyline.json` 含本节）、素材就位（subprocess 调 `figure_analysis_gate.py`）、上一节占位符清零（无 `CITE_PENDING`/`DATA_PENDING`/`【待`）、缩略词一致（subprocess 调 `abbreviation_consistency.py`）；上一节盲检未落盘则降级 warning 提示人工确认，不阻断。过此闸门后再走下面 0b。
+0a. **🔴 开写前置闸门 (Mandatory，脚本硬拦截)**：开写任何 section 前必须先跑 `python3 scripts/prewrite_gate.py --section [section_id] --root .`，exit≠0 禁止开写。它统一硬检查：上一节完成（`writing_progress.json` 该节最新 status=done）、故事线就位（`storyline.json` 含本节）、素材就位（subprocess 调 `figure_analysis_gate.py`）、上一节占位符清零（无 `CITE_PENDING`/`DATA_PENDING`/`【待`）、缩略词一致（subprocess 调 `abbreviation_consistency.py`）；上一节盲检结果（`.review_pass/<上一节>.json`）缺失即 prewrite_gate 硬拦 exit 1，禁止开写；必须先跑 delegate_review verify --section <上一节> 落盘通过标记。过此闸门后再走下面 0b。
 0b. **🔴 figure_analysis 加载门禁 (Mandatory，脚本兜底)**：跑 `python scripts/figure_analysis_gate.py --section [section_id] --root .`。该 gate 比对 `figures_database.json` 中该节涉及的 figure，确认每张 `figure_analysis/figure_{N}.md` 存在、非空、无 `❓待确认` 残留；任一未就绪 → 脚本 exit 1，**禁止开写**，先回 `/figure` 补齐再回来。Introduction/Methods 等无 figure 的小节脚本自然放行（exit 0）。过 gate 后**必须显式 `Read` 本节对应的 `figure_analysis/figure_{N}.md`**（write-cycle 不自动加载，见 §13 白名单第 7 项），作为 Results/Discussion 的事实依据。
 1. **Pre-Write Check**: 检查数据完整性。
 2. **Drafting (Main)**: 撰写包含 Main Figures 和 References 的初稿。
