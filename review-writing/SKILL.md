@@ -47,16 +47,22 @@ why_how_what_note: |
 | phase=0, 无 mode 字段 | Phase 0.5（继续初始化） |
 | phase=0, mode="polish" | Phase 0-P（📖 读 `docs/phase_0p_polish_mode.md`） |
 | phase=1 | Phase 1（检查是否已完成） |
+| phase=1.5 | Phase 1.5（研究空白识别，检查是否已完成） |
+| phase=1.6 | Phase 1.6（对标综述库 + 框架指南） |
 | phase=2 | Phase 2（跳过 completed_sections） |
 | phase=3 或 pending_sections 非空 | Phase 3（跳过 completed_sections） |
-| phase=4, completed=true | 已完成，告知用户 |
+| phase=4, completed=true | Phase 4 导出完成 → 进 Phase 5（投稿包） |
+| phase=5, completed=true | 已完成，告知用户 |
 
 ### 每 Phase 关键动作
 - **Phase 0:** 收参数 → 检测环境 → 创建项目 → git init
 - **Phase 1:** 提纲 → 用户确认 → Zotero 集合树 → **HALT**
+- **Phase 1.5:** 基于真实文献识别热点/争议/空白 → `data/research_gap.json` → 委托盲检 → **HALT**（用户确认选题方向）
+- **Phase 1.6:** 检索 5–10 篇对标综述 → `data/benchmark_reviews.json` + `data/framing_guide.md` → 委托盲检 → **HALT**
 - **Phase 2:** 逐节搜索（**串行，≥1s 间隔**）→ 写入 Zotero/index → **HALT** dedup
-- **Phase 3:** 逐节写作 → citation spot-check → Reviewer Simulator → **HALT**
+- **Phase 3:** Read framing_guide 搭框架 → 逐节写作 → citation spot-check → Reviewer Simulator → **HALT**
 - **Phase 4:** 引用总量校验 → citation guard → 编译 → 连贯性扫描 → 缩写扫描 → 导出
+- **Phase 5:** 对齐 gsw submission-guide/compliance-gate → 生成投稿包（Cover Letter/Title Page/CRediT/COI/Funding/DAS/Keywords...）→ 委托盲检
 
 ### 绝对禁止
 - 并行搜索调用
@@ -175,9 +181,10 @@ Before any **writing / search / import / Zotero-mutating** action, ask exactly *
 
 > **Route map:**
 > ```
-> Write Mode:  Phase 0 (init) → Phase 1 (outline) → Phase 2 (search) → Phase 3 (write) → Phase 4 (export)
-> Polish Mode: Phase 0 (init) → Phase 0-P (import+diagnose) → Phase 3 (write) → Phase 4 (export)
+> Write Mode:  Phase 0 (init) → Phase 1 (outline) → Phase 1.5 (research gap) → Phase 1.6 (benchmark reviews+framing) → Phase 2 (search) → Phase 3 (write) → Phase 4 (export) → Phase 5 (submission pack)
+> Polish Mode: Phase 0 (init) → Phase 0-P (import+diagnose) → Phase 3 (write) → Phase 4 (export) → Phase 5 (submission pack)
 > ```
+> Phase 1.5 / 1.6 are Write-Mode only (Polish Mode imports an existing draft, so gap/framing analysis is skipped). Phase 5 runs in both modes.
 >
 > Resume rule: if `state.json` already exists in the project folder, read it first.  
 > If `"mode": "polish"` → skip to Phase 0-P Step 6 (resume pending sections).  
@@ -418,7 +425,109 @@ Format: `[review] Phase X.Step: <description>`. 📖 消息表 + Rollback 命令
    ```
 9. **Git Checkpoint** (见复用块, msg: `[review] Phase 1: outline confirmed`)
 
-**HALT. Wait for user to confirm outline before Phase 2.**
+**HALT. Wait for user to confirm outline before Phase 1.5.**
+
+---
+
+## Phase 1.5: Research Gap Identification（Write Mode only）
+
+**触发时机：** Phase 1 提纲确认后、Phase 2 系统检索前。Polish Mode 跳过（已有成稿）。
+**Entry: Read `outline.md` + `state.json`. If `phase ≥ 1.6` → already done, skip.**
+> **Phase gate:** `state.json` 不存在或 `phase < 1` → HALT，提示先完成 Phase 1。
+
+**目的：** 在搭框架前，先基于**已检索的真实文献证据**摸清领域格局——热点、争议、机制线索、研究空白——供用户确认选题方向。综述的 novelty 不来自堆砌文献，而来自识别一个**有证据支撑且尚未被很好综述**的空白。
+
+### 步骤
+
+1. **取证文献：** 围绕 RQ/PICO 做一轮**探索性检索**（串行，≥1s 间隔，工具优先级同 Phase 2）。每篇按 Phase 2 规则入库 `data/literature_index.json` 并跑 `citation_guard.py`——**gap 只能由 verified 文献推出**。本步可与 Phase 2 共享 index（不重复入库）。
+   > ⚠️ 红线：gap 必须从真实文献证据推出，**禁止脑补**。每个 gap 关联 ≥1 篇支撑文献 `[n]`，且该 `[n]` 已 citation_guard verified。
+
+2. **识别四类信号**，写入 `data/research_gap.json`：
+   - `candidate_topics[]`：候选选题方向（每个含一句话 framing + 支撑 refs）
+   - `hotspots`：近年高频/高被引主题（含 support_refs）
+   - `controversies`：文献中的矛盾发现/未决争论（含对立双方 refs）
+   - `gaps`：研究空白（每个含 `id` / `description` / `support_refs[]` / 为何是空白）
+   - `novelty_risk`：候选选题与**既有综述/已发表工作**的重叠度比较，标 high/medium/low + 理由（防止"重复造轮子"）
+
+   ```json
+   {
+     "candidate_topics": [{"topic": "...", "framing": "...", "support_refs": [3, 7]}],
+     "hotspots": [{"theme": "...", "support_refs": [3, 12]}],
+     "controversies": [{"issue": "...", "side_a_refs": [5], "side_b_refs": [9], "note": "..."}],
+     "gaps": [{"id": "gap-1", "description": "...", "support_refs": [7, 12], "why_gap": "..."}],
+     "novelty_risk": [{"topic": "...", "overlapping_reviews": [...], "risk": "low", "reason": "..."}]
+   }
+   ```
+
+3. **DoD 自检（gate `research-gap-dod`，委托独立子代理盲检）：**
+   ```bash
+   python3 scripts/delegate_review.py pack --checklist references/dod_checklist.json \
+     --gate research-gap-dod --files data/research_gap.json --workdir .
+   # → 派独立子代理（Claude Code 用 academic-blind-reviewer），不给写作上下文，按任务包返回 JSON
+   python3 scripts/delegate_review.py verify --checklist references/dod_checklist.json \
+     --gate research-gap-dod --return .review_return_research-gap-dod.json
+   # 退出码非 0 = fail-closed，据子代理证据修复后重跑，未过不得声明完成
+   ```
+   gate 5 项：G1 每 gap ≥1 verified 文献支撑 / G2 与 literature_index 一致（无孤儿）/ G3 从真实证据推出（禁脑补）/ G4 含 novelty_risk 比较 / G5 占位符清零。逐项内容以 `references/dod_checklist.json` 为唯一真源。
+
+4. **更新 state + Git Checkpoint：**
+   ```bash
+   python3 scripts/state_manager.py set-phase --phase 1.5
+   git add -A && git commit -m "[review] Phase 1.5: research gap identified" --allow-empty-message 2>/dev/null || true
+   ```
+
+**HALT. 向用户展示 candidate_topics / gaps / novelty_risk，等用户确认选题方向后再进 Phase 1.6。**
+
+---
+
+## Phase 1.6: Benchmark Review Library + Framing Guide（Write Mode only）
+
+**触发时机：** Phase 1.5 选题确认后、Phase 3 搭框架前（搭框架本身在 Phase 3，但框架素材在此准备）。Polish Mode 跳过。
+**Entry: Read `outline.md` + `state.json`. If `phase ≥ 2` → already done, skip.**
+> **Phase gate:** `phase < 1.5` → HALT，提示先完成 Phase 1.5。
+
+**目的：** 高水平综述的框架不是凭空设计的。检索近年 5–10 篇**对标综述**（同领域顶刊 review），学习其章节框架、论证思路、图表与正文关系、引言-主体-展望的组织方式，提炼可复用的写作思路供 Phase 3 搭框架时直接参照。
+
+### 步骤
+
+1. **检索对标综述：** 工具优先级同 Phase 2（串行，≥1s）。目标 5–10 篇近年同领域高水平综述（Nature Reviews / Cell / Lancet 系等）。每篇**必须真实存在并走 citation_guard 验证**——禁编造。
+   > ⚠️ 红线：对标综述真实存在、走 `citation_guard.py` 验证，不编造标题/期刊/年份。
+
+2. **建对标库 `data/benchmark_reviews.json`：** 每篇含
+   ```json
+   [{
+     "title": "...", "journal": "Nature Reviews ...", "year": 2023,
+     "framework_outline": "该综述的章节框架（背景→机制→应用→挑战→展望 ... 具体到节）",
+     "highlights": "亮点：如何 framing、如何仲裁矛盾、图怎么用",
+     "verified": true
+   }]
+   ```
+
+3. **提炼 `data/framing_guide.md`：** 从对标库归纳**可操作**的写作思路，至少覆盖：
+   - 可复用的章节框架骨架（漏斗引言 → 主题主体 → 展望）
+   - 论证思路（如何从 setup → evidence → synthesis → implication）
+   - 图表与正文的关系（概念框架图放哪、每节图承担什么角色）
+   - 引言-主体-展望的组织套路
+   - 对**本综述**的具体建议（结合 Phase 1.5 的 gap，而非泛泛而谈）
+
+4. **DoD 自检（gate `benchmark-reviews-dod`，委托独立子代理盲检）：**
+   ```bash
+   python3 scripts/delegate_review.py pack --checklist references/dod_checklist.json \
+     --gate benchmark-reviews-dod --files data/benchmark_reviews.json data/framing_guide.md --workdir .
+   python3 scripts/delegate_review.py verify --checklist references/dod_checklist.json \
+     --gate benchmark-reviews-dod --return .review_return_benchmark-reviews-dod.json
+   ```
+   gate 5 项：B1 ≥5 篇 verified / B2 每篇含框架大纲 / B3 framing_guide 含可操作建议 / B4 Phase 3 搭框架显式 Read framing_guide / B5 占位符清零。真源见 `references/dod_checklist.json`。
+
+5. **更新 state + Git Checkpoint：**
+   ```bash
+   python3 scripts/state_manager.py set-phase --phase 1.6
+   git add -A && git commit -m "[review] Phase 1.6: benchmark reviews + framing guide" --allow-empty-message 2>/dev/null || true
+   ```
+
+**HALT. 向用户展示对标库与 framing_guide 要点，确认后进 Phase 2。**
+
+> **🔗 Phase 3 挂接（搭框架时强制）：** Phase 3 各节搭框架/写作前必须 `Read data/framing_guide.md`，并使框架与其提炼的可复用结构对齐（对应 gate item B4）。这是 Phase 1.6 产出的落地点，不得跳过。
 
 ---
 
@@ -528,6 +637,8 @@ python3 scripts/state_manager.py set-phase --phase 3
 ```
 **Skip completed sections (check `completed_sections` list).**
 
+> **🔗 Framing hook (Write Mode, MANDATORY before building any section's framework):** `Read data/framing_guide.md` (produced in Phase 1.6) and use its reusable章节框架/论证思路 as the basis for each section's structure — do NOT fall back to a generic default template. (Polish Mode: file may not exist — skip if absent.) This satisfies gate item B4.
+
 **Polish Mode branch (if `state.json` contains `"mode": "polish"`):**
 ```
 Before starting any section, read state.json → pending_sections:
@@ -541,6 +652,8 @@ If pending_sections is empty → all sections complete; proceed to Phase 4.
 ```
 
 ### Per-Section Cycle
+
+0. **🔴 开写前置闸门 (Mandatory，脚本硬拦截)**：开写本 section 前必须先跑 `python3 scripts/prewrite_gate.py --section X.X --root .`，exit≠0 禁止开写。它统一硬检查：上一节完成（上一节 ∈ `state.json.completed_sections`）、大纲就位（`outline.md` 含本节标题）、素材就位（`data/synthesis_matrix.json` 本节文献矩阵非空）、上一节占位符清零（`drafts/` 无 `CITE_PENDING`/`DATA_PENDING`/`【待`）；上一节盲检（`.review_return_manuscript-dod.json`）未落盘则降级 warning 提示人工确认，不阻断。Polish Mode `keep` 节跳过本节循环故无需跑。
 
 1. **Load context:**
    ```
@@ -742,6 +855,65 @@ Write Mode has no `pending_sections` field so this gate is a no-op (no key → e
    Only `phase` and `completed` are mutated; `completed_sections`, `mode`, `pending_sections`, `zotero_root_key`, `citations_imported` are preserved untouched.
 7. **Git Checkpoint** (见复用块, msg: `[review] Phase 4: export finalized`)
 8. **Update outline.md** current status section (human-readable summary).
+
+**进入 Phase 5（投稿包）。** Phase 4 导出完成后不直接结束，继续生成投稿材料。
+
+---
+
+## Phase 5: Submission Pack
+
+**触发时机：** Phase 4 导出完成后（`phase=4, completed=true`）。Write 与 Polish 两模式都执行。
+**Entry: Read `outline.md` + `state.json`. If `phase=5, completed=true` → already done, skip.**
+> **Phase gate:** `phase < 4` 或 Phase 4 未 completed → HALT，提示先完成 Phase 4 导出。
+
+**📖 进入本阶段必读：**
+1. `references/submission_checklist.md`（综述版投稿清单 + 强制/询问分级 + 红线 + 产出路径）
+2. general-sci-writing 的 `references/submission-guide.md` 与 `references/compliance-gate.md` 的逐项标准——**只读，不改 gsw**。读取以对齐 Cover Letter 询问明细、CRediT 11 类分配、Acknowledgements 类别、合规门禁判定。
+
+### 强制 / 询问分级（对齐 gsw，不静默留白）
+
+| 件 | 级别 | 无内容时的处理 |
+|----|------|---------------|
+| Cover Letter / Title Page / CRediT / COI / Funding / DAS / Keywords(3–6) | **强制** | COI/Funding/DAS 无则按 submission_checklist 标准句声明"无"，不留空 |
+| ORCID / Acknowledgements 致谢对象 | **询问** | 向用户索取；未提供 → 显式标 "not provided" / 各类 N/A |
+| Highlights / Suggested·Opposed Reviewers | **按目标刊** | Cell 系等要求时给；Reviewers 须逐一核 COI 回避，严禁伪造邮箱 |
+
+### 步骤
+
+1. **逐项询问**（不要静默用空白）：通讯作者信息 + ORCID、各作者 CRediT role、COI、Funding（funder + grant number）、致谢对象、目标刊是否要 Highlights / Suggested Reviewers。明细见 submission_checklist.md 第 1 节 + gsw submission-guide.md 第 1 节。
+
+2. **生成投稿包**（写入 `exports/`，路径以 submission_checklist.md 第 6 节为准）：
+   - `exports/cover_letter.md` — 综述卖点是 synthesis/framing/gap→展望；引用 Phase 1.5 gap + Phase 1.6 framing 作为"为何此刻需要这篇综述"。
+   - `exports/title_page.md` — 题名（禁缩写）/ 作者 / 单位 / 通讯(含邮箱) / ORCID。
+   - `exports/author_contributions.md` — CRediT（综述常用 role；未覆盖的 11 类标 N/A，分配细则见 gsw 第 5 节）。
+   - `exports/coi_statement.md` — 无则 "The authors declare no competing interests."
+   - `exports/funding.md`（可并入 title page）— 无则 "This work received no specific external funding."
+   - `exports/data_availability.md` — 综述无原始数据 → "Data sharing not applicable — no new datasets were generated or analysed."（systematic 有提取数据则给获取方式）。
+   - `exports/keywords.md` — 3–6 个，不照抄标题词。
+   - `exports/acknowledgements.md` — 各类别（非作者贡献者/技术平台/讨论反馈），无则 N/A。
+   - `exports/highlights.md`（按目标刊）/ `exports/suggested_reviewers.md`（按需，逐一核 COI 回避）。
+
+3. **合规核对**（综述相关项，对齐 gsw compliance-gate）：署名 ICMJE 四准则、Reviewer COI 回避；伦理/注册号/统计报告对 narrative 综述标 N/A，仅 systematic/scoping 走 PRISMA。细则见 submission_checklist.md 第 3–4 节。
+
+4. **DoD 自检（gate `submission-pack-dod`，委托独立子代理盲检）：**
+   ```bash
+   python3 scripts/delegate_review.py pack --checklist references/dod_checklist.json \
+     --gate submission-pack-dod \
+     --files exports/cover_letter.md exports/title_page.md exports/author_contributions.md \
+             exports/coi_statement.md exports/keywords.md --workdir .
+   python3 scripts/delegate_review.py verify --checklist references/dod_checklist.json \
+     --gate submission-pack-dod --return .review_return_submission-pack-dod.json
+   # 退出码非 0 = fail-closed，据子代理证据修复后重跑，未过不得声明完成
+   ```
+   gate 5 项：S1 强制件齐全（Cover Letter+Title Page+CRediT+COI+Keywords）/ S2 COI·Funding·DAS 非空（无则声明无）/ S3 Keywords 3–6 且不与标题雷同 / S4 通讯作者一致 / S5 无占位符·无伪造。真源见 `references/dod_checklist.json`。
+
+5. **更新 state + Git Checkpoint：**
+   ```bash
+   python3 scripts/state_manager.py set-phase --phase 5 --completed true
+   git add -A && git commit -m "[review] Phase 5: submission pack" --allow-empty-message 2>/dev/null || true
+   ```
+
+**完成。向用户交付投稿包，列出已生成文件与询问级标 N/A 的项。**
 
 ---
 
