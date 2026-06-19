@@ -427,7 +427,7 @@ def is_section_heading_text(text: str, style_name: str = "") -> bool:
     if re.match(r"^\d+(?:\.\d+)*\s+", t):
         return True
     if re.match(
-        r"^(abstract|keywords?|introduction|materials and methods|methods|results(?: and discussion)?|discussion|conclusion|references)\\b",
+        r"^(abstract|keywords?|introduction|materials and methods|methods|results(?: and discussion)?|discussion|conclusion|references)\b",
         t,
         flags=re.IGNORECASE,
     ):
@@ -652,7 +652,7 @@ def _tokenize_for_match(text: str) -> set[str]:
         "have", "has", "had", "their", "your", "please", "should", "figure", "fig", "line",
         "authors", "author", "manuscript", "data", "results", "comment", "reply",
     }
-    words = re.findall(r"[A-Za-z][A-Za-z0-9\\-]{2,}", text.lower())
+    words = re.findall(r"[A-Za-z][A-Za-z0-9\-]{2,}", text.lower())
     out = {w for w in words if w not in stop}
     return out
 

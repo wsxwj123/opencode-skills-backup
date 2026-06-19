@@ -280,7 +280,7 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
 
 🔴 出具前置闸口：delegate_review verify 必须 exit 0（含 RR14 结构完整性），否则不得向用户出具 response letter。
 
-1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate response-dod --files <project_root>/units/*.json`
+1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate response-dod --files <project_root>/units/*.json`（Windows PowerShell/cmd 不展开 `*.json`，需把 `units/` 下的 json 显式逐个列在 `--files` 后，或在 WSL/bash 里运行）
 2. **派一个独立子代理**（Claude Code 用 `academic-blind-reviewer`；其他平台派通用子代理），把任务包原样给它、**不要给它回复包的写作上下文**，要求按任务包返回 JSON 数组。
 3. 校验返回：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate response-dod --return <子代理返回.json>`；退出码非 0（任一缺项/fail/无证据）= **fail-closed**，据子代理证据修复后重跑，**未过不得声明完成**。
 - **降级路径**（当前环境无法派子代理时）：主 agent 切换"审稿人视角"、清空对回复包的写作记忆，逐项独立重核，不得因"自己刚写完"默认通过；仍跑 `verify` 把关。

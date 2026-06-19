@@ -65,6 +65,8 @@ license: Proprietary
   3. `cp [Skill_Path]/templates/*.json [Target_Path]/`
   4. `cp [Skill_Path]/configs/*.json [Target_Path]/configs/`
 
+  > **Windows (PowerShell)**：以上 4 步是 POSIX 写法。`mkdir -p` 用 `New-Item -ItemType Directory -Force -Path ...`；`cp ...*.py` 用 `Copy-Item ...\scripts\*.py -Destination ...\scripts\`。或让 AI 按"把 scripts/templates/configs 拷进项目根、项目自包含不依赖 Skill 安装路径"的语义,用等价 PowerShell/Python 命令完成。
+
 ### 2. 数据依赖熔断机制 (Data Dependency Hard Stop)
 **Scope**: 此机制仅适用于 **Phase 8 (/write)** 的 Results/Discussion 章节。**严禁**在 Phase 1 (/preview) 或 Phase 2 (/storyline) 阶段因缺失具体实验数据而阻断流程。
 **在执行 `/write` 撰写 Results/Discussion 章节前，必须执行以下检查**：
@@ -461,6 +463,8 @@ python scripts/state_manager.py add-abbreviation <one.json>
 4c. `python scripts/proofread.py --manuscript-dir manuscripts --report proofread_report.json --threshold 70` — 机械错误。**阻断**：avg_score<70 → 按 report 中 `issues` 字段逐条修后重跑。
 5. `grep -rn "CITE_PENDING\|DATA_PENDING\|REF_DROPPED" manuscripts/ figure_analysis/ 2>/dev/null` — 占位扫描。**阻断**：非空 → 必须按 §REF_DROPPED 三种处置补齐。
 6. 防误改合并稿门禁：`[ ! -f manuscripts/Full_Manuscript.md ] || grep -q "AUTO-GENERATED" manuscripts/Full_Manuscript.md` — **阻断**：banner 不在 → 合并稿被手改过，需 `/merge` 重生成。
+
+> **Windows**：步骤 5 的 `grep ... 2>/dev/null` 与步骤 6 的 `[ ... ] || grep -q ...` 是 POSIX shell 写法，PowerShell/cmd 不可用。AI 在 Windows 上改用 `Select-String` 或直接用 Python 等价逻辑，完成同样的占位符扫描与 AUTO-GENERATED banner 校验。
 7. `python scripts/abbreviation_consistency.py --root .` — 缩略词一致性扫描（脚本化，不再纯靠 AI 自评）。检测：① **重复定义** 同一缩写在多个 manuscript 文件首次定义；② **未定义就用** 直接用 ABBR 但 `abbreviations.json` 缺、且不在 `UNIVERSAL_ABBREVIATIONS` 白名单；③ **Title 出现缩写**（Title 严禁缩写）。**阻断**：脚本 exit 非 0 → 必修后重跑。通用缩写（DNA/RNA/PCR 等）自动跳过。脚本未覆盖的"已定义但全文未使用"等冗余项可人工补查。
 
 **润色对齐目标刊**：本阶段去 AI/校对的同时，`Read journal_study/target_journal_study.json`，按 `maps_to=正文`/`maps_to=图表` 的 actionable_recommendations 调整正文行文风格与图表呈现，使其贴合目标刊调性（不改科学内容，仅调风格/结构）。

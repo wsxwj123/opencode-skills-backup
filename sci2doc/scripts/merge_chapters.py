@@ -14,6 +14,12 @@
 日期：2024-03-15
 """
 
+import sys as _sys
+try:  # Windows GBK 控制台/管道捕获下 emoji print 防 UnicodeEncodeError
+    _sys.stdout.reconfigure(encoding="utf-8")
+    _sys.stderr.reconfigure(encoding="utf-8")
+except Exception:
+    pass
 from docx import Document
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
