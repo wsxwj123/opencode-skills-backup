@@ -288,7 +288,7 @@ If `--status` lists multiple libraries (personal + group), show the list and ask
 ### 0.5 Initialize Project Files
 
 After all checks pass, run `scripts/init_project.py`. It creates the folder structure,
-copies the 9 active scripts, writes `state.json` + `outline.md` (templates below), and runs
+copies the active scripts (REQUIRED_SCRIPTS), writes `state.json` + `outline.md` (templates below), and runs
 `git init` + the initial `[review] Phase 0: project initialized` commit (skips git silently if
 unavailable). Cross-platform (pure pathlib, no heredoc).
 
