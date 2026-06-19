@@ -45,9 +45,10 @@ def main() -> int:
     existing = [str(path) for path in discover_global_skill(args.skill_name)]
     missing_targets = []
     for candidate in global_skill_install_paths(args.skill_name):
-        if args.target == "codex" and ".codex" not in str(candidate):
+        cand_norm = str(candidate).replace("\\", "/")  # Windows 反斜杠归一为正斜杠,避免 ".config/opencode" 子串匹配失效
+        if args.target == "codex" and ".codex" not in cand_norm:
             continue
-        if args.target == "opencode" and ".config/opencode" not in str(candidate):
+        if args.target == "opencode" and ".config/opencode" not in cand_norm:
             continue
         if not (candidate / "SKILL.md").exists():
             missing_targets.append(candidate)

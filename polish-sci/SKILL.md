@@ -61,6 +61,7 @@ python scripts/polish_units.py pack --project-root <root> --intensity standard
 python scripts/polish_units.py verify --project-root <root>
 
 # 5. 委托独立子代理盲检 DoD(见下方 DoD 自检清单)
+# Windows 注意:PowerShell/cmd 不展开 *.json 通配符,需把 polished/ 下的 json 文件显式逐个列在 --files 后,或在 WSL/bash 里运行
 python scripts/delegate_review.py pack --checklist references/dod_checklist.json \
     --gate polish-dod --files <polished/*.json polished_manuscript.md> --workdir <root>
 # 子代理返回后:

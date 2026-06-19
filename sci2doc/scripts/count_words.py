@@ -13,6 +13,12 @@ Markdown 字数统计工具
 作者：Sci2Doc Team
 """
 
+import sys as _sys
+try:  # Windows GBK 控制台/管道捕获下 emoji print 防 UnicodeEncodeError
+    _sys.stdout.reconfigure(encoding="utf-8")
+    _sys.stderr.reconfigure(encoding="utf-8")
+except Exception:
+    pass
 import argparse
 import re
 import sys
