@@ -13,9 +13,10 @@ section_id 形如 "2.1"（章.节）。
 2. 大纲就位：project_state.json.outline.chapters 含本节所属章；且 chapter_index.json 存在
 3. 素材就位：figures_index.json 本章有 figure/实验映射条目
 4. 占位符清零：上一节 atomic_md 文件无 CITE_PENDING/DATA_PENDING/【待 残留
+5. 上一节盲检通过：<root>/.review_pass/<上一节>.json 存在且 passed:true
+   （由 delegate_review.py verify --section <上一节> 落盘）；缺失 → 硬拦
 
 降级 warning（不阻断）：
-- 上一节盲检：.review_return_section-dod.json 未落盘 → 提示人工确认
 - 缩略词一致：sci2doc 用 abbreviation_registry（无 --root 式扫描接口）→ skip 并注明
 
 输出：stdout 一行 JSON {"ok":bool,"section":...,"checks":[...],"warnings":[...]}
@@ -184,12 +185,20 @@ def main():
             failures.append(f"previous section {chapter}.{prev_sub} file missing or empty in {chapter_dir(root, chapter)}")
             checks.append({"name": "prev_section_done", "ok": False, "prev": f"{chapter}.{prev_sub}"})
 
-    # ---- warning: 上一节盲检落盘 ----
-    blind_path = os.path.join(root, ".review_return_section-dod.json")
-    if os.path.exists(blind_path):
-        checks.append({"name": "blind_review", "ok": True, "note": "review return found"})
+    # ---- check: 上一节盲检通过并落盘（硬） ----
+    if sub is not None and sub > 1:
+        prev = f"{chapter}.{sub - 1}"
+        pass_path = os.path.join(root, ".review_pass", f"{prev}.json")
+        marker = _load_json(pass_path)
+        if isinstance(marker, dict) and marker.get("passed") is True:
+            checks.append({"name": "blind_review", "ok": True, "prev": prev})
+        else:
+            failures.append(
+                f"previous section {prev!r} blind review not passed or marker missing; "
+                f"run: delegate_review.py verify --section {prev}")
+            checks.append({"name": "blind_review", "ok": False, "prev": prev})
     else:
-        warnings.append("no .review_return_section-dod.json on disk; previous-section blind review must be confirmed manually")
+        checks.append({"name": "blind_review", "ok": True, "note": "first subsection or chapter-level, N/A"})
 
     # ---- check 3: 素材就位（本章 figure/实验映射） ----
     n_fig = figures_for_chapter(root, chapter)
