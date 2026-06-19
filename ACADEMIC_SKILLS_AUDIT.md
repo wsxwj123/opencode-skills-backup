@@ -659,3 +659,23 @@ nsfc-proposal/SKILL.md +45/-8 行。新流程节点：Phase 0 → 0.5 → 1。
 ### 遗留(下一窗口,非阻断)
 1. 新增各 Phase(研究空白/对标库/目标刊/投稿包/Phase0.5)真稿端到端实测
 2. nsfc Phase 0.5 真稿实测
+
+## 第二十九节 新功能真稿实测 + 强制自检验证（2026-06-19）
+
+### 强制自检实测结论
+prewrite_gate 4 技能 × 4 场景全过：盲检无法绕过——伪造标记 / 缺标记 / 无旁路参数三种规避手段均 exit 1，开写被硬拦。nsfc 跨 Phase 粒度精确生效（同 Phase 子节判 N/A，跨 Phase 边界硬校验上一节 .review_pass）。开写前 6 项机械合规为真·脚本强制，AI 无法静默跳过。
+
+### 新 Phase 实测
+review 1.5/1.6/5 + gsw 8.6 共 5 个 gate 的 pack/verify 全通过、schema 自洽、fail-closed 生效；投稿包分级与 gsw submission-guide/compliance-gate 对齐。
+
+### 本节修复
+1. 4 份 SKILL.md（gsw/review/sci2doc/nsfc）盲检拦截描述对齐脚本：散文从「未落盘降级 warning 不阻断」改为「缺 .review_pass/<上一节>.json 即 prewrite_gate 硬拦 exit 1，须先跑 delegate_review verify --section <上一节> 落盘」；nsfc 版补「仅跨 Phase 边界生效，同 Phase 子节 N/A」。
+2. review Phase 1.5 选定 gap 落盘衔接（防长会话丢主线）：HALT 确认选题后，research_gap.json 选中项加 selected=true + outline.md 顶部写主线锚点；Phase 2/3 entry 各加开写前 Read research_gap.json 取 selected gap 作主线依据。
+3. research-gap-dod 的 G2 孤儿引文检查扩覆盖：原仅校 gaps+hotspots 的 support_refs，现补 candidate_topics 的 support_refs 与 controversies 的 side_a_refs/side_b_refs；正负用例验证（孤儿 50/99 检出、合法编号 NO_ORPHANS）。
+
+### 记录不改项
+review + gsw 的 submission-pack-dod 同名 pack 记录仅在同目录互覆盖；真实使用时各自项目根独立，不冲突，无需改。
+
+### 遗留（下一窗口，非阻断）
+1. nsfc Phase 0.5 真稿实测
+2. 新 Phase 用真实文献走更长端到端
