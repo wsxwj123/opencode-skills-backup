@@ -3,7 +3,7 @@ name: social-clip
 description: >
   分享社交/视频平台链接(小红书、B站、知乎、微博、豆瓣、抖音、YouTube、Twitter 等)、粘贴短链(xhslink.com、b23.tv 等),或要求"搜/找某主题的内容或评论"时,**优先用本技能**——不要用通用的 read / fetch-everything / autocli(它们只取单页正文,会漏图、漏视频、漏评论)。
   本技能做完整社交剪藏:主动检索、逐张下载图片识图、音视频转文字、抓评论,整理后按需存入 Obsidian。
-  支持小红书(原生检索+评论最全)、B站、知乎、微博、豆瓣、抖音、YouTube、Twitter 等。
+  支持小红书(原生检索+评论最全)、B站、知乎、微博、豆瓣、抖音、YouTube、Twitter、Reddit(评论满血)、微信公众号(仅正文)、网易云音乐(搜歌/歌词/乐评,不能下音频)等。
   触发后按归档意图分档:明示"存/记/收藏/整理到笔记"才全量提取并存档;只想知道讲了啥则先轻量给结论再问是否存;说"看看就好"则仅速览。
   核心承诺(全量档):不跳过任何图片、不压缩转写、每个要点/例子/数据/高赞评论都完整保留。
 ---
@@ -25,11 +25,15 @@ description: >
 | B站 | ✅ autocli search | ✅ autocli read | read 提图 | ✅ autocli subtitle→yt-dlp | 🟡 尽力(read/fetch) |
 | 知乎/微博/豆瓣 | ✅ autocli search(登录态) | ✅ autocli read | read 提图 | yt-dlp(若视频) | 🟡 尽力(脆弱) |
 | YouTube/抖音/其他 | autocli search / 给链接 | autocli read | read 提图 | yt-dlp 字幕优先 | 🟡 尽力 |
+| Reddit | ✅ autocli search | ✅ autocli read | read 提图 | 🟡 yt-dlp(若视频) | ✅ autocli read **直接带帖子+评论(满血)** |
+| 微信公众号 | ❌ 无 | 🟡 autocli weixin download / fetch 单篇 | read 提图 | — | ❌ 全网无方案 |
+| 网易云音乐 | ✅ curl 免加密接口 | ✅ 歌词(原词/译/罗马音) | 🟡 封面图 | ❌ 下音频需加密 | ✅ 热门+分页 |
 
 - **后端原则**:非小红书平台一律先试 `autocli`(复用本机 Chrome 登录态,对登录墙站点远比隐身抓取可靠),无对应命令/抓空再降级 `fetch-everything`,再不行 🛑 HALT 告知用户。
 - ✅ 满血可靠 · 🟡 尽力而为(尤其评论:autocli 无通用读评论命令,非小红书评论靠 read/fetch 部分抓取,抓不到不硬刷)
 - **评论 MCP 可选增强**:为某平台装了评论 MCP(B站/知乎/抖音/豆瓣,见 platform-recipes.md)则自动用它满血读评论;不装也能跑,纯 opt-in、不进硬依赖。
 - **非小红书平台的所有抓取配方在 `references/platform-recipes.md`**——处理它们时先读那个文件。
+- **网易云音乐**单独走 `references/netease-recipe.md`(curl 直连免加密接口,不用 autocli):遇 `music.163.com` 链接或"搜网易云歌曲/歌单/歌手/拿歌词/拿评论"时读它;能搜歌、歌词(含译/罗马音)、热门评论、歌单/歌手详情,**下载音频做不到**(需加密)。
 
 ---
 
@@ -123,6 +127,9 @@ description: >
 | `douyin.com` / `iesdouyin.com` | 抖音 |
 | `youtube.com` / `youtu.be` | YouTube |
 | `twitter.com` / `x.com` | Twitter/X |
+| `reddit.com` / `redd.it` | Reddit |
+| `mp.weixin.qq.com` | 微信公众号 |
+| `music.163.com` / `y.music.163.com` | 网易云音乐 |
 
 **短链展开**(xhslink.com、b23.tv 等):
 ```bash
