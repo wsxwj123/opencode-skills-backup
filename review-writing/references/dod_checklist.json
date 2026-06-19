@@ -88,6 +88,110 @@
           "check": "本节包含其文体/storyline 规定的全部结构组件，无缺段/空标题/未填骨架；综述各节符合规定结构（引言漏斗、主体主题段有论点-证据-小结、结论有展望）。子代理对照 outline.md 对应 section 逐组件核对"
         }
       ]
+    },
+    "research-gap-dod": {
+      "title": "Phase 1.5 研究空白识别 DoD（落盘前委托独立子代理盲检）",
+      "applies_when": "Phase 1.5 产出 data/research_gap.json 后、提交用户确认选题方向前",
+      "items": [
+        {
+          "id": "G1",
+          "name": "每 gap 有 verified 文献支撑",
+          "check": "research_gap.json 中每个 gap 至少关联 1 篇支撑文献 [n]，且该文献在 literature_index.json 中 verified=true（已过 citation_guard）。无 verified 支撑的 gap 一律 fail",
+          "script": "python3 -c \"import json,pathlib; gaps=json.loads(pathlib.Path('data/research_gap.json').read_text(encoding='utf-8')).get('gaps',[]); idx={e['global_id']:e for e in json.loads(pathlib.Path('data/literature_index.json').read_text(encoding='utf-8'))}; bad=[g for g in gaps if not g.get('support_refs') or not all(idx.get(r,{}).get('verified') for r in g.get('support_refs',[]))]; print('UNSUPPORTED:', [g.get('id') for g in bad]) if bad else print('ALL_SUPPORTED')\""
+        },
+        {
+          "id": "G2",
+          "name": "与 literature_index 一致",
+          "check": "research_gap.json 引用的所有 [n] 均存在于 literature_index.json，无孤儿编号、无凭空捏造的文献条目",
+          "script": "python3 -c \"import json,pathlib; gaps=json.loads(pathlib.Path('data/research_gap.json').read_text(encoding='utf-8')); ids={e['global_id'] for e in json.loads(pathlib.Path('data/literature_index.json').read_text(encoding='utf-8'))}; used={r for g in gaps.get('gaps',[]) for r in g.get('support_refs',[])} | {r for h in gaps.get('hotspots',[]) for r in (h.get('support_refs') or [])}; orphans=used-ids; print('ORPHANS:', sorted(orphans)) if orphans else print('NO_ORPHANS')\""
+        },
+        {
+          "id": "G3",
+          "name": "gap 从真实文献证据推出（禁脑补）",
+          "check": "每个 gap 的描述可追溯到所关联文献的实际内容（摘要/结论），不得出现文献未提及的论断；子代理对照支撑文献摘要逐条核对，凡无证据链的 gap 判 fail"
+        },
+        {
+          "id": "G4",
+          "name": "含 novelty_risk 比较",
+          "check": "research_gap.json 含 novelty_risk 字段，对候选选题与既有综述/已发表工作做了重叠度比较，标注 high/medium/low 风险及理由，非空",
+          "script": "python3 -c \"import json,pathlib; d=json.loads(pathlib.Path('data/research_gap.json').read_text(encoding='utf-8')); nr=d.get('novelty_risk'); print('OK') if nr else print('MISSING_NOVELTY_RISK')\""
+        },
+        {
+          "id": "G5",
+          "name": "占位符清零",
+          "check": "research_gap.json 无 CITE_PENDING / DATA_PENDING / TODO / 待AI 等占位符",
+          "script": "grep -nE 'CITE_PENDING|DATA_PENDING|【待AI|待AI翻译|\\[TODO\\]|TBD' data/research_gap.json || echo CLEAN"
+        }
+      ]
+    },
+    "benchmark-reviews-dod": {
+      "title": "Phase 1.6 对标综述库 + 框架指南 DoD（落盘前委托独立子代理盲检）",
+      "applies_when": "Phase 1.6 产出 data/benchmark_reviews.json + data/framing_guide.md 后、进入 Phase 3 搭框架前",
+      "items": [
+        {
+          "id": "B1",
+          "name": "≥5 篇 verified 对标综述",
+          "check": "benchmark_reviews.json 至少 5 篇，每篇为真实存在的高水平综述，已走 citation_guard 验证（verified=true 或与 literature_index.json verified 条目一致），无编造",
+          "script": "python3 -c \"import json,pathlib; b=json.loads(pathlib.Path('data/benchmark_reviews.json').read_text(encoding='utf-8')); n=len(b); ver=[x for x in b if x.get('verified')]; print(f'TOTAL={n} VERIFIED={len(ver)}'); exit(0 if len(ver)>=5 else 1)\""
+        },
+        {
+          "id": "B2",
+          "name": "每篇含框架大纲",
+          "check": "benchmark_reviews.json 每篇含 title/journal/year/framework_outline/highlights 字段，framework_outline 为该综述的章节框架（非空、可读）",
+          "script": "python3 -c \"import json,pathlib; b=json.loads(pathlib.Path('data/benchmark_reviews.json').read_text(encoding='utf-8')); bad=[x.get('title','?') for x in b if not x.get('framework_outline') or not x.get('journal') or not x.get('year')]; print('INCOMPLETE:', bad) if bad else print('ALL_COMPLETE')\""
+        },
+        {
+          "id": "B3",
+          "name": "framing_guide 含可操作建议",
+          "check": "framing_guide.md 提炼了可复用的章节框架、论证思路、图表与正文关系、引言-主体-展望组织，给出对本综述可操作的具体建议（非泛泛而谈），非空",
+          "script": "python3 -c \"import pathlib; t=pathlib.Path('data/framing_guide.md').read_text(encoding='utf-8'); print('OK' if len(t.strip())>300 else 'TOO_THIN')\""
+        },
+        {
+          "id": "B4",
+          "name": "Phase 3 搭框架显式 Read framing_guide",
+          "check": "确认 Phase 3 搭框架时已 Read data/framing_guide.md 作为写作上下文（子代理核：框架/各节结构与 framing_guide 提炼的可复用框架对齐，非默认模板）"
+        },
+        {
+          "id": "B5",
+          "name": "占位符清零",
+          "check": "benchmark_reviews.json 与 framing_guide.md 无 CITE_PENDING / DATA_PENDING / TODO / 待AI 等占位符",
+          "script": "grep -nE 'CITE_PENDING|DATA_PENDING|【待AI|待AI翻译|\\[TODO\\]|TBD' data/benchmark_reviews.json data/framing_guide.md || echo CLEAN"
+        }
+      ]
+    },
+    "submission-pack-dod": {
+      "title": "Phase 5 投稿包 DoD（落盘前委托独立子代理盲检）",
+      "applies_when": "Phase 5 生成投稿包后、向用户交付前；对齐 general-sci-writing submission-guide / compliance-gate（综述版细则见 references/submission_checklist.md）",
+      "items": [
+        {
+          "id": "S1",
+          "name": "强制件齐全",
+          "check": "Cover Letter + Title Page + CRediT (Author Contributions) + COI + Keywords 五件必须全部生成且非空（强制级，见 references/submission_checklist.md 强制/询问分级）",
+          "script": "ls -la exports/cover_letter.md exports/title_page.md exports/author_contributions.md exports/coi_statement.md exports/keywords.md 2>&1"
+        },
+        {
+          "id": "S2",
+          "name": "COI / Funding / DAS 非空",
+          "check": "COI、Funding、Data Availability 三段均非空：无利益冲突写 'The authors declare no competing interests.'；无资助写 'This work received no specific external funding.'；综述无原始数据写明 'Data sharing not applicable — no datasets were generated.' 不留白"
+        },
+        {
+          "id": "S3",
+          "name": "Keywords 3-6 且不与标题雷同",
+          "check": "Keywords 数量 3-6 个，且与综述标题用词不简单重复（不照抄标题词），覆盖主题/方法/应用维度",
+          "script": "python3 -c \"import pathlib,re; t=pathlib.Path('exports/keywords.md').read_text(encoding='utf-8'); kws=[k.strip() for k in re.split(r'[\\n,;]', t) if k.strip() and not k.strip().startswith('#')]; print(f'COUNT={len(kws)}'); exit(0 if 3<=len(kws)<=6 else 1)\""
+        },
+        {
+          "id": "S4",
+          "name": "通讯作者一致",
+          "check": "Title Page 标注的通讯作者（含邮箱）与 Cover Letter 署名通讯作者一致；ORCID 如提供则格式合法（0000-0000-0000-0000）"
+        },
+        {
+          "id": "S5",
+          "name": "无占位符 / 无伪造",
+          "check": "投稿包所有文件无 {{VAR}} / TODO / 待填 残留；未提供的询问级信息（ORCID/致谢对象/suggested reviewers）按 submission_checklist 分级处理（询问用户或显式标 N/A），严禁伪造 reviewer 邮箱或编造单位",
+          "script": "grep -rnE '\\{\\{|CITE_PENDING|【待AI|\\[TODO\\]|待填' exports/cover_letter.md exports/title_page.md exports/author_contributions.md exports/coi_statement.md exports/keywords.md || echo CLEAN"
+        }
+      ]
     }
   }
 }

@@ -79,6 +79,16 @@
 
 ---
 
+## 7. Keywords（投稿关键词列表）
+
+- 投稿包必须含 `submission/keywords.txt`，内含 3-6 个投稿关键词（具体数量遵从目标刊投稿系统要求）。
+- 数量须符合目标刊规则：多数期刊 3-6 个；缺失或数量越界即阻断。
+- 关键词与 title/abstract 主题一致，避免与标题词完全重复（标题已含的词不重复占名额）。
+- 生命科学优先选 MeSH 受控词。选词原则与 MeSH 适配细则见 `references/submission-guide.md` 第 8 节。
+- **阻断**：`submission/keywords.txt` 缺失，或关键词数量不符目标刊规则（一般 <3 或 >6），阻断投稿包导出。
+
+---
+
 ## 输出格式
 
 `submission/compliance_report.md`：
@@ -91,6 +101,7 @@
 4. 统计报告完整性：✅/❌ [缺失项]
 5. 署名合规性（ICMJE）：✅/❌ [问题项]
 6. Reviewer COI 回避：✅/❌ [问题项]
+7. Keywords：✅/❌ [keywords.txt 是否存在 + 关键词数量]
 ```
 
 全部 ✅ → 进 Phase 11；任一 ❌ → 补充后重跑，不得跳过。

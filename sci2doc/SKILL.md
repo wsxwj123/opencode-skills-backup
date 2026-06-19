@@ -297,6 +297,7 @@ python3 scripts/extract_docx_images.py --manuscript /path/to/source.docx --proje
 
 ### 3) Atomic Subsection Writing
 
+- **🔴 开写前置闸门 (Mandatory，脚本硬拦截)**：每节开写前必须先跑 `python3 scripts/prewrite_gate.py --section X.Y --root .`（X.Y 为章.节，如 2.1），exit≠0 禁止开写。它统一硬检查：上一节完成（同章编号紧邻上一节 `atomic_md/第N章/{X.Y-1}_*.md` 存在非空）、大纲就位（`project_state.json.outline` 含本章 + `chapter_index.json`）、素材就位（`figures_index.json` 本章有图表/实验映射条目，无则降级 warning）、上一节占位符清零（无 `CITE_PENDING`/`DATA_PENDING`/`【待`）；上一节盲检（`.review_return_section-dod.json`）未落盘则降级 warning 提示人工确认，不阻断。
 - 文件存于 `${save_path}/atomic_md/第{chapter}章/`，命名 `{section_number}_{section_title}.md`（如 `2.1_研究对象.md`）。
 - **Table reminder**：呈现结构化数据（试剂/仪器/分组/统计）的小节 **必须** 用 Markdown 管道表，见 [Table Contract](#table-contract)，不得用散文描述。
 - 校验：`atomic_md_workflow.py validate --chapter N`（加 `--enforce-research-structure`）+ `validate-experiment-map --chapter N`。**门禁：** 编号断裂 → 修复后才能继续。

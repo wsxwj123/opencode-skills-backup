@@ -12,6 +12,7 @@
 - **Funding**：每个 funder + grant number + 受资助 PI
 - **Highlights**（Cell 系强制）：3-5 条 ≤85 字符，写完后必须 `wc -L` 确认
 - **One-sentence summary / eTOC**：Nature 系 ~150 字符，Cell ~125 字符
+- **Keywords**：3-6 个投稿关键词（数量遵从目标刊），与 title/abstract 主题一致，生命科学优先 MeSH（详见第 8 节）
 - **Graphical abstract**：按 `submission_package.json.graphical_abstract_spec` 出，用户自己画或交付 BioRender，本流程不画
 
 ## 2. 目标期刊适配（按需读取）
@@ -55,4 +56,14 @@
 
 ## 7. 红线
 
-① 严禁 `{{VAR}}` 残留 ② 严禁伪造 reviewer 邮箱 ③ COI 已有需主动声明严禁瞒报 ④ Funding 无则写 "This work received no specific external funding"，**不留空** ⑤ **Source Data 数值必须与图对应** —— 不一致即学术不端嫌疑 ⑥ Acks 不能空，无则各类写 N/A。
+① 严禁 `{{VAR}}` 残留 ② 严禁伪造 reviewer 邮箱 ③ COI 已有需主动声明严禁瞒报 ④ Funding 无则写 "This work received no specific external funding"，**不留空** ⑤ **Source Data 数值必须与图对应** —— 不一致即学术不端嫌疑 ⑥ Acks 不能空，无则各类写 N/A ⑦ **Keywords 必须产出**（`submission/keywords.txt`，3-6 个且数量符合目标刊），缺失或数量不符即阻断投稿包导出。
+
+## 8. Keywords（投稿关键词）—— 强制产出 `submission/keywords.txt`
+
+- **数量规则**：3-6 个，具体遵从目标刊投稿系统要求（多数刊 3-6；部分刊固定 5 个或上限 6）。数量不符即被 Phase 10.5 阻断。
+- **选词原则**：
+  - 覆盖研究对象 / 方法 / 应用领域三个维度，便于检索命中。
+  - 与 title 和 abstract 主题一致；**避免与标题词完全重复**（标题已显著出现的词不再占关键词名额，应补充标题未含但检索价值高的同义/上位/方法学词）。
+  - 用领域规范术语，避免生造缩写与过宽泛词（如 "study" / "analysis"）。
+- **MeSH 适配（生命科学优先）**：生命科学/医学稿件优先从 MeSH（Medical Subject Headings）受控词表选词，提升 PubMed 检索可发现性；无对应 MeSH 词时用领域公认术语。CS/AI 等无 MeSH 体系的领域用本领域标准关键词（如 ACM CCS、arXiv 分类术语）。
+- **格式**：`submission/keywords.txt`，每行一个关键词或单行分号/逗号分隔（按目标刊要求），全小写或首字母大写遵从目标刊范例。

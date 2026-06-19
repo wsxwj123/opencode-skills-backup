@@ -15,6 +15,30 @@ try:
 except Exception:  # pragma: no cover
     fcntl = None
 
+# Valid workflow phases (string-keyed to allow sub-phases 1.5 / 1.6 inserted between integers).
+# 0=init, 1=outline, 1.5=research gap, 1.6=benchmark reviews+framing, 2=search, 3=write, 4=export, 5=submission pack.
+VALID_PHASES = {"0", "1", "1.5", "1.6", "2", "3", "4", "5"}
+
+
+def _parse_phase(value):
+    """Accept int or sub-phase float (e.g. 1.5) as a phase token; validate against VALID_PHASES.
+
+    Stored canonically as int when integral (3 not 3.0), else as float (1.5).
+    """
+    raw = str(value).strip()
+    # Normalize "3.0" -> "3"
+    try:
+        f = float(raw)
+        token = str(int(f)) if f == int(f) else str(f)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"phase 必须是数字，收到 {value!r}")
+    if token not in VALID_PHASES:
+        raise argparse.ArgumentTypeError(
+            f"未知 phase {value!r}；合法值: {', '.join(sorted(VALID_PHASES))}"
+        )
+    return int(float(token)) if float(token) == int(float(token)) else float(token)
+
+
 # Define state files map for Review Writing Project
 STATE_FILES = {
     "project_info": "project_info.md",          # Basic project info (RQ, PICO)
@@ -1392,7 +1416,7 @@ def main():
         "set-phase",
         help="Set workflow phase in state.json (preserves all other keys). Replaces inline phase-update Python in Phase 1/2.5/3/4.",
     )
-    setphase_parser.add_argument("--phase", type=int, required=True, help="Phase number to set (0-4)")
+    setphase_parser.add_argument("--phase", type=_parse_phase, required=True, help="Phase to set (0,1,1.5,1.6,2,3,4,5)")
     setphase_parser.add_argument(
         "--completed",
         choices=["true", "false"],
