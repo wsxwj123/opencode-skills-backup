@@ -58,6 +58,12 @@
           "name": "结构完整性",
           "check": "合并后 polished_manuscript.md 段落顺序与小节结构与原稿一致,无段落丢失/错位/重复;引用编号连续",
           "script": "python scripts/strict_gate.py --project-root ."
+        },
+        {
+          "id": "PL-G10",
+          "name": "缩略语首展一致性(软报告)",
+          "check": "abbreviation_index.json 的 undefined_use / duplicate_definition / title_abbreviation 已列出供人工取舍;润色未破坏既有首展、未新增缩略语问题,首展格式 Full Name (ABBR) / 中文全称（English Full Name, ABBR）。纯润色不主动改缩略语定义,原稿固有问题只报告不阻断交付(与 revise-sci 硬门禁 RV-G7 区分);启发式索引,可疑项人工复核",
+          "script": "python -c \"import json; H={'undefined_use','duplicate_definition','title_abbreviation'}; d=json.load(open('abbreviation_index.json')); bad=[(a['abbr'],a['orphan_type']) for a in d if a['orphan_type'] in H]; print('ABBR_HARD_ORPHANS(report-only):', bad or 'none')\""
         }
       ]
     }

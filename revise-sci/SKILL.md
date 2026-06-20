@@ -91,7 +91,8 @@ Always produce:
 - `data/reference_registry.json`
 - `data/reference_coverage_audit.json`
 - `figure_index.json` / `reference_index.json`,反向抽取的图、参考交叉索引(每项含 cited_by 与 orphan_type)
-- `manuscript_index.md`,人读版图/参考索引与孤儿汇总。启发式抽取,作审查辅助而非红线核验
+- `abbreviation_index.json`,反向抽取的缩略语交叉索引(每项含 defined_count / used_count / orphan_type:undefined_use / duplicate_definition / title_abbreviation 为硬错,defined_unused 为软警告)
+- `manuscript_index.md`,人读版图/参考/缩略语索引与孤儿汇总。启发式抽取,作审查辅助而非红线核验
 - `figures/figure_NN.<ext>` + `figures/image_manifest.json`,从源 docx `word/media/` 解出的内嵌图(按 zip 出现顺序命名),供最终返修 docx 嵌回。仅二进制搬运,不做 OCR/图像识别;非 docx 输入则目录可能为空
 
 ## Pipeline
@@ -102,7 +103,7 @@ python scripts/intake_router.py ...
 python scripts/preflight.py ...
 python scripts/atomize_comments.py ...
 python scripts/atomize_manuscript.py ...
-python scripts/manuscript_index.py --manuscript <manuscript_docx_path> --project-root <project_root> --units-dir units   # 反向抽取图/参考交叉索引,辅助图文一致性与引用完整性核查
+python scripts/manuscript_index.py --manuscript <manuscript_docx_path> --project-root <project_root> --units-dir units   # 反向抽取图/参考/缩略语交叉索引,辅助图文一致性、引用完整性与缩略语首展核查(产 abbreviation_index.json)。改稿合并后宜对最终 output_md 重跑一次,使索引反映改后稿
 python scripts/extract_docx_images.py --manuscript <manuscript_path> --project-root <project_root>   # 支持 docx 与 pdf,抠出内嵌图到 figures/,供最终返修 docx 嵌回(best-effort;pdf 需 PyMuPDF,缺失则优雅跳过;其他非 docx/pdf 输入自动 no-op)
 python scripts/build_issue_matrix.py ...
 python scripts/state_manager.py --project-root <project_root> refresh
@@ -165,6 +166,13 @@ Protocol (four phases):
 Rules:
 - The patch path is **fail-closed**: a hash mismatch or source drift must abort and write nothing; never coerce or auto-relocate a patch onto a changed block.
 - The patch path is an increment on top of the existing pipeline, not a replacement: `atomize_comments.py`, `build_issue_matrix.py`, the state-window protocol, and `strict_gate.py` all still apply to the resulting draft.
+
+## 缩略语首展一致性(Abbreviation Consistency)
+改稿最易破坏缩略语一致性:改某句时删掉了首展、在首展之前的位置裸用 ABBR、或新增术语未首展。规则:
+- **首展格式**:英文 `Full Name (ABBR)`;中文正文 `中文全称（English Full Name, ABBR）`。同一缩写全文只首展一次,之后裸用 ABBR,不重复展开。
+- **Title 禁缩写**(DNA/RNA/PCR 等通用词除外);Abstract 独立,即使正文已定义,Abstract 内首次出现仍应重新展开。
+- **改稿守则**:替换/删除句子时若该句承载某缩写的唯一首展,须把首展移到改后稿中该缩写的新首现处;新引入的术语必须在首现处首展。
+- **核查**:`manuscript_index.py` 对改后稿产 `abbreviation_index.json`。`undefined_use`(裸用未定义)/`duplicate_definition`(重复首展)/`title_abbreviation`(Title 含缩写)为硬错须修;`defined_unused`(定义后未再用)为软警告,人工取舍。通用缩写见脚本 `UNIVERSAL_ABBREVIATIONS` 白名单,自动跳过。索引为启发式辅助,可疑项人工复核。
 
 ## Response Format
 `response_to_reviewers` must use this hierarchy:
@@ -291,6 +299,7 @@ Each comment must contain:
 - ❌ 退稿信漏回某条意见，或某 comment_id 在 `manuscript_edit_plan.md` 中无 revised_excerpt 落点。
 - ❌ 引文 `[n]` 与参考列表不对应、缺号或编号不连续就交付（`reference_coverage_audit.json` 须 ok=true）。
 - ❌ `--resume` 时输入指纹或脚本签名已变仍信任旧产物，而非 fail-fast 重建。
+- ❌ 改稿删/换句子时丢失某缩写的唯一首展、在首展前裸用 ABBR、新增术语不首展，或 Title 出现缩写（`abbreviation_index.json` 的 `undefined_use` / `duplicate_definition` / `title_abbreviation` 硬错须清零）。
 
 ## Definition-of-Done (DoD) 自检清单（改稿收口）
 
@@ -305,7 +314,7 @@ Each comment must contain:
 
 下列清单与 `references/dod_checklist.json` 逐项对应（**改清单先改 JSON，再同步此处散文**）；能脚本核的项子代理会先跑脚本：
 
-### 通用 6 项（id: RV-G1 ~ RV-G6）
+### 通用 7 项（id: RV-G1 ~ RV-G7）
 
 | id | 项目 | 核验方式 |
 |---|------|---------|
@@ -315,6 +324,7 @@ Each comment must contain:
 | RV-G4 | 占位符清零：无 `CITE_PENDING` / `DATA_PENDING` / `【待AI】` / `{{` 残留 | `grep -r "CITE_PENDING\|DATA_PENDING\|待AI\|{{" <project_root>/` 零命中 |
 | RV-G5 | 去 AI 五项（破折号/scare quotes/解释性冒号/英文≤30词/-ing从句/中文≤50字≤2层从句）通过 | `python scripts/strict_gate.py --project-root <project_root>` → `ai_style_flags_removed` 无残留；句长警告记录于 notes |
 | RV-G6 | 字数达标（改动前后正文字数在期刊要求范围内） | 人工或期刊要求核对 |
+| RV-G7 | 缩略语首展一致：`abbreviation_index.json` 无 `undefined_use` / `duplicate_definition` / `title_abbreviation` 硬错；改稿未破坏既有首展，Title 不含缩写（`defined_unused` 为软警告可人工豁免） | `python scripts/manuscript_index.py --manuscript <output_md> --project-root <project_root>` 后读 `abbreviation_index.json`，硬错 orphan 零命中（启发式索引，可疑项人工复核） |
 
 🔴 收口前置闸口：`delegate_review verify` 必须 exit 0（含 RV-R8 结构完整性），否则不得声明改稿完成。任一项 fail 均为阻断。
 
