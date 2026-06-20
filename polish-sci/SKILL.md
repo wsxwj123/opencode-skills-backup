@@ -44,7 +44,7 @@ not_for(以下情况不要用本技能):
 # 1. 原子化:把稿子按段落拆成 units/<idx>.json
 python scripts/atomize_manuscript.py --manuscript <input.md|docx> --project-root <root>
 
-# 1.5 反向抽取图/参考交叉索引(图文一致性与引用完整性的审查辅助)
+# 1.5 反向抽取图/参考/缩略语交叉索引(图文一致性、引用完整性与缩略语首展的审查辅助;产 abbreviation_index.json)
 python scripts/manuscript_index.py --manuscript <input> --project-root <root> --units-dir units
 
 # 1.6 抠图落盘(支持 docx 与 pdf,把内嵌图片解到 figures/,供最终 docx 嵌回;pdf 需 PyMuPDF,缺失则优雅跳过;其他非 docx/pdf 输入会自动 no-op)
@@ -89,7 +89,8 @@ python scripts/polish_report.py --project-root <root>
 ## Output Contract
 - `units/<idx>.json`,原子化单元(原文 + section_type + 引用/数值标记)。
 - `figure_index.json` / `reference_index.json`,反向抽取的图、参考交叉索引(每项含 cited_by 与 orphan_type)。
-- `manuscript_index.md`,人读版图/参考索引与孤儿汇总。启发式抽取,作审查辅助而非红线核验。
+- `abbreviation_index.json`,反向抽取的缩略语交叉索引(每项含 defined_count / used_count / orphan_type)。纯润色不改缩略语定义,此索引为**软报告**,列出 undefined_use / duplicate_definition / title_abbreviation 供人工取舍,不阻断交付。
+- `manuscript_index.md`,人读版图/参考/缩略语索引与孤儿汇总。启发式抽取,作审查辅助而非红线核验。
 - `figures/figure_NN.<ext>` + `figures/image_manifest.json`,从源 docx `word/media/` 解出的内嵌图(按 zip 出现顺序命名)。仅二进制搬运,不做 OCR/图像识别;非 docx 输入则该目录可能为空。供最终 docx 嵌图使用。
 - `polish_manifest.json`,逐段润色任务包。
 - `polished/<idx>.json`,逐段润色结果 + polish_risk_flags。
@@ -116,7 +117,7 @@ python scripts/polish_report.py --project-root <root>
 ## DoD 自检清单(润色收口)
 机器可读真源,`references/dod_checklist.json` 的 `polish-dod` gate。strict_gate 运行前,必须委托独立子代理盲检。
 
-通用 9 项(id: PL-G1 ~ PL-G9):
+通用 10 项(id: PL-G1 ~ PL-G10):
 - **PL-G1 数值保留**,每段数值/统计量集合与原文一字不差。
 - **PL-G2 无语气升级**,不确定性动词未被升级。
 - **PL-G3 引用保留**,引用标记与 DOI 集合前后一致。
@@ -126,6 +127,7 @@ python scripts/polish_report.py --project-root <root>
 - **PL-G7 被动语态合区间**,各段被动比例落在 section_type 目标区间附近。
 - **PL-G8 术语一致**,全文术语用词前后一致(人工核)。
 - **PL-G9 结构完整性**,合并稿段落顺序与小节结构与原稿一致,引用编号连续。
+- **PL-G10 缩略语首展一致(软报告)**,`abbreviation_index.json` 的 undefined_use / duplicate_definition / title_abbreviation 已列出供人工取舍;润色未破坏既有首展、未新增缩略语问题。纯润色不主动改缩略语定义,原稿固有问题只报告不阻断交付(与 revise-sci 的硬门禁 RV-G7 区分)。
 
 🔴 **委托盲检(强制)**,主 agent 不得自评 DoD。必须:
 1. `python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate polish-dod --files <...> --workdir <root>`,把打印的任务包交给独立子代理(默认 sonnet)。

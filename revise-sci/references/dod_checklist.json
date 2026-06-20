@@ -41,6 +41,12 @@
           "check": "改动前后正文字数在期刊要求范围内"
         },
         {
+          "id": "RV-G7",
+          "name": "缩略语首展一致性",
+          "check": "abbreviation_index.json 无 undefined_use / duplicate_definition / title_abbreviation 硬错(defined_unused 为软警告,可人工豁免);改稿未破坏既有首展,新引入缩略语已按 Full Name (ABBR) / 中文全称（English Full Name, ABBR）首展,Title 不含缩写。启发式索引,人工复核可疑项",
+          "script": "python -c \"import json,sys; H={'undefined_use','duplicate_definition','title_abbreviation'}; d=json.load(open('abbreviation_index.json')); bad=[(a['abbr'],a['orphan_type']) for a in d if a['orphan_type'] in H]; print('ABBR_HARD_ORPHANS:', bad or 'none'); sys.exit(1 if bad else 0)\""
+        },
+        {
           "id": "RV-R1",
           "name": "strict_gate 通过",
           "check": "strict_gate.py exit code 0，输出 STRICT_GATE: PASS",
