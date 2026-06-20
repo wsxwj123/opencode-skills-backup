@@ -5,8 +5,8 @@ Reverse-extracts figure and reference cross-indexes from a finished manuscript
 (docx or md) for review and completeness checking. Output is an assistive hint,
 not a red-line verifier: heuristic parsing is good but not 100 percent reliable.
 
-Produces figure_index.json, reference_index.json and a human-readable
-manuscript_index.md under the project root.
+Produces figure_index.json, reference_index.json, abbreviation_index.json and a
+human-readable manuscript_index.md under the project root.
 
 CLI:
   python manuscript_index.py --manuscript <docx|md> --project-root <root> [--units-dir units]
@@ -117,6 +117,55 @@ REF_NUMBER_PREFIX_RE = re.compile(r"^\[?(\d+)\]?[.)]?\s+(\S.*)$")
 
 DOI_RE = re.compile(r"\b(10\.\d{4,9}/[-._;()/:A-Za-z0-9]+)", re.IGNORECASE)
 PMID_RE = re.compile(r"\bPMID:\s*(\d+)", re.IGNORECASE)
+
+# Abbreviations exempt from first-use definition (kept in sync with
+# general-sci-writing/scripts/state_manager.py UNIVERSAL_ABBREVIATIONS; update
+# both when the whitelist changes).
+UNIVERSAL_ABBREVIATIONS = {
+    "DNA", "RNA", "PCR", "HIV", "WHO", "FDA", "NIH", "USA", "UK", "EU",
+    "AI", "ML", "API", "URL", "PDF", "HTML", "JSON", "XML", "CSV",
+    "ATP", "ADP", "GTP", "NADH", "NADPH", "CO2", "H2O", "NaCl",
+    "PH", "RNA-SEQ", "DNA-SEQ", "CHIP-SEQ", "RT-PCR", "QPCR", "ELISA",
+    "FACS", "FISH", "GFP", "RFP", "BSA", "PBS", "DMSO", "EDTA",
+    "SD", "SEM", "CI", "OD", "MW", "KDA", "BP", "KB",
+}
+
+# First-use definition pattern, both "Full Name (ABBR)" and the Chinese form
+# "中文全称（English Full Name, ABBR）". Half-width and full-width parens are both
+# accepted; the parenthetical may carry an English full name and a comma before
+# the abbreviation. ABBR is upper-led, 2-10 chars (uppercase / digit / hyphen).
+ABBR_DEF_RE = re.compile(
+    r"([A-Za-z一-鿿][\w一-鿿\-/]*"
+    r"(?:[ ,][A-Za-z一-鿿][\w一-鿿\-/]*){0,6})"
+    r"\s*[(（]\s*(?:[^)）]*?,\s*)?([A-Z][A-Z0-9\-]{1,9})\s*[)）]"
+)
+# Bare abbreviation token: upper-led, 2-10 chars, not bounded by alphanumerics
+# (so it also fires when adjacent to CJK characters, where \b would not).
+BARE_ABBR_RE = re.compile(r"(?<![A-Za-z0-9])([A-Z][A-Z0-9\-]{1,9})(?![A-Za-z0-9])")
+
+# Orphan types that should block delivery vs. soft warnings only.
+ABBR_HARD_ORPHANS = {"undefined_use", "duplicate_definition", "title_abbreviation"}
+
+# Leading function words trimmed from a heuristic full-name capture so the
+# displayed name does not bleed sentence remnants from before the term.
+_FULLNAME_STOPWORDS = {
+    "the", "a", "an", "and", "or", "of", "we", "this", "that", "these",
+    "those", "in", "on", "for", "with", "to", "by", "is", "was", "were",
+    "are", "as", "at", "from", "using", "used", "via", "here",
+}
+
+
+def trim_full_name(name: str) -> str:
+    """Heuristically tidy a captured full name: keep the last few tokens (the
+    ones adjacent to the abbreviation) and drop leading function words. CJK
+    names without spaces are returned unchanged."""
+    parts = name.split()
+    if len(parts) <= 1:
+        return name
+    parts = parts[-5:]
+    while parts and parts[0].lower() in _FULLNAME_STOPWORDS:
+        parts = parts[1:]
+    return " ".join(parts) if parts else name
 
 
 def read_manuscript_paragraphs(path: Path) -> list[dict[str, Any]]:
@@ -412,9 +461,90 @@ def build_reference_index(
     }
 
 
+def build_abbreviation_index(
+    rows: list[dict[str, Any]],
+    ref_start: int | None,
+) -> list[dict[str, Any]]:
+    """Reverse-extract an abbreviation cross-index from the manuscript body.
+
+    Heuristic, not a red-line verifier. Detects first-use definitions
+    (Full Name (ABBR) / 中文全称（English Full Name, ABBR）) and bare ABBR uses,
+    then flags orphans:
+      - undefined_use: bare ABBR used, never defined, not whitelisted
+      - duplicate_definition: defined more than once (re-expanded)
+      - title_abbreviation: a non-whitelisted ABBR appears in the title
+      - defined_unused: defined but never used again (soft warning)
+    """
+    body_end = ref_start if ref_start is not None else len(rows)
+
+    # Title = first non-empty paragraph. A finished manuscript's first paragraph
+    # is the title. (md parsing strips '#' markers, so a Heading style is not
+    # reliably present; the first paragraph is the robust anchor.)
+    title_text = normalize_ws(rows[0].get("text", "")) if rows else ""
+
+    title_abbrs: set[str] = set()
+    for m in BARE_ABBR_RE.finditer(title_text):
+        abbr = m.group(1).upper()
+        if abbr not in UNIVERSAL_ABBREVIATIONS:
+            title_abbrs.add(abbr)
+
+    defs: dict[str, list[tuple[str, str]]] = {}  # abbr -> [(label, full_name)]
+    uses: dict[str, int] = {}
+    first_use: dict[str, str] = {}
+    seq_no = 0
+    for i in range(body_end):
+        text = normalize_ws(rows[i].get("text", ""))
+        if not text:
+            continue
+        seq_no += 1
+        label = f"p{seq_no}"
+        for m in ABBR_DEF_RE.finditer(text):
+            full_name = trim_full_name(m.group(1).strip())
+            abbr = m.group(2).strip().upper()
+            defs.setdefault(abbr, []).append((label, full_name))
+        # Strip definitions before counting bare uses so the defining
+        # occurrence is not double-counted as a bare use.
+        stripped = ABBR_DEF_RE.sub(" ", text)
+        for m in BARE_ABBR_RE.finditer(stripped):
+            abbr = m.group(1).upper()
+            uses[abbr] = uses.get(abbr, 0) + 1
+            first_use.setdefault(abbr, label)
+
+    index: list[dict[str, Any]] = []
+    for abbr in sorted(set(defs) | set(uses)):
+        def_list = defs.get(abbr, [])
+        def_count = len(def_list)
+        use_count = uses.get(abbr, 0)
+        is_universal = abbr in UNIVERSAL_ABBREVIATIONS
+        if abbr in title_abbrs:
+            orphan = "title_abbreviation"
+        elif def_count >= 2:
+            orphan = "duplicate_definition"
+        elif use_count > 0 and def_count == 0 and not is_universal:
+            orphan = "undefined_use"
+        elif def_count >= 1 and use_count == 0:
+            orphan = "defined_unused"
+        else:
+            orphan = None
+        index.append(
+            {
+                "abbr": abbr,
+                "full_name": def_list[0][1] if def_list else "",
+                "defined_count": def_count,
+                "used_count": use_count,
+                "first_defined": def_list[0][0] if def_list else None,
+                "first_used": first_use.get(abbr),
+                "universal": is_universal,
+                "orphan_type": orphan,
+            }
+        )
+    return index
+
+
 def render_markdown(
     figure_index: list[dict[str, Any]],
     reference_index: dict[str, Any],
+    abbreviation_index: list[dict[str, Any]],
     manuscript_path: Path,
 ) -> str:
     lines: list[str] = []
@@ -461,11 +591,32 @@ def render_markdown(
         lines.append(f"| {entry['ref_number']} | {raw} | {cited} | {orphan} |")
     lines.append("")
 
+    lines.append("## Abbreviation Index")
+    lines.append("")
+    abbr_hard = sum(1 for a in abbreviation_index if a["orphan_type"] in ABBR_HARD_ORPHANS)
+    abbr_soft = sum(1 for a in abbreviation_index if a["orphan_type"] == "defined_unused")
+    lines.append(
+        f"Total abbreviations: {len(abbreviation_index)} | Hard issues: "
+        f"{abbr_hard} | Soft (defined_unused): {abbr_soft}"
+    )
+    lines.append("")
+    lines.append("| Abbr | Full name | Def | Use | Orphan |")
+    lines.append("|---|---|---|---|---|")
+    for ab in abbreviation_index:
+        full = (ab["full_name"] or "-")[:60].replace("|", "\\|")
+        orphan = ab["orphan_type"] or "-"
+        lines.append(
+            f"| {ab['abbr']} | {full} | {ab['defined_count']} | "
+            f"{ab['used_count']} | {orphan} |"
+        )
+    lines.append("")
+
     lines.append("## Orphan Summary")
     lines.append("")
     fig_orphans = [f for f in figure_index if f["orphan_type"]]
     ref_orphans = [e for e in reference_index["entries"] if e["orphan_type"]]
-    if not fig_orphans and not ref_orphans:
+    abbr_orphans = [a for a in abbreviation_index if a["orphan_type"]]
+    if not fig_orphans and not ref_orphans and not abbr_orphans:
         lines.append("No orphans detected.")
     else:
         if fig_orphans:
@@ -477,6 +628,11 @@ def render_markdown(
             lines.append("References:")
             for e in ref_orphans:
                 lines.append(f"- [{e['ref_number']}]: {e['orphan_type']}")
+        if abbr_orphans:
+            lines.append("")
+            lines.append("Abbreviations:")
+            for a in abbr_orphans:
+                lines.append(f"- {a['abbr']}: {a['orphan_type']}")
     lines.append("")
     return "\n".join(lines)
 
@@ -506,14 +662,18 @@ def main() -> int:
 
     figure_index = build_figure_index(rows, ref_start, units_map)
     reference_index = build_reference_index(rows, ref_start, units_map)
-    markdown = render_markdown(figure_index, reference_index, manuscript_path)
+    abbreviation_index = build_abbreviation_index(rows, ref_start)
+    markdown = render_markdown(figure_index, reference_index, abbreviation_index, manuscript_path)
 
     write_json(project_root / "figure_index.json", figure_index)
     write_json(project_root / "reference_index.json", reference_index)
+    write_json(project_root / "abbreviation_index.json", abbreviation_index)
     write_text(project_root / "manuscript_index.md", markdown)
 
     fig_orphans = sum(1 for f in figure_index if f["orphan_type"])
     ref_orphans = reference_index["summary"]["orphans"]
+    abbr_hard = sum(1 for a in abbreviation_index if a["orphan_type"] in ABBR_HARD_ORPHANS)
+    abbr_soft = sum(1 for a in abbreviation_index if a["orphan_type"] == "defined_unused")
     print(
         json.dumps(
             {
@@ -522,6 +682,9 @@ def main() -> int:
                 "references": reference_index["summary"]["total_refs"],
                 "figure_orphans": fig_orphans,
                 "reference_orphans": ref_orphans,
+                "abbreviations": len(abbreviation_index),
+                "abbreviation_hard_orphans": abbr_hard,
+                "abbreviation_soft_orphans": abbr_soft,
             },
             ensure_ascii=False,
         )
