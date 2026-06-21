@@ -763,6 +763,8 @@ def cmd_build(args):
                         f"但 paper 块里没有 figure 块——必须补图（SVG 或用户提供图片）。")
             # Bug-W-2：历史题干内嵌史料软提醒（warn，不阻断；机器无法判真伪）
             _check_embedded_history(fp, p_blocks, meta.get("subject", ""), warn)
+            # darwin 短板3：英语题文误用全角引号 “” 软提醒（JSON 合法但英文排版错误）
+            _check_english_fullwidth_quote(fp, p_blocks, meta.get("subject", ""), warn)
 
         # —— 阅读类素材真实性硬门禁 ——
         _pre_src_err = len(source_errors)
@@ -1630,6 +1632,37 @@ def _check_embedded_history(fp, p_blocks, subject, warn):
         warn.append(f"{name}：题干含内嵌史料『{snippet}』——历史题干史料不受溯源门禁覆盖，"
                     f"请人工核验：①引文是否真实存在 ②出处是否准确 ③标点字句是否忠实。"
                     f"严禁编造伪史料。")
+
+
+# 英语题文里误用的全角双引号 “”（U+201C/U+201D）——JSON 合法故解析门禁抓不到，
+# 但英文里全角引号是排版错误（视觉异常、字体回退）。SKILL 规则⑦要求英语一律半角 ASCII。
+_FULLWIDTH_DQUOTE_RE = re.compile("[“”]")
+
+
+def _check_english_fullwidth_quote(fp, p_blocks, subject, warn):
+    """英语题文误用全角双引号 “” 的软提醒（warn，不阻断）。
+    与完整性门禁互补：那个抓 JSON 非法（未转义 ASCII 双引号），此处抓 JSON 合法但
+    英语该用半角却写了全角的情形——解析通过但排版错误。仅英语科目触发。"""
+    if "英语" not in str(subject):
+        return
+    name = os.path.basename(fp)
+    for b in p_blocks:
+        if not isinstance(b, dict):
+            continue
+        # 题干/选项/材料正文：text 字段 + options 列表 + material.paras
+        texts = [str(b.get("text") or "")]
+        opts = b.get("options")
+        if isinstance(opts, list):
+            texts.extend(str(o) for o in opts)
+        paras = b.get("paras")
+        if isinstance(paras, list):
+            texts.extend(str(p) for p in paras)
+        for t in texts:
+            if _FULLWIDTH_DQUOTE_RE.search(t):
+                snippet = t[:30] + ("…" if len(t) > 30 else "")
+                warn.append(f"{name}：英语题文含全角引号 “” 『{snippet}』——英语一律用半角 ASCII "
+                            f'双引号（JSON 内写 \\" 转义），全角会致排版异常，请改半角。')
+                break  # 每题只提醒一次
 
 
 _POLITICAL_SUBJECTS = ("思想政治", "政治", "道德与法治", "道法")

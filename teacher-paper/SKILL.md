@@ -4,7 +4,7 @@ description: "教师智能出题技能 - 覆盖小学一年级到高三全科目
 user-invocable: true
 allowed-tools: [Read, Write, Edit, Bash, Agent, AskUserQuestion, WebFetch, WebSearch]
 metadata:
-  version: "3.27.0"
+  version: "3.28.0"
   author: "teacher-paper-skill"
 ---
 
@@ -402,7 +402,7 @@ python3 "<工程>/scripts/assemble.py" build "<工程>" [--pdf]
 }
 ```
 
-规则：① **每道小题一个独立文件，文件名前缀须全局唯一且递增**——如一选 7 题写 `101_q01.json / 102_q02.json / … / 107_q07.json`（不是全用 `101_` 前缀！同前缀会被去重，v3.24.0 起按"完整基名去版本号"判重，`101_q01` 与 `101_q02` 不再误判，但仍建议前缀递增唯一最清晰；只有 `101_q01` + `101_q01_v2` 这种同名带版本号才会判为同题）；前缀数字对应 manifest 大题编号区段（1xx→一大题/2xx→二大题…）；② 含选文题必须有 `material` 块且 `paras` 写全文，缺 `source`+`source_file` 则 build 拒绝；③ `material.layout="verse"` 让古诗词逐句居中；④ 含图题：用户提供图片填 `{"type":"figure","src":"materials/图.png","alt":"…"}`；AI 自动渲染填 `{"type":"figure","kind":"svg","svg":"<svg …>…</svg>","alt":"…"}` 或 `kind":"function"/"climate"` 等（**svg 内容写在顶层 `svg` 字段，切勿写成 `"spec":"<svg>"`**，否则降级占位、图丢失；详见 `物理.md` 第 2 节）；缺 src 又无可渲染内容时 build 末尾按占位比例 warn；⑤ `options` 仅选择题需要；⑥ `answer` 客观题填选项字母，主观题填采分点列表；⑦ **JSON 字符串内的中文引述一律直接写全角 `“”`**——未转义的 ASCII 双引号会让整个文件解析失败、该题被完整性门禁拦下（不要用 `\"` 转义绕行，渲染时反正会规范成全角）。**⚠️ 英语题例外**：英语题干/选项/原文里的双引号、撇号一律**保留 ASCII 半角**（如 `"text":"He said, \"Hello.\""` 用转义，或把外层引号改单引号 `'text':'He said, "Hello."'` 仅当所在 JSON 字符串本身不含单引号时）；只有中文引述才全角。完整 block 类型扩展见 `make_paper.py` 顶部文档（存在时参照）。
+规则：① **每道小题一个独立文件，文件名前缀须全局唯一且递增**——如一选 7 题写 `101_q01.json / 102_q02.json / … / 107_q07.json`（不是全用 `101_` 前缀！同前缀会被去重，v3.24.0 起按"完整基名去版本号"判重，`101_q01` 与 `101_q02` 不再误判，但仍建议前缀递增唯一最清晰；只有 `101_q01` + `101_q01_v2` 这种同名带版本号才会判为同题）；前缀数字对应 manifest 大题编号区段（1xx→一大题/2xx→二大题…）；② 含选文题必须有 `material` 块且 `paras` 写全文，缺 `source`+`source_file` 则 build 拒绝；③ `material.layout="verse"` 让古诗词逐句居中；④ 含图题：用户提供图片填 `{"type":"figure","src":"materials/图.png","alt":"…"}`；AI 自动渲染填 `{"type":"figure","kind":"svg","svg":"<svg …>…</svg>","alt":"…"}` 或 `kind":"function"/"climate"` 等（**svg 内容写在顶层 `svg` 字段，切勿写成 `"spec":"<svg>"`**，否则降级占位、图丢失；详见 `物理.md` 第 2 节）；缺 src 又无可渲染内容时 build 末尾按占位比例 warn；⑤ `options` 仅选择题需要；⑥ `answer` 客观题填选项字母，主观题填采分点列表；⑦ **JSON 字符串内的中文引述一律直接写全角 `“”`**——未转义的 ASCII 双引号会让整个文件解析失败、该题被完整性门禁拦下（不要用 `\"` 转义绕行，渲染时反正会规范成全角）。**⚠️ 英语题例外**：英语题干/选项/原文里的引号、撇号**一律保留 ASCII 半角，不准用全角 `“”`**（全角引号在英文里是排版错误，且 build 会 warn）。唯一正确写法：**双引号写 `\"` 转义**（JSON 字符串本就以双引号定界，内部双引号只能转义，没有"改用单引号"的替代——JSON 不接受单引号定界字符串），**撇号 `'` 直接写**（JSON 字符串内单引号无需转义）。引号撇号混用的正例：`"text": "He said, \"I'm fine.\""`。完整 block 类型扩展见 `make_paper.py` 顶部文档（存在时参照）。
 
 输出（缺一不可，落在 `build/`）：
 1. **学生试卷.docx**——A4，可直接打印，默认带页脚页码「第X页 共Y页」；按 `meta.sealing_line` 可加密封线与座位号；排版按 `references/formatting-rules.md`（缺失时默认规范：A4纸/页边距2.54cm，试卷名黑体二号居中，正文宋体小四10.5磅，行距1.5倍，古诗词楷体居中）

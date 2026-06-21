@@ -1176,6 +1176,41 @@ with tempfile.TemporaryDirectory() as td:
     case("U4.build输出含科目工艺提示", "命题工艺提醒" in out
          and "references/subjects/物理.md" in out)
 
+# ====== Part V: 英语题文全角引号软提醒（darwin 短板3）======
+print("\n=== V. 英语全角引号 warn ===")
+
+
+def _eng_warn(blocks, subject):
+    w = []
+    A._check_english_fullwidth_quote("99_q01.json", blocks, subject, w)
+    return w
+
+
+# V1 英语题干全角引号 → warn
+_w = _eng_warn([{"type": "question", "text": "He said, “Hello.”"}], "英语")
+case("V1 英语题干全角引号-warn", any("全角" in x for x in _w))
+# V2 英语选项里全角引号 → warn
+_w = _eng_warn([{"type": "question", "text": "Choose:",
+                 "options": ["A. “Yes”", "B. No"]}], "英语")
+case("V2 英语选项全角引号-warn", any("全角" in x for x in _w))
+# V3 英语材料 paras 全角引号 → warn
+_w = _eng_warn([{"type": "material", "paras": ["The boy said, “Run!”"]}], "英语")
+case("V3 英语材料全角引号-warn", any("全角" in x for x in _w))
+# V4 英语正确半角写法（含撇号混用）→ 静默
+_w = _eng_warn([{"type": "question", "text": "He said, \"I'm fine.\""}], "英语")
+case("V4 英语半角引号+撇号-静默", not _w)
+# V5 非英语科目（语文用全角是对的）→ 静默
+_w = _eng_warn([{"type": "question", "text": "他说：“你好。”"}], "语文")
+case("V5 语文全角引号-不误伤", not _w)
+# V6 单题多处全角只提醒一次（不刷屏）
+_w = _eng_warn([{"type": "question", "text": "“a” “b” “c”"}], "英语")
+case("V6 单题多处全角-只提醒一次", len(_w) == 1)
+# V7 SKILL 规则⑦正例 JSON 可解析（含双引号转义+撇号直写）
+import json as _json_v7
+_v7_src = '{"text": "He said, \\"I\'m fine.\\""}'
+case("V7 SKILL正例JSON可解析",
+     _json_v7.loads(_v7_src)["text"] == "He said, \"I'm fine.\"")
+
 # 总结
 print(f"\n=== 总计 {len(PASS)}/{len(PASS)+len(FAIL)} 通过 ===")
 if FAIL:
