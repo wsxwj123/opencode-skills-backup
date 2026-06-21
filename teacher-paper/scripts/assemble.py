@@ -15,6 +15,9 @@
     # 2) 合并 items/ 下所有原子文件 → build/content.json → 生成两个 Word
     python3 assemble.py build "<工程目录>"
 
+    # 3) 每完成一题存档一次（init 已自动 git init；方便逐题回滚）
+    python3 assemble.py commit "<工程目录>" "题7完成：动能定理计算题"
+
 原子文件（items/NN_*.json）格式：
     {"meta":{"num":"7","score":2,"status":"已出", ...}, "paper":[...], "answer":[...]}
   - NN 为序号前缀（建议3位），控制全卷顺序；section/sub/material 文件可无 num/score。
@@ -412,6 +415,75 @@ def cmd_init(args):
                        extra_dirs=(os.path.dirname(os.path.abspath(proj)) or ".", os.getcwd()))
     for _w in _nul_warn:
         print(f"  [清理] {_w}")
+    # v3.26.0：工程目录纳入 git 版本管理（每完成一题可 commit 存档回滚）
+    _git_init_project(proj)
+
+
+_GIT_ID = ["-c", "user.name=teacher-paper", "-c", "user.email=teacher-paper@local"]
+
+
+def _git_available():
+    try:
+        subprocess.run(["git", "--version"], capture_output=True, check=True)
+        return True
+    except (OSError, subprocess.CalledProcessError):
+        return False
+
+
+def _git_init_project(proj):
+    """v3.26.0：工程目录自动 git init + .gitignore + 首次 commit，使每完成一题可存档回滚。
+    失败模式：① 无 git → 跳过+提示；② 工程已在某 git 仓库内 → 跳过 init 避免嵌套/污染父库。"""
+    if not _git_available():
+        print("  [git] 未检测到 git，跳过版本管理（建议装 git，以便逐题存档回滚）")
+        return False
+    r = subprocess.run(["git", "-C", proj, "rev-parse", "--is-inside-work-tree"],
+                       capture_output=True, text=True)
+    if r.returncode == 0 and r.stdout.strip() == "true":
+        print("  [git] 工程已在某 git 仓库内，跳过 init（题目变更将被父仓库跟踪）")
+        return False
+    gi = os.path.join(proj, ".gitignore")
+    if not os.path.exists(gi):
+        with open(gi, "w", encoding="utf-8") as f:
+            f.write("build/\nscripts/__pycache__/\n*.pyc\n~$*\n")
+    subprocess.run(["git", "-C", proj, "init", "-q"], capture_output=True)
+    subprocess.run(["git", "-C", proj, "add", "-A"], capture_output=True)
+    c = subprocess.run(["git", "-C", proj] + _GIT_ID +
+                       ["commit", "-q", "-m", "init: 工程初始化（题源纳入版本管理）"],
+                       capture_output=True, text=True)
+    if c.returncode == 0:
+        print("  [git] 已 git init + 首次存档；每写完一题用 "
+              "`assemble.py commit <工程> \"题N完成\"` 存档，方便回滚")
+        return True
+    print(f"  [git] init 后首次 commit 失败：{c.stderr.strip()}（不影响出卷）")
+    return False
+
+
+def cmd_commit(args):
+    """每完成一题存档一次：assemble.py commit <工程目录> "<提交说明>"。
+    无变更则跳过；无 git / 非仓库则提示。"""
+    if not args:
+        print('用法：assemble.py commit <工程目录> "<提交说明>"')
+        sys.exit(1)
+    proj = args[0]
+    msg = args[1] if len(args) > 1 else "出题进度存档"
+    if not _git_available():
+        print("[git] 未检测到 git，无法存档（装 git 后 init 的工程才支持逐题回滚）")
+        return
+    r = subprocess.run(["git", "-C", proj, "rev-parse", "--is-inside-work-tree"],
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        print(f"[git] {proj} 不是 git 仓库（init 时无 git 或已在父库内），跳过存档")
+        return
+    subprocess.run(["git", "-C", proj, "add", "-A"], capture_output=True)
+    st = subprocess.run(["git", "-C", proj, "status", "--porcelain"],
+                        capture_output=True, text=True)
+    if not st.stdout.strip():
+        print("[git] 无变更，跳过 commit")
+        return
+    c = subprocess.run(["git", "-C", proj] + _GIT_ID + ["commit", "-q", "-m", msg],
+                       capture_output=True, text=True)
+    print(f"[git] 已存档：{msg}" if c.returncode == 0
+          else f"[git] commit 失败：{c.stderr.strip()}")
 
 
 def _copy_scripts(proj):
@@ -2238,11 +2310,13 @@ def _write_json(path, obj):
 
 
 def main():
-    if len(sys.argv) < 2 or sys.argv[1] not in ("init", "build"):
+    if len(sys.argv) < 2 or sys.argv[1] not in ("init", "build", "commit"):
         print(__doc__)
         sys.exit(1)
     if sys.argv[1] == "init":
         cmd_init(sys.argv[2:])
+    elif sys.argv[1] == "commit":
+        cmd_commit(sys.argv[2:])
     else:
         cmd_build(sys.argv[2:])
 

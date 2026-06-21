@@ -1062,6 +1062,47 @@ with tempfile.TemporaryDirectory() as td:
         combined = bo.getvalue() + be.getvalue()
         case("R8.终审 build缺答案-exit2", e.code == 2 and "终审门禁" in combined)
 
+# ============== Part S: v3.26.0 工程目录 git 版本管理 ==============
+print("\n=== S. v3.26.0 工程 git 版本管理 ===")
+import subprocess as _sp
+
+def _log_count(d):
+    r = _sp.run(["git","-C",str(d),"rev-list","--count","HEAD"], capture_output=True, text=True)
+    return int(r.stdout.strip()) if r.returncode == 0 else 0
+
+if A._git_available():
+    # S1 自动 init + 首次 commit
+    with tempfile.TemporaryDirectory() as td:
+        proj = pathlib.Path(td) / "proj"
+        proj.mkdir()
+        (proj / "items").mkdir()
+        ok = A._git_init_project(str(proj))
+        case("S1.git init+首次commit", ok and (proj/".git").exists() and _log_count(proj)==1)
+        # S2 .gitignore 忽略 build/
+        ign = _sp.run(["git","-C",str(proj),"check-ignore","build/"], capture_output=True)
+        case("S2.gitignore忽略build", ign.returncode==0)
+        # S3 写题后 commit +1
+        (proj/"items"/"101_q01.json").write_text("{}", encoding="utf-8")
+        with _ctx.redirect_stdout(_io.StringIO()):
+            A.cmd_commit([str(proj), "题1完成"])
+        case("S3.逐题commit存档", _log_count(proj)==2)
+        # S4 无变更跳过
+        with _ctx.redirect_stdout(_io.StringIO()):
+            A.cmd_commit([str(proj), "重复"])
+        case("S4.无变更跳过commit", _log_count(proj)==2)
+    # S5 嵌套保护：已在父 repo 内 → 跳过 init，不建子 .git
+    with tempfile.TemporaryDirectory() as td:
+        parent = pathlib.Path(td) / "parent"
+        parent.mkdir()
+        _sp.run(["git","-C",str(parent),"init","-q"], capture_output=True)
+        child = parent / "child"
+        child.mkdir()
+        with _ctx.redirect_stdout(_io.StringIO()):
+            ret = A._git_init_project(str(child))
+        case("S5.嵌套保护不建子.git", ret is False and not (child/".git").exists())
+else:
+    case("S0.git不可用-跳过测试", True, "本机无 git")
+
 # 总结
 print(f"\n=== 总计 {len(PASS)}/{len(PASS)+len(FAIL)} 通过 ===")
 if FAIL:
