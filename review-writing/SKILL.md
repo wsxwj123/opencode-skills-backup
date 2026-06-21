@@ -253,7 +253,7 @@ Run the 8-step environment detection (📖 full commands in `references/env_chec
 |-------------|-----------|---------------------|
 | 0 Python < 3.7 | **YES** | Abort; guide upgrade (python.org / `brew install python` / `winget install Python.Python.3`). |
 | 1 curl missing | **YES** | System-level issue; resolve before continuing (Windows: curl ships with PowerShell 5.1+). |
-| 2 git missing | No | Not blocking. All Git Checkpoints silently skip (`git_available: false`); recommend install for rollback. |
+| 2 git missing | No | Not blocking, but **ASK** user to install (no snapshot fallback → no rollback without git). 装好重跑；拒装则确认知悉后继续，Checkpoints 静默跳过（`git_available: false`）。 |
 | 3 Zotero/pyzotero (Zotero mode) | **YES** (Zotero mode) | `pip install pyzotero`; install Zotero desktop. None/EndNote mode → skip Step 3. |
 | 4 edirect missing (Medical/Bio) | No | Auto-fallback to paper-search MCP → write `search_fallback: paper-search-mcp`; Windows → WSL or fallback. |
 | 5 PubMed unreachable | No | Auto-scan proxy ports; if all fail → fallback to paper-search MCP, notify user. |
