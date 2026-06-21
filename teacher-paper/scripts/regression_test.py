@@ -1103,6 +1103,79 @@ if A._git_available():
 else:
     case("S0.git不可用-跳过测试", True, "本机无 git")
 
+# ============== Part T: --blueprint-file 显式给定但解析失败 → exit 2（不静默降级）==============
+print("\n=== T. blueprint-file 显式坏文件不静默降级 ===")
+import io as _io2, contextlib as _ctx2, json as _json2
+
+
+def _resolve_exit_code(opt):
+    """跑 _resolve_blueprint，返回 ('ok', source, stderr) 或 ('exit', code, stderr)。"""
+    try:
+        with _ctx2.redirect_stdout(_io2.StringIO()), _ctx2.redirect_stderr(_io2.StringIO()) as be:
+            bp = A._resolve_blueprint("九年级", "语文", "长沙", "中考模拟", opt)
+        return ("ok", bp.get("source"), be.getvalue())
+    except SystemExit as e:
+        return ("exit", e.code, be.getvalue())
+
+
+# T1 --blueprint-file 指向不存在的文件 → exit 2
+r = _resolve_exit_code({"blueprint-file": "/nonexistent/____no_such_blueprint____.json"})
+case("T1.blueprint-file 不存在-exit2", r[0] == "exit" and r[1] == 2)
+
+# T2 --blueprint-file 指向坏 JSON → exit 2（且不静默回退）
+with tempfile.TemporaryDirectory() as td:
+    bad = pathlib.Path(td) / "坏样卷结构.json"
+    bad.write_text("{ this is not valid json :: ", encoding="utf-8")
+    r = _resolve_exit_code({"blueprint-file": str(bad)})
+    case("T2.blueprint-file 坏JSON-exit2", r[0] == "exit" and r[1] == 2)
+
+# T3 --blueprint-file 顶层非 dict（合法 JSON 但结构错）→ exit 2
+with tempfile.TemporaryDirectory() as td:
+    badtype = pathlib.Path(td) / "结构是数组.json"
+    badtype.write_text("[1, 2, 3]", encoding="utf-8")
+    r = _resolve_exit_code({"blueprint-file": str(badtype)})
+    case("T3.blueprint-file 非dict-exit2", r[0] == "exit" and r[1] == 2)
+
+# T4 不给 --blueprint-file → 正常走预设/兜底，绝不 exit
+r = _resolve_exit_code({})
+case("T4.未给blueprint-file-不exit正常返回", r[0] == "ok" and bool(r[1]))
+
+# T5 --blueprint-file 合法 → 正常返回，source 标记为样卷蓝图
+with tempfile.TemporaryDirectory() as td:
+    good = pathlib.Path(td) / "好样卷.json"
+    good.write_text(_json2.dumps({
+        "total": 100, "duration": 90, "questions": 5,
+        "skeleton": [["选择题", 5]], "manifest": []}, ensure_ascii=False), encoding="utf-8")
+    r = _resolve_exit_code({"blueprint-file": str(good)})
+    case("T5.blueprint-file 合法-正常返回", r[0] == "ok" and "样卷蓝图" in (r[1] or ""))
+
+# ============== Part U: darwin 短板2 科目命题工艺提示（提示级·非门禁）==============
+print("\n=== U. 科目命题工艺提示 ===")
+
+# U1-U3：_subject_craft_doc 纯映射（含别名归并、未知科目）
+case("U1.物理→物理.md", A._subject_craft_doc("物理") == "物理.md")
+case("U2.道法→政治.md（别名归并）", A._subject_craft_doc("道德与法治") == "政治.md")
+case("U3.未知科目→None", A._subject_craft_doc("音乐") is None)
+
+# U4：build 末尾按 meta.subject 打印命题工艺提示（不阻断、正常出卷）
+with tempfile.TemporaryDirectory() as td:
+    proj = pathlib.Path(td) / "p"
+    (proj / "items").mkdir(parents=True)
+    (proj / "materials").mkdir()
+    (proj / "meta.json").write_text(_json.dumps({
+        "title": "t", "expected_questions": 1, "total": 2, "subject": "物理"}),
+        encoding="utf-8")
+    (proj / "items" / "101_q01.json").write_text(_json.dumps({
+        "meta": {"num": "1", "score": 2},
+        "paper": [{"type": "question", "num": "1", "text": "Q"}],
+        "answer": [{"num": "1", "text": "A"}]}, ensure_ascii=False), encoding="utf-8")
+    with _ctx.redirect_stdout(_io.StringIO()) as buf_o, \
+         _ctx.redirect_stderr(_io.StringIO()):
+        A.cmd_build([str(proj)])
+    out = buf_o.getvalue()
+    case("U4.build输出含科目工艺提示", "命题工艺提醒" in out
+         and "references/subjects/物理.md" in out)
+
 # 总结
 print(f"\n=== 总计 {len(PASS)}/{len(PASS)+len(FAIL)} 通过 ===")
 if FAIL:
