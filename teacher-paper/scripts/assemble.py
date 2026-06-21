@@ -181,6 +181,26 @@ _SUBJECT_ALIASES = {
     "政治": "思想政治", "道德与法治": "思想政治", "道法": "思想政治",
 }
 
+# 科目 → references/subjects/<文档>.md 命题工艺文档名（按 SKILL.md Phase 2 路由表）。
+# 政治/道法/思想政治统一指向 政治.md；其余按单科。理科.md/政史地.md 是旧兼容入口，不在此映射。
+_SUBJECT_DOC = {
+    "语文": "语文", "英语": "英语",
+    "思想政治": "政治", "政治": "政治", "道德与法治": "政治", "道法": "政治",
+    "历史": "历史", "地理": "地理",
+    "数学": "数学", "物理": "物理", "化学": "化学", "生物": "生物",
+}
+
+
+def _subject_craft_doc(subject):
+    """返回 meta.subject 对应的命题工艺文档名（不含路径，如 '物理.md'）；无对应则 None。
+    只做纯映射，不检测文件是否存在——build 在工程内副本运行，references/ 不随脚本复制，
+    存在性检测在副本环境必然失败、会误导。提示级输出，由 AI 自行据此去技能本体读文档。"""
+    s = str(subject or "")
+    for key, doc in _SUBJECT_DOC.items():
+        if key in s:
+            return doc + ".md"
+    return None
+
 
 def _load_preset(stage, subject, region):
     """查预设：按 [本名→别名] × [{stage}_{subject}_{region} → {stage}_{subject}] 顺序。
@@ -210,12 +230,24 @@ def _resolve_blueprint(stage, subject, region, etype, opt):
     """蓝图解析优先级：样卷蓝图文件 > 预设 > 内置长沙语文 > 通用兜底。"""
     bf = opt.get("blueprint-file")
     if bf:
+        # 用户显式给了 --blueprint-file = 强意图（很在意样卷结构）。
+        # 解析失败不再静默 fallback 到预设/通用骨架（那是"无声功能退化"：
+        # 用户以为按样卷出卷，实际没有），改为清晰报错并 exit 2。
         try:
             bp = _normalize_blueprint(_read_json(bf))
             bp["source"] = f"样卷蓝图 {os.path.basename(bf)}"
             return bp
-        except (json.JSONDecodeError, FileNotFoundError, OSError) as e:
-            print(f"[警告] --blueprint-file 读取失败（{e}），改用预设/兜底")
+        except (json.JSONDecodeError, FileNotFoundError, OSError,
+                ValueError, TypeError, AttributeError) as e:
+            print(
+                f"[错误] --blueprint-file 指定的样卷结构文件无法使用：{bf}\n"
+                f"        原因：{e}\n"
+                f"        请检查：(1) 路径是否存在、(2) 文件是否为合法 JSON 格式。\n"
+                f"        修好该文件后重新运行 init；如本就不想按样卷出卷，"
+                f"请去掉 --blueprint-file 参数。",
+                file=sys.stderr,
+            )
+            sys.exit(2)
     p = _load_preset(stage, subject, region)
     if p:
         return p
@@ -1027,6 +1059,16 @@ def cmd_build(args):
             print("  修对应 items/*.json 后重跑 build；如确需强制出卷，加 --allow-final-audit。",
                   file=sys.stderr)
             sys.exit(2)
+
+    # —— 科目命题工艺提示（提示级·非门禁·不阻断）——
+    # "AI 是否读过命题工艺文档"是认知行为、无法机器验证，不造橡皮图章门禁。
+    # 这里仅按 meta.subject 输出一条提醒，把"靠 SKILL.md 一句话"升级为"每次 build 都提醒"。
+    _craft_doc = _subject_craft_doc(meta.get("subject", ""))
+    if _craft_doc:
+        print(f"\n📖 [命题工艺提醒] 本卷为『{meta.get('subject')}』，"
+              f"请确认已按 references/subjects/{_craft_doc} 的命题工艺出题"
+              f"（含该科图题型/采分点/陷阱设计/选材规格等）。"
+              f"此为提示，非门禁。")
 
     content = {
         "paper_path": os.path.join(proj, "build",
