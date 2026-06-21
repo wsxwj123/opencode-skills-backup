@@ -52,6 +52,7 @@ SELF_SCRIPTS = ["read_material.py", "fetch_web.py", "ocr_image.py",
                 "regression_test.py"]
 # 可选的外部命令行工具（增强能力，有就用没有不强求）
 CLI_TOOL_GROUPS = [
+    ("git", ["git"], "工程目录版本管理：init 自动建仓、逐题 commit 存档、可回滚（强烈建议）"),
     ("pandoc", ["pandoc"], "Markdown/HTML 转 DOCX，可配 reference.docx 模板"),
     ("libreoffice", ["soffice", "libreoffice"], "Office 格式转换、DOCX/PDF 渲染校验"),
     ("tesseract", ["tesseract"], "OCR 兜底"),
