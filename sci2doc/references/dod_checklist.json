@@ -72,6 +72,12 @@
           "id": "S6",
           "name": "结构完整性",
           "check": "本节含其规定的全部结构组件，无缺段/空标题/未填骨架，符合该节在中文博论章节结构中的定位。子代理对照 outline 逐组件核对"
+        },
+        {
+          "id": "S-GIT",
+          "name": "检查点已落",
+          "check": "已落版本检查点:git 可用时 git_checkpoint.py status 的 commit 数随节/章递增;git 不可用时已生成 snapshot。二者满足其一",
+          "script": "python3 scripts/git_checkpoint.py status ."
         }
       ]
     },
@@ -159,6 +165,12 @@
           "id": "S8",
           "name": "章结构完整性",
           "check": "本章各节齐全、层级完整（引言/方法/结果/讨论或学科对应结构），无缺节、无空章节标题、章末小结齐全"
+        },
+        {
+          "id": "S-GIT",
+          "name": "检查点已落",
+          "check": "已落版本检查点:git 可用时 git_checkpoint.py status 的 commit 数随节/章递增;git 不可用时已生成 snapshot。二者满足其一",
+          "script": "python3 scripts/git_checkpoint.py status ."
         }
       ]
     }

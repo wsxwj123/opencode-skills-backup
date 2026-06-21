@@ -289,6 +289,8 @@ python3 scripts/extract_docx_images.py --manuscript /path/to/source.docx --proje
 
 ### 1) Initialize Project
 
+- **Env Precheck（软门禁，建项目文件前）**：`python3 scripts/env_preflight.py ${save_path} --cli esearch --py docx`，写 `env_status.json`，末行 `PRECHECK: OK|ASK|BLOCKED`。`BLOCKED`（Python 过低）→ 停并引导升级；`ASK`（缺 git/esearch/python-docx 等可选工具）→ **逐项问用户是否安装**并给指引，用户答"已装/不装"后才继续，后续再遇缺工具同此处理；`OK` → 继续。
+- **Git Init（叠加在 snapshot 之上）**：`python3 scripts/git_checkpoint.py init ${save_path}`。git 可用且项目根不在他人仓库内时建 git 检查点，否则静默回退 snapshot。
 - `state_manager.py init`：先二选一样式。`--format-mode default_generic` 或 `--format-mode custom`（+ `--university-name` / `--degree-type` / `--template-source` / `--missing-requirement`）。
 - `state_manager.py profile --show` 验证；`render-front-matter` 手动重渲前置页；`profile --body-target/--abstract-min/--chapter-target ...` 写入已协商好的各章字数目标（应在 Step 0.5 中已与用户确定）。
 - 自定义结构化布局字段不全 → 保持 `pending_template`（最小必填字段见 `## Style Selection Gate`）。
@@ -309,12 +311,14 @@ python3 scripts/extract_docx_images.py --manuscript /path/to/source.docx --proje
 ### 4) Subsection Summary Snapshot
 
 - `atomic_md_workflow.py section-snapshot --chapter N --section X.Y`。每节小结完成即快照。
+- **Git Checkpoint**：`python3 scripts/git_checkpoint.py commit ${save_path} "[sci2doc] section X.Y done"`（git 不可用自动 no-op，snapshot 仍兜底）。
 
 #### 🔴 每节收口自检清单（Definition of Done · 节级）
 
 **硬规则：以下各项未逐一确认通过，不得向用户声明"该节完成"。**
 
 **🔴 进入下一节前置闸口**：上一节 `delegate_review verify` 必须 exit 0（含结构完整性项 S6），否则不得开始下一节。写完即检，不过不进。
+**🔴 修复 3 次仍不过 → 回滚兜底**：同一节/章据盲检证据修复重跑 3 次仍 fail，停止盲目重写，提示用户回滚到上一检查点（git 可用 `git checkout <sha> -- <文件>`；否则 `state_manager.py rollback --target snapshot`）后重写。
 
 **🔴 委托盲检（不得主 agent 自评）**：落盘前必须把 DoD 清单**委托给独立上下文的子代理盲检**，自己不直接打勾：
 1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate section-dod --files <本节文件>`
@@ -338,6 +342,7 @@ sci2doc 特有项：
 - [ ] **S3** 三线表格式：本节所有数据表使用 Markdown 管道语法，无散文替代（脚本：`check_quality.py` 三线表类别）
 - [ ] **S4** 缩略语首展：本节新引入缩略语均已按 `中文全称（English Full Name, ABBR）` 格式首展，已过 `abbreviation_registry.py process`
 - [ ] **S5** 自我抄袭标注：本节复用已发表 SCI 内容处已标注来源文献 `[N]` 及声明（见 Non-Negotiable 第 20 条）
+- [ ] **S-GIT** 检查点已落：本节已落版本检查点——git 可用时 `git_checkpoint.py status .` commit 数随节递增；git 不可用时已生成 snapshot。二者满足其一
 
 ### 5) Merge Chapter Markdown and Convert
 
@@ -379,10 +384,12 @@ sci2doc 特有项：
 - [ ] **S5** GB/T 7714 著录格式：本章新引文已过 `reference_renderer.py validate_all`，零偏差
 - [ ] **S6** 自我抄袭标注完整：本章所有复用 SCI 来源处均有 `[N]` 引用 + 声明
 - [ ] **S7** 章后 self-check 已跑（`atomic_md_workflow.py self-check` 输出 ok=true），无 error 级问题
+- [ ] **S-GIT** 检查点已落：本章已落版本检查点——git 可用时 `git_checkpoint.py status .` commit 数随章递增；git 不可用时已生成 snapshot。二者满足其一
 
 ### 7) Finalize Chapter State
 
 - `state_manager.py write-cycle --chapter N --finalize --summary "..." --snapshot`。
+- **Git Checkpoint（章末）**：`python3 scripts/git_checkpoint.py commit ${save_path} "[sci2doc] chapter N done"`（git 不可用自动 no-op）。
 
 ### 8) Merge Full Markdown and Full Word
 

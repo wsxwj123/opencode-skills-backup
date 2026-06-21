@@ -44,7 +44,7 @@ curl --version      # ❌ → system-level issue (Windows: curl available in Pow
 git --version 2>/dev/null && echo "✅ git available" || echo "⚠️ git not found (auto-checkpoint disabled; no rollback)"
 ```
 Record `git_available: true / false` — written to `outline.md` later in Phase 0.5.
-Git not available → **not blocking** — all checkpoint operations silently skip. Recommend user install git for rollback capability.
+Git not available → **not blocking, but ASK the user**: review-writing has no snapshot fallback, so without git there is **no rollback at all**. Prompt: "git 未安装，本技能无 git 时无任何回退手段——是否现在安装？" 愿装 → 按平台指引安装（`brew install git` / `sudo apt install git` / `winget install Git.Git`）后重跑本步；不装 → 确认知悉无回退后继续，所有 checkpoint 静默跳过（`git_available: false`）。
 
 **Step 3: Zotero (Zotero mode only)**
 ```python

@@ -26,6 +26,8 @@ Default mode is **one-shot full package with atomic storage**. Two secondary mod
 ## Save Path Confirmation (Mandatory)
 Before running the pipeline, first ask the user where output files should be saved.
 
+**环境预检（软门禁，确认 project_root 后、跑 pipeline 前）：** `python3 scripts/env_preflight.py <project_root> --cli esearch --py docx`，写 `env_status.json`，末行 `PRECHECK: OK|ASK|BLOCKED`。`BLOCKED`（Python 过低）→ 停并引导升级；`ASK`（缺 esearch/python-docx 等可选工具）→ 逐项问用户是否安装并给指引，用户答"已装/不装"后才继续；`OK` → 继续。回退靠 `state_manager.py snapshot`（不建 git 检查点）。
+
 Default behavior if user does not specify a custom location:
 1. Use the current project directory.
 2. Create a dedicated subfolder for this run (for example: `projects/<task_name_or_date>/`).

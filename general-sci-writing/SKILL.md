@@ -176,7 +176,8 @@ license: Proprietary
    - `literature_matrix.json` ← `literature_matrix_template`（空对象 `{}`）
    - `abbreviations.json` ← `abbreviations_template`（空数组 `[]`）
    - 运行 `python scripts/state_manager.py set-field --field [field_id]` 生成 `project_config.json` 和 `reviewer_concerns.json`
-5. **Verify**: 尝试运行 `python scripts/state_manager.py load` 验证环境。
+5. **Env Precheck（软门禁）**: `python scripts/env_preflight.py [Project_Root] --cli esearch`，写 `env_status.json`，末行打印 `PRECHECK: OK|ASK|BLOCKED`。`BLOCKED`（Python 过低）→ 停并引导升级，不得继续；`ASK`（缺 git/esearch 等可选工具）→ **逐项问用户是否安装**并给安装指引，用户答"已装/不装"后才继续，后续再遇工具缺失同此处理；`OK` → 继续。随后 `python scripts/state_manager.py load` 验证脚本环境。
+6. **Git Init**（叠加在 snapshot 之上，非替换）：运行 `python scripts/git_checkpoint.py init [Project_Root]`。git 可用且项目根不在他人仓库内时建立 git 检查点；否则静默回退 snapshot。
 
 **`/upgrade-scripts` 升级脚本**：触发场景、备份/拷贝/验证流程见 `references/interaction-protocol.md`（`/upgrade-scripts` 节）。
 
@@ -362,6 +363,7 @@ python scripts/state_manager.py add-abbreviation <one.json>
    - **降级路径**(当前环境无法派子代理时):主 agent 切换审稿人视角、清空对本节的写作记忆，逐项独立重核，绝不因刚写完就默认通过；仍跑 `verify` 把关。
 
    🔴 **进入下一节前置闸口**：上一节 `delegate_review verify` 必须 exit 0（含 G13 结构完整性），否则不得开始下一节撰写。写完即检，不过不进。
+   🔴 **修复 3 次仍不过 → 回滚兜底**：同一节据盲检证据修复重跑 3 次仍 fail，停止盲目重写，提示用户回滚到上一检查点（git 可用：`git checkout <sha> -- <文件>`；否则 `/rollback` 到上一 snapshot）后重写。
 
    下列清单与 `references/dod_checklist.json` 逐项对应(改清单先改 JSON),供人工对照;能脚本核的项子代理会先跑脚本:
 
@@ -382,7 +384,8 @@ python scripts/state_manager.py add-abbreviation <one.json>
    - [ ] **⑫只改原子化源**：本次写入的目标文件为 `manuscripts/` 下的原子化源文件，非 `Full_Manuscript.md` / `.docx`（见 §3）
    - [ ] **⑬结构完整性**：本节包含其文体/storyline 规定的全部结构组件，无缺段/空标题/未填骨架；且符合该节类型规定结构（Introduction 漏斗式；Discussion 主要发现→文献对比+机制→Limitations→Outlook 四段；Methods 必备子节）。子代理对照 `storyline.json` 对应 section 的结构要求逐组件核对
    - [ ] **⑭figure_analysis 加载**：本节涉及的 figure 在 `figures_database.json` 中均有对应 `figure_analysis/figure_{N}.md` 文件、非空、无 `❓待确认` 残留（脚本：`python scripts/figure_analysis_gate.py --section [section_id] --root .` 必须 exit 0）
-10. **Safety Write**: 用户 OK 后写入文件 → 智能快照。回退手段：若落盘后用户反悔，`/rollback` 到上一个 snapshot 或直接 Edit 改原子化文件（参见 §3 润色 workflow）。
+   - [ ] **⑮检查点已落**：本节已落版本检查点——`python scripts/git_checkpoint.py status .` 显示 commit 数随节递增（git 可用时），或 git 不可用时已生成 snapshot（`version_history.json` 有新快照）。二者满足其一即可
+10. **Safety Write**: 用户 OK 后写入文件 → 智能快照 → **Git Checkpoint**：`python scripts/git_checkpoint.py commit [Project_Root] "[gsw] section <section_id> done"`（git 不可用时自动 no-op，snapshot 仍是回退兜底）。回退手段：若落盘后用户反悔，`/rollback` 到上一个 snapshot、`git checkout <sha> -- <file>` 回退单节，或直接 Edit 改原子化文件（参见 §3 润色 workflow）。
 
 **Discussion 段落结构 / Online Methods vs STAR Methods**：写 Discussion 或 Methods 章节前 `Read references/writing-templates.md` 对应小节。要点：Discussion 走"主要发现总结→文献对比+机制→**Limitations（强制，缺即退稿高频）**→Outlook"四段式；Methods 按 target_journal 选 Online Methods（Nature 精简版+完整版后置）或 STAR Methods（Cell 五段结构）。
 

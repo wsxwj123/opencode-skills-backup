@@ -15,6 +15,8 @@ The manuscript atomizer recognizes numbered section headings such as `1`, `1.1`,
 ## Mandatory Intake Before Any Full Pipeline Run
 When the user provides a `comments_path`, a `manuscript_docx_path`, or both, do **not** jump straight into `run_pipeline.py`.
 
+First, env precheck (soft gate, before any pipeline run): `python scripts/env_preflight.py <project_root> --cli esearch --py docx` — writes `env_status.json`, last line prints `PRECHECK: OK|ASK|BLOCKED`. BLOCKED (Python too old) → stop and guide upgrade; ASK (missing optional tools like esearch/python-docx) → ask the user per tool whether to install, give guidance, continue only after the user answers installed/skip; OK → continue. Rollback uses `state_manager.py snapshot` + Patch-hash (no git checkpoints).
+
 Always run:
 
 ```bash
