@@ -50,6 +50,20 @@ def validate_local(used_ids, index_entries):
     return orphans, unused
 
 
+def detect_duplicate_global_ids(index_entries):
+    """Find global_id values shared by more than one index entry.
+
+    Duplicate global_ids mean two distinct papers collapse onto the same
+    citation number [n] -- data corruption that is always fatal. Returns a
+    dict {gid: [entry, ...]} for gids appearing more than once.
+    """
+    groups = {}
+    for item in index_entries:
+        gid = str(item["global_id"])
+        groups.setdefault(gid, []).append(item)
+    return {gid: items for gid, items in groups.items() if len(items) > 1}
+
+
 def validate_traceability(index_entries):
     failures = []
     for item in index_entries:
@@ -217,12 +231,30 @@ def main():
         sys.exit(1)
 
     orphans, unused = validate_local(used_ids, entries)
+    duplicate_gids = detect_duplicate_global_ids(entries)
+    unique_gid_count = len({str(item["global_id"]) for item in entries})
 
     print("-" * 40)
     print("VALIDATION REPORT")
     print("-" * 40)
     print(f"Draft citations: {len(used_ids)}")
     print(f"Index entries (with valid global_id): {len(entries)}")
+    print(f"Unique global_ids: {unique_gid_count}")
+
+    if duplicate_gids:
+        print("-" * 40)
+        print("DUPLICATE global_id CHECK")
+        print("-" * 40)
+        for gid in sorted(duplicate_gids, key=int):
+            items = duplicate_gids[gid]
+            print(f"[DUP-FAIL] global_id={gid} 被 {len(items)} 条 index 条目共用")
+            for item in items:
+                pmid = str(item.get("pmid") or "").strip() or "-"
+                doi = str(item.get("doi") or "").strip() or "-"
+                title = str(item.get("title") or "").strip() or "-"
+                print(f"           PMID={pmid} DOI={doi} title={title}")
+    else:
+        print("[OK] No duplicate global_ids")
 
     if orphans:
         print(f"[CRITICAL] Orphan citations: {', '.join(sorted(orphans, key=int))}")
@@ -265,8 +297,11 @@ def main():
         for gid, code, reason in live["failures"]:
             print(f"[LIVE-FAIL] global_id={gid} code={code} reason={reason}")
 
+    # Duplicate global_ids are unconditional data corruption: always fatal,
+    # independent of any --fail-on-* switch.
     should_fail = (
-        (args.fail_on_orphan and bool(orphans))
+        bool(duplicate_gids)
+        or (args.fail_on_orphan and bool(orphans))
         or (args.fail_on_live and live_failures > 0)
         or (args.fail_on_trace and bool(trace_failures))
     )

@@ -10,15 +10,16 @@ import re
 #   **Word Count Target:** 600 words
 #   - Word Count Target: ~600
 _WC_PATTERN = re.compile(
-    r"word\s+count\s+target\s*[:：]\s*[*_]*\s*[~≈]?\s*(\d[\d,]*)\s*(words?|chars?|characters?|词|字)?",
+    r"word\s+count\s+target\s*[:：]\s*[*_]*\s*[~≈]?\s*(\d[\d,]*)(?:\s*[-–~至到]\s*(\d[\d,]*))?\s*(words?|chars?|characters?|词|字)?",
     re.IGNORECASE,
 )
 
 def _read_outline_target(cwd, language):
     """Read Word Count Target from outline.md if present.
 
-    Returns (min, max) tuple or None if not found.
-    The target is treated as both min and max within ±20%:
+    Returns (min, max, center, unit) tuple or None if not found.
+    If an explicit range is given (e.g. 5000-8000), min/max follow the range
+    bounds verbatim. For a single value, fall back to ±20%:
       min = target * 0.8,  max = target * 1.2
     """
     for name in ("outline.md", "storyline.md"):
@@ -33,19 +34,50 @@ def _read_outline_target(cwd, language):
         if m:
             raw = m.group(1).replace(",", "")
             try:
-                target = int(raw)
+                low = int(raw)
             except ValueError:
                 continue
+            # Optional upper bound when an explicit range is provided.
+            high = None
+            if m.group(2):
+                try:
+                    high = int(m.group(2).replace(",", ""))
+                except ValueError:
+                    high = None
+            if high is not None and high >= low:
+                goal_min, goal_max, center = low, high, high
+            else:
+                goal_min, goal_max, center = int(low * 0.8), int(low * 1.2), low
             # Determine unit from suffix token or language default
-            suffix = (m.group(2) or "").lower()
+            suffix = (m.group(3) or "").lower()
             is_cn_unit = suffix in ("chars", "char", "characters", "character", "词", "字")
             is_en_unit = suffix in ("words", "word")
             if is_cn_unit or (not is_en_unit and language == "cn"):
-                # Chinese character target
-                return int(target * 0.8), int(target * 1.2), target, "chars"
+                return goal_min, goal_max, center, "chars"
             else:
-                return int(target * 0.8), int(target * 1.2), target, "words"
+                return goal_min, goal_max, center, "words"
     return None
+
+_VERSION_SUFFIX = re.compile(r"_v\d+$", re.IGNORECASE)
+
+def _warn_multi_version_drafts(md_files):
+    """Detect multiple version files sharing the same section base name
+    (e.g. section_01.md / section_01_v2.md / section_01_v3.md) and print a
+    WARNING. Files are still counted as-is; nothing is excluded here.
+    """
+    groups = {}
+    for md_file in md_files:
+        base = _VERSION_SUFFIX.sub("", md_file.stem)
+        key = (str(md_file.parent), base)
+        groups.setdefault(key, []).append(md_file)
+    for (_parent, base), files in sorted(groups.items()):
+        if len(files) > 1:
+            names = ", ".join(sorted(f.name for f in files))
+            print(
+                f"WARNING: multiple version files share section base '{base}': "
+                f"{names} — all are counted, total may be inflated.",
+                file=sys.stderr,
+            )
 
 def clean_markdown(text):
     """
@@ -97,8 +129,11 @@ def main():
     current_count = 0
     current_name = "N/A"
 
+    md_files = sorted(drafts_dir.glob("**/*.md"))
+    _warn_multi_version_drafts(md_files)
+
     # Count all files in drafts
-    for md_file in drafts_dir.glob("**/*.md"):
+    for md_file in md_files:
         try:
             content = md_file.read_text(encoding='utf-8')
         except Exception as e:
@@ -118,7 +153,10 @@ def main():
     outline_target = _read_outline_target(cwd, args.language)
     if outline_target is not None:
         GOAL_MIN, GOAL_MAX, target_center, unit = outline_target
-        goal_label = f"{target_center:,} (outline target ±20%)"
+        if GOAL_MAX == target_center and GOAL_MIN != int(target_center * 0.8):
+            goal_label = f"{GOAL_MIN:,}-{GOAL_MAX:,} (outline target range)"
+        else:
+            goal_label = f"{target_center:,} (outline target ±20%)"
     elif args.language == "cn":
         GOAL_MIN = 15000
         GOAL_MAX = 20000
