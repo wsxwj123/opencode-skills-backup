@@ -101,6 +101,9 @@ Apply these resolutions when references conflict:
 ### Write Mode
 Follow phased gates in order:
 1. Phase 0: initialize project profile, section targets, mapping cardinality.
+   - **Env Precheck（软门禁，建项目文件前）**：`python3 scripts/env_preflight.py . --cli esearch`，写 `env_status.json`，末行 `PRECHECK: OK|ASK|BLOCKED`。`BLOCKED`（Python 过低）→ 停并引导升级；`ASK`（缺 git/esearch 等可选工具）→ **逐项问用户是否安装**并给指引，用户答"已装/不装"后才继续，后续再遇缺工具同此处理；`OK` → 继续。
+   - **Git Init（叠加在 snapshot 之上）**：`python3 scripts/git_checkpoint.py init .`。git 可用且项目根不在他人仓库内时建 git 检查点，否则静默回退 snapshot。
+   - **🔴 Git Checkpoint 约定（复用）**：此后每个 Phase 的 `delegate_review verify` 通过、落盘 `.review_pass/PX.json` 后，立即运行 `python3 scripts/git_checkpoint.py commit . "[nsfc] PX done"`（git 不可用自动 no-op，snapshot 仍兜底）。各 Phase DoD 的 **N-GIT** 项据此核查检查点是否已落。
    - 🔴 **必须选定「科学问题属性」四选一**（四类官方措辞见 Inputs Required 节），写入 profile `science_problem_attribute`。注意与「研究属性（自由探索类/目标导向类）」区分，二者是独立字段。未选定将在 Phase 7 `gate-check` 触发 `failed_at=profile` 阻断。
 
 2. **Phase 0.5: 实验设计与技术路线结构化问询**（H/O/RC/KSQ mapping count 确定后、P1 撰写前的强制问询环节）
@@ -148,6 +151,7 @@ Follow phased gates in order:
    **Phase 1 DoD（收口自检）：未逐项确认通过，不得向用户声明 P1 完成**
 
    **🔴 进入下一部分前置闸口（适用所有 Phase）：本部分 delegate_review verify 必须 exit 0（含结构完整性），否则不得进入下一部分撰写。写完即检，不过不进。**
+   **🔴 修复 3 次仍不过 → 回滚兜底**：某部分据盲检证据修复重跑 3 次仍 fail，停止盲目重写，提示用户回滚到上一检查点（git 可用 `git checkout <sha> -- <文件>`；否则 `state_manager.py rollback`）后重写。
 
    **🔴 委托盲检（不得主 agent 自评）**：P1 自评易漏项、易默认通过。落盘前必须把 DoD 清单**委托给独立上下文的子代理盲检**，自己不直接打勾：
    1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate p1-dod --files sections/P1_立项依据.md`

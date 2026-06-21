@@ -28,7 +28,7 @@ not_for(以下情况不要用本技能):
    - deep,在 standard 基础上做段内句序与衔接优化,但仍不改任何论点与数据。
 4. **是否要 docx 导出**,默认只出 md。
 
-确认这四项 + 目标 project_root 后再进 Pipeline。
+确认这四项 + 目标 project_root 后,先跑**环境预检（软门禁）**:`python scripts/env_preflight.py <project_root> --py docx`,写 `env_status.json`,末行 `PRECHECK: OK|ASK|BLOCKED`。`BLOCKED`(Python 过低)→停并引导升级;`ASK`(缺 git/python-docx 等可选工具)→逐项问用户是否安装并给指引,用户答"已装/不装"后才继续;`OK`→继续。再进 Pipeline。
 
 ## Red Lines(一字不改)
 以下内容润色时绝对不动,脚本会做集合比对拦截:
