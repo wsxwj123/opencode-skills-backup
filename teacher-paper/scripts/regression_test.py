@@ -979,6 +979,89 @@ with tempfile.TemporaryDirectory() as td:
     case("Q6.R3 手抄凭证非URL-合规不拒",
          not errs and any("手抄凭证" in w for w in wn))
 
+# ============== Part R: v3.25.0 终审门禁（合并排版后整卷对账）==============
+print("\n=== R. v3.25.0 终审门禁 ===")
+
+# R1 门禁：试卷有题但答案缺失
+md, hard, soft = A._final_audit(
+    [{"type":"question","num":"1","text":"Q1"},
+     {"type":"question","num":"2","text":"Q2"}],
+    [{"type":"answer","num":"1","text":"A"}])  # 缺第2题答案
+case("R1.终审 答案缺失-门禁", any("答案缺失" in e and "2" in e for e in hard))
+
+# R2 门禁：客观题答案超出选项范围
+md, hard, soft = A._final_audit(
+    [{"type":"question","num":"1","text":"Q"},
+     {"type":"options","items":["A. 甲","B. 乙","C. 丙"]}],  # 只有 A/B/C
+    [{"type":"answer","num":"1","text":"D"}])  # 答案 D 越界
+case("R2.终审 答案越界-门禁", any("超出选项范围" in e for e in hard))
+
+# R2b：答案在范围内不报（多选 AC ⊆ ABCD）
+md, hard, soft = A._final_audit(
+    [{"type":"question","num":"1","text":"Q"},
+     {"type":"options","items":["A. 甲","B. 乙","C. 丙","D. 丁"]}],
+    [{"type":"answer","num":"1","text":"AC"}])
+case("R2b.终审 多选AC在范围-不报", not any("超出选项范围" in e for e in hard))
+
+# R3 warn：题号断号
+md, hard, soft = A._final_audit(
+    [{"type":"question","num":"1"},{"type":"question","num":"2"},
+     {"type":"question","num":"4"}],
+    [{"type":"answer","num":"1"},{"type":"answer","num":"2"},
+     {"type":"answer","num":"4"}])
+case("R3.终审 题号断号-warn", any("断号" in w and "3" in w for w in soft))
+
+# R4 warn：孤立 sub 无父 section
+md, hard, soft = A._final_audit(
+    [{"type":"sub","text":"（一）小节"},{"type":"question","num":"1"}],
+    [{"type":"answer","num":"1","text":"A"}])
+case("R4.终审 孤立sub-warn", any("缺上级大题" in w for w in soft))
+
+# R5 warn：空大题
+md, hard, soft = A._final_audit(
+    [{"type":"section","text":"一、选择题"},
+     {"type":"section","text":"二、填空题"},{"type":"question","num":"1"}],
+    [{"type":"answer","num":"1","text":"A"}])
+case("R5.终审 空大题-warn", any("空大题" in w for w in soft))
+
+# R6 warn：大题编号不连续
+md, hard, soft = A._final_audit(
+    [{"type":"section","text":"一、选择"},{"type":"question","num":"1"},
+     {"type":"section","text":"三、计算"},{"type":"question","num":"2"}],  # 跳过"二"
+    [{"type":"answer","num":"1","text":"A"},{"type":"answer","num":"2","text":"B"}])
+case("R6.终审 大题编号跳号-warn", any("大题编号不连续" in w for w in soft))
+
+# R7：完整正常卷无门禁问题
+md, hard, soft = A._final_audit(
+    [{"type":"section","text":"一、选择题"},
+     {"type":"question","num":"1"},{"type":"options","items":["A.甲","B.乙","C.丙","D.丁"]}],
+    [{"type":"answer","num":"1","text":"B"},
+     {"type":"analysis","text":"因为乙正确，甲混淆了概念所以错误。"}])
+case("R7.终审 正常卷-无门禁", not hard)
+
+# R8 端到端：build 触发终审 exit 2（答案缺失）
+with tempfile.TemporaryDirectory() as td:
+    proj = pathlib.Path(td) / "p"
+    (proj / "items").mkdir(parents=True)
+    (proj / "materials").mkdir()
+    (proj / "meta.json").write_text(_json.dumps({
+        "title":"t","expected_questions":2,"total":4}), encoding="utf-8")
+    (proj / "items" / "101_q01.json").write_text(_json.dumps({
+        "meta":{"num":"1","score":2},
+        "paper":[{"type":"question","num":"1","text":"Q1"}],
+        "answer":[{"type":"answer","num":"1","text":"A"}]}, ensure_ascii=False), encoding="utf-8")
+    (proj / "items" / "102_q02.json").write_text(_json.dumps({
+        "meta":{"num":"2","score":2},
+        "paper":[{"type":"question","num":"2","text":"Q2"}],
+        "answer":[]}, ensure_ascii=False), encoding="utf-8")  # 第2题无答案
+    try:
+        with _ctx.redirect_stdout(_io.StringIO()) as bo, _ctx.redirect_stderr(_io.StringIO()) as be:
+            A.cmd_build([str(proj)])
+        case("R8.终审 build缺答案-exit2", False, "未退出")
+    except SystemExit as e:
+        combined = bo.getvalue() + be.getvalue()
+        case("R8.终审 build缺答案-exit2", e.code == 2 and "终审门禁" in combined)
+
 # 总结
 print(f"\n=== 总计 {len(PASS)}/{len(PASS)+len(FAIL)} 通过 ===")
 if FAIL:
