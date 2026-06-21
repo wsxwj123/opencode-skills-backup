@@ -55,7 +55,10 @@ FORBIDDEN_EXACT = {
 FORBIDDEN_PATTERNS = [
     re.compile(r"not only\b.*?\bbut also\b", re.IGNORECASE),
     re.compile(r"seamless[,\s]+intuitive[,\s]+and\s+powerful", re.IGNORECASE),
-    re.compile(r"from\s+\w+\s+to\s+\w+", re.IGNORECASE),  # "from X to Y" pattern
+    # NOTE: removed `from\s+\w+\s+to\s+\w+` ("from X to Y"). In scientific reviews
+    # this construction is high-frequency and legitimate ("from gut to joint",
+    # "from adipogenic to osteogenic differentiation"); the false-positive rate
+    # made the signal-to-noise ratio too poor to keep as an AI-rhetoric flag.
 ]
 
 # ── Anti-AI: em-dash, scare quotes, explanatory colon ────────────────────────
@@ -96,8 +99,17 @@ PASSIVE_RE = re.compile(
 SENTENCE_RE = re.compile(r"(?<=[.!?])\s+(?=[A-Z\[])")
 
 # ── Reference/figure/heading filters ─────────────────────────────────────────
-REF_LINE_RE = re.compile(r"^\d+\.\s+\w+.*?\d{4}", re.MULTILINE)
+# Reference list lines. Matches both the Vancouver numbered format
+# ("1. Author A, ... 2020") and the bullet format used in review drafts
+# ("- [168] Author A, ... 2020" / "* [12] ...").
+REF_LINE_RE = re.compile(
+    r"^(?:\d+\.\s+\w+.*?\d{4}"          # 1. Author...2020
+    r"|[-*]\s+\[\d+\].*?\d{4})",        # - [168] Author...2020
+    re.MULTILINE,
+)
 HEADING_RE = re.compile(r"^#+\s+", re.MULTILINE)
+# Heading text (after stripping leading #/space) that marks a reference section.
+REF_HEADING_RE = re.compile(r"^(?:References|参考文献|Bibliography)", re.IGNORECASE)
 FIGURE_LEGEND_RE = re.compile(r"^(?:Figure|Fig\.?|Table)\s+\d", re.IGNORECASE | re.MULTILINE)
 CODE_BLOCK_RE = re.compile(r"```.*?```", re.DOTALL)
 CITATION_RE = re.compile(r"\[\d+(?:[,\-\s]*\d+)*\]")
@@ -112,11 +124,21 @@ def _extract_prose(text: str) -> str:
     for line in lines:
         stripped = line.strip()
         if not stripped:
-            in_ref_block = False
+            # Keep in_ref_block as-is: a reference section commonly has blank
+            # lines between entries. The block is closed only by a non-ref
+            # heading (see HEADING branch), not by an empty line.
             prose_lines.append("")
             continue
         if HEADING_RE.match(stripped):
-            in_ref_block = False
+            # A "## References"/"参考文献"/"Bibliography" heading opens the ref
+            # block; any other heading closes it. Without this, the heading
+            # branch swallowed "## References" first and the dedicated
+            # `^(References|参考文献)` check below never fired.
+            heading_text = HEADING_RE.sub("", stripped, count=1).strip()
+            if REF_HEADING_RE.match(heading_text):
+                in_ref_block = True
+            else:
+                in_ref_block = False
             continue
         if stripped.startswith("---"):
             continue
