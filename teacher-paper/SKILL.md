@@ -4,7 +4,7 @@ description: "教师智能出题技能 - 覆盖小学一年级到高三全科目
 user-invocable: true
 allowed-tools: [Read, Write, Edit, Bash, Agent, AskUserQuestion, WebFetch, WebSearch]
 metadata:
-  version: "3.26.0"
+  version: "3.27.0"
   author: "teacher-paper-skill"
 ---
 
@@ -347,15 +347,21 @@ python3 <SKILL_DIR>/scripts/assemble.py init "<试卷名>_工程" --stage 九年
 #     mac/Linux 也可用 --decisions-file <json文件> 传入。
 
 # 2) 抓素材入 materials/，逐题写 items/NN_qXX.json（paper+answer+解析+命题意图）
-#    🔴 每写完一题，立即存档一次（init 已自动 git init；有 git 才生效，无 git 自动跳过）：
+#    🔴 每写完一题立即存档（init 已自动 git init；无 git 自动跳过）：
 python3 "<工程>/scripts/assemble.py" commit "<工程>" "题7完成：动能定理计算题"
-#    出错/写坏可回滚：git -C "<工程>" reset --hard HEAD~1（回退一题），或 git -C "<工程>" checkout -- items/坏文件.json
 
 # 3) 合并校验并出卷 —— init 后改用【工程内脚本副本】，不再碰技能本体脚本！
 #    自动校验题量/分值、选文完整性、溯源凭证、缺图、各板块选文字数；生成两个 Word 到 build/（默认带页码）
 #    需同时出 PDF 加 --pdf（需本机 LibreOffice，否则提示手动导出）
 python3 "<工程>/scripts/assemble.py" build "<工程>" [--pdf]
 ```
+
+**自检/盲检发现问题 → 处理与回滚（适用 Phase 3.5/3.8/3.9，精确区分勿混）**：
+- **标准动作＝定点修复**：只改对应 `items/NN_qXX.json` → `commit` → 重 build。**自检失败不回滚**——回滚会丢掉同批其他正确的题。
+- **单题回滚**（仅当某题越改越坏/改出 JSON 错误，不影响其他题）：
+  - 改动未存档：`git -C "<工程>" checkout -- items/NN_qXX.json`（弃未 commit 改动）
+  - 已存档退上一版：`git -C "<工程>" checkout HEAD~1 -- items/NN_qXX.json`（只回退该题）
+- 🔴 **禁用 `git reset --hard`**（波及整仓、丢未存档工作，属危险操作）。
 
 > **务必把 build 的所有 `[校验告警]`/`[PDF]`/`[后端]`/figure 降级等输出如实转告用户**——
 > 例如小说字数偏短、题量分值不符、抓取替代源、配图降级为占位、用了 `--allow-unsourced` 等，
