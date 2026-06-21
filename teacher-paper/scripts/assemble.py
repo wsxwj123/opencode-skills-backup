@@ -936,6 +936,26 @@ def cmd_build(args):
     paper = _dedup_consecutive_sections(paper)
     answers = _dedup_consecutive_sections(answers)
 
+    # —— v3.25.0 终审门禁：合并排版定型后对整卷做结构对账 ——
+    _final_md, _final_hard, _final_soft = _final_audit(paper, answers)
+    warn.extend(_final_soft)
+    _tpath = os.path.join(proj, "build", "终审表.md")
+    os.makedirs(os.path.dirname(_tpath), exist_ok=True)
+    with open(_tpath, "w", encoding="utf-8") as f:
+        f.write(_final_md)
+    print("\n[终审表] 已写入 build/终审表.md")
+    if _final_hard:
+        if "--allow-final-audit" in args:
+            warn.extend(e + "（--allow-final-audit 已降级为告警）" for e in _final_hard)
+        else:
+            print("\n🔴 [终审门禁] 合并排版后发现整卷结构硬伤：", file=sys.stderr)
+            for e in _final_hard:
+                print("   - " + e, file=sys.stderr)
+            print("\n  这些问题原子层看不出，合并后才暴露（残卷/答案越界）。", file=sys.stderr)
+            print("  修对应 items/*.json 后重跑 build；如确需强制出卷，加 --allow-final-audit。",
+                  file=sys.stderr)
+            sys.exit(2)
+
     content = {
         "paper_path": os.path.join(proj, "build",
                                    meta.get("title", "试卷") + ".docx"),
@@ -960,7 +980,7 @@ def cmd_build(args):
     _allow_used = [a for a in (
         "--allow-unsourced", "--allow-missing-figure", "--allow-length",
         "--allow-incomplete", "--allow-wording", "--allow-excerpt",
-        "--allow-stale") if a in args]
+        "--allow-stale", "--allow-final-audit") if a in args]
     if _allow_used:
         _msg = f"本次启用了 {len(_allow_used)} 个降级开关：{', '.join(_allow_used)}"
         if len(_allow_used) >= 2:
@@ -1792,6 +1812,146 @@ def _gen_self_audit(quality_rows):
              "## ✅ 自审通过（无明显异常）\n\n")
           + "## 逐题明细\n" + "\n".join(rows) + "\n")
     return md, issues
+
+
+_CN_NUM = {"一": 1, "二": 2, "三": 3, "四": 4, "五": 5,
+           "六": 6, "七": 7, "八": 8, "九": 9, "十": 10}
+
+
+def _final_audit(paper, answers):
+    """v3.25.0 终审门禁：原子合并、排版定型后对整卷做结构对账。
+    与 Phase 3.5（原子层命题质量）不同，这里查"合并后才暴露"的跨块结构问题：
+    试卷↔答案题号对账、客观题答案越界、标题层级断层、解析缺失。
+    返回 (markdown, hard_errors, soft_warns)。hard 非空默认 exit 2（--allow-final-audit 降级）。"""
+    hard, soft = [], []
+    q_blocks = [b for b in paper if isinstance(b, dict) and b.get("type") == "question"]
+    a_blocks = [b for b in answers if isinstance(b, dict) and b.get("type") == "answer"]
+    q_nums = [str(b.get("num")) for b in q_blocks if b.get("num") is not None]
+    a_nums = [str(b.get("num")) for b in a_blocks if b.get("num") is not None]
+    qset, aset = set(q_nums), set(a_nums)
+
+    # —— 门禁1：试卷有题但答案缺失（残卷）——
+    # ponytail: 全卷一个答案都没有＝分批预览/中间态，降为 soft；部分缺＝真残卷漏题，hard。
+    missing = [n for n in q_nums if n not in aset]
+    if missing:
+        if not aset:
+            soft.append(f"全卷 {len(missing)} 题均无参考答案——若非分批预览/纯结构核对，请补答案块。")
+        else:
+            hard.append(f"试卷有题但参考答案缺失：题 {', '.join(missing)}——"
+                        f"部分题有答案、这些题漏了（真残卷）。")
+    extra = [n for n in a_nums if n not in qset]
+    if extra:
+        soft.append(f"参考答案有多余题号（试卷无此题）：{', '.join(extra)}——疑似题号写错。")
+
+    # —— 门禁2：客观题答案超出选项范围 ——
+    # 建 num→选项字母集（仅有 options 的题＝客观题）
+    opts_by_num, cur = {}, None
+    for b in paper:
+        if not isinstance(b, dict):
+            continue
+        if b.get("type") == "question":
+            cur = str(b.get("num"))
+        elif b.get("type") == "options" and cur is not None:
+            letters = set()
+            for it in b.get("items", []):
+                mo = re.match(r"[\s　]*([A-DＡ-Ｄ])", str(it))
+                if mo:
+                    letters.add(mo.group(1).translate(_FULLWIDTH_AZ))
+            if letters:
+                opts_by_num[cur] = letters
+    for b in a_blocks:
+        n = str(b.get("num"))
+        if n not in opts_by_num:
+            continue
+        am = re.match(r"[\s　]*([A-DＡ-Ｄ]+)", str(b.get("text", "")))
+        if not am:
+            continue
+        ans_letters = set(am.group(1).translate(_FULLWIDTH_AZ))
+        valid = opts_by_num[n]
+        if ans_letters and not ans_letters <= valid:
+            hard.append(f"题{n} 答案『{''.join(sorted(ans_letters))}』超出选项范围"
+                        f"『{''.join(sorted(valid))}』——选项缺失或答案标错。")
+
+    # —— warn：题号断号（1,2,4 跳 3）——
+    norm = sorted({int(re.sub(r"\D", "", n)) for n in q_nums if re.sub(r"\D", "", n)})
+    if norm:
+        gap = [i for i in range(norm[0], norm[-1] + 1) if i not in norm]
+        if gap:
+            soft.append(f"试卷题号断号：缺 {', '.join(map(str, gap))}（题号应连续不跳号）。")
+
+    # —— warn：标题层级——孤立 sub 无父 section / 空 section ——
+    seen_section = False
+    sec_open_idx = None  # 当前 section 起始后是否已遇到题/材料
+    sec_has_content = False
+    for b in paper:
+        if not isinstance(b, dict):
+            continue
+        t = b.get("type")
+        if t == "section":
+            if sec_open_idx is not None and not sec_has_content:
+                soft.append(f"空大题『{sec_open_idx}』下无任何题目/材料——标题层级断层。")
+            seen_section = True
+            sec_open_idx = str(b.get("text", ""))[:12]
+            sec_has_content = False
+        elif t == "sub":
+            if not seen_section:
+                soft.append(f"小标题『{str(b.get('text',''))[:12]}』出现在任何大题之前"
+                            f"——缺上级大题（section）。")
+        elif t in ("question", "material"):
+            sec_has_content = True
+    if sec_open_idx is not None and not sec_has_content:
+        soft.append(f"空大题『{sec_open_idx}』下无任何题目/材料——标题层级断层。")
+
+    # —— warn：大题中文编号连续性（一二三四不跳号）——
+    sec_nums = []
+    for b in paper:
+        if isinstance(b, dict) and b.get("type") == "section":
+            mo = re.match(r"[\s　]*([一二三四五六七八九十]+)\s*[、.，．]", str(b.get("text", "")))
+            if mo and mo.group(1) in _CN_NUM:
+                sec_nums.append(_CN_NUM[mo.group(1)])
+    if sec_nums and sec_nums != list(range(1, len(sec_nums) + 1)):
+        soft.append(f"大题编号不连续：实际序号 {sec_nums}（应为 1..N 连续）。")
+
+    # —— warn：解析疑似缺失（启发式，误报可控）——
+    # ponytail: 客观题答案常把解析并进 answer.text；规则=该题既无独立 analysis 块、
+    # answer.text 又 <15 字（纯答案无解释）→ 提示。误报时人工忽略即可。
+    ana_nums = set()
+    cur_a = None
+    for b in answers:
+        if not isinstance(b, dict):
+            continue
+        if b.get("type") == "answer":
+            cur_a = str(b.get("num"))
+        elif b.get("type") == "analysis" and cur_a is not None:
+            if str(b.get("text", "")).strip():
+                ana_nums.add(cur_a)
+    no_ana = []
+    for b in a_blocks:
+        n = str(b.get("num"))
+        if n in ana_nums:
+            continue
+        if len(str(b.get("text", "")).strip()) < 15:
+            no_ana.append(n)
+    if len(no_ana) >= 2:
+        soft.append(f"{len(no_ana)} 题疑似缺解析（无 analysis 块且答案正文<15字）："
+                    f"题 {', '.join(no_ana[:8])}{'…' if len(no_ana) > 8 else ''}。")
+
+    # —— 生成终审表 ——
+    lines = [f"- **试卷题数**：{len(q_blocks)}　**答案条数**：{len(a_blocks)}",
+             f"- **客观题（含选项）**：{len(opts_by_num)} 题",
+             f"- **门禁级问题**：{len(hard)}　**提醒级问题**：{len(soft)}"]
+    body = "## 🔴 门禁级（必须修复后重跑）\n" + (
+        "\n".join("- " + e for e in hard) if hard else "（无）") + "\n\n"
+    body += "## ⚠️ 提醒级（建议核查）\n" + (
+        "\n".join("- " + w for w in soft) if soft else "（无）") + "\n"
+    md = ("# 终审表（build 自动生成·合并排版后整卷对账）\n\n"
+          "> 中途 Phase 3.5 查命题质量；本表查合并后才暴露的结构问题"
+          "（题号对账/答案越界/标题层级/解析缺失）。\n\n"
+          "## 整卷对账\n" + "\n".join(lines) + "\n\n" + body)
+    return md, hard, soft
+
+
+_FULLWIDTH_AZ = str.maketrans("ＡＢＣＤ", "ABCD")
 
 
 def _extract_body(text):
