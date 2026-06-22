@@ -64,11 +64,13 @@ def main() -> int:
     manuscript_dir.mkdir(parents=True, exist_ok=True)
     si_dir.mkdir(parents=True, exist_ok=True)
 
-    manuscript_index = parse_sections(read_docx_paragraphs(Path(args.manuscript)), "manuscript", manuscript_dir)
+    # inline_format=True 让原稿段落的 run 级 斜体/上下标/加粗 以行内标记进入 section
+    # text/current_text,经 revise -> export 往返保住语义行内格式(与 polish 口径一致)。
+    manuscript_index = parse_sections(read_docx_paragraphs(Path(args.manuscript), inline_format=True), "manuscript", manuscript_dir)
     write_json(project_root / "manuscript_section_index.json", manuscript_index)
 
     if args.si:
-        si_index = parse_sections(read_docx_paragraphs(Path(args.si)), "si", si_dir)
+        si_index = parse_sections(read_docx_paragraphs(Path(args.si), inline_format=True), "si", si_dir)
     else:
         si_index = {"sections": []}
     write_json(project_root / "si_section_index.json", si_index)
