@@ -360,7 +360,6 @@ python scripts/state_manager.py add-abbreviation <one.json>
    1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate section-dod --files <本节文件>`
    2. **派一个独立子代理**(Claude Code 用 `academic-blind-reviewer`;其他平台派通用子代理)，把任务包原样给它、**不要给它本节的写作上下文**，要求按任务包返回 JSON 数组。
    3. 校验返回:`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate section-dod --return <子代理返回.json> --section <当前section_id> --root <项目根>`;退出码非 0(任一缺项/fail/无证据)= **fail-closed**,据子代理证据修复后重跑,**未过不得声明完成**。verify 通过会落盘 `.review_pass/<当前section_id>.json`,下一节 `prewrite_gate.py` 会**硬校验**它(缺失即拒绝开写)。
-   - **降级路径**(当前环境无法派子代理时):主 agent 切换审稿人视角、清空对本节的写作记忆，逐项独立重核，绝不因刚写完就默认通过；仍跑 `verify` 把关。
 
    🔴 **进入下一节前置闸口**：上一节 `delegate_review verify` 必须 exit 0（含 G13 结构完整性），否则不得开始下一节撰写。写完即检，不过不进。
    🔴 **修复 3 次仍不过 → 回滚兜底**：同一节据盲检证据修复重跑 3 次仍 fail，停止盲目重写，提示用户回滚到上一检查点（git 可用：`git checkout <sha> -- <文件>`；否则 `/rollback` 到上一 snapshot）后重写。
