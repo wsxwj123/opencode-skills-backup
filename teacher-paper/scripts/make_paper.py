@@ -110,6 +110,41 @@ def set_font(run, name=SONGTI, size=10.5, bold=False):
     run._element.get_or_add_rPr().rFonts.set(qn("w:eastAsia"), name)
 
 
+# 上下标语法：_{...} 下标、^{...} 上标。只认带花括号形式——填空线 ____ 不含 { 不误伤，
+# 单字符 Unicode 上下标（H₂O/x²）仍优先；本机制专为 Unicode 无法表达的多字符/中文下标
+# （v_{max}、F_{合}）与显式上标提供真富文本渲染。
+_SUBSUP_RE = re.compile(r"([_^])\{([^{}]*)\}")
+
+
+def _split_subsup(text):
+    """把含 _{...}/^{...} 的字符串拆成 [(片段, kind)]，kind ∈ normal/sub/sup。
+    无标记则原样返回 [(text, 'normal')]，向后兼容。"""
+    out, pos = [], 0
+    for m in _SUBSUP_RE.finditer(text):
+        if m.start() > pos:
+            out.append((text[pos:m.start()], "normal"))
+        out.append((m.group(2), "sub" if m.group(1) == "_" else "sup"))
+        pos = m.end()
+    if pos < len(text):
+        out.append((text[pos:], "normal"))
+    if not out:
+        out.append((text, "normal"))
+    return out
+
+
+def _emit_runs(p, line_text, name, size, bold):
+    """把一行文本按 _{}/^{} 拆段加 run，下标/上标段置 vertAlign。"""
+    for seg, kind in _split_subsup(line_text):
+        if seg == "":
+            continue
+        r = p.add_run(seg)
+        set_font(r, name=name, size=size, bold=bold)
+        if kind == "sub":
+            r.font.subscript = True
+        elif kind == "sup":
+            r.font.superscript = True
+
+
 def add_para(doc, text="", align=None, indent_chars=0, size=10.5,
              name=SONGTI, bold=False, space_after=4):
     p = doc.add_paragraph()
@@ -122,14 +157,15 @@ def add_para(doc, text="", align=None, indent_chars=0, size=10.5,
     if indent_chars:
         p.paragraph_format.first_line_indent = Pt(size * indent_chars)
     if text:
-        # 先规范中文引号，再保留文本内换行：拆成多行，行间插软换行，避免 \n 被吞成空格
+        # 先规范中文引号，再保留文本内换行：拆成多行，行间插软换行，避免 \n 被吞成空格；
+        # 每行再按 _{}/^{} 拆出上下标 run。
         parts = normalize_quotes(str(text)).split("\n")
-        r = p.add_run(parts[0])
-        set_font(r, name=name, size=size, bold=bold)
+        _emit_runs(p, parts[0], name, size, bold)
         for seg in parts[1:]:
-            r.add_break()
-            r = p.add_run(seg)
-            set_font(r, name=name, size=size, bold=bold)
+            br = p.add_run()
+            set_font(br, name=name, size=size, bold=bold)
+            br.add_break()
+            _emit_runs(p, seg, name, size, bold)
     return p
 
 
