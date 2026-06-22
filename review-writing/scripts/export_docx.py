@@ -59,8 +59,8 @@ def main():
 
     if not REFERENCE_DOCX.exists():
         sys.exit(
-            f"ERROR: style template not found: {REFERENCE_DOCX}\n"
-            "Generate it via scripts/make_reference_docx.py first."
+            f"ERROR: reference.docx 模板缺失: {REFERENCE_DOCX}\n"
+            "请先运行 `python scripts/make_reference_docx.py` 重新生成后再导出 docx。"
         )
 
     if args.csl and not args.bib:

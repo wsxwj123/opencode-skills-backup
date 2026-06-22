@@ -324,6 +324,24 @@ def run_merge(
     }
 
     if generate_docx:
+        # 模板是已提交的样式资产，缺失=安装损坏。硬失败让用户重生成，
+        # 不要 silently 产出字体不受控的 docx。仅 docx 步骤失败，md 已落盘不受影响。
+        if not DEFAULT_REFERENCE_DOC.exists() and (
+            reference_doc is None or not os.path.exists(reference_doc)
+        ):
+            missing = reference_doc if reference_doc else str(DEFAULT_REFERENCE_DOC)
+            result["ok"] = False
+            result["docx"] = {
+                "attempted": False,
+                "ok": False,
+                "reason": "reference_doc_missing",
+                "message": (
+                    f"reference.docx 模板缺失: {missing}。"
+                    "请先运行 `python scripts/make_reference_docx.py` 重新生成后再导出 docx。"
+                    "（md 已生成，未产出 docx）"
+                ),
+            }
+            return result
         docx_report = convert_docx(output_md=output_md, output_docx=output_docx, reference_doc=reference_doc)
         result["docx"] = docx_report
     return result
@@ -352,7 +370,9 @@ def main():
     output_docx = args.output_docx or os.path.join(args.manuscript_dir, "Full_Manuscript.docx")
     patterns = [p.strip() for p in args.patterns.split(",") if p.strip()]
 
-    # Default to the bundled TNR-12pt reference template; skip silently if absent.
+    # Default to the bundled TNR-12pt reference template. If it (or an explicit
+    # --reference-doc) is missing when producing docx, run_merge hard-fails so we
+    # never emit an uncontrolled-font docx — see the docx branch in run_merge.
     reference_doc = args.reference_doc
     if reference_doc is None and DEFAULT_REFERENCE_DOC.exists():
         reference_doc = str(DEFAULT_REFERENCE_DOC)
