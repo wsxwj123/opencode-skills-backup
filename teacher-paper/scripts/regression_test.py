@@ -1211,6 +1211,97 @@ _v7_src = '{"text": "He said, \\"I\'m fine.\\""}'
 case("V7 SKILL正例JSON可解析",
      _json_v7.loads(_v7_src)["text"] == "He said, \"I'm fine.\"")
 
+# ============== Part X: v3.30 上下标富文本渲染 ==============
+print("\n=== X. 上下标渲染 ===")
+import make_paper as _MP
+
+case("X1 下标 v_{max}", _MP._split_subsup("v_{max}") == [("v", "normal"), ("max", "sub")])
+case("X2 上标 x^{2}", _MP._split_subsup("x^{2}") == [("x", "normal"), ("2", "sup")])
+case("X3 混合 F_{合}=v^{2}", len(_MP._split_subsup("F_{合}=v^{2}")) == 4)
+case("X4 无标记向后兼容", _MP._split_subsup("普通题干文本") == [("普通题干文本", "normal")])
+case("X5 多下标 C_{6}H_{12}O_{6}", sum(1 for _, k in _MP._split_subsup("C_{6}H_{12}O_{6}") if k == "sub") == 3)
+# X6 填空线 ____ 不被误当下标（无花括号）
+case("X6 填空线不误伤", _MP._split_subsup("答案______") == [("答案______", "normal")])
+# X7 渲染级：docx 里下标/上标 run 真带 vertAlign（python-docx 不可用则跳过计为通过）
+try:
+    import docx as _docx_x7  # noqa: F401
+    from docx import Document as _Doc
+    _W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+    _d = _Doc()
+    _MP.add_para(_d, "F_{合}=ma，v_{max}，E^{2}")
+    _sub = _sup = 0
+    for _r in _d.paragraphs[0].runs:
+        _rpr = _r._element.find(f"{_W}rPr")
+        _va = _rpr.find(f"{_W}vertAlign") if _rpr is not None else None
+        if _va is not None:
+            _v = _va.get(f"{_W}val")
+            _sub += _v == "subscript"
+            _sup += _v == "superscript"
+    case("X7 docx渲染上下标vertAlign", _sub == 2 and _sup == 1)
+except ImportError:
+    case("X7 docx渲染上下标vertAlign", True, "python-docx不可用-跳过")
+
+# ============== Part Y: v3.31 排版字符 lint（_check_typography）==============
+print("\n=== Y. 排版字符 lint ===")
+
+
+def _typo(text, subject):
+    w = []
+    A._check_typography("y_q.json", [{"type": "question", "text": text}], subject, w)
+    return w[0] if w else ""
+
+
+case("Y1 中文误用半角逗号-warn", "半角标点" in _typo("甲,乙两物体", "物理"))
+case("Y2 中文误用半角冒号-warn", "半角标点" in _typo("他说:今天", "语文"))
+case("Y3 数学半角变量x,y-不误伤", _typo("已知 x,y∈R 求 z", "数学") == "")
+case("Y4 小数3.14-不误伤", _typo("圆周率约 3.14", "数学") == "")
+case("Y5 中文夹全角数字-warn", "全角字母" in _typo("考于２０２５年", "历史"))
+case("Y6 带圈数字①②-不误伤", _typo("①基础 ②提高", "语文") == "")
+case("Y7 markdown斜体*v*-warn", "斜体" in _typo("速度 *v* 不变", "物理"))
+case("Y8 乘法2*3*5-不误判斜体", _typo("计算 2*3*5 的值", "数学") == "")
+case("Y9 化学式紧贴中文H2O-warn", "下标" in _typo("水是H2O", "化学"))
+case("Y10 无下标式NaCl-不误报", _typo("NaCl是食盐", "化学") == "")
+case("Y11 _{}语法不被拦", _typo("合力 F_{合}=ma", "物理") == "")
+case("Y12 英语题跳过中文标点检测", _typo("Choose A,B,C.", "英语") == "")
+case("Y13 裸下标F_合漏花括号-warn", "花括号" in _typo("求合力 F_合 的大小", "物理"))
+case("Y14 带花括号F_{合}-不报", _typo("求合力 F_{合} 的大小", "物理") == "")
+case("Y15 填空线A____B-裸下标不误伤", _typo("填空 A____B____", "数学") == "")
+
+# ============== Part Z: v3.32 git 逐题存档硬门禁 ==============
+print("\n=== Z. git 逐题存档门禁 ===")
+if A._git_available():
+    def _git(d, *a):
+        return _sp.run(["git", "-C", str(d), *a], capture_output=True, text=True)
+    with tempfile.TemporaryDirectory() as td:
+        _p = pathlib.Path(td) / "proj"
+        (_p / "items").mkdir(parents=True)
+        _git(_p, "init", "-q")
+        _git(_p, "config", "user.email", "t@t")
+        _git(_p, "config", "user.name", "t")
+        case("Z1 空items干净-不触发", A._uncommitted_items(str(_p)) == [])
+        (_p / "items" / "101_q01.json").write_text("{}", encoding="utf-8")
+        _r = A._uncommitted_items(str(_p))
+        case("Z2 写题未提交-检出具体文件", bool(_r) and any("101_q01.json" in x for x in _r))
+        _git(_p, "add", "-A"); _git(_p, "commit", "-q", "-m", "x")
+        case("Z3 提交后-干净", A._uncommitted_items(str(_p)) == [])
+        (_p / "items" / "101_q01.json").write_text('{"a":1}', encoding="utf-8")
+        case("Z4 改动已提交文件-再次检出", bool(A._uncommitted_items(str(_p))))
+    with tempfile.TemporaryDirectory() as td2:
+        case("Z5 非git工程-返回None不强制", A._uncommitted_items(td2) is None)
+else:
+    for zid in ("Z1", "Z2", "Z3", "Z4", "Z5"):
+        case(f"{zid} git不可用-跳过", True, "无git环境")
+
+# Z6-Z9：is_question 按 paper 块判定（修 meta 无 score 时题级检查漏跑的集成 bug）
+case("Z6 最小格式(score在paper块)-判为题目",
+     A._atom_has_question([{"type": "question", "text": "题干", "score": "（2分）"}]))
+case("Z7 stem块-判为题目",
+     A._atom_has_question([{"type": "stem", "text": "材料题干"}]))
+case("Z8 纯材料块-不判为题目",
+     not A._atom_has_question([{"type": "material", "paras": ["选文正文"]}]))
+case("Z9 大题分隔块-不判为题目",
+     not A._atom_has_question([{"type": "section", "text": "一、单选"}]))
+
 # 总结
 print(f"\n=== 总计 {len(PASS)}/{len(PASS)+len(FAIL)} 通过 ===")
 if FAIL:

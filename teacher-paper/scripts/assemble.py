@@ -518,6 +518,23 @@ def cmd_commit(args):
           else f"[git] commit 失败：{c.stderr.strip()}")
 
 
+def _uncommitted_items(proj):
+    """返回 items/ 下未提交的文件列表（git 硬门禁用）。
+    仅当工程是【自身的 git 仓库】（init 时对独立工程才 git init）才检查；
+    无 git / 工程嵌在父库内（show-toplevel 不等于 proj）→ 返回 None 表示不适用、不强制。"""
+    if not _git_available():
+        return None
+    top = subprocess.run(["git", "-C", proj, "rev-parse", "--show-toplevel"],
+                         capture_output=True, text=True)
+    if top.returncode != 0:
+        return None
+    if os.path.realpath(top.stdout.strip()) != os.path.realpath(proj):
+        return None  # 嵌套在父仓库内，非独立工程仓库，不强制逐题存档
+    st = subprocess.run(["git", "-C", proj, "status", "--porcelain",
+                         "-uall", "--", "items"], capture_output=True, text=True)
+    return [ln[3:] for ln in st.stdout.splitlines() if ln.strip()]
+
+
 def _copy_scripts(proj):
     """把技能 scripts/ 下的 .py 与 requirements.txt 复制到 工程/scripts/，
     使 AI 在工程内运行、修改脚本时都不触及技能本体。__pycache__ 不复制。"""
@@ -746,7 +763,10 @@ def cmd_build(args):
         paper.extend(p_blocks)
         answers.extend(a_blocks)
         m = atom.get("meta", {})
-        is_question = (m.get("score") is not None and str(m.get("status", "")) != "-")
+        # 按 paper 块内容判定是否题目原子，不依赖 meta.score——最小格式(SKILL.md)
+        # 把分值写在 paper 的 question 块、meta 不写 score，旧的 m.get("score") 判定会
+        # 漏判 → 缺图/排版/引号等题级检查在最常见写法下静默全跳过（v3.32.0 修）。
+        is_question = (_atom_has_question(p_blocks) and str(m.get("status", "")) != "-")
 
         # —— 缺图硬门禁：题干含"如图/图中/图所示"等图引用字样但 paper 无 figure 块 ——
         if is_question:
@@ -792,7 +812,7 @@ def cmd_build(args):
 
         if is_question:
             try:
-                total += float(m["score"])
+                total += float(m.get("score"))  # .get 防 KeyError：无 score 由下方 838 行 warn
             except (TypeError, ValueError):
                 pass
             # Batch6-L3：收集 Phase 3.5 自审数据（考点/难度/题干长度）
@@ -992,6 +1012,25 @@ def cmd_build(args):
             print("  如确需越界出卷，加 --allow-length（降级为告警，须告知用户字数不达标）。")
             sys.exit(2)
 
+    # —— git 逐题存档硬门禁：items/ 有未提交改动 → 拒绝出卷（--allow-uncommitted 逃生）——
+    # 强制"每写完一题/一部分就 commit 存档"，保证逐题可回滚；无 git/嵌套父库则不适用。
+    allow_uncommitted = "--allow-uncommitted" in args
+    _dirty_items = _uncommitted_items(proj)
+    if _dirty_items:
+        _shown = ", ".join(_dirty_items[:8]) + ("…" if len(_dirty_items) > 8 else "")
+        if allow_uncommitted:
+            warn.append(f"git 未逐题存档：items/ 有 {len(_dirty_items)} 处未提交改动"
+                        f"（{_shown}）（--allow-uncommitted 已降级为告警）")
+        else:
+            print(f"[合并] 已读 {len(files)} 个原子文件，题量 {len(nums)}，分值合计 {total:g}")
+            print(f"\n🔴 [git 存档门禁] items/ 有 {len(_dirty_items)} 处未提交改动："
+                  f"{_shown}", file=sys.stderr)
+            print("\n  规则：每写完一题/一部分必须 `assemble.py commit <工程> \"说明\"` 存档，"
+                  "保证逐题可回滚。", file=sys.stderr)
+            print("  已拒绝出卷。先 commit 存档后重跑；如确需未存档出卷，加 --allow-uncommitted。",
+                  file=sys.stderr)
+            sys.exit(2)
+
     # —— 材料真实性自检表：build 自动生成并打印，交付时必须原样转发给用户 ——
     if audit_rows:
         _tbl = ["| 文件 | 选文标题 | meta.source | source_file | 溯源 | 标注措辞 |",
@@ -1093,11 +1132,30 @@ def cmd_build(args):
     else:
         print("[校验通过] 题量与分值符合期望")
 
+    # —— 校验告警落盘：所有 warn（排版/史料/分值/题号/降级等）写入持久 .md，
+    # 与材料真实性表/Phase3.5表同级。防止 AI 漏转述 stdout 导致告警丢失。——
+    _wpath = os.path.join(proj, "build", "校验告警.md")
+    os.makedirs(os.path.dirname(_wpath), exist_ok=True)
+    if warn:
+        _typo_kw = ("排版字符", "全角引号", "下标", "斜体", "半角标点", "花括号")
+        _typo_w = [w for w in warn if any(k in w for k in _typo_kw)]
+        _other_w = [w for w in warn if w not in _typo_w]
+        _wmd = ["# 校验告警（build 自动生成 · 交付时须如实转告用户）", ""]
+        if _typo_w:
+            _wmd += ["## 排版自检", ""] + [f"- {w}" for w in _typo_w] + [""]
+        if _other_w:
+            _wmd += ["## 其它校验", ""] + [f"- {w}" for w in _other_w] + [""]
+        with open(_wpath, "w", encoding="utf-8") as f:
+            f.write("\n".join(_wmd))
+        print("[校验告警] 已写入 build/校验告警.md（含排版自检分节，交付时须转告用户）")
+    elif os.path.exists(_wpath):
+        os.remove(_wpath)  # 本次无告警则清掉上一轮的旧告警文件，避免误导
+
     # —— Batch6-L4：多 allow 开关审计聚合 ——
     _allow_used = [a for a in (
         "--allow-unsourced", "--allow-missing-figure", "--allow-length",
         "--allow-incomplete", "--allow-wording", "--allow-excerpt",
-        "--allow-stale", "--allow-final-audit") if a in args]
+        "--allow-stale", "--allow-final-audit", "--allow-uncommitted") if a in args]
     if _allow_used:
         _msg = f"本次启用了 {len(_allow_used)} 个降级开关：{', '.join(_allow_used)}"
         if len(_allow_used) >= 2:
@@ -1537,6 +1595,14 @@ _FIG_CUES = ("如图", "如下图", "下图", "图中", "图所示", "根据图"
              "观察图", "请看图", "依据图")
 
 
+def _atom_has_question(p_blocks):
+    """原子 paper 块里是否含题目块（question/stem）——判定是否跑缺图/排版/引号等题级检查。
+    不依赖 meta.score：最小格式把分值写在 paper 的 question 块、meta 不写 score，
+    用 meta.score 判定会在最常见写法下漏判，导致题级检查静默跳过。"""
+    return any(isinstance(b, dict) and b.get("type") in ("question", "stem")
+               for b in (p_blocks or []))
+
+
 def _check_missing_figure(fp, paper_blocks, errors):
     """题干含'如图/如下图/图中/图所示'等图引用字样，但 paper 块里没有 figure block
     （也没有 src 提供的图）→ 拒绝出卷。AI 不能写出"如图所示"却不给图。
@@ -1674,11 +1740,29 @@ _MD_PATTERNS = [
     (re.compile(r"(?m)^#{1,6}\s"), "markdown标题 #"),
 ]
 _CARET_RE = re.compile(r"[A-Za-z0-9)\]]\s*\^\s*[A-Za-z0-9(\-]")  # x^2 / 10^-3 / a^n
-_CHEM_RE = re.compile(r"\b(H2O|CO2|O2|N2|H2|SO2|SO3|SO4|NO2|NO3|CH4|NH3|CaCO3|"
-                      r"NaOH|H2SO4|HNO3|Na2CO3|MnO2|Fe2O3|Al2O3|CuSO4|CaCl2|"
-                      r"C6H12O6|C2H5OH|KMnO4|KClO3|H2O2|NaHCO3)\b")
+# 用 [A-Za-z0-9] 前后界而非 \b：CJK 在 Python 正则算 \w，\b 会让"是H2O"等紧贴
+# 中文的化学式漏检（中文题干直接写化学式是最常见场景）。
+# 只列【含数字下标】的式子（NaCl/MgO/HCl 无下标，不该提醒）；括号须转义为字面。
+_CHEM_RE = re.compile(r"(?<![A-Za-z0-9])(H2O2|H2O|CO2|O2|N2|H2|SO2|SO3|SO4|NO2|NO3|"
+                      r"CH4|NH3|CaCO3|NaOH|H2SO4|HNO3|Na2CO3|MnO2|Fe2O3|Al2O3|"
+                      r"CuSO4|CaCl2|C6H12O6|C2H5OH|KMnO4|KClO3|NaHCO3|"
+                      r"FeCl3|FeCl2|AgNO3|BaSO4|BaCl2|Na2SO4|K2CO3|NH4Cl|"
+                      r"Ca\(OH\)2|Cu\(OH\)2|Fe\(OH\)3|Fe3O4|P2O5|N2O5|"
+                      r"Mg3N2|MgCl2|AlCl3)(?![A-Za-z0-9])")
 _UNIT_SUP_RE = re.compile(r"(?<![A-Za-z])(m/s|km/h|cm|dm|m|kg)[23](?![A-Za-z0-9])")
 _TYPO_SCI_SUBJECTS = ("物理", "化学", "生物", "数学")
+# 中文正文误用半角标点：半角 ,;:?! 紧邻 CJK（应改全角 ，；：？！）。
+# 只盯紧邻 CJK，避开数学 x,y / 小数 3.14 / 英文夹注等合法半角，FP 极低。
+_CN_HALFWIDTH_PUNC_RE = re.compile(r"[一-鿿][,;:?!]|[,;:?!][一-鿿]")
+# 中文卷里夹全角字母/数字（２０２５/ＡＢＣ 应半角）。①②③等带圈数字不在此区间，不误伤。
+_FULLWIDTH_ALNUM_RE = re.compile(r"[０-９Ａ-Ｚａ-ｚ]")
+# 单个 markdown 斜体 *…*（** 加粗已由 _MD_PATTERNS 覆盖；此处只抓单星号斜体）。
+# 两侧界用 [\*\w]：星号紧邻字母/数字时是乘法（2*3*5、a*b*c），不算斜体，避免理科乘号误报。
+_MD_ITALIC_RE = re.compile(r"(?<![\*\w])\*(?!\*)[^*\n]+\*(?![\*\w])")
+# 裸下标漏花括号：F_合 / v_max 渲染器不认（只认 _{…}），会原样印出下划线。
+# 触发：字母/数字/右括号 + _ + 紧跟 CJK 或字母数字，且下一字符不是 {（已带花括号的正确写法不报）。
+# 填空线 ____ 不触发（_ 前是 CJK 或另一个 _，不在 [A-Za-z0-9)\]] 内）。
+_BARE_SUB_RE = re.compile(r"[A-Za-z0-9)\]]_(?!\{)([一-鿿]|[A-Za-z0-9])")
 
 
 def _check_typography(fp, p_blocks, subject, warn):
@@ -1706,6 +1790,16 @@ def _check_typography(fp, p_blocks, subject, warn):
     for rgx, label in _MD_PATTERNS:
         if rgx.search(blob):
             hits.append(label)
+    if _MD_ITALIC_RE.search(blob):
+        hits.append("markdown斜体 *…*（渲染器不解析，会原样显示；物理量直接正体写）")
+    if _BARE_SUB_RE.search(blob):
+        hits.append("下标漏花括号（F_合/v_max 会原样印出下划线，应写 F_{合}/v_{max}）")
+    if "英语" not in str(subject):
+        # ③全半角：英语整题该用半角，故跳过；其余科目中文正文须全角
+        if _CN_HALFWIDTH_PUNC_RE.search(blob):
+            hits.append("中文正文用了半角标点（,;:?! 应改全角 ，；：？！）")
+        if _FULLWIDTH_ALNUM_RE.search(blob):
+            hits.append("中文里夹全角字母/数字（２０２５/ＡＢＣ 应改半角 2025/ABC）")
     if any(k in str(subject) for k in _TYPO_SCI_SUBJECTS):
         if _CARET_RE.search(blob):
             hits.append("幂写成 x^2（应 Unicode 上标 x²）")
@@ -1716,8 +1810,8 @@ def _check_typography(fp, p_blocks, subject, warn):
             hits.append("单位平方/立方未用上标（应 m/s²、cm³）")
     if hits:
         warn.append(f"{name}：排版字符问题——{'；'.join(dict.fromkeys(hits))}。"
-                    f"make_paper 不解析 markdown、不做富文本上下标，会原样显示；"
-                    f"见 SKILL.md 排版铁律②③。")
+                    f"make_paper 不解析 markdown（会原样显示符号）；上下标用 Unicode "
+                    f"（H₂O/x²）或 _{{...}}/^{{...}}（F_{{合}}/v_{{max}}）。见 SKILL.md『排版铁律』表。")
 
 
 _POLITICAL_SUBJECTS = ("思想政治", "政治", "道德与法治", "道法")
