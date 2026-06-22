@@ -245,7 +245,7 @@ python3 scripts/state_manager.py get-screening-counts   # 读回校验
 
 ### 0.2 Full Environment Check
 
-Run the 8-step environment detection (📖 full commands in `references/env_check.md`): Step 0 OS+Python, 1 curl, 2 git, 3 Zotero+pyzotero, 4 edirect, 5 proxy+PubMed connectivity, 6 NCBI key, 7 paper-search MCP, 8 required scripts. Display ✅/❌ per step. Record `os` / `git_available` / `pubmed_proxy` / `search_fallback` for Phase 0.5 to write into `outline.md`.
+Run the 9-step environment detection (Step 0–8) (📖 full commands in `references/env_check.md`): Step 0 OS+Python, 1 curl, 2 git, 3 Zotero+pyzotero, 4 edirect, 5 proxy+PubMed connectivity, 6 NCBI key, 7 paper-search MCP, 8 required scripts. Display ✅/❌ per step. Record `os` / `git_available` / `pubmed_proxy` / `search_fallback` for Phase 0.5 to write into `outline.md`.
 
 **All 8 must resolve before Phase 0.5.** Failure routing:
 
@@ -753,7 +753,7 @@ If pending_sections is empty → all sections complete; proceed to Phase 4.
     3. 校验返回：`python3 scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate manuscript-dod --return <子代理返回.json> --section <当前section_id> --root <项目根>`；退出码非 0（任一缺项 / fail / 无证据）= **fail-closed**，据子代理证据修复后重跑，**未过不得声明完成**。verify 通过会落盘 `.review_pass/<当前section_id>.json`，下一节 `prewrite_gate.py` 会**硬校验**它（缺失即拒绝开写）。
     - **降级路径**（当前环境无法派子代理时）：主 agent 切换审稿人视角、清空对本节的写作记忆，逐项独立重核，绝不因刚写完就默认通过；仍跑 `verify` 把关。
 
-    `manuscript-dod` gate 共 15 项（通用 6：引文一一对应 / citation_guard 已过 / 符合 storyline / 占位符清零 / 去 AI 合规 / 字数达标；review 特有 5：综合非罗列 / 矛盾仲裁 / 引用类型匹配 / 检索日志已记 / 框架图一致；systematic 额外 3：PRISMA 计数自洽 / RoB 已评级 / GRADE 已分级 + 结构完整性 R15）。**逐项内容与核验命令以 `references/dod_checklist.json` 为唯一真源**。上面 `pack` 步骤运行时会把该 gate 的每个 item（id / name / check / script）完整打印进盲检任务包，此处不再复述以免与 JSON 漂移。systematic 3 项仅 Review type = systematic 时检查。
+    `manuscript-dod` gate 共 15 项（通用 6：引文一一对应 / citation_guard 已过 / 符合 storyline / 占位符清零 / 去 AI 合规 / 字数达标；review 特有 5：综合非罗列 / 矛盾仲裁 / 引用类型匹配 / 检索日志已记 / 框架图一致；systematic 额外 3：PRISMA 计数自洽 / RoB 已评级 / GRADE 已分级；结构完整性 R15（全类型通用））。**逐项内容与核验命令以 `references/dod_checklist.json` 为唯一真源**。上面 `pack` 步骤运行时会把该 gate 的每个 item（id / name / check / script）完整打印进盲检任务包，此处不再复述以免与 JSON 漂移。systematic 3 项仅 Review type = systematic 时检查，R15 全类型通用。
 
 11. **HALT:** Output summary (content / logic / citation count / word count). Wait for "Continue".
 

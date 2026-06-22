@@ -85,7 +85,7 @@
         {
           "id": "N11",
           "name": "M/IN 可追溯性",
-          "check": "每个 M 可追溯到具体 RC，每个 IN 可追溯到 RC 和 M（--phase 2 输出中的 V-08/V-10）",
+          "check": "每个 M 可追溯到具体 RC，每个 IN 可追溯到 RC 和 M（--phase 2 输出中的 V-08）",
           "script": "python scripts/consistency_mapper.py --path data/consistency_map.json validate --phase 2"
         },
         {

@@ -252,6 +252,7 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
 8. Render single HTML with left hierarchical TOC + right content pane from updated atomic JSON.
 9. Run hard gate checks, citation checks, and HTML checks before delivery.
    - **判读：** `scripts/run_pipeline.py` 串行自动执行全部 gate（顺序与职责详见 Scripts 段）；退出码 `0` = 全部通过；非零时 stdout 打印 `PIPELINE: FAIL (step=..., code=...)` 及失败 unit。按失败信息直接改对应 `units/*.json`（≤3 次上限，见 Rules）后重跑。Do not run gates manually one-by-one; do not generate extra fixer scripts.
+   - **注：** `citation_ref_tracker` / `citation_guard` 在 pipeline 内为 WARN 级（未带 `--fail-on-undefined` / `--fail-on-unverified`，仅撤稿引用会直接 FAIL），`PIPELINE: PASS` 不代表引文零缺陷，RR1/RR2 须在 DoD 委托盲检阶段单独确认。
 10. Run final consistency report.
 11. Write checkpoint + transaction logs to `project_root/logs/`.
 12. Sync unit state map to `project_root/logs/unit_state.json`.

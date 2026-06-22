@@ -330,7 +330,7 @@ Each comment must contain:
 
 🔴 收口前置闸口：`delegate_review verify` 必须 exit 0（含 RV-R8 结构完整性），否则不得声明改稿完成。任一项 fail 均为阻断。
 
-### Revise-Sci 特有项（id: RV-R1 ~ RV-R8）
+### Revise-Sci 特有项（id: RV-R1 ~ RV-R9）
 
 | id | 项目 | 核验方式 |
 |---|------|---------|

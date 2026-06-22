@@ -1,4 +1,4 @@
-# Phase 0.2 — Full Environment Check (8 steps)
+# Phase 0.2 — Full Environment Check (9 steps, Step 0–8)
 
 ## SKILL_DIR Auto-Detection ("Other" clients)
 

@@ -149,7 +149,13 @@ def main() -> int:
                 or zh_fallback_ok
             )
 
-            if not found and revised.strip() not in {"", "无", "N/A"}:
+            # A promise lives in response_en independent of whether revised_excerpt_en
+            # is "无": a unit often promises (e.g.) "added a new control" while landing
+            # the change in SI/main text outside the excerpt and leaving revised="无".
+            # The landing point is therefore sought in modification_actions / Chinese
+            # fields (all folded into `found`), NOT gated on revised being non-empty.
+            # revised="无" no longer exempts the promise from the check.
+            if not found:
                 warnings.append(
                     f"[{uid}] response_en promises '{promise}' but no matching entry found "
                     f"in modification_actions, revised_excerpt_en, or Chinese fields"

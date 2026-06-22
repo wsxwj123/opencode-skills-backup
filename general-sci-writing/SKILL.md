@@ -384,7 +384,8 @@ python scripts/state_manager.py add-abbreviation <one.json>
    - [ ] **⑫只改原子化源**：本次写入的目标文件为 `manuscripts/` 下的原子化源文件，非 `Full_Manuscript.md` / `.docx`（见 §3）
    - [ ] **⑬结构完整性**：本节包含其文体/storyline 规定的全部结构组件，无缺段/空标题/未填骨架；且符合该节类型规定结构（Introduction 漏斗式；Discussion 主要发现→文献对比+机制→Limitations→Outlook 四段；Methods 必备子节）。子代理对照 `storyline.json` 对应 section 的结构要求逐组件核对
    - [ ] **⑭figure_analysis 加载**：本节涉及的 figure 在 `figures_database.json` 中均有对应 `figure_analysis/figure_{N}.md` 文件、非空、无 `❓待确认` 残留（脚本：`python scripts/figure_analysis_gate.py --section [section_id] --root .` 必须 exit 0）
-   - [ ] **⑮检查点已落**：本节已落版本检查点——`python scripts/git_checkpoint.py status .` 显示 commit 数随节递增（git 可用时），或 git 不可用时已生成 snapshot（`version_history.json` 有新快照）。二者满足其一即可
+   - [ ] **⑮缩略词一致性**：本节新引入缩略词均已规范首展（`Full Name (ABBR)`），无重复定义、无未定义即用、Title 无缩写；已过 `python scripts/abbreviation_consistency.py --root .` 核验（exit 0；通用缩写自动跳过）
+   - [ ] **⑯检查点已落**：本节已落版本检查点——`python scripts/git_checkpoint.py status .` 显示 commit 数随节递增（git 可用时），或 git 不可用时已生成 snapshot（`version_history.json` 有新快照）。二者满足其一即可
 10. **Safety Write**: 用户 OK 后写入文件 → 智能快照 → **Git Checkpoint**：`python scripts/git_checkpoint.py commit [Project_Root] "[gsw] section <section_id> done"`（git 不可用时自动 no-op，snapshot 仍是回退兜底）。回退手段：若落盘后用户反悔，`/rollback` 到上一个 snapshot、`git checkout <sha> -- <file>` 回退单节，或直接 Edit 改原子化文件（参见 §3 润色 workflow）。
 
 **Discussion 段落结构 / Online Methods vs STAR Methods**：写 Discussion 或 Methods 章节前 `Read references/writing-templates.md` 对应小节。要点：Discussion 走"主要发现总结→文献对比+机制→**Limitations（强制，缺即退稿高频）**→Outlook"四段式；Methods 按 target_journal 选 Online Methods（Nature 精简版+完整版后置）或 STAR Methods（Cell 五段结构）。

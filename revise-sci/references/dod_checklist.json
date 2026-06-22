@@ -92,6 +92,12 @@
           "name": "结构完整性",
           "check": "改后稿件结构完整：原结构无破坏、参考文献编号连续、response 各 unit 三要素（审稿意见与中文理解 / Response / Evidence Attachments）齐全；退稿信每条意见在 edit_plan 中有落点无遗漏",
           "script": "python scripts/strict_gate.py --project-root ."
+        },
+        {
+          "id": "RV-R9",
+          "name": "polish 片段级守卫",
+          "check": "每个 polished 片段 polish_numbers_ok=true（无数值漂移/丢失）、polish_certainty_ok=true（谨慎动词未被升级为强断言）、无套话禁词残留；polish_risk_flags 已落盘到 unit / revision_polish_execution.json / comment_records/<id>.md。strict_gate.py 内含 A/B/MID 三项检查，本项由 RV-R1 覆盖；若 strict_gate 通过，本项视为通过",
+          "script": "python scripts/strict_gate.py --project-root ."
         }
       ]
     }
