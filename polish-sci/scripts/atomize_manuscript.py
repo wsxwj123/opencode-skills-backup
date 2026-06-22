@@ -104,6 +104,12 @@ def heading_text(line: str) -> str:
     return re.sub(r"^#{1,6}\s+", "", line).strip()
 
 
+def markdown_heading_level(line: str) -> int:
+    """`#` 的个数即层级(1-6);非 md 语法标题返回 0。"""
+    m = re.match(r"^(#{1,6})\s+\S", line)
+    return len(m.group(1)) if m else 0
+
+
 def split_md_paragraphs(text: str) -> list[dict]:
     """Return ordered list of {'kind': 'heading'|'para', 'text': str}."""
     blocks: list[dict] = []
@@ -119,7 +125,8 @@ def split_md_paragraphs(text: str) -> list[dict]:
         line = raw_line.rstrip()
         if is_markdown_heading(line):
             flush()
-            blocks.append({"kind": "heading", "text": heading_text(line)})
+            blocks.append({"kind": "heading", "text": heading_text(line),
+                           "heading_level": markdown_heading_level(line)})
         elif not line.strip():
             flush()
         else:
@@ -140,7 +147,11 @@ def split_docx_paragraphs(path: Path) -> list[dict]:
         marked = normalize_ws(row.get("marked_text", "")) or text
         para_index = row.get("paragraph_index")
         if style.startswith("heading") or style == "title":
-            blocks.append({"kind": "heading", "text": text, "para_index": para_index})
+            # 从 style name 提取层级:"heading 1"->1, "heading 2"->2;"title" 视为 1。
+            m = re.search(r"(\d+)", style)
+            level = int(m.group(1)) if m else 1
+            blocks.append({"kind": "heading", "text": text, "para_index": para_index,
+                           "heading_level": level})
         else:
             blocks.append({"kind": "para", "text": marked, "plain_text": text, "para_index": para_index})
     return blocks
@@ -151,6 +162,8 @@ def build_units(blocks: list[dict]) -> list[dict]:
     current_heading = ""
     current_type = "other"
     current_prose = True
+    current_heading_level = 0
+    current_heading_inferred = False
     idx = 0
     for block in blocks:
         # 标题判定用纯文本(plain_text),避免行内格式标记干扰正则;para 默认无 plain_text 时回退 text
@@ -162,6 +175,14 @@ def build_units(blocks: list[dict]) -> list[dict]:
             current_heading = plain
             current_type = infer_section_type(current_heading)
             current_prose = not is_nonprose_section(current_heading)
+            if "heading_level" in block:
+                # 显式标题(md `#` 语法 / docx heading 样式):用记录的真实层级
+                current_heading_level = block["heading_level"]
+                current_heading_inferred = False
+            else:
+                # 未样式化、靠 looks_like_heading 推断的标题:给默认 level 1 并标 inferred
+                current_heading_level = 1
+                current_heading_inferred = True
             continue
         raw = block["text"]  # 带行内格式标记(docx)或纯文本(md)
         # Abstract 引导词判定用纯文本
@@ -172,6 +193,10 @@ def build_units(blocks: list[dict]) -> list[dict]:
                 "idx": idx,
                 "raw_text": raw,
                 "heading": current_heading,
+                # heading_level:该 unit 所属标题的层级(1-6)。abstract 引导词段无独立标题,
+                # 沿用当前 section 层级。inferred 段(非 # 语法)默认 1。
+                "heading_level": current_heading_level,
+                "heading_inferred": current_heading_inferred,
                 "section_type": unit_type,
                 # source_para_index:该 unit 对应源 docx 的段落下标,供 in-place 写回精确定位;
                 # md 输入无此概念则为 None。
@@ -213,6 +238,7 @@ def main() -> int:
         "unit_count": len(units),
         "units": [
             {"idx": u["idx"], "section_type": u["section_type"], "heading": u["heading"],
+             "heading_level": u["heading_level"],
              "has_citation": u["has_citation"], "has_numeric": u["has_numeric"]}
             for u in units
         ],

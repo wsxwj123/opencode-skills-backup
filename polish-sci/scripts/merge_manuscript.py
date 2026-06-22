@@ -99,7 +99,11 @@ def build_markdown(project_root: Path) -> tuple[str, list[dict]]:
         if not heading:
             heading = SECTION_TITLE.get(unit.get("section_type", "other"), "")
         if heading and heading != last_heading:
-            parts.append(f"## {heading}")
+            # heading_level 还原 `#` 层级:优先 polished unit,回退 index entry,
+            # 旧 unit 无此字段则回退 2(沿用历史 `## ` 行为)。clamp 到 1-6。
+            level = unit.get("heading_level", entry.get("heading_level", 2)) or 2
+            level = max(1, min(6, level))
+            parts.append(f"{'#' * level} {heading}")
             last_heading = heading
         text = unit.get("polished_text", "").strip()
         if text:
@@ -118,8 +122,11 @@ def export_docx(md_text: str, docx_path: Path) -> bool:
         block = block.strip()
         if not block:
             continue
-        if block.startswith("## "):
-            heading = doc.add_heading(block[3:].strip(), level=1)
+        m = re.match(r"^(#{1,6})\s+(.*)$", block, re.DOTALL)
+        if m:
+            # `#` 个数 -> Heading 级别(clamp 到 1-9,python-docx 上限)
+            level = max(1, min(9, len(m.group(1))))
+            heading = doc.add_heading(m.group(2).strip(), level=level)
             for run in heading.runs:
                 _set_run_font(run)
         else:
