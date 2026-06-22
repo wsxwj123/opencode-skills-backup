@@ -386,6 +386,7 @@ python scripts/state_manager.py add-abbreviation <one.json>
    - [ ] **⑭figure_analysis 加载**：本节涉及的 figure 在 `figures_database.json` 中均有对应 `figure_analysis/figure_{N}.md` 文件、非空、无 `❓待确认` 残留（脚本：`python scripts/figure_analysis_gate.py --section [section_id] --root .` 必须 exit 0）
    - [ ] **⑮缩略词一致性**：本节新引入缩略词均已规范首展（`Full Name (ABBR)`），无重复定义、无未定义即用、Title 无缩写；已过 `python scripts/abbreviation_consistency.py --root .` 核验（exit 0；通用缩写自动跳过）
    - [ ] **⑯检查点已落**：本节已落版本检查点——`python scripts/git_checkpoint.py status .` 显示 commit 数随节递增（git 可用时），或 git 不可用时已生成 snapshot（`version_history.json` 有新快照）。二者满足其一即可
+   - [ ] **⑰字符级排版契约已遵守**（人工项）：本节斜体（学名/基因名/统计符号 `*p*`/`*n*`/拉丁缩写）、上标 `^...^`（10^6^、cm^2^）、下标 `~...~`（H~2~O、CO~2~、IC~50~）标记到位，无裸写 `H2O`/`CO2`/`IC50`；中文全角、英文数字半角（见 §字符级排版契约）
 10. **Safety Write**: 用户 OK 后写入文件 → 智能快照 → **Git Checkpoint**：`python scripts/git_checkpoint.py commit [Project_Root] "[gsw] section <section_id> done"`（git 不可用时自动 no-op，snapshot 仍是回退兜底）。回退手段：若落盘后用户反悔，`/rollback` 到上一个 snapshot、`git checkout <sha> -- <file>` 回退单节，或直接 Edit 改原子化文件（参见 §3 润色 workflow）。
 
 **Discussion 段落结构 / Online Methods vs STAR Methods**：写 Discussion 或 Methods 章节前 `Read references/writing-templates.md` 对应小节。要点：Discussion 走"主要发现总结→文献对比+机制→**Limitations（强制，缺即退稿高频）**→Outlook"四段式；Methods 按 target_journal 选 Online Methods（Nature 精简版+完整版后置）或 STAR Methods（Cell 五段结构）。
@@ -646,6 +647,21 @@ python scripts/state_manager.py add-abbreviation <one.json>
 - ❌ 先写超期刊上限 30% 再砍：storyline 必须在 target_journal 字数上限内编排。
 - ❌ Discussion 漏写 Limitations 段，或正文用列点符号、单句超 30 词、带破折号修辞。
 - ❌ 投稿包残留 `{{VAR}}` 占位、伪造 reviewer 邮箱、瞒报 COI，或 Source Data 数值与图不对应。
+
+---
+
+## ✒️ 字符级排版契约 (Character-Level Typography Contract)
+
+正文 Markdown 必须用下列字符级标记，`/merge` 的 pandoc（输入格式 `markdown+superscript+subscript`）会渲染成真斜体/上标/下标。**手写正文时即按此标记，不要等导出后再补**。
+
+- **斜体 `*...*`**（pandoc 默认渲染为 *italic*）：① 物种拉丁学名（`*E. coli*`、`*Escherichia coli*`）② 基因名（`*TP53*`，蛋白名不斜体）③ 统计符号（`*p*`、`*t*`、`*n*`、`*F*`、`*r*`、`*P*` 值的 P）④ 拉丁缩写（`*in vitro*`、`*in vivo*`、`*et al.*`、`*vs.*`）。
+- **上标 `^...^`**（pandoc superscript 语法）：`10^6^`、`cm^2^`、`m^2^`、同位素 `^14^C`。
+- **下标 `~...~`**（pandoc subscript 语法）：`H~2~O`、`CO~2~`、`IC~50~`、`Ca^2+^`（电荷上标）。**🔴 禁止裸写 `H2O`/`CO2`/`IC50`**，必须用下标标记。
+- **加粗 `**...**`**：仅用于标题或必要强调，正文论述不滥用加粗。
+- **半角/全角**：中文句内标点用全角（，。；：），英文与数字用半角；中英混排时英文单词、数字、单位一律半角，两侧按需留空格。
+- **Vancouver 数字引文上标**（仅当目标刊要求上标引文样式时）：用 `^[n]^`（如 `^[1]^`、`^[3,5]^`）；默认 `[n]` 行内样式不变，按目标刊 author guideline 决定。
+
+> 不与既有规则冲突：P0#7 的正文 `[n]` 引用格式不变；上标引文 `^[n]^` 仅在目标刊明确要求时启用。
 
 ---
 

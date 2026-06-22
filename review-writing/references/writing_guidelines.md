@@ -96,6 +96,26 @@ High-impact reviews are not summaries; they are arguments.
   ```
 - **Cross-section consistency:** When writing Section N, check if the abbreviation was already defined in a previous section. During Phase 3 the registry does not exist yet (Phase 4 generates it) — grep the already-written `drafts/section_*.md` files for the `Full Name (ABBR)` pattern. If already defined, use ABBR directly — do NOT re-expand.
 
+### Character-Level Typesetting Contract
+
+Inline formatting in section drafts must follow these rules (reviews are usually English; rules written in English).
+
+- **Italic via `*...*`** — apply to:
+  - Species Latin names: `*E. coli*`, `*Arabidopsis*`, `*Staphylococcus aureus*`.
+  - Gene names (per convention): `*TP53*`, `*BRCA1*`.
+  - Statistical symbols: `*p*`, `*t*`, `*n*`, `*F*`, `*r*` (e.g. `*p* < 0.05`, `*n* = 30`).
+  - Latin abbreviations: `*in vitro*`, `*in vivo*`, `*et al.*`, `*via*`, `*ex vivo*`, `*de novo*`.
+- **Superscript `^...^` / subscript `~...~`** (pandoc syntax, reserved for future docx export):
+  - Superscript: `10^6^`, `cm^2^`, `μm^2^`.
+  - Subscript: `H~2~O`, `CO~2~`, `IC~50~`.
+  - Never write bare `H2O` / `CO2` / `IC50` — always mark sub/superscripts.
+- **Bold `**...**`** — only for emphasis or headings. Do NOT use bold for species names, genes, or statistical symbols (those are italic).
+- **Half-width / full-width punctuation:**
+  - English, numbers, and DOIs use half-width characters and punctuation throughout.
+  - If a sentence contains Chinese, use full-width punctuation for the in-sentence Chinese punctuation; keep half-width for embedded English/number/DOI tokens.
+
+> Note: `^...^` / `~...~` render only when docx export uses pandoc with the `+superscript+subscript` extensions (a later completion item; see SKILL.md Phase 4). In plain Markdown preview they may show as literal carets/tildes — this is expected and the source markup is correct.
+
 ## 5. Figure Prompt Template
 
 **Trigger:** Run ONCE after ALL sections in Phase 3 are complete (all sections in `completed_sections`).

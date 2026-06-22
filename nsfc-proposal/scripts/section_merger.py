@@ -115,7 +115,7 @@ def merge_selected(sections_dir: Path, selected: list[str], output_path: Path) -
 
 def merge_docx(md_path: Path, docx_path: Path) -> dict:
     docx_path.parent.mkdir(parents=True, exist_ok=True)
-    cmd = ["pandoc", str(md_path), "-o", str(docx_path)]
+    cmd = ["pandoc", "-f", "markdown+superscript+subscript", str(md_path), "-o", str(docx_path)]
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
     except FileNotFoundError:

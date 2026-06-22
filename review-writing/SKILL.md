@@ -696,6 +696,7 @@ If pending_sections is empty → all sections complete; proceed to Phase 4.
 4. **Draft:** Write to `drafts/section_XX_XX.md` (zero-pad each part to 2 digits, e.g., section 1.1 → `drafts/section_01_01.md`, section 2.10 → `drafts/section_02_10.md`). Paragraphs only. Citation format `[N]` (N = gid).
    - **Reference the figure caption from Step 3a.** The draft must describe and introduce the figure using its planned caption and key message.
    - Apply Anti-AI Writing rules (English or Chinese mode per outline.md).
+   - 行内格式遵守 `references/writing_guidelines.md` 的字符级排版契约（物种/基因/统计符号/拉丁缩写斜体 `*...*`；上下标 `^...^`/`~...~`，禁裸 H2O/CO2；半角全角规则）。
    - Synthesis not summary; arbitration of contradictions; alternate claim/evidence order.
    - **Abbreviation rule:** First occurrence of any abbreviation in this section must use "Full Name (ABBR)" format. If the abbreviation was already defined in a previous section, use ABBR directly. `exports/abbreviation_list.md` does not exist yet (it is generated in Phase 4 Step 4c); to check prior definitions, grep the already-written `drafts/section_*.md` files for the `Full Name (ABBR)` pattern.
 
@@ -831,6 +832,7 @@ Write Mode has no `pending_sections` field so this gate is a no-op (no key → e
    # If any file uses non-padded name, rename first:
    #   mv drafts/section_1_1.md drafts/section_01_01.md
    ```
+   > **⚠️ 导出范围注记：当前导出止于 Markdown（`exports/Final_Review.md`）。** 转 docx 时，字符级排版契约里的上下标 `^...^`/`~...~` 需用 pandoc 的 `+superscript+subscript` 扩展，并配 `reference.docx` 模板（斜体/上下标样式）——此为后续补全项，**本技能不自动产出 `Final_Review.docx`**。
    4b. **Cross-section coherence scan** (on compiled `exports/Final_Review.md`):
    Read the full compiled text sequentially and check:
    - **Transition continuity:** The opening of each section/subsection must logically connect to the closing of the previous one. Flag abrupt topic jumps with no bridging sentence.

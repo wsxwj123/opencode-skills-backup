@@ -286,6 +286,17 @@ Each comment must contain:
   - **MID 禁词表**：`common.AI_CLICHE_TERMS_EN`（与 `general-sci-writing/scripts/style_checker.py` 的 `FORBIDDEN_EXACT` 对齐：moreover/delve into/it is worth noting 等）+ `AI_CLICHE_TERMS_ZH`（值得注意的是/综上所述等），由 `find_ai_style_markers` 在 polished 片段上检测套话词，命中归入 overstatement 风险并阻断门禁。
 - `strict_gate.py` must also fail if `comments_input_mode` is unsupported, `expected_comments_mode` and detected mode diverge, or the required state-window artifacts are missing.
 
+## Character-level typography contract（字符级排版契约）
+
+Applies to all newly written or rewritten content (revised fragments, new sentences, response-letter prose). These inline markers are rendered into real Word character formatting by `scripts/export_docx.py` (bold/italic/superscript/subscript runs). This contract governs **the generation layer only** — the markers you emit when authoring new text. Reading legacy docx still loses formatting; that round-trip is a separate in-place concern.
+
+- **Italic** via `*...*` for: species Latin names (`*E. coli*`, `*Staphylococcus aureus*`), gene names (`*TP53*`, `*BRCA1*`), single-letter statistical symbols (`*p*`, `*t*`, `*n*`, `*F*`, `*r*`), and Latin abbreviations (`*in vitro*`, `*in vivo*`, `*et al.*`, `*e.g.*`, `*i.e.*`).
+- **Superscript** via `<sup>...</sup>`: exponents and powers (`10<sup>6</sup>`, `cm<sup>2</sup>`, `mg·kg<sup>-1</sup>`). **Subscript** via `<sub>...</sub>`: chemical subscripts and indexed terms (`H<sub>2</sub>O`, `CO<sub>2</sub>`, `IC<sub>50</sub>`, `T<sub>max</sub>`). **Never** emit bare `H2O` / `CO2` / `IC50`.
+- **Bold** via `**...**` only for headings and inline labels (e.g. `**Limitations.**`), never for emphasis inside running scientific prose.
+- 中文回复部分：句内标点全角（，。：；），英文与数字保持半角，中英文之间不强制空格但须一致。
+
+These inline markers are load-bearing and carry the same status as citation markers `[n]`: when rewriting a locked fragment, **do not add, drop, or mis-pair** them. Adding `*`/`<sup>`/`<sub>` where the source had none, or stripping existing ones, is a meaning/format drift and is subject to the same fragment-only and scope-lock rules as `[n]`.
+
 ## ❌ 反例黑名单（Anti-Patterns）
 
 - ❌ 跳过 `intake_router.py` 直接跑 `run_pipeline.py`，或输入源未分类／不支持仍硬跑（preflight 须 fail-fast，不得猜分支）。
@@ -302,6 +313,7 @@ Each comment must contain:
 - ❌ 引文 `[n]` 与参考列表不对应、缺号或编号不连续就交付（`reference_coverage_audit.json` 须 ok=true）。
 - ❌ `--resume` 时输入指纹或脚本签名已变仍信任旧产物，而非 fail-fast 重建。
 - ❌ 改稿删/换句子时丢失某缩写的唯一首展、在首展前裸用 ABBR、新增术语不首展，或 Title 出现缩写（`abbreviation_index.json` 的 `undefined_use` / `duplicate_definition` / `title_abbreviation` 硬错须清零）。
+- ❌ 改写锁定片段时增删或错配行内排版标记（`*italic*` / `<sup>` / `<sub>` / `**bold**`），等同于篡改引文标记 `[n]`；裸写 `H2O`/`CO2`/`IC50` 或漏给物种名、基因名、统计符号加斜体。
 
 ## Definition-of-Done (DoD) 自检清单（改稿收口）
 
