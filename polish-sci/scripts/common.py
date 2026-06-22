@@ -8,8 +8,14 @@ from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
 
-from docx import Document
-from docx.opc.exceptions import PackageNotFoundError
+try:
+    from docx import Document
+    from docx.opc.exceptions import PackageNotFoundError
+except ImportError:
+    Document = None
+
+    class PackageNotFoundError(Exception):
+        pass
 
 
 BANNED_PLACEHOLDER_MARKERS = ("{{", "待ai", "ai_fill_required")
@@ -383,6 +389,11 @@ def directory_signature(path: Path | None) -> dict[str, Any]:
 
 
 def read_docx_paragraphs(path: Path) -> list[dict[str, Any]]:
+    if Document is None:
+        raise RuntimeError(
+            "python-docx is not installed but is required to read .docx files. "
+            "Install it with `pip install python-docx`, or provide manuscript/comments in Markdown."
+        )
     doc = Document(str(path))
     rows: list[dict[str, Any]] = []
     for i, paragraph in enumerate(doc.paragraphs):

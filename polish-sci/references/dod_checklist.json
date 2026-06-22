@@ -56,8 +56,8 @@
         {
           "id": "PL-G9",
           "name": "结构完整性",
-          "check": "合并后 polished_manuscript.md 段落顺序与小节结构与原稿一致,无段落丢失/错位/重复;引用编号连续",
-          "script": "python scripts/strict_gate.py --project-root ."
+          "check": "纯人工核:合并后 polished_manuscript.md 段落顺序与小节结构与原稿一致,无段落丢失/错位/重复,引用编号连续(strict_gate 只逐 unit 核红线,不验证段落顺序/段数/引用连续,本项无脚本背书)",
+          "script": ""
         },
         {
           "id": "PL-G10",

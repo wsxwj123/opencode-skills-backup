@@ -16,7 +16,7 @@
           "id": "G2",
           "name": "citation_guard",
           "check": "本节新增引用已过 citation_guard，报告 ok=true",
-          "script": "python scripts/citation_guard.py --offline --index data/literature_index.json"
+          "script": "python scripts/citation_guard.py --offline --index <项目根>/literature_index.json"
         },
         {
           "id": "G3",
@@ -95,7 +95,7 @@
           "id": "G2",
           "name": "全章citation_guard",
           "check": "本章所有引用已过 citation_guard，报告 ok=true",
-          "script": "python scripts/citation_guard.py --offline --index data/literature_index.json"
+          "script": "python scripts/citation_guard.py --offline --index <项目根>/literature_index.json"
         },
         {
           "id": "G3",
@@ -148,7 +148,7 @@
           "id": "S5",
           "name": "GB/T 7714著录格式",
           "check": "本章新引文已过 reference_renderer.py validate_all，零偏差",
-          "script": "python scripts/reference_renderer.py --index data/literature_index.json --validate-only"
+          "script": "python scripts/reference_renderer.py --index <项目根>/literature_index.json --validate-only"
         },
         {
           "id": "S6",

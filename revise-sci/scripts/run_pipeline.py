@@ -641,6 +641,27 @@ def main() -> int:
             reference_registry_args.extend(["--references-source", resolved_references_source])
         run_step(reference_registry_args)
 
+    # 改稿合并完成后,对最终 output_md 重跑 manuscript_index,使 abbreviation_index.json
+    # 反映改后稿(供 RV-G7 缩略语首展门禁审改后稿而非改前原稿)。辅助产物,失败不阻断主流程,
+    # 但须显式 warning 而非静默吞(区别于 line 488 对源稿那次的 try/except pass)。
+    try:
+        idx_completed = subprocess.run(
+            [py, str(script_dir / "manuscript_index.py"), "--manuscript", args.output_md, "--project-root", args.project_root],
+            text=True, capture_output=True, timeout=180,
+        )
+        if idx_completed.returncode != 0:
+            print(
+                f"[run_pipeline] WARNING: manuscript_index over output_md failed (exit {idx_completed.returncode}); "
+                f"abbreviation_index.json may still reflect the pre-revision manuscript. stderr: {idx_completed.stderr.strip()}",
+                file=sys.stderr,
+            )
+    except Exception as exc:
+        print(
+            f"[run_pipeline] WARNING: manuscript_index over output_md raised {exc!r}; "
+            f"abbreviation_index.json may still reflect the pre-revision manuscript.",
+            file=sys.stderr,
+        )
+
     export_args = [
         py,
         str(script_dir / "export_docx.py"),
