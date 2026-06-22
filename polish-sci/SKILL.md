@@ -84,7 +84,7 @@ python scripts/delegate_review.py verify --checklist references/dod_checklist.js
 python scripts/strict_gate.py --project-root <root>
 
 # 7. 合并 + 报告
-python scripts/merge_manuscript.py --project-root <root> [--docx out.docx]
+python scripts/merge_manuscript.py --project-root <root> [--docx out.docx] [--in-place-src <原始docx>]
 python scripts/polish_report.py --project-root <root>
 ```
 
@@ -107,8 +107,10 @@ python scripts/polish_report.py --project-root <root>
 - `figures/figure_NN.<ext>` + `figures/image_manifest.json`,从源 docx `word/media/` 解出的内嵌图(按 zip 出现顺序命名)。仅二进制搬运,不做 OCR/图像识别;非 docx 输入则该目录可能为空。供最终 docx 嵌图使用。
 - `polish_manifest.json`,逐段润色任务包。
 - `polished/<idx>.json`,逐段润色结果 + polish_risk_flags。
-- `polished_manuscript.md`,合并后的润色稿。docx 为可选导出(`--docx`,需 python-docx;失败仅警告,md 仍产出)。导出器会解析 md 行内标记(`**加粗**`/`*斜体*`/`<sup>`/`<sub>`)渲染为 run 级格式,并对每个 run 设含 `w:eastAsia` 的字体(中文默认宋体)。
-  > ⚠️ **docx 往返 lossy 警告**:当前 docx 输入经 md 往返会丢失**原稿** run 级格式(斜体/上下标/字体),根因在读取层(atomize 只取纯文本)。`--docx` 导出仅能还原 md 里**显式标注**的字符级格式,**不可当交付稿**——原稿中未被标记捕获的排版会丢。`--docx` 仅供纯文本/已标注格式的预览。保格式的 in-place 导出(直接在原 docx 上改文字、不动 run 格式)为后续改造项。
+- `polished_manuscript.md`,合并后的润色稿。docx 导出有两条路径:
+  - **in-place 保格式导出(交付级,docx 输入首选)**:`--in-place-src <原始docx>`(可配 `--docx <输出路径>`,缺省 `polished_inplace.docx`)。直接打开**原始输入 docx**,只把每个 prose 段落的文字换成 polished 文本——按行内标记(`*斜体*`/`**加粗**`/`<sup>`/`<sub>`)重建 run,每个新 run 继承该段落原首个 run 的基础字体(`font.name`/`size`/`w:eastAsia`),再叠加 italic/sup/sub/bold。段落级格式(对齐/样式/缩进 pPr)、表格、图片、页眉页脚、参考文献等非 prose 内容**完全不动**。映射靠 `units/<idx>.json` 的 `source_para_index`;段落数与 unit 对不齐(缺索引/越界/冲突)时 **fail-closed 报错退出**,绝不错位写入。这是 docx 输入的**保格式交付稿**。
+  - **md 重建导出(无原始 docx 时,如 md 输入)**:`--docx out.docx`(不带 `--in-place-src`)。从 polished md 重建裸 docx,解析行内标记渲染为 run 级格式并对每个 run 设含 `w:eastAsia` 的字体(中文默认宋体)。能渲染显式标注的字符级格式,但**不携带原稿的段落排版/表格/图片**,适合 md 输入或预览。
+  > ℹ️ 读取层(`read_docx_paragraphs`)已把原稿 run 级格式(斜体/上下标/加粗)序列化进 `marked_text`,atomize 用它作 prose 段落 `raw_text`,润色全程带标记(见"字符级排版契约"),因此 in-place 写回能还原原稿语义行内格式,纯润色不再把 `H₂O→H2O` 或丢斜体。
 - `polish_change_report.md`,逐段改动 + 风险 flag + 未改原因。
 
 ## Anti-AI 规则(检测见 common.py)

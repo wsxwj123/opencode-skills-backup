@@ -674,6 +674,9 @@ def main() -> int:
     ]
     if args.reference_docx:
         export_args.extend(["--reference-docx", args.reference_docx])
+    # 传原始 manuscript docx,使改后稿默认 in-place 保原稿格式(仅 .docx 原稿生效)。
+    if args.manuscript and Path(args.manuscript).suffix.lower() == ".docx":
+        export_args.extend(["--manuscript-docx", args.manuscript])
     export_args.extend(["--journal-style", args.journal_style])
     run_step(export_args)
     run_step([py, str(script_dir / "final_consistency_report.py"), "--project-root", args.project_root])

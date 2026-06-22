@@ -832,7 +832,7 @@ Write Mode has no `pending_sections` field so this gate is a no-op (no key → e
    # If any file uses non-padded name, rename first:
    #   mv drafts/section_1_1.md drafts/section_01_01.md
    ```
-   > **⚠️ 导出范围注记：当前导出止于 Markdown（`exports/Final_Review.md`）。** 转 docx 时，字符级排版契约里的上下标 `^...^`/`~...~` 需用 pandoc 的 `+superscript+subscript` 扩展，并配 `reference.docx` 模板（斜体/上下标样式）——此为后续补全项，**本技能不自动产出 `Final_Review.docx`**。
+   > **导出范围注记：** Markdown（`exports/Final_Review.md`）是中间产物；最终 docx 由本技能 Step 5d 的 `scripts/export_docx.py` 产出。字符级排版契约里的上下标 `^...^`/`~...~` 通过 pandoc 的 `+superscript+subscript` 扩展转换，正文/标题字体（Times New Roman、标题加粗）由 `templates/reference.docx` 锁定（该模板由 `scripts/make_reference_docx.py` 烘焙）。
    4b. **Cross-section coherence scan** (on compiled `exports/Final_Review.md`):
    Read the full compiled text sequentially and check:
    - **Transition continuity:** The opening of each section/subsection must logically connect to the closing of the previous one. Flag abrupt topic jumps with no bridging sentence.
@@ -857,6 +857,13 @@ Write Mode has no `pending_sections` field so this gate is a no-op (no key → e
 
 5c. **元数据块（导出前补全）：** 在 `exports/Final_Review.md` 末尾追加 Manuscript Metadata 块（search cutoff / databases / COI / funding）。
    📖 字段模板详见 `references/writing_guidelines.md` §7。
+
+5d. **导出 docx（最终交付物）：** 所有 md 修复（4b/4c/5/5b/5c）完成后，将 `exports/Final_Review.md` 编译为 `exports/Final_Review.docx`：
+   ```bash
+   python3 scripts/export_docx.py --md exports/Final_Review.md --out exports/Final_Review.docx
+   # 若使用 BibTeX/CSL 渲染参考文献，追加：--bib exports/references.bib [--csl style.csl]
+   ```
+   样式由 `templates/reference.docx` 锁定（正文 Times New Roman 12pt、标题 TNR 加粗），上下标 `^...^`/`~...~` 经 pandoc `+superscript+subscript` 转为真实上下标。pandoc 缺失时脚本会报清晰错误并退出。
 
 6. **Update state.json (merge, do NOT overwrite):**
    ```bash

@@ -6,6 +6,12 @@ import re
 import shutil
 import subprocess
 import sys
+from pathlib import Path
+
+# Default pandoc reference template bundled with this skill: locks body to
+# Times New Roman 12pt and headings to TNR bold (see make_reference_docx.py).
+# Resolved relative to this script's skill directory so it works regardless of cwd.
+DEFAULT_REFERENCE_DOC = Path(__file__).resolve().parent.parent / "templates" / "reference.docx"
 
 DEFAULT_PATTERNS = [
     "01_Abstract*.md",
@@ -331,7 +337,11 @@ def parse_args():
     parser.add_argument("--patterns", default=",".join(DEFAULT_PATTERNS), help="Comma-separated glob patterns")
     parser.add_argument("--skip-docx", action="store_true", help="Skip docx conversion")
     parser.add_argument("--skip-precheck", action="store_true", help="Skip merge consistency precheck")
-    parser.add_argument("--reference-doc", help="Optional pandoc reference docx template")
+    parser.add_argument(
+        "--reference-doc",
+        default=None,
+        help="Pandoc reference docx template (defaults to bundled templates/reference.docx if present)",
+    )
     parser.add_argument("--allow-empty", action="store_true", help="Allow producing an empty merged file")
     return parser.parse_args()
 
@@ -341,13 +351,18 @@ def main():
     output_md = args.output_md or os.path.join(args.manuscript_dir, "Full_Manuscript.md")
     output_docx = args.output_docx or os.path.join(args.manuscript_dir, "Full_Manuscript.docx")
     patterns = [p.strip() for p in args.patterns.split(",") if p.strip()]
+
+    # Default to the bundled TNR-12pt reference template; skip silently if absent.
+    reference_doc = args.reference_doc
+    if reference_doc is None and DEFAULT_REFERENCE_DOC.exists():
+        reference_doc = str(DEFAULT_REFERENCE_DOC)
     report = run_merge(
         manuscript_dir=args.manuscript_dir,
         output_md=output_md,
         output_docx=output_docx,
         patterns=patterns,
         generate_docx=(not args.skip_docx),
-        reference_doc=args.reference_doc,
+        reference_doc=reference_doc,
         allow_empty=args.allow_empty,
         skip_precheck=args.skip_precheck,
     )

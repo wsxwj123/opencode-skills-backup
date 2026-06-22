@@ -372,11 +372,100 @@ def directory_signature(path: Path | None) -> dict[str, Any]:
     return {"path": str(resolved), "exists": True, "files": files}
 
 
-def read_docx_paragraphs(path: Path) -> list[dict[str, Any]]:
+def _run_is_superscript(run) -> bool:
+    try:
+        return bool(run.font.superscript)
+    except (AttributeError, ValueError):
+        return False
+
+
+def _run_is_subscript(run) -> bool:
+    try:
+        return bool(run.font.subscript)
+    except (AttributeError, ValueError):
+        return False
+
+
+def serialize_paragraph_with_inline_format(paragraph) -> str:
+    """Serialize a docx paragraph's run-level formatting into inline markers so the
+    text round-trips italic/bold/superscript/subscript: `*italic*`, `**bold**`,
+    `<sup>..</sup>`, `<sub>..</sub>` (same vocabulary export_docx.add_runs_with_bold
+    reconstructs). Adjacent runs sharing a format are merged so we emit one marker
+    per span, not one per run. Plain runs pass through verbatim.
+
+    NOTE: This is opt-in (inline_format=True). The default reader stays plain so the
+    numeric / citation / AI-style red-line comparisons that consume the shared reader
+    are not polluted by markers they never expect.
+    """
+    out: list[str] = []
+    # Coalesce consecutive runs that carry the same (bold, italic, sup, sub) tuple
+    # into a single span; emit the span text once with its markers.
+    span_text: list[str] = []
+    span_fmt: tuple[bool, bool, bool, bool] | None = None
+
+    def flush_span() -> None:
+        nonlocal span_text, span_fmt
+        if not span_text or span_fmt is None:
+            span_text = []
+            span_fmt = None
+            return
+        raw = "".join(span_text)
+        if raw.strip():
+            bold, italic, sup, sub = span_fmt
+            inner = raw
+            if sup:
+                inner = f"<sup>{inner}</sup>"
+            if sub:
+                inner = f"<sub>{inner}</sub>"
+            if bold:
+                inner = f"**{inner}**"
+            if italic:
+                inner = f"*{inner}*"
+            out.append(inner)
+        else:
+            out.append(raw)  # whitespace-only run: never wrap in markers
+        span_text = []
+        span_fmt = None
+
+    for run in paragraph.runs:
+        run_text = run.text or ""
+        if not run_text:
+            continue
+        fmt = (
+            bool(run.bold),
+            bool(run.italic),
+            _run_is_superscript(run),
+            _run_is_subscript(run),
+        )
+        if span_fmt is None or fmt == span_fmt:
+            span_fmt = fmt
+            span_text.append(run_text)
+        else:
+            flush_span()
+            span_fmt = fmt
+            span_text.append(run_text)
+    flush_span()
+    return normalize_ws("".join(out))
+
+
+def read_docx_paragraphs(path: Path, inline_format: bool = False) -> list[dict[str, Any]]:
+    """Read docx body paragraphs as {paragraph_index, text, style_name} rows.
+
+    inline_format=False (default): text is the plain paragraph text. Used by every
+    red-line consumer (numeric/citation/AI-style guards, reference & comment parsing)
+    that must not see formatting markers.
+
+    inline_format=True: text carries run-level italic/bold/sup/sub as inline markers
+    (`*..*` / `**..**` / `<sup>..</sup>` / `<sub>..</sub>`) so the atomized manuscript
+    sections preserve semantic formatting through the revise -> export round-trip.
+    """
     doc = Document(str(path))
     rows: list[dict[str, Any]] = []
     for i, paragraph in enumerate(doc.paragraphs):
-        text = normalize_ws(paragraph.text)
+        if inline_format:
+            text = serialize_paragraph_with_inline_format(paragraph)
+        else:
+            text = normalize_ws(paragraph.text)
         if not text:
             continue
         style_name = normalize_ws(getattr(getattr(paragraph, "style", None), "name", "") or "")
@@ -577,9 +666,19 @@ _AFFILIATION_HINT_RE = re.compile(
 )
 
 
+_INLINE_FORMAT_MARKER_RE = re.compile(r"\*\*|\*|</?sup>|</?sub>")
+
+
+def strip_inline_format_markers(text: str) -> str:
+    """Remove the inline format markers (`**`, `*`, `<sup>`, `<sub>` and their
+    closers) so plain-text matchers (headings, citation regexes) are unaffected
+    when fed text produced by inline_format=True reads."""
+    return _INLINE_FORMAT_MARKER_RE.sub("", text or "")
+
+
 def is_heading(row: dict[str, Any]) -> bool:
     style_name = row.get("style_name", "").lower()
-    text = row.get("text", "")
+    text = strip_inline_format_markers(row.get("text", ""))
     if style_name.startswith("heading"):
         return True
     if (

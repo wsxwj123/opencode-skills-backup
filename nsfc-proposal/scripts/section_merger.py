@@ -116,6 +116,10 @@ def merge_selected(sections_dir: Path, selected: list[str], output_path: Path) -
 def merge_docx(md_path: Path, docx_path: Path) -> dict:
     docx_path.parent.mkdir(parents=True, exist_ok=True)
     cmd = ["pandoc", "-f", "markdown+superscript+subscript", str(md_path), "-o", str(docx_path)]
+    # 默认套用国自然字体模板（正文宋体小四+黑体标题，eastAsia 已锁），存在才加
+    reference_docx = Path(__file__).resolve().parent.parent / "templates" / "reference.docx"
+    if reference_docx.exists():
+        cmd += ["--reference-doc", str(reference_docx)]
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
     except FileNotFoundError:

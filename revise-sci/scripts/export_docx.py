@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -14,7 +15,7 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Inches, Pt
 
-from common import read_json
+from common import read_json, read_docx_paragraphs, strip_inline_format_markers
 
 
 PROFILE_PRESETS: dict[str, dict[str, Any]] = {
@@ -465,12 +466,184 @@ def markdown_to_docx(
     doc.save(str(docx_path))
 
 
+# ---------------------------------------------------------------------------
+# In-place export: edit the ORIGINAL manuscript docx, replacing only the text of
+# paragraphs that revise actually changed. Untouched paragraphs, tables, images
+# and styles are preserved byte-for-byte (we never recreate the document).
+# ---------------------------------------------------------------------------
+
+
+def _paragraph_base_font(paragraph) -> dict[str, Any]:
+    """Capture the paragraph's base run font so rebuilt runs inherit name/size/
+    eastAsia instead of falling back to Normal. Prefers the first run with text;
+    falls back to the paragraph style's font."""
+    name = None
+    size = None
+    east_asia = None
+    for run in paragraph.runs:
+        if run.text and run.text.strip():
+            name = run.font.name
+            size = run.font.size
+            try:
+                rpr = run._element.get_or_add_rPr()
+                rfonts = rpr.find(qn("w:rFonts"))
+                if rfonts is not None:
+                    east_asia = rfonts.get(qn("w:eastAsia"))
+            except Exception:
+                east_asia = None
+            break
+    style = getattr(paragraph, "style", None)
+    if name is None and style is not None:
+        name = getattr(getattr(style, "font", None), "name", None)
+    if size is None and style is not None:
+        size = getattr(getattr(style, "font", None), "size", None)
+    return {"name": name, "size": size, "east_asia": east_asia}
+
+
+def _paragraph_has_embedded_image(paragraph) -> bool:
+    """True if the paragraph contains an inline/floating image (<w:drawing>) or a
+    legacy embedded object (<w:object>). Clearing such a paragraph's runs would
+    delete the picture and leave an orphan image relationship, so callers must
+    skip in-place run rebuild for these paragraphs."""
+    p = paragraph._p
+    return bool(
+        p.findall(".//" + qn("w:drawing"))
+        or p.findall(".//" + qn("w:object"))
+    )
+
+
+def _clear_paragraph_runs(paragraph) -> None:
+    """Remove every run element from a paragraph, keeping its pPr (alignment,
+    style, indentation) intact so paragraph-level formatting survives."""
+    p = paragraph._p
+    for run in list(paragraph.runs):
+        p.remove(run._r)
+
+
+def _apply_base_font(run, base: dict[str, Any]) -> None:
+    if base.get("name"):
+        run.font.name = base["name"]
+    if base.get("size") is not None:
+        run.font.size = base["size"]
+    if base.get("east_asia"):
+        rpr = run._element.get_or_add_rPr()
+        rfonts = rpr.get_or_add_rFonts()
+        rfonts.set(qn("w:eastAsia"), base["east_asia"])
+
+
+def rebuild_paragraph_runs(paragraph, text: str, base: dict[str, Any]) -> None:
+    """Replace paragraph content with runs built from inline markers, each run
+    inheriting the captured base font and layering italic/bold/sup/sub on top."""
+    _clear_paragraph_runs(paragraph)
+    pos = 0
+    for match in INLINE_TOKEN_RE.finditer(text):
+        if match.start() > pos:
+            run = paragraph.add_run(text[pos:match.start()])
+            _apply_base_font(run, base)
+        if match.group(1) is not None:
+            run = paragraph.add_run(match.group(0)[2:-2]); run.bold = True
+        elif match.group(2) is not None:
+            run = paragraph.add_run(match.group(0)[1:-1]); run.italic = True
+        elif match.group(3) is not None:
+            run = paragraph.add_run(match.group(0)[5:-6]); run.font.superscript = True
+        elif match.group(4) is not None:
+            run = paragraph.add_run(match.group(0)[5:-6]); run.font.subscript = True
+        else:
+            run = paragraph.add_run(match.group(0))
+        _apply_base_font(run, base)
+        pos = match.end()
+    if pos < len(text):
+        run = paragraph.add_run(text[pos:])
+        _apply_base_font(run, base)
+
+
+def collect_changed_paragraphs(project_root: Path) -> list[dict[str, Any]]:
+    """From manuscript_section_index.json, return paragraphs whose current_text
+    diverged from the original text (i.e. the ones revise actually edited)."""
+    index = read_json(project_root / "manuscript_section_index.json", {"sections": []})
+    changed: list[dict[str, Any]] = []
+    for section in index.get("sections", []):
+        for para in section.get("paragraphs", []):
+            pidx = para.get("paragraph_index")
+            original = para.get("text", "")
+            current = para.get("current_text", original)
+            if pidx is None:
+                continue
+            if current != original:
+                changed.append({"paragraph_index": pidx, "original": original, "current": current})
+    return changed
+
+
+def export_inplace(manuscript_docx: Path, project_root: Path, output_docx: Path) -> dict[str, Any]:
+    """Edit the original manuscript docx in place: replace only changed paragraphs'
+    text, preserve everything else. fail-closed on any location/identity mismatch."""
+    doc = Document(str(manuscript_docx))
+    paragraphs = doc.paragraphs
+    changed = collect_changed_paragraphs(project_root)
+    errors: list[str] = []
+    applied: list[int] = []
+    for entry in changed:
+        pidx = entry["paragraph_index"]
+        if pidx < 0 or pidx >= len(paragraphs):
+            errors.append(f"paragraph_index {pidx} out of range (doc has {len(paragraphs)} paragraphs)")
+            continue
+        paragraph = paragraphs[pidx]
+        # Identity check: the live paragraph (with the same inline serialization the
+        # index was built from) must match the recorded original. A mismatch means
+        # the docx drifted from the atomized snapshot -> fail-closed, write nothing.
+        live = strip_inline_format_markers(paragraph.text)
+        recorded = strip_inline_format_markers(entry["original"])
+        if normalize_text_for_match(live) != normalize_text_for_match(recorded):
+            errors.append(
+                f"identity mismatch at paragraph_index {pidx}: "
+                f"docx={live[:60]!r} != index={recorded[:60]!r}"
+            )
+            continue
+    if errors:
+        return {"ok": False, "rejected": True, "errors": errors, "mode": "in-place"}
+    # second pass: all entries validated, now mutate.
+    skipped_images: list[int] = []
+    for entry in changed:
+        pidx = entry["paragraph_index"]
+        paragraph = paragraphs[pidx]
+        # fail-safe: a revised paragraph that embeds an image cannot be run-rebuilt
+        # in place — _clear_paragraph_runs would delete the <w:drawing>/<w:object>
+        # and leave an orphan image rel. Skip its text rewrite, keep runs intact.
+        if _paragraph_has_embedded_image(paragraph):
+            skipped_images.append(pidx)
+            print(
+                f"[export_inplace] warning: paragraph {pidx} contains an embedded "
+                f"image; skipping in-place rewrite to preserve the picture — "
+                f"please revise this paragraph's text manually.",
+                file=sys.stderr,
+            )
+            continue
+        base = _paragraph_base_font(paragraph)
+        rebuild_paragraph_runs(paragraph, entry["current"], base)
+        applied.append(pidx)
+    output_docx.parent.mkdir(parents=True, exist_ok=True)
+    doc.save(str(output_docx))
+    return {
+        "ok": True,
+        "mode": "in-place",
+        "paragraphs_changed": applied,
+        "paragraphs_skipped_images": skipped_images,
+        "paragraphs_total": len(paragraphs),
+    }
+
+
+def normalize_text_for_match(text: str) -> str:
+    return re.sub(r"\s+", " ", text or "").strip()
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Export markdown artifacts to docx")
     parser.add_argument("--project-root", required=True)
     parser.add_argument("--output-md", required=True)
     parser.add_argument("--output-docx", required=True)
     parser.add_argument("--reference-docx", default="")
+    parser.add_argument("--manuscript-docx", default="", help="Original manuscript docx; when present, the revised manuscript is exported in-place to preserve its formatting/tables/images.")
+    parser.add_argument("--no-inplace", action="store_true", help="Force the legacy full-rebuild-from-md path even when an original manuscript docx is available.")
     parser.add_argument("--journal-style", choices=tuple(PROFILE_PRESETS.keys()), default="journal-manuscript")
     args = parser.parse_args()
 
@@ -480,15 +653,33 @@ def main() -> int:
     response_md = project_root / "response_to_reviewers.md"
     response_docx = project_root / "response_to_reviewers.docx"
 
-    markdown_to_docx(
-        output_md,
-        output_docx,
-        args.reference_docx,
-        page_break_before_comment=False,
-        header_text="Revised Manuscript",
-        profile_name=args.journal_style,
-        doc_kind="manuscript",
+    # 改后稿默认 in-place:基于原始 manuscript docx 编辑,保原稿格式/表格/图片,
+    # 只替换被改段落。无原始 docx 或 in-place 失败时,回退到 md 全量重建(legacy)。
+    manuscript_docx = Path(args.manuscript_docx) if args.manuscript_docx else None
+    inplace_result: dict[str, Any] | None = None
+    use_inplace = (
+        not args.no_inplace
+        and manuscript_docx is not None
+        and manuscript_docx.exists()
+        and manuscript_docx.suffix.lower() == ".docx"
     )
+    if use_inplace:
+        inplace_result = export_inplace(manuscript_docx, project_root, output_docx)
+        if not inplace_result.get("ok"):
+            # fail-closed: 不静默错位写入,回退到 md 全量重建并保留拒绝原因供诊断。
+            print(json.dumps({"inplace_rejected": inplace_result}, ensure_ascii=False), file=sys.stderr)
+            inplace_result = None
+
+    if inplace_result is None:
+        markdown_to_docx(
+            output_md,
+            output_docx,
+            args.reference_docx,
+            page_break_before_comment=False,
+            header_text="Revised Manuscript",
+            profile_name=args.journal_style,
+            doc_kind="manuscript",
+        )
     markdown_to_docx(
         response_md,
         response_docx,
@@ -508,9 +699,18 @@ def main() -> int:
     state["outputs"]["output_docx"] = str(output_docx.resolve())
     state.setdefault("inputs", {})
     state["inputs"]["journal_style"] = args.journal_style
+    export_mode = "in-place" if inplace_result is not None else "md-rebuild"
+    state["outputs"]["manuscript_export_mode"] = export_mode
     (project_root / "project_state.json").write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    print(json.dumps({"ok": True, "response_docx": str(response_docx.resolve()), "output_docx": str(output_docx.resolve()), "journal_style": args.journal_style}, ensure_ascii=False))
+    print(json.dumps({
+        "ok": True,
+        "response_docx": str(response_docx.resolve()),
+        "output_docx": str(output_docx.resolve()),
+        "journal_style": args.journal_style,
+        "manuscript_export_mode": export_mode,
+        "inplace": inplace_result,
+    }, ensure_ascii=False))
     return 0
 
 
