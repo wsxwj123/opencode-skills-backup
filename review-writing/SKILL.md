@@ -832,6 +832,13 @@ Write Mode has no `pending_sections` field so this gate is a no-op (no key → e
    #   mv drafts/section_1_1.md drafts/section_01_01.md
    ```
    > **导出范围注记：** Markdown（`exports/Final_Review.md`）是中间产物；最终 docx 由本技能 Step 5d 的 `scripts/export_docx.py` 产出。字符级排版契约里的上下标 `^...^`/`~...~` 通过 pandoc 的 `+superscript+subscript` 扩展转换，正文/标题字体（Times New Roman、标题加粗）由 `templates/reference.docx` 锁定（该模板由 `scripts/make_reference_docx.py` 烘焙）。
+   4a. **Consolidate references into ONE global list** (run immediately after the `cat` merge):
+   ```bash
+   python3 scripts/consolidate_references.py \
+     --md exports/Final_Review.md \
+     --index data/literature_index.json
+   ```
+   > 写作阶段（Phase 3 规则 7）每节自带 `## References` 是**自包含核验用**——保证每节引用都能当场对账。`cat` 拼接会把这些每节列表全部塞进最终稿，导致 docx 出现多个参考表。本步把正文里散落的所有每节 `## References` 块**剥掉**，按全局编号 `[n]` 升序在**文末重建唯一一个** `## References`（Vancouver 条目来自 `literature_index.json`）。脚本幂等；若某 `[n]` 在 index 查不到，stderr 警告但不阻断导出（退出码仍 0），按需补 index 后重跑。
    4b. **Cross-section coherence scan** (on compiled `exports/Final_Review.md`):
    Read the full compiled text sequentially and check:
    - **Transition continuity:** The opening of each section/subsection must logically connect to the closing of the previous one. Flag abrupt topic jumps with no bridging sentence.
