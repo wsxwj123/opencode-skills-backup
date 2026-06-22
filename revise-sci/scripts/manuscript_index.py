@@ -54,8 +54,18 @@ def read_docx_paragraphs(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
+# Markdown list-item prefix ("- ", "* ", "+ ", "• ") that wraps a reference
+# entry in a review's per-chapter "## References" block. Stripped before any
+# numbering/entry pattern is applied so "- [1] Author..." parses like "[1] ...".
+LIST_PREFIX_RE = re.compile(r"^[-*+•]\s+")
+
+
+def strip_list_prefix(text: str) -> str:
+    return LIST_PREFIX_RE.sub("", text, count=1)
+
+
 def looks_like_reference_entry(text: str) -> bool:
-    candidate = normalize_ws(text)
+    candidate = strip_list_prefix(normalize_ws(text))
     lowered = candidate.lower()
     if re.search(r"\bdoi:\s*10\.", lowered) or re.search(r"\bpmid:\s*\d+", lowered):
         return True
@@ -199,18 +209,30 @@ def read_md_paragraphs(path: Path) -> list[dict[str, Any]]:
     # between entries. Blank-line blocking would glue the whole list into one
     # paragraph, so once the References heading is seen each non-blank line
     # becomes its own paragraph.
+    def emit_heading(text: str) -> None:
+        # Markdown heading -> its own Heading-styled paragraph. Emitted directly
+        # (not via flush, which sniffs a leading '#') so the stored text is clean
+        # while style stays "Heading", letting is_heading() terminate a reference
+        # span even for non-whitelisted chapter titles (e.g. CJK headings).
+        nonlocal para_index
+        flush()
+        cleaned = normalize_ws(text)
+        if cleaned:
+            rows.append({"paragraph_index": para_index, "text": cleaned, "style_name": "Heading"})
+            para_index += 1
+
     in_references = False
     for line in raw.splitlines():
         stripped = line.strip()
         if not stripped:
             flush()
             continue
+        is_md_heading = stripped.startswith("#")
         clean = re.sub(r"^#{1,6}\s*", "", line)
-        if normalize_ws(clean).lower() in REFERENCE_HEADINGS:
-            flush()
-            block_lines.append(clean)
-            flush()
-            in_references = True
+        if is_md_heading:
+            # A new heading ends any preceding chapter's reference list.
+            in_references = normalize_ws(clean).lower() in REFERENCE_HEADINGS
+            emit_heading(clean)
             continue
         if in_references:
             flush()
@@ -269,39 +291,75 @@ def expand_citation_group(group_text: str) -> list[int]:
     return numbers
 
 
-def find_reference_section_start(rows: list[dict[str, Any]]) -> int | None:
-    for i, row in enumerate(rows):
-        if normalize_ws(row.get("text", "")).lower() in REFERENCE_HEADINGS:
-            return i
-    return None
+def find_reference_section_starts(rows: list[dict[str, Any]]) -> list[int]:
+    """All References-heading row indices. A review keeps one '## References'
+    per chapter, so there can be many; legacy single-section manuscripts return
+    a one-element list."""
+    return [
+        i
+        for i, row in enumerate(rows)
+        if normalize_ws(row.get("text", "")).lower() in REFERENCE_HEADINGS
+    ]
 
 
-def parse_references(rows: list[dict[str, Any]], ref_start: int) -> list[dict[str, Any]]:
-    """Parse reference entries after the References heading. Supports explicit
-    numbering ([n]/n./n) and, when entries carry no number prefix, falls back to
-    list position as the reference number (1-based)."""
-    entries: list[dict[str, Any]] = []
-    after = rows[ref_start + 1 :]
+def reference_section_spans(rows: list[dict[str, Any]]) -> list[tuple[int, int]]:
+    """For each References heading, the [start, end) row span covering its
+    entries: from the heading row up to the next non-reference heading (or EOF).
+    Used to carve reference blocks out of the body for figure/abbr scanning."""
+    starts = find_reference_section_starts(rows)
+    spans: list[tuple[int, int]] = []
+    for start in starts:
+        end = len(rows)
+        for j in range(start + 1, len(rows)):
+            text = normalize_ws(rows[j].get("text", ""))
+            if not text:
+                continue
+            if is_heading(rows[j]) and text.lower() not in REFERENCE_HEADINGS:
+                end = j
+                break
+        spans.append((start, end))
+    return spans
 
-    explicit_numbered = 0
-    for row in after:
-        text = normalize_ws(row.get("text", ""))
-        if not text:
-            continue
-        if is_heading(row) and text.lower() not in REFERENCE_HEADINGS:
-            break
-        if REF_NUMBER_PREFIX_RE.match(text):
-            explicit_numbered += 1
 
+def body_row_indices(rows: list[dict[str, Any]], ref_spans: list[tuple[int, int]]) -> list[int]:
+    """Body row indices = all rows not inside any reference span. Body between
+    two chapters' reference blocks is still body, so figures/abbreviations after
+    the first '## References' are not dropped."""
+    in_ref = [False] * len(rows)
+    for start, end in ref_spans:
+        for i in range(start, end):
+            in_ref[i] = True
+    return [i for i in range(len(rows)) if not in_ref[i]]
+
+
+def _reference_entry_rows(rows: list[dict[str, Any]], ref_spans: list[tuple[int, int]]) -> list[str]:
+    """Collect candidate entry texts (list prefix stripped) from every reference
+    span, in document order."""
+    texts: list[str] = []
+    for start, end in ref_spans:
+        for i in range(start + 1, end):
+            text = normalize_ws(rows[i].get("text", ""))
+            if not text or text.lower() in REFERENCE_HEADINGS:
+                continue
+            texts.append(strip_list_prefix(text))
+    return texts
+
+
+def parse_references(rows: list[dict[str, Any]], ref_spans: list[tuple[int, int]]) -> list[dict[str, Any]]:
+    """Parse reference entries across ALL References sections (a review has one
+    per chapter). Supports explicit numbering ([n]/n./n, optionally wrapped in a
+    markdown list prefix) and, when entries carry no number prefix, falls back to
+    list position as the reference number (1-based). Numbers are deduplicated by
+    value: chapter blocks that each restart at [1] collapse onto one entry."""
+    entry_texts = _reference_entry_rows(rows, ref_spans)
+
+    explicit_numbered = sum(1 for text in entry_texts if REF_NUMBER_PREFIX_RE.match(text))
     use_position = explicit_numbered < 3  # fall back to positional numbering
 
+    entries: list[dict[str, Any]] = []
+    seen_numbers: set[int] = set()
     position = 0
-    for row in after:
-        text = normalize_ws(row.get("text", ""))
-        if not text:
-            continue
-        if is_heading(row) and text.lower() not in REFERENCE_HEADINGS:
-            break
+    for text in entry_texts:
         if use_position:
             if not looks_like_reference_entry(text) and not _looks_like_unnumbered_entry(text):
                 continue
@@ -314,6 +372,9 @@ def parse_references(rows: list[dict[str, Any]], ref_start: int) -> list[dict[st
                 continue
             ref_number = int(m.group(1))
             raw_entry = m.group(2)
+            if ref_number in seen_numbers:
+                continue
+            seen_numbers.add(ref_number)
         entries.append(
             {
                 "ref_number": ref_number,
@@ -330,6 +391,7 @@ def parse_references(rows: list[dict[str, Any]], ref_start: int) -> list[dict[st
 def _looks_like_unnumbered_entry(text: str) -> bool:
     """Heuristic for an unnumbered reference line (author-led, journal-marked or
     year-bearing). Used only in positional mode."""
+    text = strip_list_prefix(text)
     if re.search(r"\bdoi:|\b10\.\d{4,9}/|\[J\]|\[C\]|\[M\]", text, re.IGNORECASE):
         return True
     has_year = re.search(r"\b(18|19|20)\d{2}\b", text) is not None
@@ -339,10 +401,10 @@ def _looks_like_unnumbered_entry(text: str) -> bool:
 
 def build_figure_index(
     rows: list[dict[str, Any]],
-    ref_start: int | None,
+    ref_spans: list[tuple[int, int]],
     units_map: dict[int, str] | None,
 ) -> list[dict[str, Any]]:
-    body_end = ref_start if ref_start is not None else len(rows)
+    body_indices = body_row_indices(rows, ref_spans)
 
     captions: dict[int, str] = {}
     caption_rows: set[int] = set()
@@ -358,7 +420,7 @@ def build_figure_index(
 
     cited_by: dict[int, list[str]] = {}
     seq_no = 0
-    for i in range(body_end):
+    for i in body_indices:
         text = normalize_ws(rows[i].get("text", ""))
         if not text:
             continue
@@ -401,22 +463,22 @@ def build_figure_index(
 
 def build_reference_index(
     rows: list[dict[str, Any]],
-    ref_start: int | None,
+    ref_spans: list[tuple[int, int]],
     units_map: dict[int, str] | None,
 ) -> dict[str, Any]:
-    if ref_start is None:
+    if not ref_spans:
         return {
             "entries": [],
             "summary": {"total_refs": 0, "total_intext_citations": 0, "orphans": 0},
         }
 
-    entries = parse_references(rows, ref_start)
+    entries = parse_references(rows, ref_spans)
     entry_by_number = {e["ref_number"]: e for e in entries}
 
     cited_numbers: set[int] = set()
     total_intext = 0
     seq_no = 0
-    for i in range(ref_start):
+    for i in body_row_indices(rows, ref_spans):
         text = normalize_ws(rows[i].get("text", ""))
         if not text:
             continue
@@ -463,7 +525,7 @@ def build_reference_index(
 
 def build_abbreviation_index(
     rows: list[dict[str, Any]],
-    ref_start: int | None,
+    ref_spans: list[tuple[int, int]],
 ) -> list[dict[str, Any]]:
     """Reverse-extract an abbreviation cross-index from the manuscript body.
 
@@ -475,7 +537,7 @@ def build_abbreviation_index(
       - title_abbreviation: a non-whitelisted ABBR appears in the title
       - defined_unused: defined but never used again (soft warning)
     """
-    body_end = ref_start if ref_start is not None else len(rows)
+    body_indices = body_row_indices(rows, ref_spans)
 
     # Title = first non-empty paragraph. A finished manuscript's first paragraph
     # is the title. (md parsing strips '#' markers, so a Heading style is not
@@ -492,7 +554,7 @@ def build_abbreviation_index(
     uses: dict[str, int] = {}
     first_use: dict[str, str] = {}
     seq_no = 0
-    for i in range(body_end):
+    for i in body_indices:
         text = normalize_ws(rows[i].get("text", ""))
         if not text:
             continue
@@ -658,11 +720,11 @@ def main() -> int:
 
     rows = read_manuscript_paragraphs(manuscript_path)
     units_map = load_units_map(units_dir)
-    ref_start = find_reference_section_start(rows)
+    ref_spans = reference_section_spans(rows)
 
-    figure_index = build_figure_index(rows, ref_start, units_map)
-    reference_index = build_reference_index(rows, ref_start, units_map)
-    abbreviation_index = build_abbreviation_index(rows, ref_start)
+    figure_index = build_figure_index(rows, ref_spans, units_map)
+    reference_index = build_reference_index(rows, ref_spans, units_map)
+    abbreviation_index = build_abbreviation_index(rows, ref_spans)
     markdown = render_markdown(figure_index, reference_index, abbreviation_index, manuscript_path)
 
     write_json(project_root / "figure_index.json", figure_index)
