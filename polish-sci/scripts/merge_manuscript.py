@@ -205,6 +205,19 @@ def _rewrite_paragraph_runs(paragraph, marked_text: str, base_rpr) -> None:
             run.font.subscript = True
 
 
+def _paragraph_has_embedded_image(paragraph) -> bool:
+    """段落是否含内嵌图片(<w:drawing>)或旧式嵌入对象(<w:object>)。
+    清空此类段落的 run(in-place 重建)会删掉图并留下孤儿图片关系,故调用方
+    必须对这类段落跳过 run 重建以保图。口径与 revise-sci 的同名函数一致。"""
+    from docx.oxml.ns import qn
+
+    p = paragraph._p
+    return bool(
+        p.findall(".//" + qn("w:drawing"))
+        or p.findall(".//" + qn("w:object"))
+    )
+
+
 def export_inplace(src_docx: Path, project_root: Path, out_docx: Path) -> dict:
     """In-place 保格式导出:打开原始 docx,只把 prose 段落文字替换为 polished 文本,
     其余(标题/表格/图片/页眉页脚/非散文段落)完全不动。
@@ -261,16 +274,34 @@ def export_inplace(src_docx: Path, project_root: Path, out_docx: Path) -> dict:
     if not plan:
         raise ValueError("in-place: 没有可写回的 prose 段落(plan 为空),fail-closed")
 
+    import sys
+
+    rewritten = 0
+    skipped_images: list[int] = []
     for item in plan:
-        paragraph = paragraphs[item["para_index"]]
+        para_index = item["para_index"]
+        paragraph = paragraphs[para_index]
+        # fail-safe:含内嵌图片的段落无法 in-place 重建 run —— _rewrite_paragraph_runs
+        # 会清掉 <w:drawing>/<w:object> 并留下孤儿图片关系。改写文字时也无法确定图在新
+        # 文字里的位置,强行重排会放错图。故跳过该段文字改写、保留原 runs(图)不动,提示人工。
+        if _paragraph_has_embedded_image(paragraph):
+            skipped_images.append(para_index)
+            print(
+                f"[export_inplace] warning: 段 {para_index} 含内嵌图片,"
+                f"跳过 in-place 改写以保图,请人工处理该段文字。",
+                file=sys.stderr,
+            )
+            continue
         base_rpr = _capture_base_rpr(paragraph)
         _rewrite_paragraph_runs(paragraph, item["text"], base_rpr)
+        rewritten += 1
 
     out_docx.parent.mkdir(parents=True, exist_ok=True)
     doc.save(str(out_docx))
     return {
-        "rewritten_paragraphs": len(plan),
+        "rewritten_paragraphs": rewritten,
         "skipped_nonprose": skipped_nonprose,
+        "paragraphs_skipped_images": skipped_images,
         "total_src_paragraphs": n_paras,
     }
 

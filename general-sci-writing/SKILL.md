@@ -584,7 +584,7 @@ python scripts/state_manager.py add-abbreviation <one.json>
   - **中间版本（给导师 / 自己核对）**：`python scripts/merge_manuscript.py --manuscript-dir manuscripts --output-md manuscripts/Draft_Round{N}_Manuscript.md --skip-docx`，文件名带 round 编号，不覆盖 Full_Manuscript.md。
   - **最终版本（投稿用）**：`python scripts/merge_manuscript.py --manuscript-dir manuscripts`（默认输出 `manuscripts/Full_Manuscript.md` + .docx）。**只在 `/check` 全过 + `/submission-pack` 已生成后才允许跑最终版**；否则视为中间稿。
   - 可选：`--skip-docx`（仅生成 Markdown）
-  - **docx 字体锁定**：`/merge` 默认带上 `--reference-doc templates/reference.docx`（脚本自动按 skill 目录解析，存在才用、不存在则跳过），把正文锁为 Times New Roman 12pt、标题 TNR 加粗。要改字体/字号：编辑 `scripts/make_reference_docx.py` 顶部常量后重跑 `python scripts/make_reference_docx.py` 重生成模板（基准模板由 `pandoc --print-default-data-file reference.docx > templates/reference.docx` 产生）。
+  - **docx 字体锁定**：`/merge` 默认带上 `--reference-doc templates/reference.docx`（脚本自动按 skill 目录解析），把正文锁为 Times New Roman 12pt、标题 TNR 加粗。**模板是已提交的样式资产，缺失=安装损坏：产出 docx 时若模板缺失，docx 步骤硬失败（退出非零、不产出 docx，md 仍正常生成），并提示运行 `python scripts/make_reference_docx.py` 重新生成**——不会 silently 产出字体不受控的 docx。要改字体/字号：编辑 `scripts/make_reference_docx.py` 顶部常量后重跑 `python scripts/make_reference_docx.py` 重生成模板（基准模板由 `pandoc --print-default-data-file reference.docx > templates/reference.docx` 产生）。
   - 可选：`--patterns "01_Abstract*.md,02_Introduction*.md,03_Methods*.md,04_Results*.md,05_Discussion*.md,06_Conclusion*.md,07_References*.md,*.md"`（自定义合并顺序与兜底匹配；默认值同此，与 `merge_manuscript.py` DEFAULT_PATTERNS 一致）
 - `/export_bib` → `python scripts/export_bibtex.py --index-file literature_index.json --output-file references.bib`
   - 支持 `literature_index.json` 为 list 或 dict（`references/items/entries/data`）
