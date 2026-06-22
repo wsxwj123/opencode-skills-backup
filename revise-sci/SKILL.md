@@ -82,6 +82,7 @@ Always produce:
 - `response_to_reviewers.docx`
 - revised manuscript markdown at `output_md_path`
 - revised manuscript Word at `output_docx_path`
+  - **默认 in-place 保原稿格式**：当原稿是 `.docx` 时，改后稿基于原始 manuscript docx 编辑——未被改的段落、表格、图片、样式、对齐**原样保留**，只替换被点名改写的段落的文字，并按行内标记（`*斜体*`/`**粗**`/`<sup>`/`<sub>`）重建 run、继承原段落基础字体（font.name/size/eastAsia）。定位/身份对不上时 **fail-closed**，自动回退到 md 全量重建并在 stderr 记录拒绝原因。原稿非 docx 或无原稿时走 md 全量重建（legacy fallback）。导出模式记录在 `project_state.json` 的 `outputs.manuscript_export_mode`（`in-place` / `md-rebuild`）。`response_to_reviewers.docx` 不受影响，维持现有固定样式脚本（含 eastAsia）。
 - `precheck_report.md`
 - `issue_matrix.md`
 - `manuscript_edit_plan.md`
@@ -117,7 +118,8 @@ python scripts/matrix_manager.py audit ...
 python scripts/merge_manuscript.py --project-root <project_root> --output-md <output_md>
 python scripts/reference_sync.py --project-root <project_root> --output-md <output_md>
 python scripts/build_reference_registry.py --project-root <project_root> --output-md <output_md> [--references-source <ref_source>] [--reference-search-decision ask|approved|declined]
-python scripts/export_docx.py --project-root <project_root> --output-md <output_md> --output-docx <output_docx> [--reference-docx <ref_docx>] [--journal-style journal-manuscript|nature-review|cell-press|lancet-review]
+python scripts/export_docx.py --project-root <project_root> --output-md <output_md> --output-docx <output_docx> [--reference-docx <ref_docx>] [--manuscript-docx <original_manuscript_docx>] [--no-inplace] [--journal-style journal-manuscript|nature-review|cell-press|lancet-review]
+# 传 --manuscript-docx <原始稿.docx> 时改后稿默认 in-place 保原稿格式（仅替换被改段落；定位失败自动回退 md 全量重建）。--no-inplace 强制走 legacy 全量重建。run_pipeline 会在原稿为 .docx 时自动传入。
 python scripts/final_consistency_report.py ...
 python scripts/strict_gate.py ...
 ```
@@ -288,7 +290,7 @@ Each comment must contain:
 
 ## Character-level typography contract（字符级排版契约）
 
-Applies to all newly written or rewritten content (revised fragments, new sentences, response-letter prose). These inline markers are rendered into real Word character formatting by `scripts/export_docx.py` (bold/italic/superscript/subscript runs). This contract governs **the generation layer only** — the markers you emit when authoring new text. Reading legacy docx still loses formatting; that round-trip is a separate in-place concern.
+Applies to all newly written or rewritten content (revised fragments, new sentences, response-letter prose). These inline markers are rendered into real Word character formatting by `scripts/export_docx.py` (bold/italic/superscript/subscript runs). This contract governs the markers you emit when authoring new text. **Reading the original docx now preserves run-level formatting too**: `read_docx_paragraphs(..., inline_format=True)`（仅 `atomize_manuscript.py` 开启）把原稿 run 的 italic/bold/sup/sub 序列化成同一套行内标记进 section text/current_text，所以未改片段的原格式经 revise→export 往返不丢；被改片段也按同一套标记在 in-place 写出时重建 run。默认读取器仍为纯文本（`inline_format=False`），数值/引用/AI 风格红线比对不受标记污染。
 
 - **Italic** via `*...*` for: species Latin names (`*E. coli*`, `*Staphylococcus aureus*`), gene names (`*TP53*`, `*BRCA1*`), single-letter statistical symbols (`*p*`, `*t*`, `*n*`, `*F*`, `*r*`), and Latin abbreviations (`*in vitro*`, `*in vivo*`, `*et al.*`, `*e.g.*`, `*i.e.*`).
 - **Superscript** via `<sup>...</sup>`: exponents and powers (`10<sup>6</sup>`, `cm<sup>2</sup>`, `mg·kg<sup>-1</sup>`). **Subscript** via `<sub>...</sub>`: chemical subscripts and indexed terms (`H<sub>2</sub>O`, `CO<sub>2</sub>`, `IC<sub>50</sub>`, `T<sub>max</sub>`). **Never** emit bare `H2O` / `CO2` / `IC50`.

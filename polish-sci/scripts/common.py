@@ -11,8 +11,10 @@ from typing import Any
 try:
     from docx import Document
     from docx.opc.exceptions import PackageNotFoundError
+    from docx.oxml.ns import qn
 except ImportError:
     Document = None
+    qn = None
 
     class PackageNotFoundError(Exception):
         pass
@@ -133,6 +135,18 @@ NUMERIC_TOKEN_RE = re.compile(
     re.IGNORECASE | re.VERBOSE,
 )
 
+# Inline format markers emitted by serialize_runs_to_marked_text:
+# **bold** / *italic* / <sup>…</sup> / <sub>…</sub>. Stripped before numeric
+# tokenization so tag fragments (e.g. the "p>6" inside "10<sup>6</sup>") are not
+# mis-read as phantom numeric tokens.
+_INLINE_FORMAT_MARKER_RE = re.compile(r"</?su[pb]>|\*\*|\*")
+
+
+def strip_inline_format_markers(text: str) -> str:
+    """Remove inline markdown/format markers, keeping the wrapped text content."""
+    return _INLINE_FORMAT_MARKER_RE.sub("", text or "")
+
+
 # B: cautious (hedging) verbs vs. strong (assertive) verbs. The guard only
 # blocks the upgrade direction (hedge -> strong claim), matching the
 # conservative philosophy of preserving evidence strength.
@@ -237,7 +251,7 @@ def find_ai_style_markers(text: str) -> list[str]:
 
 def numeric_tokens(text: str) -> set[str]:
     """A: extract the set of numeric tokens (ints, decimals, %, p-values, CI, n=N)."""
-    normalized = normalize_ws(text)
+    normalized = normalize_ws(strip_inline_format_markers(text))
     found: set[str] = set()
     for m in NUMERIC_TOKEN_RE.finditer(normalized):
         token = re.sub(r"\s+", "", m.group(0)).lower()
@@ -388,6 +402,63 @@ def directory_signature(path: Path | None) -> dict[str, Any]:
     return {"path": str(resolved), "exists": True, "files": files}
 
 
+def _run_is_subscript(run) -> bool:
+    """run.font.subscript 在某些 docx 里返回 None,需回退查 vertAlign。"""
+    val = run.font.subscript
+    if val is not None:
+        return bool(val)
+    rpr = run._element.find(qn("w:rPr"))
+    if rpr is None:
+        return False
+    valign = rpr.find(qn("w:vertAlign"))
+    return valign is not None and valign.get(qn("w:val")) == "subscript"
+
+
+def _run_is_superscript(run) -> bool:
+    val = run.font.superscript
+    if val is not None:
+        return bool(val)
+    rpr = run._element.find(qn("w:rPr"))
+    if rpr is None:
+        return False
+    valign = rpr.find(qn("w:vertAlign"))
+    return valign is not None and valign.get(qn("w:val")) == "superscript"
+
+
+def serialize_runs_to_marked_text(paragraph) -> str:
+    """把段落的 run 级格式序列化成行内标记文本。
+
+    斜体->`*…*`、加粗->`**…**`、上标-><sup>…</sup>、下标-><sub>…</sub>。
+    标记是**附加**的:run 文字原样保留,数值/引用 token 不受影响,只是被标记包裹。
+    相邻同格式 run 合并,避免把一个词拆成 `*a**b*` 这类碎标记。
+    顺序:外层 bold/italic(成对 `*`),内层 sup/sub(标签)。嵌套时 bold 在最外、
+    italic 次之、上下标最内,保证开闭标签合法配对。
+    """
+    parts: list[str] = []
+    for run in paragraph.runs:
+        text = run.text
+        if not text:
+            continue
+        bold = bool(run.bold)
+        italic = bool(run.italic)
+        sup = _run_is_superscript(run)
+        sub = _run_is_subscript(run)
+        # 内层(上下标)先包,再包斜体,最外包加粗
+        if sup:
+            text = f"<sup>{text}</sup>"
+        elif sub:
+            text = f"<sub>{text}</sub>"
+        if italic:
+            text = f"*{text}*"
+        if bold:
+            text = f"**{text}**"
+        parts.append(text)
+    marked = normalize_ws("".join(parts))
+    # 折叠相邻同格式 run 产生的冗余空标记:`**…****…**`->合并、`</sup><sup>`->去掉。
+    marked = marked.replace("****", "").replace("</sup><sup>", "").replace("</sub><sub>", "")
+    return marked
+
+
 def read_docx_paragraphs(path: Path) -> list[dict[str, Any]]:
     if Document is None:
         raise RuntimeError(
@@ -401,7 +472,15 @@ def read_docx_paragraphs(path: Path) -> list[dict[str, Any]]:
         if not text:
             continue
         style_name = normalize_ws(getattr(getattr(paragraph, "style", None), "name", "") or "")
-        rows.append({"paragraph_index": i, "text": text, "style_name": style_name})
+        # marked_text:在纯文本基础上附加 run 级格式标记(斜体/上下标/加粗)。
+        # text 字段保持纯文本不变,所有现有红线比对(数值/引用)仍走 text。
+        marked_text = serialize_runs_to_marked_text(paragraph)
+        rows.append({
+            "paragraph_index": i,
+            "text": text,
+            "marked_text": marked_text,
+            "style_name": style_name,
+        })
     return rows
 
 

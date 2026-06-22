@@ -135,10 +135,14 @@ def split_docx_paragraphs(path: Path) -> list[dict]:
         text = normalize_ws(row.get("text", ""))
         if not text:
             continue
+        # marked_text 带 run 级行内格式标记(斜体/上下标/加粗);para 用它做 raw_text,
+        # 使润色直接看到并保留这些语义格式。heading 判定仍用纯 text,避免标记干扰正则。
+        marked = normalize_ws(row.get("marked_text", "")) or text
+        para_index = row.get("paragraph_index")
         if style.startswith("heading") or style == "title":
-            blocks.append({"kind": "heading", "text": text})
+            blocks.append({"kind": "heading", "text": text, "para_index": para_index})
         else:
-            blocks.append({"kind": "para", "text": text})
+            blocks.append({"kind": "para", "text": marked, "plain_text": text, "para_index": para_index})
     return blocks
 
 
@@ -149,17 +153,19 @@ def build_units(blocks: list[dict]) -> list[dict]:
     current_prose = True
     idx = 0
     for block in blocks:
+        # 标题判定用纯文本(plain_text),避免行内格式标记干扰正则;para 默认无 plain_text 时回退 text
+        plain = block.get("plain_text", block["text"])
         # 样式化标题,或内容上像未样式化的章节标题,都当作标题处理
         if block["kind"] == "heading" or (
-            block["kind"] == "para" and looks_like_heading(block["text"])
+            block["kind"] == "para" and looks_like_heading(plain)
         ):
-            current_heading = block["text"]
+            current_heading = plain
             current_type = infer_section_type(current_heading)
             current_prose = not is_nonprose_section(current_heading)
             continue
-        raw = block["text"]
-        # Abstract 常以行内引导词起头("Abstract. ..."),正文与标题同段,单独归类
-        is_abstract = bool(_ABSTRACT_LEADIN_RE.match(raw))
+        raw = block["text"]  # 带行内格式标记(docx)或纯文本(md)
+        # Abstract 引导词判定用纯文本
+        is_abstract = bool(_ABSTRACT_LEADIN_RE.match(plain))
         unit_type = "abstract" if is_abstract else current_type
         units.append(
             {
@@ -167,6 +173,9 @@ def build_units(blocks: list[dict]) -> list[dict]:
                 "raw_text": raw,
                 "heading": current_heading,
                 "section_type": unit_type,
+                # source_para_index:该 unit 对应源 docx 的段落下标,供 in-place 写回精确定位;
+                # md 输入无此概念则为 None。
+                "source_para_index": block.get("para_index"),
                 # prose=False 的段落(参考文献/致谢等)只保留不润色,去AI/句长检测豁免
                 "prose": True if is_abstract else current_prose,
                 "has_citation": bool(CITATION_RE.search(raw)),
