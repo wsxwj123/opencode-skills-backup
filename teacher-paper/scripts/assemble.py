@@ -765,6 +765,7 @@ def cmd_build(args):
             _check_embedded_history(fp, p_blocks, meta.get("subject", ""), warn)
             # darwin 短板3：英语题文误用全角引号 “” 软提醒（JSON 合法但英文排版错误）
             _check_english_fullwidth_quote(fp, p_blocks, meta.get("subject", ""), warn)
+            _check_typography(fp, p_blocks, meta.get("subject", ""), warn)
 
         # —— 阅读类素材真实性硬门禁 ——
         _pre_src_err = len(source_errors)
@@ -1663,6 +1664,60 @@ def _check_english_fullwidth_quote(fp, p_blocks, subject, warn):
                 warn.append(f"{name}：英语题文含全角引号 “” 『{snippet}』——英语一律用半角 ASCII "
                             f'双引号（JSON 内写 \\" 转义），全角会致排版异常，请改半角。')
                 break  # 每题只提醒一次
+
+
+_MD_PATTERNS = [
+    (re.compile(r"\*\*[^*\n]+\*\*"), "markdown加粗 **…**"),
+    (re.compile(r"~~[^~\n]+~~"), "markdown删除线 ~~…~~"),
+    (re.compile(r"\^[A-Za-z0-9][\w+\-]*\^"), "markdown上标 ^…^"),
+    (re.compile(r"\[[^\]\n]+\]\(https?://"), "markdown链接 […](url)"),
+    (re.compile(r"(?m)^#{1,6}\s"), "markdown标题 #"),
+]
+_CARET_RE = re.compile(r"[A-Za-z0-9)\]]\s*\^\s*[A-Za-z0-9(\-]")  # x^2 / 10^-3 / a^n
+_CHEM_RE = re.compile(r"\b(H2O|CO2|O2|N2|H2|SO2|SO3|SO4|NO2|NO3|CH4|NH3|CaCO3|"
+                      r"NaOH|H2SO4|HNO3|Na2CO3|MnO2|Fe2O3|Al2O3|CuSO4|CaCl2|"
+                      r"C6H12O6|C2H5OH|KMnO4|KClO3|H2O2|NaHCO3)\b")
+_UNIT_SUP_RE = re.compile(r"(?<![A-Za-z])(m/s|km/h|cm|dm|m|kg)[23](?![A-Za-z0-9])")
+_TYPO_SCI_SUBJECTS = ("物理", "化学", "生物", "数学")
+
+
+def _check_typography(fp, p_blocks, subject, warn):
+    """v3.29.0：排版字符级软门禁（warn，不阻断）。排版版式由 block type 自动决定，
+    本检测只抓 AI 写 JSON 文本时的字符错误——这些 make_paper 渲染时会原样输出：
+    - 通用：markdown 标记（**/~~/^^/[](url)/#，脚本不解析 markdown，会显示符号）
+    - 理科：化学式/单位/幂未用 Unicode 上下标（H2O→H₂O、x^2→x²、m/s2→m/s²）。
+    见 SKILL.md 排版铁律②③。"""
+    name = os.path.basename(fp)
+    texts = []
+    for b in p_blocks:
+        if not isinstance(b, dict):
+            continue
+        t = b.get("type")
+        if t in ("question", "stem"):
+            texts.append(str(b.get("text") or b.get("stem") or ""))
+        elif t == "options":
+            texts.extend(str(x) for x in (b.get("items") or []))
+        elif t == "material":
+            texts.extend(str(x) for x in (b.get("paras") or []))
+    blob = "\n".join(texts)
+    if not blob:
+        return
+    hits = []
+    for rgx, label in _MD_PATTERNS:
+        if rgx.search(blob):
+            hits.append(label)
+    if any(k in str(subject) for k in _TYPO_SCI_SUBJECTS):
+        if _CARET_RE.search(blob):
+            hits.append("幂写成 x^2（应 Unicode 上标 x²）")
+        mc = _CHEM_RE.search(blob)
+        if mc:
+            hits.append(f"化学式 {mc.group(1)} 未用下标（应写 H₂O/CO₂ 式 Unicode 下标）")
+        if _UNIT_SUP_RE.search(blob):
+            hits.append("单位平方/立方未用上标（应 m/s²、cm³）")
+    if hits:
+        warn.append(f"{name}：排版字符问题——{'；'.join(dict.fromkeys(hits))}。"
+                    f"make_paper 不解析 markdown、不做富文本上下标，会原样显示；"
+                    f"见 SKILL.md 排版铁律②③。")
 
 
 _POLITICAL_SUBJECTS = ("思想政治", "政治", "道德与法治", "道法")
