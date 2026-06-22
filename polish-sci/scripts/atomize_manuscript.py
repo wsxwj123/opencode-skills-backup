@@ -13,7 +13,7 @@ import json
 import re
 from pathlib import Path
 
-from common import normalize_ws, numeric_tokens, read_docx_paragraphs, write_json
+from common import looks_like_reference_entry, normalize_ws, numeric_tokens, read_docx_paragraphs, write_json
 
 CITATION_RE = re.compile(r"\[\d+(?:\s*[-,]\s*\d+)*\]|\bdoi:\s*10\.\d", re.IGNORECASE)
 
@@ -64,6 +64,9 @@ def looks_like_heading(text: str) -> bool:
     """非样式化的章节标题判定:短段落 + (编号开头 或 整行就是已知章节名)。"""
     t = normalize_ws(text)
     if not t or len(t.split()) > 10:
+        return False
+    # 数字编号的参考文献条目(如 "1. Smith J, et al. Nature. 2020;...")不是标题
+    if looks_like_reference_entry(t):
         return False
     core = re.sub(r"^\d+(?:\.\d+)*\.?\s*", "", t).strip().rstrip(".．")
     if (

@@ -16,7 +16,7 @@
           "id": "G2",
           "name": "citation_guard",
           "check": "本节新增引用已过核验 ok=true",
-          "script": "python scripts/citation_guard.py --offline --index data/literature_index.json"
+          "script": "python scripts/citation_guard.py --offline --index literature_index.json"
         },
         {
           "id": "G3",
