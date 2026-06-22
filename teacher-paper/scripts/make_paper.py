@@ -18,13 +18,13 @@ JSON 结构：
 }
 
 block 类型（type 字段）——试卷与答案通用：
-  {"type":"title","text":"..."}                          大标题（居中,黑体小二）
-  {"type":"subtitle","text":"（满分120分 时间120分钟）"}  副标题（居中,小四）
+  {"type":"title","text":"..."}                          大标题（居中,宋体三号16加粗）
+  {"type":"subtitle","text":"（满分120分 时间120分钟）"}  副标题（居中,宋体小四12）
   {"type":"info"}                                         学校/班级/姓名/考号/座位号 填写行
   {"type":"sealing"}                                      密封线（印刷版横排虚线，仅试卷）
   {"type":"notice","items":["...","..."]}                注意事项编号列表
-  {"type":"section","text":"一、积累运用（20分）"}        大题标题（黑体四号）
-  {"type":"sub","text":"（一）积累"}                      小标题（黑体五号）
+  {"type":"section","text":"一、积累运用（20分）"}        大题标题（宋体小四12加粗）
+  {"type":"sub","text":"（一）积累"}                      小标题（宋体小四12加粗）
   {"type":"para","text":"...","indent":true}             正文段落,indent=首行缩进
   {"type":"material","label":"【材料一】","title":"老街","author":"",
    "paras":["...","..."],"source":"（选自《读者》2024年第6期）",

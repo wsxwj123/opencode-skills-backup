@@ -1,6 +1,6 @@
 # teacher-paper 状态（接续点）
 
-**当前 v3.32.0** · darwin **86**（opus 盲评，2026-06-22）· 回归 **178/178** · 仓库 wsxwj123/opencode-skills-backup main
+**当前 v3.32.1** · darwin **86**（opus 盲评，2026-06-22）· 回归 **182/182** · 仓库 wsxwj123/opencode-skills-backup main
 
 > 旧文档 `PLAN-2026-06-15-v3.16-全面修复.md` / `SESSION-2026-06-15-全记录.md` 是 v3.16 时代历史，仅供追溯。本文件为当前权威态。
 
@@ -17,6 +17,7 @@
 | v3.27.0 | 回滚协议精确化 | 定点修复vs单题回滚区分/禁用reset --hard |
 | v3.31.0 | 排版铁律+上下标渲染 | 「排版铁律」分工表(①版式②上下标③全半角④标记)；lint 补半角标点/全角字母/斜体非乘法/化学式CJK边界修复/裸下标漏花括号；make_paper `_split_subsup` 真富文本上下标(解决 F_合/v_max 硬伤) |
 | **v3.32.0** | **git门禁+告警落盘+题级检查集成修复** | **git 逐题存档升为硬门禁(items/未提交→exit2，`--allow-uncommitted` 逃生，无git/嵌套父库不触发)；所有 warn 落盘 `build/校验告警.md`(含「排版自检」分节)；🔴修集成bug：题级检查(排版/缺图/英语引号)原挂在 `is_question=meta.score!=None` 后，最小格式 score 不在 meta→静默全跳过，改为按 paper 块有无 question/stem 判定(`_atom_has_question`)，并修 `total+=float(m["score"])` 的 KeyError。单测全绿曾掩盖此缺口(测试直调函数绕过门控)，已加 Z6-Z9+opus端到端兜底** |
+| **v3.32.1** | **格式文档统一** | **SKILL.md「原子题最小格式」原是扁平 schema(`id/type/body/options/score` 顶层)，assemble.py 只认块格式(`paper[]/answer[]/meta`)无扁平转换→照旧文档写题产不出内容；改写为块格式示例并标注 num/score 在 meta。make_paper.py 顶部 block 注释字体改对(黑体→宋体，对齐 render() 与 formatting-rules.md)。真跑 build 验证文档=代码** |
 
 ## 三层自检架构（核心资产）
 

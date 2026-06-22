@@ -4,7 +4,7 @@ description: "教师智能出题技能 - 覆盖小学一年级到高三全科目
 user-invocable: true
 allowed-tools: [Read, Write, Edit, Bash, Agent, AskUserQuestion, WebFetch, WebSearch]
 metadata:
-  version: "3.32.0"
+  version: "3.32.1"
   author: "teacher-paper-skill"
 ---
 
@@ -378,30 +378,36 @@ python3 "<工程>/scripts/assemble.py" build "<工程>" [--pdf]
 
 🔴 **STOP · 出卷前确认门禁（必做，不可跳过）**：在运行第3步 `build` 之前，必须先把 `00_manifest.md` 的题目清单（题号·题型·考点·分值·难度·选材）完整展示给用户，逐题让用户确认或指出要改的题。**用户明确说"可以出卷"后才运行 build**。避免未经确认直接产出成卷。
 
-**原子题文件最小格式（`authoring-workflow.md` 存在时参照详细版；缺失时本规范即完整执行依据）**：
+**原子题文件最小格式（与 `authoring-workflow.md`、`make_paper.py` 顶部 block 列表一致；这是 build 唯一认的格式）**：
+
+> 🔴 **只有「块格式」生效**：assemble.py 只读 `atom.get("paper")` / `atom.get("answer")` / `atom.get("meta")` 三个键，**没有扁平格式转换**。题干/选项/选文/图都是 `paper` 数组里的 **block**（`{"type":...}`），不是顶层字段。**`num`/`score` 写在 `meta`**（供总分聚合与 manifest 对账；缺 score 不崩但 warn「未计入总分」），`paper` 的 question/answer 块里再写一份 `score` 字符串（如 `（2分）`）供卷面显示。
 
 ```json
 {
-  "id": "101_q01",
-  "type": "选择|填空|简答|材料分析|解答|作文",
-  "body": "题干正文",
-  "options": {"A": "…", "B": "…", "C": "…", "D": "…"},
-  "answer": "A",
-  "score": 2,
-  "knowledge": "考点标签",
   "meta": {
-    "source": "https://…（或 原创-已声明）",
-    "source_file": "materials/xxx.md"
+    "num": "7", "score": 2, "difficulty": 0.7,
+    "type": "选择|填空|简答|材料分析|解答|作文",
+    "knowledge_point": "考点标签",
+    "source": "https://… 或 节选自《X》 或 原创-已声明",
+    "source_file": "materials/xxx.md",
+    "status": "已出"
   },
-  "material": {
-    "title": "选文标题", "author": "作者/朝代", "source": "出处标注",
-    "paras": ["第一段", "第二段"],
-    "layout": "prose|verse",
-    "block": "非连|小说|散文|文言|名著（可选；不写则按小标题推断，字数门禁按此归板块）"
-  },
-  "figure": {"src": "materials/图.png", "caption": "图注"}
+  "paper": [
+    {"type": "material", "title": "选文标题", "author": "作者/朝代",
+     "paras": ["第一段全文", "第二段全文"], "source": "（节选自《X》）",
+     "layout": "prose|verse",
+     "block": "非连|小说|散文|文言|名著（可选；不写按小标题推断，字数门禁按此归板块）"},
+    {"type": "question", "num": "7", "score": "（2分）", "text": "题干正文"},
+    {"type": "options", "items": ["A. …", "B. …", "C. …", "D. …"]}
+  ],
+  "answer": [
+    {"type": "answer", "num": "7", "score": "（2分）", "text": "C"},
+    {"type": "analysis", "text": "【解析】…"}
+  ]
 }
 ```
+> 含图题：在 `paper` 数组加 figure 块 `{"type":"figure","src":"materials/图.png","alt":"图注"}`（用户提供图）或 `{"type":"figure","kind":"svg","svg":"<svg…>","alt":"…"}`（AI 直绘）。
+> 大题分隔/纯材料文件：`meta.status="-"`，`paper` 只放 `section`/`sub`/`material` 块、无 question，`answer` 留 `[]`。完整 block 类型见 `make_paper.py` 顶部文档。
 
 规则：① **每道小题一个独立文件，文件名前缀须全局唯一且递增**——如一选 7 题写 `101_q01.json / 102_q02.json / … / 107_q07.json`（不是全用 `101_` 前缀！同前缀会被去重，v3.24.0 起按"完整基名去版本号"判重，`101_q01` 与 `101_q02` 不再误判，但仍建议前缀递增唯一最清晰；只有 `101_q01` + `101_q01_v2` 这种同名带版本号才会判为同题）；前缀数字对应 manifest 大题编号区段（1xx→一大题/2xx→二大题…）；② 含选文题必须有 `material` 块且 `paras` 写全文，缺 `source`+`source_file` 则 build 拒绝；③ `material.layout="verse"` 让古诗词逐句居中；④ 含图题：用户提供图片填 `{"type":"figure","src":"materials/图.png","alt":"…"}`；AI 自动渲染填 `{"type":"figure","kind":"svg","svg":"<svg …>…</svg>","alt":"…"}` 或 `kind":"function"/"climate"` 等（**svg 内容写在顶层 `svg` 字段，切勿写成 `"spec":"<svg>"`**，否则降级占位、图丢失；详见 `物理.md` 第 2 节）；缺 src 又无可渲染内容时 build 末尾按占位比例 warn；⑤ `options` 仅选择题需要；⑥ `answer` 客观题填选项字母，主观题填采分点列表；⑦ **JSON 字符串内的中文引述一律直接写全角 `“”`**——未转义的 ASCII 双引号会让整个文件解析失败、该题被完整性门禁拦下（不要用 `\"` 转义绕行，渲染时反正会规范成全角）。**⚠️ 英语题例外**：英语题干/选项/原文里的引号、撇号**一律保留 ASCII 半角，不准用全角 `“”`**（全角引号在英文里是排版错误，且 build 会 warn）。唯一正确写法：**双引号写 `\"` 转义**（JSON 字符串本就以双引号定界，内部双引号只能转义，没有"改用单引号"的替代——JSON 不接受单引号定界字符串），**撇号 `'` 直接写**（JSON 字符串内单引号无需转义）。引号撇号混用的正例：`"text": "He said, \"I'm fine.\""`。完整 block 类型扩展见 `make_paper.py` 顶部文档（存在时参照）。
 
