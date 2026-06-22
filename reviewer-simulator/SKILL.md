@@ -221,8 +221,6 @@ python -c "import os,json; d=os.path.join(os.getcwd(),'data'); os.makedirs(d,exi
    - 填入报告模板占位符（第五步"18点深度分析"结果来自子代理合并，第五步半"魔鬼代言人"结果来自视角④子代理）
    - 跑 DoD 委托盲检（第七步后的 DoD 节）
 
-5. **降级路径**（当前环境无法派子代理时）：主 agent 逐视角切换，每切换一次向用户显式声明"现在切换为[视角X]视角，清空其他视角记忆"，在该视角内完成全部 rubric 条目后再切换下一个，**绝不让一个视角的判断在切换前污染下一视角的初始读稿印象**；各视角结果单独记录，最后合并。
-
 > **此协议段只定义委托框架，不替换以下内容**：第五步的18点深度分析框架、第五步半的五类对抗性审查条目、rubric 定义、报告模板占位符映射表；上述内容均原样保留，子代理按这些条目执行，主 agent 按这些框架汇总。
 
 
@@ -275,7 +273,6 @@ python -c "import os,json; d=os.path.join(os.getcwd(),'data'); os.makedirs(d,exi
 2. **派一个独立子代理**（Claude Code 用 `academic-blind-reviewer`；其他平台派通用子代理，默认 sonnet 模型），把任务包原样给它、**不要给它本次审稿的分析上下文**，要求按任务包返回 JSON 数组。
 3. 校验返回：`python ~/.claude/skills/reviewer-simulator/scripts/delegate_review.py verify --checklist ~/.claude/skills/reviewer-simulator/references/dod_checklist.json --gate report-dod --return <子代理返回.json>`；退出码非 0（任一缺项/fail/无证据）= **fail-closed**，据子代理证据修复后重跑，**未过不得声明完成**。
 🔴 报告出具前置闸口：delegate_review verify 必须 exit 0（含 B8 结构完整性 + 所有视角已汇总），否则不得向用户出具审稿报告。
-- **降级路径**（当前环境无法派子代理时）：主 agent 切换"质检视角"、清空对本次审稿分析的记忆，逐项独立重核，不得因"自己刚审完"默认通过；仍跑 `verify` 把关。
 
 > 下列清单与 `references/dod_checklist.json` 逐项对应（改清单先改 JSON），供人工对照；能脚本核的项子代理会先跑脚本。
 

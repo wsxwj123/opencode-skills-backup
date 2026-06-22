@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import re
 import subprocess
@@ -113,6 +114,99 @@ def merge_selected(sections_dir: Path, selected: list[str], output_path: Path) -
     return used
 
 
+# 正文参考文献角标：纯数字方括号，形如 [1] / [2,3] / [4-6] / [2，3]（全角逗号）。
+# 限定纯数字 + 分隔符，天然排除 [图1]/[表2]（含中文）与公式区间等。
+_CITATION_RE = re.compile(r"\[\d+(?:[-,，]\d+)*\]")
+# 参考文献章节标题：进入后停止上标处理，避免误伤列表条目编号 [1] 张三...
+_REF_HEADING_RE = re.compile(r"^\s*(参考文献|References)\s*$")
+
+
+def _is_ref_heading(text: str) -> bool:
+    # 去掉可能的 markdown 标题残留符号后匹配
+    stripped = text.strip().lstrip("#").strip()
+    return bool(_REF_HEADING_RE.match(stripped))
+
+
+def _superscript_citations(docx_path: Path) -> int:
+    """后处理 docx：把正文裸写的参考文献角标 [N]/[N,M]/[N-M] 设为上标。
+
+    边界处理：
+    - 一旦遇到"参考文献/References"标题段落，停止处理后续所有段落（列表条目编号 [1] 不动）。
+    - 仅匹配纯数字方括号；[图1]/[表2] 含中文，不匹配。
+    - pandoc 已把 ^[1]^ 渲染成上标的 run（run.font.superscript=True）跳过，避免重复。
+    返回被设为上标的角标 run 数量。
+    """
+    from docx import Document
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+
+    doc = Document(str(docx_path))
+    changed = 0
+    in_references = False
+
+    for para in doc.paragraphs:
+        if not in_references and _is_ref_heading(para.text):
+            in_references = True
+        if in_references:
+            continue
+
+        # 重建段落 runs：对每个 run 内的角标拆分出独立上标 run。
+        for run in list(para.runs):
+            if run.font.superscript:
+                continue  # 已是上标（来自 ^[N]^），不重复处理
+            text = run.text
+            if not text or "[" not in text:
+                continue
+            matches = list(_CITATION_RE.finditer(text))
+            if not matches:
+                continue
+
+            # 把原 run 拆成 [前缀][角标(上标)][后缀]... 序列。
+            # 复用原 run 作为第一段，其余 run 插到其后，继承字体格式。
+            segments: list[tuple[str, bool]] = []  # (text, is_superscript)
+            cursor = 0
+            for m in matches:
+                if m.start() > cursor:
+                    segments.append((text[cursor:m.start()], False))
+                segments.append((m.group(), True))
+                cursor = m.end()
+            if cursor < len(text):
+                segments.append((text[cursor:], False))
+
+            run.text = segments[0][0]
+            if segments[0][1]:
+                run.font.superscript = True
+                changed += 1
+            ref_el = run._element
+            for seg_text, is_sup in segments[1:]:
+                new_run = copy.deepcopy(run._element)
+                # 清空文本节点后重设
+                for t in new_run.findall(qn("w:t")):
+                    new_run.remove(t)
+                new_t = OxmlElement("w:t")
+                new_t.set(qn("xml:space"), "preserve")
+                new_t.text = seg_text
+                new_run.append(new_t)
+                # 设置/清除上标
+                rpr = new_run.find(qn("w:rPr"))
+                if rpr is None:
+                    rpr = OxmlElement("w:rPr")
+                    new_run.insert(0, rpr)
+                for va in rpr.findall(qn("w:vertAlign")):
+                    rpr.remove(va)
+                if is_sup:
+                    va = OxmlElement("w:vertAlign")
+                    va.set(qn("w:val"), "superscript")
+                    rpr.append(va)
+                    changed += 1
+                ref_el.addnext(new_run)
+                ref_el = new_run
+
+    if changed:
+        doc.save(str(docx_path))
+    return changed
+
+
 def merge_docx(md_path: Path, docx_path: Path) -> dict:
     docx_path.parent.mkdir(parents=True, exist_ok=True)
     cmd = ["pandoc", "-f", "markdown+superscript+subscript", str(md_path), "-o", str(docx_path)]
@@ -136,7 +230,13 @@ def merge_docx(md_path: Path, docx_path: Path) -> dict:
 
     if proc.returncode != 0:
         return {"ok": False, "error": proc.stderr.strip()[:500]}
-    return {"ok": True, "output": str(docx_path)}
+
+    # 后处理：把正文裸写的参考文献角标 [N]/[N,M]/[N-M] 设为上标（参考文献列表/图表号不动）。
+    try:
+        superscripted = _superscript_citations(docx_path)
+    except Exception as exc:  # 后处理失败不应让已生成的 docx 作废
+        return {"ok": True, "output": str(docx_path), "superscript_warning": str(exc)}
+    return {"ok": True, "output": str(docx_path), "citations_superscripted": superscripted}
 
 
 def main() -> int:

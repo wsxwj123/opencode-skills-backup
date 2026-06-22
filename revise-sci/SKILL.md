@@ -326,7 +326,6 @@ These inline markers are load-bearing and carry the same status as citation mark
 1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate revision-dod --files <改稿相关文件>`
 2. **派一个独立子代理**（Claude Code 用 `academic-blind-reviewer`；其他平台派通用子代理），把任务包原样给它、**不要给它本次改稿的写作上下文**，要求按任务包返回 JSON 数组。
 3. 校验返回：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate revision-dod --return <子代理返回.json>`；退出码非 0（任一缺项/fail/无证据）= **fail-closed**，据子代理证据修复后重跑，**未过不得声明改稿完成**。
-- **降级路径**（当前环境无法派子代理时）：主 agent 切换审稿人视角、清空对本次改稿的写作记忆，逐项独立重核，不得因"自己刚改完"而默认通过；仍跑 `verify` 把关。
 
 下列清单与 `references/dod_checklist.json` 逐项对应（**改清单先改 JSON，再同步此处散文**）；能脚本核的项子代理会先跑脚本：
 

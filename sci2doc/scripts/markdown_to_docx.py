@@ -582,6 +582,37 @@ def _add_styled_run(paragraph, text, spec, bold=None, italic=None,
         run.font.color.rgb = RGBColor(0, 0, 0)
 
 
+def _clear_paragraph_runs(paragraph):
+    """移除段落内已有的所有 run（保留段落本身及其格式），便于用 add_inline_runs 重建。"""
+    for run in list(paragraph.runs):
+        run._element.getparent().remove(run._element)
+
+
+def render_heading_with_inline(paragraph, content, spec, word_style, set_text_black=False):
+    """标题：清空 add_heading 建的默认 run，先套段落级样式（空转），再用 add_inline_runs 重建。
+
+    这样标题里的 *斜体* / <sup> / <sub> / **粗** 能正确渲染，而非原样残留。
+    无 inline-bold 的片段在 add_inline_runs 中回退 spec['bold']，自动继承标题加粗。
+    """
+    _clear_paragraph_runs(paragraph)
+    _apply_paragraph_style_from_spec(paragraph, spec, word_style=word_style, set_text_black=set_text_black)
+    add_inline_runs(paragraph, content, spec, set_text_black=set_text_black)
+
+
+def render_cell_with_inline(cell, text, spec, set_text_black=False):
+    """表格单元格：清空 cell.text 建的纯文本 run，用 add_inline_runs 重建，渲染行内标记。
+
+    cell.text 设值会在首个段落建一个 run；这里清掉它，对单元格段落套对齐后重建 run。
+    """
+    paragraph = cell.paragraphs[0]
+    _clear_paragraph_runs(paragraph)
+    paragraph.paragraph_format.alignment = _ALIGNMENT_MAP.get(
+        spec.get("alignment", "center"),
+        WD_ALIGN_PARAGRAPH.CENTER,
+    )
+    add_inline_runs(paragraph, text, spec, set_text_black=set_text_black)
+
+
 def add_inline_runs(paragraph, text, spec, set_text_black=False):
     """解析行内排版标记，为每个片段建独立 run。
 
@@ -770,45 +801,22 @@ def create_three_line_table(doc, headers, rows, caption=None, render_context=Non
     table = doc.add_table(rows=num_rows, cols=num_cols)
     table.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-    # 填充表头
+    cell_spec = _resolve_style_profile(render_context).get("table_cell", {})
+    # 表头 spec：用 header_bold 覆盖 bold，让 add_inline_runs 默认按表头加粗渲染
+    header_spec = dict(cell_spec)
+    header_spec["bold"] = cell_spec.get("header_bold", True)
+
+    # 填充表头（行内标记 *斜体*/上下标交给 add_inline_runs 渲染）
     for j, header_text in enumerate(headers):
         cell = table.rows[0].cells[j]
-        cell.text = header_text
-        for paragraph in cell.paragraphs:
-            cell_spec = _resolve_style_profile(render_context).get("table_cell", {})
-            paragraph.paragraph_format.alignment = _ALIGNMENT_MAP.get(
-                cell_spec.get("alignment", "center"),
-                WD_ALIGN_PARAGRAPH.CENTER,
-            )
-            for run in paragraph.runs:
-                set_run_font(
-                    run,
-                    latin=cell_spec.get("font_latin", "Times New Roman"),
-                    east_asia=cell_spec.get("font_east_asia", "SimSun"),
-                    size_pt=cell_spec.get("font_size_pt", 10.5),
-                    bold=cell_spec.get("header_bold", True),
-                )
+        render_cell_with_inline(cell, header_text, header_spec)
 
     # 填充数据行
     for i, row_data in enumerate(rows):
         for j, cell_text in enumerate(row_data):
             if j < num_cols:
                 cell = table.rows[i + 1].cells[j]
-                cell.text = cell_text
-                for paragraph in cell.paragraphs:
-                    cell_spec = _resolve_style_profile(render_context).get("table_cell", {})
-                    paragraph.paragraph_format.alignment = _ALIGNMENT_MAP.get(
-                        cell_spec.get("alignment", "center"),
-                        WD_ALIGN_PARAGRAPH.CENTER,
-                    )
-                    for run in paragraph.runs:
-                        set_run_font(
-                            run,
-                            latin=cell_spec.get("font_latin", "Times New Roman"),
-                            east_asia=cell_spec.get("font_east_asia", "SimSun"),
-                            size_pt=cell_spec.get("font_size_pt", 10.5),
-                            bold=cell_spec.get("bold", False),
-                        )
+                render_cell_with_inline(cell, cell_text, cell_spec)
 
     # 应用三线表边框
     no = _no_border()
@@ -987,15 +995,18 @@ def markdown_to_docx(md_content, output_path, chapter_num=None, project_root=Non
             
             elif line_type == 'heading1':
                 para = doc.add_heading(content, level=1)
-                apply_default_heading1_style(para, render_context=render_context)
-            
+                h1_spec = _resolve_style_profile(render_context).get("heading1", {})
+                render_heading_with_inline(para, content, h1_spec, word_style="Heading 1", set_text_black=True)
+
             elif line_type == 'heading2':
                 para = doc.add_heading(content, level=2)
-                apply_default_heading2_style(para, render_context=render_context)
-            
+                h2_spec = _resolve_style_profile(render_context).get("heading2", {})
+                render_heading_with_inline(para, content, h2_spec, word_style="Heading 2")
+
             elif line_type == 'heading3':
                 para = doc.add_heading(content, level=3)
-                apply_default_heading3_style(para, render_context=render_context)
+                h3_spec = _resolve_style_profile(render_context).get("heading3", {})
+                render_heading_with_inline(para, content, h3_spec, word_style="Heading 3")
             
             elif line_type == 'figure':
                 para = doc.add_paragraph(content)
