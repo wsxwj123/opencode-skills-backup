@@ -170,10 +170,9 @@ def find_ai_style_markers(text: str) -> list[str]:
         markers.append("em dash")
     if re.search(r"\bnot only\b.*\bbut also\b", normalized, flags=re.IGNORECASE):
         markers.append("not only...but also")
-    # AI 修辞 "from X to Y";排除数值/时间/量纲范围(from 24 to 72 h / from 0 to 200 nM):含数字即合法范围,非修辞
-    _fa = re.search(r"\bfrom\s+[A-Za-z0-9].{0,60}?\s+to\s+[A-Za-z0-9]\w*", normalized, flags=re.IGNORECASE)
-    if _fa and not re.search(r"\d", _fa.group(0)):
-        markers.append("from A to B")
+    # "from A to B" 模式已移除:科学文本高频合法(谱系/转变/范围,如 "from gut to bone"、
+    # "from unmodified probiotics to engineered strains"),纯修辞铺陈难以与合法用法可靠区分,
+    # 信噪比差、误报率高(review-writing 的 style_checker 亦已移除)。
     if "?" in normalized:
         markers.append("rhetorical question")
     if re.search(r",\s*(?:thus|thereby|therefore)\s+[A-Za-z-]+ing\b", normalized, flags=re.IGNORECASE):
@@ -195,10 +194,18 @@ def find_ai_style_markers(text: str) -> list[str]:
     # Legitimate colons: ratios (1:2), time (10:30), list introduction after verb, headings
     # Heuristic: flag "word/phrase: word(s)" where the part before colon is ≤6 words and
     # the part after colon is a sentence fragment (starts with a word, not a number/abbreviation)
-    for m in re.finditer(r"\b([A-Za-z][^:]{2,40}):\s+([A-Za-z][a-z])", normalized):
+    for m in re.finditer(r"\b([A-Za-z][^:]{2,40}):\s+([A-Za-z][a-z][^.;!?]*)", normalized):
         before = m.group(1).strip()
+        after = m.group(2).strip()
         # skip legitimate patterns: headings at start of text, figure labels, etc.
         if re.search(r"^(fig|figure|table|eq|equation|note|step)\b", before, re.IGNORECASE):
+            continue
+        # skip legitimate enumeration: colon followed by a comma/semicolon-separated list
+        # (e.g. "three advantages: no risk, low cost, easy scaling") or a short "A and B"
+        # pairing (e.g. "two groups: control and treatment"), not an explanatory clause
+        if re.search(r", |; ", after):
+            continue
+        if " and " in after and len(after.split()) <= 4:
             continue
         before_words = before.split()
         if 1 <= len(before_words) <= 6:
