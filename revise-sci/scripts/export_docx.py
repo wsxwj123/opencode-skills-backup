@@ -127,25 +127,55 @@ def doc_for_template(template_path: str) -> Document:
     return Document()
 
 
+INLINE_TOKEN_RE = re.compile(
+    r"(\*\*.+?\*\*)"          # bold (matched before italic)
+    r"|(\*.+?\*)"            # italic
+    r"|(<sup>.*?</sup>)"     # superscript
+    r"|(<sub>.*?</sub>)",    # subscript
+    re.DOTALL,
+)
+
+
 def add_runs_with_bold(paragraph, text: str) -> None:
-    parts = re.split(r"(\*\*.*?\*\*)", text)
-    for part in parts:
-        if not part:
-            continue
-        if part.startswith("**") and part.endswith("**") and len(part) >= 4:
-            paragraph.add_run(part[2:-2]).bold = True
-        else:
-            paragraph.add_run(part)
+    """Render inline markers (**bold**, *italic*, <sup>, <sub>) as real Word runs.
+
+    `**bold**` is matched before `*italic*` so a bold span is not mis-split by the
+    single-asterisk branch. Markers are non-nesting (flat); unmatched text is plain.
+    """
+    pos = 0
+    for match in INLINE_TOKEN_RE.finditer(text):
+        if match.start() > pos:
+            paragraph.add_run(text[pos:match.start()])
+        token = match.group(0)
+        if match.group(1) is not None:
+            paragraph.add_run(token[2:-2]).bold = True
+        elif match.group(2) is not None:
+            paragraph.add_run(token[1:-1]).italic = True
+        elif match.group(3) is not None:
+            paragraph.add_run(token[5:-6]).font.superscript = True
+        elif match.group(4) is not None:
+            paragraph.add_run(token[5:-6]).font.subscript = True
+        pos = match.end()
+    if pos < len(text):
+        paragraph.add_run(text[pos:])
 
 
 def profile_settings(profile_name: str) -> dict[str, Any]:
     return PROFILE_PRESETS.get(profile_name, PROFILE_PRESETS["journal-manuscript"])
 
 
-def set_style_font(style, name: str, size: float, bold: bool = False) -> None:
+DEFAULT_CJK_FONT = "宋体"
+
+
+def set_style_font(style, name: str, size: float, bold: bool = False, east_asian: str = DEFAULT_CJK_FONT) -> None:
     style.font.name = name
     style.font.size = Pt(size)
     style.font.bold = bold
+    # Set w:eastAsia so CJK glyphs fall back to a real Chinese face instead of the
+    # Latin body font (which renders Chinese as tofu / wrong metrics).
+    rpr = style.element.get_or_add_rPr()
+    rfonts = rpr.get_or_add_rFonts()
+    rfonts.set(qn("w:eastAsia"), east_asian)
 
 
 def ensure_custom_styles(doc: Document, profile_name: str, doc_kind: str) -> None:

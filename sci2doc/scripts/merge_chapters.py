@@ -246,6 +246,16 @@ def merge_docx_files(file_list, output_path, require_high_fidelity=False):
                     new_run.underline = run.underline
                     new_run.font.size = run.font.size
                     new_run.font.name = run.font.name
+                    new_run.font.superscript = run.font.superscript
+                    new_run.font.subscript = run.font.subscript
+                    # 复制东亚字体（w:eastAsia），否则中文 run 会丢失宋体等设置
+                    src_rpr = run._element.rPr
+                    if src_rpr is not None and src_rpr.rFonts is not None:
+                        east_asia = src_rpr.rFonts.get(qn('w:eastAsia'))
+                        if east_asia:
+                            new_rpr = new_run._element.get_or_add_rPr()
+                            new_rfonts = new_rpr.get_or_add_rFonts()
+                            new_rfonts.set(qn('w:eastAsia'), east_asia)
                     if run.font.color.rgb:
                         new_run.font.color.rgb = run.font.color.rgb
             

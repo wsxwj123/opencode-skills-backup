@@ -39,6 +39,18 @@ not_for(以下情况不要用本技能):
 
 每段 `meaning_changed` 必须为 false。语义层守卫靠脚本(数值/引用集合比对)加人工逐段对照。
 
+## 字符级排版契约(等同红线)
+行内格式标记与上方红线**同级**,润色时逐字保留其位置与配对,不得增删、不得错配:
+- **斜体** `*…*`,标注物种(`*E. coli*`)、基因(`*TP53*`)、统计符号(`*p*` 值、`*t*`、`*F*`、`*r*`、`*n*` 作变量时)。原文已斜体的,润色后仍斜体且范围不变。
+- **上标** `<sup>…</sup>`,如 `10<sup>6</sup>`、`cm<sup>2</sup>`、`O<sub>2</sub>` 的对应上标场景。
+- **下标** `<sub>…</sub>`,如 `H<sub>2</sub>O`、`CO<sub>2</sub>`、`Ca<sup>2+</sup>` 的对应下标。
+- **加粗** `**…**`,保留原稿强调位置,不新增、不删除。
+
+硬约束:
+- 标记成对出现,改写后开闭标签数量与配对必须守恒(每个 `<sup>` 对一个 `</sup>`,每个 `*` 成对)。
+- 禁止裸写需要排版的字符,如 `H2O` 必须写 `H<sub>2</sub>O`、`10^6` 必须写 `10<sup>6</sup>`、基因斜体不可退化为正体。
+- 标记内的字符属红线,不可改动其中的数值/专名;只可改标记**外**的散文。
+
 ## Pipeline(脚本顺序)
 ```bash
 # 1. 原子化:把稿子按段落拆成 units/<idx>.json
@@ -84,7 +96,8 @@ python scripts/polish_report.py --project-root <root>
 4. **术语一致**,同一概念全文用同一词,不要为求变化做同义替换。
 5. **不确定性动词不升级**,hedge 不可改成 strong(may/suggest 不可变成 prove/demonstrate)。只可平移或下调。
 6. **红线**,task 里 `red_lines.preserve_citations` 列出的引用标记、所有数值、专名一字不动。
-7. 改完写回该 unit,`polished_by` 填非 PLACEHOLDER 值,`meaning_changed` 必须为 false,`polish_note` 简述改了什么或为何不改。
+7. **保留行内格式标记**,见"字符级排版契约"。`*斜体*`(物种/基因/统计符号)、`<sup>`/`<sub>`、`**加粗**`逐字保留位置与配对,不增删、不错配,标记内字符按红线处理。
+8. 改完写回该 unit,`polished_by` 填非 PLACEHOLDER 值,`meaning_changed` 必须为 false,`polish_note` 简述改了什么或为何不改。
 
 ## Output Contract
 - `units/<idx>.json`,原子化单元(原文 + section_type + 引用/数值标记)。
@@ -94,7 +107,8 @@ python scripts/polish_report.py --project-root <root>
 - `figures/figure_NN.<ext>` + `figures/image_manifest.json`,从源 docx `word/media/` 解出的内嵌图(按 zip 出现顺序命名)。仅二进制搬运,不做 OCR/图像识别;非 docx 输入则该目录可能为空。供最终 docx 嵌图使用。
 - `polish_manifest.json`,逐段润色任务包。
 - `polished/<idx>.json`,逐段润色结果 + polish_risk_flags。
-- `polished_manuscript.md`,合并后的润色稿。docx 为可选导出(`--docx`,需 python-docx;失败仅警告,md 仍产出)。
+- `polished_manuscript.md`,合并后的润色稿。docx 为可选导出(`--docx`,需 python-docx;失败仅警告,md 仍产出)。导出器会解析 md 行内标记(`**加粗**`/`*斜体*`/`<sup>`/`<sub>`)渲染为 run 级格式,并对每个 run 设含 `w:eastAsia` 的字体(中文默认宋体)。
+  > ⚠️ **docx 往返 lossy 警告**:当前 docx 输入经 md 往返会丢失**原稿** run 级格式(斜体/上下标/字体),根因在读取层(atomize 只取纯文本)。`--docx` 导出仅能还原 md 里**显式标注**的字符级格式,**不可当交付稿**——原稿中未被标记捕获的排版会丢。`--docx` 仅供纯文本/已标注格式的预览。保格式的 in-place 导出(直接在原 docx 上改文字、不动 run 格式)为后续改造项。
 - `polish_change_report.md`,逐段改动 + 风险 flag + 未改原因。
 
 ## Anti-AI 规则(检测见 common.py)
