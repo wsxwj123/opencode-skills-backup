@@ -101,7 +101,7 @@ def cmd_pack(args: argparse.Namespace) -> int:
     lines.append("```")
     lines.append(
         "规则:每个清单 id 必须出现一次;verdict ∈ {pass,fail,na};"
-        "verdict 为 fail 或 na 时 evidence 必填(指出文件位置/具体证据)。"
+        "evidence 对每个 id 都必填——pass 须给出据以判定通过的具体证据(文件位置/脚本输出/原文),fail/na 须指出问题所在。空证据一律视为未裁决,拦截。"
     )
     lines.append("")
     return_path = str(Path(args.workdir) / f".review_return_{args.gate}.json")
@@ -160,8 +160,8 @@ def cmd_verify(args: argparse.Namespace) -> int:
             problems.append(f"{eid}: verdict 非法 ({verdict!r})")
             continue
         evidence = (entry.get("evidence") or "").strip()
-        if verdict in {"fail", "na"} and not evidence:
-            problems.append(f"{eid}: verdict={verdict} 但 evidence 为空")
+        if not evidence:
+            problems.append(f"{eid}: verdict={verdict} 但 evidence 为空（每项裁决都须附证据，pass 也不例外，防无证据橡皮图章）")
         if verdict == "fail":
             fails.append(f"{eid}: {evidence or '(无证据)'}")
 
