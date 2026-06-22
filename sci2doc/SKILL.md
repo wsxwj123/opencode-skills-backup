@@ -384,6 +384,7 @@ sci2doc 特有项：
 - [ ] **S5** GB/T 7714 著录格式：本章新引文已过 `reference_renderer.py validate_all`，零偏差
 - [ ] **S6** 自我抄袭标注完整：本章所有复用 SCI 来源处均有 `[N]` 引用 + 声明
 - [ ] **S7** 章后 self-check 已跑（`atomic_md_workflow.py self-check` 输出 ok=true），无 error 级问题
+- [ ] **S9** 字符级排版契约已遵守：本章斜体（学名/基因/统计符号/拉丁缩写）、上下标（`<sup>`/`<sub>`，无裸写 `H2O`/`CO2` 或 Unicode 上下标字符）、加粗仅用于标题、中英标点半/全角分明，均符合 `## 字符级排版契约`
 - [ ] **S-GIT** 检查点已落：本章已落版本检查点——git 可用时 `git_checkpoint.py status .` commit 数随章递增；git 不可用时已生成 snapshot。二者满足其一
 
 ### 7) Finalize Chapter State
@@ -520,6 +521,23 @@ Three-line tables are mandatory in (but not limited to):
 **Writing rule**: If a subsection contains 3+ items sharing the same attributes (name+spec+source, group+treatment+n, etc.), it MUST be written as a Markdown pipe table, never as a prose list or paragraph.
 
 边框参数（pt 值）与题注字体字号见 `references/word-format-spec.md § Three-Line Table Borders`；格式由 `check_quality.py` 强制校验（无竖线，顶/底线 1.5pt，表头线 0.5pt）。
+
+## 字符级排版契约
+
+正文与表格中的字符级排版必须在原子化 `.md` 中按下列规则书写，`markdown_to_docx.py` 的行内解析器会把这些标记渲染为对应的 Word run 格式（斜体 / 上标 / 下标 / 加粗），并保证每个 run 仍走中英双字体（含 `eastAsia`）。
+
+- **斜体**：用 `*...*` 包裹。适用对象：
+  - 物种拉丁学名：`*E. coli*`、`*Escherichia coli*`、`*Mus musculus*`。
+  - 基因名（按学科惯例，人类基因常大写斜体）：`*TP53*`、`*BRCA1*`。
+  - 统计符号：`*p*`、`*t*`、`*n*`、`*F*`、`*r*`（例：`*p* < 0.05`、`*n* = 30`）。
+  - 拉丁缩写：`*in vitro*`、`*in vivo*`、`*et al.*`、`*vs.*`。
+- **上标**：用 `<sup>...</sup>`。例：`10<sup>6</sup>` cells/mL、`cm<sup>2</sup>`、`Ca<sup>2+</sup>`。
+- **下标**：用 `<sub>...</sub>`。例：`H<sub>2</sub>O`、`CO<sub>2</sub>`、`IC<sub>50</sub>`、`Na<sup>+</sup>/K<sup>+</sup>`。
+  - **禁止裸写 `H2O` / `CO2` / `IC50`，禁止直接粘贴 Unicode 上下标字符（如 `²`、`₂`、`⁶`）**——必须用 `<sup>`/`<sub>` 标记。
+- **加粗**：用 `**...**`，**仅限标题**（如分组小标题）。学位论文正文不得用加粗做强调；强调改用句式或斜体。
+- **半角 / 全角**：中文句内标点用全角（`，。；：（）`）；英文、数字、DOI、URL、公式用半角；同一句内不得中英标点混用。
+
+注意：`*p* < 0.05` 这类统计显著性标记中的 `*` 是斜体标记的合法用途，行内解析器会正确识别并保护既有显著性写法（如 `**P*<0.05` 不会被误吞为加粗）。
 
 ## Word Format Specification (Built-in Default Template)
 

@@ -231,7 +231,7 @@ def convert_docx(output_md, output_docx, reference_doc=None):
             "reason": "pandoc_not_found",
             "message": "Pandoc not found in PATH. Docx generation skipped."
         }
-    cmd = [pandoc_bin, output_md, "-o", output_docx]
+    cmd = [pandoc_bin, "-f", "markdown+superscript+subscript", output_md, "-o", output_docx]
     if reference_doc:
         cmd.extend(["--reference-doc", reference_doc])
     try:
