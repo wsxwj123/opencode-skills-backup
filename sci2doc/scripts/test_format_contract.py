@@ -133,6 +133,24 @@ def test_abbreviation_hyphenated_full_name():
     assert "Magnetic Resonance Imaging" in mri["full_en"], \
         f"全称应完整保留，实际：{mri!r}"
 
+    # (c) 小写英文全称（期刊惯例 focused ultrasound，非首字母大写）应抓到 abbr 且 full_en 完整
+    found_lower = extract_abbreviations('聚焦超声（focused ultrasound，FUS）')
+    fus = next((item for item in found_lower if item["abbr"] == "FUS"), None)
+    assert fus is not None, f"小写英文全称应抓到 FUS，实际：{found_lower!r}"
+    assert fus["full_en"] == "focused ultrasound", \
+        f"小写全称应完整保留，实际：{fus!r}"
+    assert fus["full_cn"] == "聚焦超声", f"中文全称应正确，实际：{fus!r}"
+
+    # (d) 希腊字母（γ/β）不得在缩写或全称处截断，且缩写不留悬空连字符
+    found_greek = extract_abbreviations('转化生长因子β（transforming growth factor-β，TGF-β）')
+    tgf = next((item for item in found_greek if item["abbr"] == "TGF-β"), None)
+    assert tgf is not None, \
+        f"希腊字母缩写应完整抓到 TGF-β（不是 TGF-），实际：{found_greek!r}"
+    assert not tgf["abbr"].endswith("-"), \
+        f"缩写不得以悬空连字符结尾，实际：{tgf!r}"
+    assert "transforming growth factor-β" in tgf["full_en"], \
+        f"含希腊字母的英文全称应完整不截断，实际：{tgf!r}"
+
 
 # ===========================================================================
 # 契约 4：check_quality 表号 + 图号去重

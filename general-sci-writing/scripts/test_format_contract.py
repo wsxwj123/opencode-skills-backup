@@ -133,6 +133,42 @@ def test_abbreviation_uppercase_definition_still_detected() -> None:
 
 
 # ---------------------------------------------------------------------------
+# bug1b: abbreviation_consistency — BARE_ABBR_PATTERN 希腊字母截断
+#        IFN-γ / TGF-β 等须完整捕获，绝不产生以 "-" 结尾的残缺缩写。
+# ---------------------------------------------------------------------------
+def test_bare_abbr_pattern_greek_suffix_not_truncated() -> None:
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "abbreviation_consistency", str(ABBR_SCRIPT)
+    )
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    pat = mod.BARE_ABBR_PATTERN
+
+    # 含希腊字母后缀的缩写必须被完整抓取（而非残缺的 "IFN-" / "TGF-"）。
+    for text, expected in [("IFN-γ", "IFN-γ"), ("TGF-β", "TGF-β"),
+                           ("TNF-α", "TNF-α"), ("IL-1β", "IL-1β")]:
+        tokens = [m.group(1) for m in pat.finditer(text)]
+        assert tokens == [expected], (
+            f"{text!r} should capture {expected!r}, got {tokens!r}"
+        )
+        # 绝不出现以 "-" 结尾的残缺缩写。
+        assert not any(tok.endswith("-") for tok in tokens), (
+            f"dangling trailing hyphen in {tokens!r} for {text!r}"
+        )
+
+    # 不退化：纯大写缩写仍抓，单字母不抓。
+    assert [m.group(1) for m in pat.finditer("PCR ELISA P53")] == \
+        ["PCR", "ELISA", "P53"], "plain uppercase abbreviations regressed"
+    assert [m.group(1) for m in pat.finditer("A cat and I left")] == [], \
+        "single letters A/I must not be captured"
+    # 残缺输入 "IFN-" 须抓到干净的 "IFN"（不带悬空 "-"）。
+    assert [m.group(1) for m in pat.finditer("IFN- alone")] == ["IFN"], \
+        "trailing-hyphen input must yield clean 'IFN'"
+
+
+# ---------------------------------------------------------------------------
 # bug2: figure_analysis_gate — 复数 section_ids 数组字段 + 门禁真能拦截
 # ---------------------------------------------------------------------------
 def test_figure_gate_plural_section_ids_pass_and_block() -> None:
@@ -226,6 +262,7 @@ def test_make_reference_docx_output_flag_does_not_touch_template() -> None:
 if __name__ == "__main__":
     test_abbreviation_lowercase_filename_and_lowercase_definition()
     test_abbreviation_uppercase_definition_still_detected()
+    test_bare_abbr_pattern_greek_suffix_not_truncated()
     test_figure_gate_plural_section_ids_pass_and_block()
     test_make_reference_docx_output_flag_does_not_touch_template()
     print("OK: all format-contract regression tests passed (3 bugs locked)")
