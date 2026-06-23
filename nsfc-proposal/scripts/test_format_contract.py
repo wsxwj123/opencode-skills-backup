@@ -1,0 +1,216 @@
+#!/usr/bin/env python3
+"""回归测试：固化两类已修 bug 的契约。
+
+纯 assert、无 pytest、自包含（输入用 tempfile/字符串现造，不依赖真稿）。
+直接运行：失败抛 AssertionError，全过打印 OK。
+
+    python3 test_format_contract.py
+
+覆盖契约：
+  契约 1 —— citation_validator.extract_citation_numbers 复合角标解析
+            （bug: 旧版只识别单角标 [7]，复合 [4,5] / 区间 [4-6] / 全角逗号失效）
+  契约 2 —— 三个 CLI 的 fail-closed 退出码
+            （bug: ERROR 级 FAIL 未映射为非零退出码，CI 误判通过）
+"""
+
+import json
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+SCRIPTS_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(SCRIPTS_DIR))
+
+from citation_validator import extract_citation_numbers  # noqa: E402
+
+
+# ---------------------------------------------------------------------------
+# 契约 1：复合角标解析
+# bug 复现：复合/区间/全角逗号角标必须全部展开，单角标不得退化。
+# ---------------------------------------------------------------------------
+def test_extract_citation_numbers() -> None:
+    # 复合（半角逗号）
+    nums = extract_citation_numbers("[4,5]")
+    assert 4 in nums and 5 in nums, f"[4,5] 应含 4,5，实得 {nums}"
+
+    # 区间展开
+    nums = extract_citation_numbers("[4-6]")
+    assert 4 in nums and 5 in nums and 6 in nums, f"[4-6] 应含 4,5,6，实得 {nums}"
+
+    # 句中混合复合 + 单角标
+    nums = extract_citation_numbers("文献[2,3]和[7]")
+    assert 2 in nums and 3 in nums and 7 in nums, f"文献[2,3]和[7] 应含 2,3,7，实得 {nums}"
+
+    # 全角逗号
+    nums = extract_citation_numbers("[4，5]")
+    assert 4 in nums and 5 in nums, f"全角 [4，5] 应含 4,5，实得 {nums}"
+
+    # 单角标不退化
+    nums = extract_citation_numbers("[7]")
+    assert nums == [7], f"单角标 [7] 应仍为 [7]，实得 {nums}"
+
+    print("契约 1 (复合角标解析) OK")
+
+
+# ---------------------------------------------------------------------------
+# 契约 2：fail-closed 退出码
+# 每个命令在独立 tempdir 中运行，所有输入/输出路径显式指向 tempdir，
+# 不污染 skill 目录，退出即随 tempdir 一并清理。
+# ---------------------------------------------------------------------------
+def _run(script: str, args: list[str], cwd: Path) -> int:
+    proc = subprocess.run(
+        [sys.executable, str(SCRIPTS_DIR / script), *args],
+        cwd=str(cwd),
+        capture_output=True,
+        text=True,
+    )
+    return proc.returncode
+
+
+def test_consistency_mapper_exit_codes() -> None:
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+
+        # ERROR FAIL：研究内容缺 mapped_to_method → V-03(ERROR) 失败 → rc=1
+        err_map = d / "cm_err.json"
+        err_map.write_text(
+            json.dumps({"research_contents": [{"id": "RC-1", "mapped_to_method": []}]}),
+            encoding="utf-8",
+        )
+        rc = _run("consistency_mapper.py",
+                  ["--path", str(err_map), "validate", "--rules", "V-03"], d)
+        assert rc == 1, f"consistency ERROR FAIL 应 rc=1，实得 {rc}"
+
+        # 全 pass：空 map，所有规则空集合 vacuously 通过 → rc=0
+        pass_map = d / "cm_pass.json"
+        pass_map.write_text("{}", encoding="utf-8")
+        rc = _run("consistency_mapper.py",
+                  ["--path", str(pass_map), "validate"], d)
+        assert rc == 0, f"consistency 全 pass 应 rc=0，实得 {rc}"
+
+        # 仅 WARNING：研究内容有 method 但缺 annual_plan_year → V-04(WARNING) 失败 → rc=0
+        warn_map = d / "cm_warn.json"
+        warn_map.write_text(
+            json.dumps({"research_contents": [{"id": "RC-1", "mapped_to_method": ["M-1"]}]}),
+            encoding="utf-8",
+        )
+        rc = _run("consistency_mapper.py",
+                  ["--path", str(warn_map), "validate", "--rules", "V-04"], d)
+        assert rc == 0, f"consistency 仅 WARNING 应 rc=0，实得 {rc}"
+
+    print("契约 2a (consistency_mapper: ERROR→1 / pass→0 / WARNING→0) OK")
+
+
+def test_citation_validator_exit_codes() -> None:
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        ref = d / "none.md"          # 不存在的 p1，validator 容忍
+        mrq = d / "mrq.json"
+        log = d / "log.json"
+        base = ["--offline", "--mcp-ttl-days", "0",
+                "--p1", str(ref),
+                "--manual-review", str(mrq), "--log", str(log)]
+
+        # verification_status=failed：DOI 非法 + 无 MCP 记录 → 硬失败 → rc=1
+        idx_fail = d / "idx_fail.json"
+        idx_fail.write_text(json.dumps({
+            "metadata": {},
+            "entries": [{"ref_number": 1, "title": "Some Title",
+                         "doi": "NOT_A_DOI", "search_source": "pubmed"}],
+        }), encoding="utf-8")
+        mcp_empty = d / "mcp_empty.json"
+        mcp_empty.write_text(json.dumps({"entries": []}), encoding="utf-8")
+        rc = _run("citation_validator.py",
+                  ["verify-all", "--index", str(idx_fail),
+                   "--mcp-cache", str(mcp_empty), *base], d)
+        assert rc == 1, f"citation verification failed 应 rc=1，实得 {rc}"
+
+        # 全 pass：合法 DOI + MCP 命中（ttl=0 跳过时效）+ offline → verified → rc=0
+        idx_pass = d / "idx_pass.json"
+        idx_pass.write_text(json.dumps({
+            "metadata": {},
+            "entries": [{"ref_number": 1, "title": "Some Title",
+                         "doi": "10.1000/abc123", "search_source": "pubmed"}],
+        }), encoding="utf-8")
+        mcp_pass = d / "mcp_pass.json"
+        mcp_pass.write_text(json.dumps({
+            "metadata": {"schema_version": "1.0"},
+            "entries": [{"doi": "10.1000/abc123"}],
+        }), encoding="utf-8")
+        rc = _run("citation_validator.py",
+                  ["verify-all", "--index", str(idx_pass),
+                   "--mcp-cache", str(mcp_pass), *base], d)
+        assert rc == 0, f"citation 全 pass 应 rc=0，实得 {rc}"
+
+    print("契约 2b (citation_validator: failed→1 / pass→0) OK")
+
+
+def test_diagnosis_engine_exit_codes() -> None:
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        idx = d / "idx.json"
+        idx.write_text(json.dumps({"metadata": {}, "entries": []}), encoding="utf-8")
+        ref = d / "ref.md"
+        ref.write_text("", encoding="utf-8")
+        empty_cm = d / "cm_empty.json"
+        empty_cm.write_text("{}", encoding="utf-8")
+
+        # blocked：空 sections 目录 → P1 缺失 → D-01 评 "D" → 任一维 D → blocked → rc=1
+        blocked_dir = d / "sections_blocked"
+        blocked_dir.mkdir()
+        rep_blocked = d / "rep_blocked.json"
+        p1_missing = d / "p1_missing.md"
+        p1_missing.write_text("", encoding="utf-8")
+        rc = _run("diagnosis_engine.py", [
+            "full-review",
+            "--sections-dir", str(blocked_dir),
+            "--consistency", str(empty_cm),
+            "--index", str(idx), "--p1", str(p1_missing), "--ref", str(ref),
+            "--output", str(rep_blocked),
+        ], d)
+        assert rc == 1, f"diagnosis blocked 应 rc=1，实得 {rc}"
+
+        # pass：构造无任何 "D" 维度的最小合法稿
+        #   D-01: P1 非空(≥8 角标) ; D-04: cm 含 1 条 feasibility_evidence(合法节)
+        #   D-09: B1/B2/B3 齐全 ; D-07: 各节文本清洁(无风格/节奏告警)
+        pass_dir = d / "sections_pass"
+        pass_dir.mkdir()
+        p1 = ("本研究关注糖代谢调控的分子机制[1]。前期工作发现某蛋白在肝细胞中表达升高[2]。"
+              "我们推测它参与葡萄糖摄取[3]。实验采用细胞培养与小鼠模型相结合的方式开展[4]。"
+              "数据来自三批独立重复[5]。统计方法选用方差分析[6]。"
+              "结果显示该蛋白敲低后糖摄取下降约四成[7]。这一现象在两种细胞系中均可观察到[8]。"
+              "后续将进一步验证其下游通路[9]。")
+        (pass_dir / "P1_立项依据.md").write_text(p1, encoding="utf-8")
+        (pass_dir / "B1_预算说明_直接费用.md").write_text(
+            "直接费用涵盖设备与材料两类。设备购置依照实验需要列支。", encoding="utf-8")
+        (pass_dir / "B2_预算说明_合作外拨.md").write_text(
+            "合作外拨主要用于委托测序服务。金额依据对方报价确定。", encoding="utf-8")
+        (pass_dir / "B3_预算说明_其他来源.md").write_text(
+            "其他来源经费来自单位配套支持。用途与本项目保持一致。", encoding="utf-8")
+        pass_cm = d / "cm_pass.json"
+        pass_cm.write_text(json.dumps({
+            "feasibility_evidence": [
+                {"id": "F-1", "source_section": "P3_1_研究基础与可行性分析"}
+            ]
+        }), encoding="utf-8")
+        rep_pass = d / "rep_pass.json"
+        rc = _run("diagnosis_engine.py", [
+            "full-review",
+            "--sections-dir", str(pass_dir),
+            "--consistency", str(pass_cm),
+            "--index", str(idx),
+            "--p1", str(pass_dir / "P1_立项依据.md"), "--ref", str(ref),
+            "--output", str(rep_pass),
+        ], d)
+        assert rc == 0, f"diagnosis pass 应 rc=0，实得 {rc}"
+
+    print("契约 2c (diagnosis_engine: blocked→1 / pass→0) OK")
+
+
+if __name__ == "__main__":
+    test_extract_citation_numbers()
+    test_consistency_mapper_exit_codes()
+    test_citation_validator_exit_codes()
+    test_diagnosis_engine_exit_codes()
+    print("ALL OK")
