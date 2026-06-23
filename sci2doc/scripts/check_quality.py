@@ -250,7 +250,15 @@ def check_figure_numbering(doc):
         figures_by_chapter[chapter].append(fig)
     
     for chapter, figs in figures_by_chapter.items():
-        figs_sorted = sorted(figs, key=lambda x: x['number'])
+        # 按 (chapter, number) 去重：同一图号被题注+正文多次引用只算一次，
+        # 否则排序后 expected=i+1 必错位，产生假"不连续"warning。
+        seen_numbers = set()
+        figs_unique = []
+        for fig in figs:
+            if fig['number'] not in seen_numbers:
+                seen_numbers.add(fig['number'])
+                figs_unique.append(fig)
+        figs_sorted = sorted(figs_unique, key=lambda x: x['number'])
         for i, fig in enumerate(figs_sorted):
             expected = i + 1
             if fig['number'] != expected:
@@ -271,7 +279,15 @@ def check_figure_numbering(doc):
         tables_by_chapter[chapter].append(tab)
     
     for chapter, tabs in tables_by_chapter.items():
-        tabs_sorted = sorted(tabs, key=lambda x: x['number'])
+        # 按 (chapter, number) 去重：同一表号被题注+正文多次引用只算一次，
+        # 否则排序后 expected=i+1 必错位，产生假"不连续"warning。
+        seen_numbers = set()
+        tabs_unique = []
+        for tab in tabs:
+            if tab['number'] not in seen_numbers:
+                seen_numbers.add(tab['number'])
+                tabs_unique.append(tab)
+        tabs_sorted = sorted(tabs_unique, key=lambda x: x['number'])
         for i, tab in enumerate(tabs_sorted):
             expected = i + 1
             if tab['number'] != expected:

@@ -914,6 +914,9 @@ def markdown_to_docx(md_content, output_path, chapter_num=None, project_root=Non
         
         # 设置页面
         section = doc.sections[0]
+        # 显式设为 A4（python-docx 默认 Letter 21.59×27.94cm，check_quality 硬要求 A4）
+        section.page_width = Cm(21.0)
+        section.page_height = Cm(29.7)
         page_margins = render_context.get("page_margins_cm", {})
         section.top_margin = Cm(page_margins.get("top", 2.54))
         section.bottom_margin = Cm(page_margins.get("bottom", 2.54))
