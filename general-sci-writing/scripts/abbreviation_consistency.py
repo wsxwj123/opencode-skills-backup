@@ -34,16 +34,21 @@ UNIVERSAL_ABBREVIATIONS = {
     "SD", "SEM", "CI", "OD", "MW", "kDa", "bp", "kb",
 }
 
+# 缩写 token 子模式：大写起头，总长 >=2（避免抓单字母 "A"/"I"），
+# 连字符段后必须跟内容（禁悬空尾 "-"），连字符后允许希腊字母（α-ωΑ-Ω），
+# 以完整捕获 IFN-γ / TGF-β / IL-1β 等而非残缺的 "IFN-"。
+_ABBR_TOKEN = r"[A-Z](?:[A-Z0-9]+(?:-[A-Z0-9Α-Ωα-ω]+)*|(?:-[A-Z0-9Α-Ωα-ω]+)+)"
+
 # 匹配 "Full Name (ABBR)" 定义模式：
-# - ABBR 全大写或大写+数字组合，2-10 字符
+# - ABBR 见 _ABBR_TOKEN（全大写/数字，可含 -希腊字母后缀）
 # - 前面跟着 1-6 个全称词作为 full name；首词允许大写或小写
 #   （SCI 首展惯例常用小写，如 "reactive oxygen species (ROS)"）
 DEFINITION_PATTERN = re.compile(
-    r"\b((?:[A-Za-z][\w\-]*\s+){1,6})\(([A-Z][A-Z0-9\-]{1,9})\)"
+    r"\b((?:[A-Za-z][\w\-]*\s+){1,6})\((" + _ABBR_TOKEN + r")\)"
 )
 
-# 匹配裸用缩写（独立词，全大写或大写+数字，2-10 字符）
-BARE_ABBR_PATTERN = re.compile(r"\b([A-Z][A-Z0-9\-]{1,9})\b")
+# 匹配裸用缩写（独立词，全大写/数字，可含 -希腊字母后缀；不产生悬空尾 "-"）
+BARE_ABBR_PATTERN = re.compile(r"\b(" + _ABBR_TOKEN + r")\b")
 
 
 def load_defined(root: str) -> dict:
