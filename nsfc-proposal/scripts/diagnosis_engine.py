@@ -467,8 +467,9 @@ def main() -> int:
         out = Path(args.output)
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
-        print(json.dumps({"ok": True, "output": str(out), "overall_grade": report["overall_grade"]}, ensure_ascii=False))
-        return 0
+        blocked = report.get("pass_status") == "blocked"
+        print(json.dumps({"ok": not blocked, "output": str(out), "overall_grade": report["overall_grade"], "pass_status": report.get("pass_status")}, ensure_ascii=False))
+        return 1 if blocked else 0
 
     if args.cmd == "export-report":
         payload = json.loads(Path(args.input).read_text(encoding="utf-8"))
