@@ -29,7 +29,7 @@ import citation_guard_core as core
 
 DOI_RE = re.compile(r"^10\.\d{4,9}/[-._;()/:A-Z0-9]+$", re.IGNORECASE)
 PMID_RE = re.compile(r"^\d{4,10}$")
-CIT_RE = re.compile(r"\[(\d+)\]")
+CIT_RE = re.compile(r"\[\d+(?:[-,，]\d+)*\]")
 TITLE_TOKEN_RE = re.compile(r"[a-z0-9\u4e00-\u9fff]+")
 
 CACHE_SCHEMA_VERSION = "1.0"
@@ -66,7 +66,19 @@ def save_json(path: Path, data: dict[str, Any]) -> None:
 
 
 def extract_citation_numbers(text: str) -> list[int]:
-    return [int(x) for x in CIT_RE.findall(text)]
+    numbers: list[int] = []
+    for match in CIT_RE.findall(text):
+        inner = match[1:-1].replace("，", ",")
+        for part in inner.split(","):
+            part = part.strip()
+            if not part:
+                continue
+            if "-" in part:
+                lo, hi = part.split("-", 1)
+                numbers.extend(range(int(lo), int(hi) + 1))
+            else:
+                numbers.append(int(part))
+    return numbers
 
 
 def _http_get_json(url: str, timeout_sec: float = 8.0) -> dict[str, Any] | None:
@@ -804,11 +816,12 @@ def main() -> int:
             **run_stats,
         })
 
+        verification_status = idx["metadata"].get("verification_status")
         print(
             json.dumps(
                 {
-                    "ok": True,
-                    "verification_status": idx["metadata"].get("verification_status"),
+                    "ok": verification_status != "failed",
+                    "verification_status": verification_status,
                     "manual_review_count": len(queue),
                     "avg_confidence": run_stats.get("avg_confidence"),
                     "duration_ms": run_stats.get("duration_ms"),
@@ -816,7 +829,7 @@ def main() -> int:
                 ensure_ascii=False,
             )
         )
-        return 0
+        return 1 if verification_status == "failed" else 0
 
     if args.cmd == "verify-entry":
         index_path = Path(args.index)

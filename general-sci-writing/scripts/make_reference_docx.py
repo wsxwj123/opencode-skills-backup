@@ -9,12 +9,14 @@ The script is IDEMPOTENT: re-running it on an already-processed file produces
 the same result. Run it after editing the FONT/SIZE constants below.
 
 Usage:
-    python scripts/make_reference_docx.py
+    python scripts/make_reference_docx.py [--template BASE.docx] [--output OUT.docx]
+    (default: read skill templates/reference.docx, write ./reference.docx in CWD)
 
 Requires: python-docx. The baseline templates/reference.docx must already exist
 (regenerate with: pandoc --print-default-data-file reference.docx > templates/reference.docx).
 """
 
+import argparse
 from pathlib import Path
 
 from docx import Document
@@ -69,14 +71,28 @@ def set_style_font(style, size_pt, bold=None):
 
 
 def main():
-    if not TEMPLATE_PATH.exists():
+    parser = argparse.ArgumentParser(
+        description="Bake SCI manuscript fonts (TNR) into a pandoc reference.docx."
+    )
+    parser.add_argument(
+        "--template", default=str(TEMPLATE_PATH),
+        help="baseline reference.docx to read (default: skill templates/reference.docx)")
+    parser.add_argument(
+        "--output", default=str(Path.cwd() / "reference.docx"),
+        help="where to write the styled docx (default: ./reference.docx in CWD)")
+    args = parser.parse_args()
+
+    template_path = Path(args.template).resolve()
+    output_path = Path(args.output).resolve()
+
+    if not template_path.exists():
         raise SystemExit(
-            f"baseline template not found: {TEMPLATE_PATH}\n"
+            f"baseline template not found: {template_path}\n"
             "regenerate it first:\n"
             "  pandoc --print-default-data-file reference.docx > templates/reference.docx"
         )
 
-    doc = Document(str(TEMPLATE_PATH))
+    doc = Document(str(template_path))
     styles = {s.name: s for s in doc.styles}
 
     applied = []
@@ -90,9 +106,10 @@ def main():
             set_style_font(styles[name], size, bold=bold)
             applied.append(f"{name} -> {FONT_NAME} {size}pt bold={bold}")
 
-    doc.save(str(TEMPLATE_PATH))
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    doc.save(str(output_path))
 
-    print(f"wrote {TEMPLATE_PATH}")
+    print(f"wrote {output_path}")
     for line in applied:
         print("  " + line)
 

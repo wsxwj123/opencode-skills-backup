@@ -614,8 +614,13 @@ def main() -> int:
                 parser.error(f"unknown rule id(s): {', '.join(unknown)}")
         else:
             rules = None
-        print(json.dumps(validate(cm, rules), ensure_ascii=False, indent=2))
-        return 0
+        results = validate(cm, rules)
+        print(json.dumps(results, ensure_ascii=False, indent=2))
+        has_error_fail = any(
+            r.get("severity") == "ERROR" and not r.get("pass")
+            for r in results.values()
+        )
+        return 1 if has_error_fail else 0
 
     if args.cmd == "validate-one":
         results = validate(cm)

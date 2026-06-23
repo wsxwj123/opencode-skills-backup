@@ -82,7 +82,6 @@ def build_manifest(project_root: Path, candidates: list[dict[str, Any]]) -> dict
             ],
             "forbidden_structures": [
                 "not only... but also",
-                "from A to B",
                 "rhetorical question",
                 "trailing -ing clause (', reflecting/ensuring/highlighting/suggesting/demonstrating/indicating/revealing ...')",
                 "decorative contrast",
@@ -160,7 +159,6 @@ def build_polish_prompt(project_root: Path, output_path: Path, candidates: list[
         "",
         "Forbidden structures:",
         "not only... but also...",
-        "from A to B",
         "rhetorical questions",
         "decorative contrast structures",
         "trailing -ing clauses used as unsupported inference (', reflecting/ensuring/highlighting/suggesting/demonstrating/indicating/revealing ...')",

@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
 
 import docx
@@ -71,16 +72,31 @@ def apply_styles(doc) -> None:
 
 
 def main() -> int:
-    if not REFERENCE_DOCX.exists():
+    parser = argparse.ArgumentParser(
+        description="为 pandoc 生成国自然中文标书的 reference.docx 样式模板。"
+    )
+    parser.add_argument(
+        "--template", default=str(REFERENCE_DOCX),
+        help="基线 reference.docx（默认：技能 templates/reference.docx）")
+    parser.add_argument(
+        "--output", default=str(Path.cwd() / "reference.docx"),
+        help="输出路径（默认：当前工作目录 ./reference.docx）")
+    args = parser.parse_args()
+
+    template_path = Path(args.template).resolve()
+    output_path = Path(args.output).resolve()
+
+    if not template_path.exists():
         raise SystemExit(
-            f"未找到 {REFERENCE_DOCX}\n"
+            f"未找到 {template_path}\n"
             "请先运行：pandoc --print-default-data-file reference.docx > "
-            f"{REFERENCE_DOCX}"
+            f"{template_path}"
         )
-    doc = docx.Document(str(REFERENCE_DOCX))
+    doc = docx.Document(str(template_path))
     apply_styles(doc)
-    doc.save(str(REFERENCE_DOCX))
-    print(f"已写入字体样式：{REFERENCE_DOCX}")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    doc.save(str(output_path))
+    print(f"已写入字体样式：{output_path}")
     print(f"  正文 {BODY_STYLES}: 西文={WESTERN_FONT} 中文={BODY_EAST_ASIA} {BODY_PT}pt")
     print(f"  标题 H1/H2/H3/Title: 西文={WESTERN_FONT} 中文={HEADING_EAST_ASIA}")
     return 0

@@ -243,7 +243,7 @@ _PATTERN_CN_ABBR = re.compile(
 )
 
 _PATTERN_EN_ABBR = re.compile(
-    r'([A-Z][a-z]+(?:\s+[A-Za-z]+){1,8})' # 英文全称 (首字母大写短语)
+    r'([A-Z][a-z]+(?:-[A-Za-z]+)*(?:\s+[A-Za-z]+(?:-[A-Za-z]+)*){1,8})' # 英文全称 (首字母大写短语)
     r'\s*[（(]'                             # 左括号
     r'([a-zA-Z][A-Za-z0-9\-]{1,15})'       # 英文缩写（允许小写开头）
     r'[）)]'                                # 右括号
@@ -253,7 +253,7 @@ _PATTERN_MIXED = re.compile(
     r'(?<![\u4e00-\u9fff])'                # 左侧不紧跟中文字（防贪婪截断使中文前缀过长）
     r'([\u4e00-\u9fff]{2,20}?)'            # 中文全称（非贪婪，取最短合法匹配）
     r'[（(]'                                 # 左括号
-    r'([A-Z][a-z]+(?:\s+[A-Za-z]+){1,8})'   # 英文全称
+    r'([A-Z][a-z]+(?:-[A-Za-z]+)*(?:\s+[A-Za-z]+(?:-[A-Za-z]+)*){1,8})'   # 英文全称
     r'[,，]\s*'                              # 逗号分隔
     r'([a-zA-Z][A-Za-z0-9\-]{1,15})'        # 英文缩写（允许小写开头）
     r'[）)]'                                 # 右括号
@@ -473,7 +473,7 @@ def _build_strip_patterns(registry, current_chapter, current_section):
         else:
             patterns.append((
                 re.compile(
-                    r'[A-Z][a-z]+(?:\s+[A-Za-z]+){1,8}\s*[（(]' + escaped_abbr + r'[）)]'
+                    r'[A-Z][a-z]+(?:-[A-Za-z]+)*(?:\s+[A-Za-z]+(?:-[A-Za-z]+)*){1,8}\s*[（(]' + escaped_abbr + r'[）)]'
                 ),
                 abbr,
             ))
@@ -482,7 +482,7 @@ def _build_strip_patterns(registry, current_chapter, current_section):
         if not (full_cn and full_en):
             patterns.append((
                 re.compile(
-                    r'[\u4e00-\u9fff]{2,20}[（(][A-Z][a-z]+(?:\s+[A-Za-z]+){1,8}[,，]\s*'
+                    r'[\u4e00-\u9fff]{2,20}[（(][A-Z][a-z]+(?:-[A-Za-z]+)*(?:\s+[A-Za-z]+(?:-[A-Za-z]+)*){1,8}[,，]\s*'
                     + escaped_abbr + r'[）)]'
                 ),
                 abbr,

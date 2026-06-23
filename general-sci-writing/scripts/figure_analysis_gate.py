@@ -61,8 +61,13 @@ def figures_for_section(figures: list[dict], section: str) -> list[dict]:
     section_norm = section.strip()
     out = []
     for item in figures:
+        # 兼容单数字符串字段与复数数组字段（section_ids）
         sec = str(item.get("section") or item.get("section_id") or "").strip()
-        if sec == section_norm:
+        section_list = item.get("section_ids") or []
+        if not isinstance(section_list, list):
+            section_list = [section_list]
+        section_list = [str(s).strip() for s in section_list]
+        if sec == section_norm or section_norm in section_list:
             out.append(item)
     return out
 

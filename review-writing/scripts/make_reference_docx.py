@@ -15,6 +15,7 @@ Idempotent: re-running on an already-baked template produces the same result.
 Run after regenerating the pandoc default to re-apply the house style.
 """
 
+import argparse
 from pathlib import Path
 
 from docx import Document
@@ -65,15 +66,29 @@ def _set_font(style, *, size_pt, bold=None):
 
 
 def main():
-    if not TEMPLATE.exists():
+    parser = argparse.ArgumentParser(
+        description="Bake the English-review house style into a pandoc reference.docx."
+    )
+    parser.add_argument(
+        "--template", default=str(TEMPLATE),
+        help="baseline reference.docx to read (default: skill templates/reference.docx)")
+    parser.add_argument(
+        "--output", default=str(Path.cwd() / "reference.docx"),
+        help="where to write the styled docx (default: ./reference.docx in CWD)")
+    args = parser.parse_args()
+
+    template_path = Path(args.template).resolve()
+    output_path = Path(args.output).resolve()
+
+    if not template_path.exists():
         raise SystemExit(
-            f"Base template not found: {TEMPLATE}\n"
+            f"Base template not found: {template_path}\n"
             "Generate it first:\n"
             "  pandoc --print-default-data-file reference.docx > "
-            f"{TEMPLATE}"
+            f"{template_path}"
         )
 
-    doc = Document(str(TEMPLATE))
+    doc = Document(str(template_path))
     style_names = {s.name for s in doc.styles}
 
     for name in BODY_STYLES:
@@ -84,8 +99,9 @@ def main():
         if name in style_names:
             _set_font(doc.styles[name], size_pt=size, bold=True)
 
-    doc.save(str(TEMPLATE))
-    print(f"Baked house style into {TEMPLATE}")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    doc.save(str(output_path))
+    print(f"Baked house style into {output_path}")
     print(f"  body styles  {BODY_STYLES} -> {BODY_FONT} {BODY_SIZE_PT}pt")
     for name, size in HEADING_SIZES.items():
         print(f"  {name:<10} -> {BODY_FONT} {size}pt bold")

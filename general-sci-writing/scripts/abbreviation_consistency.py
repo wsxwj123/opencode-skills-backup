@@ -36,9 +36,10 @@ UNIVERSAL_ABBREVIATIONS = {
 
 # 匹配 "Full Name (ABBR)" 定义模式：
 # - ABBR 全大写或大写+数字组合，2-10 字符
-# - 前面跟着 1-6 个 Title-Case 词作为 full name
+# - 前面跟着 1-6 个全称词作为 full name；首词允许大写或小写
+#   （SCI 首展惯例常用小写，如 "reactive oxygen species (ROS)"）
 DEFINITION_PATTERN = re.compile(
-    r"\b((?:[A-Z][\w\-]*\s+){1,6})\(([A-Z][A-Z0-9\-]{1,9})\)"
+    r"\b((?:[A-Za-z][\w\-]*\s+){1,6})\(([A-Z][A-Z0-9\-]{1,9})\)"
 )
 
 # 匹配裸用缩写（独立词，全大写或大写+数字，2-10 字符）
@@ -77,10 +78,10 @@ def load_defined(root: str) -> dict:
 def collect_manuscript_files(root: str) -> list[str]:
     pattern = os.path.join(root, "manuscripts", "*.md")
     files = sorted(glob.glob(pattern))
-    # 排除合并稿与派生物
+    # 排除合并稿与派生物（大小写不敏感，与 merge_manuscript.py 对齐）
     return [
         f for f in files
-        if os.path.basename(f) != "Full_Manuscript.md"
+        if os.path.basename(f).lower() != "full_manuscript.md"
         and not os.path.basename(f).startswith("Draft_Round")
     ]
 

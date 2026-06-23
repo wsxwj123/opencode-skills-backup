@@ -63,6 +63,16 @@ MODE_WORKFLOWS = {
 
 
 def build_confirmation_prompt(payload: dict) -> str:
+    if payload.get("manuscript_format_error"):
+        return "\n".join(
+            [
+                "主稿格式不符合要求，已在 intake 阶段拦截：",
+                f"- {payload['manuscript_format_error']}",
+                "",
+                "revise-sci 需要提供 .docx 主稿（与后续 preflight/pipeline 口径一致）。",
+                "请改用 .docx 主稿后重新进入 intake。",
+            ]
+        ) + "\n"
     lines = [
         "已检测到当前输入的审稿意见分流如下：",
         f"- comments_input_mode: `{payload['detected_mode']}`",
@@ -118,7 +128,17 @@ def main() -> int:
     comments = Path(args.comments).resolve() if args.comments else None
     manuscript = Path(args.manuscript).resolve() if args.manuscript else None
 
-    if comments and comments.exists():
+    # 主稿扩展名前置校验:与 preflight 口径一致(manuscript 必须是 .docx)。
+    # 提前在 intake 阶段拦截非 .docx 主稿,避免放行到 pipeline 才报错。
+    manuscript_format_error = (
+        f"manuscript_docx_path must be readable .docx: {manuscript}"
+        if manuscript and manuscript.exists() and manuscript.suffix.lower() != ".docx"
+        else ""
+    )
+
+    if manuscript_format_error:
+        detected_mode = "unsupported"
+    elif comments and comments.exists():
         detected_mode = detect_comments_input_mode(comments)
     elif manuscript and manuscript.exists():
         detected_mode = "no-comments-manuscript-only"
@@ -140,6 +160,7 @@ def main() -> int:
         "project_root_required": True,
         "needs_branch_guidance": needs_branch_guidance,
         "needs_reviewer_simulator": needs_reviewer_simulator,
+        "manuscript_format_error": manuscript_format_error,
         "workflow_steps": workflow_steps,
         "comments_path": str(comments) if comments else "",
         "manuscript_docx_path": str(manuscript) if manuscript else "",

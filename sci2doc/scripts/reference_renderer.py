@@ -231,12 +231,35 @@ _TYPE_RENDERERS = {
 }
 
 
+def _has_structured_fields(entry: dict) -> bool:
+    """
+    判断条目是否具备可渲染的结构化字段。
+    SCI 参考库（如 PubMed 抓取）常只有完整 raw_vancouver 字符串而无 authors/journal 等
+    结构化字段，此时应回退原样输出 raw_vancouver，避免渲染出"佚名 / 空刊名"。
+    判据：至少有 authors，且对期刊类至少有 journal。
+    """
+    authors = entry.get("authors")
+    if not authors:
+        return False
+    ref_type = (entry.get("type") or entry.get("ref_type") or "journal").strip()
+    if ref_type in {"journal", "J", "article"} and not (entry.get("journal") or "").strip():
+        return False
+    return True
+
+
 def render_entry(entry: dict, index: int | None = None) -> str:
     """
     渲染单条文献条目为 GB/T 7714 著录字符串。
     index 为正整数时前缀 [N] 编号；None 时不加编号。
     未知 type 默认按期刊处理。
+
+    若结构化字段缺失（作者为空/期刊为空等），回退直接采用 raw_vancouver 原文。
     """
+    if not _has_structured_fields(entry):
+        raw = (entry.get("raw_vancouver") or "").strip()
+        if raw:
+            return f"[{index}] {raw}" if index is not None else raw
+
     ref_type = (entry.get("type") or entry.get("ref_type") or "journal").strip()
     renderer = _TYPE_RENDERERS.get(ref_type, render_journal)
     text = renderer(entry)
