@@ -164,13 +164,40 @@ def parse_pairs(block: str) -> list[tuple[str, str, str]]:
     return pairs
 
 
+def _strip_block_header(text: str) -> str:
+    """Remove a leading 'Reviewer #N:' / 'Editor:' header line so a fallback
+    general comment keeps only the actual instruction text, not the header."""
+    return re.sub(
+        r"(?s)^[ \t]*(?:\d+[.)]\s*)?"
+        r"(?:(?:Reviewer\s*#\d+\s*[:：])|(?:" + EDITOR_BLOCK_PATTERN + r"))\s*",
+        "",
+        text,
+        count=1,
+    )
+
+
 def collect_comment_pairs(text: str) -> list[CommentPair]:
     out: list[CommentPair] = []
     for reviewer, rb in split_reviewer_blocks(text).items():
         for section, sb in split_sections(rb):
-            for num, comment, reply in parse_pairs(sb):
+            pairs = parse_pairs(sb)
+            has_numbered = False
+            for num, comment, reply in pairs:
                 if comment:
+                    has_numbered = True
                     out.append(CommentPair(reviewer, section, num, comment, reply))
+            # Fallback: an unnumbered block (common for single/multi-sentence
+            # Editor requests) yields no numbered pairs but still carries a real
+            # instruction. Emit one general comment so RR7 "逐条覆盖无遗漏" holds
+            # and the Editor stays an independent top-level node.
+            if not has_numbered:
+                body = simplify_ws(_strip_block_header(sb))
+                comment, reply = body, ""
+                if " Reply:" in body:
+                    left, right = body.split(" Reply:", 1)
+                    comment, reply = simplify_ws(left), simplify_ws(right)
+                if comment:
+                    out.append(CommentPair(reviewer, section, "0", comment, reply))
     return out
 
 

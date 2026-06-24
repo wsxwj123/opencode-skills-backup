@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import copy
 import json
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -67,6 +68,21 @@ def load_map(path: Path) -> dict[str, Any]:
     for k, v in DEFAULT_MAP.items():
         data.setdefault(k, copy.deepcopy(v))
     return data
+
+
+def unknown_top_level_keys(path: Path) -> list[str]:
+    """返回输入 JSON 中不属于 DEFAULT_MAP 的顶层键。
+
+    用于堵 validate 假绿：字段名写错（如 hypotheses→h_nodes）时，load_map 会把
+    错键当未知数据丢弃、正确键 setdefault 成空集合，validate 便 vacuously 全 PASS。
+    这里读原始文件键名暴露此类拼写错位，由调用方据此 fail-closed。
+    """
+    if not path.exists():
+        return []
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        return []
+    return [k for k in data if k not in DEFAULT_MAP]
 
 
 def save_map(path: Path, data: dict[str, Any]) -> None:
@@ -605,6 +621,23 @@ def main() -> int:
         return 0
 
     if args.cmd == "validate":
+        unknown_keys = unknown_top_level_keys(path)
+        if unknown_keys:
+            print(
+                json.dumps(
+                    {
+                        "error": "unknown_top_level_keys",
+                        "severity": "ERROR",
+                        "unknown_keys": sorted(unknown_keys),
+                        "allowed_keys": sorted(DEFAULT_MAP.keys()),
+                        "hint": "字段名拼错会被静默丢弃导致假绿；请改用 DEFAULT_MAP 中的标准键名",
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                file=sys.stderr,
+            )
+            return 1
         if args.phase:
             rules = PHASE_RULES[args.phase]
         elif args.rules:

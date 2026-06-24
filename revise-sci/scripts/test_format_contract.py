@@ -30,6 +30,7 @@ INTAKE = SCRIPTS_DIR / "intake_router.py"
 CITATION_GUARD = SCRIPTS_DIR / "citation_guard.py"
 REFERENCE_SYNC = SCRIPTS_DIR / "reference_sync.py"
 XSEC_SCRIPT = SCRIPTS_DIR / "cross_section_consistency.py"
+DOD_CHECKLIST = SCRIPTS_DIR.parent / "references" / "dod_checklist.json"
 MANUSCRIPT_INDEX = SCRIPTS_DIR / "manuscript_index.py"
 DELEGATE_REVIEW = SCRIPTS_DIR / "delegate_review.py"
 
@@ -228,6 +229,25 @@ def _xsec_drafts(tmp: str, sec1: str, sec2: str) -> Path:
     (drafts / "section_01_abstract.md").write_text(sec1, encoding="utf-8")
     (drafts / "section_03_results.md").write_text(sec2, encoding="utf-8")
     return root
+
+
+def test_dod_checklist_valid_and_rv_r10_wired_to_xsec() -> None:
+    # RV-R10 (cross-section consistency blind check) gained an auxiliary objective
+    # signal: it must now carry a "script" field invoking cross_section_consistency.py.
+    # The checklist must stay valid JSON and the script must resolve to an existing file.
+    data = json.loads(DOD_CHECKLIST.read_text(encoding="utf-8"))
+    items = data["gates"]["revision-dod"]["items"]
+    rv_r10 = next((i for i in items if i["id"] == "RV-R10"), None)
+    assert rv_r10 is not None, "RV-R10 item missing from dod_checklist.json"
+    assert "script" in rv_r10 and rv_r10["script"].strip(), (
+        f"RV-R10 must carry a non-empty 'script' field; got {rv_r10.get('script')!r}"
+    )
+    assert "cross_section_consistency.py" in rv_r10["script"], (
+        f"RV-R10 script must invoke cross_section_consistency.py; got {rv_r10['script']!r}"
+    )
+    assert XSEC_SCRIPT.exists(), (
+        f"cross_section_consistency.py referenced by RV-R10 must exist at {XSEC_SCRIPT}"
+    )
 
 
 def test_xsec_flags_same_label_drift() -> None:
@@ -544,6 +564,7 @@ def main() -> int:
     test_reference_sync_fail_on_gap_lenient_by_default()
     test_reference_sync_fail_on_gap_blocks()
     test_reference_sync_fail_on_gap_no_false_positive()
+    test_dod_checklist_valid_and_rv_r10_wired_to_xsec()
     test_xsec_flags_same_label_drift()
     test_xsec_no_flag_when_consistent()
     test_xsec_no_flag_for_different_labels()
