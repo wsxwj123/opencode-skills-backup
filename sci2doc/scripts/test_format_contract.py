@@ -467,6 +467,33 @@ def test_check_quality_formula_numbering():
 
 
 # ===========================================================================
+# 契约 9：figure_registry 锁文件 encoding（Windows 中文不崩）
+# bug：save_figure_map 的 open(lock_file, "a+") 未指定 encoding，Windows 默认
+#      GBK，含中文路径/内容场景在锁文件读写处可能 UnicodeDecodeError 崩溃。
+# 修：open(..., "a+", encoding="utf-8")。本测试做含中文内容的 save→load 往返，
+#      确保锁文件路径走通且不崩。
+# ===========================================================================
+
+def test_figure_registry_chinese_save_load_roundtrip():
+    import figure_registry as fr
+
+    root = tempfile.mkdtemp()
+    figure_map = {
+        "图1-1": {"cn_id": "图1-1", "caption": "中文图注：实验流程示意图", "src": "图片/流程图.png"},
+        "图2-3": {"cn_id": "图2-3", "caption": "另一张图的中文说明", "src": "结果/对比.png"},
+    }
+    # 写入（触发锁文件 open）
+    fr.save_figure_map(root, figure_map)
+    # 锁文件确实被创建过
+    lock = fr._figure_map_path(root) + ".lock"
+    assert os.path.exists(lock), "锁文件应被创建"
+    # 读回应完整保留中文
+    loaded = fr.load_figure_map(root)
+    assert loaded == figure_map, f"中文 figure_map 往返应无损：{loaded!r}"
+    assert "中文图注：实验流程示意图" in loaded["图1-1"]["caption"]
+
+
+# ===========================================================================
 # 入口
 # ===========================================================================
 
@@ -494,5 +521,8 @@ if __name__ == "__main__":
 
     test_check_quality_a5_crossref_validity()
     print("OK 契约8 check_quality A5 章节交叉引用有效性")
+
+    test_figure_registry_chinese_save_load_roundtrip()
+    print("OK 契约9 figure_registry 锁文件 encoding 中文往返不崩")
 
     print("ALL OK")

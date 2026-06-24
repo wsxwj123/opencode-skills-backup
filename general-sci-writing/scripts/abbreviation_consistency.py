@@ -39,12 +39,15 @@ UNIVERSAL_ABBREVIATIONS = {
 # 以完整捕获 IFN-γ / TGF-β / IL-1β 等而非残缺的 "IFN-"。
 _ABBR_TOKEN = r"[A-Z](?:[A-Z0-9]+(?:-[A-Z0-9Α-Ωα-ω]+)*|(?:-[A-Z0-9Α-Ωα-ω]+)+)"
 
-# 匹配 "Full Name (ABBR)" 定义模式：
-# - ABBR 见 _ABBR_TOKEN（全大写/数字，可含 -希腊字母后缀）
-# - 前面跟着 1-6 个全称词作为 full name；首词允许大写或小写
-#   （SCI 首展惯例常用小写，如 "reactive oxygen species (ROS)"）
+# 匹配两类首展定义模式（括号兼容半角 () 与全角 （）；逗号兼容半角 , 与全角 ，）：
+#   A) 英文惯例 "Full Name (ABBR)"：全称在括号外，括号内仅 ABBR。
+#      如 "reactive oxygen species (ROS)" / "Photodynamic Therapy (PDT)"。
+#   B) 中文惯例 "（Full Name，ABBR）"：全称与 ABBR 同在括号内、以逗号分隔。
+#      如 "聚焦超声（focused ultrasound，FUS）"。
+# 两类合并为一个正则，full name 落在 group(1) 或 group(3)，ABBR 落在 group(2) 或 group(4)。
 DEFINITION_PATTERN = re.compile(
-    r"\b((?:[A-Za-z][\w\-]*\s+){1,6})\((" + _ABBR_TOKEN + r")\)"
+    r"\b((?:[A-Za-z][\w\-]*\s+){1,6})[（(](" + _ABBR_TOKEN + r")[）)]"
+    r"|[（(]((?:[A-Za-z][\w\-]*\s*){1,6})[，,]\s*(" + _ABBR_TOKEN + r")[）)]"
 )
 
 # 匹配裸用缩写（独立词，全大写/数字，可含 -希腊字母后缀；不产生悬空尾 "-"）
@@ -123,8 +126,9 @@ def scan_definitions(files: list[str]) -> dict:
         except OSError:
             continue
         for match in DEFINITION_PATTERN.finditer(content):
-            full_name = match.group(1).strip()
-            abbr = match.group(2).strip().upper()
+            # 两条分支：A) group(1)/group(2) 英文外置全称；B) group(3)/group(4) 中文括号内全称。
+            full_name = (match.group(1) or match.group(3) or "").strip()
+            abbr = (match.group(2) or match.group(4) or "").strip().upper()
             first_def.setdefault(abbr, []).append((fp, full_name))
     return first_def
 

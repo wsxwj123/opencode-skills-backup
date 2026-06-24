@@ -285,8 +285,14 @@ def test_charlevel_bidirectional() -> None:
 
     # D2 正例：裸写 H2O
     assert "subsup_bare" in _codes("反应生成 H2O 和热量。"), "D2 应报裸写 H2O"
+    # D2 正例：中文紧邻（无空格），ASCII 边界须在汉字-字母间成立
+    assert "subsup_bare" in _codes("影响H2O代谢的关键酶。"), "D2 应报中文紧邻裸写 H2O"
+    # D2 正例：IC50 中文紧邻
+    assert "subsup_bare" in _codes("测得IC50值约为 10 μM。"), "D2 应报中文紧邻裸写 IC50"
     # D2 反例：已用 markdown 下标标注
     assert "subsup_bare" not in _codes("反应生成 H~2~O 和热量。"), "D2 不应误报已标注上下标"
+    # D2 反例：英文上下文不退化（XH2OY 前后接字母数字时不报）
+    assert "subsup_bare" not in _codes("the XH2OY level is high."), "D2 不应误报英文嵌字母的 XH2OY"
 
     # F1 正例：错别字"登陆"
     assert "chinese_typo" in _codes("用户需要登陆系统后操作。"), "F1 应报错别字'登陆'"

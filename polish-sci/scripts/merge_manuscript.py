@@ -212,6 +212,27 @@ def _rewrite_paragraph_runs(paragraph, marked_text: str, base_rpr) -> None:
             run.font.subscript = True
 
 
+def _paragraph_has_run_color_or_underline(paragraph) -> bool:
+    """段内是否存在 run 携带 w:color(显式颜色)或 w:u(下划线,且非 none)。
+
+    这两种 run 级格式不在 serialize_runs_to_marked_text 的标记范围内(只序列化
+    italic/bold/sup/sub),polished_text 里既无对应标记、LLM 也从未见过它们,因此
+    无法在 in-place 重建时还原。检测到此类段落且文字未被改动时,调用方应跳过破坏性
+    重建、保留原 runs,以无损保住颜色/下划线。"""
+    from docx.oxml.ns import qn
+
+    for run in paragraph.runs:
+        rpr = run._element.find(qn("w:rPr"))
+        if rpr is None:
+            continue
+        if rpr.find(qn("w:color")) is not None:
+            return True
+        u = rpr.find(qn("w:u"))
+        if u is not None and u.get(qn("w:val")) not in (None, "none"):
+            return True
+    return False
+
+
 def _paragraph_has_embedded_image(paragraph) -> bool:
     """段落是否含内嵌图片(<w:drawing>)或旧式嵌入对象(<w:object>)。
     清空此类段落的 run(in-place 重建)会删掉图并留下孤儿图片关系,故调用方
@@ -276,7 +297,8 @@ def export_inplace(src_docx: Path, project_root: Path, out_docx: Path) -> dict:
             )
         seen_para_indices.add(para_index)
         polished_text = pol_unit.get("polished_text", "")
-        plan.append({"para_index": para_index, "text": polished_text})
+        raw_text = pol_unit.get("raw_text", src_unit.get("raw_text", ""))
+        plan.append({"para_index": para_index, "text": polished_text, "raw_text": raw_text})
 
     if not plan:
         raise ValueError("in-place: 没有可写回的 prose 段落(plan 为空),fail-closed")
@@ -285,6 +307,7 @@ def export_inplace(src_docx: Path, project_root: Path, out_docx: Path) -> dict:
 
     rewritten = 0
     skipped_images: list[int] = []
+    skipped_color_underline: list[int] = []
     for item in plan:
         para_index = item["para_index"]
         paragraph = paragraphs[para_index]
@@ -299,6 +322,14 @@ def export_inplace(src_docx: Path, project_root: Path, out_docx: Path) -> dict:
                 file=sys.stderr,
             )
             continue
+        # fail-safe:段内 run 级颜色/下划线无法经 marked_text 还原(不在标记范围内)。
+        # 若文字未被润色改动,重建会把这些格式抹平 -> 直接跳过重建、保留原 runs 无损保色。
+        # 若文字已改动,原颜色/下划线锚定的词可能已不在,无可靠映射,只能按已知局限重建丢失
+        #(见 SKILL.md「docx 往返已知局限」)。
+        text_unchanged = item["text"] == item["raw_text"]
+        if text_unchanged and _paragraph_has_run_color_or_underline(paragraph):
+            skipped_color_underline.append(para_index)
+            continue
         base_rpr = _capture_base_rpr(paragraph)
         _rewrite_paragraph_runs(paragraph, item["text"], base_rpr)
         rewritten += 1
@@ -309,6 +340,7 @@ def export_inplace(src_docx: Path, project_root: Path, out_docx: Path) -> dict:
         "rewritten_paragraphs": rewritten,
         "skipped_nonprose": skipped_nonprose,
         "paragraphs_skipped_images": skipped_images,
+        "paragraphs_skipped_color_underline": skipped_color_underline,
         "total_src_paragraphs": n_paras,
     }
 
