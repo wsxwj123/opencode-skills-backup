@@ -13,6 +13,8 @@ Output contract (3 downstream consumers depend on it, do not drift):
   - each citation's guard_verified flag (read by revise_units.py)
   - paper_search_validated.json (the --write-back equivalent)
 Exit code 2 when not all rows verified and --allow-unverified absent; else 0.
+With --fail-on-unverified, exit 2 on any unverified row even if --allow-unverified
+is passed (opt-in hard gate; default behaviour is unchanged).
 """
 
 from __future__ import annotations
@@ -177,6 +179,11 @@ def main() -> int:
     parser.add_argument("--live", action="store_true")
     parser.add_argument("--offline", action="store_true")
     parser.add_argument("--allow-unverified", action="store_true")
+    parser.add_argument(
+        "--fail-on-unverified",
+        action="store_true",
+        help="Hard gate: exit 2 if any row is unverified, even with --allow-unverified (fail-closed for DoD).",
+    )
     args = parser.parse_args()
 
     online_check = args.live and not args.offline
@@ -223,7 +230,9 @@ def main() -> int:
     write_json(project_root / "paper_search_guard_report.json", report)
     write_json(project_root / "paper_search_validated.json", {"results": validated_rows})
 
-    if not all_rows_guard_verified and not args.allow_unverified:
+    # --fail-on-unverified is the opt-in hard gate: it overrides --allow-unverified
+    # so a DoD can turn the default WARN downgrade back into fail-closed (exit 2).
+    if not all_rows_guard_verified and (args.fail_on_unverified or not args.allow_unverified):
         print(json.dumps({"ok": False, "summary": report["summary"]}, ensure_ascii=False))
         return 2
 

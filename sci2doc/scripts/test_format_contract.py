@@ -12,6 +12,7 @@ sci2doc 格式契约回归测试（开发者维护工具，非运行时流程）
 失败抛 AssertionError（returncode != 0），全过打印 OK。
 """
 
+import json
 import os
 import sys
 import tempfile
@@ -228,6 +229,196 @@ def test_check_quality_table_figure_dedup():
 
 
 # ===========================================================================
+# 契约 5：citation_guard 引用门禁（J4 完整 / J5 自引 / J7 时效 / A4 双向）
+# J4/A4 fail-closed（exit_code=2 阻断），J5/J7 advisory（WARN，不改 exit_code）。
+# 调 citation_guard_core 三新函数 + check_bidirectional，仿 gsw --gates。
+# 双向断言：缺字段/僵尸 → 阻断；齐全/全引 → 放行；raw_only 不误杀。
+# ===========================================================================
+
+def test_citation_gates_j4_a4_j5_j7():
+    from citation_guard import run_integrity_gates
+
+    # ---- J4：title 缺失 → incomplete（fail-closed，exit_code=2）----
+    entries_bad = [
+        {"citation_number": 1, "type": "journal", "title": "完整条目",
+         "authors": ["张三"], "journal": "测试学报", "year": 2024,
+         "volume": "10", "pages": "1-9", "doi": "10.1/x"},
+        {"citation_number": 2, "authors": ["李四"]},  # 无 title 无 handle → incomplete
+    ]
+    rep = run_integrity_gates(entries_bad, drafts_dir=None,
+                              manuscript_authors=[], current_year=2026)
+    assert rep["exit_code"] == 2, f"J4 缺字段应 fail-closed：{rep}"
+    assert len(rep["j4_completeness"]["incomplete"]) >= 1
+    assert rep["j4_completeness"]["strength"] == "fail-closed"
+
+    # ---- J4 raw_only 不误杀：有 title + raw_vancouver、无结构化字段 → raw_only（放行）----
+    entries_raw = [
+        {"citation_number": 1, "title": "Some real paper",
+         "raw_vancouver": "Wang H, et al. Some real paper. Nature. 2023;1:1-2.",
+         "doi": "10.1/y"},
+    ]
+    rep_raw = run_integrity_gates(entries_raw, drafts_dir=None,
+                                  manuscript_authors=[], current_year=2026)
+    assert rep_raw["exit_code"] == 0, f"raw_only 不应误杀：{rep_raw}"
+    assert rep_raw["j4_completeness"]["raw_only_count"] == 1
+    assert rep_raw["j4_completeness"]["incomplete"] == []
+
+    # ---- J5 自引：作者命中过半 → warn，但 exit_code 仍 0（advisory）----
+    entries_self = [
+        {"citation_number": 1, "title": "A", "authors": ["张三"], "doi": "10.1/a",
+         "journal": "J", "year": 2024, "volume": "1", "pages": "1-2"},
+        {"citation_number": 2, "title": "B", "authors": ["王五"], "doi": "10.1/b",
+         "journal": "J", "year": 2024, "volume": "1", "pages": "3-4"},
+    ]
+    rep_self = run_integrity_gates(entries_self, drafts_dir=None,
+                                   manuscript_authors=["张三"], current_year=2026)
+    assert rep_self["j5_self_citation"]["status"] == "warn", \
+        f"自引过半应 warn：{rep_self['j5_self_citation']}"
+    assert rep_self["j5_self_citation"]["strength"] == "warn"
+    assert rep_self["exit_code"] == 0, "J5 是 advisory，不应改 exit_code"
+
+    # ---- J5 无作者 → skip（不报错）----
+    rep_noauth = run_integrity_gates(entries_self, drafts_dir=None,
+                                     manuscript_authors=[], current_year=2026)
+    assert rep_noauth["j5_self_citation"]["status"] == "skipped"
+
+    # ---- J7 时效：全部老文献 → warn，exit_code 仍 0（advisory）----
+    entries_old = [
+        {"citation_number": 1, "title": "old1", "year": 2005, "doi": "10.1/c",
+         "journal": "J", "authors": ["A"], "volume": "1", "pages": "1-2"},
+        {"citation_number": 2, "title": "old2", "year": 2006, "doi": "10.1/d",
+         "journal": "J", "authors": ["B"], "volume": "1", "pages": "3-4"},
+    ]
+    rep_old = run_integrity_gates(entries_old, drafts_dir=None,
+                                  manuscript_authors=[], current_year=2026)
+    assert rep_old["j7_recency"]["status"] == "warn", \
+        f"全老文献应 warn：{rep_old['j7_recency']}"
+    assert rep_old["exit_code"] == 0, "J7 是 advisory，不应改 exit_code"
+
+    # ---- A4 双向：扫描 drafts 比对 [n] ----
+    tmp_dir = tempfile.mkdtemp()
+    try:
+        from pathlib import Path
+        md_dir = Path(tmp_dir) / "manuscripts"
+        md_dir.mkdir()
+        good_entries = [
+            {"citation_number": n, "title": f"t{n}", "doi": f"10.1/{n}",
+             "journal": "J", "authors": ["A"], "year": 2024,
+             "volume": "1", "pages": "1-2"}
+            for n in (1, 2, 3)
+        ]
+        # (a) 正文全引 1,2,3 → A4 ok，exit_code 0
+        (md_dir / "ch1.md").write_text("# 绪论\n结论[1]，方法[2,3]。\n", encoding="utf-8")
+        rep_ok = run_integrity_gates(good_entries, drafts_dir=md_dir,
+                                     manuscript_authors=[], current_year=2026)
+        assert rep_ok["a4_bidirectional"]["status"] == "ok", \
+            f"全引应 A4 ok：{rep_ok['a4_bidirectional']}"
+        assert rep_ok["exit_code"] == 0
+
+        # (b) 正文漏引 3（僵尸）+ 引用不存在的 9（孤儿）→ A4 fail，exit_code 2
+        (md_dir / "ch1.md").write_text("# 绪论\n结论[1]，另见[9]。\n", encoding="utf-8")
+        rep_fail = run_integrity_gates(good_entries, drafts_dir=md_dir,
+                                       manuscript_authors=[], current_year=2026)
+        a4 = rep_fail["a4_bidirectional"]
+        assert a4["status"] == "fail", f"漏引/孤儿应 A4 fail：{a4}"
+        assert 9 in a4["orphans"], f"9 应为孤儿：{a4}"
+        assert set(a4["zombies"]) >= {2, 3}, f"2,3 应为僵尸：{a4}"
+        assert rep_fail["exit_code"] == 2, "A4 fail 应 fail-closed"
+        assert a4["strength"] == "fail-closed"
+    finally:
+        import shutil
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+# ===========================================================================
+# 契约 6：check_quality 字符级（D1 半角标点 / D2 上下标裸写 / F1 中文错别字）
+# 全 WARN（level=warning）。双向：违规命中 + 合法不误报 + 已标注剥离生效。
+# ===========================================================================
+
+def _build_docx(lines):
+    from docx import Document
+    doc = Document()
+    for ln in lines:
+        doc.add_paragraph(ln)
+    return doc
+
+
+def test_check_quality_char_level():
+    from check_quality import check_char_level
+
+    doc = _build_docx([
+        "本文研究方法,采用对照实验。",       # D1 半角逗号（汉字,汉字）
+        "测得水分子H2O含量与CO2浓度。",      # D2 裸写 H2O、CO2
+        "实验登陆系统后按装软件。",           # F1 登陆→登录、按装→安装
+        "已正确标注的 H~2~O 不应再报。",      # D2 已标注 → 剥离不报
+        "正常陈述句没有任何问题。",           # 合法 → 不误报
+    ])
+    issues = check_char_level(doc)
+    codes = {}
+    for i in issues:
+        codes[i["code"]] = codes.get(i["code"], 0) + 1
+
+    # D1：半角逗号命中
+    assert codes.get("halfwidth_punct_in_cn", 0) >= 1, f"D1 应命中半角逗号：{codes}"
+    # D2：恰为 2（H2O+CO2）；已标注 H~2~O 被剥离不计 → 证明剥离生效
+    assert codes.get("subsup_bare", 0) == 2, f"D2 应恰为2(剥离生效)：{codes}"
+    # F1：登陆 + 按装
+    assert codes.get("chinese_typo", 0) >= 2, f"F1 应命中错别字：{codes}"
+    # 全部 WARN，不阻断
+    assert all(i["level"] == "warning" for i in issues), "字符级必须全为 warning"
+
+    # 合法对照：全角标点 + 标注规范 + 无错字 → 0 命中
+    clean = _build_docx([
+        "本文研究方法，采用对照实验。",
+        "测得水分子 H~2~O 含量与 CO~2~ 浓度。",
+        "实验登录系统后安装软件。",
+    ])
+    clean_issues = check_char_level(clean)
+    clean_codes = {i["code"] for i in clean_issues}
+    assert "halfwidth_punct_in_cn" not in clean_codes, f"合法全角不应报：{clean_issues}"
+    assert "subsup_bare" not in clean_codes, f"已标注不应报：{clean_issues}"
+    assert "chinese_typo" not in clean_codes, f"无错字不应报：{clean_issues}"
+
+
+# ===========================================================================
+# 契约 7：A1 公式编号连续（check_figure_numbering 内新增）
+# 写法对齐图/表：按 (chapter, number) 去重后比对 expected=i+1。
+# 双向：连续(多次引用)不误报 + 真缺号报错；不破坏图/表去重。
+# ===========================================================================
+
+def _formula_issues(issues):
+    return [i for i in issues if i.get("category") == "公式编号"]
+
+
+def test_check_quality_formula_numbering():
+    from check_quality import check_figure_numbering
+
+    # ---- 连续公式 2-1~2-3，每个被定义+正文多次引用 → 0 假阳性 ----
+    ok_lines = [
+        "如公式(2-1)所示，能量守恒。",
+        "代入公式(2-1)得结果。",          # 重复引用 2-1
+        "公式(2-2)描述动量变化。",
+        "由式(2-2)与式(2-1)联立。",       # 重复引用 2-2、2-1（含"式(N-M)"变体）
+        "公式(2-3)为最终形式。",
+    ]
+    issues_ok = check_figure_numbering(_build_docx(ok_lines))
+    assert _formula_issues(issues_ok) == [], \
+        f"连续公式被多次引用不应误报：{_formula_issues(issues_ok)!r}"
+
+    # ---- 真缺号 2-1, 2-3（缺 2-2）→ 报错 ----
+    gap_lines = ["公式(2-1)定义。", "公式(2-3)缺了 2-2。"]
+    issues_gap = check_figure_numbering(_build_docx(gap_lines))
+    assert len(_formula_issues(issues_gap)) >= 1, \
+        f"真缺号（缺公式 2-2）应报错：{issues_gap!r}"
+
+    # ---- 不破坏图/表去重（回归）：连续表号多次引用仍 0 假阳性 ----
+    tab_lines = ["表 2-1：题注", "如表 2-1 所示。", "表 2-2：题注", "表 2-3：题注"]
+    tab_issues = check_figure_numbering(_build_docx(tab_lines))
+    assert [i for i in tab_issues if "表编号不连续" in i.get("message", "")] == [], \
+        "新增公式检查不应破坏表号去重"
+
+
+# ===========================================================================
 # 入口
 # ===========================================================================
 
@@ -243,5 +434,14 @@ if __name__ == "__main__":
 
     test_check_quality_table_figure_dedup()
     print("OK 契约4 check_quality 表号+图号去重")
+
+    test_citation_gates_j4_a4_j5_j7()
+    print("OK 契约5 citation_guard 门禁 J4/J5/J7/A4")
+
+    test_check_quality_char_level()
+    print("OK 契约6 check_quality 字符级 D1/D2/F1")
+
+    test_check_quality_formula_numbering()
+    print("OK 契约7 check_quality A1 公式编号连续")
 
     print("ALL OK")

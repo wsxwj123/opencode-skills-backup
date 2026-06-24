@@ -27,6 +27,8 @@ from pathlib import Path
 SCRIPTS_DIR = Path(__file__).resolve().parent
 POLISH = SCRIPTS_DIR / "polish_revisions.py"
 INTAKE = SCRIPTS_DIR / "intake_router.py"
+CITATION_GUARD = SCRIPTS_DIR / "citation_guard.py"
+REFERENCE_SYNC = SCRIPTS_DIR / "reference_sync.py"
 
 
 def test_polish_no_from_a_to_b_forbidden() -> None:
@@ -102,10 +104,111 @@ def test_intake_accepts_docx_manuscript() -> None:
     )
 
 
+def _run_guard(tmp: Path, extra_args: list[str]) -> int:
+    """Run citation_guard against one unverified row; return its exit code."""
+    results = {
+        "results": [
+            {
+                "comment_id": "c1",
+                "confirmed": False,  # unverified row -> all_rows_guard_verified False
+                "citations": [{"title": "Some unverifiable paper", "source": "no identifier"}],
+            }
+        ]
+    }
+    rf = tmp / "psr.json"
+    rf.write_text(json.dumps(results), encoding="utf-8")
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(CITATION_GUARD),
+            "--paper-search-results",
+            str(rf),
+            "--project-root",
+            str(tmp),
+            "--offline",
+        ]
+        + extra_args,
+        cwd=str(SCRIPTS_DIR),
+        capture_output=True,
+        text=True,
+    )
+    return result.returncode
+
+
+def test_guard_allow_unverified_is_lenient_by_default() -> None:
+    # Default pipeline behaviour must stay lenient: --allow-unverified -> exit 0.
+    with tempfile.TemporaryDirectory() as tmp:
+        rc = _run_guard(Path(tmp), ["--allow-unverified"])
+    assert rc == 0, f"--allow-unverified must stay lenient (exit 0), got {rc}"
+
+
+def test_guard_fail_on_unverified_overrides_allow() -> None:
+    # Opt-in hard gate: --fail-on-unverified must override --allow-unverified
+    # and turn an unverified row back into fail-closed (exit 2).
+    with tempfile.TemporaryDirectory() as tmp:
+        rc = _run_guard(Path(tmp), ["--allow-unverified", "--fail-on-unverified"])
+    assert rc == 2, f"--fail-on-unverified must force exit 2 on unverified row, got {rc}"
+
+
+def _run_sync(tmp: Path, refs_block: str, extra_args: list[str]) -> tuple[int, dict]:
+    (tmp / "units").mkdir(exist_ok=True)  # empty units -> only existing refs evaluated
+    md = tmp / "out.md"
+    md.write_text(f"# Title\n\nbody\n\n## References\n\n{refs_block}", encoding="utf-8")
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(REFERENCE_SYNC),
+            "--project-root",
+            str(tmp),
+            "--output-md",
+            str(md),
+        ]
+        + extra_args,
+        cwd=str(SCRIPTS_DIR),
+        capture_output=True,
+        text=True,
+    )
+    payload = json.loads(result.stdout.strip().splitlines()[-1])
+    return result.returncode, payload
+
+
+def test_reference_sync_fail_on_gap_lenient_by_default() -> None:
+    # Default behaviour unchanged: a numbering gap is reported but does NOT fail.
+    gapped = "1. A.\n2. B.\n4. D.\n"
+    with tempfile.TemporaryDirectory() as tmp:
+        rc, payload = _run_sync(Path(tmp), gapped, [])
+    assert rc == 0, f"reference_sync must stay lenient without --fail-on-gap, got {rc}"
+    assert payload["numbering_gaps"] == [3], (
+        f"gap 3 must be detected and reported, got {payload['numbering_gaps']}"
+    )
+
+
+def test_reference_sync_fail_on_gap_blocks() -> None:
+    gapped = "1. A.\n2. B.\n4. D.\n"
+    with tempfile.TemporaryDirectory() as tmp:
+        rc, _ = _run_sync(Path(tmp), gapped, ["--fail-on-gap"])
+    assert rc != 0, f"--fail-on-gap must block on a numbering gap, got {rc}"
+
+
+def test_reference_sync_fail_on_gap_no_false_positive() -> None:
+    clean = "1. A.\n2. B.\n3. C.\n"
+    with tempfile.TemporaryDirectory() as tmp:
+        rc, payload = _run_sync(Path(tmp), clean, ["--fail-on-gap"])
+    assert rc == 0, f"--fail-on-gap must not fire on contiguous refs, got {rc}"
+    assert payload["numbering_gaps"] == [], (
+        f"contiguous refs must report no gaps, got {payload['numbering_gaps']}"
+    )
+
+
 def main() -> int:
     test_polish_no_from_a_to_b_forbidden()
     test_intake_rejects_non_docx_manuscript()
     test_intake_accepts_docx_manuscript()
+    test_guard_allow_unverified_is_lenient_by_default()
+    test_guard_fail_on_unverified_overrides_allow()
+    test_reference_sync_fail_on_gap_lenient_by_default()
+    test_reference_sync_fail_on_gap_blocks()
+    test_reference_sync_fail_on_gap_no_false_positive()
     print("OK")
     return 0
 
