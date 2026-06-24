@@ -1545,7 +1545,7 @@ def load_state(
                         # For context_memory.md, maybe just read last 50 lines?
                         content = f.read()
                         if compact and key == "context_memory":
-                            lines = content.split('\n')
+                            lines = content.splitlines()  # 跨平台：兼容 \r\n/\r 换行
                             if len(lines) > 50:
                                 combined_state[key] = "...(truncated)...\n" + "\n".join(lines[-50:])
                             else:

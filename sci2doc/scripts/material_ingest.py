@@ -74,7 +74,8 @@ def process_text(path: Path) -> dict:
 
     # 简单要点提取：每段首句（非空、非标题）
     paragraphs = [p.strip() for p in text.split("\n\n") if p.strip() and not p.strip().startswith("#")]
-    key_points = [p.split("\n")[0][:200] for p in paragraphs[:10] if p]
+    # splitlines() 跨平台处理 \r\n/\r；(... or [''])[0] 防空段 IndexError
+    key_points = [(p.splitlines() or [''])[0][:200] for p in paragraphs[:10] if p]
 
     return {
         "status": "ok",
@@ -240,7 +241,8 @@ def process_document(path: Path) -> dict:
 
         preview = text[:3000].strip()
         paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
-        key_points = [p.split("\n")[0][:200] for p in paragraphs[:8] if p]
+        # splitlines() 跨平台处理 \r\n/\r；(... or [''])[0] 防空段 IndexError
+        key_points = [(p.splitlines() or [''])[0][:200] for p in paragraphs[:8] if p]
         result["preview"] = preview
         result["char_count"] = len(text)
         result["key_points"] = key_points
