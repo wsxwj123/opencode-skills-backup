@@ -37,6 +37,7 @@ TEMPLATE_PATH = SKILL_DIR / "templates" / "reference.docx"
 ABBR_SCRIPT = SCRIPTS_DIR / "abbreviation_consistency.py"
 FIGURE_GATE_SCRIPT = SCRIPTS_DIR / "figure_analysis_gate.py"
 MAKE_REF_SCRIPT = SCRIPTS_DIR / "make_reference_docx.py"
+XSEC_SCRIPT = SCRIPTS_DIR / "cross_section_consistency.py"
 
 
 def _run(args: list[str]) -> subprocess.CompletedProcess:
@@ -358,6 +359,161 @@ def test_a4_bidirectional() -> None:
         "A4: clean pairing must not be flagged"
 
 
+# ---------------------------------------------------------------------------
+# A5 — 内部交叉引用有效性（proofread.check_crossref_validity）：双向。
+#   引用存在的 Section/Figure/Table/Appendix → 不报；
+#   引用不存在的目标（断链）→ warn 报。保守：断链全 warn。
+# ---------------------------------------------------------------------------
+def test_a5_crossref_validity_bidirectional() -> None:
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "proofread", str(SCRIPTS_DIR / "proofread.py")
+    )
+    pf = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(pf)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        # 干净稿：所有交叉引用目标都有定义（题注 / 标题）→ 零断链。
+        (root / "res.md").write_text(
+            "## 2 Results\n\n"
+            "As shown in Figure 1, see Section 2.1 for details.\n\n"
+            "**Figure 1.** Overview.\n\n"
+            "### 2.1 Sub\nTable 1 lists params. Details in Appendix A.\n\n"
+            "**Table 1.** Params.\n",
+            encoding="utf-8")
+        (root / "app.md").write_text(
+            "## Appendix A Supplementary\nData in Appendix A above.\n",
+            encoding="utf-8")
+        clean = pf.check_crossref_validity([str(root / "res.md"), str(root / "app.md")])
+        assert clean == [], \
+            f"A5: valid cross-refs must not be flagged: {[i['found'] for i in clean]}"
+
+        # 脏稿：Section/Figure/Table/Appendix 均断链。
+        (root / "bad.md").write_text(
+            "## 1 Intro\n\n"
+            "But Figure 9 does not exist. See Section 8.8 missing.\n"
+            "Refer to Appendix Z. Table 7 is dangling.\n",
+            encoding="utf-8")
+        dirty = pf.check_crossref_validity([str(root / "bad.md")])
+        founds = " ".join(i["found"] for i in dirty)
+        assert "Figure 9" in founds, f"A5: dangling Figure 9 must report: {founds}"
+        assert "Section 8.8" in founds, f"A5: dangling Section 8.8 must report: {founds}"
+        assert "Table 7" in founds, f"A5: dangling Table 7 must report: {founds}"
+        assert "Appendix Z" in founds, f"A5: dangling Appendix Z must report: {founds}"
+        assert all(i["severity"] == "warn" for i in dirty), \
+            f"A5: dangling refs must all be warn (conservative): {dirty}"
+
+
+# ---------------------------------------------------------------------------
+# B1/B2: cross_section_consistency — 跨段数值漂移嫌疑（半自动 WARN）。
+# 双向断言：同标签 + 不同值 → 报嫌疑；一致 / 不同标签 → 不报。WARN 级 rc=0。
+# ---------------------------------------------------------------------------
+def _run_xsec(root: Path, extra: list[str] | None = None) -> dict:
+    proc = _run([str(XSEC_SCRIPT), "--root", str(root), *(extra or [])])
+    assert proc.returncode == 0, (
+        f"xsec must be WARN-level (rc=0), got {proc.returncode}\n{proc.stderr}"
+    )
+    return json.loads(proc.stdout)
+
+
+def _xsec_project(tmp: str, abstract: str, body: str) -> Path:
+    root = Path(tmp)
+    man = root / "manuscripts"
+    man.mkdir()
+    (man / "01_abstract.md").write_text(abstract, encoding="utf-8")
+    (man / "03_results.md").write_text(body, encoding="utf-8")
+    return root
+
+
+def test_xsec_flags_same_label_drift() -> None:
+    # 摘要 survival rate 45%，正文 survival rate 47% → 同标签不同值 → 报嫌疑。
+    with tempfile.TemporaryDirectory() as tmp:
+        root = _xsec_project(
+            tmp,
+            "The survival rate was 45% in the treated cohort.\n",
+            "## Results\n\nUltimately the survival rate reached 47% overall.\n",
+        )
+        res = _run_xsec(root)
+    labels = {s["label"] for s in res["suspicions"]}
+    assert "survival rate" in labels, (
+        f"45% vs 47% under same 'survival rate' label must be flagged; got "
+        f"{json.dumps(res['suspicions'], ensure_ascii=False)}"
+    )
+    susp = next(s for s in res["suspicions"] if s["label"] == "survival rate")
+    vals = {v["value"] for v in susp["values"]}
+    assert vals == {"45", "47"}, f"both drifting values must appear, got {vals}"
+
+
+def test_xsec_no_flag_when_consistent() -> None:
+    # 两段同标签同值 45% → 一致 → 不报（无假阳性）。
+    with tempfile.TemporaryDirectory() as tmp:
+        root = _xsec_project(
+            tmp,
+            "The survival rate was 45% in the treated cohort.\n",
+            "## Results\n\nThe survival rate remained 45% at follow-up.\n",
+        )
+        res = _run_xsec(root)
+    assert res["suspicions"] == [], (
+        f"consistent 45%/45% must NOT be flagged; got "
+        f"{json.dumps(res['suspicions'], ensure_ascii=False)}"
+    )
+
+
+def test_xsec_no_flag_for_different_labels() -> None:
+    # 不同标签的不同值（survival 45% vs response 47%）→ 不是同一指标 → 不报。
+    with tempfile.TemporaryDirectory() as tmp:
+        root = _xsec_project(
+            tmp,
+            "The survival rate was 45% in the treated cohort.\n",
+            "## Results\n\nThe response rate reached 47% overall.\n",
+        )
+        res = _run_xsec(root)
+    assert res["suspicions"] == [], (
+        f"different labels (survival vs response) must NOT be flagged; got "
+        f"{json.dumps(res['suspicions'], ensure_ascii=False)}"
+    )
+
+
+def test_xsec_cn_drift_flagged_and_action_words_ignored() -> None:
+    # 中文：同标签'存活率'45% vs 47% → 报；动作词'加入'4% vs 实验参数 → 不报。
+    with tempfile.TemporaryDirectory() as tmp:
+        root = _xsec_project(
+            tmp,
+            "实验组存活率为45%，对照组明显偏低。\n",
+            "## 结果\n\n随访期末存活率降至47%。\n另取一组加入4%多聚甲醛固定细胞。\n",
+        )
+        res = _run_xsec(root)
+    labels = {s["label"] for s in res["suspicions"]}
+    assert "存活率" in labels, (
+        f"中文同标签'存活率'45/47 漂移必须报；got "
+        f"{json.dumps(res['suspicions'], ensure_ascii=False)}"
+    )
+    assert "加入" not in labels, (
+        f"动作尾词'加入'必须被排除，不得作标签；got {labels}"
+    )
+
+
+def test_xsec_ignores_reference_block_pmids() -> None:
+    # References 块里的 PMID/编号数字（含 %）不得参与聚类 → 不报。
+    with tempfile.TemporaryDirectory() as tmp:
+        root = _xsec_project(
+            tmp,
+            "Efficacy of 45% was observed.\n",
+            "## Results\n\nNo numeric claim here.\n\n"
+            "## References\n\n"
+            "- [1] Some paper reporting 45% something. 2020. PMID 12345678.\n"
+            "- [2] Another reporting 99% else. 2021. PMID 87654321.\n",
+        )
+        res = _run_xsec(root)
+    # 仅摘要一处 45%，References 内的数字被剔除 → 无跨段冲突。
+    assert res["suspicions"] == [], (
+        f"reference-block numerics must be excluded; got "
+        f"{json.dumps(res['suspicions'], ensure_ascii=False)}"
+    )
+
+
 if __name__ == "__main__":
     test_abbreviation_lowercase_filename_and_lowercase_definition()
     test_abbreviation_uppercase_definition_still_detected()
@@ -368,4 +524,11 @@ if __name__ == "__main__":
     test_j5_self_citation()
     test_j7_recency()
     test_a4_bidirectional()
-    print("OK: all format-contract regression tests passed (3 bugs + 4 citation gates locked)")
+    test_a5_crossref_validity_bidirectional()
+    test_xsec_flags_same_label_drift()
+    test_xsec_no_flag_when_consistent()
+    test_xsec_no_flag_for_different_labels()
+    test_xsec_cn_drift_flagged_and_action_words_ignored()
+    test_xsec_ignores_reference_block_pmids()
+    print("OK: all format-contract regression tests passed "
+          "(3 bugs + 4 citation gates + 5 cross-section checks + A5 crossref locked)")

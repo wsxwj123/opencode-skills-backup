@@ -32,6 +32,14 @@ from pathlib import Path
 
 SCRIPTS_DIR = Path(__file__).resolve().parent
 VALIDATE_SCRIPT = SCRIPTS_DIR / "validate_citations.py"
+ABBR_SCRIPT = SCRIPTS_DIR / "abbreviation_consistency.py"
+
+
+def _run_abbr(args: list[str], cwd: Path) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        [sys.executable, str(ABBR_SCRIPT), *args],
+        cwd=str(cwd), capture_output=True, text=True,
+    )
 
 
 def _load_validate_module():
@@ -178,10 +186,71 @@ def test_a4_bidirectional_end_to_end() -> None:
             f"A4: clean pairing must report no unused\n{clean.stdout}"
 
 
+# ---------------------------------------------------------------------------
+# B3/B4 — 缩略语一致性（移植自 gsw）：双向。
+#   B4 首次定义：裸用未定义 → undefined_use 报；先定义后用 → 不报。
+#   B3 全文统一：同一缩写在多文件重复定义 → duplicate_definition 报。
+#   Title 含缩写 → title_abbreviation 报。
+#   fail-closed（默认）有问题 rc=1；--report-only 仅打印 rc=0。
+# ---------------------------------------------------------------------------
+def test_b3_b4_abbreviation_bidirectional() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        (root / "drafts").mkdir()
+
+        # --- 脏稿：标题含缩写 ROS + 重复定义 ROS + 裸用未定义 IL6 ---
+        (root / "drafts" / "01.md").write_text(
+            "# A Review of ROS in Disease\n\n"
+            "We study reactive oxygen species (ROS) here. IL6 appears bare.\n",
+            encoding="utf-8")
+        (root / "drafts" / "02.md").write_text(
+            "## Body\nAgain reactive oxygen species (ROS) redefined here.\n",
+            encoding="utf-8")
+
+        fail = _run_abbr(["--drafts-dir", "drafts"], root)
+        assert fail.returncode == 1, (
+            f"B3/B4: dirty drafts must fail-closed (rc=1), got {fail.returncode}\n"
+            f"{fail.stdout}\n{fail.stderr}")
+        assert "duplicate_definition: ROS" in fail.stdout, \
+            f"B3: ROS redefined in 2 files must report\n{fail.stdout}"
+        assert "undefined_use: IL6" in fail.stdout, \
+            f"B4: bare IL6 without definition must report\n{fail.stdout}"
+        assert "title_abbreviation: ROS" in fail.stdout, \
+            f"Title abbreviation ROS must report\n{fail.stdout}"
+
+        # report-only：同样的脏稿 → 仍打印问题，但 rc=0（不阻断）。
+        observe = _run_abbr(["--drafts-dir", "drafts", "--report-only"], root)
+        assert observe.returncode == 0, (
+            f"B3/B4: --report-only must be rc=0, got {observe.returncode}\n{observe.stdout}")
+        assert "ABBR_CHECK_FAIL" in observe.stdout, \
+            f"--report-only must still print issues\n{observe.stdout}"
+
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        (root / "drafts").mkdir()
+        # --- 干净稿：标题无缩写；ROS 定义一次后多次裸用；TNF 定义后裸用 ---
+        (root / "drafts" / "01.md").write_text(
+            "# A Review of Oxidative Stress\n\n"
+            "We study reactive oxygen species (ROS) and tumor necrosis factor (TNF).\n",
+            encoding="utf-8")
+        (root / "drafts" / "02.md").write_text(
+            "## Body\nROS drives inflammation while TNF acts downstream.\n",
+            encoding="utf-8")
+        clean = _run_abbr(["--drafts-dir", "drafts"], root)
+        assert clean.returncode == 0, (
+            f"B3/B4: clean drafts must pass (rc=0), got {clean.returncode}\n"
+            f"{clean.stdout}\n{clean.stderr}")
+        assert "ABBR_CHECK_OK" in clean.stdout, \
+            f"clean drafts must report OK\n{clean.stdout}"
+        assert "ABBR_CHECK_FAIL" not in clean.stdout, \
+            f"clean drafts must not report any FAIL\n{clean.stdout}"
+
+
 if __name__ == "__main__":
     test_j4_completeness()
     test_j5_self_citation()
     test_j7_recency()
     test_j4_fail_closed_end_to_end()
     test_a4_bidirectional_end_to_end()
-    print("OK: all citation-integrity gate regression tests passed (J4/J5/J7/A4 locked)")
+    test_b3_b4_abbreviation_bidirectional()
+    print("OK: all citation-integrity gate regression tests passed (J4/J5/J7/A4 + B3/B4 abbr locked)")
