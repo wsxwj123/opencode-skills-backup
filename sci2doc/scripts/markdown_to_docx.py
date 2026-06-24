@@ -394,7 +394,7 @@ def add_abstract_section(doc, abstract_body, keywords=None, render_context=None)
 
     # 正文
     if abstract_body:
-        for para_text in abstract_body.split('\n'):
+        for para_text in abstract_body.splitlines():  # 跨平台：abstract_body 可能来自外部非文件文本，含 \r\n
             para_text = para_text.strip()
             if not para_text:
                 continue
@@ -438,7 +438,7 @@ def add_english_abstract_section(doc, abstract_body, keywords=None, render_conte
 
     # 正文
     if abstract_body:
-        for para_text in abstract_body.split('\n'):
+        for para_text in abstract_body.splitlines():  # 跨平台：abstract_body 可能来自外部非文件文本，含 \r\n
             para_text = para_text.strip()
             if not para_text:
                 continue
@@ -925,7 +925,7 @@ def markdown_to_docx(md_content, output_path, chapter_num=None, project_root=Non
 
         # 自动提取页眉右侧文字（从首个 H1）
         if header_right_text is None:
-            for ln in md_content.split('\n'):
+            for ln in md_content.splitlines():  # 跨平台：兼容 \r\n/\r 换行
                 ln_s = ln.strip()
                 if ln_s.startswith('# ') and not ln_s.startswith('## '):
                     header_right_text = ln_s[2:].strip()
@@ -955,7 +955,7 @@ def markdown_to_docx(md_content, output_path, chapter_num=None, project_root=Non
             create_abbreviation_table_page(doc, project_root, render_context=render_context)
         
         # 逐行解析，支持表格累积
-        lines = md_content.split('\n')
+        lines = md_content.splitlines()  # 跨平台：兼容 \r\n/\r 换行
         table_buffer = []       # 累积连续的表格行
         table_caption = None    # 表格标题（表 X-X）
 
