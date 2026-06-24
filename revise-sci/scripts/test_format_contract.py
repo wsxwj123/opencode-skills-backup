@@ -30,6 +30,8 @@ INTAKE = SCRIPTS_DIR / "intake_router.py"
 CITATION_GUARD = SCRIPTS_DIR / "citation_guard.py"
 REFERENCE_SYNC = SCRIPTS_DIR / "reference_sync.py"
 XSEC_SCRIPT = SCRIPTS_DIR / "cross_section_consistency.py"
+MANUSCRIPT_INDEX = SCRIPTS_DIR / "manuscript_index.py"
+DELEGATE_REVIEW = SCRIPTS_DIR / "delegate_review.py"
 
 
 def test_polish_no_from_a_to_b_forbidden() -> None:
@@ -288,6 +290,136 @@ def test_xsec_ignores_reference_block_pmids() -> None:
     )
 
 
+# ---------------------------------------------------------------------------
+# Bug 2: manuscript_index — a numbered References heading ("## 9. References")
+# must still be recognised as the reference section, so reference reverse-lookup
+# does not silently report references=0. Driven end-to-end through the CLI.
+# ---------------------------------------------------------------------------
+def _run_manuscript_index(manuscript_md: str, tmp: Path) -> dict:
+    md = tmp / "main.md"
+    md.write_text(manuscript_md, encoding="utf-8")
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(MANUSCRIPT_INDEX),
+            "--manuscript",
+            str(md),
+            "--project-root",
+            str(tmp),
+        ],
+        cwd=str(SCRIPTS_DIR),
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, (
+        f"manuscript_index exited non-zero: {result.returncode}\nstderr:\n{result.stderr}"
+    )
+    return json.loads(result.stdout.strip().splitlines()[-1])
+
+
+# A body that cites [1] and [2] plus a reference list under the given heading.
+_MS_BODY = (
+    "# Title\n\n"
+    "## Introduction\n\n"
+    "Prior work established the baseline [1] and the follow-up [2].\n\n"
+    "{heading}\n\n"
+    "1. Smith J. A foundational study. Journal A. 2019.\n"
+    "2. Doe R. A follow-up study. Journal B. 2021.\n"
+)
+
+
+def test_manuscript_index_numbered_references_heading() -> None:
+    # BUG: "## 9. References" normalised to "9. references", which was not in the
+    # exact REFERENCE_HEADINGS set, so references parsed as 0 and orphan detection
+    # was meaningless.
+    with tempfile.TemporaryDirectory() as tmp:
+        payload = _run_manuscript_index(
+            _MS_BODY.format(heading="## 9. References"), Path(tmp)
+        )
+    assert payload["references"] == 2, (
+        f"numbered 'References' heading must yield references>0, got {payload['references']}"
+    )
+    # Both refs are cited -> no entry_not_cited orphans for them.
+    assert payload["reference_orphans"] == 0, (
+        f"both refs are cited, expected 0 reference orphans, got {payload['reference_orphans']}"
+    )
+
+
+def test_manuscript_index_plain_references_heading_unchanged() -> None:
+    # An un-numbered "## References" must NOT regress.
+    with tempfile.TemporaryDirectory() as tmp:
+        payload = _run_manuscript_index(
+            _MS_BODY.format(heading="## References"), Path(tmp)
+        )
+    assert payload["references"] == 2, (
+        f"plain 'References' heading must still parse refs, got {payload['references']}"
+    )
+
+
+def test_manuscript_index_numbered_chinese_references_heading() -> None:
+    # "## 6 参考文献" (number + space, no dot) must also be recognised.
+    with tempfile.TemporaryDirectory() as tmp:
+        payload = _run_manuscript_index(
+            _MS_BODY.format(heading="## 6 参考文献"), Path(tmp)
+        )
+    assert payload["references"] == 2, (
+        f"numbered Chinese references heading must parse refs, got {payload['references']}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Bug 7: delegate_review._get_gate — a malformed checklist whose "gates" is a
+# list (not a dict) must fail with a friendly exit 2, not crash with TypeError.
+# ---------------------------------------------------------------------------
+def _run_delegate_pack(checklist_obj, tmp: Path) -> subprocess.CompletedProcess:
+    cl = tmp / "checklist.json"
+    cl.write_text(json.dumps(checklist_obj), encoding="utf-8")
+    target = tmp / "target.md"
+    target.write_text("placeholder\n", encoding="utf-8")
+    return subprocess.run(
+        [
+            sys.executable,
+            str(DELEGATE_REVIEW),
+            "pack",
+            "--checklist",
+            str(cl),
+            "--gate",
+            "g1",
+            "--files",
+            str(target),
+            "--workdir",
+            str(tmp),
+        ],
+        cwd=str(SCRIPTS_DIR),
+        capture_output=True,
+        text=True,
+    )
+
+
+def test_delegate_review_malformed_gates_list_exit2() -> None:
+    # BUG: gates as a list reached sorted()+join and raised TypeError.
+    with tempfile.TemporaryDirectory() as tmp:
+        proc = _run_delegate_pack({"skill": "x", "gates": ["g1", "g2"]}, Path(tmp))
+    assert proc.returncode == 2, (
+        f"malformed list 'gates' must exit 2 (friendly), got {proc.returncode}\n"
+        f"stderr:\n{proc.stderr}"
+    )
+    assert "TypeError" not in proc.stderr, (
+        f"must not crash with TypeError; stderr:\n{proc.stderr}"
+    )
+
+
+def test_delegate_review_unknown_gate_still_exit2() -> None:
+    # A well-formed dict 'gates' missing the requested gate must keep its
+    # existing friendly exit-2 behaviour (no regression).
+    with tempfile.TemporaryDirectory() as tmp:
+        proc = _run_delegate_pack({"skill": "x", "gates": {"other": {}}}, Path(tmp))
+    assert proc.returncode == 2, (
+        f"unknown gate on a valid dict checklist must still exit 2, got {proc.returncode}\n"
+        f"stderr:\n{proc.stderr}"
+    )
+
+
 def main() -> int:
     test_polish_no_from_a_to_b_forbidden()
     test_intake_rejects_non_docx_manuscript()
@@ -301,6 +433,11 @@ def main() -> int:
     test_xsec_no_flag_when_consistent()
     test_xsec_no_flag_for_different_labels()
     test_xsec_ignores_reference_block_pmids()
+    test_manuscript_index_numbered_references_heading()
+    test_manuscript_index_plain_references_heading_unchanged()
+    test_manuscript_index_numbered_chinese_references_heading()
+    test_delegate_review_malformed_gates_list_exit2()
+    test_delegate_review_unknown_gate_still_exit2()
     print("OK")
     return 0
 

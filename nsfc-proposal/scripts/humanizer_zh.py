@@ -96,21 +96,26 @@ HALFWIDTH_IN_CN = [
 ]
 
 # D2：应上下标却裸写的化学式/标记（先剥离已正确标注的 ^..^ / ~..~ / sup/sub 再扫）
+# 边界用 (?<![A-Za-z0-9])/(?![A-Za-z0-9]) 而非 \b：中文在 Unicode re 下属 \w，
+# \b 在“汉字H2O汉字”处不成立，故用显式 ASCII 边界，确保中文紧邻时也能抓到，
+# 同时不误吞 XH2OY（前后接字母数字时不报）。带电荷的 Na+/Ca2+ 右边界也用 _SE。
+_SS = r"(?<![A-Za-z0-9])"  # 左：前面不是字母数字
+_SE = r"(?![A-Za-z0-9])"   # 右：后面不是字母数字
 SUBSUP_PATTERNS = [
-    (re.compile(r"\bH2O2\b"), "H2O2 → H~2~O~2~（下标）"),
-    (re.compile(r"\bH2O\b"), "H2O → H~2~O（下标 2）"),
-    (re.compile(r"\bCO2\b"), "CO2 → CO~2~（下标 2）"),
-    (re.compile(r"\bO2\b"), "O2 → O~2~（下标 2）"),
-    (re.compile(r"\bN2\b"), "N2 → N~2~（下标 2）"),
-    (re.compile(r"\bNH3\b"), "NH3 → NH~3~（下标 3）"),
-    (re.compile(r"\bSO2\b"), "SO2 → SO~2~（下标 2）"),
-    (re.compile(r"\bNa\+"), "Na+ → Na^+^（上标电荷）"),
-    (re.compile(r"\bCa2\+"), "Ca2+ → Ca^2+^（上标电荷）"),
-    (re.compile(r"\bIC50\b"), "IC50 → IC~50~（下标 50）"),
-    (re.compile(r"\bEC50\b"), "EC50 → EC~50~（下标 50）"),
-    (re.compile(r"\bLD50\b"), "LD50 → LD~50~（下标 50）"),
-    (re.compile(r"\b(\d+(?:\.\d+)?)\s?(cm|mm|nm|μm|um|m)2\b"), "面积单位 如 cm2 → cm^2^（上标指数）"),
-    (re.compile(r"\b(\d+(?:\.\d+)?)\s?(cm|mm|nm|μm|um|m)3\b"), "体积单位 如 cm3 → cm^3^（上标指数）"),
+    (re.compile(_SS + r"H2O2" + _SE), "H2O2 → H~2~O~2~（下标）"),
+    (re.compile(_SS + r"H2O" + _SE), "H2O → H~2~O（下标 2）"),
+    (re.compile(_SS + r"CO2" + _SE), "CO2 → CO~2~（下标 2）"),
+    (re.compile(_SS + r"O2" + _SE), "O2 → O~2~（下标 2）"),
+    (re.compile(_SS + r"N2" + _SE), "N2 → N~2~（下标 2）"),
+    (re.compile(_SS + r"NH3" + _SE), "NH3 → NH~3~（下标 3）"),
+    (re.compile(_SS + r"SO2" + _SE), "SO2 → SO~2~（下标 2）"),
+    (re.compile(_SS + r"Na\+" + _SE), "Na+ → Na^+^（上标电荷）"),
+    (re.compile(_SS + r"Ca2\+" + _SE), "Ca2+ → Ca^2+^（上标电荷）"),
+    (re.compile(_SS + r"IC50" + _SE), "IC50 → IC~50~（下标 50）"),
+    (re.compile(_SS + r"EC50" + _SE), "EC50 → EC~50~（下标 50）"),
+    (re.compile(_SS + r"LD50" + _SE), "LD50 → LD~50~（下标 50）"),
+    (re.compile(_SS + r"(\d+(?:\.\d+)?)\s?(cm|mm|nm|μm|um|m)2" + _SE), "面积单位 如 cm2 → cm^2^（上标指数）"),
+    (re.compile(_SS + r"(\d+(?:\.\d+)?)\s?(cm|mm|nm|μm|um|m)3" + _SE), "体积单位 如 cm3 → cm^3^（上标指数）"),
 ]
 _SUBSUP_WRAPPED_RE = re.compile(
     r"\^[^\^\s]+\^|~[^~\s]+~|<sup>.*?</sup>|<sub>.*?</sub>",

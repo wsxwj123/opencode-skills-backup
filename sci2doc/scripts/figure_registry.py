@@ -156,7 +156,7 @@ def save_figure_map(project_root, figure_map):
     try:
         try:
             import fcntl
-            fd_lock = open(lock_file, "a+")
+            fd_lock = open(lock_file, "a+", encoding="utf-8")
             fcntl.flock(fd_lock.fileno(), fcntl.LOCK_EX)
         except ImportError:
             pass  # No fcntl on Windows; skip locking

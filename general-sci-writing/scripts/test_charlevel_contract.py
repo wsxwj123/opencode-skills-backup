@@ -51,6 +51,16 @@ def test_d2_no_false_positive_when_wrapped():
     assert not P.check_subsup("10<sup>6</sup> cells"), "D2 误报已带 <sup> 的幂"
 
 
+def test_d2_cjk_adjacent_boundary():
+    # bug⑤: 中文紧邻 "H2O代谢" → \b 在 Unicode 下失效会漏报；改用 ASCII 边界后须命中。
+    assert any(i["found"] == "H2O" for i in P.check_subsup("H2O代谢异常")), "D2 漏报中文紧邻 H2O代谢"
+    assert any(i["found"] == "CO2" for i in P.check_subsup("CO2浓度升高")), "D2 漏报中文紧邻 CO2浓度"
+    # 已标注 H~2~O 紧邻中文 → 仍不报。
+    assert not any(i["found"] == "H2O" for i in P.check_subsup("已标 H~2~O 代谢")), "D2 误报已标注 H~2~O"
+    # 英文 "the H2O level" 不退化 → 仍报。
+    assert any(i["found"] == "H2O" for i in P.check_subsup("the H2O level was high")), "D2 英文 H2O 退化漏报"
+
+
 # ── F1: 中文错别字 ───────────────────────────────────────────────────────────
 def test_f1_flags_typos():
     assert any(i["found"] == "帐号" for i in P.check_chinese_typos("请输入帐号和密码")), "F1 漏报 帐号"
@@ -80,6 +90,20 @@ def test_f3_no_false_positive():
     assert not P.check_academic_misspellings("a significant fluorescence measurement in the environment"), "F3 误报正确拼写"
     # 专有名词/合法词不在表 → 不报
     assert not P.check_academic_misspellings("PMG colonized the tumor and FUS heating worked"), "F3 误报专有名词"
+
+
+def test_misspelling_evidence_no_false_positive():
+    # bug④: "evidence" 不再被 evidenc+\w* 误报为 misspelling。
+    assert not P.check_misspellings("There is strong evidence for this hypothesis."), \
+        "F4 误报正确词 evidence"
+    assert not P.check_misspellings("The evidences were collected."), "F4 误报 evidences"
+    # 同类风险 nad → NADH/NADPH/nadir 不再误报（这些是 SCI 高频词）。
+    assert not P.check_misspellings("NADH and NADPH and nadir levels"), \
+        "F4 误报 NADH/NADPH/nadir"
+    # 真错拼仍报（不因删词条而漏检）。
+    assert any(i["found"].lower() == "teh" for i in P.check_misspellings("teh result")), "F4 漏报 teh"
+    assert any(i["found"].lower() == "occured" for i in P.check_misspellings("it occured")), "F4 漏报 occured"
+    assert any(i["found"].lower() == "seperate" for i in P.check_misspellings("two seperate groups")), "F4 漏报 seperate"
 
 
 def test_f3_warn_severity():

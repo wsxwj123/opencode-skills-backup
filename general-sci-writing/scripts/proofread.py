@@ -22,7 +22,7 @@ from pathlib import Path
 
 # ── Common misspellings (a → b) ──────────────────────────────────────────────
 MISSPELLINGS = {
-    "teh": "the", "adn": "and", "nad": "and", "recieve": "receive",
+    "teh": "the", "adn": "and", "recieve": "receive",
     "occured": "occurred", "occuring": "occurring", "seperate": "separate",
     "definately": "definitely", "alot": "a lot", "untill": "until",
     "wich": "which", "thier": "their", "wierd": "weird",
@@ -40,7 +40,7 @@ MISSPELLINGS = {
     "compromized": "compromised", "compoared": "compared",
     "compairson": "comparison", "comparsion": "comparison",
     "expermental": "experimental",
-    "evidenc": "evidence", "preformed": "performed (or 'preformed' if 'pre-formed')",
+    "preformed": "performed (or 'preformed' if 'pre-formed')",
     "becuase": "because", "becasue": "because",
 }
 # 移除 None 值(占位)
@@ -85,26 +85,32 @@ ACADEMIC_MISSPELLINGS = {
 
 # ── D2: 应上下标却裸写的常见化学式/标记(WARN 级,字符级易误报) ───────────────
 # 仅当未被 markdown 上下标(^...^ / ~...~)或 HTML(<sup>/<sub>)包裹时才报。
-# 模式列表可维护:每项 (正则, 说明)。词边界 + 上下文约束尽量降低误报。
+# 模式列表可维护:每项 (正则, 说明)。
+# 边界用 (?<![A-Za-z0-9]) / (?![A-Za-z0-9]) 而非 \b：Unicode 下汉字属 \w，
+# \b 在 "H2O代谢" 这种中英紧邻处失效会漏报；ASCII 字母数字边界则不受汉字干扰，
+# 既能在中文紧邻时命中，又不会把 "the H2O level" 的英文写法退化。
+# （方案对齐 sci2doc check_quality.py 的字符级边界处理。）
+_NB = r"(?<![A-Za-z0-9])"   # 左边界：前面不是 ASCII 字母/数字
+_NA = r"(?![A-Za-z0-9])"    # 右边界：后面不是 ASCII 字母/数字
 SUBSUP_PATTERNS = [
-    (re.compile(r"\bH2O\b"), "H2O → H~2~O (water; subscript 2)"),
-    (re.compile(r"\bCO2\b"), "CO2 → CO~2~ (subscript 2)"),
-    (re.compile(r"\bH2O2\b"), "H2O2 → H~2~O~2~ (subscripts)"),
-    (re.compile(r"\bO2\b"), "O2 → O~2~ (subscript 2)"),
-    (re.compile(r"\bN2\b"), "N2 → N~2~ (subscript 2)"),
-    (re.compile(r"\bNH3\b"), "NH3 → NH~3~ (subscript 3)"),
-    (re.compile(r"\bSO2\b"), "SO2 → SO~2~ (subscript 2)"),
-    (re.compile(r"\bNa\+\b"), "Na+ → Na^+^ (superscript charge)"),
-    (re.compile(r"\bCa2\+"), "Ca2+ → Ca^2+^ (superscript charge)"),
-    (re.compile(r"\bIC50\b"), "IC50 → IC~50~ (subscript 50)"),
-    (re.compile(r"\bEC50\b"), "EC50 → EC~50~ (subscript 50)"),
-    (re.compile(r"\bLD50\b"), "LD50 → LD~50~ (subscript 50)"),
-    (re.compile(r"\bKm\b"), "Km → K~m~ (subscript m; Michaelis constant)"),
+    (re.compile(_NB + r"H2O" + _NA), "H2O → H~2~O (water; subscript 2)"),
+    (re.compile(_NB + r"CO2" + _NA), "CO2 → CO~2~ (subscript 2)"),
+    (re.compile(_NB + r"H2O2" + _NA), "H2O2 → H~2~O~2~ (subscripts)"),
+    (re.compile(_NB + r"O2" + _NA), "O2 → O~2~ (subscript 2)"),
+    (re.compile(_NB + r"N2" + _NA), "N2 → N~2~ (subscript 2)"),
+    (re.compile(_NB + r"NH3" + _NA), "NH3 → NH~3~ (subscript 3)"),
+    (re.compile(_NB + r"SO2" + _NA), "SO2 → SO~2~ (subscript 2)"),
+    (re.compile(_NB + r"Na\+" + _NA), "Na+ → Na^+^ (superscript charge)"),
+    (re.compile(_NB + r"Ca2\+"), "Ca2+ → Ca^2+^ (superscript charge)"),
+    (re.compile(_NB + r"IC50" + _NA), "IC50 → IC~50~ (subscript 50)"),
+    (re.compile(_NB + r"EC50" + _NA), "EC50 → EC~50~ (subscript 50)"),
+    (re.compile(_NB + r"LD50" + _NA), "LD50 → LD~50~ (subscript 50)"),
+    (re.compile(_NB + r"Km" + _NA), "Km → K~m~ (subscript m; Michaelis constant)"),
     # cm2/m2/μm2 等面积:数字后紧跟单位再跟 2/3(指数)
-    (re.compile(r"\b(\d+(?:\.\d+)?)\s?(cm|mm|nm|μm|um|m)2\b"), "area unit: e.g. cm2 → cm^2^ (superscript exponent)"),
-    (re.compile(r"\b(\d+(?:\.\d+)?)\s?(cm|mm|nm|μm|um|m)3\b"), "volume unit: e.g. cm3 → cm^3^ (superscript exponent)"),
+    (re.compile(_NB + r"(\d+(?:\.\d+)?)\s?(cm|mm|nm|μm|um|m)2" + _NA), "area unit: e.g. cm2 → cm^2^ (superscript exponent)"),
+    (re.compile(_NB + r"(\d+(?:\.\d+)?)\s?(cm|mm|nm|μm|um|m)3" + _NA), "volume unit: e.g. cm3 → cm^3^ (superscript exponent)"),
     # 幂:仅匹配带字面 ^ 的 10^n(作者手写乘方),裸数字 105/100/410011 一律不碰
-    (re.compile(r"\b10\^(\d+)\b"), "power-of-ten: 10^6 → 10^6^ (markdown superscript)"),
+    (re.compile(_NB + r"10\^(\d+)" + _NA), "power-of-ten: 10^6 → 10^6^ (markdown superscript)"),
 ]
 
 # ── F1: 中文高置信错别字/混用(WARN 级,保守只收确定性错字) ──────────────────

@@ -42,6 +42,11 @@ def _load_json(path: str) -> Any:
 
 def _get_gate(checklist: dict, gate: str) -> dict:
     gates = checklist.get("gates", {})
+    if not isinstance(gates, dict):
+        sys.stderr.write(
+            f"[delegate_review] checklist 'gates' 必须是对象(dict)，实际为 {type(gates).__name__}\n"
+        )
+        sys.exit(2)
     if gate not in gates:
         avail = ", ".join(sorted(gates)) or "(空)"
         sys.stderr.write(f"[delegate_review] 未知 gate '{gate}'。可用: {avail}\n")

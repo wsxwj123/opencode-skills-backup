@@ -51,9 +51,18 @@ UNIVERSAL_ABBREVIATIONS = {
 # 完整捕获 IFN-γ / TGF-β / IL-1β 而非残缺 "IFN-"。
 _ABBR_TOKEN = r"[A-Z](?:[A-Z0-9]+(?:-[A-Z0-9Α-Ωα-ω]+)*|(?:-[A-Z0-9Α-Ωα-ω]+)+)"
 
-# 匹配 "Full Name (ABBR)" 定义模式（与 gsw 同步）。
+# 匹配定义模式，兼容半角/全角括号 [（(] [）)] 与全角逗号 [,，]（参考 sci2doc）。
+# 两种形态：
+#   A) 英文全称在括号外：  Full Name (ABBR) / Full Name（ABBR）
+#   B) 全角场景全称在括号内、逗号分隔： 聚焦超声（focused ultrasound，FUS）
+# 捕获组：group(1)=A 形态全称，group(2)=B 形态全称，group(3)=缩写。
 DEFINITION_PATTERN = re.compile(
-    r"\b((?:[A-Za-z][\w\-]*\s+){1,6})\((" + _ABBR_TOKEN + r")\)"
+    r"(?:"
+    r"((?:[A-Za-z][\w\-]*\s+){1,6})[（(]"
+    r"|"
+    r"[（(]\s*([A-Za-z][\w\- ]*?)\s*[,，]\s*"
+    r")"
+    r"(" + _ABBR_TOKEN + r")[）)]"
 )
 
 # 匹配裸用缩写。
@@ -102,8 +111,8 @@ def scan_definitions(files: list[str]) -> dict:
         except OSError:
             continue
         for match in DEFINITION_PATTERN.finditer(content):
-            full_name = match.group(1).strip()
-            abbr = match.group(2).strip().upper()
+            full_name = (match.group(1) or match.group(2) or "").strip()
+            abbr = match.group(3).strip().upper()
             first_def.setdefault(abbr, []).append((fp, full_name))
     return first_def
 

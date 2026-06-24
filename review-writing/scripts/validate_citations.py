@@ -253,6 +253,12 @@ def check_doi_online(doi, timeout=8):
         return False, "DOI mismatch"
 
 
+def _pmid_item_valid(item):
+    # NCBI esummary 对不存在 PMID 仍返回带 uid 的占位项，但附带 error 字段
+    # （如 "cannot get document summary"）。必须同时排除 error 才算真实存在。
+    return bool(isinstance(item, dict) and item.get("uid") and not item.get("error"))
+
+
 def check_pmid_online(pmid, timeout=8):
     url = (
         "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?"
@@ -265,7 +271,7 @@ def check_pmid_online(pmid, timeout=8):
         data = json.loads(resp.read().decode("utf-8", errors="replace"))
         result = data.get("result", {}) if isinstance(data, dict) else {}
         item = result.get(str(pmid), {}) if isinstance(result, dict) else {}
-        if isinstance(item, dict) and item.get("uid"):
+        if _pmid_item_valid(item):
             return True, "ok"
         return False, "PMID not found"
 
