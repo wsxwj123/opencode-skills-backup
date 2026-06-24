@@ -92,7 +92,7 @@ def strip_markdown_syntax(text):
     处理：标题 #、粗体/斜体、行内代码、链接/图片、HTML 标签、
     表格分隔行、引用 >、列表标记、水平线、脚注标记。
     """
-    lines = text.split("\n")
+    lines = text.splitlines()  # 跨平台：兼容 \r\n/\r 换行
     cleaned = []
     for line in lines:
         s = line.strip()
@@ -199,7 +199,7 @@ def count_words_in_md(
             body_english_words += counts["english_words"]
 
     heading_re = re.compile(r"^(#{1,6})\s+(.+)$")
-    lines = raw.split("\n")
+    lines = raw.splitlines()  # 跨平台：兼容 \r\n/\r 换行
 
     for stripped, sec_type in classify_lines_with_chapter_scope(lines, extra_exclude=extra_exclude):
         if not stripped:

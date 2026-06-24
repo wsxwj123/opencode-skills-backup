@@ -97,7 +97,7 @@ CITATION_RE = re.compile(r"\[\d+(?:[,\-\s]*\d+)*\]")
 def _extract_prose(text: str) -> str:
     """Strip non-prose elements from manuscript markdown."""
     text = CODE_BLOCK_RE.sub("", text)
-    lines = text.split("\n")
+    lines = text.splitlines()  # 跨平台：兼容 \r\n/\r 换行
     prose_lines = []
     in_ref_block = False
     for line in lines:
