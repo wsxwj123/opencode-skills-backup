@@ -14,6 +14,7 @@ Catches:
 Usage:
     python citation_ref_tracker.py --project-root /path/to/project
     python citation_ref_tracker.py --project-root /path/to/project --fail-on-undefined
+    python citation_ref_tracker.py --project-root /path/to/project --fail-on-gap
 """
 
 from __future__ import annotations
@@ -59,6 +60,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Citation reference number tracker")
     parser.add_argument("--project-root", required=True, help="Project root directory")
     parser.add_argument("--fail-on-undefined", action="store_true", help="Exit non-zero if undefined refs found")
+    parser.add_argument("--fail-on-gap", action="store_true", help="Exit non-zero if numbering gaps found (A2 hard gate)")
     args = parser.parse_args()
 
     root = Path(args.project_root)
@@ -182,6 +184,8 @@ def main() -> int:
         print(f"CITATION_REF_TRACKER: PASS ({len(all_cited)} refs, all defined)")
 
     if args.fail_on_undefined and undefined:
+        return 1
+    if args.fail_on_gap and gaps:
         return 1
     return 0
 

@@ -208,17 +208,20 @@ def check_heading_levels(doc):
 def check_figure_numbering(doc):
     """检查图表编号是否连续规范"""
     issues = []
-    
+
     # 匹配图编号：图 1-1, 图 2-3 等
     figure_pattern = re.compile(r'图\s*(\d+)-(\d+)')
     table_pattern = re.compile(r'表\s*(\d+)-(\d+)')
+    # A1 公式编号：公式(2-3) / 式(2-3) / 公式 2-3 / 式 2-3（按章 chapter-number）
+    formula_pattern = re.compile(r'(?:公式|式)\s*[（(]?\s*(\d+)\s*-\s*(\d+)\s*[）)]?')
     
     figures = []
     tables = []
-    
+    formulas = []
+
     for i, para in enumerate(doc.paragraphs):
         text = para.text
-        
+
         # 查找图编号
         for match in figure_pattern.finditer(text):
             chapter = int(match.group(1))
@@ -229,12 +232,23 @@ def check_figure_numbering(doc):
                 'location': i + 1,
                 'text': text[:50]
             })
-        
+
         # 查找表编号
         for match in table_pattern.finditer(text):
             chapter = int(match.group(1))
             number = int(match.group(2))
             tables.append({
+                'chapter': chapter,
+                'number': number,
+                'location': i + 1,
+                'text': text[:50]
+            })
+
+        # 查找公式编号（A1）
+        for match in formula_pattern.finditer(text):
+            chapter = int(match.group(1))
+            number = int(match.group(2))
+            formulas.append({
                 'chapter': chapter,
                 'number': number,
                 'location': i + 1,
@@ -298,7 +312,36 @@ def check_figure_numbering(doc):
                     'message': f'第 {chapter} 章表编号不连续：表 {chapter}-{tab["number"]}',
                     'suggestion': f'应为 表 {chapter}-{expected}'
                 })
-    
+
+    # 检查公式编号连续性（A1，同表/图去重写法）
+    formulas_by_chapter = {}
+    for fml in formulas:
+        chapter = fml['chapter']
+        if chapter not in formulas_by_chapter:
+            formulas_by_chapter[chapter] = []
+        formulas_by_chapter[chapter].append(fml)
+
+    for chapter, fmls in formulas_by_chapter.items():
+        # 按 (chapter, number) 去重：同一公式号被定义+正文多次引用只算一次，
+        # 否则排序后 expected=i+1 必错位，产生假"不连续"warning。
+        seen_numbers = set()
+        fmls_unique = []
+        for fml in fmls:
+            if fml['number'] not in seen_numbers:
+                seen_numbers.add(fml['number'])
+                fmls_unique.append(fml)
+        fmls_sorted = sorted(fmls_unique, key=lambda x: x['number'])
+        for i, fml in enumerate(fmls_sorted):
+            expected = i + 1
+            if fml['number'] != expected:
+                issues.append({
+                    'level': 'warning',
+                    'category': '公式编号',
+                    'location': f'第 {fml["location"]} 段',
+                    'message': f'第 {chapter} 章公式编号不连续：公式 {chapter}-{fml["number"]}',
+                    'suggestion': f'应为 公式 {chapter}-{expected}'
+                })
+
     return issues
 
 
@@ -698,6 +741,133 @@ _CN_SENT_MAX_CHARS = 50  # 单句 >50 中文字符报 cn_sentence_too_long
 _CN_SENT_SHORT_MAX = 15  # ≤15 字视为"短句"
 _CN_SENT_LONG_MIN = 30   # ≥30 字视为"长句"
 _CN_SENT_MONOTONE_DIFF = 5  # 连续3句长度差 <5 字报单调警告
+
+
+# ---------------------------------------------------------------------------
+# 字符级检查（移植自 general-sci-writing/scripts/proofread.py，全部 WARN 级）
+# D1 中文句内夹半角标点 / D2 应上下标却裸写 / F1 中文高置信错别字
+# 强度：全部 warning，不阻断（与引用门禁 J5/J7 同级）
+# ---------------------------------------------------------------------------
+
+# D1：中文句内夹半角标点（高误报区，极度保守）。
+# 只标"半角标点两侧紧邻汉字"这种高置信中文句内夹半角的情形。
+# DOI/URL/数字/单位区间不会出现"汉字+半角+汉字"，故天然规避。
+_HALFWIDTH_IN_CN = [
+    (re.compile(r'([一-鿿]),([一-鿿])'), ',', '，', '中文句内半角逗号'),
+    (re.compile(r'([一-鿿]);([一-鿿])'), ';', '；', '中文句内半角分号'),
+    (re.compile(r'([一-鿿]):([一-鿿])'), ':', '：', '中文句内半角冒号'),
+    (re.compile(r'([一-鿿])\(([一-鿿])'), '(', '（', '中文句内半角左括号'),
+    (re.compile(r'([一-鿿])\)([一-鿿])'), ')', '）', '中文句内半角右括号'),
+]
+
+# D2：应上下标却裸写的化学式/标记。仅当未被 markdown 上下标(^..^/~..~)或
+# HTML(<sup>/<sub>)包裹时才报；词边界 + 上下文约束尽量降低误报。
+# 边界用 (?<![A-Za-z0-9])/(?![A-Za-z0-9]) 而非 \b：中文在 Unicode re 下属 \w，
+# \b 在"汉字H2O汉字"处不成立，故用显式 ASCII 边界，确保中文环境也能抓到，
+# 同时不误吞 XH2OY（前后接字母数字时不报）。
+_SS = r'(?<![A-Za-z0-9])'   # 左：前面不是字母数字
+_SE = r'(?![A-Za-z0-9])'    # 右：后面不是字母数字
+_SUBSUP_PATTERNS = [
+    (re.compile(_SS + r'H2O2' + _SE), 'H2O2 → H~2~O~2~（下标）'),
+    (re.compile(_SS + r'H2O' + _SE), 'H2O → H~2~O（下标 2）'),
+    (re.compile(_SS + r'CO2' + _SE), 'CO2 → CO~2~（下标 2）'),
+    (re.compile(_SS + r'O2' + _SE), 'O2 → O~2~（下标 2）'),
+    (re.compile(_SS + r'N2' + _SE), 'N2 → N~2~（下标 2）'),
+    (re.compile(_SS + r'NH3' + _SE), 'NH3 → NH~3~（下标 3）'),
+    (re.compile(_SS + r'SO2' + _SE), 'SO2 → SO~2~（下标 2）'),
+    (re.compile(_SS + r'IC50' + _SE), 'IC50 → IC~50~（下标 50）'),
+    (re.compile(_SS + r'EC50' + _SE), 'EC50 → EC~50~（下标 50）'),
+    (re.compile(_SS + r'LD50' + _SE), 'LD50 → LD~50~（下标 50）'),
+    (re.compile(_SS + r'(\d+(?:\.\d+)?)\s?(cm|mm|nm|μm|um|m)2' + _SE), '面积单位：如 cm2 → cm^2^（上标指数）'),
+    (re.compile(_SS + r'(\d+(?:\.\d+)?)\s?(cm|mm|nm|μm|um|m)3' + _SE), '体积单位：如 cm3 → cm^3^（上标指数）'),
+    # 幂：仅匹配带字面 ^ 的 10^n（作者手写乘方），裸数字不碰
+    (re.compile(_SS + r'10\^(\d+)' + _SE), '幂次：10^6 → 10^6^（markdown 上标）'),
+]
+
+# 已带 markdown 上下标或 HTML sup/sub 的片段：剥离后再扫裸写，避免误报
+_SUBSUP_WRAPPED_RE = re.compile(
+    r'\^[^\^\s]+\^|~[^~\s]+~|<sup>.*?</sup>|<sub>.*?</sub>',
+    re.IGNORECASE | re.DOTALL,
+)
+
+# F1：中文高置信错别字（保守只收确定性书写错字；的/地/得等主观字一律不收）。
+_CHINESE_TYPOS = {
+    '帐号': '账号', '登陆': '登录', '既使': '即使', '按装': '安装',
+    '做为': '作为', '拌随': '伴随', '迫不急待': '迫不及待',
+    '再接再励': '再接再厉', '一如继往': '一如既往', '言简意骇': '言简意赅',
+    '甘败下风': '甘拜下风', '察颜观色': '察言观色', '脉博': '脉搏',
+    '松驰': '松弛', '竭泽而鱼': '竭泽而渔', '金榜提名': '金榜题名',
+    '美仑美奂': '美轮美奂', '病入膏盲': '病入膏肓', '穿流不息': '川流不息',
+}
+
+
+def check_char_level(doc):
+    """字符级检查（D1 半角标点 / D2 上下标裸写 / F1 中文错别字），全 WARN。
+
+    跳过参考文献与摘要区（与 check_writing_style 同口径），避免英文/DOI 误报。
+    """
+    issues = []
+    in_references = False
+    in_abstract = False
+
+    for para in doc.paragraphs:
+        text = para.text.strip()
+        if not text:
+            continue
+
+        lvl = heading_level(getattr(para.style, "name", ""))
+        if lvl is not None:
+            cls = classify_heading(text)
+            if cls == "references":
+                in_references = True
+            elif in_references:
+                in_references = False
+            in_abstract = "摘要" in text or "abstract" in text.lower()
+            continue
+
+        if in_references or in_abstract:
+            continue
+
+        # D1：中文句内夹半角标点
+        for pat, half, full, desc in _HALFWIDTH_IN_CN:
+            for m in pat.finditer(text):
+                issues.append({
+                    'level': 'warning',
+                    'category': '字符级-半角标点',
+                    'message': f'{desc}：…{m.group(0)}…（"{half}" → "{full}"）',
+                    'suggestion': '中文句内标点应使用全角',
+                    'code': 'halfwidth_punct_in_cn',
+                })
+
+        # D2：应上下标却裸写（先剥离已正确标注的片段）
+        stripped = _SUBSUP_WRAPPED_RE.sub(' ', text)
+        seen = set()
+        for pat, desc in _SUBSUP_PATTERNS:
+            for m in pat.finditer(stripped):
+                key = (m.group(0), m.start())
+                if key in seen:
+                    continue
+                seen.add(key)
+                issues.append({
+                    'level': 'warning',
+                    'category': '字符级-上下标',
+                    'message': f'疑似应上下标却裸写：{m.group(0)}（{desc}）',
+                    'suggestion': '用 markdown ~下标~ / ^上标^ 标注',
+                    'code': 'subsup_bare',
+                })
+
+        # F1：中文高置信错别字
+        for wrong, right in _CHINESE_TYPOS.items():
+            for m in re.finditer(re.escape(wrong), text):
+                issues.append({
+                    'level': 'warning',
+                    'category': '字符级-错别字',
+                    'message': f'疑似错别字：{wrong} → {right}',
+                    'suggestion': f'确认是否应为"{right}"',
+                    'code': 'chinese_typo',
+                })
+
+    return issues
 
 
 def check_writing_style(doc):
@@ -2347,6 +2517,12 @@ def generate_quality_report(
         print("🔍 检查写作风格...")
     style_issues = check_writing_style(doc)
     all_issues.extend(style_issues)
+
+    # 5.3.1 字符级检查（D1 半角标点 / D2 上下标裸写 / F1 中文错别字，全 WARN）
+    if verbose:
+        print("🔍 字符级检查（半角标点/上下标/错别字）...")
+    char_issues = check_char_level(doc)
+    all_issues.extend(char_issues)
 
     # 5.4 全文结构门禁（仅在全文检查时启用）
     if enforce_full_structure:

@@ -616,6 +616,66 @@ def verify_all(
     return idx, stats_payload, manual_review_queue
 
 
+def _entry_ref_number(entry: dict[str, Any]) -> int | None:
+    v = entry.get("ref_number")
+    if v is None:
+        return None
+    try:
+        return int(str(v).strip())
+    except (ValueError, TypeError):
+        return None
+
+
+def run_integrity_gates(
+    entries: list[dict[str, Any]],
+    *,
+    applicant_authors: list[str],
+    current_year: int,
+    self_cite_threshold: float = 0.4,
+    recency_window: int = 5,
+    recency_min_ratio: float = 0.3,
+) -> dict[str, Any]:
+    """J4/J5/J7 over the literature index entries.
+
+    J4 (completeness) is fail-closed: any incomplete entry -> exit_code 2.
+    J5 (self-citation) / J7 (recency) are advisory (WARN) and never change the
+    exit code. A4 (bidirectional) is intentionally NOT here: matrix-check already
+    covers the three-way P1/index/REF integrity.
+    """
+    incomplete: list[dict[str, Any]] = []
+    raw_only: list[int] = []
+    partial: list[dict[str, Any]] = []
+    for i, e in enumerate(entries):
+        res = core.check_completeness(e)
+        num = _entry_ref_number(e)
+        ref_id = num if num is not None else f"idx:{i}"
+        if res["status"] == "incomplete":
+            incomplete.append({"ref": ref_id, "missing_fields": res["missing_fields"]})
+        elif res["status"] == "raw_only":
+            raw_only.append(num if num is not None else i)
+        elif res["missing_fields"]:
+            partial.append({"ref": ref_id, "missing_fields": res["missing_fields"]})
+
+    self_cite = core.check_self_citation(entries, applicant_authors, threshold=self_cite_threshold)
+    recency = core.check_recency(entries, current_year, window=recency_window,
+                                 min_recent_ratio=recency_min_ratio)
+
+    exit_code = 2 if incomplete else 0
+
+    return {
+        "ok": exit_code == 0,
+        "exit_code": exit_code,
+        "j4_completeness": {
+            "incomplete": incomplete,
+            "raw_only_count": len(raw_only),
+            "partial": partial,
+            "strength": "fail-closed",
+        },
+        "j5_self_citation": {**self_cite, "strength": "warn"},
+        "j7_recency": {**recency, "strength": "warn"},
+    }
+
+
 def _ordered_unique(values: list[int]) -> list[int]:
     seen = set()
     ordered = []
@@ -781,6 +841,13 @@ def main() -> int:
     p_stats = sub.add_parser("stats")
     p_stats.add_argument("--index", default="data/literature_index.json")
 
+    p_gates = sub.add_parser("check-gates")
+    p_gates.add_argument("--index", default="data/literature_index.json")
+    p_gates.add_argument("--profile", default="proposal_profile.json",
+                         help="proposal_profile.json holding applicant_authors (J5)")
+    p_gates.add_argument("--current-year", type=int, default=None,
+                         help="Current year for J7 recency (default: system clock)")
+
     args = parser.parse_args()
 
     mcp_index: dict[str, dict[str, Any]] = {}
@@ -891,6 +958,21 @@ def main() -> int:
         idx = _normalize_index(raw)
         print(json.dumps(stats(idx), ensure_ascii=False, indent=2))
         return 0
+
+    if args.cmd == "check-gates":
+        raw = load_json(Path(args.index), {"metadata": {}, "entries": []})
+        idx = _normalize_index(raw)
+        profile = load_json(Path(args.profile), {})
+        raw_authors = profile.get("applicant_authors") if isinstance(profile, dict) else None
+        applicant_authors = [str(a) for a in raw_authors] if isinstance(raw_authors, list) else []
+        current_year = args.current_year or datetime.now(timezone.utc).year
+        gates = run_integrity_gates(
+            idx.get("entries", []),
+            applicant_authors=applicant_authors,
+            current_year=current_year,
+        )
+        print(json.dumps(gates, ensure_ascii=False, indent=2))
+        return gates["exit_code"]
 
     return 1
 

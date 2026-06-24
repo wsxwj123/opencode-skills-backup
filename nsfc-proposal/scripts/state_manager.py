@@ -34,6 +34,7 @@ DEFAULT_PROFILE = {
         "total_body": {"min": 18000, "max": 25000},
     },
     "citation_targets": {"min_total": 30, "min_recent_5yr": 20, "min_cn_journals": 5},
+    "applicant_authors": [],
     "mode": "write",
 }
 

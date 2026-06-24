@@ -83,6 +83,102 @@ EXPLANATORY_COLON_PATTERN = (
 )
 
 
+# ── 字符级检查（移植自 general-sci proofread.py，全 WARN）──────────────────
+
+# D1：中文句内夹半角标点（高误报区，极度保守：仅标半角两侧紧邻汉字的高置信情形）
+# 半角 , ; : ( ) → 全角 ， ； ： （ ）；DOI/URL/数字区间天然不触发
+HALFWIDTH_IN_CN = [
+    (re.compile(r"([一-鿿]),([一-鿿])"), ",", "，", "中文句内半角逗号"),
+    (re.compile(r"([一-鿿]);([一-鿿])"), ";", "；", "中文句内半角分号"),
+    (re.compile(r"([一-鿿]):([一-鿿])"), ":", "：", "中文句内半角冒号"),
+    (re.compile(r"([一-鿿])\(([一-鿿])"), "(", "（", "中文句内半角左括号"),
+    (re.compile(r"([一-鿿])\)([一-鿿])"), ")", "）", "中文句内半角右括号"),
+]
+
+# D2：应上下标却裸写的化学式/标记（先剥离已正确标注的 ^..^ / ~..~ / sup/sub 再扫）
+SUBSUP_PATTERNS = [
+    (re.compile(r"\bH2O2\b"), "H2O2 → H~2~O~2~（下标）"),
+    (re.compile(r"\bH2O\b"), "H2O → H~2~O（下标 2）"),
+    (re.compile(r"\bCO2\b"), "CO2 → CO~2~（下标 2）"),
+    (re.compile(r"\bO2\b"), "O2 → O~2~（下标 2）"),
+    (re.compile(r"\bN2\b"), "N2 → N~2~（下标 2）"),
+    (re.compile(r"\bNH3\b"), "NH3 → NH~3~（下标 3）"),
+    (re.compile(r"\bSO2\b"), "SO2 → SO~2~（下标 2）"),
+    (re.compile(r"\bNa\+"), "Na+ → Na^+^（上标电荷）"),
+    (re.compile(r"\bCa2\+"), "Ca2+ → Ca^2+^（上标电荷）"),
+    (re.compile(r"\bIC50\b"), "IC50 → IC~50~（下标 50）"),
+    (re.compile(r"\bEC50\b"), "EC50 → EC~50~（下标 50）"),
+    (re.compile(r"\bLD50\b"), "LD50 → LD~50~（下标 50）"),
+    (re.compile(r"\b(\d+(?:\.\d+)?)\s?(cm|mm|nm|μm|um|m)2\b"), "面积单位 如 cm2 → cm^2^（上标指数）"),
+    (re.compile(r"\b(\d+(?:\.\d+)?)\s?(cm|mm|nm|μm|um|m)3\b"), "体积单位 如 cm3 → cm^3^（上标指数）"),
+]
+_SUBSUP_WRAPPED_RE = re.compile(
+    r"\^[^\^\s]+\^|~[^~\s]+~|<sup>.*?</sup>|<sub>.*?</sub>",
+    re.IGNORECASE | re.DOTALL,
+)
+
+# F1：中文高置信错别字/成语误写（保守词表，主观字"的/地/得"不收）。键=错，值=对。
+CHINESE_TYPOS = {
+    "帐号": "账号", "登陆": "登录", "既使": "即使", "按装": "安装",
+    "做为": "作为", "拌随": "伴随", "迫不急待": "迫不及待",
+    "再接再励": "再接再厉", "一如继往": "一如既往", "言简意骇": "言简意赅",
+    "甘败下风": "甘拜下风", "察颜观色": "察言观色", "脉博": "脉搏",
+    "松驰": "松弛", "竭泽而鱼": "竭泽而渔", "金榜提名": "金榜题名",
+    "美仑美奂": "美轮美奂", "病入膏盲": "病入膏肓", "穿流不息": "川流不息",
+}
+
+
+def check_halfwidth_in_cn(text: str) -> list[dict]:
+    """D1：中文句内夹半角标点（WARN）。仅标半角两侧紧邻汉字的高置信情形。"""
+    out = []
+    for pat, half, full, desc in HALFWIDTH_IN_CN:
+        for m in pat.finditer(text):
+            out.append({
+                "severity": "WARNING",
+                "code": "halfwidth_punct_in_cn",
+                "span": [m.start(), m.end()],
+                "text": m.group(0),
+                "suggestion": f"{desc}：'{half}' → '{full}'",
+            })
+    return out
+
+
+def check_subsup(text: str) -> list[dict]:
+    """D2：应上下标却裸写（WARN）。先剥离已正确标注的片段再扫，避免误报。"""
+    stripped = _SUBSUP_WRAPPED_RE.sub(" ", text)
+    out = []
+    seen = set()
+    for pat, desc in SUBSUP_PATTERNS:
+        for m in pat.finditer(stripped):
+            key = (m.group(0), m.start())
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append({
+                "severity": "WARNING",
+                "code": "subsup_bare",
+                "span": [m.start(), m.end()],
+                "text": m.group(0),
+                "suggestion": desc,
+            })
+    return out
+
+
+def check_chinese_typos(text: str) -> list[dict]:
+    """F1：中文高置信错别字（WARN）。保守词表，主观字不收。"""
+    out = []
+    for wrong, right in CHINESE_TYPOS.items():
+        for m in re.finditer(re.escape(wrong), text):
+            out.append({
+                "severity": "WARNING",
+                "code": "chinese_typo",
+                "span": [m.start(), m.end()],
+                "text": wrong,
+                "suggestion": f"错别字：'{wrong}' → '{right}'",
+            })
+    return out
+
+
 def scan_text(text: str, allow_lists: bool = False) -> dict:
     issues = []
 
@@ -169,6 +265,11 @@ def scan_text(text: str, allow_lists: bool = False) -> dict:
                     "suggestion": EXPLANATORY_COLON_PATTERN[2],
                 }
             )
+
+    # 字符级（全 WARN）：D1 中文句内半角、D2 上下标裸写、F1 中文错别字
+    issues.extend(check_halfwidth_in_cn(text))
+    issues.extend(check_subsup(text))
+    issues.extend(check_chinese_typos(text))
 
     return {"count": len(issues), "issues": issues}
 

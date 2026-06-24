@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 import time
 from collections import Counter
@@ -24,8 +25,169 @@ from citation_guard_core import (  # noqa: E402
     FORBIDDEN_PROVIDER_FAMILIES,
     TITLE_VERIFY_THRESHOLD,
     _provider_family,
+    check_bidirectional,
+    check_completeness,
+    check_recency,
+    check_self_citation,
     validate_core,
 )
+
+# Citation-group matcher: [12], [1,4-7], [3; 5–9]. Expands ranges and lists.
+_CITATION_GROUP_RE = re.compile(
+    r"\[((?:\s*\d+(?:\s*[-–]\s*\d+)?\s*)(?:[,;]\s*\d+(?:\s*[-–]\s*\d+)?\s*)*)\]"
+)
+
+
+def _extract_cited_numbers(text: str) -> set[int]:
+    """Every citation number appearing as [n] / [a,b-c] in manuscript text."""
+    out: set[int] = set()
+    for m in _CITATION_GROUP_RE.finditer(text):
+        for token in re.split(r"\s*[,;]\s*", m.group(1).strip()):
+            token = token.strip()
+            if token.isdigit():
+                out.add(int(token))
+                continue
+            rng = re.fullmatch(r"(\d+)\s*[-–]\s*(\d+)", token)
+            if rng:
+                a, b = int(rng.group(1)), int(rng.group(2))
+                out.update(range(min(a, b), max(a, b) + 1))
+    return out
+
+
+def _scan_cited_numbers(drafts_dir: Path) -> set[int]:
+    out: set[int] = set()
+    if not drafts_dir.exists():
+        return out
+    for md in drafts_dir.rglob("*.md"):
+        try:
+            out |= _extract_cited_numbers(md.read_text(encoding="utf-8", errors="ignore"))
+        except OSError:
+            continue
+    return out
+
+
+def _entry_citation_number(entry: dict[str, Any]) -> int | None:
+    for k in ("citation_number", "ref_number", "global_id", "id", "index", "number"):
+        v = entry.get(k)
+        if v is None:
+            continue
+        try:
+            return int(str(v).strip())
+        except (ValueError, TypeError):
+            continue
+    return None
+
+
+def _reference_index_signal(entries: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """A4 reverse-lookup straight off a reference_index that already carries the
+    pairing verdict (cited_by / orphan_type), e.g. 肠骨轴 reference_index.json.
+
+    Preferred over a drafts re-scan because the index author already resolved
+    which [n] map to which entry. Returns None when no entry carries either
+    signal (so the caller falls back to a drafts scan or skips).
+
+    zombie = listed but never cited (cited_by empty OR orphan_type=="entry_not_cited").
+    orphan = cited with no list entry (orphan_type=="cited_no_entry").
+    """
+    has_signal = any(
+        ("cited_by" in e) or ("orphan_type" in e)
+        for e in entries if isinstance(e, dict)
+    )
+    if not has_signal:
+        return None
+
+    zombies: set[int] = set()
+    orphans: set[int] = set()
+    for e in entries:
+        if not isinstance(e, dict):
+            continue
+        num = _entry_citation_number(e)
+        if num is None:
+            continue
+        otype = str(e.get("orphan_type") or "").strip()
+        cited_by = e.get("cited_by")
+        if otype == "cited_no_entry":
+            orphans.add(num)
+            continue
+        if otype == "entry_not_cited":
+            zombies.add(num)
+            continue
+        # No explicit orphan_type verdict: fall back to cited_by emptiness.
+        if isinstance(cited_by, (list, tuple, set)) and len(cited_by) == 0:
+            zombies.add(num)
+    status = "fail" if (orphans or zombies) else "ok"
+    return {
+        "status": status,
+        "orphans": sorted(orphans),
+        "zombies": sorted(zombies),
+        "source": "reference_index",
+    }
+
+
+def run_review_gates(
+    entries: list[dict[str, Any]],
+    *,
+    drafts_dir: Path | None,
+    manuscript_authors: list[str],
+    current_year: int,
+    self_cite_threshold: float = 0.4,
+    recency_window: int = 5,
+    recency_min_ratio: float = 0.3,
+) -> dict[str, Any]:
+    """Review-side J4/J5/J7/A4 reverse-lookup. ALL report-only (never blocks).
+
+    This is the審稿端 counterpart of general-sci-writing's run_integrity_gates:
+    same core functions, but the verdict is advisory — every section is tagged
+    strength="report", mode is "review_report", and exit_code is pinned to 0 so
+    the reviewer simulator can fold findings into its report without aborting.
+
+    A4 source precedence: reference_index reverse-lookup (cited_by/orphan_type) >
+    drafts [n] scan > skipped.
+    """
+    # J4 — per-entry completeness.
+    incomplete: list[dict[str, Any]] = []
+    raw_only: list[int] = []
+    partial: list[dict[str, Any]] = []
+    for i, e in enumerate(entries):
+        res = check_completeness(e)
+        num = _entry_citation_number(e)
+        if res["status"] == "incomplete":
+            incomplete.append({"ref": num if num is not None else f"idx:{i}",
+                               "missing_fields": res["missing_fields"]})
+        elif res["status"] == "raw_only":
+            raw_only.append(num if num is not None else i)
+        elif res["missing_fields"]:
+            partial.append({"ref": num if num is not None else f"idx:{i}",
+                            "missing_fields": res["missing_fields"]})
+
+    # J5 / J7 — corpus-level advisory.
+    self_cite = check_self_citation(entries, manuscript_authors, threshold=self_cite_threshold)
+    recency = check_recency(entries, current_year, window=recency_window,
+                            min_recent_ratio=recency_min_ratio)
+
+    # A4 — reference_index signal first, then drafts scan, then skip.
+    a4 = _reference_index_signal(entries)
+    if a4 is None and drafts_dir is not None:
+        cited = _scan_cited_numbers(drafts_dir)
+        listed = {n for n in (_entry_citation_number(e) for e in entries) if n is not None}
+        a4 = {**check_bidirectional(cited, listed), "source": "drafts_scan"}
+    if a4 is None:
+        a4 = {"status": "skipped", "reason": "no_signal_no_drafts", "source": "none"}
+
+    return {
+        "ok": True,
+        "mode": "review_report",
+        "exit_code": 0,
+        "j4_completeness": {
+            "incomplete": incomplete,
+            "raw_only_count": len(raw_only),
+            "partial": partial,
+            "strength": "report",
+        },
+        "j5_self_citation": {**self_cite, "strength": "report"},
+        "j7_recency": {**recency, "strength": "report"},
+        "a4_bidirectional": {**a4, "strength": "report"},
+    }
 
 
 def load_json(path: Path, default: Any) -> Any:
@@ -161,11 +323,38 @@ def main() -> int:
     p.add_argument("--log", default="data/verification_run_log.json")
     p.add_argument("--report", default="data/citation_guard_report.json")
     p.add_argument("--write-back", action="store_true", help="Write verification fields back to index")
+    # Review-side reverse-lookup gates (J4/J5/J7/A4). All report-only (exit 0).
+    p.add_argument("--gates", action="store_true",
+                   help="Run review-side citation reverse-lookup checks (J4 completeness, "
+                        "J5 self-citation, J7 recency, A4 bidirectional). Report-only.")
+    p.add_argument("--drafts-dir", default="manuscripts",
+                   help="Manuscript directory scanned for [n] citations (A4 fallback)")
+    p.add_argument("--project-config", default="project_config.json",
+                   help="Config holding manuscript authors (J5); from manuscript metadata under review")
+    p.add_argument("--current-year", type=int, default=None,
+                   help="Current year for J7 recency (default: system clock)")
+    p.add_argument("--gates-report", default="data/citation_review_report.json")
     args = p.parse_args()
 
     index_path = Path(args.index)
     raw = load_json(index_path, {})
     entries, shape = _normalize_index(raw)
+
+    if args.gates:
+        cfg = load_json(Path(args.project_config), {})
+        authors = cfg.get("authors") if isinstance(cfg, dict) else None
+        manuscript_authors = [str(a) for a in authors] if isinstance(authors, list) else []
+        drafts_dir = Path(args.drafts_dir)
+        current_year = args.current_year or datetime.now(timezone.utc).year
+        gates = run_review_gates(
+            entries,
+            drafts_dir=drafts_dir if drafts_dir.exists() else None,
+            manuscript_authors=manuscript_authors,
+            current_year=current_year,
+        )
+        save_json(Path(args.gates_report), gates)
+        print(json.dumps(gates, ensure_ascii=False, indent=2))
+        return gates["exit_code"]
 
     mcp_cache = load_json(Path(args.mcp_cache), {}) if args.mcp_cache else {}
     mcp_index = _build_mcp_index(mcp_cache)
