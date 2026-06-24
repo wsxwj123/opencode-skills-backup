@@ -386,6 +386,54 @@ def test_check_quality_char_level():
 # 双向：连续(多次引用)不误报 + 真缺号报错；不破坏图/表去重。
 # ===========================================================================
 
+def _a5_issues(issues):
+    return [i for i in issues if i.get("category") == "交叉引用"]
+
+
+def test_check_quality_a5_crossref_validity():
+    """A5 章节交叉引用有效性：双向。
+    引用存在的目标 → 不报；引用不存在的目标（断链）→ WARN 报。
+    """
+    from check_quality import check_markdown_quality
+
+    def _run_md(text):
+        with tempfile.NamedTemporaryFile(
+                "w", suffix=".md", delete=False, encoding="utf-8") as f:
+            f.write(text)
+            path = f.name
+        try:
+            issues, _ = check_markdown_quality(path)
+        finally:
+            os.unlink(path)
+        return issues
+
+    # ---- 干净稿：所有交叉引用目标都存在 → A5 零报 ----
+    clean = (
+        "# 第1章 绪论\n本研究方法见第2章。\n\n"
+        "# 第2章 方法\n\n## 2.1 流程\n图 2-1：实验流程图\n\n"
+        "如图 2-1 所示。详见第 2.1 节。\n\n"
+        "表 2-1：参数配置表\n\n见表 2-1，参数已列出。\n\n"
+        "# 附录 A 原始数据\n原始数据见附录 A。\n"
+    )
+    a5_clean = _a5_issues(_run_md(clean))
+    assert a5_clean == [], f"有效交叉引用不应报断链：{[i['message'] for i in a5_clean]}"
+
+    # ---- 脏稿：图/表/节/附录均断链 → 4 类各至少 1 报，且全为 warning ----
+    dirty = (
+        "# 第1章 绪论\n\n"
+        "# 第2章 实验\n见图 9-9 不存在。见表 8-8 不存在。\n"
+        "见第 99 节不存在。见附录 Z 不存在。\n"
+    )
+    a5_dirty = _a5_issues(_run_md(dirty))
+    msgs = " ".join(i["message"] for i in a5_dirty)
+    assert "图 9-9" in msgs, f"断链图 9-9 应报：{msgs}"
+    assert "表 8-8" in msgs, f"断链表 8-8 应报：{msgs}"
+    assert "节 99" in msgs, f"断链第 99 节应报：{msgs}"
+    assert "附录 Z" in msgs, f"断链附录 Z 应报：{msgs}"
+    assert all(i["level"] == "warning" for i in a5_dirty), \
+        f"A5 断链必须全为 warning（保守不阻断）：{a5_dirty}"
+
+
 def _formula_issues(issues):
     return [i for i in issues if i.get("category") == "公式编号"]
 
@@ -443,5 +491,8 @@ if __name__ == "__main__":
 
     test_check_quality_formula_numbering()
     print("OK 契约7 check_quality A1 公式编号连续")
+
+    test_check_quality_a5_crossref_validity()
+    print("OK 契约8 check_quality A5 章节交叉引用有效性")
 
     print("ALL OK")
