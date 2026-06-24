@@ -259,10 +259,113 @@ def test_make_reference_docx_output_flag_does_not_touch_template() -> None:
     )
 
 
+# ---------------------------------------------------------------------------
+# Citation-integrity gates (J4 completeness / J5 self-citation / J7 recency /
+# A4 bidirectional). Pure-function assertions over citation_guard_core.
+# ---------------------------------------------------------------------------
+def test_j4_completeness() -> None:
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "citation_guard_core", str(SCRIPTS_DIR / "citation_guard_core.py")
+    )
+    core = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(core)
+
+    # Missing field caught: no title -> incomplete.
+    assert core.check_completeness({"doi": "10.1/x"})["status"] == "incomplete", \
+        "J4: missing title must be incomplete"
+    # No identifier and no raw fallback -> incomplete (identifier listed).
+    r = core.check_completeness({"title": "X", "authors": ["A B"]})
+    assert r["status"] == "incomplete" and "identifier" in r["missing_fields"], \
+        "J4: no DOI/PMID/raw must be incomplete"
+    # Complete article: not flagged.
+    full = {"title": "X", "authors": ["Smith J"], "journal": "Nat",
+            "year": 2020, "volume": "1", "pages": "1-9", "doi": "10.1/x"}
+    assert core.check_completeness(full)["status"] == "ok", \
+        "J4: complete article must not be flagged"
+    assert core.check_completeness(full)["missing_fields"] == [], \
+        "J4: complete article must have no missing fields"
+    # raw_only entry (PPE-style: only raw_vancouver + identifier) NOT incomplete.
+    raw_entry = {"title": "X", "raw_vancouver": "BRAY F. ...", "doi": "10.1/x"}
+    assert core.check_completeness(raw_entry)["status"] == "raw_only", \
+        "J4: raw_only entry must not be judged incomplete"
+
+
+def test_j5_self_citation() -> None:
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "citation_guard_core", str(SCRIPTS_DIR / "citation_guard_core.py")
+    )
+    core = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(core)
+
+    # Empty authors -> skipped (never errors / never blocks existing projects).
+    assert core.check_self_citation([{"authors": ["A"]}], [])["status"] == "skipped", \
+        "J5: empty manuscript_authors must skip"
+    # High self-citation (2/3) -> warn. "Smith J" must match "John Smith".
+    high = [{"authors": ["Smith J", "Lee K"]}, {"authors": ["Doe A"]},
+            {"authors": ["Smith J", "Wu Q"]}]
+    res = core.check_self_citation(high, ["John Smith"])
+    assert res["status"] == "warn" and res["count"] == 2, \
+        f"J5: high self-citation must warn, got {res}"
+    # Low self-citation (1/10) -> ok (no false alarm).
+    low = [{"authors": ["Smith J"]}] + [{"authors": [f"X{i} Y"]} for i in range(9)]
+    assert core.check_self_citation(low, ["John Smith"])["status"] == "ok", \
+        "J5: low self-citation must not warn"
+
+
+def test_j7_recency() -> None:
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "citation_guard_core", str(SCRIPTS_DIR / "citation_guard_core.py")
+    )
+    core = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(core)
+
+    # Low recency (1/5 within window) -> warn.
+    old = [{"year": y} for y in (2005, 2006, 2007, 2008, 2025)]
+    assert core.check_recency(old, 2026)["status"] == "warn", \
+        "J7: low recency must warn"
+    # Healthy recency -> ok.
+    fresh = [{"year": y} for y in (2023, 2024, 2025)]
+    assert core.check_recency(fresh, 2026)["status"] == "ok", \
+        "J7: healthy recency must not warn"
+    # No usable years -> skipped.
+    assert core.check_recency([{"title": "x"}], 2026)["status"] == "skipped", \
+        "J7: no years must skip"
+
+
+def test_a4_bidirectional() -> None:
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "citation_guard_core", str(SCRIPTS_DIR / "citation_guard_core.py")
+    )
+    core = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(core)
+
+    # Zombie (listed-not-cited) + orphan (cited-not-listed) both caught.
+    res = core.check_bidirectional({1, 2, 99}, {1, 2, 3})
+    assert res["status"] == "fail", "A4: broken pairing must fail"
+    assert res["orphans"] == [99], f"A4: orphan must be [99], got {res['orphans']}"
+    assert res["zombies"] == [3], f"A4: zombie must be [3], got {res['zombies']}"
+    # Clean pairing -> ok, no false positives.
+    clean = core.check_bidirectional({1, 2, 3}, {1, 2, 3})
+    assert clean["status"] == "ok" and not clean["orphans"] and not clean["zombies"], \
+        "A4: clean pairing must not be flagged"
+
+
 if __name__ == "__main__":
     test_abbreviation_lowercase_filename_and_lowercase_definition()
     test_abbreviation_uppercase_definition_still_detected()
     test_bare_abbr_pattern_greek_suffix_not_truncated()
     test_figure_gate_plural_section_ids_pass_and_block()
     test_make_reference_docx_output_flag_does_not_touch_template()
-    print("OK: all format-contract regression tests passed (3 bugs locked)")
+    test_j4_completeness()
+    test_j5_self_citation()
+    test_j7_recency()
+    test_a4_bidirectional()
+    print("OK: all format-contract regression tests passed (3 bugs + 4 citation gates locked)")

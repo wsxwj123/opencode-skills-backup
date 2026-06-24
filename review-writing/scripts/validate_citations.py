@@ -1,12 +1,165 @@
 #!/usr/bin/env python3
 import argparse
+import datetime
 import json
 import os
+import re
 import sys
 import time
 from urllib import error, parse, request
 
 from citation_utils import extract_citation_ids
+
+# --- Citation-integrity gates (J4 completeness / J5 self-citation / J7 recency).
+# Self-contained here (no shared-core dependency) so the review skill stays
+# decoupled. Mirrors the semantics of general-sci-writing's citation_guard_core.
+
+ARTICLE_EXPECTED_FIELDS = ("authors", "title", "journal", "year", "volume", "pages")
+RAW_CITATION_FIELDS = ("raw_vancouver", "raw_entry", "raw")
+
+
+def _entry_has_author(entry):
+    a = entry.get("authors")
+    if isinstance(a, list):
+        return any(str(x).strip() for x in a)
+    if isinstance(a, str) and a.strip():
+        return True
+    return bool(str(entry.get("author") or "").strip())
+
+
+def _has_raw_citation(entry):
+    return any(str(entry.get(k) or "").strip() for k in RAW_CITATION_FIELDS)
+
+
+def check_completeness(entry):
+    """J4 — bibliographic completeness for one entry (fail-closed when incomplete).
+
+    Hard floor: title missing, OR no DOI/PMID and no raw citation string. Entries
+    with an identifier or raw Vancouver string are renderable, so missing
+    sub-fields are advisory only. raw_only = structured fields absent but a raw
+    string present.
+    """
+    title = str(entry.get("title") or "").strip()
+    doi = str(entry.get("doi") or "").strip()
+    pmid = str(entry.get("pmid") or "").strip()
+    has_identifier = bool(doi or pmid)
+    raw_only_source = _has_raw_citation(entry)
+
+    missing = []
+    for f in ARTICLE_EXPECTED_FIELDS:
+        if f == "authors":
+            if not _entry_has_author(entry):
+                missing.append("authors")
+        elif not str(entry.get(f) or "").strip():
+            missing.append(f)
+
+    if not title:
+        return {"status": "incomplete", "missing_fields": missing or ["title"], "raw_only": False}
+    if not has_identifier and not raw_only_source:
+        if "title" not in missing:
+            missing = [*missing, "identifier"]
+        return {"status": "incomplete", "missing_fields": missing, "raw_only": False}
+
+    structured_present = _entry_has_author(entry) or any(
+        str(entry.get(f) or "").strip() for f in ("journal", "volume", "pages")
+    )
+    if not structured_present and raw_only_source:
+        return {"status": "raw_only", "missing_fields": missing, "raw_only": True}
+    return {"status": "ok", "missing_fields": missing, "raw_only": False}
+
+
+def _name_key(name):
+    s = str(name or "").strip().lower()
+    s = re.sub(r"[^a-z0-9一-鿿]+", " ", s).strip()
+    if not s:
+        return None
+    if re.search(r"[一-鿿]", s):
+        return (re.sub(r"\s+", "", s), frozenset())
+    toks = [t for t in s.split() if t]
+    if not toks:
+        return None
+    if len(toks) == 1:
+        return (toks[0], frozenset())
+    surname = max(toks, key=len)
+    initials = frozenset(t[0] for t in toks if t != surname and t)
+    return (surname, initials)
+
+
+def _names_match(a, b):
+    if a[0] != b[0]:
+        return False
+    return (not a[1]) or (not b[1]) or bool(a[1] & b[1])
+
+
+def _split_author_field(value):
+    if isinstance(value, list):
+        return [str(x) for x in value]
+    if isinstance(value, str) and value.strip():
+        return re.split(r"\s*(?:;|\band\b|&|\bet al\.?)\s*", value)
+    return []
+
+
+def _entry_author_keys(entry):
+    names = _split_author_field(entry.get("authors"))
+    if not names and entry.get("author"):
+        names = _split_author_field(entry.get("author"))
+    return [k for k in (_name_key(n) for n in names) if k is not None]
+
+
+def check_self_citation(entries, manuscript_authors, threshold=0.4):
+    """J5 — self-citation overuse (WARN). Empty authors -> skipped."""
+    author_keys = [k for k in (_name_key(a) for a in (manuscript_authors or [])) if k is not None]
+    if not author_keys:
+        return {"status": "skipped", "reason": "no_manuscript_authors"}
+    total_with_authors = 0
+    self_count = 0
+    for e in entries:
+        entry_keys = _entry_author_keys(e)
+        if not entry_keys:
+            continue
+        total_with_authors += 1
+        if any(_names_match(ma, ea) for ma in author_keys for ea in entry_keys):
+            self_count += 1
+    if total_with_authors == 0:
+        return {"status": "skipped", "reason": "no_entries_with_authors"}
+    self_ratio = self_count / total_with_authors
+    return {
+        "status": "warn" if self_ratio > threshold else "ok",
+        "self_ratio": round(self_ratio, 4),
+        "count": self_count,
+        "total_with_authors": total_with_authors,
+        "threshold": threshold,
+    }
+
+
+def check_recency(entries, current_year, window=5, min_recent_ratio=0.3):
+    """J7 — citation recency (WARN). No usable years -> skipped."""
+    cutoff = current_year - window + 1
+    total_with_year = 0
+    recent_count = 0
+    for e in entries:
+        raw_year = e.get("year")
+        if raw_year is None or str(raw_year).strip() == "":
+            continue
+        try:
+            yr = int(str(raw_year).strip()[:4])
+        except (ValueError, TypeError):
+            continue
+        total_with_year += 1
+        if yr >= cutoff:
+            recent_count += 1
+    if total_with_year == 0:
+        return {"status": "skipped", "reason": "no_entries_with_year"}
+    recent_ratio = recent_count / total_with_year
+    return {
+        "status": "warn" if recent_ratio < min_recent_ratio else "ok",
+        "recent_ratio": round(recent_ratio, 4),
+        "recent_count": recent_count,
+        "total_with_year": total_with_year,
+        "window": window,
+        "current_year": current_year,
+        "min_recent_ratio": min_recent_ratio,
+    }
 
 
 def scan_drafts(root_dir):
@@ -213,6 +366,15 @@ def main():
     parser.add_argument("--fail-on-orphan", action="store_true", help="Exit non-zero if orphan citations exist")
     parser.add_argument("--fail-on-live", action="store_true", help="Exit non-zero if live checks fail")
     parser.add_argument("--fail-on-trace", action="store_true", help="Exit non-zero if source traceability checks fail")
+    # Citation-integrity gates (J4 completeness fail-closed; J5/J7 advisory WARN).
+    parser.add_argument("--gates", action="store_true",
+                        help="Run J4 completeness + J5 self-citation + J7 recency gates")
+    parser.add_argument("--state-path", default="state.json",
+                        help="state.json holding manuscript authors (J5)")
+    parser.add_argument("--current-year", type=int, default=None,
+                        help="Current year for J7 recency (default: system clock)")
+    parser.add_argument("--fail-on-incomplete", action="store_true",
+                        help="Exit non-zero if any J4-incomplete entry exists (fail-closed)")
     args = parser.parse_args()
 
     if not os.path.exists(args.drafts_dir):
@@ -297,6 +459,59 @@ def main():
         for gid, code, reason in live["failures"]:
             print(f"[LIVE-FAIL] global_id={gid} code={code} reason={reason}")
 
+    incomplete_entries = []
+    if args.gates:
+        # J4 — per-entry completeness.
+        raw_only_count = 0
+        partial = []
+        for item in entries:
+            res = check_completeness(item)
+            gid = item.get("global_id")
+            if res["status"] == "incomplete":
+                incomplete_entries.append((gid, res["missing_fields"]))
+            elif res["status"] == "raw_only":
+                raw_only_count += 1
+            elif res["missing_fields"]:
+                partial.append((gid, res["missing_fields"]))
+
+        # J5 — self-citation (authors from state.json).
+        manuscript_authors = []
+        if os.path.exists(args.state_path):
+            try:
+                with open(args.state_path, "r", encoding="utf-8") as f:
+                    state = json.load(f)
+                a = state.get("authors") if isinstance(state, dict) else None
+                if isinstance(a, list):
+                    manuscript_authors = [str(x) for x in a]
+            except (OSError, ValueError):
+                pass
+        self_cite = check_self_citation(entries, manuscript_authors)
+
+        # J7 — recency.
+        current_year = args.current_year or datetime.datetime.now(datetime.timezone.utc).year
+        recency = check_recency(entries, current_year)
+
+        print("-" * 40)
+        print("CITATION-INTEGRITY GATES")
+        print("-" * 40)
+        print(f"J4 completeness: incomplete={len(incomplete_entries)} "
+              f"raw_only={raw_only_count} partial={len(partial)} [fail-closed]")
+        for gid, miss in incomplete_entries:
+            print(f"[J4-FAIL] global_id={gid} missing={miss}")
+        if self_cite["status"] == "skipped":
+            print(f"J5 self-citation: skipped ({self_cite['reason']}) [warn]")
+        else:
+            print(f"J5 self-citation: status={self_cite['status']} "
+                  f"ratio={self_cite['self_ratio']} ({self_cite['count']}/"
+                  f"{self_cite['total_with_authors']}) threshold={self_cite['threshold']} [warn]")
+        if recency["status"] == "skipped":
+            print(f"J7 recency: skipped ({recency['reason']}) [warn]")
+        else:
+            print(f"J7 recency: status={recency['status']} "
+                  f"recent_ratio={recency['recent_ratio']} "
+                  f"({recency['recent_count']}/{recency['total_with_year']} within "
+                  f"{recency['window']}y) min={recency['min_recent_ratio']} [warn]")
+
     # Duplicate global_ids are unconditional data corruption: always fatal,
     # independent of any --fail-on-* switch.
     should_fail = (
@@ -304,6 +519,7 @@ def main():
         or (args.fail_on_orphan and bool(orphans))
         or (args.fail_on_live and live_failures > 0)
         or (args.fail_on_trace and bool(trace_failures))
+        or (args.fail_on_incomplete and bool(incomplete_entries))
     )
     if should_fail:
         sys.exit(2)
