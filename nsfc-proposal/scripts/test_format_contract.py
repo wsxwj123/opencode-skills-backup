@@ -309,9 +309,82 @@ def test_charlevel_bidirectional() -> None:
     print("契约 4 (字符级 D1/D2/F1 双向断言, 全 WARN) OK")
 
 
+# ---------------------------------------------------------------------------
+# 契约 5：consistency_mapper 字段名契约（防"字段名错配静默全 PASS=假绿"）
+# 实测背景：consistency_map 顶层键名为 hypotheses/research_contents 等非直觉名，
+# 调用方易写成 h_nodes/reseach_contents。旧行为下 load_map 把错键当未知数据丢弃、
+# 正确键 setdefault 成空集合，validate 便 vacuously 全 PASS、rc=0 —— 假绿。
+#   - 正例：标准键名的最小合法全链 → validate PASS（rc=0）。
+#   - 反例：所有顶层键错配（real data 落在未知键上，集合全空）→ 必须 fail-closed
+#           （rc≠0），不得返回"全 PASS / rc=0"。固化 unknown_top_level_keys 守卫行为。
+# ---------------------------------------------------------------------------
+def test_consistency_mapper_field_name_contract() -> None:
+    # 标准键名最小全链：Phase 2 规则全过，且无未知键 → rc=0
+    correct_map = {
+        "scientific_questions": [{"id": "SQ-1"}],
+        "hypotheses": [{"id": "H-1", "mapped_from_sq": ["SQ-1"],
+                        "mapped_to_objective": "O-1", "mapped_to_rc": "RC-1",
+                        "mapped_to_ksq": "KSQ-1"}],
+        "objectives": [{"id": "O-1"}],
+        "key_scientific_problems": [{"id": "KSQ-1", "mapped_from_sq": ["SQ-1"]}],
+        "research_contents": [{"id": "RC-1", "mapped_to_method": ["M-1"],
+                               "annual_plan_year": 1}],
+        "methodologies": [{"id": "M-1"}],
+        "innovations": [{"id": "IN-1", "mapped_from_rc": ["RC-1"],
+                         "mapped_from_method": ["M-1"]}],
+        "feasibility_evidence": [],
+        "keywords_trace": {},
+    }
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        ok = d / "cm_correct.json"
+        ok.write_text(json.dumps(correct_map), encoding="utf-8")
+        rc = _run("consistency_mapper.py",
+                  ["--path", str(ok), "validate", "--phase", "2"], d)
+        assert rc == 0, f"标准键名最小全链应 PASS rc=0，实得 {rc}"
+
+        # 错配键名：把整张图的键全写错（hypotheses→h_nodes 等）。
+        # real data 落到未知键、标准集合全空 —— 旧行为会假绿 rc=0；守卫后必须 rc!=0。
+        wrong_map = {
+            "scientific_questions_": correct_map["scientific_questions"],  # 拼错
+            "h_nodes": correct_map["hypotheses"],                          # hypotheses 错配
+            "objs": correct_map["objectives"],
+            "ksqs": correct_map["key_scientific_problems"],
+            "reseach_contents": correct_map["research_contents"],          # research 拼错
+            "methods": correct_map["methodologies"],
+        }
+        bad = d / "cm_wrong.json"
+        bad.write_text(json.dumps(wrong_map), encoding="utf-8")
+        # phase 7（全量规则）下尤其危险：若守卫缺失，空集合令所有规则 vacuously PASS。
+        rc7 = _run("consistency_mapper.py",
+                   ["--path", str(bad), "validate", "--phase", "7"], d)
+        assert rc7 != 0, f"字段名全错配不得假绿（phase7 应 rc!=0），实得 {rc7}"
+        rc2 = _run("consistency_mapper.py",
+                   ["--path", str(bad), "validate", "--phase", "2"], d)
+        assert rc2 != 0, f"字段名全错配不得假绿（phase2 应 rc!=0），实得 {rc2}"
+
+        # 部分错配（hypotheses→h_nodes，其余正确键名存在并引用缺失 ID）同样不得假绿。
+        partial = {
+            "scientific_questions": [{"id": "SQ-1"}],
+            "h_nodes": correct_map["hypotheses"],
+            "objectives": correct_map["objectives"],
+            "key_scientific_problems": correct_map["key_scientific_problems"],
+            "research_contents": correct_map["research_contents"],
+            "methodologies": correct_map["methodologies"],
+        }
+        pbad = d / "cm_partial.json"
+        pbad.write_text(json.dumps(partial), encoding="utf-8")
+        rcp = _run("consistency_mapper.py",
+                   ["--path", str(pbad), "validate", "--phase", "2"], d)
+        assert rcp != 0, f"部分字段名错配不得假绿，实得 {rcp}"
+
+    print("契约 5 (consistency_mapper 字段名契约：标准名 PASS / 错配名不假绿) OK")
+
+
 if __name__ == "__main__":
     test_extract_citation_numbers()
     test_consistency_mapper_exit_codes()
+    test_consistency_mapper_field_name_contract()
     test_citation_validator_exit_codes()
     test_diagnosis_engine_exit_codes()
     test_check_gates_exit_codes()

@@ -109,6 +109,73 @@ def test_tracker_fail_on_gap_no_false_positive() -> None:
     )
 
 
+def _collect_pairs(text: str) -> list:
+    """Import build_full_package and run collect_comment_pairs on raw text.
+
+    Imported lazily inside the test so the citation-gate tests above stay
+    independent of python-docx availability.
+    """
+    sys.path.insert(0, str(SCRIPTS_DIR))
+    import build_full_package as bfp  # noqa: E402
+
+    return bfp.collect_comment_pairs(text)
+
+
+def test_unnumbered_editor_block_not_dropped() -> None:
+    # darwin-found bug: an unnumbered single-sentence Editor block was silently
+    # dropped because parse_pairs matched no number. It must now yield one
+    # independent Editor unit (RR7 逐条覆盖无遗漏 + Editor 顶层节点).
+    text = (
+        "Reviewer #1:\n"
+        "Major Comments\n"
+        "1. Please clarify the methods.\n\n"
+        "Editor:\n"
+        "Please add a data availability statement.\n"
+    )
+    pairs = _collect_pairs(text)
+    editor = [p for p in pairs if p.reviewer == "Editor"]
+    assert len(editor) == 1, f"unnumbered Editor block must yield 1 unit, got {len(editor)}"
+    assert "data availability" in editor[0].comment_en, (
+        f"Editor unit must keep block text, got {editor[0].comment_en!r}"
+    )
+    # Editor text must not leak the 'Editor:' header into the comment body.
+    assert not editor[0].comment_en.lower().startswith("editor"), (
+        f"Editor header must be stripped, got {editor[0].comment_en!r}"
+    )
+
+
+def test_unnumbered_multisentence_block_falls_back() -> None:
+    # A multi-sentence block with no numbering must still produce a unit that
+    # preserves the full text rather than being discarded.
+    text = (
+        "Please reduce the abstract to 250 words. "
+        "Also add a graphical abstract. "
+        "Confirm IRB approval number."
+    )
+    pairs = _collect_pairs(text)
+    assert len(pairs) == 1, f"unnumbered multi-sentence block must yield 1 unit, got {len(pairs)}"
+    body = pairs[0].comment_en
+    assert "250 words" in body and "graphical abstract" in body and "IRB" in body, (
+        f"fallback unit must keep whole block text, got {body!r}"
+    )
+
+
+def test_numbered_block_not_regressed() -> None:
+    # A normal numbered block must parse to exactly its numbered comments with
+    # no spurious general fallback unit.
+    text = (
+        "Reviewer #2:\n"
+        "1. Fix typo on line 10.\n"
+        "2. Clarify Figure 3.\n"
+        "3. Add statistics.\n"
+    )
+    pairs = _collect_pairs(text)
+    assert len(pairs) == 3, f"numbered block must yield exactly 3 units, got {len(pairs)}"
+    assert [p.number for p in pairs] == ["1", "2", "3"], (
+        f"numbered comments must keep their numbers, got {[p.number for p in pairs]}"
+    )
+
+
 def main() -> int:
     test_guard_unverified_lenient_by_default()
     test_guard_fail_on_unverified_blocks()
@@ -116,6 +183,9 @@ def main() -> int:
     test_tracker_gap_lenient_by_default()
     test_tracker_fail_on_gap_blocks()
     test_tracker_fail_on_gap_no_false_positive()
+    test_unnumbered_editor_block_not_dropped()
+    test_unnumbered_multisentence_block_falls_back()
+    test_numbered_block_not_regressed()
     print("OK")
     return 0
 
