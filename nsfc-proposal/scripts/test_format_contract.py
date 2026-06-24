@@ -23,6 +23,7 @@ SCRIPTS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS_DIR))
 
 from citation_validator import extract_citation_numbers  # noqa: E402
+from humanizer_zh import scan_text  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -208,9 +209,105 @@ def test_diagnosis_engine_exit_codes() -> None:
     print("契约 2c (diagnosis_engine: blocked→1 / pass→0) OK")
 
 
+# ---------------------------------------------------------------------------
+# 契约 3：check-gates 引用门禁（J4 fail-closed / J5,J7 WARN）
+# J4 著录不完整 → exit 2；J5 自引 / J7 时效仅告警，不改退出码 → exit 0。
+# ---------------------------------------------------------------------------
+def _codes(text: str) -> set[str]:
+    return {i["code"] for i in scan_text(text)["issues"]}
+
+
+def test_check_gates_exit_codes() -> None:
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        profile = d / "proposal_profile.json"
+        profile.write_text(json.dumps({"applicant_authors": ["张三"]}), encoding="utf-8")
+
+        # J4 fail-closed：某条无 title 且无 DOI/PMID/raw → incomplete → rc=2
+        idx_bad = d / "idx_bad.json"
+        idx_bad.write_text(json.dumps({"metadata": {}, "entries": [
+            {"ref_number": 1, "doi": "", "pmid": "", "title": ""},
+        ]}), encoding="utf-8")
+        rc = _run("citation_validator.py",
+                  ["check-gates", "--index", str(idx_bad),
+                   "--profile", str(profile), "--current-year", "2026"], d)
+        assert rc == 2, f"J4 著录不完整应 fail-closed rc=2，实得 {rc}"
+
+        # 全 pass：J4 完整（有 title+DOI）；J5 自引超阈/J7 时效偏旧 仅 WARN → rc=0
+        idx_warn = d / "idx_warn.json"
+        idx_warn.write_text(json.dumps({"metadata": {}, "entries": [
+            {"ref_number": 1, "title": "T1", "doi": "10.1/a",
+             "authors": ["张三"], "year": 2008},
+            {"ref_number": 2, "title": "T2", "doi": "10.1/b",
+             "authors": ["张三"], "year": 2009},
+        ]}), encoding="utf-8")
+        proc = subprocess.run(
+            [sys.executable, str(SCRIPTS_DIR / "citation_validator.py"),
+             "check-gates", "--index", str(idx_warn),
+             "--profile", str(profile), "--current-year", "2026"],
+            cwd=str(d), capture_output=True, text=True,
+        )
+        assert proc.returncode == 0, f"J5/J7 仅 WARN 应 rc=0，实得 {proc.returncode}"
+        report = json.loads(proc.stdout)
+        assert report["j5_self_citation"]["status"] == "warn", "J5 应触发 warn（自引比例=1）"
+        assert report["j7_recency"]["status"] == "warn", "J7 应触发 warn（无近 5 年文献）"
+        assert report["j4_completeness"]["strength"] == "fail-closed"
+        assert report["j5_self_citation"]["strength"] == "warn"
+        assert report["j7_recency"]["strength"] == "warn"
+
+        # J5 skip：profile 无 applicant_authors → 不报错、status=skipped → rc=0
+        empty_profile = d / "empty_profile.json"
+        empty_profile.write_text("{}", encoding="utf-8")
+        proc2 = subprocess.run(
+            [sys.executable, str(SCRIPTS_DIR / "citation_validator.py"),
+             "check-gates", "--index", str(idx_warn),
+             "--profile", str(empty_profile), "--current-year", "2026"],
+            cwd=str(d), capture_output=True, text=True,
+        )
+        assert proc2.returncode == 0, "无 authors 时 check-gates 应 rc=0"
+        assert json.loads(proc2.stdout)["j5_self_citation"]["status"] == "skipped", \
+            "无 applicant_authors → J5 应 skip"
+
+    print("契约 3 (check-gates: J4→2 / J5,J7 warn→0 / J5 skip) OK")
+
+
+# ---------------------------------------------------------------------------
+# 契约 4：字符级检查双向断言（D1 半角 / D2 上下标裸写 / F1 错别字，全 WARN）
+# 正例必报对应 code；反例（干净/已正确标注）不得误报。
+# ---------------------------------------------------------------------------
+def test_charlevel_bidirectional() -> None:
+    # D1 正例：中文句内夹半角逗号
+    assert "halfwidth_punct_in_cn" in _codes("本实验,采用细胞模型。"), "D1 应报中文句内半角逗号"
+    # D1 反例：全角逗号干净
+    assert "halfwidth_punct_in_cn" not in _codes("本实验，采用细胞模型。"), "D1 不应误报全角逗号"
+    # D1 反例：数字间半角不触发（非汉字两侧）
+    assert "halfwidth_punct_in_cn" not in _codes("剂量为 1,000 mg。"), "D1 不应误报数字千分位"
+
+    # D2 正例：裸写 H2O
+    assert "subsup_bare" in _codes("反应生成 H2O 和热量。"), "D2 应报裸写 H2O"
+    # D2 反例：已用 markdown 下标标注
+    assert "subsup_bare" not in _codes("反应生成 H~2~O 和热量。"), "D2 不应误报已标注上下标"
+
+    # F1 正例：错别字"登陆"
+    assert "chinese_typo" in _codes("用户需要登陆系统后操作。"), "F1 应报错别字'登陆'"
+    # F1 反例：正确写法"登录"
+    assert "chinese_typo" not in _codes("用户需要登录系统后操作。"), "F1 不应误报'登录'"
+
+    # 全 WARN：字符级 issue 不得出现 ERROR 级
+    issues = scan_text("本实验,生成 H2O，用户登陆系统。")["issues"]
+    charlevel = [i for i in issues
+                 if i["code"] in {"halfwidth_punct_in_cn", "subsup_bare", "chinese_typo"}]
+    assert charlevel and all(i["severity"] == "WARNING" for i in charlevel), \
+        "字符级检查必须全为 WARNING 级"
+
+    print("契约 4 (字符级 D1/D2/F1 双向断言, 全 WARN) OK")
+
+
 if __name__ == "__main__":
     test_extract_citation_numbers()
     test_consistency_mapper_exit_codes()
     test_citation_validator_exit_codes()
     test_diagnosis_engine_exit_codes()
+    test_check_gates_exit_codes()
+    test_charlevel_bidirectional()
     print("ALL OK")

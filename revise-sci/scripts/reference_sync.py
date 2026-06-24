@@ -47,6 +47,24 @@ def next_reference_number(existing_lines: list[str]) -> int:
     return (max(numbers) + 1) if numbers else 1
 
 
+def numbering_gaps(reference_lines: list[str]) -> list[int]:
+    """Return missing numbers in the references list, e.g. [1,2,4] -> [3].
+
+    Only the numbered ``N. ...`` lines are considered. Gaps are the integers
+    between the min and max present numbers that are absent (A2 missing-number
+    detection). Non-numbered lines and duplicates are ignored.
+    """
+    numbers = []
+    for line in reference_lines:
+        match = NUMBERED_REF_RE.match(line)
+        if match:
+            numbers.append(int(match.group(1)))
+    if not numbers:
+        return []
+    present = set(numbers)
+    return [n for n in range(min(numbers), max(numbers) + 1) if n not in present]
+
+
 def completed_citation_rows(project_root: Path) -> list[dict]:
     units = [read_json(path, {}) for path in sorted((project_root / "units").glob("*.json"))]
     literature_index = read_json(project_root / "data" / "literature_index.json", [])
@@ -84,6 +102,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Append validated revision citations into the merged manuscript references section")
     parser.add_argument("--project-root", required=True)
     parser.add_argument("--output-md", required=True)
+    parser.add_argument(
+        "--fail-on-gap",
+        action="store_true",
+        help="Exit non-zero if the final references section has numbering gaps (A2 hard gate).",
+    )
     args = parser.parse_args()
 
     project_root = Path(args.project_root)
@@ -142,16 +165,25 @@ def main() -> int:
             lines = new_lines
         write_text(output_md, "\n".join(lines).rstrip() + "\n")
 
+    # Re-parse the final references section so gap detection reflects the merged
+    # state (existing + freshly inserted), not just the pre-sync lines.
+    final_lines = output_md.read_text(encoding="utf-8").splitlines()
+    _, _, final_refs = extract_existing_references(final_lines)
+    gaps = numbering_gaps(final_refs)
+
     report = {
         "references_added": len(insertions),
         "covered_comment_ids": covered_comment_ids,
         "has_references_section": HEADING_RE.search(output_md.read_text(encoding="utf-8")) is not None,
+        "numbering_gaps": gaps,
     }
     write_json(project_root / "reference_sync_report.json", report)
     print(
-        '{"ok": true, "references_added": %d, "covered_comment_ids": %s}'
-        % (report["references_added"], covered_comment_ids)
+        '{"ok": %s, "references_added": %d, "covered_comment_ids": %s, "numbering_gaps": %s}'
+        % ("true" if not gaps else "false", report["references_added"], covered_comment_ids, gaps)
     )
+    if args.fail_on_gap and gaps:
+        return 1
     return 0
 
 

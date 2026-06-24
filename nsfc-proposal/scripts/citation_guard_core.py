@@ -222,6 +222,270 @@ def _verify_title_exists(title: str) -> dict[str, Any] | None:
     return None
 
 
+# ---------------------------------------------------------------------------
+# Citation-integrity gates (J4 completeness / J5 self-citation / J7 recency).
+# Pure functions, no IO. Added independently of validate_core; its signature and
+# return contract are untouched. Adapters (citation_guard.py) wire these to CLI.
+# ---------------------------------------------------------------------------
+
+# Fields a complete journal-article entry is *expected* to carry. The hard floor
+# (whose absence makes an entry truly unusable) is much smaller — see below.
+ARTICLE_EXPECTED_FIELDS = ("authors", "title", "journal", "year", "volume", "pages")
+# Raw-citation fallback fields: when structured fields are missing but one of
+# these holds the full Vancouver/text citation, rendering falls back to it, so
+# the entry is "raw_only", not "incomplete".
+RAW_CITATION_FIELDS = ("raw_vancouver", "raw_entry", "raw")
+
+
+def _entry_has_author(entry: dict[str, Any]) -> bool:
+    a = entry.get("authors")
+    if isinstance(a, list):
+        return any(str(x).strip() for x in a)
+    if isinstance(a, str) and a.strip():
+        return True
+    return bool(str(entry.get("author") or "").strip())
+
+
+def _has_raw_citation(entry: dict[str, Any]) -> bool:
+    return any(str(entry.get(k) or "").strip() for k in RAW_CITATION_FIELDS)
+
+
+def check_completeness(entry: dict[str, Any]) -> dict[str, Any]:
+    """J4 — bibliographic completeness for one entry.
+
+    Hard floor (status="incomplete", caller fails closed):
+      - title missing, OR
+      - no usable handle at all: no DOI AND no PMID AND no raw citation string.
+    An entry with a DOI/PMID or a raw Vancouver string can always be rendered
+    and re-fetched, so it never hard-fails on missing sub-fields alone.
+
+    raw_only (status="raw_only"): structured fields (authors/journal/...) are
+    absent but a raw citation string is present — rendering falls back to it.
+    Not an error; reported so callers can surface it without blocking.
+
+    complete / partial (status="ok"): structured fields present; any expected
+    article fields still missing are listed in ``missing_fields`` as advisory
+    (never blocking on their own).
+
+    Returns: {status, missing_fields[], has_identifier, raw_only}.
+    """
+    title = str(entry.get("title") or "").strip()
+    doi = str(entry.get("doi") or "").strip()
+    pmid = str(entry.get("pmid") or "").strip()
+    has_identifier = bool(doi or pmid)
+    raw_only_source = _has_raw_citation(entry)
+
+    missing: list[str] = []
+    for f in ARTICLE_EXPECTED_FIELDS:
+        if f == "authors":
+            if not _entry_has_author(entry):
+                missing.append("authors")
+        elif not str(entry.get(f) or "").strip():
+            missing.append(f)
+
+    # Hard floor.
+    if not title:
+        return {"status": "incomplete", "missing_fields": missing or ["title"],
+                "has_identifier": has_identifier, "raw_only": False}
+    if not has_identifier and not raw_only_source:
+        # No identifier and no raw fallback -> cannot render or verify.
+        if "title" not in missing:
+            missing = [*missing, "identifier"]
+        return {"status": "incomplete", "missing_fields": missing,
+                "has_identifier": has_identifier, "raw_only": False}
+
+    # Structured fields all absent but a raw citation exists -> raw_only.
+    structured_present = _entry_has_author(entry) or any(
+        str(entry.get(f) or "").strip() for f in ("journal", "volume", "pages")
+    )
+    if not structured_present and raw_only_source:
+        return {"status": "raw_only", "missing_fields": missing,
+                "has_identifier": has_identifier, "raw_only": True}
+
+    return {"status": "ok", "missing_fields": missing,
+            "has_identifier": has_identifier, "raw_only": False}
+
+
+def _name_key(name: str) -> tuple[str, frozenset[str]] | None:
+    """Reduce a person name to a (surname, given-initials) key for matching.
+
+    Handles the two formats that collide in practice:
+      - "Smith J" / "Smith, J" (Vancouver, surname first)
+      - "John Smith" / "J. Smith" (natural order, surname last)
+    The longest alphabetic token is taken as the surname; every other token
+    contributes its first letter to the initials set. "Smith J" and "John Smith"
+    both map to ("smith", {"j"}) -> match. CJK names map to (joined, ∅).
+
+    Returns None for empty/unusable names.
+    """
+    s = str(name or "").strip().lower()
+    s = re.sub(r"[^a-z0-9一-鿿]+", " ", s).strip()
+    if not s:
+        return None
+    if re.search(r"[一-鿿]", s):
+        return (re.sub(r"\s+", "", s), frozenset())
+    toks = [t for t in s.split() if t]
+    if not toks:
+        return None
+    if len(toks) == 1:
+        return (toks[0], frozenset())
+    # Surname = longest token (initials are length-1; full surnames are longer).
+    surname = max(toks, key=len)
+    initials = frozenset(t[0] for t in toks if t != surname and t)
+    return (surname, initials)
+
+
+def _names_match(a: tuple[str, frozenset[str]], b: tuple[str, frozenset[str]]) -> bool:
+    if a[0] != b[0]:
+        return False
+    # Same surname: match if either side has no given initials, or they overlap.
+    return (not a[1]) or (not b[1]) or bool(a[1] & b[1])
+
+
+def _split_author_field(value: Any) -> list[str]:
+    if isinstance(value, list):
+        return [str(x) for x in value]
+    if isinstance(value, str) and value.strip():
+        return re.split(r"\s*(?:;|\band\b|&|\bet al\.?)\s*", value)
+    return []
+
+
+def _entry_author_keys(entry: dict[str, Any]) -> list[tuple[str, frozenset[str]]]:
+    names = _split_author_field(entry.get("authors"))
+    if not names and entry.get("author"):
+        names = _split_author_field(entry.get("author"))
+    keys = [_name_key(n) for n in names]
+    return [k for k in keys if k is not None]
+
+
+def check_self_citation(
+    entries: list[dict[str, Any]],
+    manuscript_authors: list[str] | None,
+    threshold: float = 0.4,
+) -> dict[str, Any]:
+    """J5 — self-citation overuse (advisory / WARN).
+
+    A reference counts as a self-citation when at least one normalized
+    manuscript-author name appears among its authors. self_ratio = self-cited /
+    total entries that *have* author data (entries with no authors are excluded
+    from the denominator so raw_only/identifier-only refs don't dilute it).
+
+    manuscript_authors empty/None -> {"status": "skipped"} (graceful, never an
+    error): existing projects with no authors field keep working untouched.
+
+    Returns when authors known:
+      {status: "ok"|"warn", self_ratio, count, total_with_authors, threshold}.
+    """
+    author_keys = [k for k in (_name_key(a) for a in (manuscript_authors or [])) if k is not None]
+    if not author_keys:
+        return {"status": "skipped", "reason": "no_manuscript_authors"}
+
+    total_with_authors = 0
+    self_count = 0
+    for e in entries:
+        if not isinstance(e, dict):
+            continue
+        entry_keys = _entry_author_keys(e)
+        if not entry_keys:
+            continue
+        total_with_authors += 1
+        if any(_names_match(ma, ea) for ma in author_keys for ea in entry_keys):
+            self_count += 1
+
+    if total_with_authors == 0:
+        return {"status": "skipped", "reason": "no_entries_with_authors"}
+
+    self_ratio = self_count / total_with_authors
+    status = "warn" if self_ratio > threshold else "ok"
+    return {
+        "status": status,
+        "self_ratio": round(self_ratio, 4),
+        "count": self_count,
+        "total_with_authors": total_with_authors,
+        "threshold": threshold,
+    }
+
+
+def check_recency(
+    entries: list[dict[str, Any]],
+    current_year: int,
+    window: int = 5,
+    min_recent_ratio: float = 0.3,
+) -> dict[str, Any]:
+    """J7 — citation recency (advisory / WARN).
+
+    recent_ratio = entries published within the last ``window`` years (inclusive
+    of current_year) over entries that carry a parseable year. ``current_year``
+    is supplied by the caller (scripts must not call Date.now()).
+
+    No entries with a usable year -> {"status": "skipped"}.
+
+    Returns: {status: "ok"|"warn", recent_ratio, recent_count, total_with_year,
+              window, current_year, min_recent_ratio}.
+    """
+    cutoff = current_year - window + 1
+    total_with_year = 0
+    recent_count = 0
+    for e in entries:
+        if not isinstance(e, dict):
+            continue
+        raw_year = e.get("year")
+        if raw_year is None or str(raw_year).strip() == "":
+            continue
+        try:
+            yr = int(str(raw_year).strip()[:4])
+        except (ValueError, TypeError):
+            continue
+        total_with_year += 1
+        if yr >= cutoff:
+            recent_count += 1
+
+    if total_with_year == 0:
+        return {"status": "skipped", "reason": "no_entries_with_year"}
+
+    recent_ratio = recent_count / total_with_year
+    status = "warn" if recent_ratio < min_recent_ratio else "ok"
+    return {
+        "status": status,
+        "recent_ratio": round(recent_ratio, 4),
+        "recent_count": recent_count,
+        "total_with_year": total_with_year,
+        "window": window,
+        "current_year": current_year,
+        "min_recent_ratio": min_recent_ratio,
+    }
+
+
+def check_bidirectional(
+    cited_numbers: set[int] | set[str],
+    listed_numbers: set[int] | set[str],
+) -> dict[str, Any]:
+    """A4 — bidirectional citation/list integrity (fail-closed when broken).
+
+    Both inputs are sets of citation numbers, already extracted by the adapter:
+      - cited_numbers: every [n] appearing in the manuscript body.
+      - listed_numbers: every entry number present in the reference list.
+
+    orphans  = cited but not listed  (a [n] in text with no list entry).
+    zombies  = listed but not cited  (a list entry never referenced in text).
+
+    Returns: {status: "ok"|"fail", orphans[], zombies[]} with sorted numeric
+    lists. Caller treats status=="fail" as blocking.
+    """
+    def _as_int(x: Any) -> int | None:
+        try:
+            return int(str(x).strip())
+        except (ValueError, TypeError):
+            return None
+
+    cited = {v for v in (_as_int(x) for x in cited_numbers) if v is not None}
+    listed = {v for v in (_as_int(x) for x in listed_numbers) if v is not None}
+    orphans = sorted(cited - listed)
+    zombies = sorted(listed - cited)
+    status = "fail" if (orphans or zombies) else "ok"
+    return {"status": status, "orphans": orphans, "zombies": zombies}
+
+
 def _provider_family(raw: str) -> str:
     """Map a raw provider string to its family.
 
