@@ -111,6 +111,12 @@ def is_heading(row: dict[str, Any]) -> bool:
 
 REFERENCE_HEADINGS = {"references", "reference", "参考文献", "bibliography", "literature cited"}
 
+
+def _strip_heading_number(text: str) -> str:
+    """Strip a leading section number from a heading, e.g. '9. References' ->
+    'References', '6 参考文献' -> '参考文献'. Leaves un-numbered headings intact."""
+    return re.sub(r"^\d+(?:\.\d+)*[.、]?\s*", "", text).strip()
+
 # In-text figure reference, capturing the figure number. Matches "Figure 1",
 # "Fig. 2", "Fig 3", "图 4". A trailing panel letter (1A) is allowed but the
 # number alone is captured for keying.
@@ -231,7 +237,7 @@ def read_md_paragraphs(path: Path) -> list[dict[str, Any]]:
         clean = re.sub(r"^#{1,6}\s*", "", line)
         if is_md_heading:
             # A new heading ends any preceding chapter's reference list.
-            in_references = normalize_ws(clean).lower() in REFERENCE_HEADINGS
+            in_references = _strip_heading_number(normalize_ws(clean).lower()) in REFERENCE_HEADINGS
             emit_heading(clean)
             continue
         if in_references:
@@ -298,7 +304,8 @@ def find_reference_section_starts(rows: list[dict[str, Any]]) -> list[int]:
     return [
         i
         for i, row in enumerate(rows)
-        if normalize_ws(row.get("text", "")).lower() in REFERENCE_HEADINGS
+        if _strip_heading_number(normalize_ws(row.get("text", "")).lower())
+        in REFERENCE_HEADINGS
     ]
 
 
@@ -314,7 +321,7 @@ def reference_section_spans(rows: list[dict[str, Any]]) -> list[tuple[int, int]]
             text = normalize_ws(rows[j].get("text", ""))
             if not text:
                 continue
-            if is_heading(rows[j]) and text.lower() not in REFERENCE_HEADINGS:
+            if is_heading(rows[j]) and _strip_heading_number(text.lower()) not in REFERENCE_HEADINGS:
                 end = j
                 break
         spans.append((start, end))

@@ -109,6 +109,37 @@ def test_abbreviation_lowercase_filename_and_lowercase_definition() -> None:
         )
 
 
+def test_abbreviation_fullwidth_parens_definition() -> None:
+    """bug③: 全角括号/全角逗号的中文首展 "聚焦超声（focused ultrasound，FUS）"
+    必须被识别为 FUS 的定义 → 不报 undefined_use；半角 "Photodynamic Therapy (PDT)"
+    不退化。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        man = root / "manuscripts"
+        man.mkdir()
+        (man / "03_results.md").write_text(
+            "我们使用聚焦超声（focused ultrasound，FUS）进行治疗。后续 FUS 加热显著。\n"
+            "Photodynamic Therapy (PDT) was applied; PDT efficacy increased.\n",
+            encoding="utf-8",
+        )
+        (root / "abbreviations.json").write_text("[]", encoding="utf-8")
+
+        proc = _run([str(ABBR_SCRIPT), "--root", str(root)])
+        out = proc.stdout + proc.stderr
+        # 全角首展识别 → FUS 不被当裸用未定义。
+        assert "undefined_use: FUS" not in out, (
+            "full-width 首展 '聚焦超声（focused ultrasound，FUS）' not recognized "
+            f"→ undefined_use false positive.\n--- output ---\n{out}"
+        )
+        # 半角首展不退化。
+        assert "undefined_use: PDT" not in out, (
+            f"half-width '(PDT)' regressed.\n--- output ---\n{out}"
+        )
+        assert proc.returncode == 0, (
+            f"expected rc=0 (clean), got {proc.returncode}\n--- output ---\n{out}"
+        )
+
+
 def test_abbreviation_uppercase_definition_still_detected() -> None:
     """纯正向：仅大写全称定义存在，且无重复 → 必须 rc=0 且不误报 PDT。"""
     with tempfile.TemporaryDirectory() as tmp:
@@ -516,6 +547,7 @@ def test_xsec_ignores_reference_block_pmids() -> None:
 
 if __name__ == "__main__":
     test_abbreviation_lowercase_filename_and_lowercase_definition()
+    test_abbreviation_fullwidth_parens_definition()
     test_abbreviation_uppercase_definition_still_detected()
     test_bare_abbr_pattern_greek_suffix_not_truncated()
     test_figure_gate_plural_section_ids_pass_and_block()

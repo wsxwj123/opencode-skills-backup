@@ -246,6 +246,51 @@ def test_b3_b4_abbreviation_bidirectional() -> None:
             f"clean drafts must not report any FAIL\n{clean.stdout}"
 
 
+# ---------------------------------------------------------------------------
+# Bug ① — _pmid_item_valid：NCBI esummary 对不存在 PMID 返回带 uid 但含 error 的
+#   占位项；必须排除 error 才算真实存在，否则假 PMID 被当真。
+# ---------------------------------------------------------------------------
+def test_pmid_item_valid_rejects_error() -> None:
+    m = _load_validate_module()
+    bad = {"uid": "999999999", "error": "cannot get document summary"}
+    assert m._pmid_item_valid(bad) is False, \
+        "Bug①: esummary item with error must be invalid (假 PMID 不能当真)"
+    good = {"uid": "12345678", "title": "Real Paper", "pubdate": "2020"}
+    assert m._pmid_item_valid(good) is True, \
+        "Bug①: normal esummary item must be valid"
+    assert m._pmid_item_valid({}) is False, "Bug①: empty item invalid"
+    assert m._pmid_item_valid(None) is False, "Bug①: non-dict item invalid"
+
+
+# ---------------------------------------------------------------------------
+# Bug ③ — 全角括号定义识别：聚焦超声（focused ultrasound，FUS）应识别为定义，
+#   FUS 不报 undefined；半角 Photodynamic Therapy (PDT) 不退化。
+# ---------------------------------------------------------------------------
+def test_fullwidth_abbreviation_definition() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        (root / "drafts").mkdir()
+        # 全角定义 + 后续裸用 FUS；半角定义 PDT + 后续裸用 PDT。
+        (root / "drafts" / "01.md").write_text(
+            "# A Review of Tumor Ablation\n\n"
+            "我们采用聚焦超声（focused ultrasound，FUS）进行消融。"
+            "Photodynamic Therapy (PDT) is also discussed.\n",
+            encoding="utf-8")
+        (root / "drafts" / "02.md").write_text(
+            "## Body\nFUS shows promise while PDT remains complementary.\n",
+            encoding="utf-8")
+        res = _run_abbr(["--drafts-dir", "drafts"], root)
+        assert res.returncode == 0, (
+            f"Bug③: 全角定义后裸用必须通过 (rc=0), got {res.returncode}\n"
+            f"{res.stdout}\n{res.stderr}")
+        assert "undefined_use: FUS" not in res.stdout, \
+            f"Bug③: 全角定义的 FUS 不应报 undefined\n{res.stdout}"
+        assert "undefined_use: PDT" not in res.stdout, \
+            f"Bug③: 半角定义的 PDT 不应退化报 undefined\n{res.stdout}"
+        assert "ABBR_CHECK_OK" in res.stdout, \
+            f"Bug③: 全角+半角定义齐全应 OK\n{res.stdout}"
+
+
 if __name__ == "__main__":
     test_j4_completeness()
     test_j5_self_citation()
@@ -253,4 +298,6 @@ if __name__ == "__main__":
     test_j4_fail_closed_end_to_end()
     test_a4_bidirectional_end_to_end()
     test_b3_b4_abbreviation_bidirectional()
-    print("OK: all citation-integrity gate regression tests passed (J4/J5/J7/A4 + B3/B4 abbr locked)")
+    test_pmid_item_valid_rejects_error()
+    test_fullwidth_abbreviation_definition()
+    print("OK: all citation-integrity gate regression tests passed (J4/J5/J7/A4 + B3/B4 abbr + Bug①③ locked)")
