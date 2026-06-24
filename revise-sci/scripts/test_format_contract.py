@@ -420,6 +420,121 @@ def test_delegate_review_unknown_gate_still_exit2() -> None:
     )
 
 
+# ---------------------------------------------------------------------------
+# Bug 7 (residual): pack/verify use it["id"] over gate["items"]; a malformed
+# gate (items elements not dicts / items not a list / gate not a dict) must
+# fail with a friendly exit 2, never a raw TypeError. A normal dict checklist
+# must keep pack->verify behaviour identical.
+# ---------------------------------------------------------------------------
+def _run_delegate_verify(
+    checklist_obj, return_obj, tmp: Path
+) -> subprocess.CompletedProcess:
+    cl = tmp / "checklist.json"
+    cl.write_text(json.dumps(checklist_obj), encoding="utf-8")
+    ret = tmp / ".review_return_g1.json"
+    ret.write_text(json.dumps(return_obj), encoding="utf-8")
+    return subprocess.run(
+        [
+            sys.executable,
+            str(DELEGATE_REVIEW),
+            "verify",
+            "--checklist",
+            str(cl),
+            "--gate",
+            "g1",
+            "--workdir",
+            str(tmp),
+        ],
+        cwd=str(SCRIPTS_DIR),
+        capture_output=True,
+        text=True,
+    )
+
+
+def test_delegate_review_items_string_elements_exit2() -> None:
+    # ① items is a list but elements are strings -> it["id"] would TypeError.
+    bad = {"skill": "x", "gates": {"g1": {"items": ["a", "b"]}}}
+    with tempfile.TemporaryDirectory() as tmp:
+        proc_pack = _run_delegate_pack(bad, Path(tmp))
+        proc_ver = _run_delegate_verify(bad, [], Path(tmp))
+    for label, proc in (("pack", proc_pack), ("verify", proc_ver)):
+        assert proc.returncode == 2, (
+            f"{label}: string-element items must exit 2, got {proc.returncode}\n"
+            f"stderr:\n{proc.stderr}"
+        )
+        assert "Traceback" not in proc.stderr, (
+            f"{label}: must not crash with Traceback; stderr:\n{proc.stderr}"
+        )
+
+
+def test_delegate_review_items_not_list_exit2() -> None:
+    # ② items is a dict (not a list) -> friendly exit 2, no TypeError.
+    bad = {"skill": "x", "gates": {"g1": {"items": {"id": "X1"}}}}
+    with tempfile.TemporaryDirectory() as tmp:
+        proc_pack = _run_delegate_pack(bad, Path(tmp))
+        proc_ver = _run_delegate_verify(bad, [], Path(tmp))
+    for label, proc in (("pack", proc_pack), ("verify", proc_ver)):
+        assert proc.returncode == 2, (
+            f"{label}: dict (non-list) items must exit 2, got {proc.returncode}\n"
+            f"stderr:\n{proc.stderr}"
+        )
+        assert "Traceback" not in proc.stderr, (
+            f"{label}: must not crash with Traceback; stderr:\n{proc.stderr}"
+        )
+
+
+def test_delegate_review_gate_not_dict_exit2() -> None:
+    # ③ gates[gate] is not a dict (e.g. a list) -> friendly exit 2, no TypeError.
+    bad = {"skill": "x", "gates": {"g1": ["not", "a", "dict"]}}
+    with tempfile.TemporaryDirectory() as tmp:
+        proc_pack = _run_delegate_pack(bad, Path(tmp))
+        proc_ver = _run_delegate_verify(bad, [], Path(tmp))
+    for label, proc in (("pack", proc_pack), ("verify", proc_ver)):
+        assert proc.returncode == 2, (
+            f"{label}: non-dict gate object must exit 2, got {proc.returncode}\n"
+            f"stderr:\n{proc.stderr}"
+        )
+        assert "Traceback" not in proc.stderr, (
+            f"{label}: must not crash with Traceback; stderr:\n{proc.stderr}"
+        )
+
+
+def test_delegate_review_normal_checklist_pack_and_verify_ok() -> None:
+    # ④ A well-formed checklist: pack must exit 0; verify with a complete,
+    # evidence-bearing return must pass (exit 0). Behaviour unchanged.
+    good = {
+        "skill": "x",
+        "gates": {
+            "g1": {
+                "title": "Gate One",
+                "items": [
+                    {"id": "X1", "name": "n1", "check": "c1"},
+                    {"id": "X2", "name": "n2", "check": "c2"},
+                ],
+            }
+        },
+    }
+    good_return = [
+        {"id": "X1", "verdict": "pass", "evidence": "ok per file"},
+        {"id": "X2", "verdict": "pass", "evidence": "ok per file"},
+    ]
+    with tempfile.TemporaryDirectory() as tmp:
+        proc_pack = _run_delegate_pack(good, Path(tmp))
+        assert proc_pack.returncode == 0, (
+            f"normal pack must exit 0, got {proc_pack.returncode}\n"
+            f"stderr:\n{proc_pack.stderr}"
+        )
+        assert "X1" in proc_pack.stdout and "X2" in proc_pack.stdout, (
+            "pack output must list both item ids"
+        )
+        proc_ver = _run_delegate_verify(good, good_return, Path(tmp))
+    assert proc_ver.returncode == 0, (
+        f"normal verify with full evidence must exit 0, got {proc_ver.returncode}\n"
+        f"stderr:\n{proc_ver.stderr}"
+    )
+    assert "Traceback" not in proc_ver.stderr
+
+
 def main() -> int:
     test_polish_no_from_a_to_b_forbidden()
     test_intake_rejects_non_docx_manuscript()
@@ -438,6 +553,10 @@ def main() -> int:
     test_manuscript_index_numbered_chinese_references_heading()
     test_delegate_review_malformed_gates_list_exit2()
     test_delegate_review_unknown_gate_still_exit2()
+    test_delegate_review_items_string_elements_exit2()
+    test_delegate_review_items_not_list_exit2()
+    test_delegate_review_gate_not_dict_exit2()
+    test_delegate_review_normal_checklist_pack_and_verify_ok()
     print("OK")
     return 0
 

@@ -54,6 +54,37 @@ def _get_gate(checklist: dict, gate: str) -> dict:
     return gates[gate]
 
 
+def _get_items(gate_obj: Any, gate: str) -> list:
+    """校验 gate 对象结构并返回其 items 列表。
+
+    防止畸形 checklist(gate 非 dict / items 非 list / item 非 dict 或缺 id)
+    在 pack/verify 用 `it["id"]` 时抛 TypeError。全部走友好 stderr + exit 2。
+    """
+    if not isinstance(gate_obj, dict):
+        sys.stderr.write(
+            f"[delegate_review] gate '{gate}' 必须是对象(dict)，实际为 {type(gate_obj).__name__}\n"
+        )
+        sys.exit(2)
+    items = gate_obj.get("items")
+    if not isinstance(items, list):
+        sys.stderr.write(
+            f"[delegate_review] gate '{gate}' 的 'items' 必须是数组(list)，实际为 {type(items).__name__}\n"
+        )
+        sys.exit(2)
+    for idx, it in enumerate(items):
+        if not isinstance(it, dict):
+            sys.stderr.write(
+                f"[delegate_review] gate '{gate}' 第 {idx} 项畸形:必须是对象(dict)，实际为 {type(it).__name__}\n"
+            )
+            sys.exit(2)
+        if "id" not in it:
+            sys.stderr.write(
+                f"[delegate_review] gate '{gate}' 第 {idx} 项畸形:缺少 'id' 字段\n"
+            )
+            sys.exit(2)
+    return items
+
+
 def _pkg_record_path(workdir: str, gate: str) -> Path:
     return Path(workdir) / f".review_pkg_{gate}.json"
 
@@ -62,7 +93,7 @@ def cmd_pack(args: argparse.Namespace) -> int:
     checklist = _load_json(args.checklist)
     skill = checklist.get("skill", "?")
     gate = _get_gate(checklist, args.gate)
-    items = gate.get("items", [])
+    items = _get_items(gate, args.gate)
     item_ids = [it["id"] for it in items]
 
     # 写任务包记录(verify 用它确认 gate 一致 + 期望 id)
@@ -139,7 +170,7 @@ def _project_root_for_verify(args: argparse.Namespace) -> str:
 def cmd_verify(args: argparse.Namespace) -> int:
     checklist = _load_json(args.checklist)
     gate = _get_gate(checklist, args.gate)
-    expected = [it["id"] for it in gate.get("items", [])]
+    expected = [it["id"] for it in _get_items(gate, args.gate)]
 
     returned = _load_json(args.return_path)
     if not isinstance(returned, list):
