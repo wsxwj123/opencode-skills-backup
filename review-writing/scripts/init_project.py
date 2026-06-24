@@ -47,7 +47,7 @@ REQUIRED_SCRIPTS = [
     "style_checker.py",  # 去 AI 风格检测
 ]
 
-STATE_JSON = '{"phase": 0, "completed_sections": [], "zotero_root_key": ""}\n'
+STATE_JSON = '{"phase": 0, "completed_sections": [], "zotero_root_key": "", "authors": []}\n'
 
 OUTLINE_TEMPLATE = """# Review Configuration (READ THIS FILE at the start of every phase)
 

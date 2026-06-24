@@ -58,6 +58,90 @@ BRE_AME_PAIRS = [
 ]
 
 
+# ── F3: 学术英文常见错拼(WARN 级). codespell 不可用时用本固定词表补充. ────────
+# 注:与既有 MISSPELLINGS(high 级)分开存放,本表统一 warn 级、不扣分不阻断。
+# 真稿验证环境已确认无 codespell,故走词表路径。键=错拼,值=建议。
+ACADEMIC_MISSPELLINGS = {
+    "occassion": "occasion", "occassionally": "occasionally",
+    "consistant": "consistent", "consistancy": "consistency",
+    "dependant": "dependent", "independant": "independent",
+    "signficant": "significant", "signficantly": "significantly",
+    "signifcant": "significant", "significatn": "significant",
+    "measurment": "measurement", "measuremnt": "measurement",
+    "enviroment": "environment", "enviornment": "environment",
+    "futher": "further", "furthur": "further",
+    "homogenous": "homogeneous (for uniform composition)",
+    "heterogenous": "heterogeneous",
+    "flourescence": "fluorescence", "flourescent": "fluorescent",
+    "concentraion": "concentration", "concetration": "concentration",
+    "wavelenght": "wavelength", "througput": "throughput",
+    "thoughput": "throughput", "paramter": "parameter",
+    "parmeter": "parameter", "absorbtion": "absorption",
+    "preceeding": "preceding", "supress": "suppress",
+    "supressed": "suppressed", "supression": "suppression",
+    "inhibtion": "inhibition", "prolifertion": "proliferation",
+    "proliferaton": "proliferation", "cytoplasmatic": "cytoplasmic",
+}
+
+# ── D2: 应上下标却裸写的常见化学式/标记(WARN 级,字符级易误报) ───────────────
+# 仅当未被 markdown 上下标(^...^ / ~...~)或 HTML(<sup>/<sub>)包裹时才报。
+# 模式列表可维护:每项 (正则, 说明)。词边界 + 上下文约束尽量降低误报。
+SUBSUP_PATTERNS = [
+    (re.compile(r"\bH2O\b"), "H2O → H~2~O (water; subscript 2)"),
+    (re.compile(r"\bCO2\b"), "CO2 → CO~2~ (subscript 2)"),
+    (re.compile(r"\bH2O2\b"), "H2O2 → H~2~O~2~ (subscripts)"),
+    (re.compile(r"\bO2\b"), "O2 → O~2~ (subscript 2)"),
+    (re.compile(r"\bN2\b"), "N2 → N~2~ (subscript 2)"),
+    (re.compile(r"\bNH3\b"), "NH3 → NH~3~ (subscript 3)"),
+    (re.compile(r"\bSO2\b"), "SO2 → SO~2~ (subscript 2)"),
+    (re.compile(r"\bNa\+\b"), "Na+ → Na^+^ (superscript charge)"),
+    (re.compile(r"\bCa2\+"), "Ca2+ → Ca^2+^ (superscript charge)"),
+    (re.compile(r"\bIC50\b"), "IC50 → IC~50~ (subscript 50)"),
+    (re.compile(r"\bEC50\b"), "EC50 → EC~50~ (subscript 50)"),
+    (re.compile(r"\bLD50\b"), "LD50 → LD~50~ (subscript 50)"),
+    (re.compile(r"\bKm\b"), "Km → K~m~ (subscript m; Michaelis constant)"),
+    # cm2/m2/μm2 等面积:数字后紧跟单位再跟 2/3(指数)
+    (re.compile(r"\b(\d+(?:\.\d+)?)\s?(cm|mm|nm|μm|um|m)2\b"), "area unit: e.g. cm2 → cm^2^ (superscript exponent)"),
+    (re.compile(r"\b(\d+(?:\.\d+)?)\s?(cm|mm|nm|μm|um|m)3\b"), "volume unit: e.g. cm3 → cm^3^ (superscript exponent)"),
+    # 幂:仅匹配带字面 ^ 的 10^n(作者手写乘方),裸数字 105/100/410011 一律不碰
+    (re.compile(r"\b10\^(\d+)\b"), "power-of-ten: 10^6 → 10^6^ (markdown superscript)"),
+]
+
+# ── F1: 中文高置信错别字/混用(WARN 级,保守只收确定性错字) ──────────────────
+# 主观字(的/地/得)一律不收;只收书写错字。键=错,值=对。
+CHINESE_TYPOS = {
+    "帐号": "账号", "登陆": "登录", "即时": None,  # 即时合法,占位排除
+    "既使": "即使", "按装": "安装", "؟": None,
+    "蜡烛": None, "树立": None,
+    "必需品": None,
+    "做为": "作为", "另据": None,
+    "竟然": None,
+    "拌随": "伴随", "渡过难关": None,
+    "迫不急待": "迫不及待", "再接再励": "再接再厉",
+    "一如继往": "一如既往", "言简意骇": "言简意赅",
+    "甘败下风": "甘拜下风", "察颜观色": "察言观色",
+    "�absolute": None,
+    "脉博": "脉搏", "松驰": "松弛", "辐射": None,
+    "震荡": None, "竭泽而鱼": "竭泽而渔",
+    "金榜提名": "金榜题名", "美仑美奂": "美轮美奂",
+    "病入膏盲": "病入膏肓", "信誓旦旦": None,
+    "穿流不息": "川流不息", "源远流长": None,
+}
+CHINESE_TYPOS = {k: v for k, v in CHINESE_TYPOS.items() if v is not None}
+
+# ── D1: 中文句内夹半角标点(WARN 级,高误报区,极度保守) ─────────────────────
+# 只标"半角标点两侧紧邻汉字"这种高置信中文句内夹半角的情形。
+# 半角标点:, ; : ( )  → 应为全角 ， ； ： （ ）
+# DOI/URL/数字/单位区间不会出现"汉字+半角+汉字",故天然规避。
+HALFWIDTH_IN_CN = [
+    (re.compile(r"([一-鿿]),([一-鿿])"), ",", "，", "中文句内半角逗号"),
+    (re.compile(r"([一-鿿]);([一-鿿])"), ";", "；", "中文句内半角分号"),
+    (re.compile(r"([一-鿿]):([一-鿿])"), ":", "：", "中文句内半角冒号"),
+    (re.compile(r"([一-鿿])\(([一-鿿])"), "(", "（", "中文句内半角左括号"),
+    (re.compile(r"([一-鿿])\)([一-鿿])"), ")", "）", "中文句内半角右括号"),
+]
+
+
 # ── Chinese punctuation that leaked into English text ────────────────────────
 CHINESE_PUNCT = {
     "，": ",", "；": ";", "：": ":", "（": "(", "）": ")",
@@ -157,6 +241,80 @@ def check_chinese_punct(text):
                 "severity": "high",
                 "found": ch,
                 "suggest": en,
+                "pos": m.start(),
+            })
+    return issues
+
+
+def check_academic_misspellings(text):
+    """F3: 学术英文错拼(WARN). codespell 不可用时的词表路径."""
+    issues = []
+    for wrong, right in ACADEMIC_MISSPELLINGS.items():
+        pattern = re.compile(rf"\b{re.escape(wrong)}\b", re.IGNORECASE)
+        for m in pattern.finditer(text):
+            issues.append({
+                "type": "academic_misspelling",
+                "severity": "warn",
+                "found": m.group(0),
+                "suggest": right,
+                "pos": m.start(),
+            })
+    return issues
+
+
+def check_chinese_typos(text):
+    """F1: 中文高置信错别字(WARN). 保守词表,主观字不收."""
+    issues = []
+    for wrong, right in CHINESE_TYPOS.items():
+        for m in re.finditer(re.escape(wrong), text):
+            issues.append({
+                "type": "chinese_typo",
+                "severity": "warn",
+                "found": wrong,
+                "suggest": right,
+                "pos": m.start(),
+            })
+    return issues
+
+
+def check_halfwidth_in_cn(text):
+    """D1: 中文句内夹半角标点(WARN). 仅标半角两侧紧邻汉字的高置信情形."""
+    issues = []
+    for pat, half, full, desc in HALFWIDTH_IN_CN:
+        for m in pat.finditer(text):
+            issues.append({
+                "type": "halfwidth_punct_in_cn",
+                "severity": "warn",
+                "found": f"…{m.group(0)}…",
+                "suggest": f"{desc}: '{half}' → '{full}'",
+                "pos": m.start(),
+            })
+    return issues
+
+
+# 已带 markdown 上下标或 HTML sup/sub 的片段:剥离后再扫裸写,避免误报
+_SUBSUP_WRAPPED_RE = re.compile(
+    r"\^[^\^\s]+\^|~[^~\s]+~|<sup>.*?</sup>|<sub>.*?</sub>",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def check_subsup(text):
+    """D2: 应上下标却裸写(WARN). 先剥离已正确标注的片段再扫."""
+    stripped = _SUBSUP_WRAPPED_RE.sub(" ", text)
+    issues = []
+    seen = set()
+    for pat, desc in SUBSUP_PATTERNS:
+        for m in pat.finditer(stripped):
+            key = (m.group(0), m.start())
+            if key in seen:
+                continue
+            seen.add(key)
+            issues.append({
+                "type": "subsup_bare",
+                "severity": "warn",
+                "found": m.group(0),
+                "suggest": desc,
                 "pos": m.start(),
             })
     return issues
@@ -265,6 +423,10 @@ def check_file(filepath):
     all_issues = []
     all_issues.extend(check_misspellings(text))
     all_issues.extend(check_chinese_punct(text))
+    all_issues.extend(check_academic_misspellings(text))  # F3 (warn)
+    all_issues.extend(check_chinese_typos(text))      # F1 (warn)
+    all_issues.extend(check_halfwidth_in_cn(text))     # D1 (warn)
+    all_issues.extend(check_subsup(text))              # D2 (warn)
     all_issues.extend(check_units(text))
     all_issues.extend(check_number_consistency(text))
     all_issues.extend(check_bre_ame_mixed(text))
@@ -272,7 +434,7 @@ def check_file(filepath):
     all_issues.extend(check_methods_tense(text, fn))
     # 计分:high 扣 5/medium 扣 2/low 扣 1,起点 100
     score = 100
-    severity_weight = {"high": 5, "medium": 2, "low": 1}
+    severity_weight = {"high": 5, "medium": 2, "low": 1, "warn": 0}
     for i in all_issues:
         score -= severity_weight.get(i.get("severity", "low"), 1)
     score = max(0, score)

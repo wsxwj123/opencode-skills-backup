@@ -2,6 +2,7 @@
   "project_config_template": {
     "project_name": "",
     "research_field": "",
+    "authors": [],
     "target_journal": "Nature",
     "model_system": "",
     "word_limits": {
