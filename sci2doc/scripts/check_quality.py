@@ -1798,6 +1798,25 @@ def check_markdown_quality(md_path):
     fig_refs = []  # (chapter, seq)
     tbl_refs = []  # (chapter, seq)
 
+    # ---- A5 交叉引用有效性：收集"目标存在集合" + "待核对引用" ----
+    # 目标集合 = 全文实际出现过的编号（无论定义还是引用都计入，保守取并集）。
+    fig_targets = set()     # "X-Y" 字符串
+    tbl_targets = set()     # "X-Y"
+    section_targets = set()  # 章节号字符串，如 "2" / "2.1" / "2.1.3"
+    appendix_targets = set()  # 附录字母，如 "A"
+    crossrefs = []  # (line_no, kind, target_str, raw_snippet)
+
+    _A5_SEC_REF_RE = re.compile(r'见第?\s*([0-9]+(?:\.[0-9]+)*)\s*节')
+    _A5_FIG_REF_RE = re.compile(r'见图\s*([0-9]+[-–][0-9]+)')
+    _A5_TBL_REF_RE = re.compile(r'见表\s*([0-9]+[-–][0-9]+)')
+    _A5_APP_REF_RE = re.compile(r'见?附录\s*([A-Z])')
+    _A5_EN_SEC_RE = re.compile(r'Section\s+([0-9]+(?:\.[0-9]+)*)')
+    _A5_EN_FIG_RE = re.compile(r'Figure\s+([0-9]+[-–][0-9]+)')
+    # 章节标题号：行首 # 标题里的 "第N章" 或前导 "N.M" 数字串
+    _A5_HEAD_CN_CHAP_RE = re.compile(r'^#{1,3}\s*第\s*([0-9]+)\s*章')
+    _A5_HEAD_NUM_RE = re.compile(r'^#{1,3}\s*([0-9]+(?:\.[0-9]+)*)\s')
+    _A5_APP_HEAD_RE = re.compile(r'^#{1,3}\s*附录\s*([A-Z])')
+
     for line_no, raw_line in enumerate(lines, start=1):
         line = raw_line.rstrip('\n')
 
@@ -1815,6 +1834,22 @@ def check_markdown_quality(md_path):
             level = len(heading_match.group(1))
             stats['heading_count'] += 1
             heading_levels_seen.append((line_no, level))
+
+            # A5：从标题登记章节号 / 附录号作为可引用目标
+            m_chap = _A5_HEAD_CN_CHAP_RE.match(line)
+            if m_chap:
+                section_targets.add(m_chap.group(1))
+            m_num = _A5_HEAD_NUM_RE.match(line)
+            if m_num:
+                num = m_num.group(1)
+                section_targets.add(num)
+                # "2.1.3" 也意味着第 2 章、2.1 节存在 → 登记所有前缀
+                parts = num.split('.')
+                for k in range(1, len(parts)):
+                    section_targets.add('.'.join(parts[:k]))
+            m_app = _A5_APP_HEAD_RE.match(line)
+            if m_app:
+                appendix_targets.add(m_app.group(1))
 
             if level > 3:
                 issues.append({
@@ -1878,6 +1913,28 @@ def check_markdown_quality(md_path):
             fig_refs.append((int(m.group(1)), int(m.group(2))))
         for m in tbl_re.finditer(line):
             tbl_refs.append((int(m.group(1)), int(m.group(2))))
+
+        # A5 目标集合：图/表编号的"定义性出现"——剥离 "见图/见表 N-M"
+        # （引用语境），剩下的 图N-M / 表N-M 视为定义点（题注、正文首述等）。
+        line_defs = _A5_FIG_REF_RE.sub('', _A5_TBL_REF_RE.sub('', line))
+        for m in fig_re.finditer(line_defs):
+            fig_targets.add(f"{m.group(1)}-{m.group(2)}")
+        for m in tbl_re.finditer(line_defs):
+            tbl_targets.add(f"{m.group(1)}-{m.group(2)}")
+
+        # ---- 5b) A5 交叉引用收集（正文行）----
+        for m in _A5_SEC_REF_RE.finditer(line):
+            crossrefs.append((line_no, 'section', m.group(1), m.group(0)))
+        for m in _A5_EN_SEC_RE.finditer(line):
+            crossrefs.append((line_no, 'section', m.group(1), m.group(0)))
+        for m in _A5_FIG_REF_RE.finditer(line):
+            crossrefs.append((line_no, 'figure', m.group(1).replace('–', '-'), m.group(0)))
+        for m in _A5_EN_FIG_RE.finditer(line):
+            crossrefs.append((line_no, 'figure', m.group(1).replace('–', '-'), m.group(0)))
+        for m in _A5_TBL_REF_RE.finditer(line):
+            crossrefs.append((line_no, 'table', m.group(1).replace('–', '-'), m.group(0)))
+        for m in _A5_APP_REF_RE.finditer(line):
+            crossrefs.append((line_no, 'appendix', m.group(1), m.group(0)))
 
         # ---- 6) 列表项检测 ----
         if list_re.match(line):
@@ -1964,6 +2021,25 @@ def check_markdown_quality(md_path):
 
     _check_numbering(fig_refs, '图')
     _check_numbering(tbl_refs, '表')
+
+    # ---- A5) 章节交叉引用有效性（断链 → WARN，保守）----
+    # 引用目标在全文找不到对应定义（章节标题 / 图表编号 / 附录）→ 断链。
+    # 提取易误判（如把正文里偶发的"第3节"当引用），故只 WARN，不阻断。
+    _a5_target_map = {
+        'section': (section_targets, '节'),
+        'figure': (fig_targets, '图'),
+        'table': (tbl_targets, '表'),
+        'appendix': (appendix_targets, '附录'),
+    }
+    for ref_line, kind, target, snippet in crossrefs:
+        targets, label = _a5_target_map[kind]
+        if target not in targets:
+            issues.append({
+                'level': 'warning',
+                'category': '交叉引用',
+                'message': f'第 {ref_line} 行：交叉引用 "{snippet}" 指向的{label} {target} 在全文中找不到定义',
+                'suggestion': f'核对该{label}是否存在；断链请修正编号或补全被引用的{label}',
+            })
 
     # ---- 10) 题名长度检查（≤25 字） ----
     for line_no, raw_line in enumerate(lines, start=1):

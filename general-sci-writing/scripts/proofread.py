@@ -412,6 +412,75 @@ def check_methods_tense(text, filename):
     return issues[:5]  # 限制条数避免刷屏
 
 
+# ── A5 内部交叉引用有效性（全稿级，非单文件）─────────────────────────────────
+# 提取正文里的内部交叉引用并核对引用目标是否真实存在（章节/图/表/附录有定义）。
+# 提取易误判（如散文里偶发的 "Figure 1" 既可能是引用也可能是题注），故只 WARN。
+_A5_REF_SECTION = re.compile(r"\bSection\s+(\d+(?:\.\d+)*)", re.IGNORECASE)
+_A5_REF_FIGURE = re.compile(r"\bFig(?:ure|\.)?\s+(\d+)", re.IGNORECASE)
+_A5_REF_TABLE = re.compile(r"\bTable\s+(\d+)", re.IGNORECASE)
+_A5_REF_APPENDIX = re.compile(r"\bAppendix\s+([A-Z])\b")
+# 定义点（题注 / 标题）：行首（可含 markdown # 或 **）的 Figure/Table/Appendix/Section。
+_A5_DEF_FIGURE = re.compile(r"^[#*\s]*Fig(?:ure|\.)?\s+(\d+)", re.IGNORECASE | re.MULTILINE)
+_A5_DEF_TABLE = re.compile(r"^[#*\s]*Table\s+(\d+)", re.IGNORECASE | re.MULTILINE)
+_A5_DEF_APPENDIX = re.compile(r"^[#*\s]*Appendix\s+([A-Z])\b", re.MULTILINE)
+# 章节定义：markdown 标题里的前导数字号（# 2 / ## 2.1 Title）或显式 Section N。
+_A5_DEF_HEAD_NUM = re.compile(r"^#{1,4}\s+(\d+(?:\.\d+)*)\b", re.MULTILINE)
+_A5_DEF_HEAD_SECTION = re.compile(r"^#{1,4}.*?\bSection\s+(\d+(?:\.\d+)*)", re.IGNORECASE | re.MULTILINE)
+
+
+def check_crossref_validity(files):
+    """全稿级：核对内部交叉引用（Section/Figure/Table/Appendix N）目标是否存在。
+    断链 → 一条 warn issue。返回 issue 列表（type=crossref_dangling）。
+    files: 待扫描的 .md 路径列表（已剔除合并衍生物）。
+    """
+    sec_targets, fig_targets, tbl_targets, app_targets = set(), set(), set(), set()
+    file_texts = []
+    for fp in files:
+        try:
+            with open(fp, "r", encoding="utf-8") as f:
+                raw = f.read()
+        except Exception:
+            continue
+        file_texts.append((fp, raw))
+        for m in _A5_DEF_FIGURE.finditer(raw):
+            fig_targets.add(m.group(1))
+        for m in _A5_DEF_TABLE.finditer(raw):
+            tbl_targets.add(m.group(1))
+        for m in _A5_DEF_APPENDIX.finditer(raw):
+            app_targets.add(m.group(1))
+        for m in _A5_DEF_HEAD_NUM.finditer(raw):
+            num = m.group(1)
+            sec_targets.add(num)
+            parts = num.split(".")
+            for k in range(1, len(parts)):
+                sec_targets.add(".".join(parts[:k]))
+        for m in _A5_DEF_HEAD_SECTION.finditer(raw):
+            sec_targets.add(m.group(1))
+
+    issues = []
+    ref_specs = [
+        (_A5_REF_SECTION, sec_targets, "Section"),
+        (_A5_REF_FIGURE, fig_targets, "Figure"),
+        (_A5_REF_TABLE, tbl_targets, "Table"),
+        (_A5_REF_APPENDIX, app_targets, "Appendix"),
+    ]
+    for fp, raw in file_texts:
+        text = _extract_prose(raw)
+        for ref_re, targets, label in ref_specs:
+            for m in ref_re.finditer(text):
+                tgt = m.group(1)
+                if tgt not in targets:
+                    issues.append({
+                        "type": "crossref_dangling",
+                        "severity": "warn",
+                        "file": os.path.basename(fp),
+                        "found": m.group(0),
+                        "suggest": f"{label} {tgt} is referenced but never defined in the manuscript",
+                        "pos": m.start(),
+                    })
+    return issues
+
+
 def check_file(filepath):
     try:
         with open(filepath, "r", encoding="utf-8") as f:
@@ -485,18 +554,24 @@ def main():
     avg = round(sum(r["score"] for r in results) / len(results), 1)
     total_issues = sum(r["issues_total"] for r in results)
     all_pass = all(r["score"] >= args.threshold for r in results)
+    # A5 全稿级内部交叉引用有效性（断链 → warn，不影响 score / all_pass，保守）。
+    crossref_issues = check_crossref_validity([str(f) for f in files])
     summary = {
         "ok": all_pass,
         "avg_score": avg,
         "total_issues": total_issues,
         "files_checked": len(results),
         "threshold": args.threshold,
+        "crossref_dangling": len(crossref_issues),
+        "crossref_issues": crossref_issues,
         "files": results,
     }
     with open(args.report, "w", encoding="utf-8") as f:
         json.dump(summary, f, indent=2, ensure_ascii=False)
-    # 简短控制台输出
-    print(json.dumps({k: v for k, v in summary.items() if k != "files"}, ensure_ascii=False))
+    # 简短控制台输出（剔除明细列表，只留计数）
+    print(json.dumps(
+        {k: v for k, v in summary.items() if k not in ("files", "crossref_issues")},
+        ensure_ascii=False))
     if args.verbose:
         for r in results:
             if r["issues_total"]:

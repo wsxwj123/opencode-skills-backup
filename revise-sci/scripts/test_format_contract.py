@@ -29,6 +29,7 @@ POLISH = SCRIPTS_DIR / "polish_revisions.py"
 INTAKE = SCRIPTS_DIR / "intake_router.py"
 CITATION_GUARD = SCRIPTS_DIR / "citation_guard.py"
 REFERENCE_SYNC = SCRIPTS_DIR / "reference_sync.py"
+XSEC_SCRIPT = SCRIPTS_DIR / "cross_section_consistency.py"
 
 
 def test_polish_no_from_a_to_b_forbidden() -> None:
@@ -200,6 +201,93 @@ def test_reference_sync_fail_on_gap_no_false_positive() -> None:
     )
 
 
+# ---------------------------------------------------------------------------
+# B1/B2: cross_section_consistency — cross-section numeric drift (WARN, semi-auto).
+# Bidirectional: same label + different value -> suspicion; consistent / different
+# label -> nothing. Scans the revise-sci drafts/section_*.md chapter layout.
+# ---------------------------------------------------------------------------
+def _run_xsec(root: Path) -> dict:
+    result = subprocess.run(
+        [sys.executable, str(XSEC_SCRIPT), "--project-root", str(root)],
+        cwd=str(SCRIPTS_DIR),
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, (
+        f"xsec must be WARN-level (rc=0), got {result.returncode}\n{result.stderr}"
+    )
+    return json.loads(result.stdout)
+
+
+def _xsec_drafts(tmp: str, sec1: str, sec2: str) -> Path:
+    root = Path(tmp)
+    drafts = root / "drafts"
+    drafts.mkdir()
+    (drafts / "section_01_abstract.md").write_text(sec1, encoding="utf-8")
+    (drafts / "section_03_results.md").write_text(sec2, encoding="utf-8")
+    return root
+
+
+def test_xsec_flags_same_label_drift() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = _xsec_drafts(
+            tmp,
+            "The survival rate was 45% in the treated cohort.\n",
+            "# Results\n\nUltimately the survival rate reached 47% overall.\n",
+        )
+        res = _run_xsec(root)
+    labels = {s["label"] for s in res["suspicions"]}
+    assert "survival rate" in labels, (
+        f"45% vs 47% under same label must be flagged; got {res['suspicions']}"
+    )
+    susp = next(s for s in res["suspicions"] if s["label"] == "survival rate")
+    assert {v["value"] for v in susp["values"]} == {"45", "47"}, (
+        "both drifting values must appear"
+    )
+
+
+def test_xsec_no_flag_when_consistent() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = _xsec_drafts(
+            tmp,
+            "The survival rate was 45% in the treated cohort.\n",
+            "# Results\n\nThe survival rate remained 45% at follow-up.\n",
+        )
+        res = _run_xsec(root)
+    assert res["suspicions"] == [], (
+        f"consistent 45%/45% must NOT be flagged; got {res['suspicions']}"
+    )
+
+
+def test_xsec_no_flag_for_different_labels() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = _xsec_drafts(
+            tmp,
+            "The survival rate was 45% in the treated cohort.\n",
+            "# Results\n\nThe response rate reached 47% overall.\n",
+        )
+        res = _run_xsec(root)
+    assert res["suspicions"] == [], (
+        f"different labels must NOT be flagged; got {res['suspicions']}"
+    )
+
+
+def test_xsec_ignores_reference_block_pmids() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = _xsec_drafts(
+            tmp,
+            "Efficacy of 45% was observed.\n",
+            "# Results\n\nNo numeric claim here.\n\n"
+            "## References\n\n"
+            "- [1] Some paper reporting 45% something. 2020. PMID 12345678.\n"
+            "- [2] Another reporting 99% else. 2021. PMID 87654321.\n",
+        )
+        res = _run_xsec(root)
+    assert res["suspicions"] == [], (
+        f"reference-block numerics must be excluded; got {res['suspicions']}"
+    )
+
+
 def main() -> int:
     test_polish_no_from_a_to_b_forbidden()
     test_intake_rejects_non_docx_manuscript()
@@ -209,6 +297,10 @@ def main() -> int:
     test_reference_sync_fail_on_gap_lenient_by_default()
     test_reference_sync_fail_on_gap_blocks()
     test_reference_sync_fail_on_gap_no_false_positive()
+    test_xsec_flags_same_label_drift()
+    test_xsec_no_flag_when_consistent()
+    test_xsec_no_flag_for_different_labels()
+    test_xsec_ignores_reference_block_pmids()
     print("OK")
     return 0
 
