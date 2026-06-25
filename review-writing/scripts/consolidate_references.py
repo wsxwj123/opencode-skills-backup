@@ -43,6 +43,8 @@ def strip_reference_blocks(text):
     expected inside; if a non-entry, non-blank, non-heading line is hit, the
     block is closed there to avoid eating real body text.
     """
+    # 保留 split('\n')：输出用 "\n".join(out) 重组，splitlines() 会丢弃末尾空元素导致
+    # 尾随换行被吃掉（行为变化）。text 来自 open('r') universal newline，本就无 \r 残留。
     lines = text.split("\n")
     out = []
     i = 0

@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+data/
+*.review_pkg_*.json
+.review_pkg_*.json
+style_check_report.json
+env_status.json
