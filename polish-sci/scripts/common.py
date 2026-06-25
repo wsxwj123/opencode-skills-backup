@@ -49,7 +49,6 @@ AI_STYLE_BANNED_PATTERNS: tuple[tuple[str, str], ...] = (
     ("tapestry", r"\btapestry\b"),
     ("underscore", r"\bunderscore(?:s|d)?\b"),
     ("testament", r"\btestament\b"),
-    ("Moreover", r"\bMoreover\b"),
     ("Crucial", r"\bCrucial\b"),
     ("Landscape", r"\bLandscape\b"),
     ("Pivot", r"\bPivot(?:s|ed|ing)?\b"),
@@ -91,8 +90,6 @@ AI_CLICHE_TERMS_EN: tuple[str, ...] = (
     "pave the way",
     "of paramount importance",
     "a key player",
-    "moreover",
-    "furthermore",
 )
 AI_CLICHE_TERMS_ZH: tuple[str, ...] = (
     "值得注意的是",
@@ -311,7 +308,6 @@ def polish_changed_text_locally(text: str) -> str:
     if not cleaned:
         return cleaned
     replacements = (
-        (r"\bMoreover,\s*", ""),
         (r"\bCrucial\b", "Important"),
         (r"\bdelve into\b", "examine"),
         (r"\bcomprehensive landscape\b", "current evidence base"),
@@ -331,7 +327,8 @@ def polish_changed_text_locally(text: str) -> str:
         cleaned = re.sub(pattern, replacement, cleaned, flags=re.IGNORECASE)
     cleaned = cleaned.replace("—", ", ")
     cleaned = re.sub(r"\bnot only\s+(.+?)\s+but also\s+(.+?)([.;!?]|$)", r"\1 and \2\3", cleaned, flags=re.IGNORECASE)
-    cleaned = re.sub(r"\bfrom\s+([A-Za-z0-9][^,.;]{0,40})\s+to\s+([A-Za-z0-9][^,.;]{0,40})", r"across \1 and \2", cleaned, flags=re.IGNORECASE)
+    # "from X to Y" 改写已移除：科学文本里多为合法谱系/转变/范围（from gut to bone 等），
+    # 且改成 "across X and Y" 会改变方向语义，违反纯润色"一字不改"原则；检测端亦不再标记。
     cleaned = re.sub(r",\s*(?:thus|thereby|therefore)\s+([A-Za-z-]+ing\b[^.;!?]*)", r".", cleaned, flags=re.IGNORECASE)
     cleaned = cleaned.replace("?", ".")
     cleaned = re.sub(r"\s+([,.;!?])", r"\1", cleaned)
