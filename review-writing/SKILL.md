@@ -755,6 +755,10 @@ If pending_sections is empty → all sections complete; proceed to Phase 4.
 
     `manuscript-dod` gate 共 15 项（通用 6：引文一一对应 / citation_guard 已过 / 符合 storyline / 占位符清零 / 去 AI 合规 / 字数达标；review 特有 5：综合非罗列 / 矛盾仲裁 / 引用类型匹配 / 检索日志已记 / 框架图一致；systematic 额外 3：PRISMA 计数自洽 / RoB 已评级 / GRADE 已分级；结构完整性 R15（全类型通用））。**逐项内容与核验命令以 `references/dod_checklist.json` 为唯一真源**。上面 `pack` 步骤运行时会把该 gate 的每个 item（id / name / check / script）完整打印进盲检任务包，此处不再复述以免与 JSON 漂移。systematic 3 项仅 Review type = systematic 时检查，R15 全类型通用。
 
+    附带软报告项（不计入上述 15 项硬 gate，不进 verify 退出码，由盲检子代理 LLM 判断）：
+
+    - **R16 常识合理性(🟡软报告,不阻断)**,盲检子代理顺带扫正文是否有明显常识/事实硬伤(单位量级离谱、生理/机制常识错误、跨文献综合时的事实拼接错误、前后数值逻辑矛盾等)。**仅提示不阻断**,只在发现明显硬伤时记入盲检反馈供用户裁决,绝不自动改内容。与引用/文献核验门禁区分:本项管"综述论述的内容常识上是否成立"。
+
 11. **HALT:** Output summary (content / logic / citation count / word count). Wait for "Continue".
 
 ### Figure Prompt Generation

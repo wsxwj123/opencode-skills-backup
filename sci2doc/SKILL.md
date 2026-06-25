@@ -373,6 +373,7 @@ sci2doc 特有项：
 - [ ] **G4** 全章占位符清零（`CITE_PENDING` / `DATA_PENDING` / `【待AI】` 全部归零）
 - [ ] **G5** 去 AI 通过：`check_quality.py check_writing_style()` 零违规（含中文句长、AI 禁词、三项标点规范）
 - [ ] **G6** 本章字数达标：`count_words.py` 输出 ≥ `chapter_targets[N]`
+- [ ] **G7** 常识合理性(🟡软报告,不阻断)，盲检子代理顺带扫本章是否有明显常识/事实硬伤(单位量级离谱、生理/机制常识错误、前后数值逻辑矛盾、转写翻译扭曲原意致常识错误等)。**仅提示不阻断**，只在发现明显硬伤时记入报告供用户裁决，绝不自动改内容。与 Citation Zero-Hallucination Gate(管引用真伪)区分：本项管"转写出的中文内容常识上是否成立"。
 
 sci2doc 特有项：
 - [ ] **S1** 全章实验-方法映射完整：`atomic_md_workflow.py validate-experiment-map --chapter N` 通过

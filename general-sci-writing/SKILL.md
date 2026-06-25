@@ -386,6 +386,7 @@ python scripts/state_manager.py add-abbreviation <one.json>
    - [ ] **⑮缩略词一致性**：本节新引入缩略词均已规范首展（`Full Name (ABBR)`），无重复定义、无未定义即用、Title 无缩写；已过 `python scripts/abbreviation_consistency.py --root .` 核验（exit 0；通用缩写自动跳过）
    - [ ] **⑯检查点已落**：本节已落版本检查点——`python scripts/git_checkpoint.py status .` 显示 commit 数随节递增（git 可用时），或 git 不可用时已生成 snapshot（`version_history.json` 有新快照）。二者满足其一即可
    - [ ] **⑰字符级排版契约已遵守**（人工项）：本节斜体（学名/基因名/统计符号 `*p*`/`*n*`/拉丁缩写）、上标 `^...^`（10^6^、cm^2^）、下标 `~...~`（H~2~O、CO~2~、IC~50~）标记到位，无裸写 `H2O`/`CO2`/`IC50`；中文全角、英文数字半角（见 §字符级排版契约）
+   - [ ] **⑱常识合理性(🟡软报告,不阻断)**,盲检子代理顺带扫本节是否有明显常识/事实硬伤(单位量级离谱、生理/机制常识错误、前后数值逻辑矛盾等)被写入。**仅提示不阻断**,只在发现明显硬伤时记入盲检反馈供用户裁决,绝不自动改内容。与 citation_guard 文献证据核验(管"引用真不真")、结构完整性 G 项区分:本项管"写出来的内容常识上是否成立"。
 10. **Safety Write**: 用户 OK 后写入文件 → 智能快照 → **Git Checkpoint**：`python scripts/git_checkpoint.py commit [Project_Root] "[gsw] section <section_id> done"`（git 不可用时自动 no-op，snapshot 仍是回退兜底）。回退手段：若落盘后用户反悔，`/rollback` 到上一个 snapshot、`git checkout <sha> -- <file>` 回退单节，或直接 Edit 改原子化文件（参见 §3 润色 workflow）。
 
 **Discussion 段落结构 / Online Methods vs STAR Methods**：写 Discussion 或 Methods 章节前 `Read references/writing-templates.md` 对应小节。要点：Discussion 走"主要发现总结→文献对比+机制→**Limitations（强制，缺即退稿高频）**→Outlook"四段式；Methods 按 target_journal 选 Online Methods（Nature 精简版+完整版后置）或 STAR Methods（Cell 五段结构）。
