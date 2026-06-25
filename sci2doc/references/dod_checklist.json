@@ -196,6 +196,12 @@
           "name": "检查点已落",
           "check": "已落版本检查点:git 可用时 git_checkpoint.py status 的 commit 数随节/章递增;git 不可用时已生成 snapshot。二者满足其一",
           "script": "python3 scripts/git_checkpoint.py status ."
+        },
+        {
+          "id": "G7",
+          "name": "常识合理性",
+          "check": "盲检子代理顺带扫本章是否有明显常识/事实硬伤(单位量级离谱、生理/机制常识错误、前后数值逻辑矛盾、转写翻译扭曲原意致常识错误)；软项仅报告不阻断、不改内容，与 Citation Zero-Hallucination Gate 区分",
+          "severity": "soft"
         }
       ]
     }
