@@ -17,8 +17,8 @@ not_for(以下情况不要用本技能):
 
 工作流是脚本闸门式的。脚本只负责拆分、生成润色任务包、校验红线,真正的语言改写由主 agent 按本文 prompt 逐段执行。不要跳步,不要让脚本假装自己会改写。
 
-## Intake Gate(开工前必须确认)
-拿到稿子后,先与用户确认四件事,再动工:
+## 🔴 Intake Gate(开工前必须确认)
+🛑 STOP：拿到稿子后,先与用户确认四件事,再动工:
 
 1. **输入稿路径**,md 还是 docx。docx 需要本机已装 python-docx。
 2. **语言**,中文还是英文。决定句长上限(英文≤30词 / 中文≤50字)与去AI规则分支。
@@ -116,7 +116,7 @@ python scripts/polish_report.py --project-root <root>
    风险flag: <若有,列出;无则省略此行>
    ```
    改动点必须**逐处列全**——这是你对照手改原稿的依据,不能只说"优化了表达"。
-3. **停下**,等你表态:
+3. 🛑 **停下**,等你表态:
    - 确认/默许 → 写回 `polished/<idx>.json`,进下一段。
    - 要求调整(语气/某词别动/换种改法) → 重改重贴,直到你满意再写回。
    - 跳过该段 → 标 `polished_by=unchanged-user-skip`、保留原文,进下一段。
@@ -159,10 +159,22 @@ python scripts/polish_report.py --project-root <root>
 
 本 SKILL.md 文本自身也遵守上述去AI规则。
 
+## ❌ 禁止动作清单(润色时绝不做)
+对现有规则的集中索引,逐条对应正文已有约束,违反任一即 strict_gate 或盲检拦截:
+- ❌ 改动数值/统计量/p值/n=N/百分比/单位/引用标记[n]/DOI/专名(基因蛋白细胞系物种),见 Red Lines
+- ❌ 升级不确定性动词(may/suggest/可能 改成 prove/demonstrate/证实),见 Polish Prompt #5
+- ❌ 凭空增加原文没有的程度词(significantly/extensively/显著 等),等同升级语气,meaning_changed 必为 false
+- ❌ 为求变化做同义替换、破坏全文术语一致,见 Polish Prompt #4
+- ❌ 裸写需排版字符(H2O 不写成 H<sub>2</sub>O、10^6 不写成 10<sup>6</sup>、基因斜体退化为正体),见 字符级排版契约
+- ❌ 润色后残留 AI 套话/修辞破折号/scare quotes/解释性冒号/-ing 拖尾从句,对应 Anti-AI 硬拦项
+- ❌ 只改被点名片段而非全文逐段覆盖,本技能是纯润色,覆盖每一段
+- ❌ 未经用户确认就把该段写回 polished/,见 交互式逐段润色协议
+- ❌ 主 agent 自评 DoD 不委托独立盲检子代理,见 DoD 委托盲检(强制)
+
 ## DoD 自检清单(润色收口)
 机器可读真源,`references/dod_checklist.json` 的 `polish-dod` gate。strict_gate 运行前,必须委托独立子代理盲检。
 
-通用 10 项(id: PL-G1 ~ PL-G10):
+通用 11 项(id: PL-G1 ~ PL-G11,其中 PL-G11 为软报告):
 - **PL-G1 数值保留**,每段数值/统计量集合与原文一字不差。
 - **PL-G2 无语气升级**,不确定性动词未被升级。
 - **PL-G3 引用保留**,引用标记与 DOI 集合前后一致。
@@ -173,6 +185,7 @@ python scripts/polish_report.py --project-root <root>
 - **PL-G8 术语一致**,全文术语用词前后一致(人工核)。
 - **PL-G9 结构完整性**,合并稿段落顺序与小节结构与原稿一致,引用编号连续。
 - **PL-G10 缩略语首展一致(软报告)**,`abbreviation_index.json` 的 undefined_use / duplicate_definition / title_abbreviation 已列出供人工取舍;润色未破坏既有首展、未新增缩略语问题。纯润色不主动改缩略语定义,原稿固有问题只报告不阻断交付(与 revise-sci 的硬门禁 RV-G7 区分)。
+- **PL-G11 常识合理性(🟡软报告,不阻断)**,盲检子代理顺带扫一遍是否有明显常识/事实硬伤(单位量级离谱、生理/机制常识错误、前后数值逻辑矛盾等)被原文带入或润色引入。**仅提示不阻断**,纯润色默认原文内容正确,本项只在发现明显硬伤时记入报告供人工判断,绝不自动改内容(与 PL-G1~G10 的核验/硬拦区分,也与 reviewer-simulator 的完整科学性审查区分)。
 
 🔴 **委托盲检(强制)**,主 agent 不得自评 DoD。必须:
 1. `python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate polish-dod --files <...> --workdir <root>`,把打印的任务包交给独立子代理(默认 sonnet)。
