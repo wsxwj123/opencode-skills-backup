@@ -201,7 +201,7 @@ Follow phased gates in order:
    - [ ] ⑦V-06（M→F）/V-07（F 来源）/V-09（预算追溯）/V-11（代表作匹配）依赖 F/预算字段，本阶段用 `validate --phase 2` 即不输出其结论，强制点在 Phase 7 gate-check；V-12（备选路线）只依赖 M.alternative_plan，自 Phase 3 起进入 `--phase 3` 集合为 ERROR 硬门控
    - [ ] ⑧P2 末尾含独立预期成果小节（论文/专利/人才培养目标三类均有明确数字目标）
    - [ ] ⑨figure_prompts.md 已生成，技术路线图提示词映射到 ≥1 个 RC
-   - [ ] ⑩常识合理性(🟡软报告,不阻断),盲检子代理顺带扫本节是否有明显常识/事实硬伤(单位量级离谱、生理/机制常识错误、科学逻辑断裂、前后数值矛盾等)。**仅提示不阻断**,只在发现明显硬伤时记入报告供用户裁决,绝不自动改内容。与 citation_validator 文献核验(管引用真伪/来源合规)区分:本项管"本子论述的科学内容常识上是否成立"。
+   - [ ] ⑩常识合理性(🟡软报告,不阻断;json 真源 id: p2-dod/N65),盲检子代理顺带扫本节是否有明显常识/事实硬伤(单位量级离谱、生理/机制常识错误、科学逻辑断裂、前后数值矛盾等)。**仅提示不阻断**,只在发现明显硬伤时记入报告供用户裁决,绝不自动改内容。与 citation_validator 文献核验(管引用真伪/来源合规)区分:本项管"本子论述的科学内容常识上是否成立"。
 
 5. Phase 3: write P3 研究基础（4 sub-files）.
    - **🔴 开写前置闸门 (Mandatory，脚本硬拦截)**：每个子节开写前先跑 `python3 scripts/prewrite_gate.py --section P3_1 --root .`（其余子节同理 P3_2/P3_3/P3_4），exit≠0 禁止开写（硬检查上一节完成、`consistency_map` 含 M、占位符清零；P3_1 额外要求 `data/experimental_design.json` 非空；盲检按 Phase 粒度：P3_1←P2 跨 Phase，缺 `.review_pass/P2.json` 硬拦 exit 1；P3_2/P3_3/P3_4 同属 P3 一次性盲检，同 Phase N/A 不拦）。
