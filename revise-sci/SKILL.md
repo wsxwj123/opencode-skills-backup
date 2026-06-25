@@ -329,7 +329,7 @@ These inline markers are load-bearing and carry the same status as citation mark
 
 下列清单与 `references/dod_checklist.json` 逐项对应（**改清单先改 JSON，再同步此处散文**）；能脚本核的项子代理会先跑脚本：
 
-### 通用 7 项（id: RV-G1 ~ RV-G7）
+### 通用 8 项（id: RV-G1 ~ RV-G8）
 
 | id | 项目 | 核验方式 |
 |---|------|---------|
@@ -340,6 +340,7 @@ These inline markers are load-bearing and carry the same status as citation mark
 | RV-G5 | 去 AI 五项（破折号/scare quotes/解释性冒号/英文≤30词/-ing从句/中文≤50字≤2层从句）通过 | `python scripts/strict_gate.py --project-root <project_root>` → `ai_style_flags_removed` 无残留；句长警告记录于 notes |
 | RV-G6 | 字数达标（改动前后正文字数在期刊要求范围内） | 人工或期刊要求核对 |
 | RV-G7 | 缩略语首展一致：`abbreviation_index.json` 无 `undefined_use` / `duplicate_definition` / `title_abbreviation` 硬错；改稿未破坏既有首展，Title 不含缩写（`defined_unused` 为软警告可人工豁免） | `python scripts/manuscript_index.py --manuscript <output_md> --project-root <project_root>` 后读 `abbreviation_index.json`，硬错 orphan 零命中（启发式索引，可疑项人工复核） |
+| RV-G8 | **Commonsense sanity (🟡 soft report, non-blocking)**: the blind-review subagent also scans rewritten fragments for obvious commonsense/factual errors (absurd unit magnitudes, physiology/mechanism mistakes, internal numeric contradictions) introduced by the rewrite. Report only, never block delivery, never auto-edit content. Distinct from the citation/reference verification gates (RV-G1/RV-G2) and from reviewer-simulator's full scientific audit. | 盲检子代理 LLM 判断（复用现有 `delegate_review` 盲检机制，无新脚本）；命中只在子代理返回 `notes` 报告，软项不进 `strict_gate.py` 硬失败、不计入 `delegate_review verify` 的阻断退出码（与 `references/dod_checklist.json` 硬门禁互不冲突） |
 
 🔴 收口前置闸口：`delegate_review verify` 必须 exit 0（含 RV-R8 结构完整性），否则不得声明改稿完成。任一项 fail 均为阻断。
 
