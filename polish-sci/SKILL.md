@@ -6,7 +6,7 @@ description: 纯论文润色全管道。输入一份已写完的稿子(无审稿
 # Polish-Sci
 
 ## Overview
-本技能只做一件事,纯语言润色一份已写完的稿子。输入是完整稿(md 或 docx),没有审稿意见。输出是逐段润色后的稿子,加一份逐段改动报告。
+本技能只做一件事,纯语言润色一份已写完的稿子。输入是完整稿(md 或 docx),没有审稿意见。输出是逐段润色后的稿子,加一份逐段改动报告。**默认走交互式逐段润色**(每段先贴原文/润色/逐处改动给你看、你确认或要求调整后才写回,见"交互式逐段润色协议"专节),方便你边润边对照改自己的原稿。
 
 核心约束,只提升语言表达,绝不改内容、数据、结论。润色覆盖全文每一段,不是只改被点名的片段。
 
@@ -65,9 +65,9 @@ python scripts/extract_docx_images.py --manuscript <input> --project-root <root>
 # 2. 生成逐段润色任务包(含 section_type 的被动目标区间 + 句长上限 + 红线)
 python scripts/polish_units.py pack --project-root <root> --intensity standard
 
-# 3. 主 agent 逐段润色:读 polish_manifest.json 的每个 task,
-#    按下方 Polish Prompt 改写,把结果写回 polished/<idx>.json
-#    (覆盖 polished_text、polished_by、polish_note、meaning_changed)
+# 3. 主 agent 逐段润色:读 polish_manifest.json 的每个 task,按下方 Polish Prompt 改写。
+#    默认走「交互式逐段润色协议」(见下方专节):每段润完先贴原文/润色/逐处改动给用户,
+#    用户确认或要求调整后才写回 polished/<idx>.json;不是闷头全润完再 merge。
 
 # 4. 校验红线(逐段写回 polish_risk_flags)
 python scripts/polish_units.py verify --project-root <root>
@@ -98,6 +98,34 @@ python scripts/polish_report.py --project-root <root>
 6. **红线**,task 里 `red_lines.preserve_citations` 列出的引用标记、所有数值、专名一字不动。
 7. **保留行内格式标记**,见"字符级排版契约"。`*斜体*`(物种/基因/统计符号)、`<sup>`/`<sub>`、`**加粗**`逐字保留位置与配对,不增删、不错配,标记内字符按红线处理。
 8. 改完写回该 unit,`polished_by` 填非 PLACEHOLDER 值,`meaning_changed` 必须为 false,`polish_note` 简述改了什么或为何不改。
+
+## 交互式逐段润色协议(默认开启)
+目的:让你边润边看、能随时干预,方便对照着改自己的原稿;不是闷头全润完再 merge。
+
+按 `polish_manifest.json` 的 task 顺序逐个处理。**散文段(prose=true)** 走下面五步,**一段一停**:
+
+1. 按 Polish Prompt 改写,自检去AI硬拦项与红线(数值/引用/专名/行内标记)无残留、无破坏。
+2. 在对话里贴出该段对照,固定格式:
+   ```
+   ── Unit <idx> · <section_type> ──
+   原文:   <raw_text>
+   润色后: <polished_text>
+   改动点:
+     · <原词/原表述> → <新词/新表述>(为什么:去AI套话 / 拆长句 / 母语化 / 被动调整…)
+     · …(逐处列全,没改的不写)
+   风险flag: <若有,列出;无则省略此行>
+   ```
+   改动点必须**逐处列全**——这是你对照手改原稿的依据,不能只说"优化了表达"。
+3. **停下**,等你表态:
+   - 确认/默许 → 写回 `polished/<idx>.json`,进下一段。
+   - 要求调整(语气/某词别动/换种改法) → 重改重贴,直到你满意再写回。
+   - 跳过该段 → 标 `polished_by=unchanged-user-skip`、保留原文,进下一段。
+4. 只有你确认后才写回该 unit,绝不未确认就落盘。
+5. 全部段处理完 → 照常走 Pipeline 第4步起(verify / 盲检 / strict_gate / merge / report)。
+
+**非散文段(prose=false:参考文献、作者名单、单位、资助、关键词、致谢、图表标题、纯数据清单)**:不润色、**不逐段打扰你**。直接标 `polished_by=unchanged-nonprose` 写回,在邻近一次输出末尾汇总一句"已跳过 N 个非散文段(参考文献/图注等)"即可。
+
+**节奏开关**:你可随时说"接下来连续润完不用停"→切到连续模式(整节或剩余段一次润完再统一贴对照);说"恢复逐段停"→切回一段一停。默认逐段停。
 
 ## Output Contract
 - `units/<idx>.json`,原子化单元(原文 + section_type + 引用/数值标记)。
