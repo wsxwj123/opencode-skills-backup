@@ -49,7 +49,6 @@ AI_STYLE_BANNED_PATTERNS: tuple[tuple[str, str], ...] = (
     ("tapestry", r"\btapestry\b"),
     ("underscore", r"\bunderscore(?:s|d)?\b"),
     ("testament", r"\btestament\b"),
-    ("Moreover", r"\bMoreover\b"),
     ("Crucial", r"\bCrucial\b"),
     ("Landscape", r"\bLandscape\b"),
     ("Pivot", r"\bPivot(?:s|ed|ing)?\b"),
@@ -91,8 +90,6 @@ AI_CLICHE_TERMS_EN: tuple[str, ...] = (
     "pave the way",
     "of paramount importance",
     "a key player",
-    "moreover",
-    "furthermore",
 )
 AI_CLICHE_TERMS_ZH: tuple[str, ...] = (
     "值得注意的是",
@@ -311,7 +308,6 @@ def polish_changed_text_locally(text: str) -> str:
     if not cleaned:
         return cleaned
     replacements = (
-        (r"\bMoreover,\s*", ""),
         (r"\bCrucial\b", "Important"),
         (r"\bdelve into\b", "examine"),
         (r"\bcomprehensive landscape\b", "current evidence base"),
