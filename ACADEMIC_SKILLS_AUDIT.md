@@ -926,3 +926,10 @@ gsw 的 `proofread.py` 早已实现 拼写/中文标点漏入英文/上下标裸
 3. **希腊字母**仅覆盖单位场景(um→μm/ug→μg),未做符号级规范检测。
 4. **图像造假 / 查重 / 临床注册号 / 摘要↔正文数字一致**:列入 presubmission_checklist.md 作 soft 提醒,非门禁(机器无法可靠裁决或需外部工具)。
 5. **本机 507 幻影删除**:未处理(超出本任务范围),本地 skills 工作区缺这些文件,需用户决定是否从 origin 拉回。
+
+### 第 37 轮追加(2026-06-29):中文句内半角标点提为硬拦
+用户要求"中文用全角/英文用半角"双向都拦。原 `halfwidth_punct_in_cn`(中文句内夹半角 `,;:()`)仅 WARN。本次提为硬拦,**只在中文输出技能**落地(英文技能保持报告不拦——英文稿引用中文文献会用半角,硬拦会误卡):
+- **sci2doc** check_quality.py:退出码判定加 `halfwidth_punct_in_cn==0`(与 subsup_bare 并列);SKILL S9 同步。
+- **nsfc** humanizer_zh.py:check_halfwidth_in_cn 的 severity 由 WARNING 提为 ERROR(scan 门禁"无 ERROR"自动拦);更新 test_format_contract 契约4 断言 + SKILL ⑤。
+- 实测:`细胞,然后`/`清洗:结果`→命中硬拦;全角句、数字千分位 `1,000` 均不误报;两技能 test_format_contract 全过。
+- 英文技能(gsw/review/revise/polish)未改:仍检测+报告,不进 --fail-on。

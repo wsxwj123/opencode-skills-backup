@@ -299,14 +299,16 @@ def test_charlevel_bidirectional() -> None:
     # F1 反例：正确写法"登录"
     assert "chinese_typo" not in _codes("用户需要登录系统后操作。"), "F1 不应误报'登录'"
 
-    # 全 WARN：字符级 issue 不得出现 ERROR 级
+    # 分级：D1 半角标点=ERROR 硬拦（中文标书应全角）；D2 上下标 / F1 错别字=WARNING
     issues = scan_text("本实验,生成 H2O，用户登陆系统。")["issues"]
-    charlevel = [i for i in issues
-                 if i["code"] in {"halfwidth_punct_in_cn", "subsup_bare", "chinese_typo"}]
-    assert charlevel and all(i["severity"] == "WARNING" for i in charlevel), \
-        "字符级检查必须全为 WARNING 级"
+    halfwidth = [i for i in issues if i["code"] == "halfwidth_punct_in_cn"]
+    assert halfwidth and all(i["severity"] == "ERROR" for i in halfwidth), \
+        "D1 中文句内半角标点必须为 ERROR 级（硬拦）"
+    soft_charlevel = [i for i in issues if i["code"] in {"subsup_bare", "chinese_typo"}]
+    assert soft_charlevel and all(i["severity"] == "WARNING" for i in soft_charlevel), \
+        "D2 上下标 / F1 错别字仍应为 WARNING 级"
 
-    print("契约 4 (字符级 D1/D2/F1 双向断言, 全 WARN) OK")
+    print("契约 4 (字符级 D1=ERROR硬拦 / D2,F1=WARN 双向断言) OK")
 
 
 # ---------------------------------------------------------------------------
