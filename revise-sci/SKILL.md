@@ -344,7 +344,7 @@ These inline markers are load-bearing and carry the same status as citation mark
 
 🔴 收口前置闸口：`delegate_review verify` 必须 exit 0（含 RV-R8 结构完整性），否则不得声明改稿完成。任一项 fail 均为阻断。
 
-### Revise-Sci 特有项（id: RV-R1 ~ RV-R9）
+### Revise-Sci 特有项（id: RV-R1 ~ RV-R11）
 
 | id | 项目 | 核验方式 |
 |---|------|---------|
@@ -357,5 +357,10 @@ These inline markers are load-bearing and carry the same status as citation mark
 | RV-R9 | polish 片段级守卫通过：每个 polished 片段 `polish_numbers_ok=true`（无数值漂移/丢失）、`polish_certainty_ok=true`（谨慎动词未被升级为强断言）、无套话禁词残留；`polish_risk_flags` 已落盘到 unit / `revision_polish_execution.json` / `comment_records/<id>.md` | `python scripts/strict_gate.py --project-root <project_root>`（strict_gate 内含 A/B/MID 三项检查，RV-R1 通过则本项通过） |
 | RV-R7 | response_to_reviewers.docx 结构完整：每个 comment block 都有 comment heading / response-section heading / evidence-section heading | `python scripts/strict_gate.py --project-root <project_root>`（strict_gate 解析 docx 核验结构，RV-R1 通过则本项通过） |
 | RV-R8 | 结构完整性：改后稿件结构完整（原结构无破坏、参考文献编号连续、response 各 unit 三要素齐全）；退稿信每条意见在 edit_plan 中有落点无遗漏 | `python scripts/strict_gate.py --project-root <project_root>`（RV-R1 通过则本项通过）；或人工逐段核查 |
+| RV-R11 | 语法拼写与字符级格式：对原子化正文 `manuscript_sections/` 跑字符级体检。高置信类别 **misspelling**（英文常见错拼）/ **chinese_punct**（中文标点漏入英文句）/ **subsup_bare**（H2O、IC50、cm² 等应上下标却裸写，含 CJK 安全边界）**零容忍**——命中任一即 `fail_on_hits` 非空、`ok=false`、退出码非 0；其余类别（学术错拼/中文错字/单位/英美混用/数字格式/术语不一致/Methods 时态/断链）**仅报告不阻断**。**只报告供用户决断，绝不自动改正文**（fragment-only 保真），命中后由用户决定是否回片段修订 | `python scripts/proofread.py --manuscript-dir manuscript_sections --report proofread_report.json --fail-on misspelling,chinese_punct,subsup_bare` → `ok=true` 且 `fail_on_hits` 为空 |
 
 > RV-R3 仅在使用 Patch 修订协议时适用，跳过需在 notes 中注明原因。RV-R4/R6/R7/R8/R9 已由 strict_gate 覆盖，RV-R1 通过即视为通过；RV-R5 须确认 pipeline 正式运行产出 comment_registry.json。
+
+### 投稿前作者自检（🟡 soft 提醒，不阻断交付）
+
+终稿交付前，对照 `references/presubmission_checklist.md` 过一遍（数字一致性、英美拼写统一、图像无不当处理、Source Data、查重、临床注册号、报告规范附件、投稿材料齐全等）。这些项多需作者掌握原始数据/图像/外部工具，机器无法可靠裁决，故**只提醒、不阻断**；与本技能既有 hard 门禁（引用一一对应、去AI、跨节一致、字符级体检 RV-R11 等）不重复。

@@ -112,6 +112,12 @@
           "name": "常识合理性",
           "check": "盲检子代理顺带扫正文是否有明显常识/事实硬伤(单位量级离谱、生理/机制常识错误、跨文献综合时的事实拼接错误、前后数值逻辑矛盾)；软项仅报告不阻断、不改内容，与引用/文献核验区分",
           "severity": "soft"
+        },
+        {
+          "id": "R21",
+          "name": "语法拼写与字符级格式",
+          "check": "机器门禁：高置信类别零容忍——misspelling（常见英文错拼，如 occured/seperate）、chinese_punct（中文标点漏入英文，如 ，；：（）。）、subsup_bare（应上下标却裸写，如 H2O/CO2/IC50，CJK 安全边界）命中任一即 fail。其余类别（英美拼写混用 bre_ame_mixed、单位格式 unit_format、术语写法不一致 term_variant、数字千分位不一致、Methods 时态、学术错拼/中文错别字/中文句内半角等）仅报告不阻断，由作者择一统一。脚本扫 drafts/ 下各节 section_*.md，自动跳过 Full_Manuscript/Draft_Round* 合并衍生物。",
+          "script": "python3 scripts/proofread.py --manuscript-dir drafts --report proofread_report.json --fail-on misspelling,chinese_punct,subsup_bare"
         }
       ]
     },

@@ -753,7 +753,9 @@ If pending_sections is empty → all sections complete; proceed to Phase 4.
     2. **派一个独立子代理**（Claude Code 用 `academic-blind-reviewer`；其他平台派通用子代理），把任务包原样给它、**不要给它本节的写作上下文**，要求按任务包返回 JSON 数组。
     3. 校验返回：`python3 scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate manuscript-dod --return <子代理返回.json> --section <当前section_id> --root <项目根>`；退出码非 0（任一缺项 / fail / 无证据）= **fail-closed**，据子代理证据修复后重跑，**未过不得声明完成**。verify 通过会落盘 `.review_pass/<当前section_id>.json`，下一节 `prewrite_gate.py` 会**硬校验**它（缺失即拒绝开写）。
 
-    `manuscript-dod` gate 共 15 项（通用 6：引文一一对应 / citation_guard 已过 / 符合 storyline / 占位符清零 / 去 AI 合规 / 字数达标；review 特有 5：综合非罗列 / 矛盾仲裁 / 引用类型匹配 / 检索日志已记 / 框架图一致；systematic 额外 3：PRISMA 计数自洽 / RoB 已评级 / GRADE 已分级；结构完整性 R15（全类型通用））。**逐项内容与核验命令以 `references/dod_checklist.json` 为唯一真源**。上面 `pack` 步骤运行时会把该 gate 的每个 item（id / name / check / script）完整打印进盲检任务包，此处不再复述以免与 JSON 漂移。systematic 3 项仅 Review type = systematic 时检查，R15 全类型通用。
+    `manuscript-dod` gate 共 15 项（通用 6：引文一一对应 / citation_guard 已过 / 符合 storyline / 占位符清零 / 去 AI 合规 / 字数达标；review 特有 5：综合非罗列 / 矛盾仲裁 / 引用类型匹配 / 检索日志已记 / 框架图一致；systematic 额外 3：PRISMA 计数自洽 / RoB 已评级 / GRADE 已分级；结构完整性 R15（全类型通用）；语法拼写与字符级格式 R21（全类型通用机器门禁））。**逐项内容与核验命令以 `references/dod_checklist.json` 为唯一真源**。上面 `pack` 步骤运行时会把该 gate 的每个 item（id / name / check / script）完整打印进盲检任务包，此处不再复述以免与 JSON 漂移。systematic 3 项仅 Review type = systematic 时检查，R15 全类型通用。
+
+    - **R21 语法拼写与字符级格式(🔴机器硬门禁,可阻断)**,跑 `python3 scripts/proofread.py --manuscript-dir drafts --report proofread_report.json --fail-on misspelling,chinese_punct,subsup_bare`。stdlib-only、自包含。高置信三类**零容忍**——misspelling(英文常见错拼)、chinese_punct(中文标点漏入英文)、subsup_bare(应上下标却裸写,如 H2O/CO2/IC50,CJK 安全边界),命中任一即 `ok=false`(脚本 exit 1),据 `proofread_report.json` 的 `fail_on_hits` 定位修复后重跑。其余类别(英美拼写混用、单位格式、术语写法不一致、数字千分位、Methods 时态、学术错拼/中文错别字等)仅在报告里提示、不阻断,由作者择一统一。与 R5 去AI(style_checker)互补:R5 管文风,R21 管字符级机器错。
 
     附带软报告项（不计入上述 15 项硬 gate，不进 verify 退出码，由盲检子代理 LLM 判断）：
 
@@ -896,6 +898,7 @@ Write Mode has no `pending_sections` field so this gate is a no-op (no key → e
 **📖 进入本阶段必读：**
 1. `references/submission_checklist.md`（综述版投稿清单 + 强制/询问分级 + 红线 + 产出路径）
 2. general-sci-writing 的 `references/submission-guide.md` 与 `references/compliance-gate.md` 的逐项标准——**只读，不改 gsw**。读取以对齐 Cover Letter 询问明细、CRediT 11 类分配、Acknowledgements 类别、合规门禁判定。
+3. `references/presubmission_checklist.md`（投稿前作者自检清单，**soft 提醒不阻断**）：终稿交付前对照逐项自查，重点是机器无法可靠裁决、需作者掌握原始数据/图像/外部工具的项（图像不当处理、Source Data、查重、注册号、报告规范附件、投稿材料齐全等）。已被本技能 hard 门禁覆盖的维度不重复，仅提醒，不阻断交付。
 
 ### 强制 / 询问分级（对齐 gsw，不静默留白）
 

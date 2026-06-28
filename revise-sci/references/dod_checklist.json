@@ -110,6 +110,12 @@
           "name": "常识合理性",
           "check": "盲检扫重写片段的明显常识/事实硬伤（单位量级/机制/数值矛盾），软项仅报告不阻断、不改内容，区别于引用核验（RV-G1/RV-G2）与 reviewer-simulator 完整审计",
           "severity": "soft"
+        },
+        {
+          "id": "RV-R11",
+          "name": "语法拼写与字符级格式",
+          "check": "对原子化正文（manuscript_sections/）跑 proofread.py 字符级体检：高置信类别 misspelling（常见英文拼写错）/ chinese_punct（中文标点漏入英文句）/ subsup_bare（H2O、IC50、cm2 等应上下标却裸写，含 CJK 安全边界）零容忍——命中任一即 fail_on_hits 非空、ok=false、退出码非 0；其余类别（学术错拼/中文错字/单位/英美混用/数字格式/术语不一致/时态/断链等）仅报告不阻断。本项只报告供用户决断，绝不自动改正文（fragment-only 保真），命中后由用户人工决定是否回片段修订。",
+          "script": "python scripts/proofread.py --manuscript-dir manuscript_sections --report proofread_report.json --fail-on misspelling,chinese_punct,subsup_bare"
         }
       ]
     }

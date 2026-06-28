@@ -75,6 +75,13 @@
           "name": "常识合理性",
           "check": "盲检子代理顺带扫是否有明显常识/事实硬伤(单位量级离谱、生理/机制常识错误、前后数值逻辑矛盾)；软项仅报告不阻断、绝不自动改内容，与数值/引用核验区分",
           "severity": "soft"
+        },
+        {
+          "id": "PL-G13",
+          "name": "润色后语法拼写与字符级格式自检",
+          "check": "对润色输出(polished/<idx>.json 的 polished_text)扫 misspelling/chinese_punct/subsup_bare,命中任一则阻断交付并列出问题供用户处理,绝不自动改稿(纯读+报告,不写回任何 json/docx/原稿)",
+          "severity": "hard",
+          "script": "python scripts/proofread_polished.py --project-root ."
         }
       ]
     }

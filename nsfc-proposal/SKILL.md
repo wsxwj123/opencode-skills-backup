@@ -320,6 +320,7 @@ Follow phased gates in order:
    - [ ] ③`gate-check --require-mcp` PASS（引文矩阵 / MCP 缓存 / 撤稿检测 / 科学问题属性）
    - [ ] ④页数 ≤30 页（`page-estimate` 核验；超出则已按报告定位修剪）
    - [ ] ⑤`humanizer_zh.py scan-all` 无 ERROR，WARNING 已逐条处理或标注豁免理由；无 `cn_sentence_too_long`
+   - [ ] ⑤a（soft，N66）上下标裸写提醒：scan-all 的 `subsup_bare` 项已逐条核对——含化学式/离子/半数效应浓度/单位指数的标书（H2O、CO2、Ca2+、IC50、cm2 等）改用 `^..^`/`~..~` 或 sup/sub，docx 才能正确呈现；不含化学式的标书天然无命中。仅报告不阻断
    - [ ] ⑥全文占位符清零（CITE_PENDING/DATA_PENDING/【待AI】/【待翻译】）
    - [ ] ⑦V-11 代表作：每篇代表作能对应 ≥1 条 H 或 RC（`consistency_mapper validate` + 人工确认）
    - [ ] ⑧V-12 备选路线：每条主研究路线（M）含 ≥1 条备选方案或风险应对措施
