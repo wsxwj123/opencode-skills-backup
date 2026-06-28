@@ -319,7 +319,7 @@ Follow phased gates in order:
    - [ ] ②`consistency_mapper.py validate` V-01~V-12 全量验证 PASS（V-06/V-07/V-09/V-11/V-12 首次强制执行）
    - [ ] ③`gate-check --require-mcp` PASS（引文矩阵 / MCP 缓存 / 撤稿检测 / 科学问题属性）
    - [ ] ④页数 ≤30 页（`page-estimate` 核验；超出则已按报告定位修剪）
-   - [ ] ⑤`humanizer_zh.py scan-all` 无 ERROR，WARNING 已逐条处理或标注豁免理由；无 `cn_sentence_too_long`
+   - [ ] ⑤`humanizer_zh.py scan-all` 无 ERROR，WARNING 已逐条处理或标注豁免理由；无 `cn_sentence_too_long`。**🔴 中文句内半角标点（`code=halfwidth_punct_in_cn`，如 `细胞,然后`/`清洗:结果`）现为 ERROR 级硬阻断**：中文标书正文应全角 `，；：（）`，半角两侧紧邻汉字即报 ERROR、卡在本门禁（数字千分位 `1,000`、全角标点均不误报）
    - [ ] ⑤a（soft，N66）上下标裸写提醒：scan-all 的 `subsup_bare` 项已逐条核对——含化学式/离子/半数效应浓度/单位指数的标书（H2O、CO2、Ca2+、IC50、cm2 等）改用 `^..^`/`~..~` 或 sup/sub，docx 才能正确呈现；不含化学式的标书天然无命中。仅报告不阻断
    - [ ] ⑥全文占位符清零（CITE_PENDING/DATA_PENDING/【待AI】/【待翻译】）
    - [ ] ⑦V-11 代表作：每篇代表作能对应 ≥1 条 H 或 RC（`consistency_mapper validate` + 人工确认）

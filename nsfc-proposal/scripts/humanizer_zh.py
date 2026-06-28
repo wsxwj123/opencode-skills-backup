@@ -83,7 +83,7 @@ EXPLANATORY_COLON_PATTERN = (
 )
 
 
-# ── 字符级检查（移植自 general-sci proofread.py，全 WARN）──────────────────
+# ── 字符级检查（移植自 general-sci proofread.py）：D1半角标点=ERROR硬拦，D2上下标/F1错别字=WARN ──
 
 # D1：中文句内夹半角标点（高误报区，极度保守：仅标半角两侧紧邻汉字的高置信情形）
 # 半角 , ; : ( ) → 全角 ， ； ： （ ）；DOI/URL/数字区间天然不触发
@@ -134,12 +134,13 @@ CHINESE_TYPOS = {
 
 
 def check_halfwidth_in_cn(text: str) -> list[dict]:
-    """D1：中文句内夹半角标点（WARN）。仅标半角两侧紧邻汉字的高置信情形。"""
+    """D1：中文句内夹半角标点（ERROR，硬阻断）。仅标半角两侧紧邻汉字的高置信情形。
+    中文标书正文应全角标点；半角两侧紧邻汉字误报率极低，故定为 ERROR 由 scan 门禁拦截。"""
     out = []
     for pat, half, full, desc in HALFWIDTH_IN_CN:
         for m in pat.finditer(text):
             out.append({
-                "severity": "WARNING",
+                "severity": "ERROR",
                 "code": "halfwidth_punct_in_cn",
                 "span": [m.start(), m.end()],
                 "text": m.group(0),
