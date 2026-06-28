@@ -2689,6 +2689,8 @@ def generate_quality_report(
     error_count = len([i for i in all_issues if i['level'] == 'error'])
     warning_count = len([i for i in all_issues if i['level'] == 'warning'])
     info_count = len([i for i in all_issues if i['level'] == 'info'])
+    # 上下标裸写为硬阻断项：单独计数，纳入 ok/退出码判定（不改其评分权重）
+    subsup_bare_count = len([i for i in all_issues if i.get('code') == 'subsup_bare'])
     
     total_score = 100 - error_count * 10 - warning_count * 3 - info_count * 1
     total_score = max(0, min(100, total_score))
@@ -2711,7 +2713,8 @@ def generate_quality_report(
             'total': len(all_issues),
             'error': error_count,
             'warning': warning_count,
-            'info': info_count
+            'info': info_count,
+            'subsup_bare': subsup_bare_count
         },
         'issues': all_issues,
         'targets': {
@@ -2947,7 +2950,10 @@ def main():
         print(f"\n💾 报告已保存：{report_path}")
     
     # 返回退出码
-    if report['overall_score'] >= 80:
+    # 硬阻断项：上下标裸写（subsup_bare）命中即非零退出，无论总分高低；
+    # 其余 D1 半角标点 / F1 错别字仍为 warning，不在此处阻断。
+    subsup_bare_count = report.get('issue_summary', {}).get('subsup_bare', 0)
+    if report['overall_score'] >= 80 and subsup_bare_count == 0:
         sys.exit(0)
     else:
         sys.exit(1)

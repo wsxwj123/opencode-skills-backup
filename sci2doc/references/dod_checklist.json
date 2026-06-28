@@ -192,6 +192,13 @@
           "check": "本章各节齐全、层级完整（引言/方法/结果/讨论或学科对应结构），无缺节、无空章节标题、章末小结齐全"
         },
         {
+          "id": "S9",
+          "name": "上下标裸写零容忍",
+          "check": "check_char_level() 上下标裸写（code=subsup_bare，如 H2O/CO2/IC50/cm2）命中数为 0。hard 阻断：命中>0 则 check_quality.py 非零退出（issue_summary.subsup_bare>0）。注：D1 半角标点 / F1 错别字仍为 warning 不阻断；中文紧邻经 _SS/_SE 边界已处理不误报",
+          "script": "python scripts/check_quality.py <章节合并.docx>",
+          "severity": "hard"
+        },
+        {
           "id": "S-GIT",
           "name": "检查点已落",
           "check": "已落版本检查点:git 可用时 git_checkpoint.py status 的 commit 数随节/章递增;git 不可用时已生成 snapshot。二者满足其一",

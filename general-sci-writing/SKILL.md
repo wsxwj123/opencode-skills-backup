@@ -387,6 +387,7 @@ python scripts/state_manager.py add-abbreviation <one.json>
    - [ ] **⑯检查点已落**：本节已落版本检查点——`python scripts/git_checkpoint.py status .` 显示 commit 数随节递增（git 可用时），或 git 不可用时已生成 snapshot（`version_history.json` 有新快照）。二者满足其一即可
    - [ ] **⑰字符级排版契约已遵守**（人工项）：本节斜体（学名/基因名/统计符号 `*p*`/`*n*`/拉丁缩写）、上标 `^...^`（10^6^、cm^2^）、下标 `~...~`（H~2~O、CO~2~、IC~50~）标记到位，无裸写 `H2O`/`CO2`/`IC50`；中文全角、英文数字半角（见 §字符级排版契约）
    - [ ] **⑱常识合理性(🟡软报告,不阻断;json 真源 id: section-dod/G23)**,盲检子代理顺带扫本节是否有明显常识/事实硬伤(单位量级离谱、生理/机制常识错误、前后数值逻辑矛盾等)被写入。**仅提示不阻断**,只在发现明显硬伤时记入盲检反馈供用户裁决,绝不自动改内容。与 citation_guard 文献证据核验(管"引用真不真")、结构完整性 G 项区分:本项管"写出来的内容常识上是否成立"。
+   - [ ] **⑲语法拼写与字符级格式(🔴hard;json 真源 id: section-dod/G24)**：`proofread.py` 扫描本节，**高置信类别（misspelling/chinese_punct/subsup_bare）零容忍**（命中即 `ok=false` 阻断）；英美混用/术语不一致等低置信项仅报告不阻断。脚本：`python scripts/proofread.py --manuscript-dir <本节所在目录> --report proofread_report.json --fail-on misspelling,chinese_punct,subsup_bare`（命中高置信类别时 exit 非 0，按 report 修后重跑）。
 10. **Safety Write**: 用户 OK 后写入文件 → 智能快照 → **Git Checkpoint**：`python scripts/git_checkpoint.py commit [Project_Root] "[gsw] section <section_id> done"`（git 不可用时自动 no-op，snapshot 仍是回退兜底）。回退手段：若落盘后用户反悔，`/rollback` 到上一个 snapshot、`git checkout <sha> -- <file>` 回退单节，或直接 Edit 改原子化文件（参见 §3 润色 workflow）。
 
 **Discussion 段落结构 / Online Methods vs STAR Methods**：写 Discussion 或 Methods 章节前 `Read references/writing-templates.md` 对应小节。要点：Discussion 走"主要发现总结→文献对比+机制→**Limitations（强制，缺即退稿高频）**→Outlook"四段式；Methods 按 target_journal 选 Online Methods（Nature 精简版+完整版后置）或 STAR Methods（Cell 五段结构）。
@@ -512,6 +513,7 @@ python scripts/state_manager.py add-abbreviation <one.json>
 6. **跑 checklist**：投稿 checklist（guide 第 2 节期刊适配）+ 报告规范 checklist（guide 第 3 节）+ Source Data（guide 第 4 节）逐项 ✅/❌，缺项补到全 ✅。
 7. **输出**：`submission/submission_checklist.md`（含逐项 status + 报告 checklist 状态 + Source Data sheet 命名核对 + Keywords 数量核对）+ 各 markdown 模板 + `submission/keywords.txt`。
 8. **DoD 核查**：对照 `references/dod_checklist.json` 的 `submission-pack-dod` gate 逐项核对（SP1 无占位 / SP2 Keywords 3-6 个 / SP3 Source Data 对应 / SP4 Funding·Acks 不空）；其中 Keywords 缺失或数量不符由 Phase 10.5 强制阻断。
+9. **终稿前 soft 自查**：终稿前对照 `references/presubmission_checklist.md` 自查（soft，不阻断）——覆盖摘要数字一致性、英美拼写统一、图像无不当处理、Source Data、查重/AIGC 声明、试验注册号、报告规范附件、投稿材料齐全等机器无法可靠裁决、需作者掌握原始数据/外部工具的项；仅提示，不阻断交付。
 
 **红线（详见 guide 第 7 节）**：严禁 `{{VAR}}` 残留 / 伪造 reviewer 邮箱 / 瞒报 COI；Funding 无则写 "no specific external funding" 不留空；**Source Data 数值必须与图对应**（不一致即学术不端嫌疑）；Acks 不能空；**Keywords 必须产出且数量符合目标刊（3-6 个），缺失或数量不符即阻断投稿包导出（见 Phase 10.5）**。
 
