@@ -415,6 +415,13 @@
           "script": "python scripts/humanizer_zh.py scan-all sections"
         },
         {
+          "id": "N66",
+          "name": "上下标裸写提醒",
+          "check": "scan-all 输出中的 subsup_bare 项已逐条核对：含化学式/离子/半数效应浓度/单位指数的标书（如 H2O、CO2、Ca2+、IC50、cm2）应改用 ^..^/~..~ 上下标或 sup/sub；不含化学式的标书天然无命中。软项仅报告不阻断、不改内容；最终经 section_merger/make_reference_docx 产出 docx 时上下标才能正确呈现",
+          "severity": "soft",
+          "script": "python scripts/humanizer_zh.py scan-all sections"
+        },
+        {
           "id": "N48",
           "name": "全文占位符清零",
           "check": "全文占位符清零（CITE_PENDING/DATA_PENDING/【待AI】/【待翻译】）",
