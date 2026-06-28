@@ -2689,8 +2689,9 @@ def generate_quality_report(
     error_count = len([i for i in all_issues if i['level'] == 'error'])
     warning_count = len([i for i in all_issues if i['level'] == 'warning'])
     info_count = len([i for i in all_issues if i['level'] == 'info'])
-    # 上下标裸写为硬阻断项：单独计数，纳入 ok/退出码判定（不改其评分权重）
+    # 上下标裸写 / 中文句内半角标点 为硬阻断项：单独计数，纳入 ok/退出码判定（不改其评分权重）
     subsup_bare_count = len([i for i in all_issues if i.get('code') == 'subsup_bare'])
+    halfwidth_in_cn_count = len([i for i in all_issues if i.get('code') == 'halfwidth_punct_in_cn'])
     
     total_score = 100 - error_count * 10 - warning_count * 3 - info_count * 1
     total_score = max(0, min(100, total_score))
@@ -2714,7 +2715,8 @@ def generate_quality_report(
             'error': error_count,
             'warning': warning_count,
             'info': info_count,
-            'subsup_bare': subsup_bare_count
+            'subsup_bare': subsup_bare_count,
+            'halfwidth_punct_in_cn': halfwidth_in_cn_count
         },
         'issues': all_issues,
         'targets': {
@@ -2950,10 +2952,11 @@ def main():
         print(f"\n💾 报告已保存：{report_path}")
     
     # 返回退出码
-    # 硬阻断项：上下标裸写（subsup_bare）命中即非零退出，无论总分高低；
-    # 其余 D1 半角标点 / F1 错别字仍为 warning，不在此处阻断。
+    # 硬阻断项：上下标裸写（subsup_bare）+ 中文句内半角标点（halfwidth_punct_in_cn）命中即非零退出，无论总分高低；
+    # 其余 F1 错别字仍为 warning，不在此处阻断。
     subsup_bare_count = report.get('issue_summary', {}).get('subsup_bare', 0)
-    if report['overall_score'] >= 80 and subsup_bare_count == 0:
+    halfwidth_in_cn_count = report.get('issue_summary', {}).get('halfwidth_punct_in_cn', 0)
+    if report['overall_score'] >= 80 and subsup_bare_count == 0 and halfwidth_in_cn_count == 0:
         sys.exit(0)
     else:
         sys.exit(1)
