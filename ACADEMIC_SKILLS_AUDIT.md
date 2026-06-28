@@ -888,3 +888,41 @@ nsfc 已有轻量格式规则,基金篇幅短无原子化流程,不强加脚本(
 - 3 份 md5 一致、py_compile 过、两 dod JSON 合法、无残留旧表述(通用 6/9 项)。
 
 **仍是启发式(非红线)**:索引基于正则扫描,罗马数字/全大写专名可能误报,故定位审查辅助 + 人工复核;revise 硬门禁亦标注"可疑项人工复核"。full_name 列偶有句首残词(如 "investigated photodynamic therapy"),不影响 orphan 判定。
+
+---
+
+## 第 37 轮：投稿前自检盲区补齐 — 语法/拼写/上下标/英美统一门禁(2026-06-29)
+
+> 承上轮常识合理性软门禁(PL-G12/RV-G8/G23/G7/R20/N65,commits 4bedf66/7bf5de9,已 push,但当时未记入本文档)。本轮补另一类盲区。commit 72759b5 已 push origin/main。
+
+### 起因
+用户问:用各技能内置自检评估论文时,除创新性/实验设计外,能否查 跨节一致性/序号连贯/语法/AI感/常识/单位/格式(上下标/希腊字母/斜体/标题分级)。3 个 Explore 子代理盘点 7 技能(含 reviewer-simulator)DoD+脚本后定位 3 真盲区:①语法/拼写几乎全线无门禁(去AI≠语法校对)②格式机器裁决仅 sci2doc 有 ③英美拼写统一全线无。其余维度(一致性/序号/AI感/结构/伦理/统计)已有 hard 覆盖。
+
+### 关键复用发现(非重写)
+gsw 的 `proofread.py` 早已实现 拼写/中文标点漏入英文/上下标裸写(CJK 安全边界 _NB/_NA)/英美混用/单位 全套;sci2doc `check_char_level`、nsfc `humanizer_zh::check_subsup` 都是它的移植。真正工作=接进 DoD 门禁 + verbatim 复制 + 补开关。
+
+### 改动(派 6 个 opus 子代理按技能并行,文件按目录隔离无冲突)
+- **中心**:proofread.py 加 `--fail-on` 开关(命中高置信类别即 ok=false,不传则向后兼容);4 份英文技能 proofread.py md5 一致。
+- **gsw G24 / review-writing R21 / revise-sci RV-R11**:hard,扫 misspelling/chinese_punct/subsup_bare 零容忍;英美混用等仅报告。
+- **polish-sci PL-G13**:hard 但**只报告不改稿**(proofread_polished.py 把 polished/*.json 的 polished_text dump 到临时 md 再扫,纯读无写回);已写入 SKILL.md 命令流 5b 步。
+- **sci2doc S9**:check_char_level 的 subsup_bare 从 WARN 提为阻断(只改退出码判定,D1 半角/F1 错别字仍 warn)。
+- **nsfc N66**:soft 上下标提醒(check_subsup 已在 humanizer_zh,仅补 DoD 抓手)。
+- **新建 presubmission_checklist.md**(gsw/review-writing/revise-sci):投稿前 soft 清单(临床注册号 ICMJE/查重/图像造假6类/数据可得性/投稿材料/英美统一);sci2doc(学位论文)、nsfc(基金)不适用故不建。
+
+### 软硬分级裁决
+高置信机械可判(真错拼/中文标点漏入英文/上下标裸写)→hard;低置信风格(英美混用/术语不一致/学术错拼)→soft 报告;图像造假/查重→soft 清单提醒(写作技能手里无原始图像字节、查重需 iThenticate 等外部工具,hard 要么误判阻断要么走过场,**反对用户"全 hard"提议并说明理由**,与 LEARNINGS「LLM-as-judge 46.4%」一致)。
+
+### 实测
+- 每脚本:脏样(occured/H2O/中文逗号)→ ok=false + fail_on_hits 明细;净样 → ok=true;**中文紧邻「影响H2O代谢」正确抓取**(用 _SS/_SE ASCII 边界,无 \b 在 CJK 失效)。
+- 各技能现有 test_format_contract.py / test_charlevel_contract.py **全部回归通过**(gsw 16、rw 8、polish 4、revise 22、sci2doc 9、nsfc 7)。
+- 6 技能新 ID **逐 gate 核验唯一无撞号**(跨 gate 同名 G1/S1/S-GIT/N-GIT 是双 gate/多 phase 设计,全局 Counter 会误判,须逐 gate 看)。
+
+### git 安全处置
+本地 HEAD 落后 origin/main 5 个提交(即上轮已 push 的工作),工作区另有 507 个幻影删除(本机仅存学术技能子集,备份仓库含全量)。处置:`git reset --mixed origin/main` 快进指针(本地领先 0,零提交丢失,不动工作区)→ 只显式 add 21 个本轮文件 → commit 72759b5 → push。**绝未 git add -A**(否则会提交 507 删除抹掉备份仓库几百技能)。
+
+### 未做 / 未实测(诚实记录)
+1. **未跑端到端 `delegate_review.py verify`**:需真实项目状态(units/polished/manuscript 目录),仅验了脚本级 ok/exit 与回归测试。门禁"在真实盲检流程里是否被子代理正确裁决"未观察。
+2. **斜体缺失检测**(学名/基因/统计符号未加斜体)未做机器判定:需命名词典,误报率高;仅靠现有保真契约 + 人工。
+3. **希腊字母**仅覆盖单位场景(um→μm/ug→μg),未做符号级规范检测。
+4. **图像造假 / 查重 / 临床注册号 / 摘要↔正文数字一致**:列入 presubmission_checklist.md 作 soft 提醒,非门禁(机器无法可靠裁决或需外部工具)。
+5. **本机 507 幻影删除**:未处理(超出本任务范围),本地 skills 工作区缺这些文件,需用户决定是否从 origin 拉回。
