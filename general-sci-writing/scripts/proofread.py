@@ -154,10 +154,12 @@ CHINESE_PUNCT = {
     "！": "!", "？": "?", "“": "\"", "”": "\"",
     "‘": "'", "’": "'", "《": "<", "》": ">",
     "【": "[", "】": "]", "「": "\"", "」": "\"",
-    "—": "—",  # em dash is fine but worth flagging mixed use
     "…": "...",
     "。": ".",
 }
+# 注：em dash (—, U+2014) 不属于"中文标点漏入英文"，英文学术写作合法使用。
+# 它是否算 AI 腔（装饰性破折号）由 style_checker.py 的去AI规则裁决，不在此处计入
+# chinese_punct（否则纯英文稿一用破折号就被硬门禁误拦）。
 
 # ── Unit format issues ───────────────────────────────────────────────────────
 UNIT_PATTERNS = [
@@ -180,15 +182,15 @@ NUMBER_RE = re.compile(r"(?<![\d.,])\d{4,}(?![\d.,])")
 NUMBER_WITH_COMMA_RE = re.compile(r"\d{1,3}(,\d{3})+")
 
 # ── Term consistency tracking ────────────────────────────────────────────────
-# 检测同概念多种写法:nano-particle/nanoparticle/NP/NPs 等
+# 检测同概念多种写法。每组列「互斥」的表面形态(空格/连字符/连写)，仅当 ≥2 种
+# 不同形态共存才报；旧版用 `in.?vivo` 与 `in vivo` 重叠模式，单写 "in vivo" 会被
+# 两条同时命中误报"不一致"，故改为互斥精确形态。
 TERM_VARIANTS = [
-    [r"nano.?particle", r"NPs?\b"],
-    [r"in.?vitro", r"in vitro"],
-    [r"in.?vivo", r"in vivo"],
-    [r"co.?culture", r"coculture"],
-    [r"cell.?line", r"cellline"],
-    [r"flow.?cytometry"],
-    [r"western.?blot"],
+    [r"\bnanoparticles?\b", r"\bnano-particles?\b", r"\bnano particles?\b"],
+    [r"\binvitro\b", r"\bin-vitro\b", r"\bin vitro\b"],
+    [r"\binvivo\b", r"\bin-vivo\b", r"\bin vivo\b"],
+    [r"\bcoculture\b", r"\bco-culture\b", r"\bco culture\b"],
+    [r"\bcellline\b", r"\bcell-line\b", r"\bcell line\b"],
 ]
 
 # ── Tense hints for Methods (should be past tense) ───────────────────────────
