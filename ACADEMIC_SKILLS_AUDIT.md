@@ -933,3 +933,12 @@ gsw 的 `proofread.py` 早已实现 拼写/中文标点漏入英文/上下标裸
 - **nsfc** humanizer_zh.py:check_halfwidth_in_cn 的 severity 由 WARNING 提为 ERROR(scan 门禁"无 ERROR"自动拦);更新 test_format_contract 契约4 断言 + SKILL ⑤。
 - 实测:`细胞,然后`/`清洗:结果`→命中硬拦;全角句、数字千分位 `1,000` 均不误报;两技能 test_format_contract 全过。
 - 英文技能(gsw/review/revise/polish)未改:仍检测+报告,不进 --fail-on。
+
+### 第 37 轮端到端实测(2026-06-29):拿真材料测,抓到并修复一个硬拦误判 bug
+用两份真实项目并行测新门禁(Explore 只读子代理):
+- **PPE-sci-ds(真实中文学位论文,sci2doc)**:check_char_level 扫 54 章。subsup_bare 命中 17 处(CO2/O2/IC50/mm3)**全真、0 误报**;halfwidth_punct_in_cn **0 命中**(该论文半角都在英文/数字旁,不满足"汉字,汉字",未误伤;数字千分位 1,000 不误报)。结论:中文半角+上下标硬门禁在真实论文上**误报率 0%,安全可用**。
+- **肠骨轴_opencode(真实英文综述,review-writing)**:proofread 初测报 123 问题,其中 **103 是误报**——全是英文破折号 `—`(em dash)被 `CHINESE_PUNCT` 词表错误收录、计入 chinese_punct 硬拦 → **纯英文稿一用破折号就被硬拦**。这是把 chinese_punct 放进 --fail-on 后暴露的真 bug。
+  - **修复**:proofread.py 的 CHINESE_PUNCT 删除 em dash 条目(em dash 是否算 AI 腔由 style_checker 去AI规则裁决,不属"中文标点漏入英文")。顺手修 TERM_VARIANTS 重叠正则(`in.?vivo` 与 `in vivo` 双重命中致单写 "in vivo" 误报"不一致"→ 改互斥精确形态)。
+  - **复测**:同一真稿 ok=true,误报 123→11;4 份 proofread.py md5 仍一致;gsw test_charlevel/format 回归全过。
+  - 剩余已知软噪声(不阻断):`analyses` 被 bre_ame 误判为英式 analyse(英式动词/名词复数天然歧义,正则修不净);number_format/crossref_dangling 是该项目真实问题(非门禁 bug)。
+- 教训:**脚本级单测全过 ≠ 真实数据上不误报**;em dash 这类"看着像中文标点的英文合法字符"只有拿真英文稿跑才暴露。详见 SKILLS_LEARNINGS。
