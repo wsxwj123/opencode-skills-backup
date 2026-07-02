@@ -942,3 +942,12 @@ gsw 的 `proofread.py` 早已实现 拼写/中文标点漏入英文/上下标裸
   - **复测**:同一真稿 ok=true,误报 123→11;4 份 proofread.py md5 仍一致;gsw test_charlevel/format 回归全过。
   - 剩余已知软噪声(不阻断):`analyses` 被 bre_ame 误判为英式 analyse(英式动词/名词复数天然歧义,正则修不净);number_format/crossref_dangling 是该项目真实问题(非门禁 bug)。
 - 教训:**脚本级单测全过 ≠ 真实数据上不误报**;em dash 这类"看着像中文标点的英文合法字符"只有拿真英文稿跑才暴露。详见 SKILLS_LEARNINGS。
+
+### 第 37 轮完整流水线端到端实测(2026-06-29):真实综述 docx,挖出并修复"修订痕迹静默丢字"严重 bug
+用户给真实综述 docx(巨噬细胞囊泡 DDS,296段/6.9万字符),派 6 个 opus 子代理并行跑 polish-sci 完整流水线(env_preflight→atomize→pack→并行润色71段正文→gates)。
+- **流水线机制正常**:原子化 264 unit(71 正文/193 非正文)、pack、6 批并行润色、红线校验(数字/引用`<sup>[n]</sup>`/斜体标记逐字保留)全部按设计工作;opus 子代理正确遵守"零改动"——**遇残缺文本拒绝编造、只做无歧义修正、meaning_changed 全 false**。
+- **🔴 挖出严重真 bug:修订痕迹(tracked changes)静默丢字**。该 docx 有 807 处 `<w:ins>` + 2014 处 `<w:del>`。python-docx 的 `paragraph.text` **不读 `<w:ins>` 插入文本**,导致 atomize 抽出的正文系统性残缺(掉首字母 "he"="The"/"acrophages"="macrophages"、丢词、词粘连)。**关键**:这是流水线第一步(抽取)的静默数据损坏,**下游所有门禁都发现不了**(它们比对 polished vs raw,而 raw 本身已坏)。实锤:`further confirmed`+` they inherit`+`ed` 等字都躺在 `<w:ins>`(作者 j290,2021-11)里被丢。
+  - **非我引入、非 atomize 逻辑 bug**:atomize 忠实复制 python-docx 的输出,是 python-docx 对修订痕迹 docx 的固有行为 + 无人拦截。
+  - **修复**:polish-sci 和 revise-sci 的 `atomize_manuscript.py` 加 `count_tracked_changes()` + fail-closed 拦截:检测到 `<w:ins>/<w:del>` 即报错停下,提示"先在 Word 接受所有修订再导入",另给 `--allow-tracked-changes` 逃生阀。实测该真稿现被明确拒绝(报 807 插入/2014 删除),md 输入不受影响,两技能 test_format_contract 回归全过。
+- **未完成**:因输入被修订痕迹污染,未产出可用润色 docx(测试目的=验证流水线+挖 bug,已达成);gates(verify/proofread/strict_gate)在残稿上未逐一跑完(意义不大,机制已在原子级验证)。
+- **教训**:端到端真材料测试不可替代——所有单测+脚本级门禁全绿,却在真实带修订痕迹的 docx 上第一步就静默丢字。真实稿件常带修订痕迹,这个拦截是刚需。详见 SKILLS_LEARNINGS。
