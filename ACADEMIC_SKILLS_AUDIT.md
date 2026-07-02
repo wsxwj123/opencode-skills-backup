@@ -951,3 +951,11 @@ gsw 的 `proofread.py` 早已实现 拼写/中文标点漏入英文/上下标裸
   - **修复**:polish-sci 和 revise-sci 的 `atomize_manuscript.py` 加 `count_tracked_changes()` + fail-closed 拦截:检测到 `<w:ins>/<w:del>` 即报错停下,提示"先在 Word 接受所有修订再导入",另给 `--allow-tracked-changes` 逃生阀。实测该真稿现被明确拒绝(报 807 插入/2014 删除),md 输入不受影响,两技能 test_format_contract 回归全过。
 - **未完成**:因输入被修订痕迹污染,未产出可用润色 docx(测试目的=验证流水线+挖 bug,已达成);gates(verify/proofread/strict_gate)在残稿上未逐一跑完(意义不大,机制已在原子级验证)。
 - **教训**:端到端真材料测试不可替代——所有单测+脚本级门禁全绿,却在真实带修订痕迹的 docx 上第一步就静默丢字。真实稿件常带修订痕迹,这个拦截是刚需。详见 SKILLS_LEARNINGS。
+
+### 第 37 轮 · 干净输入完整跑通 polish-sci(2026-06-29):真实综述 PDF,又修 2 个门禁误报 + 挖 1 个子代理可靠性问题
+承上:上次用带修订痕迹的 docx 被 atomize 新拦截挡下。改用同篇的**已发表 PDF**(pymupdf 抽取,单栏干净,切除参考文献,121块→80 unit),派 7 个 opus 并行润色全部正文,首次在干净输入上完整跑通 atomize→pack→并行润色→verify→proofread→strict_gate→merge→导出 docx。
+- **成稿可用**:37 段实质润色(去AI/拆长句/主动化/修笔误 ERP→EPR)、表格碎片与声明段正确 passthrough、红线(数字/`[n]`引用/专名)逐字保留、meaning_changed 全 false。交付 md+docx+变更报告于 `~/Desktop/claude/巨噬细胞囊泡综述_polished/`。
+- **又修 2 个同类门禁误报**(都由 --fail-on chinese_punct 暴露,与 em dash 同族):
+  1. **弯引号 `“ ” ‘ ’` 被当中文标点硬拦**(13 处命中,实为英文智能引号/撇号 don't→don’t)。修:CHINESE_PUNCT 移除这 4 个歧义引号,只保留全角中文独有标点(，；：（）等)。4 份 proofread.py 同步 md5 一致。修后 PL-G13 proofread 由 fail→**ok=true (0 issue)**。
+- **挖出子代理可靠性问题**:批4(idx36-47)**报告成功但写盘未持久化**,12 个 unit 仍是 PLACEHOLDER。主会话核验 verify 时发现(靠 PLACEHOLDER 门禁兜住,没漏过)→ 主会话可靠补做(表格碎片 passthrough + 45/46/47 亲自润色)。教训:并行子代理"报告完成"不可全信,主会话必须用 verify/PLACEHOLDER 门禁独立核验落盘结果——这正是"不许主代理自评、必须独立核验"设计救场的实例。
+- **残留(合理未清)**:verify 仍标 ~12 句 >30 词(密集机制句,子代理判定拆分会割裂语义,30 词为软指导线)+ 1 处 idx66 "proved"(原文本有,certainty 检查未做 raw↔polished 差分的轻微误报)。均非润色缺陷。
