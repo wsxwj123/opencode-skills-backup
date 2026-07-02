@@ -213,10 +213,28 @@ def build_units(blocks: list[dict]) -> list[dict]:
     return units
 
 
+def count_tracked_changes(docx_path: Path) -> dict:
+    """统计 docx 未接受的修订痕迹(tracked changes)。
+    python-docx 的 paragraph.text 只读普通 run,不读 <w:ins> 插入文本、且会保留
+    <w:del> 删除文本,带修订痕迹的稿件会被静默丢字/串字(抽取残缺)。原子化前须拦下。"""
+    import zipfile
+    try:
+        with zipfile.ZipFile(docx_path) as z:
+            xml = z.read("word/document.xml").decode("utf-8", "ignore")
+    except Exception:
+        return {"ins": 0, "del": 0}
+    return {
+        "ins": len(re.findall(r"<w:ins[ >]", xml)),
+        "del": len(re.findall(r"<w:del[ >]", xml)) + len(re.findall(r"<w:delText[ >]", xml)),
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Atomize finished manuscript into per-paragraph polish units")
     parser.add_argument("--manuscript", required=True, help="input md or docx")
     parser.add_argument("--project-root", required=True)
+    parser.add_argument("--allow-tracked-changes", action="store_true",
+                        help="跳过修订痕迹拦截(仅在确认可接受丢字风险时使用)")
     args = parser.parse_args()
 
     src = Path(args.manuscript)
@@ -225,6 +243,20 @@ def main() -> int:
     units_dir.mkdir(parents=True, exist_ok=True)
 
     if src.suffix.lower() == ".docx":
+        # 🔴 修订痕迹拦截:tracked changes 会导致 python-docx 静默丢字,fail-closed。
+        if not args.allow_tracked_changes:
+            tc = count_tracked_changes(src)
+            if tc["ins"] or tc["del"]:
+                print(json.dumps({
+                    "ok": False, "error": "tracked_changes_present",
+                    "ins": tc["ins"], "del": tc["del"],
+                    "message": ("docx 含未接受的修订痕迹(tracked changes): "
+                                f"{tc['ins']} 处插入 / {tc['del']} 处删除。python-docx 会静默丢弃 "
+                                "<w:ins> 插入文本,导致抽取的正文残缺(丢词/掉首字母)。请先在 Word 里 "
+                                "【审阅→接受→接受所有修订】并关闭修订跟踪后重新导入;或明知风险时加 "
+                                "--allow-tracked-changes 强制继续。"),
+                }, ensure_ascii=False))
+                return 1
         blocks = split_docx_paragraphs(src)
     else:
         blocks = split_md_paragraphs(src.read_text(encoding="utf-8"))
