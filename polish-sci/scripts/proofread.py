@@ -194,6 +194,29 @@ TERM_VARIANTS = [
     [r"\bcellline\b", r"\bcell-line\b", r"\bcell line\b"],
 ]
 
+# ── 拉丁短语斜体软提醒(SOFT 级,只报告不阻断) ────────────────────────────────
+# 封闭集:只收公认必须斜体、误报≈0 的拉丁短语。正文里裸写(未被 *...* / **...**
+# 斜体标记包裹)时给软提醒。**不收** et al./e.g./i.e./vs./etc.——现代多数期刊
+# 这些用正体,收了会误报/引争议。severity=soft,权重 0,不扣分、不进 --fail-on 硬集。
+LATIN_ITALIC_PHRASES = [
+    "in vitro", "in vivo", "ex vivo", "in situ", "in silico", "in utero",
+    "de novo", "a priori", "a posteriori", "post hoc", "ad libitum",
+    "per se", "in toto", "in vacuo",
+]
+
+
+def _latin_phrase_pattern(phrase):
+    """按 CJK 安全边界(_NB/_NA)构造短语正则,词内空格容忍多空白,大小写不敏感。
+    左右 ASCII 字母数字边界避免 'invitrogen' 之类连写误伤,且中文紧邻能抓。"""
+    parts = [re.escape(w) for w in phrase.split()]
+    return re.compile(_NB + r"\s+".join(parts) + _NA, re.IGNORECASE)
+
+
+_LATIN_PATTERNS = [(p, _latin_phrase_pattern(p)) for p in LATIN_ITALIC_PHRASES]
+# 已被 markdown 斜体/粗体标记包裹的片段:剥离后再扫裸写,避免误报。
+# 参照 subsup 先剥离已正确标注片段的思路。[^*\n]+ 防跨多个 * / 换行的贪婪过度匹配。
+_ITALIC_WRAPPED_RE = re.compile(r"\*\*[^*\n]+\*\*|\*[^*\n]+\*")
+
 # ── Tense hints for Methods (should be past tense) ───────────────────────────
 # 简单启发式:Methods 段内出现现在时第三人称单数 + 动作动词
 PRESENT_TENSE_VERBS_RE = re.compile(
@@ -324,6 +347,23 @@ def check_subsup(text):
                 "severity": "warn",
                 "found": m.group(0),
                 "suggest": desc,
+                "pos": m.start(),
+            })
+    return issues
+
+
+def check_latin_italic(text):
+    """拉丁短语斜体软提醒(SOFT). 未被 *...* / **...** 包裹的拉丁短语 → 提示,不阻断.
+    先剥离已斜体/粗体标记的片段(其内命中不报),再在剩余文本扫裸写."""
+    stripped = _ITALIC_WRAPPED_RE.sub(" ", text)
+    issues = []
+    for phrase, pat in _LATIN_PATTERNS:
+        for m in pat.finditer(stripped):
+            issues.append({
+                "type": "latin_italic_missing",
+                "severity": "soft",
+                "found": m.group(0),
+                "suggest": f"Latin phrase conventionally italicized: *{phrase}*",
                 "pos": m.start(),
             })
     return issues
@@ -505,6 +545,7 @@ def check_file(filepath):
     all_issues.extend(check_chinese_typos(text))      # F1 (warn)
     all_issues.extend(check_halfwidth_in_cn(text))     # D1 (warn)
     all_issues.extend(check_subsup(text))              # D2 (warn)
+    all_issues.extend(check_latin_italic(text))        # 拉丁斜体 (soft,只报告不阻断)
     all_issues.extend(check_units(text))
     all_issues.extend(check_number_consistency(text))
     all_issues.extend(check_bre_ame_mixed(text))
@@ -512,7 +553,7 @@ def check_file(filepath):
     all_issues.extend(check_methods_tense(text, fn))
     # 计分:high 扣 5/medium 扣 2/low 扣 1,起点 100
     score = 100
-    severity_weight = {"high": 5, "medium": 2, "low": 1, "warn": 0}
+    severity_weight = {"high": 5, "medium": 2, "low": 1, "warn": 0, "soft": 0}
     for i in all_issues:
         score -= severity_weight.get(i.get("severity", "low"), 1)
     score = max(0, score)
