@@ -82,6 +82,12 @@
           "check": "对润色输出(polished/<idx>.json 的 polished_text)扫 misspelling/chinese_punct/subsup_bare,命中任一则阻断交付并列出问题供用户处理,绝不自动改稿(纯读+报告,不写回任何 json/docx/原稿)",
           "severity": "hard",
           "script": "python scripts/proofread_polished.py --project-root ."
+        },
+        {
+          "id": "PL-G14",
+          "name": "拉丁短语斜体软提醒",
+          "check": "proofread.py 的 latin_italic_missing 软提醒:in vitro/in vivo/ex vivo/in situ/de novo/post hoc/per se 等公认须斜体的拉丁短语,若润色输出裸写(未被 *...* 斜体标记包裹)则报告。仅提示,不阻断、不进 --fail-on、不扣分,由人工确认是否补斜体",
+          "severity": "soft"
         }
       ]
     }

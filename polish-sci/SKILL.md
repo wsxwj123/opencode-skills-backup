@@ -177,7 +177,7 @@ python scripts/polish_report.py --project-root <root>
 ## DoD 自检清单(润色收口)
 机器可读真源,`references/dod_checklist.json` 的 `polish-dod` gate。strict_gate 运行前,必须委托独立子代理盲检。
 
-通用 13 项(id: PL-G1 ~ PL-G13,其中 PL-G11 为科学内容零改动硬项、PL-G12 为软报告、PL-G13 为字符级自检硬项):
+通用 14 项(id: PL-G1 ~ PL-G14,其中 PL-G11 为科学内容零改动硬项、PL-G12 为软报告、PL-G13 为字符级自检硬项、PL-G14 为拉丁斜体软提醒):
 - **PL-G1 数值保留**,每段数值/统计量集合与原文一字不差。
 - **PL-G2 无语气升级**,不确定性动词未被升级。
 - **PL-G3 引用保留**,引用标记与 DOI 集合前后一致。
@@ -191,6 +191,7 @@ python scripts/polish_report.py --project-root <root>
 - **PL-G11 科学内容零改动**,盲检补脚本红线之外的语义盲区:润色是否仅改语言、未改科学实质(事实/机制陈述、方法描述、因果方向、限定条件与适用范围、结论确切含义均与原文等价)。任一处科学内容被实质改写或含义偏移即 fail,列出原文与润色后对应句为证。
 - **PL-G12 常识合理性(🟡软报告,不阻断)**,盲检子代理顺带扫一遍是否有明显常识/事实硬伤(单位量级离谱、生理/机制常识错误、前后数值逻辑矛盾等)被原文带入或润色引入。**仅提示不阻断**,纯润色默认原文内容正确,本项只在发现明显硬伤时记入报告供人工判断,绝不自动改内容(与 PL-G1~G11 的核验/硬拦区分,也与 reviewer-simulator 的完整科学性审查区分)。
 - **PL-G13 润色后语法拼写与字符级格式自检(硬项)**,`python scripts/proofread_polished.py --project-root <root>` 对润色输出(polished/<idx>.json 的 polished_text)扫 misspelling / chinese_punct / subsup_bare,命中任一则 ok=false、阻断交付并列出问题供用户处理。**只报告不自动改**——脚本纯读 polished/ 并输出 proofread_report.json,绝不写回任何 json/docx/原稿(改与不改由用户决断,守"科学内容零改动"铁律)。
+- **PL-G14 拉丁短语斜体软提醒(🟡软/人工确认,不阻断)**,PL-G13 同一次 `proofread_polished.py` 运行产出的 `proofread_report.json` 里 `latin_italic_missing` 类别:润色输出中 `in vitro`/`in vivo`/`ex vivo`/`in situ`/`de novo`/`post hoc`/`per se` 等公认须斜体的拉丁短语若裸写(未被 `*...*` 斜体标记包裹)则报告。**仅提示,不阻断、不进 `--fail-on`、不扣分**,由人工确认是否补斜体(`et al.`/`e.g.`/`vs.` 等正体惯例不在词表内)。
 
 🔴 **委托盲检(强制)**,主 agent 不得自评 DoD。必须:
 1. `python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate polish-dod --files <...> --workdir <root>`,把打印的任务包交给独立子代理(默认 sonnet)。
