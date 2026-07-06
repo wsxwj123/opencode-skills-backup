@@ -1012,3 +1012,14 @@ gsw 的 `proofread.py` 早已实现 拼写/中文标点漏入英文/上下标裸
 
 proofread.py 现 6 技能字节一致(`7e8775c`)：gsw/polish/revise/review + reviewer-response/reviewer-simulator。英文拼写硬门覆盖：那6个 + nsfc = 7 技能（仅 sci2doc 缺）。
 **未 commit**（等用户确认；本机 507 幻影删除风险，只能显式 add 本轮文件）。
+
+### 六、用户意见核实（2026-07-06）：grep 实证推翻 2 处评审误判
+用户凭记忆质疑"投稿打包/综述返修"缺口，grep 核实后**用户对、评审错**：
+- **投稿打包非缺口**：gsw 有 Phase 11 `/submission-pack`（cover letter/CRediT/COI/Funding/DAS/Keywords/highlights + submission-guide.md + submission_package.json 模板 + SP1-4 DoD）；review-writing 有 Phase 5 综述版投稿包且对齐 gsw 标准。第38轮"投稿打包无专用技能"的评审结论**作废**。唯一残留小缝：返修再投时 revise-sci 独立项目根够不着首投 submission-pack。
+- **综述返修非缺口**：revise-sci `intake_router` 原生支持 `reviewer-simulator-html` 模式（读 critique-section/critique-list，保留 evidence_anchor/root_cause/author_strategy）。"综述→reviewer-simulator→revise-sci"是官方链路，无需新技能。残留：revise-sci 独立 literature_index，新增文献不回流综述 Zotero 全局编号，需人工对账。
+- **统一交换格式降级**：用户指出原子化 md 段落层本就可交接（合并 md/转 docx 是后续），非必须统一格式；真损耗仅"下游重拆丢上游辅助状态"，属小优化。
+- **hypothesis-generation 本机不存在**（brainstorming 描述指向它）→ 待办 2 二选一。
+
+**修订后真待办**（范围=custom-skills 8 技能互相组合）：① 课题设计/统计新技能(大,用户依知识库/文献库/领域设计课题,后做)；② brainstorming 落文件(小,交付格式 md/html/mermaid 用户选)；③ revise-sci/reviewer-response 补 track-changes 输出(中)。
+
+教训：**功能覆盖结论也必须 grep 实证，不能凭 SKILL.md 印象说"缺"**——与 delegate_review/citation_guard 的 md5 实证同理。评审误报"缺口"会误导用户砍掉本已存在的能力。
