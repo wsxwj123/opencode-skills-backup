@@ -15,6 +15,10 @@ NUMBERED_REF_RE = re.compile(r"^\s*(\d+)\.\s+(.*)$")
 
 def normalize_reference_key(text: str) -> str:
     lowered = text.lower()
+    # Strip a leading enumerator ("1.", "1 ", "[1]", "[1].") so an already-numbered
+    # existing reference line and an unnumbered candidate entry hash to the same key.
+    # Without this, dedup never matched and the same entry was appended on every run.
+    lowered = re.sub(r"^\s*\[?\d+\]?[.)]?\s+", "", lowered)
     lowered = re.sub(r"doi:\s*10\.\S+", "", lowered)
     lowered = re.sub(r"pmid:\s*\d+", "", lowered)
     lowered = re.sub(r"[^a-z0-9\u4e00-\u9fff]+", " ", lowered)

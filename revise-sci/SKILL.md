@@ -113,7 +113,7 @@ python scripts/build_issue_matrix.py ...
 python scripts/state_manager.py --project-root <project_root> refresh
 python scripts/citation_guard.py ...   # if paper_search_results_path is provided
 python scripts/revise_units.py --project-root <project_root> [--paper-search-results <paper_search_validated.json>] [--comment-id <comment_id>]   # --comment-id 仅处理单条评论,用于迭代调试;默认全量
-python scripts/build_literature_index.py ...
+python scripts/build_literature_index.py --project-root <project_root> [--seed-index <writing_project_literature_index.json>]   # 不传 --seed-index：行为不变，从 global_id=1 重建库。传 --seed-index：复用撰写项目(gsw/review-writing)已有引文库作种子，**保留种子每条的既有 global_id**，本次返修新查到的文献按去重键(归一DOI>PMID>归一标题)与种子比对——命中种子的复用其编号不新增、真正新的从"种子最大 global_id + 1"续号追加，合并结果写 revise 自己的 data/literature_index.json。**只读种子、不写回撰写项目**(种子扩展语义)。种子读取兼容 gsw 松 schema(global_id/citation_number/id/number/ref_number 任一取号，都缺按数组顺序补号)与根级/data 下任意路径。
 python scripts/matrix_manager.py bootstrap ...
 python scripts/matrix_manager.py audit ...
 python scripts/merge_manuscript.py --project-root <project_root> --output-md <output_md>
@@ -202,6 +202,7 @@ Each comment must contain:
 - `paper_search_results_path` may be used to ingest confirmed paper-search results into citation-oriented comment handling.
 - `paper_search_results_path` is not trusted directly. It must first pass `citation_guard.py`, which performs dual verification using provider trace and identifier/title consistency evidence before citations can auto-complete a comment.
 - `build_literature_index.py` must convert validated citation support into review-writing style canonical artifacts: `data/literature_index.json` and `data/revision_claims.json`.
+- `build_literature_index.py` accepts an optional `--seed-index <path>` to reuse the writing project's existing `literature_index.json` (produced by `gsw`/`review-writing`) as a seed. Seed entries keep their original `global_id`; revision-found references that match a seed entry (dedup key: normalized DOI > PMID > normalized title) reuse the seed number instead of getting a new one, and truly new references continue numbering from `max(seed global_id) + 1`. The seed is read-only — the merged result is written only to revise-sci's own `data/literature_index.json`, never back to the writing project (seed-extension semantics). The seed reader tolerates the looser gsw schema (global id under any of `global_id`/`citation_number`/`id`/`number`/`ref_number`, back-filled by array order when absent) and a seed located either at the project root or under `data/`. Omitting `--seed-index` keeps the original rebuild-from-1 behavior unchanged.
 - `matrix_manager.py` must derive `data/synthesis_matrix.json` from the canonical literature index and emit `data/synthesis_matrix_audit.json` before delivery.
 - `build_reference_registry.py` must extract the final manuscript reference list into canonical `data/reference_registry.json` and audit body-to-reference coverage into `data/reference_coverage_audit.json`.
 - `build_reference_registry.py` may import a fallback reference seed from `references_source_path` when the manuscript reference list is empty or absent.

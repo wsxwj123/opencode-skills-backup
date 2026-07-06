@@ -33,6 +33,61 @@ def canonical_key(citation: dict[str, Any]) -> tuple[str, str]:
     return ("title", title)
 
 
+# Seed entries may come from gsw/review-writing indexes whose schema is looser
+# than revise-sci's canonical. The global id can live under any of these keys.
+SEED_GLOBAL_ID_KEYS = ("global_id", "citation_number", "id", "number", "ref_number")
+
+
+def _coerce_global_id(value: Any) -> int | None:
+    try:
+        return int(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def load_seed_entries(seed_path: Path) -> list[tuple[int, dict[str, Any]]]:
+    """Read a seed literature index (gsw root-level or review-writing data/ style),
+    tolerating a bare list or a wrapper dict. Each returned entry keeps its ORIGINAL
+    global id (resolved from any of SEED_GLOBAL_ID_KEYS); entries missing a numeric
+    id are back-filled by array order without colliding with explicit ids.
+
+    Read-only: the seed file itself is never modified by this function."""
+    raw = read_json(seed_path, None)
+    if isinstance(raw, dict):
+        for key in ("entries", "literature_index", "results", "items"):
+            if isinstance(raw.get(key), list):
+                raw = raw[key]
+                break
+        else:
+            raw = []
+    if not isinstance(raw, list):
+        return []
+
+    parsed: list[tuple[int | None, dict[str, Any]]] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        gid: int | None = None
+        for key in SEED_GLOBAL_ID_KEYS:
+            if key in item:
+                gid = _coerce_global_id(item.get(key))
+                if gid is not None:
+                    break
+        parsed.append((gid, item))
+
+    used = {gid for gid, _ in parsed if gid is not None}
+    next_fallback = 1
+    resolved: list[tuple[int, dict[str, Any]]] = []
+    for gid, item in parsed:
+        if gid is None:
+            while next_fallback in used:
+                next_fallback += 1
+            gid = next_fallback
+            used.add(gid)
+        resolved.append((gid, item))
+    return resolved
+
+
 def merge_unique_str_list(existing: list[str], new_values: list[str]) -> list[str]:
     seen = {normalize_ws(x) for x in existing if normalize_ws(x)}
     out = [x for x in existing if normalize_ws(x)]
@@ -53,6 +108,17 @@ def explicit_missing_note(value: Any, default_note: str) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Build review-writing style literature_index.json for revise-sci")
     parser.add_argument("--project-root", required=True)
+    parser.add_argument(
+        "--seed-index",
+        default=None,
+        help=(
+            "Optional path to an existing literature_index.json (e.g. from the writing "
+            "project run by gsw/review-writing) to reuse as a seed. Seed entries keep "
+            "their original global ids; revision-found references matching a seed reuse "
+            "its number, truly new references continue from max(seed id)+1. Read-only: "
+            "the seed file is never modified. Omit to rebuild from global_id=1 (unchanged)."
+        ),
+    )
     args = parser.parse_args()
 
     project_root = Path(args.project_root)
@@ -66,6 +132,17 @@ def main() -> int:
     canonical: list[dict[str, Any]] = []
     key_to_index: dict[tuple[str, str], int] = {}
     index_to_comment_ids: dict[int, list[str]] = {}
+    next_global_id = 1
+
+    if args.seed_index:
+        for gid, seed_item in load_seed_entries(Path(args.seed_index)):
+            entry = dict(seed_item)  # copy so the seed file's data is never mutated
+            entry["global_id"] = gid
+            canonical.append(entry)
+            key = canonical_key(entry)
+            if key[1]:
+                key_to_index.setdefault(key, len(canonical) - 1)
+            next_global_id = max(next_global_id, gid + 1)
 
     for row in validated.get("results", []):
         if not row.get("guard_verified"):
@@ -119,7 +196,7 @@ def main() -> int:
                 continue
 
             entry = {
-                "global_id": len(canonical) + 1,
+                "global_id": next_global_id,
                 "title": normalize_ws(str(citation.get("title") or "")),
                 "authors": citation.get("authors") or [],
                 "journal": normalize_ws(str(citation.get("journal") or citation.get("venue") or "")),
@@ -155,6 +232,7 @@ def main() -> int:
             key_to_index[key] = len(canonical)
             canonical.append(entry)
             index_to_comment_ids[len(canonical) - 1] = [comment_id] if comment_id else []
+            next_global_id += 1
 
     write_json(data_dir / "literature_index.json", canonical)
     claims = []
