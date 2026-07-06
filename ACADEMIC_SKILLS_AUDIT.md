@@ -959,3 +959,56 @@ gsw 的 `proofread.py` 早已实现 拼写/中文标点漏入英文/上下标裸
   1. **弯引号 `“ ” ‘ ’` 被当中文标点硬拦**(13 处命中,实为英文智能引号/撇号 don't→don’t)。修:CHINESE_PUNCT 移除这 4 个歧义引号,只保留全角中文独有标点(，；：（）等)。4 份 proofread.py 同步 md5 一致。修后 PL-G13 proofread 由 fail→**ok=true (0 issue)**。
 - **挖出子代理可靠性问题**:批4(idx36-47)**报告成功但写盘未持久化**,12 个 unit 仍是 PLACEHOLDER。主会话核验 verify 时发现(靠 PLACEHOLDER 门禁兜住,没漏过)→ 主会话可靠补做(表格碎片 passthrough + 45/46/47 亲自润色)。教训:并行子代理"报告完成"不可全信,主会话必须用 verify/PLACEHOLDER 门禁独立核验落盘结果——这正是"不许主代理自评、必须独立核验"设计救场的实例。
 - **残留(合理未清)**:verify 仍标 ~12 句 >30 词(密集机制句,子代理判定拆分会割裂语义,30 词为软指导线)+ 1 处 idx66 "proved"(原文本有,certainty 检查未做 raw↔polished 差分的轻微误报)。均非润色缺陷。
+
+---
+
+## 第 38 轮（2026-07-06）：库级流程评审 + 字符级门禁补齐
+
+### 一、库级流程评审（4 个 fable 角色评审员并行：SCI博士生/综述博士生/评审专家/方法学导师）
+区别于逐技能 darwin 打分，这轮做**系统级流程**评审：能否作为"SCI论文+综述一条龙"完整技能库。5 维评分（满分100）：
+
+| 维度 | 权重 | 判档 | 得分 |
+|---|---|---|---|
+| D1 单技能流程合理性 | 20 | 有短板(近合理) | 15 |
+| D2 组合接力可用性 | 25 | 有短板 | 14 |
+| D3 生命周期覆盖闭环 | 25 | 有短板偏下 | 12 |
+| D4 质量把关到位度 | 20 | 有短板 | 13 |
+| D5 用户可用性 | 10 | 有短板 | 6 |
+| **合计** | 100 | — | **60** |
+
+**结论**：作为"从科研设计到投稿一条龙、SCI+综述都算"的完整技能库 → 尚不完整(60<70)；但作为**"已有数据/已有综述内容→写成高质量稿件并过投稿返修"的写作+返修引擎** → 良好偏上。
+- **综述链**：review-writing 单技能选题→投稿包全闭环，质量高；仅"投稿后返修/回复"无综述原生技能，借原创三件套且产物不回流。
+- **SCI原创链**：只覆盖"有数据之后"的写作下半程（很强）；**研究设计/样本量/统计方案/数据分析整段真空**、投稿打包无专用技能、无统一稿件交换格式（跨技能接力丢状态）。
+
+### 二、探查纠错（md5 实证，推翻两个探查误判）
+- `citation_guard_core.py`：7 技能**全部字节一致** `7d34b39`，**无漂移**。探查所说"citation_guard 6 变体"是**薄适配层**（设计如此，section 1.2），非 bug。
+- `delegate_review.py`：**确有 2 组漂移** —— `4b78d4e9`(6技能,含 severity:soft 新机制) vs `4b0e8601`(reviewer-simulator/reviewer-response,旧版无 soft)。根因=soft 软项机制没铺到这 2 个报告类技能。新版向后兼容（未标 severity 默认硬项，行为等价）。
+- `proofread.py`：4 技能字节一致 `7e8775c`；reviewer-response/reviewer-simulator/sci2doc/nsfc 无 proofread（sci2doc/nsfc 有自家 check_quality/humanizer_zh 字符级检测）。
+
+### 三、本轮修复（只做"补齐已有逻辑覆盖面"的安全项；大改留待用户拍板）
+1. **delegate_review 收敛**（主会话直接做）：把 reviewer-simulator/reviewer-response 的 delegate_review.py 同步到 canonical `4b78d4e9`，8 份全字节一致，盲检地基恢复统一。语法+md5 已验。
+2. reviewer-response-sci 补 proofread **硬门**（回复信作者正文，misspelling/chinese_punct/subsup_bare）——派 fable。
+3. reviewer-simulator 补 proofread **软门**（审稿报告，只报告不拦）——派 fable。
+4. sci2doc / nsfc：调查英文拼写/中文错别字检测可靠性，**只把高置信英文拼写提硬拦，模糊中文错别字维持 warn**——派 fable。
+
+### 四、DEFERRED（大改，需用户决策，未动手）
+- 新增"研究设计/统计方案/样本量"能力（SCI上半程真空，D3 最大失分）；stat-helper 从写作期前移到采数据前。
+- 新增投稿打包（cover letter/期刊模板）能力。
+- 统一稿件交换格式（消除跨技能"导出→重新原子化"丢状态）。
+- revise-sci/reviewer-response-sci 产 Word track-changes 修订稿。
+- review-writing 加 Phase 6 返修环 / revise-sci 认领综述并回流引文编号。
+- brainstorming 落 hypothesis.json + 补齐 hypothesis-generation 技能。
+- 伦理批号/试验注册检查前移到入组前。
+
+### 五、本轮修复实测结果（主会话独立复验，非子代理自报）
+| 修复 | 结果 | 复验证据 |
+|---|---|---|
+| delegate_review 收敛 | ✅ | 8 份全 `4b78d4e9`；两报告技能 `--help` OK；契约测试全过 |
+| reviewer-response RR16 硬门 | ✅ | proofread.py md5 一致；脏样 ok=false 命中3类、`total_issues=3`（证明只扫作者 response_en/zh，未碰审稿人原话）；净样 ok=true；防误伤(em dash/弯引号在审稿人字段)不误报 |
+| reviewer-simulator B10 软门 | ✅ | 软项：列出 issue 但 exit=0 不阻断；proofread.py md5 一致；契约测试 OK |
+| nsfc 英文拼写 ERROR 硬门 | ✅ | 新建固定错拼表(高置信)；脏样 occured/recieve 命中 ERROR、净样/防误伤(CRISPR/IL-6/1,000/ELISA/IC50)零误报；test_format_contract 全过 |
+| sci2doc 英文拼写 | ⏸ 未加 | 调查发现英文拼写检测原不存在、中文错别字词典含 `登陆→登录` 同形异义会误伤；C 判定维持 warn 更安全（正确）。**与 nsfc 形成不对称**：nsfc 有英文错拼硬门、sci2doc 无——留作可选后续 |
+| sci2doc S9 备注订正 | ✅ | 备注"D1 半角仍 warning"与代码不符（第37轮已提 hard）→ 订正为"D1 已 hard / F1 仍 warn"；JSON 有效 |
+
+proofread.py 现 6 技能字节一致(`7e8775c`)：gsw/polish/revise/review + reviewer-response/reviewer-simulator。英文拼写硬门覆盖：那6个 + nsfc = 7 技能（仅 sci2doc 缺）。
+**未 commit**（等用户确认；本机 507 幻影删除风险，只能显式 add 本轮文件）。
