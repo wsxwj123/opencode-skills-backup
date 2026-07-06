@@ -82,7 +82,8 @@ Always produce:
 - `response_to_reviewers.docx`
 - revised manuscript markdown at `output_md_path`
 - revised manuscript Word at `output_docx_path`
-  - **默认 in-place 保原稿格式**：当原稿是 `.docx` 时，改后稿基于原始 manuscript docx 编辑——未被改的段落、表格、图片、样式、对齐**原样保留**，只替换被点名改写的段落的文字，并按行内标记（`*斜体*`/`**粗**`/`<sup>`/`<sub>`）重建 run、继承原段落基础字体（font.name/size/eastAsia）。定位/身份对不上时 **fail-closed**，自动回退到 md 全量重建并在 stderr 记录拒绝原因。原稿非 docx 或无原稿时走 md 全量重建（legacy fallback）。导出模式记录在 `project_state.json` 的 `outputs.manuscript_export_mode`（`in-place` / `md-rebuild`）。`response_to_reviewers.docx` 不受影响，维持现有固定样式脚本（含 eastAsia）。
+  - **默认 in-place 保原稿格式**：当原稿是 `.docx` 时，改后稿基于原始 manuscript docx 编辑——未被改的段落、表格、图片、样式、对齐**原样保留**，只替换被点名改写的段落的文字，并按行内标记（`*斜体*`/`**粗**`/`<sup>`/`<sub>`）重建 run、继承原段落基础字体（font.name/size/eastAsia）。定位/身份对不上时 **fail-closed**，自动回退到 md 全量重建并在 stderr 记录拒绝原因。原稿非 docx 或无原稿时走 md 全量重建（legacy fallback）。导出模式记录在 `project_state.json` 的 `outputs.manuscript_export_mode`（`in-place` / `in-place-tracked` / `md-rebuild`）。`response_to_reviewers.docx` 不受影响，维持现有固定样式脚本（含 eastAsia）。
+  - **可选 `--track-changes` 词级修订痕迹**（默认关闭，仅 in-place 生效）：改动段落按 original vs current 的词级 diff 写成带 Word 红蓝增删痕迹的 docx（`<w:ins>`/`<w:del>`，仅包住真正变化的词，行内斜体/上下标/粗体在痕迹两侧保留），导出模式记为 `in-place-tracked`。关闭时行为与原 clean in-place 完全一致。详见 Pipeline 段 `export_docx.py` 的 `--track-changes` 说明。
 - `precheck_report.md`
 - `issue_matrix.md`
 - `manuscript_edit_plan.md`
@@ -118,8 +119,9 @@ python scripts/matrix_manager.py audit ...
 python scripts/merge_manuscript.py --project-root <project_root> --output-md <output_md>
 python scripts/reference_sync.py --project-root <project_root> --output-md <output_md>
 python scripts/build_reference_registry.py --project-root <project_root> --output-md <output_md> [--references-source <ref_source>] [--reference-search-decision ask|approved|declined]
-python scripts/export_docx.py --project-root <project_root> --output-md <output_md> --output-docx <output_docx> [--reference-docx <ref_docx>] [--manuscript-docx <original_manuscript_docx>] [--no-inplace] [--journal-style journal-manuscript|nature-review|cell-press|lancet-review]
+python scripts/export_docx.py --project-root <project_root> --output-md <output_md> --output-docx <output_docx> [--reference-docx <ref_docx>] [--manuscript-docx <original_manuscript_docx>] [--no-inplace] [--track-changes] [--author revise-sci] [--date <ISO8601>] [--journal-style journal-manuscript|nature-review|cell-press|lancet-review]
 # 传 --manuscript-docx <原始稿.docx> 时改后稿默认 in-place 保原稿格式（仅替换被改段落；定位失败自动回退 md 全量重建）。--no-inplace 强制走 legacy 全量重建。run_pipeline 会在原稿为 .docx 时自动传入。
+# --track-changes（默认关闭）：in-place 导出时，改动段落不再整段重建成 clean 文本，而是对 original vs current 做**词级 diff**（英文按空白/标点切词、中文按单字切），生成带 Word 修订痕迹的 docx——删除词用 <w:del><w:delText>、新增词用 <w:ins><w:t>、替换=先删旧后插新；未变的词保持普通 run 不进痕迹。每处 ins/del 带唯一递增 w:id + w:author（--author，默认 revise-sci）+ w:date（--date，默认 datetime.now().isoformat()）。行内格式（*斜体*/**粗**/<sup>/<sub>）随词级 diff 完整保留在痕迹两侧。含内嵌图片的段落仍跳过（保图）。开关关闭时 clean in-place 行为**完全不变**。Word 里“接受全部修订”后正文==current，“拒绝全部修订”后==original。注意：python-docx 的 `.text` 不读 w:ins/w:del 内文，属正常现象（能正常打开），校验请用接受/拒绝后的文本或 docx 技能的 accept_changes.py。
 python scripts/final_consistency_report.py ...
 python scripts/strict_gate.py ...
 ```

@@ -2,9 +2,12 @@
 from __future__ import annotations
 
 import argparse
+import itertools
 import json
 import re
 import sys
+from datetime import datetime
+from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
 
@@ -557,6 +560,143 @@ def rebuild_paragraph_runs(paragraph, text: str, base: dict[str, Any]) -> None:
         _apply_base_font(run, base)
 
 
+# ---------------------------------------------------------------------------
+# Word-level track-changes rebuild (opt-in via --track-changes). Instead of
+# replacing a changed paragraph wholesale, diff original vs current at the word
+# level and emit real Word revisions: <w:ins> for added spans, <w:del> for
+# removed spans. Inline format (italic/bold/sup/sub) is carried on each token so
+# emphasis survives the word split and lands on the right side of every change.
+# ---------------------------------------------------------------------------
+
+# Tokenizer: English words (with internal apostrophe/hyphen), numbers, whitespace
+# runs, single CJK characters (Chinese has no spaces -> split per char), and any
+# other single punctuation char. Splitting whitespace as its own token keeps
+# equal spans equal so only truly-changed words fall inside <w:ins>/<w:del>.
+WORD_SPLIT_RE = re.compile(
+    r"[A-Za-z]+(?:[’'\-][A-Za-z]+)*"   # english word
+    r"|\d+(?:[.,]\d+)*%?"              # number (optional decimal/percent)
+    r"|\s+"                            # whitespace run
+    r"|[一-鿿]"               # single CJK char
+    r"|[^\sA-Za-z0-9一-鿿]"   # any other single char (punctuation)
+)
+
+# fmt tuple layout: (bold, italic, superscript, subscript). Hashable so tokens can
+# feed difflib.SequenceMatcher directly as (text, fmt) pairs.
+_PLAIN_FMT = (False, False, False, False)
+
+
+def _split_words(segment: str) -> list[str]:
+    return WORD_SPLIT_RE.findall(segment)
+
+
+def tokenize_with_format(text: str) -> list[tuple[str, tuple[bool, bool, bool, bool]]]:
+    """Split text carrying inline markers into (word, fmt) tokens.
+
+    Reuses INLINE_TOKEN_RE (the same **bold** / *italic* / <sup> / <sub> vocabulary
+    rebuild_paragraph_runs parses) so a formatted span's words each inherit that
+    span's format, and plain runs stay plain. Format lives on the token, so when the
+    diff slices a span the emphasis rides along instead of being dropped or shifted."""
+    tokens: list[tuple[str, tuple[bool, bool, bool, bool]]] = []
+
+    def emit(segment: str, fmt: tuple[bool, bool, bool, bool]) -> None:
+        for word in _split_words(segment):
+            tokens.append((word, fmt))
+
+    pos = 0
+    for match in INLINE_TOKEN_RE.finditer(text):
+        if match.start() > pos:
+            emit(text[pos:match.start()], _PLAIN_FMT)
+        if match.group(1) is not None:
+            emit(match.group(0)[2:-2], (True, False, False, False))
+        elif match.group(2) is not None:
+            emit(match.group(0)[1:-1], (False, True, False, False))
+        elif match.group(3) is not None:
+            emit(match.group(0)[5:-6], (False, False, True, False))
+        elif match.group(4) is not None:
+            emit(match.group(0)[5:-6], (False, False, False, True))
+        pos = match.end()
+    if pos < len(text):
+        emit(text[pos:], _PLAIN_FMT)
+    return tokens
+
+
+def _add_formatted_run(paragraph, text: str, base: dict[str, Any], fmt: tuple[bool, bool, bool, bool]):
+    """Append a run carrying the base font plus this token's italic/bold/sup/sub.
+    Built via python-docx so <w:rPr> child ordering stays schema-valid."""
+    run = paragraph.add_run(text)
+    _apply_base_font(run, base)
+    bold, italic, sup, sub = fmt
+    if bold:
+        run.bold = True
+    if italic:
+        run.italic = True
+    if sup:
+        run.font.superscript = True
+    if sub:
+        run.font.subscript = True
+    return run
+
+
+def _add_change_block(
+    paragraph,
+    tokens: list[tuple[str, tuple[bool, bool, bool, bool]]],
+    base: dict[str, Any],
+    change_tag: str,
+    id_gen,
+    author: str,
+    date: str,
+) -> None:
+    """Wrap `tokens` in a single <w:ins> or <w:del> revision. Runs are created via
+    python-docx (valid rPr) then moved under the change wrapper; for deletions their
+    <w:t> is retagged <w:delText> per the OOXML tracked-changes schema."""
+    if not tokens:
+        return
+    is_del = change_tag == "del"
+    runs = [_add_formatted_run(paragraph, token_str, base, fmt) for token_str, fmt in tokens]
+    change = OxmlElement(f"w:{change_tag}")
+    change.set(qn("w:id"), str(next(id_gen)))
+    change.set(qn("w:author"), author)
+    change.set(qn("w:date"), date)
+    for run in runs:
+        r = run._r
+        r.getparent().remove(r)
+        if is_del:
+            for t in r.findall(qn("w:t")):
+                t.tag = qn("w:delText")
+        change.append(r)
+    paragraph._p.append(change)
+
+
+def rebuild_paragraph_runs_tracked(
+    paragraph,
+    original: str,
+    current: str,
+    base: dict[str, Any],
+    id_gen,
+    author: str,
+    date: str,
+) -> None:
+    """Replace a paragraph's content with a word-level track-changes rendering of
+    original -> current: equal spans as plain runs, deletions in <w:del>, insertions
+    in <w:ins>, replacements as del-then-ins. Every run inherits the base font and
+    keeps its token's inline emphasis."""
+    _clear_paragraph_runs(paragraph)
+    a = tokenize_with_format(original)
+    b = tokenize_with_format(current)
+    matcher = SequenceMatcher(None, a, b, autojunk=False)
+    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+        if tag == "equal":
+            for token_str, fmt in a[i1:i2]:
+                _add_formatted_run(paragraph, token_str, base, fmt)
+        elif tag == "delete":
+            _add_change_block(paragraph, a[i1:i2], base, "del", id_gen, author, date)
+        elif tag == "insert":
+            _add_change_block(paragraph, b[j1:j2], base, "ins", id_gen, author, date)
+        elif tag == "replace":
+            _add_change_block(paragraph, a[i1:i2], base, "del", id_gen, author, date)
+            _add_change_block(paragraph, b[j1:j2], base, "ins", id_gen, author, date)
+
+
 def collect_changed_paragraphs(project_root: Path) -> list[dict[str, Any]]:
     """From manuscript_section_index.json, return paragraphs whose current_text
     diverged from the original text (i.e. the ones revise actually edited)."""
@@ -574,9 +714,24 @@ def collect_changed_paragraphs(project_root: Path) -> list[dict[str, Any]]:
     return changed
 
 
-def export_inplace(manuscript_docx: Path, project_root: Path, output_docx: Path) -> dict[str, Any]:
+def export_inplace(
+    manuscript_docx: Path,
+    project_root: Path,
+    output_docx: Path,
+    track_changes: bool = False,
+    author: str = "revise-sci",
+    date: str | None = None,
+) -> dict[str, Any]:
     """Edit the original manuscript docx in place: replace only changed paragraphs'
-    text, preserve everything else. fail-closed on any location/identity mismatch."""
+    text, preserve everything else. fail-closed on any location/identity mismatch.
+
+    track_changes=False (default): changed paragraphs are rebuilt to their current
+    text (clean, no revision marks) — unchanged legacy behavior.
+    track_changes=True: changed paragraphs are re-rendered as word-level Word
+    revisions (<w:ins>/<w:del>) diffing original vs current."""
+    if date is None:
+        date = datetime.now().isoformat()
+    id_gen = itertools.count(1)
     doc = Document(str(manuscript_docx))
     paragraphs = doc.paragraphs
     changed = collect_changed_paragraphs(project_root)
@@ -619,13 +774,17 @@ def export_inplace(manuscript_docx: Path, project_root: Path, output_docx: Path)
             )
             continue
         base = _paragraph_base_font(paragraph)
-        rebuild_paragraph_runs(paragraph, entry["current"], base)
+        if track_changes:
+            rebuild_paragraph_runs_tracked(paragraph, entry["original"], entry["current"], base, id_gen, author, date)
+        else:
+            rebuild_paragraph_runs(paragraph, entry["current"], base)
         applied.append(pidx)
     output_docx.parent.mkdir(parents=True, exist_ok=True)
     doc.save(str(output_docx))
     return {
         "ok": True,
-        "mode": "in-place",
+        "mode": "in-place-tracked" if track_changes else "in-place",
+        "track_changes": track_changes,
         "paragraphs_changed": applied,
         "paragraphs_skipped_images": skipped_images,
         "paragraphs_total": len(paragraphs),
@@ -644,6 +803,9 @@ def main() -> int:
     parser.add_argument("--reference-docx", default="")
     parser.add_argument("--manuscript-docx", default="", help="Original manuscript docx; when present, the revised manuscript is exported in-place to preserve its formatting/tables/images.")
     parser.add_argument("--no-inplace", action="store_true", help="Force the legacy full-rebuild-from-md path even when an original manuscript docx is available.")
+    parser.add_argument("--track-changes", action="store_true", help="In-place export as word-level Word tracked changes (<w:ins>/<w:del>) instead of a clean rewrite. Requires an in-place export (original --manuscript-docx).")
+    parser.add_argument("--author", default="revise-sci", help="w:author stamped on each tracked change (only with --track-changes).")
+    parser.add_argument("--date", default="", help="w:date (ISO 8601) stamped on each tracked change; defaults to datetime.now().isoformat() (only with --track-changes).")
     parser.add_argument("--journal-style", choices=tuple(PROFILE_PRESETS.keys()), default="journal-manuscript")
     args = parser.parse_args()
 
@@ -663,8 +825,22 @@ def main() -> int:
         and manuscript_docx.exists()
         and manuscript_docx.suffix.lower() == ".docx"
     )
+    if args.track_changes and not use_inplace:
+        print(
+            "[export_docx] warning: --track-changes needs an in-place export "
+            "(original --manuscript-docx, no --no-inplace); falling back to clean "
+            "md-rebuild without revision marks.",
+            file=sys.stderr,
+        )
     if use_inplace:
-        inplace_result = export_inplace(manuscript_docx, project_root, output_docx)
+        inplace_result = export_inplace(
+            manuscript_docx,
+            project_root,
+            output_docx,
+            track_changes=args.track_changes,
+            author=args.author,
+            date=args.date or None,
+        )
         if not inplace_result.get("ok"):
             # fail-closed: 不静默错位写入,回退到 md 全量重建并保留拒绝原因供诊断。
             print(json.dumps({"inplace_rejected": inplace_result}, ensure_ascii=False), file=sys.stderr)
@@ -699,7 +875,7 @@ def main() -> int:
     state["outputs"]["output_docx"] = str(output_docx.resolve())
     state.setdefault("inputs", {})
     state["inputs"]["journal_style"] = args.journal_style
-    export_mode = "in-place" if inplace_result is not None else "md-rebuild"
+    export_mode = inplace_result.get("mode", "in-place") if inplace_result is not None else "md-rebuild"
     state["outputs"]["manuscript_export_mode"] = export_mode
     (project_root / "project_state.json").write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
 
