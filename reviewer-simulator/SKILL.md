@@ -253,6 +253,9 @@ python -c "import os,json; d=os.path.join(os.getcwd(),'data'); os.makedirs(d,exi
 紧接着对同一 HTML 跑审稿意见去AI脚本（B7 兜底，剥离 head/script/style/footer 后抽正文文本喂 humanizer）：
 `python "$SKILL_DIR/scripts/scan_report_humanize.py" <生成后的报告HTML路径>`
 
+再对同一 HTML 跑字符级软体检（B10 软项，抽正文喂 proofread，只报告不阻断）：
+`python "$SKILL_DIR/scripts/proofread_report.py" <生成后的报告HTML路径>`
+
 硬门禁:
 1. 若存在未替换占位符(如`{{...}}`),必须终止交付并返工。
 2. 头部`VERDICT_TEXT`与第十部分`FINAL_RECOMMENDATION`必须一致且只能为"拒稿/大修/小修/接收"之一。
@@ -260,6 +263,9 @@ python -c "import os,json; d=os.path.join(os.getcwd(),'data'); os.makedirs(d,exi
 4. 仅当上述校验全部通过才允许提交最终报告。
 5. 若 `$SKILL_DIR/scripts/validate_report_html.py` 或 `scan_report_humanize.py` 路径不存在或执行报错，必须在报告头部注明"[自动校验不可用，已人工核查占位符与VERDICT一致性及去AI三禁]"，并逐项人工确认上述门禁，不得静默跳过。
 6. 若校验未通过：不得自行静默修改报告后重新提交，必须向用户说明具体失败原因和位置，列出需要人工确认的条目，等待用户指令后再决定返工或带注释交付。
+
+软门禁（B10，只报告不阻断）:
+- `proofread_report.py` 抽报告正文喂 `proofread.py`（不传 `--fail-on`），列出拼写错误/中文标点漏进英文/上下标裸写等字符级瑕疵。**这是软项：脚本恒 exit 0，有无 issue 都不阻断交付**；发现的问题仅供人工参考修润，不作返工强制。
 
 
 ---
@@ -289,6 +295,9 @@ python -c "import os,json; d=os.path.join(os.getcwd(),'data'); os.makedirs(d,exi
 - [ ] **B6 · 引文真实性**：报告正文中主动引据的外部文献（非稿件自带引用）已过 `citation_guard`，`ok=true` 或已标注"待核验"；未引外部文献时此项标记"无外部引文"
 - [ ] **B7 · 审稿意见本身去AI**：报告正文（含各 `{{*_HTML}}` 占位符填充内容）已逐项核查 rubric 第七节"审稿意见自身去AI"5项规则（三项禁用 + 中文句长 ≤50字 + 从句 ≤2层），无违规残留。**先跑脚本核三禁+超50字**：`python ~/.claude/skills/reviewer-simulator/scripts/scan_report_humanize.py <报告HTML路径>` 须 `HUMANIZE_OK`（exit 0）；脚本不覆盖的"从句 ≤2层"再人工核
 - [ ] **B8 · 报告结构完整性**：审稿报告含全部规定区块（稿件概要/合规审计/契合度/18点分析/魔鬼代言人/核心问题/给编辑保密意见/回复草案），无缺块、无空区块；且多视角并发盲评的所有视角发现均已汇入，无遗漏视角
+
+**C. 软项（🟡只报告不阻断，soft）**
+- [ ] **B10 · 审稿报告正文字符级软体检**：`python ~/.claude/skills/reviewer-simulator/scripts/proofread_report.py <报告HTML路径>` 抽正文喂 proofread（不传 `--fail-on`），报告拼写错误/中文标点漏进英文/上下标裸写等字符级问题。**软项**：脚本恒 exit 0，delegate_review verify 对它只汇报不影响退出码，发现问题仅供人工修润，不阻断报告交付。
 
 ---
 

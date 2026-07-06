@@ -194,7 +194,7 @@
         {
           "id": "S9",
           "name": "上下标裸写零容忍",
-          "check": "check_char_level() 上下标裸写（code=subsup_bare，如 H2O/CO2/IC50/cm2）命中数为 0。hard 阻断：命中>0 则 check_quality.py 非零退出（issue_summary.subsup_bare>0）。注：D1 半角标点 / F1 错别字仍为 warning 不阻断；中文紧邻经 _SS/_SE 边界已处理不误报",
+          "check": "check_char_level() 上下标裸写（code=subsup_bare，如 H2O/CO2/IC50/cm2）命中数为 0。hard 阻断：命中>0 则 check_quality.py 非零退出（issue_summary.subsup_bare>0）。注：硬阻断=subsup_bare + halfwidth_punct_in_cn + english_misspelling（任一>0 即非零退出）；F2 英文拼写用固定错拼表(occured/recieve 类)零误报、摘要区也扫；F1 中文错别字仍为 warning（含登陆等同形异义，硬拦会误伤）；中文紧邻经 _SS/_SE 边界已处理不误报",
           "script": "python scripts/check_quality.py <章节合并.docx>",
           "severity": "hard"
         },

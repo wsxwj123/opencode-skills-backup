@@ -800,11 +800,34 @@ _CHINESE_TYPOS = {
     '美仑美奂': '美轮美奂', '病入膏盲': '病入膏肓', '穿流不息': '川流不息',
 }
 
+# F2：英文高置信拼写错误（固定错拼表，键=错拼，值=正确）。
+# 只收"永不是合法英文词、也不像基因符号/缩写/化学式"的铁错拼，误报率≈0，故 ERROR 硬拦。
+# 与 F1 中文错别字的区别：中文"登陆/做为"个别语境合法（登陆作战），F1 维持 WARN；
+# occured/recieve 这类在英文里从不成立，可硬拦。（与 nsfc humanizer_zh 同表，保持一致）
+_ENGLISH_MISSPELLINGS = {
+    "occured": "occurred", "occuring": "occurring", "occurance": "occurrence",
+    "occurence": "occurrence", "recieve": "receive", "recieved": "received",
+    "seperate": "separate", "seperately": "separately", "definately": "definitely",
+    "neccessary": "necessary", "accomodate": "accommodate", "enviroment": "environment",
+    "existance": "existence", "acheive": "achieve", "acheived": "achieved",
+    "arguement": "argument", "begining": "beginning", "beleive": "believe",
+    "comparision": "comparison", "consistant": "consistent", "goverment": "government",
+    "paralell": "parallel", "persistant": "persistent", "prefered": "preferred",
+    "refered": "referred", "relevent": "relevant", "succesful": "successful",
+    "successfull": "successful", "untill": "until", "writen": "written",
+}
+# ASCII 边界：汉字紧邻也抓（"细胞occured了"），不匹配更长英文词内部（reoccured 不误报），大小写不敏感。
+_EN_MISSPELL_RE = re.compile(
+    _SS + r'(' + '|'.join(re.escape(w) for w in _ENGLISH_MISSPELLINGS) + r')' + _SE,
+    re.IGNORECASE,
+)
+
 
 def check_char_level(doc):
-    """字符级检查（D1 半角标点 / D2 上下标裸写 / F1 中文错别字），全 WARN。
+    """字符级检查（D1 半角标点 / D2 上下标裸写 / F1 中文错别字 = WARN；F2 英文拼写 = ERROR 硬拦）。
 
     跳过参考文献与摘要区（与 check_writing_style 同口径），避免英文/DOI 误报。
+    例外：F2 英文拼写在摘要区也扫——英文主要出现在英文摘要，固定错拼表误报率≈0。
     """
     issues = []
     in_references = False
@@ -825,7 +848,22 @@ def check_char_level(doc):
             in_abstract = "摘要" in text or "abstract" in text.lower()
             continue
 
-        if in_references or in_abstract:
+        if in_references:
+            continue
+
+        # F2：英文高置信拼写错误（ERROR 硬拦）。摘要区也扫——英文主要出现在英文摘要。
+        for m in _EN_MISSPELL_RE.finditer(text):
+            wrong = m.group(0)
+            right = _ENGLISH_MISSPELLINGS[wrong.lower()]
+            issues.append({
+                'level': 'error',
+                'category': '字符级-英文拼写',
+                'message': f'英文拼写错误：{wrong} → {right}',
+                'suggestion': f'改为"{right}"',
+                'code': 'english_misspelling',
+            })
+
+        if in_abstract:
             continue
 
         # D1：中文句内夹半角标点
@@ -2692,6 +2730,7 @@ def generate_quality_report(
     # 上下标裸写 / 中文句内半角标点 为硬阻断项：单独计数，纳入 ok/退出码判定（不改其评分权重）
     subsup_bare_count = len([i for i in all_issues if i.get('code') == 'subsup_bare'])
     halfwidth_in_cn_count = len([i for i in all_issues if i.get('code') == 'halfwidth_punct_in_cn'])
+    english_misspelling_count = len([i for i in all_issues if i.get('code') == 'english_misspelling'])
     
     total_score = 100 - error_count * 10 - warning_count * 3 - info_count * 1
     total_score = max(0, min(100, total_score))
@@ -2716,7 +2755,8 @@ def generate_quality_report(
             'warning': warning_count,
             'info': info_count,
             'subsup_bare': subsup_bare_count,
-            'halfwidth_punct_in_cn': halfwidth_in_cn_count
+            'halfwidth_punct_in_cn': halfwidth_in_cn_count,
+            'english_misspelling': english_misspelling_count
         },
         'issues': all_issues,
         'targets': {
@@ -2952,11 +2992,12 @@ def main():
         print(f"\n💾 报告已保存：{report_path}")
     
     # 返回退出码
-    # 硬阻断项：上下标裸写（subsup_bare）+ 中文句内半角标点（halfwidth_punct_in_cn）命中即非零退出，无论总分高低；
-    # 其余 F1 错别字仍为 warning，不在此处阻断。
+    # 硬阻断项：上下标裸写（subsup_bare）+ 中文句内半角标点（halfwidth_punct_in_cn）+ 英文拼写（english_misspelling）
+    # 命中即非零退出，无论总分高低；其余 F1 中文错别字仍为 warning（含登陆等同形异义，硬拦会误伤），不在此处阻断。
     subsup_bare_count = report.get('issue_summary', {}).get('subsup_bare', 0)
     halfwidth_in_cn_count = report.get('issue_summary', {}).get('halfwidth_punct_in_cn', 0)
-    if report['overall_score'] >= 80 and subsup_bare_count == 0 and halfwidth_in_cn_count == 0:
+    english_misspelling_count = report.get('issue_summary', {}).get('english_misspelling', 0)
+    if report['overall_score'] >= 80 and subsup_bare_count == 0 and halfwidth_in_cn_count == 0 and english_misspelling_count == 0:
         sys.exit(0)
     else:
         sys.exit(1)

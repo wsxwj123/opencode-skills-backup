@@ -122,6 +122,8 @@ def cmd_pack(args: argparse.Namespace) -> int:
     lines.append("## 检查清单(逐项裁决,不得跳过)")
     for it in items:
         seg = f"- [{it['id']}] {it.get('name', '')}:{it.get('check', '')}"
+        if it.get("severity") == "soft":
+            seg += "  · 🟡软项(仅报告不阻断,但仍须逐项裁决并附证据)"
         if it.get("script"):
             seg += f"  · 先跑脚本核:`{it['script']}`"
         lines.append(seg)
@@ -170,7 +172,11 @@ def _project_root_for_verify(args: argparse.Namespace) -> str:
 def cmd_verify(args: argparse.Namespace) -> int:
     checklist = _load_json(args.checklist)
     gate = _get_gate(checklist, args.gate)
-    expected = [it["id"] for it in _get_items(gate, args.gate)]
+    items = _get_items(gate, args.gate)
+    expected = [it["id"] for it in items]
+    # 软项(severity=soft):仍进任务包被裁决,但其 fail/缺裁决/空证据只汇报不阻断,
+    # 不计入 ok/退出码。未标 severity 的项默认硬项,行为与旧版完全一致(向后兼容)。
+    soft_ids = {it["id"] for it in items if it.get("severity") == "soft"}
 
     returned = _load_json(args.return_path)
     if not isinstance(returned, list):
@@ -186,31 +192,36 @@ def cmd_verify(args: argparse.Namespace) -> int:
         by_id[entry["id"]] = entry
 
     fails: list[str] = []
+    soft_flags: list[str] = []
     for eid in expected:
+        is_soft = eid in soft_ids
         entry = by_id.get(eid)
         if entry is None:
-            problems.append(f"缺漏未裁决: {eid}")
+            (soft_flags if is_soft else problems).append(
+                f"{eid}: 软项未裁决(不阻断)" if is_soft else f"缺漏未裁决: {eid}")
             continue
         verdict = entry.get("verdict")
         if verdict not in VALID_VERDICTS:
-            problems.append(f"{eid}: verdict 非法 ({verdict!r})")
+            (soft_flags if is_soft else problems).append(f"{eid}: verdict 非法 ({verdict!r})")
             continue
         evidence = (entry.get("evidence") or "").strip()
-        if not evidence:
+        if not evidence and not is_soft:
             problems.append(f"{eid}: verdict={verdict} 但 evidence 为空（每项裁决都须附证据，pass 也不例外，防无证据橡皮图章）")
         if verdict == "fail":
-            fails.append(f"{eid}: {evidence or '(无证据)'}")
+            (soft_flags if is_soft else fails).append(f"{eid}: {evidence or '(无证据)'}")
 
     extra = [k for k in by_id if k not in set(expected)]
     if extra:
         problems.append(f"返回了清单外的 id: {', '.join(extra)}")
 
+    # soft_flags 只汇报,不影响 ok / 退出码(软项不阻断交付)
     ok = not problems and not fails
     summary = {
         "gate": args.gate,
         "ok": ok,
         "checked": len(expected),
         "fails": fails,
+        "soft_flags": soft_flags,
         "problems": problems,
     }
     print(json.dumps(summary, ensure_ascii=False, indent=2))
