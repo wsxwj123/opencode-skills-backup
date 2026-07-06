@@ -138,6 +138,14 @@ Help crystallize insights and create concrete paths forward.
 - Capture key questions that emerged for future exploration
 - Identify resources or expertise that would be valuable
 
+**Optional structured handoff file（可选结构化产出，收尾时提供）:**
+
+当会话自然收敛、已有值得留存的方向/假设时，**主动询问**用户是否要保存一份结构化交接文件（可 skip——保持脑暴的开放性质，不强制、不打断探索）。若用户要：
+- **Read `references/handoff_template.md`**，按其结构与铁律产出。
+- **询问交付格式**：md（默认）/ html / mermaid 思维导图 / 其他；按用户选择生成对应文件。
+- 关键：假设部分**必须**带"自变量 / 因变量 / 预期效应方向 / 证伪条件"四要素（对话未明确的标"（待明确）"，不脑补）；文件顶部标注"探索性产出·假设待验证·Gap 未经系统检索确认"。
+- 用途：可直接喂给 general-sci-writing `/preview`（研究问题+假设）或 review-writing outline（Gap+方法方向），避免手抄丢失假设严谨性。
+
 **Close with encouragement:**
 - Acknowledge the creative work done
 - Reinforce the value of the ideas generated
