@@ -1023,3 +1023,12 @@ proofread.py 现 6 技能字节一致(`7e8775c`)：gsw/polish/revise/review + re
 **修订后真待办**（范围=custom-skills 8 技能互相组合）：① 课题设计/统计新技能(大,用户依知识库/文献库/领域设计课题,后做)；② brainstorming 落文件(小,交付格式 md/html/mermaid 用户选)；③ revise-sci/reviewer-response 补 track-changes 输出(中)。
 
 教训：**功能覆盖结论也必须 grep 实证，不能凭 SKILL.md 印象说"缺"**——与 delegate_review/citation_guard 的 md5 实证同理。评审误报"缺口"会误导用户砍掉本已存在的能力。
+
+### 七、引文库回流可行性（2026-07-06 fable 实证，修正主会话过早乐观结论）
+用户问 revise-sci 能否复用撰写技能引文库以免"另起项目/编号不回流"。主会话读了 reference_sync.py（增量续号）后初判"格式已统一、加约定即可（小改）"。**fable 子代理真跑脚本证伪该结论**：
+- **致命点 build_literature_index.py 覆盖式重建**：只读 paper_search_validated.json+units/ 从 global_id=1 重建 canonical，`write_json(data_dir/literature_index.json, canonical)` **整文件覆盖、不读既有库**。实测 project_root 预置3条→跑一次 build→抹成1条、编号归1。→ 把 revise 的 project_root 指向写作根 = **清库，非回流**。run_pipeline.py:523/603 正式流程即这么调。
+- reference_sync.py 续号+不动旧编号 ✅；但"去重跳过"实测**失效**（normalize_reference_key 不剥行首编号，existing_keys 带编号 vs candidate 不带编号，永不匹配）+ **非幂等**（同文件连跑3次追加 [3][4][5]）。
+- gsw 引文库在**项目根级** `literature_index.json`（非 `data/`，见 merge_manuscript.py:272 / state_manager.py:29 / RUNTIME_LAYOUT.md），schema 更松（citation_guard 接受 citation_number/global_id/id/number/ref_number 多键）。与 revise/review 的 `data/` 版路径+字段不齐。
+- intake_router 只问 project_root、无"默认复用写作根"规则（约定确缺，此点主会话判对）；common.py:830 autodiscover_reference_source 确存在，但喂 references_source 当种子、锚 comments 目录，非复用机制。
+**修正结论**：方向可行但**是中改（改代码）非小改（加约定）**——必改 build_literature_index（覆盖→增量续号去重合并追加）+ reference_sync 去重键 + gsw 根级/`data/` 路径对齐。
+**教训**：看了一半脚本（reference_sync 增量对的那半）就下"闭环成立"结论，漏看 build_literature_index 的覆盖写。闭环类结论必须端到端真跑，不能只验链条中的一环。
