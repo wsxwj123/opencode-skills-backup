@@ -63,6 +63,13 @@
           "id": "B9",
           "name": "科学事实正确性核查",
           "check": "盲检（补 rubric 未单列的维度，区别于统计/逻辑/合规已覆盖项）：审稿人是否核查了稿件中科学事实、定律、公式、单位、剂量/浓度等硬数值的正确性，对明显违背领域公认知识的硬错误是否在报告中指出并锚定证据。稿件存在明确科学错误而报告漏检=fail，需补出该错误与正确表述为证。"
+        },
+        {
+          "id": "B10",
+          "name": "审稿报告正文字符级软体检",
+          "check": "审稿报告正文过 proofread 软体检：抽报告可见正文喂 proofread.py（不传 --fail-on），只报告拼写错误/中文标点漏进英文/上下标裸写等字符级问题，不阻断交付。软项——发现问题仅汇报供人工修，score 低/有 issue 都不影响退出码。",
+          "script": "python ~/.claude/skills/reviewer-simulator/scripts/proofread_report.py <报告HTML路径>",
+          "severity": "soft"
         }
       ]
     }

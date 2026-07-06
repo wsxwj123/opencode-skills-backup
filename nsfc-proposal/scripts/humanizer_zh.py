@@ -83,7 +83,7 @@ EXPLANATORY_COLON_PATTERN = (
 )
 
 
-# ── 字符级检查（移植自 general-sci proofread.py）：D1半角标点=ERROR硬拦，D2上下标/F1错别字=WARN ──
+# ── 字符级检查（移植自 general-sci proofread.py）：D1半角标点/F2英文拼写=ERROR硬拦，D2上下标/F1错别字=WARN ──
 
 # D1：中文句内夹半角标点（高误报区，极度保守：仅标半角两侧紧邻汉字的高置信情形）
 # 半角 , ; : ( ) → 全角 ， ； ： （ ）；DOI/URL/数字区间天然不触发
@@ -120,6 +120,29 @@ SUBSUP_PATTERNS = [
 _SUBSUP_WRAPPED_RE = re.compile(
     r"\^[^\^\s]+\^|~[^~\s]+~|<sup>.*?</sup>|<sub>.*?</sub>",
     re.IGNORECASE | re.DOTALL,
+)
+
+# F2：英文高置信拼写错误（固定错拼表，键=错拼，值=正确）。
+# 只收"永不是合法英文词、也不像基因符号/缩写/化学式"的铁错拼，误报率≈0，故定为 ERROR 硬拦。
+# 与 F1 中文错别字的关键区别：中文"登陆/做为"在个别语境可能合法（登陆作战），故 F1 维持 WARNING；
+# 而 occured/recieve 这类字符串在英文里从不成立，置信度更高，可硬拦。
+ENGLISH_MISSPELLINGS = {
+    "occured": "occurred", "occuring": "occurring", "occurance": "occurrence",
+    "occurence": "occurrence", "recieve": "receive", "recieved": "received",
+    "seperate": "separate", "seperately": "separately", "definately": "definitely",
+    "neccessary": "necessary", "accomodate": "accommodate", "enviroment": "environment",
+    "existance": "existence", "acheive": "achieve", "acheived": "achieved",
+    "arguement": "argument", "begining": "beginning", "beleive": "believe",
+    "comparision": "comparison", "consistant": "consistent", "goverment": "government",
+    "paralell": "parallel", "persistant": "persistent", "prefered": "preferred",
+    "refered": "referred", "relevent": "relevant", "succesful": "successful",
+    "successfull": "successful", "untill": "until", "writen": "written",
+}
+# 英文错拼用 ASCII 边界（同 D2）：允许汉字紧邻也能抓（如"细胞occured了"），
+# 但不匹配更长英文词的内部（如 reoccured 不误报），且大小写不敏感。
+_EN_MISSPELL_RE = re.compile(
+    _SS + r"(" + "|".join(re.escape(w) for w in ENGLISH_MISSPELLINGS) + r")" + _SE,
+    re.IGNORECASE,
 )
 
 # F1：中文高置信错别字/成语误写（保守词表，主观字"的/地/得"不收）。键=错，值=对。
@@ -182,6 +205,22 @@ def check_chinese_typos(text: str) -> list[dict]:
                 "text": wrong,
                 "suggestion": f"错别字：'{wrong}' → '{right}'",
             })
+    return out
+
+
+def check_english_spelling(text: str) -> list[dict]:
+    """F2：英文高置信拼写错误（ERROR，硬阻断）。固定错拼表，铁错拼从不合法，误报率≈0。"""
+    out = []
+    for m in _EN_MISSPELL_RE.finditer(text):
+        wrong = m.group(0)
+        right = ENGLISH_MISSPELLINGS[wrong.lower()]
+        out.append({
+            "severity": "ERROR",
+            "code": "english_misspelling",
+            "span": [m.start(), m.end()],
+            "text": wrong,
+            "suggestion": f"英文拼写错误：'{wrong}' → '{right}'",
+        })
     return out
 
 
@@ -272,8 +311,9 @@ def scan_text(text: str, allow_lists: bool = False) -> dict:
                 }
             )
 
-    # 字符级（全 WARN）：D1 中文句内半角、D2 上下标裸写、F1 中文错别字
+    # 字符级：D1 中文句内半角=ERROR、F2 英文拼写=ERROR（硬拦）；D2 上下标裸写、F1 中文错别字=WARN
     issues.extend(check_halfwidth_in_cn(text))
+    issues.extend(check_english_spelling(text))
     issues.extend(check_subsup(text))
     issues.extend(check_chinese_typos(text))
 

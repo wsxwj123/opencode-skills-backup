@@ -307,6 +307,7 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
 - [ ] Citation registry 已核验：`citation_registry.json` 存在且 `citation_guard.py` 通过；若无新增引用，确认 `citation_registry.json` 的 `entries` 为空数组 → `citation_guard.py`
 - [ ] 各 gate 全通：各独立 gate 脚本退出码均为 0（`strict_gate` / `final_content_gate` / `consistency_check` / `risk_check` / `citation_guard` / `citation_ref_tracker`）→ 见 RR13
 - [ ] 结构完整性（RR14）：每个 response unit 结构完整（审稿意见原文 + 回复正文 + 修改证据/落点定位 三要素齐全），无空 unit；letter 整体覆盖每条意见无遗漏 → 人工
+- [ ] 🔴 字符级硬门禁（RR16，hard）：回复信**作者亲自写的 Response 正文**（仅 `content.response_en` / `response_zh`，**不扫审稿人原话**）过 `proofread.py` 字符级扫描，`misspelling` / `chinese_punct` / `subsup_bare` 三类零容忍（`ok=true`、`fail_on_hits` 为空）；英美混用/术语不一致等低置信项仅报告不阻断 → `python scripts/proofread_response.py --project-root .`。放在生成回复信之后、交付之前；命中任一高置信类别即 fail，不得出具 letter。
 
 ## Re-Render Workflow
 After manual editing of any unit JSON:
@@ -344,6 +345,9 @@ python3 scripts/run_pipeline.py \
 - `risk_check.py`：检测虚构实验/统计、过度承诺、AI 式套话、跨 unit 结构重复
 - `citation_guard.py`：验证 `citation_registry.json` 新增引用真实性（DOI/PMID/撤稿检测）；`--offline` 跳过在线验证。报告写入 `logs/citation_guard_report.json`，顶层结构为 `{"status": "pass"|"warn", "verified": N, "failed": N, "retracted": N, ...}`（注意：无 `report.ok` 嵌套层；判断通过用 `status == "pass"`，判断撤稿用 `retracted > 0`）
 - `citation_ref_tracker.py`：交叉验证 `[N]` 引用编号一致性（未定义引用、编号间隙）
+
+字符级硬门禁（DoD RR16 单独跑，不在 pipeline 内自动调用）：
+- `proofread_response.py`：抽取每个 `units/*.json` 的**作者 Response 正文**（仅 `content.response_en` / `response_zh`，绝不扫 `reviewer_comment_*` 审稿人原话），dump 到临时目录后调 `proofread.py --fail-on misspelling,chinese_punct,subsup_bare`，纯读不写回。`ok=false` 即命中拼写错/中文标点漏入英文/上下标裸写，须修复后重跑。em dash 与智能引号不计入 chinese_punct（`proofread.py` 已排除），故引用审稿人英文原话不会误伤。
 
 Re-Render 单独脚本：`render_from_atomic_json.py`（重渲）、`state_manager.py`（状态同步 `sync`/`show`/`set`/`init`；改 units 前后用 `snapshot`/`rollback` 建还原点与回滚）。
 

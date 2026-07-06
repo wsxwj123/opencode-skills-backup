@@ -299,16 +299,31 @@ def test_charlevel_bidirectional() -> None:
     # F1 反例：正确写法"登录"
     assert "chinese_typo" not in _codes("用户需要登录系统后操作。"), "F1 不应误报'登录'"
 
-    # 分级：D1 半角标点=ERROR 硬拦（中文标书应全角）；D2 上下标 / F1 错别字=WARNING
-    issues = scan_text("本实验,生成 H2O，用户登陆系统。")["issues"]
+    # F2 正例：英文铁错拼 occured / recieve
+    assert "english_misspelling" in _codes("The event occured last year."), "F2 应报英文错拼 occured"
+    assert "english_misspelling" in _codes("We will recieve the sample."), "F2 应报英文错拼 recieve"
+    # F2 正例：汉字紧邻英文错拼（ASCII 边界须在汉字-字母间成立）
+    assert "english_misspelling" in _codes("该现象occured于早期。"), "F2 应报中文紧邻英文错拼"
+    # F2 反例：正确拼写不误报
+    assert "english_misspelling" not in _codes("The event occurred last year."), "F2 不应误报正确 occurred"
+    assert "english_misspelling" not in _codes("We will receive the sample."), "F2 不应误报正确 receive"
+    # F2 反例（防误伤）：正常中文基金正文段落——专业术语 + 数字千分位 + 规范英文缩写，零误报
+    clean = "本项目基于 CRISPR-Cas9 技术，招募 1,000 例患者，检测 IL-6 与 TNF-α 水平，采用 PCR 和 ELISA 方法验证。"
+    assert "english_misspelling" not in _codes(clean), "F2 不应误伤规范英文缩写/术语"
+
+    # 分级：D1 半角标点 / F2 英文拼写=ERROR 硬拦；D2 上下标 / F1 错别字=WARNING
+    issues = scan_text("本实验,生成 H2O，用户登陆系统，结果 occured。")["issues"]
     halfwidth = [i for i in issues if i["code"] == "halfwidth_punct_in_cn"]
     assert halfwidth and all(i["severity"] == "ERROR" for i in halfwidth), \
         "D1 中文句内半角标点必须为 ERROR 级（硬拦）"
+    en_spell = [i for i in issues if i["code"] == "english_misspelling"]
+    assert en_spell and all(i["severity"] == "ERROR" for i in en_spell), \
+        "F2 英文拼写错误必须为 ERROR 级（硬拦）"
     soft_charlevel = [i for i in issues if i["code"] in {"subsup_bare", "chinese_typo"}]
     assert soft_charlevel and all(i["severity"] == "WARNING" for i in soft_charlevel), \
         "D2 上下标 / F1 错别字仍应为 WARNING 级"
 
-    print("契约 4 (字符级 D1=ERROR硬拦 / D2,F1=WARN 双向断言) OK")
+    print("契约 4 (字符级 D1,F2=ERROR硬拦 / D2,F1=WARN 双向断言) OK")
 
 
 # ---------------------------------------------------------------------------

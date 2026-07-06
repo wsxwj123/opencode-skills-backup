@@ -87,6 +87,13 @@
           "id": "RR15",
           "name": "逐条实质回应",
           "check": "盲检（超出 RR7/RR14 的 unit 计数对齐）：每条审稿意见（含一条意见中的多个子问点）是否被实质性回应——直接针对其关切作答，而非答非所问、避重就轻或只承诺不落实。存在任一意见的某子问点未被实际回应、或回复与意见所问错位=fail，列出该意见与对应回复原文为证。"
+        },
+        {
+          "id": "RR16",
+          "name": "字符级硬门禁(proofread)",
+          "severity": "hard",
+          "check": "回复信『作者亲自写的 Response 正文』(仅 content.response_en/response_zh，不扫审稿人原话)过 proofread.py 字符级扫描，高置信类别 misspelling/chinese_punct/subsup_bare 零容忍(fail_on_hits 为空、ok=true)；英美混用/术语不一致等低置信项仅报告不阻断",
+          "script": "python scripts/proofread_response.py --project-root ."
         }
       ]
     }
