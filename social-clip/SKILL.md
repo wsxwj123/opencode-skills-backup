@@ -196,6 +196,17 @@ find /tmp -maxdepth 1 -name 'social_clip_img_*' -exec rm -f {} + 2>/dev/null   #
 
 ### 2B. 视频帖
 
+**Step 0(字幕优先)** 先用 yt-dlp 探小红书视频有无字幕,有就直接当转写文本,**短路跳过下面的 CDN 拦截+ASR**:
+```bash
+source ~/.zshrc 2>/dev/null; eval "$(pyenv init -)" 2>/dev/null
+yt-dlp --skip-download --write-subs --write-auto-subs --sub-langs "zh.*,en.*" \
+  --convert-subs srt -o "/tmp/social_clip_sub.%(ext)s" "XHS_URL" 2>&1
+find /tmp -maxdepth 1 -name 'social_clip_sub*.srt'   # 有输出→读 srt 去时间轴当转写,直接进总结
+```
+> 小红书视频多数无 CC 字幕,拿不到属正常(静默失败,别 HALT)→ 继续走下面 Step 1 的 CDN 拦截 + ASR。
+
+**以下 Step 1~4 为无字幕时的降级路径。**
+
 **Step 1** Playwright 拦截 CDN 视频 URL(**先初始化 pyenv**——playwright 装在 pyenv 的 python 里,系统 python3 没装,不初始化会误报"没装 playwright"):
 ```bash
 source ~/.zshrc 2>/dev/null; eval "$(pyenv init -)" 2>/dev/null   # 确保用 pyenv 的 python
