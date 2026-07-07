@@ -36,7 +36,7 @@ Download videos/audio from YouTube, Bilibili, Twitter, TikTok, and 1000+ platfor
 - **倍速** (如 1.25x, 1.5x, 2.0x) - *注意：需要重新编码，处理时间较长*
 
 ### 6. 可选项 (根据需要问)
-- 是否下载字幕？（中文/英文/自动生成）
+- 要文字内容/转录？→ **先探字幕**(见「字幕下载」)：`--list-subs` 有原生/自动字幕就直接下并转 srt,别急着下音频做 ASR
 - 播放列表处理？（全部/指定范围/单个视频）
 - 需要登录？（B站高清/私密视频）
 
@@ -238,7 +238,25 @@ yt-dlp --playlist-start 5 --playlist-end 15 "PLAYLIST_URL"
 
 ## 字幕下载
 
+**需要文字内容时优先走字幕**：字幕又快又准、省算力，扒不到再交给 ASR（本技能不做 ASR，转录见 social-clip）。先探测有无字幕，再决定下字幕还是回退：
+
 ```bash
+# 先探测：列出该视频有哪些字幕轨（不下视频）
+yt-dlp --list-subs --skip-download "VIDEO_URL"
+#   "Available subtitles"          = 作者上传的原生字幕（首选）
+#   "Available automatic captions" = 平台自动生成字幕（次选，中文常有错）
+# 两块都空 → 无字幕，需转录的走 ASR（见 social-clip 技能）
+```
+
+```bash
+# 有字幕 → 只下字幕转 srt（原生+自动都拿，不下视频）
+yt-dlp \
+  --skip-download --write-subs --write-auto-subs --sub-langs "zh-Hans,zh,en" \
+  --convert-subs srt \
+  -P "/Users/wsxwj/Downloads/video-download" \
+  -o "%(title)s [%(id)s].%(ext)s" \
+  "VIDEO_URL"
+
 # 自动生成字幕（中文优先，然后英文）
 yt-dlp \
   --write-auto-sub --sub-langs "zh-Hans,zh,en" \
