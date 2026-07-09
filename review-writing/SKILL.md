@@ -87,11 +87,12 @@ Expert academic consultant for high-impact literature reviews (Nature Reviews, C
 ## Constraints & Standards
 
 1. **Length:** 7,000–10,000 words (English); 15,000–20,000 characters (Chinese). Read target from `outline.md`.
-2. **Citations:** Total ≥150. Original Articles ≥80, Reviews ≥50, Preprints ≥20.
+2. **Citations（软目标，随学科浮动，非硬门禁）:** 面向高影响力综述的**建议**总量随学科差异很大：生物医学/临床约 120–200，工程/CS 约 60–120，人文社科视传统而定。以**覆盖领域主线**为准，不是凑数。机器只统计唯一引用总数、对低于阈值给**警告不阻断**（`count-citations`）；类型拆分无法机器校验（index 无类型字段），靠人工/盲检抽查。类型配比按论点性质择用、**非固定配额**：
    - Background/overview → Reviews preferred.
    - Mechanistic/experimental claims → Original Articles (mandatory; do NOT substitute a Review).
    - Clinical claims → Clinical Trials.
-   - Emerging claims → Preprints (label `[Preprint]`).
+   - Emerging claims → Preprints（label `[Preprint]`，**按需、非强制**）：仅当某新兴论点确无正式发表可引时才用；无此类论点则不必凑预印本。
+   - **文献量不足时怎么办**：先分清是"领域本就小/短篇综述"还是"检索不充分"。前者按实际写、在搜索日志注明检索范围，不硬凑；后者回 Phase 2 补检索（扩同义词 / 放宽年限 / 换库）。**绝不为达数而引入弱相关或未读文献**——凑数引用比数量少更伤质量。
 3. **Numbering:** Global Sequential (`[1]`, `[2]`, … `[N]`). Never reset per chapter.
 4. **Timeliness:** Core focus past 5 years.
 5. **Truthfulness:** ZERO TOLERANCE for hallucinated citations. Verify every paper via search tools.
@@ -216,7 +217,7 @@ Ask all parameters at once. State defaults; user may accept silently.
 | Discipline | **Medical/Biomedical** | Determines search tool priority |
 | **Review type** | **narrative** | `narrative`（叙述性）/ `critical`（批判性）/ `scoping`（范围综述）/ `systematic`（系统综述/Meta）/ `why-how-what`（三层轻量对比）。<br>• **scoping**：不需 PROSPERO，检索更宽，研究问题用 PCC（Population/Concept/Context）替代 PICO，Phase 0 末尾提示 scoping 记录要求。<br>• **systematic**：叠加 PRISMA 2020 + PICO/PECO + RoB（RoB 2/ROBINS-I）+ 可选 meta + GRADE。选此档则读取 `references/systematic_review_methodology.md`，并在各 Phase 挂接其触发点（见下「系统综述模式触发点」）。<br>• **why-how-what**：WHY/HOW/WHAT 三层结构化对比，介于快速摘要与完整综述之间，无 PRISMA/RoB/GRADE。选此档则读取 `references/why_how_what_mode.md`。 |
 | Word count target | EN: 7,000–10,000 words / CN: 15,000–20,000 chars | |
-| Total citations | ≥150 (Original≥80, Review≥50, Preprint≥20) | |
+| Total citations | 软目标(随学科浮动，非硬门禁)：生物医学~120–200 / 工程CS~60–120；仅警告不阻断 | 类型拆分与预印本按需，见 Constraints §2 |
 | Reference manager | **Zotero** | Zotero / None / EndNote |
 | Subagent model | Same as current session | AI scans available models, user confirms |
 
@@ -661,7 +662,7 @@ If pending_sections is empty → all sections complete; proceed to Phase 4.
 
 ### Per-Section Cycle
 
-0. **🔴 开写前置闸门 (Mandatory，脚本硬拦截)**：开写本 section 前必须先跑 `python3 scripts/prewrite_gate.py --section X.X --root .`，exit≠0 禁止开写。它统一硬检查：上一节完成（上一节 ∈ `state.json.completed_sections`）、大纲就位（`outline.md` 含本节标题）、素材就位（`data/synthesis_matrix.json` 本节文献矩阵非空）、上一节占位符清零（`drafts/` 无 `CITE_PENDING`/`DATA_PENDING`/`【待`）；上一节盲检结果（`.review_pass/<上一节>.json`）缺失即 prewrite_gate 硬拦 exit 1，禁止开写；必须先跑 delegate_review verify --section <上一节> 落盘通过标记。Polish Mode `keep` 节跳过本节循环故无需跑。
+0. **🔴 开写前置闸门 (Mandatory，脚本硬拦截)**：开写本 section 前必须先跑 `python3 scripts/prewrite_gate.py --section X.X --root .`，exit≠0 禁止开写。它统一硬检查：上一节完成（上一节 ∈ `state.json.completed_sections`）、大纲就位（`outline.md` 含本节标题）、素材就位（`data/synthesis_matrix.json` 本节文献矩阵非空）、上一节占位符清零（`drafts/` 无 `CITE_PENDING`/`DATA_PENDING`/`【待`）；上一节盲检结果（`.review_pass/<上一节>.json`）缺失即 prewrite_gate 硬拦 exit 1，禁止开写；必须先跑 delegate_review verify --section <上一节> 落盘通过标记。**盲检子代理确实跑不起来时**，用 `--allow-manual-review "<理由>"` 显式人工放行（仅放行盲检项、留痕审计，见规则 10 的逃生口）；不加则门禁默认硬拦行为不变。PASS 时脚本会注明"仅覆盖形式层，语义正确性未自动核验"。Polish Mode `keep` 节跳过本节循环故无需跑。
 
 1. **Load context:**
    ```
@@ -749,9 +750,18 @@ If pending_sections is empty → all sections complete; proceed to Phase 4.
     **🔴 进入下一节前置闸口：上一节 delegate_review verify 必须 exit 0（含 R15 结构完整性），否则不得开始下一节撰写。写完即检，不过不进。**
 
     **🔴 委托盲检（不得主 agent 自评）**：你刚写完本节，自评会失真地默认通过、且易漏项。落盘前必须把 DoD 清单**委托给独立上下文的子代理盲检**，自己不直接打勾：
-    1. 生成任务包：`python3 scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate manuscript-dod --files <本节文件> --workdir .`
-    2. **派一个独立子代理**（Claude Code 用 `academic-blind-reviewer`；其他平台派通用子代理），把任务包原样给它、**不要给它本节的写作上下文**，要求按任务包返回 JSON 数组。
+    1. 生成任务包：`python3 scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate manuscript-dod --files <本节文件> --workdir .`（会在 stderr 打印 `RETURN_PATH=...`，即子代理返回要写入的约定路径）
+    2. **派一个独立子代理**（不给它本节写作上下文），把任务包原样贴给它，要求把 JSON 数组写到 `RETURN_PATH`。**可直接复制执行的派发指令**：
+       - Claude Code：用 `Task` 工具，`subagent_type="academic-blind-reviewer"`（无此 agent 时退回 `general-purpose`），prompt = pack 打印出的整段任务包原文（含"你的角色/待检文件/检查清单/返回格式/返回写到这个文件"），**不附加任何本节写作说明**。
+       - 其他平台（Codex/OpenCode 等无此 agent）：新开一个干净上下文的子代理/子会话，同样只贴任务包原文。
     3. 校验返回：`python3 scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate manuscript-dod --return <子代理返回.json> --section <当前section_id> --root <项目根>`；退出码非 0（任一缺项 / fail / 无证据）= **fail-closed**，据子代理证据修复后重跑，**未过不得声明完成**。verify 通过会落盘 `.review_pass/<当前section_id>.json`，下一节 `prewrite_gate.py` 会**硬校验**它（缺失即拒绝开写）。
+       > **诚实边界：** verify 的 `ok:true` 只代表清单每项都被裁决且形式合规——**PASS 仅覆盖形式层，语义正确性由盲检子代理主观判断、未自动核验**。
+    4. **🚪 逃生口（盲检子代理确实跑不起来时，且仅此时）**：若平台无 `academic-blind-reviewer`、通用子代理也反复失败/取不到返回，导致 `verify` 无法落盘标记、下一节被 `prewrite_gate` 永久锁死——**不要卡死或静默跳过**。改为人工逐项盲检本节 DoD 后，用显式放行开锁并留痕：
+       ```bash
+       python3 scripts/prewrite_gate.py --section <下一节id> --root . \
+         --allow-manual-review "谁放行 + 为何盲检子代理不可用 + 已人工核过哪些项"
+       ```
+       它只放行"上一节盲检"这一项（其余硬检查照常），并写 `.review_pass/<上一节>.json`(manual:true) + 追加 `.review_pass/MANUAL_REVIEW_AUDIT.log`；理由为空则拒绝放行。此后每次 `prewrite_gate` 都会在 warnings 里点名"人工放行、语义未经独立盲检"。**门禁默认行为不变**：不加此参数时，缺盲检标记照旧硬拦。
 
     `manuscript-dod` gate 共 15 项（通用 6：引文一一对应 / citation_guard 已过 / 符合 storyline / 占位符清零 / 去 AI 合规 / 字数达标；review 特有 5：综合非罗列 / 矛盾仲裁 / 引用类型匹配 / 检索日志已记 / 框架图一致；systematic 额外 3：PRISMA 计数自洽 / RoB 已评级 / GRADE 已分级；结构完整性 R15（全类型通用）；语法拼写与字符级格式 R21（全类型通用机器门禁））。**逐项内容与核验命令以 `references/dod_checklist.json` 为唯一真源**。上面 `pack` 步骤运行时会把该 gate 的每个 item（id / name / check / script）完整打印进盲检任务包，此处不再复述以免与 JSON 漂移。systematic 3 项仅 Review type = systematic 时检查，R15 全类型通用。
 
@@ -807,7 +817,7 @@ Write Mode has no `pending_sections` field so this gate is a no-op (no key → e
    ```bash
    python3 scripts/state_manager.py count-citations --drafts-dir drafts --threshold 150
    ```
-   > **类型分布（人工核对）：** literature_index.json 未记录 Original/Review/Preprint 类型字段，无法机器统计。AI 对照 Constraints 目标（Original≥80 / Review≥50 / Preprint≥20）人工抽查 index，明显失衡时提示用户。
+   > **类型分布（人工核对）：** literature_index.json 未记录 Original/Review/Preprint 类型字段，无法机器统计。AI 对照 Constraints §2 的**软目标**（按学科浮动、类型配比按论点性质、预印本按需）人工抽查 index，明显失衡时提示用户；不按固定配额卡数。
 
    ```bash
    python3 scripts/check_global_citation_sequence.py
