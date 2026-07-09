@@ -527,6 +527,11 @@ def main():
         or (args.fail_on_trace and bool(trace_failures))
         or (args.fail_on_incomplete and bool(incomplete_entries))
     )
+    # 诚实化：PASS 只代表引文簿记与可达性过关，不代表论点被文献支持。
+    if not should_fail:
+        print(
+            "[SCOPE] PASS 仅覆盖引文簿记与可达性（编号唯一/无孤儿/DOI·PMID 可解析/字段完整）；"
+            "论点是否被文献支持、结论科学价值未核验。")
     if should_fail:
         sys.exit(2)
 

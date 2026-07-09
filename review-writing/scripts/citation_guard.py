@@ -262,6 +262,11 @@ def main() -> int:
             save_json(index_path, out)
 
     print(json.dumps(report, ensure_ascii=False))
+    # 诚实化：PASS 只代表引文来源合规层过关，不代表论点被文献支持（stderr，不污染 stdout JSON）。
+    if report["ok"]:
+        sys.stderr.write(
+            "CITATION_GUARD: PASS — 仅核验引文来源合规层（标识符/provider 白名单/标题比对）；"
+            "论点是否被所引文献支持、结论科学价值未核验。\n")
     return 0 if report["ok"] else 2
 
 
