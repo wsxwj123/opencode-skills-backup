@@ -23,17 +23,54 @@ import sys
 # GB/T 7714-2015 著录格式规则
 # ---------------------------------------------------------------------------
 
+# GB/T 7714 外文作者规范式：姓 + 名缩写，如 "Zhang S" / "Van Der Berg AB"
+_NORMALIZED_AUTHOR_RE = re.compile(r"^[A-Z][A-Za-z''\-]+(?: [A-Z][A-Za-z''\-]+)* [A-Z]{1,4}$")
+
+
+def normalize_author_name(name: str) -> str:
+    """尽量规范为 GB/T 7714 外文"姓 + 名缩写"（如 Zhang S）。
+
+    - 中文名原样返回。
+    - 逗号式 "Zhang, Shuang" / "Van Der Berg, A. B." → "Zhang S" / "Van Der Berg AB"（无歧义，安全转换）。
+    - 已是缩写式 "Zhang S" → 规整空格后返回。
+    - 空格全名 "Shuang Zhang"（姓名顺序不可判）原样返回，交 validate_entry 标记人工核对，不瞎猜。
+    """
+    if not isinstance(name, str):
+        return name
+    s = " ".join(name.split()).strip()
+    if not s:
+        return s
+    if any('一' <= c <= '鿿' for c in s):
+        return s
+    if "," in s:
+        surname, _, given = s.partition(",")
+        surname = surname.strip()
+        initials = "".join(w[0].upper() for w in re.split(r"[\s.\-]+", given.strip()) if w)
+        if surname and initials:
+            return f"{surname} {initials}"
+    return s
+
+
+def _is_normalized_author(name: str) -> bool:
+    """判断作者名是否已符合 GB/T 7714 规范（中文名视为合规）。"""
+    if not isinstance(name, str) or not name.strip():
+        return False
+    if any('一' <= c <= '鿿' for c in name):
+        return True
+    return bool(_NORMALIZED_AUTHOR_RE.match(name.strip()))
+
+
 def _fmt_authors(authors: list[str], max_authors: int = 3) -> str:
     """
     GB/T 7714: 3 名以内全列，超过 3 名列前 3 人后加 "等" / "et al."（外文）。
     作者间用 ", " 分隔，末尾不加句号（外部拼接时处理）。
 
-    注意：GB/T 7714-2015 要求外文作者采用"姓在前+名缩写"格式（如 Zhang S 而非 Shuang Zhang）。
-    本函数原样输出输入值，不做自动缩写——输入应在写入 literature_index.json 时预处理为规范格式
-    （如通过 PubMed authors 字段抓取时，作者名通常已是 "Zhang S" 格式）。
+    外文作者先经 normalize_author_name 尽量规范为"姓 + 名缩写"（逗号式可安全转换；
+    空格全名顺序不可判则原样保留，由 validate_entry 标记人工核对）。
     """
     if not authors:
         return "佚名"
+    authors = [normalize_author_name(a) for a in authors]
     is_chinese = any(
         '一' <= c <= '鿿'
         for author in authors[:1]
@@ -364,6 +401,31 @@ def validate_entry(entry: dict, entry_id: str = "") -> list[dict]:
             "message": f"文献 {ref_id}：期刊论文建议提供 doi 或 pmid",
             "id": ref_id,
         })
+
+    # 6) 作者名规范（姓前置+名缩写）——不合规进人工核对队列
+    if isinstance(authors, list):
+        bad = [a for a in authors if isinstance(a, str) and a.strip() and not _is_normalized_author(normalize_author_name(a))]
+        if bad:
+            issues.append({
+                "level": "warning",
+                "category": "参考文献著录",
+                "message": f"文献 {ref_id}：作者名未规范为 GB/T 7714「姓+名缩写」（如 Zhang S），需人工核对：{', '.join(bad[:3])}{'…' if len(bad) > 3 else ''}",
+                "id": ref_id,
+                "code": "author_not_normalized",
+            })
+
+    # 7) 期刊卷/期/页完整性——缺字段进人工补全队列（warning，不阻断渲染）
+    if ref_type in {"journal", "J", "article"}:
+        missing = [label for field, label in (("volume", "卷"), ("issue", "期"), ("pages", "页码"))
+                   if not str(entry.get(field, "") or "").strip()]
+        if missing:
+            issues.append({
+                "level": "warning",
+                "category": "参考文献著录",
+                "message": f"文献 {ref_id}：期刊条目缺 {'/'.join(missing)}，需人工补全",
+                "id": ref_id,
+                "code": "journal_fields_incomplete",
+            })
 
     return issues
 
