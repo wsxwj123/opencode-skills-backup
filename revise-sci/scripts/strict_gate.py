@@ -436,12 +436,34 @@ def main() -> int:
     if state.get("counts", {}).get("comment_units") not in {None, len(units)}:
         failures.append("project_state comment_units does not match units count")
 
+    # 📢 非阻断的响亮提醒:统计最终 response 正文里仍待作者处理的标记。命中不判 FAIL,
+    # 只醒目提示,防止半成品被当成成品交付。"Not provided by user" 是 Image/Table 证据块
+    # 的默认模板文案,属正常留白,故从 Not provided 计数中排除以免狼来了。
+    pending_confirm = response_text.count("需作者确认")
+    not_provided = sum(
+        1 for line in response_text.splitlines()
+        if "Not provided" in line and "Not provided by user" not in line
+    )
+    if pending_confirm or not_provided:
+        print("=" * 60)
+        print("📢 交付前提醒:最终 response 正文仍有待你处理之处 —")
+        if pending_confirm:
+            print(f"   · {pending_confirm} 处标记为「需作者确认」(定位/证据不足,需你补全后重跑)")
+        if not_provided:
+            print(f"   · {not_provided} 处标记为「Not provided」(非默认图/表留白,需你补内容)")
+        print("   这些不阻断门禁,但直接投稿前请逐一核对。")
+        print("=" * 60)
+
     if failures:
         print("STRICT_GATE: FAIL")
         for failure in failures:
             print(f"- {failure}")
         return 1
     print("STRICT_GATE: PASS")
+    print(
+        "注意:PASS 仅覆盖形式层(引文编号/去AI/结构/占位符/文件完整性)。"
+        "改写是否改变原意、科学结论是否正确、数据是否一致均未自动核验,须作者逐条核对。"
+    )
     return 0
 
 

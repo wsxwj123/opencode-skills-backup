@@ -82,7 +82,7 @@ Always produce:
 - `response_to_reviewers.docx`
 - revised manuscript markdown at `output_md_path`
 - revised manuscript Word at `output_docx_path`
-  - **默认 in-place 保原稿格式**：当原稿是 `.docx` 时，改后稿基于原始 manuscript docx 编辑——未被改的段落、表格、图片、样式、对齐**原样保留**，只替换被点名改写的段落的文字，并按行内标记（`*斜体*`/`**粗**`/`<sup>`/`<sub>`）重建 run、继承原段落基础字体（font.name/size/eastAsia）。定位/身份对不上时 **fail-closed**，自动回退到 md 全量重建并在 stderr 记录拒绝原因。原稿非 docx 或无原稿时走 md 全量重建（legacy fallback）。导出模式记录在 `project_state.json` 的 `outputs.manuscript_export_mode`（`in-place` / `in-place-tracked` / `md-rebuild`）。`response_to_reviewers.docx` 不受影响，维持现有固定样式脚本（含 eastAsia）。
+  - **默认 in-place 保原稿格式**：当原稿是 `.docx` 时，改后稿基于原始 manuscript docx 编辑——未被改的段落、表格、图片、样式、对齐**原样保留**，只替换被点名改写的段落的文字，并按行内标记（`*斜体*`/`**粗**`/`<sup>`/`<sub>`）重建 run、继承原段落基础字体（font.name/size/eastAsia）。定位/身份对不上时 **fail-closed 硬停**：`export_docx.py` 退出码 3，把拒绝原因和两个选项（① 重跑加 `--allow-rebuild-fallback` 接受重排版本；② 修锚点后用未改动原稿重跑）显式打给用户，**不再默认静默降级为 md 全量重建**（那会丢原稿表格/图位/对齐并按期刊模板重排，用户却不知情）。只有显式传 `--allow-rebuild-fallback`（run_pipeline 同名 flag 透传）才回退 md 全量重建。原稿非 docx 或无原稿时正常走 md 全量重建（legacy fallback，非降级）。导出模式记录在 `project_state.json` 的 `outputs.manuscript_export_mode`（`in-place` / `in-place-tracked` / `md-rebuild`）。`response_to_reviewers.docx` 不受影响，维持现有固定样式脚本（含 eastAsia）。
   - **可选 `--track-changes` 词级修订痕迹**（默认关闭，仅 in-place 生效）：改动段落按 original vs current 的词级 diff 写成带 Word 红蓝增删痕迹的 docx（`<w:ins>`/`<w:del>`，仅包住真正变化的词，行内斜体/上下标/粗体在痕迹两侧保留），导出模式记为 `in-place-tracked`。关闭时行为与原 clean in-place 完全一致。详见 Pipeline 段 `export_docx.py` 的 `--track-changes` 说明。
 - `precheck_report.md`
 - `issue_matrix.md`
@@ -117,11 +117,11 @@ python scripts/revise_units.py --project-root <project_root> [--paper-search-res
 python scripts/build_literature_index.py --project-root <project_root> [--seed-index <writing_project_literature_index.json>]   # 不传 --seed-index：行为不变，从 global_id=1 重建库。传 --seed-index：复用撰写项目(gsw/review-writing)已有引文库作种子，**保留种子每条的既有 global_id**，本次返修新查到的文献按去重键(归一DOI>PMID>归一标题)与种子比对——命中种子的复用其编号不新增、真正新的从"种子最大 global_id + 1"续号追加，合并结果写 revise 自己的 data/literature_index.json。**只读种子、不写回撰写项目**(种子扩展语义)。种子读取兼容 gsw 松 schema(global_id/citation_number/id/number/ref_number 任一取号，都缺按数组顺序补号)与根级/data 下任意路径。
 python scripts/matrix_manager.py bootstrap ...
 python scripts/matrix_manager.py audit ...
-python scripts/merge_manuscript.py --project-root <project_root> --output-md <output_md>   # md 全量重建(回退路径)时按各节 figures 锚点把图片 markdown 回填到对应节;fail-closed 防幻影删除:manifest 里有但未归到任何一节的图片全部回填到文末 "# Unplaced figures" 区并 stderr/JSON warn,绝不静默丢图。旧工程无 figures 字段则保持原纯文本拼接不变。注:in-place 导出路径不经此重建,图片在原稿内原样保留
+python scripts/merge_manuscript.py --project-root <project_root> --output-md <output_md>   # md 全量重建(回退路径)时按各节 figures 锚点把图片 markdown 回填到对应节;fail-closed 防幻影删除:manifest 里有但未归到任何一节的图片全部回填到文末 "# Unplaced figures" 区并 stderr/JSON warn,绝不静默丢图。旧工程无 figures 字段则保持原纯文本拼接不变。注:in-place 导出路径不经此重建,图片在原稿内原样保留。图号→图片文件绑定走 ordinal_heuristic(zip 顺序≈阅读顺序,常不一致),故每次都输出一份「图号→图片文件」对照(stderr 醒目 banner + JSON `figure_map`,含 binding=atomize-prefilled/ordinal_heuristic/unresolved),一旦触发 md 重建回退,图按此绑定嵌入,必须人工核对是否错号错位
 python scripts/reference_sync.py --project-root <project_root> --output-md <output_md>
 python scripts/build_reference_registry.py --project-root <project_root> --output-md <output_md> [--references-source <ref_source>] [--reference-search-decision ask|approved|declined]
-python scripts/export_docx.py --project-root <project_root> --output-md <output_md> --output-docx <output_docx> [--reference-docx <ref_docx>] [--manuscript-docx <original_manuscript_docx>] [--no-inplace] [--track-changes] [--author revise-sci] [--date <ISO8601>] [--journal-style journal-manuscript|nature-review|cell-press|lancet-review]
-# 传 --manuscript-docx <原始稿.docx> 时改后稿默认 in-place 保原稿格式（仅替换被改段落；定位失败自动回退 md 全量重建）。--no-inplace 强制走 legacy 全量重建。run_pipeline 会在原稿为 .docx 时自动传入。
+python scripts/export_docx.py --project-root <project_root> --output-md <output_md> --output-docx <output_docx> [--reference-docx <ref_docx>] [--manuscript-docx <original_manuscript_docx>] [--no-inplace] [--allow-rebuild-fallback] [--track-changes] [--author revise-sci] [--date <ISO8601>] [--journal-style journal-manuscript|nature-review|cell-press|lancet-review]
+# 传 --manuscript-docx <原始稿.docx> 时改后稿默认 in-place 保原稿格式（仅替换被改段落）。定位/身份失败时**硬停退出码 3 并打印两个选项**，不再默认静默降级；显式加 --allow-rebuild-fallback 才回退 md 全量重建。--no-inplace 强制走 legacy 全量重建。run_pipeline 会在原稿为 .docx 时自动传入 --manuscript-docx（并透传 --allow-rebuild-fallback）。
 # --track-changes（默认关闭）：in-place 导出时，改动段落不再整段重建成 clean 文本，而是对 original vs current 做**词级 diff**（英文按空白/标点切词、中文按单字切），生成带 Word 修订痕迹的 docx——删除词用 <w:del><w:delText>、新增词用 <w:ins><w:t>、替换=先删旧后插新；未变的词保持普通 run 不进痕迹。每处 ins/del 带唯一递增 w:id + w:author（--author，默认 revise-sci）+ w:date（--date，默认 datetime.now().isoformat()）。行内格式（*斜体*/**粗**/<sup>/<sub>）随词级 diff 完整保留在痕迹两侧。含内嵌图片的段落仍跳过（保图）。开关关闭时 clean in-place 行为**完全不变**。Word 里“接受全部修订”后正文==current，“拒绝全部修订”后==original。注意：python-docx 的 `.text` 不读 w:ins/w:del 内文，属正常现象（能正常打开），校验请用接受/拒绝后的文本或 docx 技能的 accept_changes.py。
 python scripts/final_consistency_report.py ...
 python scripts/strict_gate.py ...
@@ -130,7 +130,7 @@ python scripts/strict_gate.py ...
 Or use the single entrypoint:
 
 ```bash
-python scripts/run_pipeline.py --comments <comments_path> --manuscript <manuscript_docx_path> --project-root <project_root> --output-md <output_md_path> --output-docx <output_docx_path> [--journal-style journal-manuscript|nature-review|cell-press|lancet-review] [--expected-comments-mode <comments_input_mode>] [--context-token-budget 4200] [--context-tail-lines 80] [--paper-search-results <paper_search_results_path>] [--resume] [--resume-from <step>] [--force-rebuild]
+python scripts/run_pipeline.py --comments <comments_path> --manuscript <manuscript_docx_path> --project-root <project_root> --output-md <output_md_path> --output-docx <output_docx_path> [--journal-style journal-manuscript|nature-review|cell-press|lancet-review] [--expected-comments-mode <comments_input_mode>] [--context-token-budget 4200] [--context-tail-lines 80] [--paper-search-results <paper_search_results_path>] [--resume] [--resume-from <step>] [--resume-keep-unaffected] [--force-rebuild] [--allow-rebuild-fallback]
 ```
 
 `--expected-comments-mode` is strongly recommended after the user confirms the branch chosen by `intake_router.py`. `preflight.py` will block execution if the confirmed mode and the detected mode do not match.
@@ -233,6 +233,8 @@ Each comment must contain:
 - When `author_confirmation_reason` is rendered into English, the translated reason must remain fully English with no leftover Chinese fragments.
 - For substantive requests such as new mechanism explanations, new evidence, new figures, or unresolved section matches, stop at `needs_author_confirmation` and do not auto-complete.
 - `strict_gate.py` must verify comment coverage, response/manuscript/edit-plan consistency, atomic location completeness, provider-family policy, and per-comment evidence blocks before delivery.
+- 📢 **交付前半成品提醒（非阻断）**：`strict_gate.py` 每次运行都统计最终 response 正文里 `需作者确认` 的出现次数、以及非默认的 `Not provided`（排除每个 unit 的 Image/Table 默认模板行 `Not provided by user`，避免狼来了）；命中就打印醒目 banner「还有 N 处待你处理」。这**不判 FAIL**（`需作者确认` 是合法输出），只响亮提醒，防止半成品被当成成品直接投稿。
+- 🧭 **PASS 诚实化**：`STRICT_GATE: PASS` 后追加一行真话——PASS 仅覆盖形式层（引文编号/去 AI/结构/占位符/文件完整性），改写是否改变原意、科学结论是否正确、数据是否一致均**未自动核验**，须作者逐条核对。
 - `strict_gate.py` must verify that every auto-completed citation comment is covered by `reference_sync_report.json`; otherwise delivery fails.
 - `strict_gate.py` must verify that every auto-completed citation comment is present in both `data/literature_index.json` and `data/synthesis_matrix.json`, and that `data/synthesis_matrix_audit.json` reports no unresolved matrix gaps.
 - `strict_gate.py` must fail delivery when `data/reference_coverage_audit.json` reports unresolved numeric citation gaps, even if the comment-level workflow itself completed.
@@ -243,7 +245,8 @@ Each comment must contain:
 - `references_source_path` may also be a `.ris` file exported from a reference manager.
 - Keep `Evidence Attachments` in every comment block, even when no image or table is available.
 - `--resume` skips already-materialized upstream artifacts so a rerun does not silently overwrite previously curated units.
-- `--resume` also checks stored input fingerprints; if comments/manuscript/SI/attachments/reference/paper-search inputs changed, the rerun fails fast instead of trusting stale artifacts.
+- `--resume` also checks stored input fingerprints; if comments/manuscript/SI/attachments/reference/paper-search inputs changed, the rerun fails fast instead of trusting stale artifacts. 失败提示里会引导用户改用 `--resume-keep-unaffected`。
+- `--resume-keep-unaffected`：返修一作常天天改稿，一处改动即触发上面的全量重建、丢弃已 curated units。加此 flag 后，若本次改动仅涉及内容输入（comments/manuscript/SI）且**未触及任何已定位的 comment unit**（重新原子化到临时目录后比对：无 comment 文本增删改、且没有 unit 锚定的 section 正文变化），则保留全部 curated units、更新输入指纹后续跑；若有 unit 受影响则**列出受影响的 comment_id 并 fail**（curation 与原子化耦合，无法只重生成受影响 units 而不清空其它 curation，须重新 curation 后 `--force-rebuild`）；若改动涉及非内容输入（journal_style/runner/文献/预算等全局项）也 fail（无法按 unit 局部化）。注：即便保留续跑，若原稿段落发生插入/删除导致全局段落索引漂移，最终 in-place 导出仍会在身份校验处硬停（见 export_docx P1），属预期 fail-safe。
 - `--resume` must also fail fast when the stored skill signature differs from the current script tree signature.
 - `--resume-from <step>` must clear the selected step and all downstream generated artifacts, then rebuild only from that step onward under the same verified input fingerprint.
 - `--force-rebuild` clears generated project artifacts, including `data/` and citation intermediate files, and reruns the pipeline from scratch inside the same `project_root`.

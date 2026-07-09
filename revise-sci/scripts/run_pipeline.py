@@ -5,9 +5,10 @@ import argparse
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
-from common import autodiscover_reference_source, compute_tree_signature, directory_signature, path_signature, read_json
+from common import autodiscover_reference_source, compute_tree_signature, directory_signature, normalize_ws, path_signature, read_json, write_json
 
 STEP_ORDER = (
     "preflight",
@@ -167,6 +168,85 @@ def resume_inputs_changed(project_root: Path, args: argparse.Namespace) -> list[
         if previous.get(key) != value:
             changed.append(key)
     return changed
+
+
+# --resume-keep-unaffected only reasons about content inputs whose effect is
+# unit-local (comments text + manuscript/SI section text). Any other changed key
+# (journal_style, runners, decisions, references, budgets…) affects formatting or
+# behavior globally and cannot be scoped to a unit subset — those force rebuild.
+KEEP_UNAFFECTED_CONTENT_KEYS = {"comments_path", "manuscript_docx_path", "si_docx_path"}
+
+
+def _section_text_map(index: dict) -> dict[str, str]:
+    """section_id -> normalized concatenation of its paragraphs' ORIGINAL text."""
+    out: dict[str, str] = {}
+    for section in index.get("sections", []):
+        sid = section.get("section_id", "")
+        if not sid:
+            continue
+        out[sid] = normalize_ws(" ".join(p.get("text", "") for p in section.get("paragraphs", [])))
+    return out
+
+
+def compute_affected_units(project_root: Path, args: argparse.Namespace, py: str, script_dir: Path) -> list[str] | None:
+    """Re-atomize the current comments + manuscript(+SI) into a throwaway scratch
+    project and diff against the live curated state. Returns the sorted list of
+    comment_ids whose comment text changed OR whose anchored section text changed.
+    Returns None if the scratch re-atomize failed (caller must then refuse to keep)."""
+    with tempfile.TemporaryDirectory(prefix="revise_resume_") as scratch:
+        scratch_root = Path(scratch)
+        try:
+            subprocess.run(
+                [py, str(script_dir / "atomize_comments.py"), "--comments", args.comments, "--project-root", str(scratch_root)],
+                text=True, capture_output=True, check=True, timeout=180,
+            )
+            atomize_doc = [py, str(script_dir / "atomize_manuscript.py"), "--manuscript", args.manuscript, "--project-root", str(scratch_root)]
+            if args.si:
+                atomize_doc.extend(["--si", args.si])
+            subprocess.run(atomize_doc, text=True, capture_output=True, check=True, timeout=300)
+        except Exception:
+            return None
+
+        fresh_comments = {
+            normalize_ws(str(read_json(p, {}).get("comment_id", ""))): normalize_ws(str(read_json(p, {}).get("reviewer_comment_original", "")))
+            for p in (scratch_root / "units").glob("*.json")
+        }
+        fresh_ms = _section_text_map(read_json(scratch_root / "manuscript_section_index.json", {"sections": []}))
+        fresh_si = _section_text_map(read_json(scratch_root / "si_section_index.json", {"sections": []}))
+
+    live_ms = _section_text_map(read_json(project_root / "manuscript_section_index.json", {"sections": []}))
+    live_si = _section_text_map(read_json(project_root / "si_section_index.json", {"sections": []}))
+    changed_sections = {
+        sid for sid in set(live_ms) | set(fresh_ms) if live_ms.get(sid) != fresh_ms.get(sid)
+    } | {
+        sid for sid in set(live_si) | set(fresh_si) if live_si.get(sid) != fresh_si.get(sid)
+    }
+
+    affected: set[str] = set()
+    live_comments: dict[str, str] = {}
+    for unit_path in sorted((project_root / "units").glob("*.json")):
+        unit = read_json(unit_path, {})
+        cid = normalize_ws(str(unit.get("comment_id", "")))
+        if not cid:
+            continue
+        live_comments[cid] = normalize_ws(str(unit.get("reviewer_comment_original", "")))
+        atomic = unit.get("atomic_location") or {}
+        sid = atomic.get("manuscript_section_id") or atomic.get("si_section_id") or ""
+        if sid and sid in changed_sections:
+            affected.add(cid)
+    # comment text added / removed / changed
+    for cid in set(live_comments) | set(fresh_comments):
+        if live_comments.get(cid) != fresh_comments.get(cid):
+            affected.add(cid)
+    return sorted(affected)
+
+
+def refresh_stored_signatures(project_root: Path, args: argparse.Namespace) -> None:
+    state = read_json(project_root / "project_state.json", {})
+    stored = state.get("input_signatures", {})
+    stored.update(current_input_signatures(args))
+    state["input_signatures"] = stored
+    write_json(project_root / "project_state.json", state)
 
 
 def current_skill_signature(script_dir: Path) -> str:
@@ -376,7 +456,9 @@ def main() -> int:
     parser.add_argument("--context-tail-lines", type=int, default=80)
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--resume-from", choices=STEP_ORDER)
+    parser.add_argument("--resume-keep-unaffected", action="store_true", help="On --resume with changed inputs, if the change touches no located comment unit (comments/manuscript/si only), keep all curated units and continue instead of demanding a full rebuild. If any unit is affected, list them and stop.")
     parser.add_argument("--force-rebuild", action="store_true")
+    parser.add_argument("--allow-rebuild-fallback", action="store_true", help="Forwarded to export_docx: accept an md full-rebuild (reformatted, tables/figure-positions lost) when in-place format-preserving export is rejected. Off by default (export hard-stops and asks).")
     args = parser.parse_args()
 
     script_dir = Path(__file__).resolve().parent
@@ -409,8 +491,50 @@ def main() -> int:
             raise SystemExit(1)
         changed_inputs = resume_inputs_changed(project_root, args)
         if changed_inputs:
-            print(f"resume inputs changed: {', '.join(changed_inputs)}", file=sys.stderr)
-            raise SystemExit(1)
+            if not args.resume_keep_unaffected:
+                print(f"resume inputs changed: {', '.join(changed_inputs)}", file=sys.stderr)
+                print(
+                    "加 --resume-keep-unaffected 可检测这些改动是否触及任何已定位的 comment unit;"
+                    "若都无关则保留全部 curated units 续跑,否则会列出受影响的 units。",
+                    file=sys.stderr,
+                )
+                raise SystemExit(1)
+            non_content = sorted(set(changed_inputs) - KEEP_UNAFFECTED_CONTENT_KEYS)
+            if non_content:
+                print(
+                    f"--resume-keep-unaffected 无法处理这些改动: {', '.join(non_content)}"
+                    "(涉及排版/行为/文献等全局输入,无法按 unit 局部化),请全量重建(--force-rebuild)。",
+                    file=sys.stderr,
+                )
+                raise SystemExit(1)
+            affected = compute_affected_units(project_root, args, py, script_dir)
+            if affected is None:
+                print(
+                    "--resume-keep-unaffected: 无法对新输入重新原子化以判定影响范围,"
+                    "保守起见拒绝续跑,请检查输入或全量重建(--force-rebuild)。",
+                    file=sys.stderr,
+                )
+                raise SystemExit(1)
+            if affected:
+                print(f"resume inputs changed: {', '.join(changed_inputs)}", file=sys.stderr)
+                print(
+                    f"--resume-keep-unaffected: 有 {len(affected)} 个 comment unit 受本次改动影响,"
+                    "无法只保留无关 units 而单独重生成它们(curation 与原子化耦合)。受影响 units:",
+                    file=sys.stderr,
+                )
+                for cid in affected:
+                    print(f"  - {cid}", file=sys.stderr)
+                print(
+                    "请对以上 units 重新 curation 后全量重建(--force-rebuild),或用未改动的输入续跑。",
+                    file=sys.stderr,
+                )
+                raise SystemExit(1)
+            print(
+                "--resume-keep-unaffected: 本次输入改动未触及任何已定位的 comment unit;"
+                "保留全部 curated units,更新输入指纹后续跑。",
+                file=sys.stderr,
+            )
+            refresh_stored_signatures(project_root, args)
         if args.resume_from:
             clear_outputs_from_step(project_root, output_md_path, output_docx_path, args.resume_from)
 
@@ -678,6 +802,8 @@ def main() -> int:
     if args.manuscript and Path(args.manuscript).suffix.lower() == ".docx":
         export_args.extend(["--manuscript-docx", args.manuscript])
     export_args.extend(["--journal-style", args.journal_style])
+    if args.allow_rebuild_fallback:
+        export_args.append("--allow-rebuild-fallback")
     run_step(export_args)
     run_step([py, str(script_dir / "final_consistency_report.py"), "--project-root", args.project_root])
     run_step([py, str(script_dir / "strict_gate.py"), "--project-root", args.project_root])

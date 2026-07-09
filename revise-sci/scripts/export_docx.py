@@ -803,6 +803,7 @@ def main() -> int:
     parser.add_argument("--reference-docx", default="")
     parser.add_argument("--manuscript-docx", default="", help="Original manuscript docx; when present, the revised manuscript is exported in-place to preserve its formatting/tables/images.")
     parser.add_argument("--no-inplace", action="store_true", help="Force the legacy full-rebuild-from-md path even when an original manuscript docx is available.")
+    parser.add_argument("--allow-rebuild-fallback", action="store_true", help="When in-place export is rejected (location/identity mismatch), fall back to md full-rebuild instead of hard-stopping. Off by default so the user must explicitly accept a reformatted rebuild.")
     parser.add_argument("--track-changes", action="store_true", help="In-place export as word-level Word tracked changes (<w:ins>/<w:del>) instead of a clean rewrite. Requires an in-place export (original --manuscript-docx).")
     parser.add_argument("--author", default="revise-sci", help="w:author stamped on each tracked change (only with --track-changes).")
     parser.add_argument("--date", default="", help="w:date (ISO 8601) stamped on each tracked change; defaults to datetime.now().isoformat() (only with --track-changes).")
@@ -842,8 +843,38 @@ def main() -> int:
             date=args.date or None,
         )
         if not inplace_result.get("ok"):
-            # fail-closed: 不静默错位写入,回退到 md 全量重建并保留拒绝原因供诊断。
             print(json.dumps({"inplace_rejected": inplace_result}, ensure_ascii=False), file=sys.stderr)
+            if not args.allow_rebuild_fallback:
+                # 🚪 fail-closed + 硬停:不静默降级为 md 全量重建(那会丢原稿表格/图位/对齐并按
+                # 期刊模板重排),把失败原因和两个选项显式呈现给用户,由用户决定。
+                errors = inplace_result.get("errors", [])
+                lines = [
+                    "=" * 68,
+                    "[export_docx] 原地保格式导出被拒绝(in-place export rejected)。",
+                    "改后稿无法基于原始 docx 原地修改:定位/身份与原子化快照对不上。",
+                    "拒绝原因:",
+                ]
+                lines.extend(f"  - {e}" for e in errors)
+                lines.extend([
+                    "",
+                    "已阻止自动降级为 md 全量重建(会丢失原稿表格/图片位置/对齐,并按期刊模板重排版)。",
+                    "请二选一后重跑:",
+                    "  1) 接受重排版本 —— 重跑并加 --allow-rebuild-fallback,",
+                    "     产出 md 重建稿(表格/图/排版需人工核对,图号绑定见 merge 的 figure_map)。",
+                    "  2) 修锚点后重跑 —— 定位不匹配通常因原稿与原子化快照漂移(段落被移动/改写)。",
+                    "     用未改动的原稿重跑,或修正 manuscript_section_index.json 的段落定位使 in-place 命中。",
+                    "=" * 68,
+                ])
+                print("\n".join(lines), file=sys.stderr)
+                print(json.dumps({
+                    "ok": False,
+                    "error": "inplace_export_rejected",
+                    "allow_rebuild_fallback": False,
+                    "inplace_rejected": inplace_result,
+                }, ensure_ascii=False))
+                return 3
+            # 用户已显式接受重排:回退到 md 全量重建。
+            print("[export_docx] --allow-rebuild-fallback 已启用:回退到 md 全量重建(排版将按期刊模板重排)。", file=sys.stderr)
             inplace_result = None
 
     if inplace_result is None:
