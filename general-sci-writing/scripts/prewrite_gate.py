@@ -219,6 +219,9 @@ def main():
         for reason in failures:
             print(f"PREWRITE_GATE: FAIL {reason}")
         return 1
+    print("PREWRITE_GATE: PASS 仅覆盖流程前置(上一节完成/盲检标记/故事线/素材就位/"
+          "占位清零/缩略词一致)，不代表本节内容有科学价值或够顶刊——那靠盲检与作者判断。",
+          file=sys.stderr)
     return 0
 
 

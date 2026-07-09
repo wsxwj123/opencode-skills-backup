@@ -64,12 +64,13 @@
 - **从句深度 ≤ 2 层**，禁止"主句套定语从句套状语从句"三层嵌套。
 - 一句话只承担一个核心论点，复合论点拆成两句。
 
-## 🔴 被动为主 (Passive Voice as Primary)
+## 🟡 语态按目标刊切换 (Voice by Target Journal — 软提示，不阻断)
 
-- **段落整体被动占比 50–70%**（SCI Article 实验描述主流）。
-- Methods / Results 描述实验操作与观察 → **优先被动**（"Cells were treated with..."、"Apoptosis was assessed by..."）。
-- Discussion 表达作者推断 / 主观判断 → 可适当主动（"We propose..."、"These data suggest..."），但仍以被动为主。
-- 被动 < 40% 视为过于口语化；> 70% 视为冗余呆板，均扣分。
+语态是 house-style 偏好，不是去 AI 硬线。`style_checker.py` 只把语态偏差写进 warnings，不计入 score、不卡门禁。
+
+- **Nature / Science / Cell 系**：官方 author guideline 明确推荐**主动语态**（"We show that…"、"We find…"）。不设被动下限；仅当被动 > 70%（呆板）才软提示。用 `style_checker.py --journal Nature` 触发此策略。
+- **传统 SCI 刊**：实验描述仍以被动为主流，参考被动 50–70%。Methods / Results → 优先被动（"Cells were treated with..."）；Discussion 表达推断可主动。< 40% 或 > 70% 仅软提示，不扣分。
+- 拿不准目标刊风格 → Phase 7 `/journal-study` 用近 5 年代表作实测被动比例，按实测锚定，别照搬默认区间。
 
 ## 🔴 禁装饰性破折号 (No Decorative Em-dashes)
 
@@ -131,7 +132,7 @@
 ## 深度改写策略 (Anti-Similarity Protocol)
 
 - **词汇层 (Lexical)**：术语不动；术语周围的非术语通用词降到 PhD 平实层（如 `significant → clear/large`，不再升级为 `pronounced/marked/substantial`，那是编辑级修饰，违反目标读者画像）。禁止直接使用原始文献完整短语（≥4 连续词），必须拆解重构。
-- **句法层 (Syntactic)**：被动为主；将因果从句拆为独立句而非套层从句。禁止模板化过渡（"Furthermore"、"In addition"、"Moreover"），改用逻辑内嵌或自然连接（"Because..."、"This in turn..."）。
+- **句法层 (Syntactic)**：语态按目标刊（顶刊主动为主 / 传统刊被动为主，见上「语态按目标刊切换」）；将因果从句拆为独立句而非套层从句。禁止模板化过渡（"Furthermore"、"In addition"、"Moreover"），改用逻辑内嵌或自然连接（"Because..."、"This in turn..."）。
 - **结构层 (Structural)**：允许调整段内论点顺序（不破逻辑链）；可适度插入作者推断句（"This likely reflects..."、"One plausible explanation is..."）模拟真人推理痕迹。
 
 ## 自我审查

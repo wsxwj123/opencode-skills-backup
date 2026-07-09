@@ -24,7 +24,7 @@ license: Proprietary
 3. **不编数据**：缺核心定量（P 值/关键 n/效应量）→ 立即停写、输出数据收集表；严禁占位符（"XX%"）填充。
 4. **不改派生稿**：修改/润色只动 `manuscripts/*.md` 原子化源文件；严禁手改 `Full_Manuscript.md` / `*.docx`（`/merge` 会覆盖，工作丢失）。
 5. **先确认再落盘**：每节写完先展示（字数/引用/figure/缩略词/占位数），用户 OK 才写文件；禁止连续自动写多节。
-6. **去 AI 硬线**：单句 ≤30 词、被动 50–70%、无修辞/生僻词/造词/禁词、数据驱动、正文无列点（详见 `references/anti-ai-protocol.md`）。
+6. **去 AI 硬线**：单句 ≤30 词、无修辞/生僻词/造词/禁词、数据驱动、正文无列点（详见 `references/anti-ai-protocol.md`）。**语态按目标刊切换（软提示，不阻断）**：Nature/Science/Cell 官方 guideline 推荐主动语态（"We show that…"），不设被动下限；传统刊参考被动 50–70%。`style_checker.py --journal <刊名>` 只把语态偏差写进 warnings，不计入 score、不卡门禁。
 7. **引用格式**：正文一律 `[n]`（分节矩阵重排后的全局索引），每节末附 Vancouver 列表；严禁 `[Author,2023]`/`(1)`。
 8. **期刊上限**：storyline 必须在 `target_journal` 字数上限内编排，严禁先写超 30% 再砍。
 9. **占位清零**：`CITE_PENDING`/`DATA_PENDING`/`REF_DROPPED` 必须在 `/merge` 前清零（Phase 10 扫描门禁）。
@@ -465,7 +465,7 @@ python scripts/state_manager.py add-abbreviation <one.json>
 1. `python scripts/state_manager.py stats` — 字数检查。**字数预算分类**：手动汇总 `01_Abstract*.md + 02_Introduction*.md + 04_Results*.md + 05_Discussion*.md` 为"正文字数"（`03_Methods*.md`/`07_References*.md`/Legends 多数期刊不计入），对比 `project_config.word_limits`。**阻断**：超 10% 必砍；超 5% 警告。
 2. `python scripts/state_manager.py sync-literature --dry-run --strict-references` — 引用号一致性。**阻断**：dry-run 报冲突 → 跑 `--apply` 后重检。
 3. `python scripts/citation_guard.py --index literature_index.json --report citation_guard_report.json --offline` — 文献完整性。**阻断**：`ok=false` → 处理 `manual_review_queue.json` 后重跑。
-4. `python scripts/style_checker.py --manuscript-dir manuscripts --report style_check_report.json --threshold 70` — 去 AI 风格检测。**阻断**：avg_score<70 → 列具体段落修改后重跑。
+4. `python scripts/style_checker.py --manuscript-dir manuscripts --report style_check_report.json --threshold 70 --journal <target_journal>` — 去 AI 风格检测（`--journal` 用 `storyline.json` 的 target_journal，切换语态软提示策略）。**阻断**：avg_score<70 → 列具体段落修改后重跑。**注意**：avg_score 不含语态项（被动比只进 `warnings`，不阻断）；PASS 只代表形式层过关，科学创新度/配不配目标刊未自动核验，须作者与通讯作者判断。
 4b. `python scripts/style_checker.py --manuscript-dir figure_analysis --report figure_analysis_style.json --threshold 70` — 识图阶段写入的英文草稿也检测。**阻断**同 4。
 4c. `python scripts/proofread.py --manuscript-dir manuscripts --report proofread_report.json --threshold 70` — 机械错误。**阻断**：avg_score<70 → 按 report 中 `issues` 字段逐条修后重跑。
 5. `grep -rn "CITE_PENDING\|DATA_PENDING\|REF_DROPPED" manuscripts/ figure_analysis/ 2>/dev/null` — 占位扫描。**阻断**：非空 → 必须按 §REF_DROPPED 三种处置补齐。
