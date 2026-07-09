@@ -98,6 +98,7 @@ Always produce:
 - `abbreviation_index.json`,反向抽取的缩略语交叉索引(每项含 defined_count / used_count / orphan_type:undefined_use / duplicate_definition / title_abbreviation 为硬错,defined_unused 为软警告)
 - `manuscript_index.md`,人读版图/参考/缩略语索引与孤儿汇总。启发式抽取,作审查辅助而非红线核验
 - `figures/figure_NN.<ext>` + `figures/image_manifest.json`,从源 docx `word/media/` 解出的内嵌图(按 zip 出现顺序命名),供最终返修 docx 嵌回。仅二进制搬运,不做 OCR/图像识别;非 docx 输入则目录可能为空
+- `manuscript_section_index.json` 每个 section 条目含 `figures` 字段:该节图注/裸图标题锚定的图清单(`figure_id` / `caption` / `image_file` / `source`)。图注文本落在哪节该图即归哪节(definitive);图号→图片文件走 manifest idx 启发式(zip 顺序 ≈ 阅读顺序),故图片绑定标 `image_binding: ordinal_heuristic`
 
 ## Pipeline
 Run the scripts in this exact order:
@@ -106,7 +107,7 @@ Run the scripts in this exact order:
 python scripts/intake_router.py ...
 python scripts/preflight.py ...
 python scripts/atomize_comments.py ...
-python scripts/atomize_manuscript.py ...
+python scripts/atomize_manuscript.py ...   # 除切 section md 外,为每节写 figures 锚点(figure_id/caption/image_file/source);manifest 此时通常尚未生成,image_file 多为空,由 merge 阶段以 manifest 为准再解析
 python scripts/manuscript_index.py --manuscript <manuscript_docx_path> --project-root <project_root> --units-dir units   # 反向抽取图/参考/缩略语交叉索引,辅助图文一致性、引用完整性与缩略语首展核查(产 abbreviation_index.json)。改稿合并后宜对最终 output_md 重跑一次,使索引反映改后稿
 python scripts/extract_docx_images.py --manuscript <manuscript_path> --project-root <project_root>   # 支持 docx 与 pdf,抠出内嵌图到 figures/,供最终返修 docx 嵌回(best-effort;pdf 需 PyMuPDF,缺失则优雅跳过;其他非 docx/pdf 输入自动 no-op)
 python scripts/build_issue_matrix.py ...
@@ -116,7 +117,7 @@ python scripts/revise_units.py --project-root <project_root> [--paper-search-res
 python scripts/build_literature_index.py --project-root <project_root> [--seed-index <writing_project_literature_index.json>]   # 不传 --seed-index：行为不变，从 global_id=1 重建库。传 --seed-index：复用撰写项目(gsw/review-writing)已有引文库作种子，**保留种子每条的既有 global_id**，本次返修新查到的文献按去重键(归一DOI>PMID>归一标题)与种子比对——命中种子的复用其编号不新增、真正新的从"种子最大 global_id + 1"续号追加，合并结果写 revise 自己的 data/literature_index.json。**只读种子、不写回撰写项目**(种子扩展语义)。种子读取兼容 gsw 松 schema(global_id/citation_number/id/number/ref_number 任一取号，都缺按数组顺序补号)与根级/data 下任意路径。
 python scripts/matrix_manager.py bootstrap ...
 python scripts/matrix_manager.py audit ...
-python scripts/merge_manuscript.py --project-root <project_root> --output-md <output_md>
+python scripts/merge_manuscript.py --project-root <project_root> --output-md <output_md>   # md 全量重建(回退路径)时按各节 figures 锚点把图片 markdown 回填到对应节;fail-closed 防幻影删除:manifest 里有但未归到任何一节的图片全部回填到文末 "# Unplaced figures" 区并 stderr/JSON warn,绝不静默丢图。旧工程无 figures 字段则保持原纯文本拼接不变。注:in-place 导出路径不经此重建,图片在原稿内原样保留
 python scripts/reference_sync.py --project-root <project_root> --output-md <output_md>
 python scripts/build_reference_registry.py --project-root <project_root> --output-md <output_md> [--references-source <ref_source>] [--reference-search-decision ask|approved|declined]
 python scripts/export_docx.py --project-root <project_root> --output-md <output_md> --output-docx <output_docx> [--reference-docx <ref_docx>] [--manuscript-docx <original_manuscript_docx>] [--no-inplace] [--track-changes] [--author revise-sci] [--date <ISO8601>] [--journal-style journal-manuscript|nature-review|cell-press|lancet-review]
