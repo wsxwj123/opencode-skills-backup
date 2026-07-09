@@ -45,6 +45,9 @@ REQUIRED_SCRIPTS = [
     "prewrite_gate.py",  # Phase 3 Per-Section Cycle 开写前置闸门
     "delegate_review.py",  # Phase 3 section-dod 盲检委托 pack/verify
     "style_checker.py",  # 去 AI 风格检测
+    "proofread.py",  # Phase 3 R21 字符级机器硬门禁(可阻断)
+    "consolidate_references.py",  # Phase 4 合并参考文献为单一列表
+    "export_docx.py",  # Phase 5d 最终 docx 交付物(需 templates/reference.docx)
 ]
 
 STATE_JSON = '{"phase": 0, "completed_sections": [], "zotero_root_key": "", "authors": []}\n'
@@ -113,6 +116,14 @@ def main() -> None:
         shutil.copy(src, proj / "scripts" / name)
     if missing:
         sys.exit(f"❌ Missing scripts in SKILL_DIR: {missing}. Verify --skill-dir={skill_dir}")
+
+    # export_docx.py resolves templates/reference.docx as __file__.parent.parent/
+    # templates/reference.docx — i.e. proj/templates/reference.docx once copied.
+    # Ship the baked house-style template so Phase 5d docx export does not crash.
+    ref_docx = skill_dir / "templates" / "reference.docx"
+    if ref_docx.exists():
+        (proj / "templates").mkdir(parents=True, exist_ok=True)
+        shutil.copy(ref_docx, proj / "templates" / "reference.docx")
 
     print(f"✅ Project created at: {proj}")
     print(f"   Copied {len(REQUIRED_SCRIPTS)} active scripts")
