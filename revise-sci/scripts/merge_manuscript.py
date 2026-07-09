@@ -35,6 +35,7 @@ def main() -> int:
 
     parts: list[str] = []
     placed_files: set[str] = set()
+    figure_map: list[dict[str, str]] = []  # 图号→图片文件对照(供人工核对启发式绑定)
     for section in sections:
         body = (project_root / section["file"]).read_text(encoding="utf-8").strip()
         if body:
@@ -46,6 +47,13 @@ def main() -> int:
         for fig in section.get("figures", []):
             fig_id = fig.get("figure_id", "")
             img = fig.get("image_file") or image_map.get(_fig_no(fig_id))
+            binding = "atomize-prefilled" if fig.get("image_file") else "ordinal_heuristic"
+            figure_map.append({
+                "figure_id": fig_id,
+                "image_file": img or "",
+                "section": section.get("heading", ""),
+                "binding": binding if img else "unresolved",
+            })
             if img and img not in placed_files:
                 placed_files.add(img)
                 parts.append(f"![{fig_id}](figures/{img})")
@@ -70,6 +78,20 @@ def main() -> int:
         )
 
     write_text(output_md, "\n\n".join(part for part in parts if part).strip() + "\n")
+
+    # 🔴 图号→图片文件对照:zip 顺序 ≠ 阅读顺序,ordinal_heuristic 可能错号错位。
+    # 一旦 in-place 保格式导出失败、回退到本 md 重建稿,图片就按此绑定嵌入,必须人工核对。
+    if figure_map:
+        print("=" * 60, file=sys.stderr)
+        print("[merge_manuscript] 图号→图片文件对照(启发式绑定,请人工核对是否错号/错位):", file=sys.stderr)
+        for row in figure_map:
+            print(
+                f"  · {row['figure_id']} -> {row['image_file'] or '(未解析)'} "
+                f"[{row['binding']}]  节:{row['section'] or '?'}",
+                file=sys.stderr,
+            )
+        print("=" * 60, file=sys.stderr)
+
     print(
         json.dumps(
             {
@@ -80,6 +102,7 @@ def main() -> int:
                 "images_total": len(dict.fromkeys(all_files)),
                 "images_placed": len(placed_files),
                 "images_unplaced": unplaced,
+                "figure_map": figure_map,
             },
             ensure_ascii=False,
         )
