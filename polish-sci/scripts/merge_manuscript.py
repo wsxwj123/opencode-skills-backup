@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import sys
 from pathlib import Path
 
 from common import read_json, write_text
@@ -345,6 +346,36 @@ def export_inplace(src_docx: Path, project_root: Path, out_docx: Path) -> dict:
     }
 
 
+def _print_inplace_skip_manifest(result: dict, project_root: Path) -> None:
+    """交付前把 in-place 静默跳过的段落升为逐条点名的显式清单(醒目 stderr),
+    不让作者漏掉:含图段跳过润色、改动段丢run级颜色/下划线。"""
+    skipped_images = result.get("paragraphs_skipped_images", []) or []
+    skipped_color = result.get("paragraphs_skipped_color_underline", []) or []
+    if not skipped_images and not skipped_color:
+        return
+    # para_index -> raw 预览:从 units/*.json 的 source_para_index 反查
+    preview: dict[int, str] = {}
+    units_dir = project_root / "units"
+    if units_dir.exists():
+        for uf in units_dir.glob("*.json"):
+            u = read_json(uf, None) or {}
+            pidx = u.get("source_para_index")
+            if isinstance(pidx, int):
+                preview[pidx] = re.sub(r"\s+", " ", u.get("raw_text", "")).strip()[:120]
+    sys.stderr.write("\n" + "=" * 70 + "\n")
+    sys.stderr.write("[in-place] 交付前必读:以下段落未被完整处理,请逐条人工复核\n")
+    sys.stderr.write("=" * 70 + "\n")
+    if skipped_images:
+        sys.stderr.write(f"● 含内嵌图片、跳过文字润色({len(skipped_images)} 段,保留原文保图):\n")
+        for pidx in skipped_images:
+            sys.stderr.write(f"    · 段 {pidx}: {preview.get(pidx, '(无预览)')}\n")
+    if skipped_color:
+        sys.stderr.write(f"● 丢失 run 级颜色/下划线({len(skipped_color)} 段,文字未改故保留原格式):\n")
+        for pidx in skipped_color:
+            sys.stderr.write(f"    · 段 {pidx}: {preview.get(pidx, '(无预览)')}\n")
+    sys.stderr.write("=" * 70 + "\n")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Merge polished units into manuscript")
     parser.add_argument("--project-root", required=True)
@@ -375,6 +406,7 @@ def main() -> int:
             inplace_result = export_inplace(Path(args.in_place_src), project_root, out_docx)
             inplace_result["out_docx"] = str(out_docx.resolve())
             docx_ok = True
+            _print_inplace_skip_manifest(inplace_result, project_root)
     elif args.docx:
         docx_ok = export_docx(md_text, Path(args.docx))
 
