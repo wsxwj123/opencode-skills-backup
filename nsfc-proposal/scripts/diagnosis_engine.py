@@ -15,6 +15,15 @@ import humanizer_zh
 import word_counter
 
 
+# 诚实化声明：D-01/D-02/D-04 是无法机械评判的实质维度，本引擎只报统计、不给质量等级。
+QUALITY_DISCLAIMER = (
+    "⚠ 字数/条目数/引用数等均为机械统计，不代表质量。"
+    "科学意义(D-01)、创新性(D-02)、可行性(D-04)的实质判断须专家或委托盲检，本引擎不做实质评判。"
+    "本报告的等级/通过状态仅覆盖形式规范与内部一致性；立意是否够格、创新是否真新、"
+    "引文是否支持论点、研究空白真伪，均未自动核验。"
+)
+
+
 def _grade_from_ratio(ok: float) -> str:
     if ok >= 0.95:
         return "A"
@@ -97,22 +106,23 @@ def _global_dimensions(
     page_limit: int,
 ) -> dict[str, dict[str, Any]]:
 
-    # D-01 科学意义与立项依据
+    # D-01 科学意义与立项依据 —— 仅统计，不评质量等级（字数/引用数是可灌水的机械代理，
+    # 是否有真科学价值须专家/盲检判断）
     p1 = sections_dir / "P1_立项依据.md"
     p1_text = p1.read_text(encoding="utf-8") if p1.exists() else ""
     p1_cits = len(citation_validator.extract_citation_numbers(p1_text))
-    d01 = "A" if len(p1_text) >= 1500 and p1_cits >= 20 else ("B" if len(p1_text) >= 800 and p1_cits >= 8 else ("C" if p1_text else "D"))
+    d01_stats = {"p1_字数": len(p1_text), "p1_引用条数": p1_cits}
 
-    # D-02 创新性
+    # D-02 创新性 —— 仅统计创新点条目数，不评质量（条目多≠创新真）
     in_count = len(cm.get("innovations", []))
-    d02 = "A" if in_count >= 3 else ("B" if in_count >= 1 else "C")
+    d02_stats = {"创新点条目数": in_count}
 
     # D-03 研究方案合理性
     d03 = "A" if consistency.get("V-03", {}).get("pass") and consistency.get("V-06", {}).get("pass") else "D"
 
-    # D-04 可行性
+    # D-04 可行性 —— 仅统计可行性证据条数及来源合规，不评质量（证据够不够硬须专家判断）
     f_count = len(cm.get("feasibility_evidence", []))
-    d04 = "A" if f_count >= 2 and consistency.get("V-07", {}).get("pass") else ("C" if f_count >= 1 else "D")
+    d04_stats = {"可行性证据条数": f_count, "F来源合规(V-07)": bool(consistency.get("V-07", {}).get("pass"))}
 
     # D-05 四维对应完整性
     core_rules = ["V-01", "V-02", "V-03", "V-05", "V-06"]
@@ -146,11 +156,12 @@ def _global_dimensions(
     abs_en_words = len((abs_en or "").split())
     d10 = "A" if abs_cn_words <= 400 and abs_en_words <= 300 and abs_cn_words > 0 and abs_en_words > 0 else "C"
 
+    _stat_note = "统计信息，不代表质量；实质判断须专家或委托盲检，本引擎不做实质评判。"
     dims = {
-        "D-01": {"name": "科学意义与立项依据", "grade": d01},
-        "D-02": {"name": "创新性", "grade": d02},
+        "D-01": {"name": "科学意义与立项依据", "kind": "statistic", "stats": d01_stats, "note": _stat_note},
+        "D-02": {"name": "创新性", "kind": "statistic", "stats": d02_stats, "note": _stat_note},
         "D-03": {"name": "研究方案合理性", "grade": d03},
-        "D-04": {"name": "可行性", "grade": d04},
+        "D-04": {"name": "可行性", "kind": "statistic", "stats": d04_stats, "note": _stat_note},
         "D-05": {"name": "四维对应完整性", "grade": d05},
         "D-06": {"name": "跨节逻辑一致性", "grade": d06},
         "D-07": {"name": "写作风格", "grade": d07},
@@ -184,7 +195,8 @@ def full_review(
         citation_matrix = citation_validator.matrix_check(p1_text, idx, ref_text)
 
     dimensions = _global_dimensions(sections_dir, cm, section_reports, consistency, citation_matrix, page_limit)
-    grades = [d["grade"] for d in dimensions.values()]
+    # D-01/D-02/D-04 为纯统计项（无 grade），不计入等级/门控计算
+    grades = [d["grade"] for d in dimensions.values() if "grade" in d]
     d_count = sum(1 for g in grades if g == "D")
     c_count = sum(1 for g in grades if g == "C")
 
@@ -204,6 +216,7 @@ def full_review(
     return {
         "review_type": "L2_full",
         "timestamp": datetime.now(timezone.utc).isoformat(),
+        "disclaimer": QUALITY_DISCLAIMER,
         "overall_grade": overall_grade,
         "pass_status": pass_status,
         "section_reports": section_reports,
@@ -222,16 +235,22 @@ def export_markdown(report: dict[str, Any], title: str = "NSFC申请书评审报
     lines = []
     lines.append(f"# {title}")
     lines.append("")
+    lines.append(f"> {report.get('disclaimer', QUALITY_DISCLAIMER)}")
+    lines.append("")
     lines.append(f"- 时间: {report.get('timestamp', '')}")
-    lines.append(f"- 总评等级: {report.get('overall_grade', '')}")
-    lines.append(f"- 通过状态: {report.get('pass_status', '')}")
+    lines.append(f"- 总评等级（仅形式与内部一致性）: {report.get('overall_grade', '')}")
+    lines.append(f"- 通过状态（仅形式与内部一致性）: {report.get('pass_status', '')}")
     lines.append(f"- 总字数: {report.get('total_words', 0)}")
     lines.append(f"- 页数估算: {report.get('page_estimate', 0)} / 限制 {report.get('page_limit', 30)}")
     lines.append("")
 
     lines.append("## 维度评分")
     for did, detail in report.get("dimensions", {}).items():
-        lines.append(f"- {did} {detail.get('name')}: {detail.get('grade')}")
+        if detail.get("kind") == "statistic":
+            stat_str = "，".join(f"{k}={v}" for k, v in (detail.get("stats") or {}).items())
+            lines.append(f"- {did} {detail.get('name')}: [仅统计] {stat_str}（{detail.get('note', '')}）")
+        else:
+            lines.append(f"- {did} {detail.get('name')}: {detail.get('grade')}")
 
     lines.append("")
     lines.append("## 节级结果")
@@ -264,12 +283,23 @@ def _export_polish_review(report: dict[str, Any]) -> str:
     lines = []
     lines.append("# 申请书评审报告")
     lines.append("")
+    lines.append(f"> {report.get('disclaimer', QUALITY_DISCLAIMER)}")
+    lines.append("")
     lines.append("## 总体评价")
     lines.append(
-        f"本次评审综合等级为 {report.get('overall_grade')}，通过状态为 {report.get('pass_status')}。"
-        "评审重点围绕科学问题凝练、研究设计可证伪性、跨节一致性与写作规范展开。"
+        f"本次机械自审的综合等级为 {report.get('overall_grade')}，通过状态为 {report.get('pass_status')}，"
+        "该等级仅覆盖形式规范与内部一致性。科学问题凝练、研究设计可证伪性、创新实质性等"
+        "须由专家或委托盲检判断，本引擎不做实质评判。"
     )
     lines.append("")
+    stat_dims = {k: v for k, v in report.get("dimensions", {}).items() if v.get("kind") == "statistic"}
+    if stat_dims:
+        lines.append("## 统计信息（非质量评分）")
+        for did, detail in stat_dims.items():
+            stat_str = "，".join(f"{k}={v}" for k, v in (detail.get("stats") or {}).items())
+            lines.append(f"- {did} {detail.get('name')}：{stat_str}")
+        lines.append("（以上为字数/条目数统计，不代表质量；实质判断须专家或盲检。）")
+        lines.append("")
     lines.append("## 一、科学问题与立项依据")
     lines.append("围绕D-01、D-05和引用矩阵核查立项依据是否形成完整论证链。")
     lines.append("")
@@ -468,7 +498,7 @@ def main() -> int:
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
         blocked = report.get("pass_status") == "blocked"
-        print(json.dumps({"ok": not blocked, "output": str(out), "overall_grade": report["overall_grade"], "pass_status": report.get("pass_status")}, ensure_ascii=False))
+        print(json.dumps({"ok": not blocked, "output": str(out), "overall_grade": report["overall_grade"], "pass_status": report.get("pass_status"), "note": "等级/通过仅覆盖形式与内部一致性；立意/创新/可行性实质须专家或盲检，本引擎不核验"}, ensure_ascii=False))
         return 1 if blocked else 0
 
     if args.cmd == "export-report":

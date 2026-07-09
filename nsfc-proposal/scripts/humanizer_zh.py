@@ -21,11 +21,6 @@ BANNED_PATTERNS = [
     (r"日益增长|蓬勃发展|方兴未艾", "news_style", "替换为具体数据或趋势描述"),
     # 空洞动词
     (r"深入探讨|系统研究|全面分析", "hollow_verb", "改为具体研究行为描述，如'比较X与Y的差异'"),
-    # 机械过渡
-    (r"综上所述|总而言之", "template_transition", "用事实句结束段落"),
-    (r"在此基础上|鉴于此", "ai_transition", "直接写因果关系"),
-    # 禁用修辞：比喻
-    (r"的桥梁|的基石|的钥匙|的引擎", "metaphor_rhetoric", "直接陈述其功能或作用"),
     # 禁用修辞：夸张
     (r"革命性的|颠覆性的|突破性的", "hyperbole_rhetoric", "用数据/事实说明程度"),
     # 禁用修辞：排比（"...是A，是B，更是C"）
@@ -34,6 +29,15 @@ BANNED_PATTERNS = [
     (r"难道不是[^？]{0,30}？", "rhetorical_question", "改为陈述句"),
     # 禁用修辞：设问
     (r"那么，[^？]{1,30}？", "leading_question", "直接阐述，删除设问"),
+]
+
+# 逃生口：机制类过渡词与适度比喻是中标本子常态，一刀切全禁反而制造"被洗过"的均匀质感。
+# 这些改为"过量才报"——单篇出现 < 阈值不报，达到阈值才提示（WARNING，不硬拦）。
+OVERUSE_THRESHOLD = 3
+OVERUSE_PATTERNS = [
+    (r"综上所述|总而言之", "template_transition_overuse", "机械过渡词过量，保留 1~2 处、其余用事实句收尾"),
+    (r"在此基础上|鉴于此", "ai_transition_overuse", "过渡模板过量，部分改为直接写因果关系"),
+    (r"的桥梁|的基石|的钥匙|的引擎", "metaphor_overuse", "比喻过量，多数改为直接陈述功能/作用（适度机制类比可留）"),
 ]
 
 VAGUE_PATTERNS = [
@@ -239,6 +243,21 @@ def scan_text(text: str, allow_lists: bool = False) -> dict:
                 }
             )
 
+    # 过量才报：机制类过渡词/比喻仅在单篇达到阈值时提示（WARNING，不硬拦）
+    for pattern, code, suggestion in OVERUSE_PATTERNS:
+        matches = list(re.finditer(pattern, text))
+        if len(matches) >= OVERUSE_THRESHOLD:
+            for m in matches:
+                issues.append(
+                    {
+                        "severity": "WARNING",
+                        "code": code,
+                        "span": [m.start(), m.end()],
+                        "text": m.group(0),
+                        "suggestion": f"{suggestion}（全文出现 {len(matches)} 次，阈值 {OVERUSE_THRESHOLD}）",
+                    }
+                )
+
     for pattern, code, suggestion in VAGUE_PATTERNS:
         for m in re.finditer(pattern, text):
             issues.append(
@@ -321,31 +340,37 @@ def scan_text(text: str, allow_lists: bool = False) -> dict:
 
 
 def _count_cn_chars(s: str) -> int:
-    """计算字符串中中文字符数（用于句长硬上限判断）。"""
+    """计算字符串中中文字符数（用于句长提醒判断）。"""
     return sum(1 for c in s if "一" <= c <= "鿿")
+
+
+# 逃生口：机制类长句（含因果/条件/递进连接词）在中标本子里是严密表达的常态，予以豁免。
+MECHANISM_CONNECTORS = ("通过", "从而", "进而", "使得", "导致", "因而", "借助", "基于", "利用", "由于", "以及", "从而使")
 
 
 def rhythm_check(text: str) -> dict:
     paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
-    issues = []
+    issues = []          # 计入 count 的节奏问题
+    advisories = []      # 软提醒：超长句，不计入 count、不阻断
     openers = []
 
     for idx, para in enumerate(paragraphs, 1):
         sents = [s for s in re.split(r"[。！？!?]", para) if s.strip()]
         lens = [len(s.strip()) for s in sents]
 
-        # ── 中文句长硬上限（≤50 中文字符）────────────────────────────────
+        # ── 中文句长软提醒（>50 中文字符）：机制类长句豁免；其余仅提示不阻断 ──
         for sent_idx, sent in enumerate(sents, 1):
             cn_len = _count_cn_chars(sent)
-            if cn_len > 50:
-                issues.append(
+            if cn_len > 50 and not any(c in sent for c in MECHANISM_CONNECTORS):
+                advisories.append(
                     {
                         "paragraph": idx,
                         "sentence": sent_idx,
                         "type": "cn_sentence_too_long",
+                        "severity": "advisory",
                         "cn_chars": cn_len,
                         "text": sent.strip()[:60] + ("…" if len(sent.strip()) > 60 else ""),
-                        "suggestion": "中文单句超50字，拆分为两句或精简从句（目标≤50中文字符）",
+                        "suggestion": "中文单句超50字（软提醒，不阻断）；若非机制类严密长句，可考虑拆分",
                     }
                 )
 
@@ -360,7 +385,8 @@ def rhythm_check(text: str) -> dict:
         if openers[i] and openers[i] == openers[i + 1]:
             issues.append({"paragraph": i + 1, "type": "repeated_opener", "next_paragraph": i + 2, "text": openers[i]})
 
-    return {"count": len(issues), "issues": issues}
+    # count 只含硬节奏问题；超长句作为 advisories 单列，不计入 count（故不推高 D-07 至阻断）
+    return {"count": len(issues), "issues": issues + advisories, "advisories": advisories}
 
 
 def fix_suggest(text: str, allow_lists: bool = False) -> dict:
