@@ -742,6 +742,14 @@ _CN_SENT_SHORT_MAX = 15  # ≤15 字视为"短句"
 _CN_SENT_LONG_MIN = 30   # ≥30 字视为"长句"
 _CN_SENT_MONOTONE_DIFF = 5  # 连续3句长度差 <5 字报单调警告
 
+# ---------------------------------------------------------------------------
+# 翻译腔软检测（SCI 英译中高频，全部 info 级软提示，不阻断）
+# ---------------------------------------------------------------------------
+_TE_NOMINALIZE = re.compile(r'进行[了]?|加以|予以|使得|得以')  # 名词化/虚化动词
+_TE_BEI_PER_PARA = 3  # 单段"被"字达此数报被动句滥用
+# 长定语链：短片段内连续 4 个及以上"的"（…的…的…的…的），典型英式前置定语堆叠
+_TE_LONG_ATTR_CHAIN = re.compile(r'(?:[^的。！？；，]{1,8}的){4,}')
+
 
 # ---------------------------------------------------------------------------
 # 字符级检查（移植自 general-sci-writing/scripts/proofread.py，全部 WARN 级）
@@ -971,6 +979,39 @@ def check_writing_style(doc):
                     'suggestion': suggestion,
                 })
 
+        # ── 翻译腔软检测（全 info，不阻断）────────────────────────────────
+        # 1) 名词化/虚化动词：进行/加以/予以/使得/得以
+        for m in _TE_NOMINALIZE.finditer(text):
+            start = max(0, m.start() - 8)
+            end = min(len(text), m.end() + 8)
+            issues.append({
+                'level': 'info',
+                'category': '翻译腔',
+                'message': f'名词化/虚化动词（疑似翻译腔）：...{text[start:end]}...',
+                'suggestion': '改为直接的动作动词，如"进行分析"→"分析"、"使得X提高"→"提高了X"',
+                'code': 'translationese_nominalize',
+            })
+        # 2) 被字句密度：单段"被"过多
+        bei_count = text.count('被')
+        if bei_count >= _TE_BEI_PER_PARA:
+            issues.append({
+                'level': 'info',
+                'category': '翻译腔',
+                'message': f'被动句偏多（本段 {bei_count} 处"被"，疑似英式被动直译）',
+                'suggestion': '中文优先主动句，仅在施事不明或强调受事时保留被动',
+                'code': 'translationese_passive',
+            })
+        # 3) 长定语链：…的…的…的…的
+        for m in _TE_LONG_ATTR_CHAIN.finditer(text):
+            snippet = m.group(0)[:40] + ('…' if len(m.group(0)) > 40 else '')
+            issues.append({
+                'level': 'info',
+                'category': '翻译腔',
+                'message': f'超长前置定语链（疑似翻译腔）：{snippet}',
+                'suggestion': '拆分多层"的"字定语，改用短句或后置从句',
+                'code': 'translationese_long_attr',
+            })
+
         # ── 中文句长检测 ──────────────────────────────────────────────────
         # 按中文句末标点（。！？）切句；空句跳过；只数中文字符
         cn_sentences_in_para = re.split(r'[。！？]', text)
@@ -1104,6 +1145,100 @@ def check_full_thesis_structure(doc, min_chapters=5):
                 'message': '研究章节数量不足',
                 'suggestion': '应保留“独立绪论章 + 多个研究章 + 独立总结章”组织形式'
             })
+
+    return issues
+
+
+def check_cross_chapter_coherence(doc, project_root=None):
+    """章间衔接检查（软门禁，全 warning/info，不阻断）——防"订书机论文"。
+
+    以 project_state.json 的 outline（研究主线表）为基准，核对：
+      1) 绪论是否预告了每个研究章的贡献（研究章标题应在绪论正文出现）；
+      2) 结论是否逐章综合（研究章标题应在结论正文出现）；
+      3) 每个研究章开头是否回指主线（首段含承接/主线线索词）。
+    outline 缺失或为空则跳过（空 outline 由 Step 0.5 门禁另行拦截）。
+    """
+    issues = []
+    if not project_root:
+        return issues
+    ps_path = os.path.join(project_root, "project_state.json")
+    if not os.path.isfile(ps_path):
+        return issues
+    try:
+        with open(ps_path, "r", encoding="utf-8") as f:
+            ps = json.load(f)
+    except Exception:
+        return issues
+    outline = ps.get("outline")
+    if not isinstance(outline, list) or not outline:
+        return issues
+
+    # 研究章：outline 中带 core_argument 的条目（绪论/结论一般不写 core_argument）
+    research_entries = [
+        e for e in outline
+        if isinstance(e, dict) and str(e.get("core_argument", "")).strip()
+        and str(e.get("title", "")).strip()
+    ]
+    if not research_entries:
+        return issues
+
+    # 将 docx 切分为章块：{chapter_num: {"title":..., "body":[首段..], "text": 全文}}
+    chapters = {}
+    cur = None
+    for para in doc.paragraphs:
+        text = para.text.strip()
+        if not text:
+            continue
+        lvl = heading_level(getattr(para.style, "name", ""))
+        if lvl == 1 and is_chapter_heading_text(text):
+            m = re.search(r'第\s*(\d+)\s*章', text)
+            cur = int(m.group(1)) if m else None
+            if cur is not None:
+                chapters[cur] = {"title": text, "body_paras": [], "text": ""}
+            continue
+        if cur is not None and cur in chapters:
+            if lvl is None:  # 正文段
+                chapters[cur]["body_paras"].append(text)
+            chapters[cur]["text"] += text
+
+    # 绪论/结论章文本
+    intro_text = ""
+    concl_text = ""
+    for num, blk in chapters.items():
+        norm = normalize_text(blk["title"])
+        if ("绪论" in norm or "引言" in norm) and not intro_text:
+            intro_text = blk["text"]
+        if any(k in norm for k in ("结论", "总结", "小结", "展望")):
+            concl_text = blk["text"]  # 取最后一个匹配（结论通常靠后）
+
+    for e in research_entries:
+        anchor = str(e.get("title", "")).strip()
+        ch = e.get("chapter")
+        label = f"研究章「{anchor}」" + (f"（第{ch}章）" if ch is not None else "")
+        if intro_text and anchor not in intro_text:
+            issues.append({
+                'level': 'warning',
+                'category': '章间衔接',
+                'message': f'绪论未预告{label}的贡献点',
+                'suggestion': '在绪论"研究内容/技术路线"处逐一预告各研究章要解决的问题与贡献',
+            })
+        if concl_text and anchor not in concl_text:
+            issues.append({
+                'level': 'warning',
+                'category': '章间衔接',
+                'message': f'结论未跨章综合{label}',
+                'suggestion': '在结论章逐章回收各研究章的核心发现并综合成整体结论',
+            })
+        # 研究章开头回指主线
+        if ch is not None and ch in chapters:
+            head = "".join(chapters[ch]["body_paras"][:2])
+            if head and not re.search(r'上一章|前一章|前文|前述|在.{0,12}基础上|本章|围绕|针对|承接', head):
+                issues.append({
+                    'level': 'info',
+                    'category': '章间衔接',
+                    'message': f'{label}开头缺少与研究主线的承接语',
+                    'suggestion': '研究章首段先回指上一章结论或全文科学问题，再引出本章目标',
+                })
 
     return issues
 
@@ -2658,6 +2793,15 @@ def generate_quality_report(
             print("🔍 检查章间分页符...")
         page_break_issues = check_page_breaks_between_chapters(doc)
         all_issues.extend(page_break_issues)
+
+    # 5.7 章间衔接检查（防订书机论文，仅在全文检查时启用）
+    if enforce_full_structure:
+        if verbose:
+            print("🔍 检查章间衔接...")
+        coherence_issues = check_cross_chapter_coherence(
+            doc, project_root=infer_project_root_for_profile(docx_path)
+        )
+        all_issues.extend(coherence_issues)
     
     # 6. 检查段落格式
     if verbose:

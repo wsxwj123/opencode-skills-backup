@@ -894,6 +894,39 @@ def normalize_style_profile(raw_style_profile=None):
     }
 
 
+# custom 模式版式必填项：正文 + 各级标题的字体/字号/行距，缺任一即不放行。
+# 只查 raw（用户实际填写值），不查 normalize 后的 default 填充值——否则等于"自己校自己"。
+_REQUIRED_STYLE_KEYS = ("body", "heading1", "heading2", "heading3")
+
+
+def _custom_style_profile_missing(raw_style_profile):
+    """custom 模式下检查用户是否给全了正文/各级标题的字体、字号、行距。
+
+    返回 True 表示缺失（需拦在 pending_template）。
+    """
+    if not isinstance(raw_style_profile, dict):
+        return True
+    for key in _REQUIRED_STYLE_KEYS:
+        entry = raw_style_profile.get(key)
+        if not isinstance(entry, dict):
+            return True
+        # 字体（中文字形）
+        if not str(entry.get("font_east_asia", "")).strip():
+            return True
+        # 字号
+        try:
+            if entry.get("font_size_pt") is None or float(entry["font_size_pt"]) <= 0:
+                return True
+        except (TypeError, ValueError):
+            return True
+        # 行距：规则或磅值至少给一项
+        has_rule = bool(str(entry.get("line_spacing_rule", "")).strip())
+        has_pt = entry.get("line_spacing_pt") is not None
+        if not (has_rule or has_pt):
+            return True
+    return False
+
+
 def normalize_format_profile(raw_profile=None):
     raw_profile = raw_profile if isinstance(raw_profile, dict) else {}
     merged = deep_merge(DEFAULT_FORMAT_PROFILE, raw_profile)
@@ -953,6 +986,8 @@ def normalize_format_profile(raw_profile=None):
             missing_requirements.append("页边距规范")
         if header_distance_cm is None or footer_distance_cm is None:
             missing_requirements.append("页眉页脚距离规范")
+        if _custom_style_profile_missing(raw_profile.get("style_profile")):
+            missing_requirements.append("正文与各级标题版式规范（字体/字号/行距）")
         # status 由字段是否齐全决定，不继承旧值
         if missing_requirements:
             status = "pending_template"
