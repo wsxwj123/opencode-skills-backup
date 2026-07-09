@@ -41,6 +41,7 @@ def main() -> int:
 
     warnings: list[str] = []
     conflicts: list[str] = []
+    fails: list[str] = []
 
     for pat in rules.get("forbidden_phrase_patterns", []):
         if re.search(re.escape(pat), merged_text, flags=re.IGNORECASE):
@@ -55,15 +56,31 @@ def main() -> int:
         if marker not in merged_text:
             warnings.append(f"Required marker not found globally: {marker}")
 
-    # --- Commitment ↔ Landing-point consistency check (WARN level) ---
-    # Verify that action verbs promised in response_en (added/clarified/revised + object)
+    # --- Commitment ↔ Landing-point consistency check ---
+    # Verify that action verbs promised in response_en (added/performed/revised + object)
     # can be found as corresponding entries in modification_actions or revised_excerpt_en
-    # of the same unit. Mismatch → WARN (non-blocking).
+    # of the same unit. Non-substantive mismatch → WARN (non-blocking); a promise to add
+    # NEW substantive content (experiment/analysis/figure/data...) with no landing → FAIL.
+    #
+    # The old regex only matched `we <verb>` with the verb glued to `we`, so
+    # `we have added`, `we performed`, `we conducted`, `we now provide`, `we cited`,
+    # `we discussed` and passive `changes were made` all slipped through. Allow
+    # optional auxiliaries/adverbs (have/now/also/...) between `we` and the verb,
+    # widen the verb table, and cover the common passive phrasing.
     ACTION_VERB_RE = re.compile(
-        r"\b(we (?:added|clarified|revised|corrected|updated|included|removed|expanded|moved|replaced)"
-        r"(?: [\w]+){0,5})",
+        r"\b("
+        r"we (?:have |has |now |also |then |therefore )*"
+        r"(?:added|clarified|revised|corrected|updated|included|removed|expanded|moved|"
+        r"replaced|performed|conducted|provided|provide|cited|discussed|incorporated|"
+        r"introduced|rephrased|rewrote|modified|adjusted|carried out|supplemented)"
+        r"(?: [\w]+){0,5}"
+        r"|changes? (?:were|was|have been|has been) made(?: [\w]+){0,5}"
+        r")",
         re.IGNORECASE,
     )
+    # Auxiliaries/adverbs to skip when locating the verb + object words for keyword
+    # matching, so `we have added a control` yields keywords {added, control}, not {have}.
+    PROMISE_SKIP_WORDS = {"we", "have", "has", "now", "also", "then", "therefore", "changes", "change"}
     # Signal that the promise claims newly added substantive content (a new
     # experiment / dataset / figure / analysis), not a mere wording tweak.
     # Only these promises get the stricter landing-evidence requirement below.
@@ -91,7 +108,10 @@ def main() -> int:
         promises = ACTION_VERB_RE.findall(response_en)
         for promise in promises:
             promise_lower = promise.lower()
-            kws = [kw for kw in promise_lower.split()[1:3] if len(kw) > 3]
+            # Drop leading `we`/auxiliaries so the verb + first object words become
+            # the match keywords regardless of `we have/now ...` insertions.
+            content_words = [w for w in promise_lower.split() if w not in PROMISE_SKIP_WORDS]
+            kws = [kw for kw in content_words[1:3] if len(kw) > 3]
 
             # 1) English keyword match in action reason/target or revised excerpt
             found_in_actions_en = bool(kws) and any(
@@ -156,19 +176,31 @@ def main() -> int:
             # fields (all folded into `found`), NOT gated on revised being non-empty.
             # revised="无" no longer exempts the promise from the check.
             if not found:
-                warnings.append(
+                msg = (
                     f"[{uid}] response_en promises '{promise}' but no matching entry found "
                     f"in modification_actions, revised_excerpt_en, or Chinese fields"
                 )
+                # Promising NEW substantive content (a new experiment/analysis/figure/
+                # dataset/control...) with no landing point is a hard failure: the reply
+                # claims work that leaves no trace in the revision plan. Non-substantive
+                # wording promises stay WARN.
+                if SUBSTANTIVE_ADD_RE.search(promise):
+                    fails.append(msg + " [SUBSTANTIVE ADDITION — no landing point]")
+                else:
+                    warnings.append(msg)
 
-    if conflicts:
+    blocking = list(conflicts)
+    blocking += [f"MISSING LANDING: {f}" for f in fails]
+    if blocking:
         print("CONSISTENCY_CHECK: FAIL")
-        for c in conflicts:
+        for c in blocking:
             print(f"- {c}")
         if warnings:
             for w in warnings:
                 print(f"- WARN: {w}")
-        return 2 if args.fail_on_conflict else 1
+        # Substantive-addition failures always block (exit 1); forbidden-phrase
+        # conflicts escalate to exit 2 only under --fail-on-conflict (unchanged).
+        return 2 if (args.fail_on_conflict and conflicts) else 1
 
     print("CONSISTENCY_CHECK: PASS")
     if warnings:

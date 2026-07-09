@@ -36,6 +36,7 @@ Default behavior if user does not specify a custom location:
 ## Output Contract (One-Shot)
 > **主交付 = 回复包**（给编辑的总览邮件 + 各审稿人 point-by-point 回复，最终渲染为单文件分层 HTML）。
 > **修改稿 track-changes 需用户手工补**：本技能生成回复文档，不产出 Word track-changes 版本；用户应以 `manuscript_edit_plan.md` 为操作指南，在 Word 中手动启用修订模式完成改稿。若用户要求 track-changes 稿件，解释此限制并推荐使用 `manuscript_edit_plan.md`。
+> **收口提醒（交付时必须对用户说）**：回复信里的引文/行号/逐字片段是按 AI 拟稿写的；用户在 Word 里手工落地后，措辞或位置可能变。交付时提醒用户：**改完主稿后回头校准回复信里的引文与定位**（尤其行号、逐字引用的 revised 片段），确保回复信与最终修订稿一致。
 
 **主交付物 = 单文件分层 HTML**（左侧层级 TOC + 右侧内容，单页可见）。TOC 顶层节点为 **Editor（若有）+ Reviewer #1/#2/...**，Editor 排在所有 Reviewer 之前；编辑信里的 editor comment（字数/格式/伦理声明/数据可用性/利益冲突/统计复核等）作为**独立顶层 Editor 节点**呈现，与各 Reviewer 并列，**不得并入任何 Reviewer**。**全部 UI 由 `scripts/build_full_package.py` 的 `render_html()` 生成**，TOC 层级、严重度背景色、折叠/展开、可拖拽分割线、`复制` 按钮、`localStorage` 持久化、各 box 布局均已硬编码，**AI 无需手工实现 HTML**。完整 UI 验收对照细则见 `references/output-template.md`。
 
@@ -78,6 +79,7 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
 - Do not create ad-hoc fixer scripts (e.g., `fix_gate_errors.py`, temporary patch scripts) during normal runs.
 - When gate checks fail, directly edit the failing `project_root/units/*.json` fields and re-run checks.
 - Keep one-page-per-comment structure.
+- **回复信引文要用稳定锚点，别用硬行号/逐字长引文。** 本技能不改主稿，用户手工落地时措辞与位置会变；`response_en` 里若写死行号（"line 214"）或整段逐字引用 AI 拟的 `revised_excerpt_en`，用户一改就对不上。改用稳定锚点定位：章节名 + 小节 + 一句关键原句（"in the Methods, the paragraph beginning 'Cells were cultured...'"），只引最短必要的关键短语而非整段。`revised_excerpt_en` 仍照常写（供 edit_plan 用），但**正文回复对读者的指路**走锚点。
 - All copy buttons in the UI must use Chinese label `复制`.
 - Frontend design specifications are hardcoded in `scripts/build_full_package.py`'s `render_html()`; AI does not need to write HTML. Full spec is in `references/output-template.md`.
 - Quality gates must fail when:
@@ -90,6 +92,7 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
 - **AI Style Control:** English responses must avoid AI-typical phrasing patterns:
   - Hedging overuse: "it is important to note that", "it should be noted that", "notably", "importantly"
   - Empty appreciation: "we greatly appreciate your insightful comments", "this is an excellent suggestion"
+    - **外交缓冲豁免（仅 Push back / Partial 基调）**：rebuttal 里适度致谢与缓冲是不激怒审稿人的润滑剂，不算"空致谢"。反驳/部分接受的 unit **允许一句**克制的开场缓冲——`decision-rules.md` B 段推荐句式如 "We thank the reviewer for this valuable comment." / "We appreciate this suggestion; however, ..." 是**允许**的。禁的仍是：副词叠加的浮夸致谢（"we greatly/sincerely/deeply appreciate"）、`this is an excellent suggestion`、以及 ≥3 条回复用同一句致谢开头。缓冲句之外仍须紧跟实质回应，不得只致谢不作答。`risk_check.py` 的 `ai_appreciation` 正则已按此放行无副词的单句致谢，两文件口径一致。
   - Filler phrases: "in order to", "we would like to point out that", "as the reviewer rightly noted"
   - Structural repetition: ≥3 responses must not open with the same template sentence
   - **English sentence length hard cap: each sentence in `response_en` and `revised_excerpt_en` must be ≤30 words.** If a sentence exceeds 30 words, split it. Do not achieve this by removing necessary content; restructure instead.
@@ -237,7 +240,7 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
    - 抽查通过后方可进入 Step 7.5
 
    7.5. **[User Checkpoint — Quality Review]** 展示回复质量摘要供用户审查：
-   - 打印表格：每条 comment 的 unit_id | reviewer | section | response_en 前 50 字 | revised_excerpt 状态（有修改/无/needs_manual）
+   - 逐条打印：每条 comment 的 unit_id | reviewer | section，紧跟**该条审稿意见摘要 + 完整 `response_en` 全文**（不截断——前 50 字看不出是否答非所问/避重就轻/只承诺不落实，这是唯一人肉关口，必须给用户看全）| revised_excerpt 状态（有修改/无/needs_manual）
    - 标记需人工关注的条目：`needs_manual_revision` 的 unit、`confidence=low` 的定位、revised_excerpt_en 为 `无` 但 comment 明确要求改文的
    - 问用户："Response content ready for rendering. Review OK? (yes / fix:unit_id / abort)"
    - 用户可指定修改特定 unit，修改后重新展示该 unit 摘要
@@ -283,7 +286,8 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
 
 🔴 出具前置闸口：delegate_review verify 必须 exit 0（含 RR14 结构完整性），否则不得向用户出具 response letter。
 
-1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate response-dod --files <project_root>/units/*.json`（Windows PowerShell/cmd 不展开 `*.json`，需把 `units/` 下的 json 显式逐个列在 `--files` 后，或在 WSL/bash 里运行）
+1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate response-dod --files <project_root>/units/*.json --comments <comments_docx_path>`（Windows PowerShell/cmd 不展开 `*.json`，需把 `units/` 下的 json 显式逐个列在 `--files` 后，或在 WSL/bash 里运行）
+   - **必须带 `--comments`**：把**原始审稿信全文**嵌进任务包，盲检子代理才能对照原信逐条点名核对——被 fallback 塌成一条 general unit 的多诉求意见(连续散文/`(i)(ii)`/罗马数字/项目符号/一段多诉求)只有对照原文才查得出漏回。不带 `--comments` 时盲检只能看已生成的 units，被吞掉的意见永远发现不了(RR7/RR14/RR15 形同虚设)。
 2. **派一个独立子代理**（Claude Code 用 `academic-blind-reviewer`；其他平台派通用子代理），把任务包原样给它、**不要给它回复包的写作上下文**，要求按任务包返回 JSON 数组。
 3. 校验返回：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate response-dod --return <子代理返回.json>`；退出码非 0（任一缺项/fail/无证据）= **fail-closed**，据子代理证据修复后重跑，**未过不得声明完成**。
 
@@ -339,7 +343,7 @@ python3 scripts/run_pipeline.py \
 各 gate 由 `run_pipeline.py` 串行自动调用，正常运行无需手动单独跑。按执行顺序：
 - `strict_gate.py`：硬门禁，检查 `revised_excerpt_en` 非空/非占位符/与原文有实质差异、`needs_manual_revision` 状态
 - `final_content_gate.py`：内容完整性，检查所有 `待AI` / `AI_FILL_REQUIRED` 占位符是否已填（`--allow-placeholder` 仅骨架预览阶段）
-- `consistency_check.py`：① 禁用词/冲突术语检查；② **承诺↔落点一致性（WARN）**：`response_en` 中承诺的动作动词（`we added/clarified/revised` + 对象）须能在同 unit 的 `modification_actions` 或 `revised_excerpt_en` 找到对应，否则 WARN（非阻断）
+- `consistency_check.py`：① 禁用词/冲突术语检查；② **承诺↔落点一致性**：`response_en` 中承诺的动作动词（含 `we (have/now) added/performed/conducted/provide/cited/discussed...` 及被动 `changes were made`）须能在同 unit 的 `modification_actions` 或 `revised_excerpt_en` 找到对应落点。**承诺新增实质内容（新实验/分析/图表/数据/对照）却无落点 = FAIL（脚本非零退出，阻断 pipeline）**；措辞类承诺无落点 = WARN（非阻断）
 - `final_consistency_report.py`：生成统计报告（units 数量、链接率、缺失 excerpt 计数）
 - `html_format_check.py`：HTML 结构完整性
 - `risk_check.py`：检测虚构实验/统计、过度承诺、AI 式套话、跨 unit 结构重复

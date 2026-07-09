@@ -58,7 +58,7 @@
         {
           "id": "RR10",
           "name": "承诺↔落点一致性",
-          "check": "response_en 里承诺的动作（we added/clarified/revised + 对象）能在 modification_actions 或 revised_excerpt_en 找到对应落点，WARN 数为 0",
+          "check": "response_en 里承诺的动作（含 we have added/performed/conducted/now provide/cited/discussed 及被动 changes were made 等）能在 modification_actions 或 revised_excerpt_en 找到对应落点。承诺新增实质内容（新实验/分析/图表/数据/对照）却无落点=FAIL（脚本非零退出）；措辞类承诺无落点=WARN 需清零",
           "script": "python scripts/consistency_check.py --project-root ."
         },
         {
