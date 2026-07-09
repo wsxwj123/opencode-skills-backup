@@ -75,6 +75,30 @@ TRAILING_ING_RE = re.compile(
     re.IGNORECASE,
 )
 
+# ── Journal house-style: active-voice-preferred families ─────────────────────
+# Nature/Science/Cell author guidelines explicitly recommend active voice
+# ("We show that…"). For those journals a passive-ratio floor is wrong; the
+# passive check is emitted as a non-blocking WARNING for every journal (never
+# gates the score) and its target text switches by journal.
+ACTIVE_VOICE_JOURNAL_RE = re.compile(
+    r"\b(nature|science|cell|nat\.?\s|sci\.?\s)", re.IGNORECASE
+)
+
+
+def _passive_target(journal: str) -> tuple[str, float | None, float | None]:
+    """Return (guidance_text, low, high) for the passive-ratio warning.
+    active-voice journals: recommend active, no floor; traditional: 50–70%."""
+    if journal and ACTIVE_VOICE_JOURNAL_RE.search(journal):
+        return (
+            "Nature/Science/Cell house style prefers active voice "
+            "(\"We show that…\"); no passive-ratio floor. Only flag if passive "
+            "dominates (>70%).",
+            None,
+            0.70,
+        )
+    return ("traditional SCI house style, target 50–70%", 0.40, 0.70)
+
+
 # ── Passive voice detection (simplified) ──────────────────────────────────────
 _BE_FORMS = r"(?:is|are|was|were|been|being|be)"
 _PAST_PARTICIPLE = r"(?:[a-z]+ed|[a-z]+en|[a-z]+t)\b"
@@ -136,7 +160,7 @@ def _word_count(sentence: str) -> int:
     return len(sentence.split())
 
 
-def check_file(filepath: str) -> dict[str, Any]:
+def check_file(filepath: str, journal: str = "") -> dict[str, Any]:
     """Run all checks on a single manuscript file."""
     with open(filepath, "r", encoding="utf-8") as f:
         raw_text = f.read()
@@ -151,6 +175,7 @@ def check_file(filepath: str) -> dict[str, Any]:
         "total_sentences": len(sentences),
         "total_words": total_words,
         "issues": [],
+        "warnings": [],  # 软提示：不进 score、不阻断 gate
     }
 
     if not sentences:
@@ -196,24 +221,24 @@ def check_file(filepath: str) -> dict[str, Any]:
             "detail": f"{max_consec + 1} consecutive sentences with <5 word difference.",
         })
 
-    # ── 3. Passive voice ratio ────────────────────────────────────────────────
-    # Protocol (anti-ai-protocol.md P0#6): target 50–70%.
-    # < 40% = too colloquial; > 70% = stiff/repetitive.
+    # ── 3. Passive voice ratio (软提示, 不阻断) ───────────────────────────────
+    # 语态偏好按 target_journal 切换：Nature/Science/Cell 官方 author guideline
+    # 明确推荐主动语态，把被动锁 50–70% 是反着顶刊风格来。故此项只进 warnings，
+    # 不计入 score、不影响 gate 通过与否，仅供作者参考。
     passive_count = sum(1 for s in sentences if PASSIVE_RE.search(s))
     passive_ratio = passive_count / len(sentences) if sentences else 0
     result["passive_ratio"] = round(passive_ratio, 3)
 
-    if passive_ratio > 0.70:
-        result["issues"].append({
+    guidance, low, high = _passive_target(journal)
+    if high is not None and passive_ratio > high:
+        result["warnings"].append({
             "type": "excessive_passive_voice",
-            "severity": "medium",
-            "detail": f"Passive ratio {passive_ratio:.1%} (target: 50–70%). Too many passive constructions — style becomes stiff.",
+            "detail": f"Passive ratio {passive_ratio:.1%} ({guidance}). Passive dominates — consider more active constructions.",
         })
-    elif passive_ratio < 0.40:
-        result["issues"].append({
+    elif low is not None and passive_ratio < low:
+        result["warnings"].append({
             "type": "insufficient_passive_voice",
-            "severity": "medium",
-            "detail": f"Passive ratio {passive_ratio:.1%} (target: 50–70%). Too few passive constructions — reads too colloquial for SCI prose.",
+            "detail": f"Passive ratio {passive_ratio:.1%} ({guidance}). Reads colloquial for a traditional-style journal; not a blocker.",
         })
 
     # ── 4. Forbidden words/phrases ────────────────────────────────────────────
@@ -341,6 +366,7 @@ def main() -> int:
     p.add_argument("--file", default="", help="Check a single file instead of directory")
     p.add_argument("--report", default="style_check_report.json", help="Output report path")
     p.add_argument("--threshold", type=int, default=70, help="Minimum passing score")
+    p.add_argument("--journal", default="", help="Target journal name; switches passive-voice guidance (Nature/Science/Cell → active-preferred, no floor)")
     args = p.parse_args()
 
     files: list[str] = []
@@ -356,7 +382,7 @@ def main() -> int:
         print(json.dumps({"ok": True, "message": "No manuscript files found", "files": []}))
         return 0
 
-    results = [check_file(f) for f in files]
+    results = [check_file(f, journal=args.journal) for f in files]
     scores = [r["score"] for r in results]
     avg_score = round(sum(scores) / len(scores), 1) if scores else 100
     all_pass = all(s >= args.threshold for s in scores)
@@ -374,6 +400,10 @@ def main() -> int:
     Path(args.report).parent.mkdir(parents=True, exist_ok=True)
     Path(args.report).write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps({"ok": all_pass, "avg_score": avg_score, "total_issues": total_issues, "files_checked": len(results)}))
+    if all_pass:
+        print("STYLE_CHECK: PASS 仅覆盖形式层(句长方差/被动比软提示/禁词/em-dash/scare quotes/列点)，"
+              "科学创新度、论证是否成立、这稿配不配目标刊均未自动核验，须作者与通讯作者自行判断。",
+              file=sys.stderr)
     return 0 if all_pass else 1
 
 

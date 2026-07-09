@@ -116,6 +116,8 @@ def main() -> int:
     if not section_figs:
         # 该节无关联 figure（如 Introduction/Methods 仅依赖文献）— 直接放行。
         print(f"FIGURE_ANALYSIS_OK: section={args.section} has no associated figures")
+        print("  note: 放行仅因本节无关联图，不代表内容科学性已核验——须作者判断。",
+              file=sys.stderr)
         return 0
 
     failures: list[str] = []
@@ -132,6 +134,11 @@ def main() -> int:
     print(
         f"FIGURE_ANALYSIS_OK: section={args.section} "
         f"figures_ready={len(section_figs)}"
+    )
+    print(
+        "  note: OK 仅确认识图文件存在/非空/无❓待确认残留，"
+        "不核验图的科学解读是否正确、数据是否支持结论——须作者判断。",
+        file=sys.stderr,
     )
     return 0
 
