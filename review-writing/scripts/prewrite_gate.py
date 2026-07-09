@@ -14,11 +14,18 @@ CLI：python3 prewrite_gate.py --section <section_id> --root <project_root>
 5. 上一节盲检通过：<root>/.review_pass/<上一节>.json 存在且 passed:true
    （由 delegate_review.py verify --section <上一节> 落盘）；缺失 → 硬拦
 
+逃生口（--allow-manual-review "<理由>"，门禁默认行为不变）：
+   盲检子代理不可用（平台无 academic-blind-reviewer / 子代理反复失败）时，才用
+   此显式人工放行。仅放行「上一节盲检」这一项，其余硬检查照常。放行必留痕：写
+   <root>/.review_pass/<上一节>.json（manual:true+reason+timestamp）并追加
+   <root>/.review_pass/MANUAL_REVIEW_AUDIT.log；不是静默跳过。理由为空即拒绝放行。
+
 降级 warning（不阻断）：
 - 缩略词一致：review 无独立 abbreviation 脚本 → skip 并注明
 
 输出：stdout 一行 JSON {"ok":bool,"section":...,"checks":[...],"warnings":[...]}
 任一硬检查失败额外打印 PREWRITE_GATE: FAIL + 原因 并 exit 1。
+通过时打印 PREWRITE_GATE: PASS（附一句：PASS 仅覆盖形式层，语义正确性未自动核验）。
 """
 
 from __future__ import annotations
@@ -28,8 +35,26 @@ import json
 import os
 import re
 import sys
+from datetime import datetime, timezone
 
 PLACEHOLDER_TOKENS = ("CITE_PENDING", "DATA_PENDING", "【待")
+
+
+def record_manual_review(root, section, reason):
+    """逃生口留痕：盲检子代理不可用时对上一节盲检做显式人工放行。
+
+    写 <root>/.review_pass/<section>.json（manual:true）+ 追加审计日志，
+    使后续 prewrite_gate 天然通过且全程可追溯。绝非静默跳过。
+    """
+    pass_dir = os.path.join(root, ".review_pass")
+    os.makedirs(pass_dir, exist_ok=True)
+    ts = datetime.now(timezone.utc).isoformat()
+    marker = {"passed": True, "manual": True, "section": section,
+              "reason": reason, "timestamp": ts}
+    with open(os.path.join(pass_dir, f"{section}.json"), "w", encoding="utf-8") as f:
+        json.dump(marker, f, ensure_ascii=False, indent=2)
+    with open(os.path.join(pass_dir, "MANUAL_REVIEW_AUDIT.log"), "a", encoding="utf-8") as f:
+        f.write(f"{ts}\tsection={section}\tmanual_review_override\treason={reason}\n")
 
 
 def _load_json(path):
@@ -147,6 +172,11 @@ def main():
     )
     parser.add_argument("--section", required=True, help="section id，例如 2.1")
     parser.add_argument("--root", required=True, help="project root")
+    parser.add_argument(
+        "--allow-manual-review", default=None, metavar="REASON",
+        help="逃生口：盲检子代理不可用时，对上一节盲检做显式人工放行（附非空理由）。"
+             "仅放行盲检项，其余硬检查照常；会写 <root>/.review_pass/<prev>.json(manual) "
+             "并追加 MANUAL_REVIEW_AUDIT.log 留痕。不传则门禁默认行为不变（缺盲检标记即硬拦）。")
     args = parser.parse_args()
 
     root = os.path.abspath(args.root)
@@ -194,11 +224,31 @@ def main():
         pass_path = os.path.join(root, ".review_pass", f"{prev}.json")
         marker = _load_json(pass_path)
         if isinstance(marker, dict) and marker.get("passed") is True:
-            checks.append({"name": "blind_review", "ok": True, "prev": prev})
+            chk = {"name": "blind_review", "ok": True, "prev": prev}
+            if marker.get("manual"):
+                chk["manual"] = True
+                warnings.append(
+                    f"section {prev!r} 盲检为人工放行(manual override, reason={marker.get('reason', '')!r})；"
+                    f"语义正确性未经独立盲检核验")
+            checks.append(chk)
+        elif args.allow_manual_review is not None:
+            reason = (args.allow_manual_review or "").strip()
+            if not reason:
+                failures.append(
+                    "--allow-manual-review 需附非空理由（谁放行、为何盲检子代理不可用）")
+                checks.append({"name": "blind_review", "ok": False, "prev": prev})
+            else:
+                record_manual_review(root, prev, reason)
+                warnings.append(
+                    f"section {prev!r} 盲检由 --allow-manual-review 人工放行；已留痕 "
+                    f".review_pass/{prev}.json + .review_pass/MANUAL_REVIEW_AUDIT.log；"
+                    f"语义正确性未经独立盲检核验")
+                checks.append({"name": "blind_review", "ok": True, "prev": prev, "manual": True})
         else:
             failures.append(
                 f"previous section {prev!r} blind review not passed or marker missing; "
-                f"run: delegate_review.py verify --section {prev}")
+                f"run: delegate_review.py verify --section {prev}"
+                f"（盲检子代理不可用时可显式人工放行：加 --allow-manual-review \"<理由>\"）")
             checks.append({"name": "blind_review", "ok": False, "prev": prev})
     else:
         checks.append({"name": "blind_review", "ok": True, "note": "first section, N/A"})
@@ -230,6 +280,8 @@ def main():
         for reason in failures:
             print(f"PREWRITE_GATE: FAIL {reason}")
         return 1
+    print("PREWRITE_GATE: PASS — 仅覆盖形式层（上一节完成/大纲/文献矩阵/占位符/盲检标记存在），"
+          "语义正确性未自动核验")
     return 0
 
 
