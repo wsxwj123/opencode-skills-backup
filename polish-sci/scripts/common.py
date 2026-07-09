@@ -4,6 +4,7 @@ import hashlib
 import json
 import re
 import unicodedata
+from collections import Counter
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
@@ -168,10 +169,26 @@ CERTAINTY_STRONG_PATTERNS: tuple[tuple[str, Any], ...] = (
     ("establishes", re.compile(r"\bestablish(?:es|ed)?\b", re.IGNORECASE)),
     ("confirms", re.compile(r"\bconfirm(?:s|ed)?\b", re.IGNORECASE)),
     ("shows definitively", re.compile(r"\bshows? definitively\b", re.IGNORECASE)),
+    # 因果强动词:把 "may be associated with"(相关)润成 "induces/causes"(因果)是
+    # 越级断言,red-line 视同语气升级拦截。
+    ("causes", re.compile(r"\bcause(?:s|d)?\b", re.IGNORECASE)),
+    ("leads to", re.compile(r"\blead(?:s|ing)? to\b|\bled to\b", re.IGNORECASE)),
+    ("induces", re.compile(r"\binduce(?:s|d)?\b", re.IGNORECASE)),
+    ("drives", re.compile(r"\bdrive(?:s|n)?\b|\bdrove\b", re.IGNORECASE)),
+    ("promotes", re.compile(r"\bpromote(?:s|d)?\b", re.IGNORECASE)),
+    ("suppresses", re.compile(r"\bsuppress(?:es|ed)?\b", re.IGNORECASE)),
+    ("triggers", re.compile(r"\btrigger(?:s|ed)?\b", re.IGNORECASE)),
     ("证明", re.compile(r"证明")),
     ("确证", re.compile(r"确证")),
     ("充分表明", re.compile(r"充分表明")),
     ("证实", re.compile(r"证实")),
+    ("导致", re.compile(r"导致")),
+    ("引起", re.compile(r"引起")),
+    ("诱导", re.compile(r"诱导")),
+    ("驱动", re.compile(r"驱动")),
+    ("促进", re.compile(r"促进")),
+    ("抑制", re.compile(r"抑制")),
+    ("触发", re.compile(r"触发")),
 )
 
 
@@ -277,6 +294,68 @@ def numeric_tokens_preserved(raw: str, polished: str) -> dict[str, Any]:
         "dropped": dropped,
         "raw_tokens": sorted(raw_tokens),
         "polished_tokens": sorted(polished_tokens),
+    }
+
+
+def numeric_sequence(text: str) -> list[str]:
+    """A': numeric tokens in document order (list, not set). Order binds each value
+    to its position/subject, so swapping "实验组12% 对照组34%" -> "实验组34% 对照组12%"
+    changes the sequence even though the set is identical."""
+    normalized = normalize_ws(strip_inline_format_markers(text))
+    return [re.sub(r"\s+", "", m.group(0)).lower() for m in NUMERIC_TOKEN_RE.finditer(normalized)]
+
+
+def numeric_order_preserved(raw: str, polished: str) -> dict[str, Any]:
+    """A': fail when the ordered numeric sequence changes (value swaps between
+    subjects/sentences) even if the unordered set is preserved."""
+    raw_seq, polished_seq = numeric_sequence(raw), numeric_sequence(polished)
+    return {"ok": raw_seq == polished_seq, "raw_seq": raw_seq, "polished_seq": polished_seq}
+
+
+# C: proper-noun (italic-marked species/gene) and unit preservation. The red line
+# claims these are protected; this actually extracts them and compares multisets.
+_ITALIC_STRIP_BOLD_RE = re.compile(r"\*\*.+?\*\*")
+_ITALIC_TOKEN_RE = re.compile(r"\*([^*]+?)\*")
+# Common wet-lab / quantitative units. Anchored to a preceding number so stray
+# single letters (M pathway, L group) are not mis-read as unit tokens.
+_UNIT_ALTERNATION = (
+    r"mg|kg|µg|μg|ug|ng|pg|fg|mL|ml|µL|μL|uL|dL|L|"
+    r"mmol|µmol|μmol|nmol|pmol|mol|mM|µM|μM|nM|pM|fM|M|"
+    r"kDa|Da|bp|kb|nt|rpm|°C|℃|mm|cm|µm|μm|nm|pm|min|h|s"
+)
+_UNIT_TOKEN_RE = re.compile(r"\d[\d.,]*\s*(" + _UNIT_ALTERNATION + r")\b")
+
+
+def italic_tokens(text: str) -> list[str]:
+    """Italic-wrapped tokens (*E. coli*, *TP53*) — species/gene/statistical symbols
+    the red line locks. Bold spans (**…**) are stripped first so they don't leak in."""
+    without_bold = _ITALIC_STRIP_BOLD_RE.sub(" ", text or "")
+    return sorted(m.group(1).strip() for m in _ITALIC_TOKEN_RE.finditer(without_bold) if m.group(1).strip())
+
+
+def unit_tokens(text: str) -> list[str]:
+    """Measurement units bound to a number (5 mg, 10 µM, 37 °C). Case-sensitive so
+    mL vs ml / mg vs g are treated as distinct."""
+    normalized = normalize_ws(strip_inline_format_markers(text))
+    return sorted(m.group(1) for m in _UNIT_TOKEN_RE.finditer(normalized))
+
+
+def named_tokens_preserved(raw: str, polished: str) -> dict[str, Any]:
+    """C: multiset compare of italic proper nouns and units. Any raw token dropped
+    or altered (or a new one introduced) in the polished text fails the guard."""
+    raw_it, pol_it = Counter(italic_tokens(raw)), Counter(italic_tokens(polished))
+    raw_un, pol_un = Counter(unit_tokens(raw)), Counter(unit_tokens(polished))
+    italic_dropped = sorted((raw_it - pol_it).elements())
+    italic_added = sorted((pol_it - raw_it).elements())
+    unit_dropped = sorted((raw_un - pol_un).elements())
+    unit_added = sorted((pol_un - raw_un).elements())
+    ok = not (italic_dropped or italic_added or unit_dropped or unit_added)
+    return {
+        "ok": ok,
+        "italic_dropped": italic_dropped,
+        "italic_added": italic_added,
+        "unit_dropped": unit_dropped,
+        "unit_added": unit_added,
     }
 
 
