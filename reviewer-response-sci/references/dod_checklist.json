@@ -32,7 +32,7 @@
         {
           "id": "RR5",
           "name": "去AI",
-          "check": "硬项：无 AI 套话禁词（空致谢/对冲/填充/模板重复）、无解释性冒号。软项(WARN 非阻断,别机械削平)：英文长句/破折号/-ing 分词、中文长句/嵌套按语感处理,明显堆砌才改",
+          "check": "硬项：无 AI 套话禁词（空致谢/对冲/填充/模板重复）、无解释性冒号、无破折号（—/——，禁止使用，risk_check.py 命中即 FAIL/pipeline-blocking）。软项(WARN 非阻断,别机械削平)：英文长句/-ing 分词、中文长句/嵌套按语感处理,明显堆砌才改",
           "script": "python scripts/risk_check.py --project-root ."
         },
         {
