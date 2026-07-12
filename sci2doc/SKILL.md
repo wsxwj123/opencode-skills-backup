@@ -260,6 +260,29 @@ python3 scripts/extract_docx_images.py --manuscript /path/to/source.docx --proje
 
 > 以下各步只列命令名 + 关键参数 + 门禁条件。**完整可复制 CLI（含所有 flag、占位符）见 `QUICK_START.md`。**
 
+---
+
+## 开场监工卡（每次启动本技能必须原样打印给用户）
+
+> 学位类型与源材料确认之后、产出章节结构之前，AI **必须** 把下面这张卡原样打印给用户。这是把 sci2doc 最容易翻车的地方摊到明面上，请用户当监工，别当甩手掌柜。
+
+```
+【sci2doc 监工卡 · 请你盯这几件事】
+1. 数据不许编：为凑字数（博士≥5万字/硕士≥3万字），AI 最爱把实验数值编圆。
+   每写一章，找我要一张"数值→原文哪张图/表"对照表，你随机抽 2-3 个数回原文核对。
+2. 一章一章写，别一次甩全文：要求逐章交付。一次性生成整篇会跳过所有逐节质检和盲检，
+   看着完整实则没过任何门。你发现我在批量出全文，立刻喊停。
+3. 本技能不查重，改写≠降重：复用已发表 SCI 段落时，找我要"逐段原文-改写对照表"
+   （章节/原文出处/SCI原文/中文改写/状态），你自己拿去知网/维普送查，别信"已改写"三个字。
+4. 引文抽验 DOI：从参考文献里随机挑 3-5 篇，让我给出 DOI/PMID，你上 doi.org 点开验真伪。
+5. 章节结构要你亲自签字：下面的"研究主线/章节结构"必须你确认后我才落签字解锁正文，
+   我不会替你确认。没签字，正文写入会被门禁物理拦下。
+```
+
+> 若开工前置的 `env_preflight.py` 报门禁状态为 `degraded`（当前环境不透传 hook）→ 明确告诉用户"本环境无法强制拦截，上面 5 条全靠你人工盯"。
+
+---
+
 ### 0.5) Research Storyline Design (Mandatory)
 
 > **执行时机：** Step 0（材料确认 + 内容提取）完成后、Style Selection Gate 前执行。
@@ -288,6 +311,10 @@ python3 scripts/extract_docx_images.py --manuscript /path/to/source.docx --proje
 🔴 **门禁（阻断 Step 1）：** `outline` 数组为空时不得进入 Style Selection Gate。`outline` 必须包含：`scientific_question`（顶层字段）+ 所有研究章条目（含 `sci_source` 和 `core_argument`）。
 
 **章节字数协商在此阶段完成（不在 init 后）：** 基于各章实际承载内容（实验数量/图表数量/方法复杂度），与用户协商每章字数目标，写入 profile 的 `chapter_targets`，再执行 Step 1 init。
+
+> **[章节结构签字·强制门禁落锁]** 用户在对话里明确确认上面的研究主线 / 章节结构映射表后（且**仅在此之后**），运行 Step 1 `env_preflight.py` 打印的那条 `SIGNOFF_CMD`（已含解析好的绝对路径）落盘签字——即 `python "<.../\_shared/structure_signoff_gate.py>" confirm --root <项目根> --note "<用户确认原话摘录>"`。这一步解锁正文写作：**未落签字，PreToolUse hook 会物理拦截任何对 `atomic_md/*/*.md`（学位论文各章正文）的写入**（这是防跳步的硬门，不是提示词纪律）。若后续章节结构又改，改完让用户重新确认并重跑本命令覆盖签字。⚠️ 严禁在用户未确认时自行运行 confirm——那等于伪造用户签字。
+>
+> 注意：本签字闸管的是**章节结构确认**，与 `## Style Selection Gate`（样式/格式确认，阻断 init 与 docx 导出）是**两道独立的门**，各管各的，别混淆或相互替代。
 
 ### 1) Initialize Project
 
