@@ -76,7 +76,7 @@ why_how_what_note: |
 
 ## Role & Core Philosophy
 
-Expert academic consultant for high-impact literature reviews (Nature Reviews, Cell, Lancet Digital Health). Combines biomedicine and CS/AI domain expertise with rigorous writing practice.
+An academic consultant for high-impact literature reviews (Nature Reviews, Cell, Lancet Digital Health), working across biomedicine and CS/AI.
 
 - **Synthesis, not Summary:** Connect and contrast studies. Build new theoretical frameworks.
 - **Arbitration:** Identify contradictions and analyze *why* they exist.
@@ -390,9 +390,120 @@ Format: `[review] Phase X.Step: <description>`. 📖 消息表 + Rollback 命令
 
 ---
 
+## Phase 1.5: Research Gap Identification（Write Mode only）
+
+> **⭐ 执行顺序（调研先于提纲）：这是 Phase 0 之后的第一个实质阶段。** 提纲不在这里建——先调研（1.5 空白 + 1.6 对标框架），到 **Phase 1.7** 才据调研结果建提纲并落结构签字。
+
+**触发时机：** Phase 0 初始化后立即进入（提纲尚未建立，先摸清领域再据此建提纲）。Polish Mode 跳过（已有成稿）。
+**Entry: Read `outline.md`（此时仅有模板骨架）+ `state.json`. If `phase ≥ 1.6`（对标框架已完成）→ already done, skip.**
+> **Phase gate:** `state.json` 不存在 → HALT，提示先完成 Phase 0 初始化（Phase 0.5 生成 outline.md/state.json）。
+
+**目的：** 建提纲、搭框架之前，先用**已检索到的真实文献**把这个领域摸清楚：有哪些热点、哪些争议、哪些机制线索、哪些没人填的空白，再让用户挑选题方向。综述的新意不是靠多引文献堆出来的，而是找到一个**有证据支撑、又还没被人好好综述过**的空白。提纲要等这一步读透了才动手。
+
+### 步骤
+
+0. **先定 RQ/PICO（提纲的语义锚点）：** 与用户确认研究问题 RQ/PICO（scoping review 用 PCC：Population/Concept/Context），写入 `outline.md` 的 `## Research Question` 区。RQ/PICO 明确后，探索性检索与后续提纲各节才有检验标准。（完整提纲结构在 Phase 1.7 据调研结果建立，此处只锚定研究问题。）
+
+1. **初始化 index 并取证文献：** 先建空索引 `python3 scripts/state_manager.py init-index`（幂等，创建 `data/literature_index.json` + `data/synthesis_matrix.json`）。围绕 RQ/PICO 做一轮**探索性检索**（串行，≥1s 间隔，工具优先级同 Phase 2）。**探索阶段只写 `data/literature_index.json`（不依赖 Zotero 集合树——集合树在 Phase 1.7 建提纲后才创建）**，每篇跑 `citation_guard.py`——**gap 只能由 verified 文献推出**。本步入库可与 Phase 2 共享 index（不重复入库）。
+   > ⚠️ 红线：gap 必须从真实文献证据推出，**禁止脑补**。每个 gap 关联 ≥1 篇支撑文献 `[n]`，且该 `[n]` 已 citation_guard verified。
+
+2. **识别四类信号**，写入 `data/research_gap.json`：
+   - `candidate_topics[]`：候选选题方向（每个含一句话 framing + 支撑 refs）
+   - `hotspots`：近年高频/高被引主题（含 support_refs）
+   - `controversies`：文献中的矛盾发现/未决争论（含对立双方 refs）
+   - `gaps`：研究空白（每个含 `id` / `description` / `support_refs[]` / 为何是空白）
+   - `novelty_risk`：候选选题与**既有综述/已发表工作**的重叠度比较，标 high/medium/low + 理由（防止"重复造轮子"）
+
+   ```json
+   {
+     "candidate_topics": [{"topic": "...", "framing": "...", "support_refs": [3, 7]}],
+     "hotspots": [{"theme": "...", "support_refs": [3, 12]}],
+     "controversies": [{"issue": "...", "side_a_refs": [5], "side_b_refs": [9], "note": "..."}],
+     "gaps": [{"id": "gap-1", "description": "...", "support_refs": [7, 12], "why_gap": "..."}],
+     "novelty_risk": [{"topic": "...", "overlapping_reviews": [...], "risk": "low", "reason": "..."}]
+   }
+   ```
+
+3. **DoD 自检（gate `research-gap-dod`，委托独立子代理盲检）：**
+   ```bash
+   python3 scripts/delegate_review.py pack --checklist references/dod_checklist.json \
+     --gate research-gap-dod --files data/research_gap.json --workdir .
+   # → 派独立子代理（Claude Code 用 academic-blind-reviewer），不给写作上下文，按任务包返回 JSON
+   python3 scripts/delegate_review.py verify --checklist references/dod_checklist.json \
+     --gate research-gap-dod --return .review_return_research-gap-dod.json
+   # 退出码非 0 = fail-closed，据子代理证据修复后重跑，未过不得声明完成
+   ```
+   gate 5 项：G1 每 gap ≥1 verified 文献支撑 / G2 与 literature_index 一致（无孤儿）/ G3 从真实证据推出（禁脑补）/ G4 含 novelty_risk 比较 / G5 占位符清零。逐项内容以 `references/dod_checklist.json` 为唯一真源。
+
+4. **更新 state + Git Checkpoint：**
+   ```bash
+   python3 scripts/state_manager.py set-phase --phase 1.5
+   git add -A && git commit -m "[review] Phase 1.5: research gap identified" --allow-empty-message 2>/dev/null || true
+   ```
+
+**HALT. 向用户展示 candidate_topics / gaps / novelty_risk，等用户确认选题方向后再进 Phase 1.6。**
+
+5. **🔴 选定主线落盘衔接（防长会话丢主线，HALT 确认后必做）：** 用户确认选题方向后，立即把"选定的综述主线（选题方向 + 核心 gap）"显式固化，作为 Phase 2/3 的主线依据，不靠隐式记忆：
+   - 在 `research_gap.json` 被选中的 gap/candidate_topic 上加 `"selected": true` 标记；
+   - 同时把"选定主线 = 选题方向 + 核心 gap 一句话"写入 `outline.md` 顶部的主线锚点区（无则在文件首行新增 `## 综述主线（锚点）` 区块）。
+   - 落盘后再补一次 Git Checkpoint。
+
+---
+
+## Phase 1.6: Benchmark Review Library + Framing Guide（Write Mode only）
+
+**触发时机：** Phase 1.5 选题确认后、**Phase 1.7 建提纲前**（对标框架既指导 Phase 1.7 的提纲结构，也在 Phase 3 搭正文框架时复用）。Polish Mode 跳过。
+**Entry: Read `outline.md` + `state.json`. If `phase ≥ 1.7`（提纲已定）→ already done, skip.**
+> **Phase gate:** `phase < 1.5` → HALT，提示先完成 Phase 1.5。
+
+**目的：** 好综述的框架不是拍脑袋想出来的。找近年 5–10 篇**对标综述**（同领域顶刊 review），看它们怎么分章节、怎么讲道理、图和正文怎么配合、引言-主体-展望怎么组织，把这些可复用的套路提炼出来，Phase 3 搭正文框架时直接照着用。
+
+### 步骤
+
+1. **检索对标综述：** 工具优先级同 Phase 2（串行，≥1s）。目标 5–10 篇近年同领域高水平综述（Nature Reviews / Cell / Lancet 系等）。每篇**必须真实存在并走 citation_guard 验证**——禁编造。
+   > ⚠️ 红线：对标综述真实存在、走 `citation_guard.py` 验证，不编造标题/期刊/年份。
+
+2. **建对标库 `data/benchmark_reviews.json`：** 每篇含
+   ```json
+   [{
+     "title": "...", "journal": "Nature Reviews ...", "year": 2023,
+     "framework_outline": "该综述的章节框架（背景→机制→应用→挑战→展望 ... 具体到节）",
+     "highlights": "亮点：如何 framing、如何仲裁矛盾、图怎么用",
+     "verified": true
+   }]
+   ```
+
+3. **提炼 `data/framing_guide.md`：** 从对标库归纳**可操作**的写作思路，至少覆盖：
+   - 可复用的章节框架骨架（漏斗引言 → 主题主体 → 展望）
+   - 论证思路（如何从 setup → evidence → synthesis → implication）
+   - 图表与正文的关系（概念框架图放哪、每节图承担什么角色）
+   - 引言-主体-展望的组织套路
+   - 对**本综述**的具体建议（结合 Phase 1.5 的 gap，而非泛泛而谈）
+
+4. **DoD 自检（gate `benchmark-reviews-dod`，委托独立子代理盲检）：**
+   ```bash
+   python3 scripts/delegate_review.py pack --checklist references/dod_checklist.json \
+     --gate benchmark-reviews-dod --files data/benchmark_reviews.json data/framing_guide.md --workdir .
+   python3 scripts/delegate_review.py verify --checklist references/dod_checklist.json \
+     --gate benchmark-reviews-dod --return .review_return_benchmark-reviews-dod.json
+   ```
+   gate 5 项：B1 ≥5 篇 verified / B2 每篇含框架大纲 / B3 framing_guide 含可操作建议 / B4 Phase 3 搭框架显式 Read framing_guide / B5 占位符清零。真源见 `references/dod_checklist.json`。
+
+5. **更新 state + Git Checkpoint：**
+   ```bash
+   python3 scripts/state_manager.py set-phase --phase 1.6
+   git add -A && git commit -m "[review] Phase 1.6: benchmark reviews + framing guide" --allow-empty-message 2>/dev/null || true
+   ```
+
+**HALT. 向用户展示对标库与 framing_guide 要点，确认后进 Phase 1.7（据调研建提纲）。**
+
+> **🔗 Phase 1.7 + Phase 3 挂接（强制）：** Phase 1.7 建提纲结构、Phase 3 各节搭正文框架前，都必须 `Read data/framing_guide.md`，并使结构与其提炼的可复用框架对齐（对应 gate item B4）。这是 Phase 1.6 产出的落地点，不得跳过。
+
+---
+
 ## Phase 1.7: Outline from Research + Structure Sign-off + Collection Tree
 
-> **🚫 不要先做这个。执行顺序：Phase 0 → 1.5（研究空白）→ 1.6（对标框架）→ 本阶段 1.7 → Phase 2。** 本节虽然在文档里排在 Phase 1.5/1.6 之前，但**必须在两者之后运行**：提纲是"读透调研后的产物"，不是开工前置。**进入条件：`phase ≥ 1.6`（`data/research_gap.json` 已有 `selected` 主线 + `data/framing_guide.md` 就位）；若 `phase < 1.6` → HALT，回去先做 Phase 1.5 / 1.6。**
+> **执行顺序：Phase 0 → 1.5（研究空白）→ 1.6（对标框架）→ 本阶段 1.7 → Phase 2。** 提纲是读透调研后的产物，所以先做完 1.5/1.6 才轮到这一步。**进入条件：`phase ≥ 1.6`（`data/research_gap.json` 已有 `selected` 主线 + `data/framing_guide.md` 就位）；若 `phase < 1.6` → HALT，回去先做 Phase 1.5 / 1.6。**
 
 **Start: Read `outline.md` + `state.json` + `data/research_gap.json`（取 `selected` gap/选题方向）+ `data/framing_guide.md`（对标框架）+ `data/benchmark_reviews.json`. If state.json shows phase≥2, skip.**
 **Polish Mode: if `state.json` contains `"mode": "polish"`, skip Phase 1.5/1.6/1.7 entirely and go to Phase 3.**
@@ -451,117 +562,6 @@ Format: `[review] Phase X.Step: <description>`. 📖 消息表 + Rollback 命令
 9. **Git Checkpoint** (见复用块, msg: `[review] Phase 1.7: outline confirmed (post-research)`)
 
 **HALT. Wait for user to confirm outline before Phase 2.**
-
----
-
-## Phase 1.5: Research Gap Identification（Write Mode only）
-
-> **⭐ 执行顺序（调研先于提纲）：这是 Phase 0 之后的第一个实质阶段。** 提纲不在这里建——先调研（1.5 空白 + 1.6 对标框架），到 **Phase 1.7** 才据调研结果建提纲并落结构签字。
-
-**触发时机：** Phase 0 初始化后立即进入（提纲尚未建立，先摸清领域再据此建提纲）。Polish Mode 跳过（已有成稿）。
-**Entry: Read `outline.md`（此时仅有模板骨架）+ `state.json`. If `phase ≥ 1.6`（对标框架已完成）→ already done, skip.**
-> **Phase gate:** `state.json` 不存在 → HALT，提示先完成 Phase 0 初始化（Phase 0.5 生成 outline.md/state.json）。
-
-**目的：** 在建提纲、搭框架前，先基于**已检索的真实文献证据**摸清领域格局——热点、争议、机制线索、研究空白——供用户确认选题方向。综述的 novelty 不来自堆砌文献，而来自识别一个**有证据支撑且尚未被很好综述**的空白。提纲是读透这一步后的产物。
-
-### 步骤
-
-0. **先定 RQ/PICO（提纲的语义锚点）：** 与用户确认研究问题 RQ/PICO（scoping review 用 PCC：Population/Concept/Context），写入 `outline.md` 的 `## Research Question` 区。RQ/PICO 明确后，探索性检索与后续提纲各节才有检验标准。（完整提纲结构在 Phase 1.7 据调研结果建立，此处只锚定研究问题。）
-
-1. **初始化 index 并取证文献：** 先建空索引 `python3 scripts/state_manager.py init-index`（幂等，创建 `data/literature_index.json` + `data/synthesis_matrix.json`）。围绕 RQ/PICO 做一轮**探索性检索**（串行，≥1s 间隔，工具优先级同 Phase 2）。**探索阶段只写 `data/literature_index.json`（不依赖 Zotero 集合树——集合树在 Phase 1.7 建提纲后才创建）**，每篇跑 `citation_guard.py`——**gap 只能由 verified 文献推出**。本步入库可与 Phase 2 共享 index（不重复入库）。
-   > ⚠️ 红线：gap 必须从真实文献证据推出，**禁止脑补**。每个 gap 关联 ≥1 篇支撑文献 `[n]`，且该 `[n]` 已 citation_guard verified。
-
-2. **识别四类信号**，写入 `data/research_gap.json`：
-   - `candidate_topics[]`：候选选题方向（每个含一句话 framing + 支撑 refs）
-   - `hotspots`：近年高频/高被引主题（含 support_refs）
-   - `controversies`：文献中的矛盾发现/未决争论（含对立双方 refs）
-   - `gaps`：研究空白（每个含 `id` / `description` / `support_refs[]` / 为何是空白）
-   - `novelty_risk`：候选选题与**既有综述/已发表工作**的重叠度比较，标 high/medium/low + 理由（防止"重复造轮子"）
-
-   ```json
-   {
-     "candidate_topics": [{"topic": "...", "framing": "...", "support_refs": [3, 7]}],
-     "hotspots": [{"theme": "...", "support_refs": [3, 12]}],
-     "controversies": [{"issue": "...", "side_a_refs": [5], "side_b_refs": [9], "note": "..."}],
-     "gaps": [{"id": "gap-1", "description": "...", "support_refs": [7, 12], "why_gap": "..."}],
-     "novelty_risk": [{"topic": "...", "overlapping_reviews": [...], "risk": "low", "reason": "..."}]
-   }
-   ```
-
-3. **DoD 自检（gate `research-gap-dod`，委托独立子代理盲检）：**
-   ```bash
-   python3 scripts/delegate_review.py pack --checklist references/dod_checklist.json \
-     --gate research-gap-dod --files data/research_gap.json --workdir .
-   # → 派独立子代理（Claude Code 用 academic-blind-reviewer），不给写作上下文，按任务包返回 JSON
-   python3 scripts/delegate_review.py verify --checklist references/dod_checklist.json \
-     --gate research-gap-dod --return .review_return_research-gap-dod.json
-   # 退出码非 0 = fail-closed，据子代理证据修复后重跑，未过不得声明完成
-   ```
-   gate 5 项：G1 每 gap ≥1 verified 文献支撑 / G2 与 literature_index 一致（无孤儿）/ G3 从真实证据推出（禁脑补）/ G4 含 novelty_risk 比较 / G5 占位符清零。逐项内容以 `references/dod_checklist.json` 为唯一真源。
-
-4. **更新 state + Git Checkpoint：**
-   ```bash
-   python3 scripts/state_manager.py set-phase --phase 1.5
-   git add -A && git commit -m "[review] Phase 1.5: research gap identified" --allow-empty-message 2>/dev/null || true
-   ```
-
-**HALT. 向用户展示 candidate_topics / gaps / novelty_risk，等用户确认选题方向后再进 Phase 1.6。**
-
-5. **🔴 选定主线落盘衔接（防长会话丢主线，HALT 确认后必做）：** 用户确认选题方向后，立即把"选定的综述主线（选题方向 + 核心 gap）"显式固化，作为 Phase 2/3 的主线依据，不靠隐式记忆：
-   - 在 `research_gap.json` 被选中的 gap/candidate_topic 上加 `"selected": true` 标记；
-   - 同时把"选定主线 = 选题方向 + 核心 gap 一句话"写入 `outline.md` 顶部的主线锚点区（无则在文件首行新增 `## 综述主线（锚点）` 区块）。
-   - 落盘后再补一次 Git Checkpoint。
-
----
-
-## Phase 1.6: Benchmark Review Library + Framing Guide（Write Mode only）
-
-**触发时机：** Phase 1.5 选题确认后、**Phase 1.7 建提纲前**（对标框架既指导 Phase 1.7 的提纲结构，也在 Phase 3 搭正文框架时复用）。Polish Mode 跳过。
-**Entry: Read `outline.md` + `state.json`. If `phase ≥ 1.7`（提纲已定）→ already done, skip.**
-> **Phase gate:** `phase < 1.5` → HALT，提示先完成 Phase 1.5。
-
-**目的：** 高水平综述的框架不是凭空设计的。检索近年 5–10 篇**对标综述**（同领域顶刊 review），学习其章节框架、论证思路、图表与正文关系、引言-主体-展望的组织方式，提炼可复用的写作思路供 Phase 3 搭框架时直接参照。
-
-### 步骤
-
-1. **检索对标综述：** 工具优先级同 Phase 2（串行，≥1s）。目标 5–10 篇近年同领域高水平综述（Nature Reviews / Cell / Lancet 系等）。每篇**必须真实存在并走 citation_guard 验证**——禁编造。
-   > ⚠️ 红线：对标综述真实存在、走 `citation_guard.py` 验证，不编造标题/期刊/年份。
-
-2. **建对标库 `data/benchmark_reviews.json`：** 每篇含
-   ```json
-   [{
-     "title": "...", "journal": "Nature Reviews ...", "year": 2023,
-     "framework_outline": "该综述的章节框架（背景→机制→应用→挑战→展望 ... 具体到节）",
-     "highlights": "亮点：如何 framing、如何仲裁矛盾、图怎么用",
-     "verified": true
-   }]
-   ```
-
-3. **提炼 `data/framing_guide.md`：** 从对标库归纳**可操作**的写作思路，至少覆盖：
-   - 可复用的章节框架骨架（漏斗引言 → 主题主体 → 展望）
-   - 论证思路（如何从 setup → evidence → synthesis → implication）
-   - 图表与正文的关系（概念框架图放哪、每节图承担什么角色）
-   - 引言-主体-展望的组织套路
-   - 对**本综述**的具体建议（结合 Phase 1.5 的 gap，而非泛泛而谈）
-
-4. **DoD 自检（gate `benchmark-reviews-dod`，委托独立子代理盲检）：**
-   ```bash
-   python3 scripts/delegate_review.py pack --checklist references/dod_checklist.json \
-     --gate benchmark-reviews-dod --files data/benchmark_reviews.json data/framing_guide.md --workdir .
-   python3 scripts/delegate_review.py verify --checklist references/dod_checklist.json \
-     --gate benchmark-reviews-dod --return .review_return_benchmark-reviews-dod.json
-   ```
-   gate 5 项：B1 ≥5 篇 verified / B2 每篇含框架大纲 / B3 framing_guide 含可操作建议 / B4 Phase 3 搭框架显式 Read framing_guide / B5 占位符清零。真源见 `references/dod_checklist.json`。
-
-5. **更新 state + Git Checkpoint：**
-   ```bash
-   python3 scripts/state_manager.py set-phase --phase 1.6
-   git add -A && git commit -m "[review] Phase 1.6: benchmark reviews + framing guide" --allow-empty-message 2>/dev/null || true
-   ```
-
-**HALT. 向用户展示对标库与 framing_guide 要点，确认后进 Phase 1.7（据调研建提纲）。**
-
-> **🔗 Phase 1.7 + Phase 3 挂接（强制）：** Phase 1.7 建提纲结构、Phase 3 各节搭正文框架前，都必须 `Read data/framing_guide.md`，并使结构与其提炼的可复用框架对齐（对应 gate item B4）。这是 Phase 1.6 产出的落地点，不得跳过。
 
 ---
 
