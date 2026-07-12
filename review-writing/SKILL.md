@@ -44,21 +44,22 @@ why_how_what_note: |
 | state.json 状态 | 跳转到 |
 |-----------------|--------|
 | 不存在 | **先过 Mode Handshake Gate** → Phase 0.1 |
-| phase=0, 无 mode 字段 | Phase 0.5（继续初始化） |
+| phase=0, 无 mode 字段 | Phase 0.5（继续初始化）→ 完成后进 **Phase 1.5**（调研先于提纲） |
 | phase=0, mode="polish" | Phase 0-P（📖 读 `docs/phase_0p_polish_mode.md`） |
-| phase=1 | Phase 1（检查是否已完成） |
-| phase=1.5 | Phase 1.5（研究空白识别，检查是否已完成） |
+| phase=1.5 | Phase 1.5（探索检索 + 研究空白，检查是否已完成） |
 | phase=1.6 | Phase 1.6（对标综述库 + 框架指南） |
+| phase=1.7 | Phase 1.7（据调研建提纲 + 用户确认 + 结构签字落锁） |
 | phase=2 | Phase 2（跳过 completed_sections） |
 | phase=3 或 pending_sections 非空 | Phase 3（跳过 completed_sections） |
 | phase=4, completed=true | Phase 4 导出完成 → 进 Phase 5（投稿包） |
 | phase=5, completed=true | 已完成，告知用户 |
 
 ### 每 Phase 关键动作
+> **核心顺序：调研先于提纲。** 提纲是"读透文献后的产物"，不是开工前置。先 Phase 1.5 探索检索/研究空白 + Phase 1.6 对标框架，再 Phase 1.7 据调研建提纲并确认、落结构签字。
 - **Phase 0:** 收参数 → 检测环境 → 创建项目 → git init
-- **Phase 1:** 提纲 → 用户确认 → Zotero 集合树 → **HALT**
-- **Phase 1.5:** 基于真实文献识别热点/争议/空白 → `data/research_gap.json` → 委托盲检 → **HALT**（用户确认选题方向）
+- **Phase 1.5:** 定 RQ/PICO → 基于真实文献识别热点/争议/空白 → `data/research_gap.json` → 委托盲检 → **HALT**（用户确认选题方向）
 - **Phase 1.6:** 检索 5–10 篇对标综述 → `data/benchmark_reviews.json` + `data/framing_guide.md` → 委托盲检 → **HALT**
+- **Phase 1.7:** 据调研（selected gap + 对标框架）建提纲 → 用户确认 → **结构签字落锁** → Zotero 集合树 → **HALT**
 - **Phase 2:** 逐节搜索（**串行，≥1s 间隔**）→ 写入 Zotero/index → **HALT** dedup
 - **Phase 3:** Read framing_guide 搭框架 → 逐节写作 → citation spot-check → Reviewer Simulator → **HALT**
 - **Phase 4:** 引用总量校验 → citation guard → 编译 → 连贯性扫描 → 缩写扫描 → 导出
@@ -182,10 +183,11 @@ Before any **writing / search / import / Zotero-mutating** action, ask exactly *
 
 > **Route map:**
 > ```
-> Write Mode:  Phase 0 (init) → Phase 1 (outline) → Phase 1.5 (research gap) → Phase 1.6 (benchmark reviews+framing) → Phase 2 (search) → Phase 3 (write) → Phase 4 (export) → Phase 5 (submission pack)
+> Write Mode:  Phase 0 (init) → Phase 1.5 (research gap) → Phase 1.6 (benchmark reviews+framing) → Phase 1.7 (outline from research + sign-off) → Phase 2 (search) → Phase 3 (write) → Phase 4 (export) → Phase 5 (submission pack)
 > Polish Mode: Phase 0 (init) → Phase 0-P (import+diagnose) → Phase 3 (write) → Phase 4 (export) → Phase 5 (submission pack)
 > ```
-> Phase 1.5 / 1.6 are Write-Mode only (Polish Mode imports an existing draft, so gap/framing analysis is skipped). Phase 5 runs in both modes.
+> **调研先于提纲**：Write Mode 先调研（1.5 研究空白 + 1.6 对标框架），提纲在 Phase 1.7 据调研结果建立并落结构签字——提纲是读透文献后的产物，不是开工前置。
+> Phase 1.5 / 1.6 / 1.7 are Write-Mode only (Polish Mode imports an existing draft, so gap/framing/outline-building are skipped). Phase 5 runs in both modes.
 >
 > Resume rule: if `state.json` already exists in the project folder, read it first.  
 > If `"mode": "polish"` → skip to Phase 0-P Step 6 (resume pending sections).  
@@ -197,6 +199,11 @@ Before any **writing / search / import / Zotero-mutating** action, ask exactly *
 > 2. Check CWD subdirectories (1 level deep) for `state.json` → if exactly 1 found, use it; if multiple, list and ask user
 > 3. If not found → ask user for project path: "请提供综述项目目录路径（包含 state.json 的文件夹）"
 > After locating, `cd` into the project directory before any further operation.
+
+> **🔁 接续与决定日志（每次进入/续写的第一动作，项目已存在时必做）：**
+> 1. 定位到项目根后，**第一件事先跑 Phase 0.5 打印的 `RESUME_CMD`**（绝对路径指向 `_shared/session_journal.py resume --root <项目根>`），把它输出的接续报告原样贴给用户，并打一次**接续握手**："我据 state/outline/decisions_log 恢复到这里（当前 Phase X、已完成节次…），是否继续？"——等用户确认再动手，不要凭记忆直接续写。
+> 2. **用户中途插入任何临时要求**（改结构、调顺序、换重点等），立即用 `session_journal.py log --root <项目根> --note "用户要求：<原话>"` 追加到 `decisions_log.md`（append-only，后续会话必读），再执行。
+> 3. `RESUME_CMD` 只读展示、绝不阻断；新项目（state.json 尚不存在）跳过本步，直接走 Mode Handshake Gate。
 
 ---
 
@@ -331,7 +338,7 @@ python3 "[SKILL_DIR]/scripts/init_project.py" \
 > **⚠️ Working directory rule:** All commands in Phase 1–4 are run from inside `[PROJECT_BASE]/[TITLE]/`.
 > After initialization: `cd "[PROJECT_BASE]/[TITLE]"` (the script prints this path).
 >
-> **Note:** Phase 0.5 only creates folder structure + copies scripts + writes state.json/outline.md. Zotero collection tree (`--init`) is NOT run here; it runs in Phase 1 (Write Mode) or Phase 0-P Step 5 (Polish Mode).
+> **Note:** Phase 0.5 only creates folder structure + copies scripts + writes state.json/outline.md. Zotero collection tree (`--init`) is NOT run here; it runs in Phase 1.7 (Write Mode, after the outline is built from research) or Phase 0-P Step 5 (Polish Mode). Phase 0.5 完成后进入 **Phase 1.5**（调研先于提纲）。
 
 The script writes `[TITLE]/state.json`:
 ```json
@@ -383,15 +390,16 @@ Format: `[review] Phase X.Step: <description>`. 📖 消息表 + Rollback 命令
 
 ---
 
-## Phase 1: Outline Confirmation + Collection Tree
+## Phase 1.7: Outline from Research + Structure Sign-off + Collection Tree
 
-**Start: Read `outline.md` + `state.json`. If state.json shows phase≥1, skip.**
-**Polish Mode: if `state.json` contains `"mode": "polish"`, skip Phase 1 entirely and go to Phase 3.**
+> **🚫 不要先做这个。执行顺序：Phase 0 → 1.5（研究空白）→ 1.6（对标框架）→ 本阶段 1.7 → Phase 2。** 本节虽然在文档里排在 Phase 1.5/1.6 之前，但**必须在两者之后运行**：提纲是"读透调研后的产物"，不是开工前置。**进入条件：`phase ≥ 1.6`（`data/research_gap.json` 已有 `selected` 主线 + `data/framing_guide.md` 就位）；若 `phase < 1.6` → HALT，回去先做 Phase 1.5 / 1.6。**
 
-1. **Define RQ/PICO** (or PCC for scoping review) with user first. Write to `outline.md`.
-   - RQ/PICO 是提纲的语义锚点，研究问题明确后，提纲各节才能有检验标准。
-   - Scoping review：用 PCC 框架（Population / Concept / Context）替代 PICO。
-2. **Propose outline structure** based on RQ/PICO: "Funnel" Introduction + "Thematic" Body. (≤2 hierarchy levels)
+**Start: Read `outline.md` + `state.json` + `data/research_gap.json`（取 `selected` gap/选题方向）+ `data/framing_guide.md`（对标框架）+ `data/benchmark_reviews.json`. If state.json shows phase≥2, skip.**
+**Polish Mode: if `state.json` contains `"mode": "polish"`, skip Phase 1.5/1.6/1.7 entirely and go to Phase 3.**
+
+1. **据调研建提纲（不是凭空设计）：** RQ/PICO 已在 Phase 1.5 定义。以 **Phase 1.5 选定的 gap/主线** 为骨架、参照 **Phase 1.6 framing_guide 的可复用章节框架**，提出提纲结构："Funnel" Introduction + "Thematic" Body（≤2 层级）。每个主体节次应能对应到某个 gap / 争议 / 主线分支，避免与既有对标综述结构简单雷同（呼应 novelty_risk）。
+   - Scoping review：研究问题用 PCC（Population / Concept / Context）。
+2. **对齐对标框架：** 显式说明本提纲如何借鉴/区别于 framing_guide 提炼的结构（对应 gate item B4）。
 3. **Confirm outline with user.** Update `outline.md`.
 
    > **⚠️ 迭代闸（Iteration Gate）：提纲在此可回修。**
@@ -406,7 +414,7 @@ Format: `[review] Phase X.Step: <description>`. 📖 消息表 + Rollback 命令
 
    > **[结构签字·强制门禁落锁]** 用户在对话里明确确认提纲后（且**仅在此之后**），运行 Phase 0.5 `init_project.py` 打印的那条 `SIGNOFF_CMD`（已含解析好的绝对路径与项目根）落盘签字——即 `python "<.../_shared/structure_signoff_gate.py>" confirm --root <项目根> --note "<用户确认原话摘录>"`。这一步解锁正文写作：**未落签字，PreToolUse hook 会物理拦截任何对 `drafts/*.md` 的写入**（这是防跳步的硬门，不是提示词纪律）。若后续回修提纲（上方迭代闸允许），改完让用户重新确认并重跑本命令覆盖签字。⚠️ 严禁在用户未确认时自行运行 confirm——那等于伪造用户签字。
 
-4. **规划贯穿全文的概念框架图（提纲确认后，Phase 1 内完成）：**
+4. **规划贯穿全文的概念框架图（提纲确认后，Phase 1.7 内完成）：**
    在 `figures/figure_index.md` 中注册一条 `Figure 0`（概念框架图），要求：
    - 覆盖全文逻辑主线（背景→机制/方法→应用/挑战→展望），体现各节之间的内在逻辑联系
    - 包含 Key Message（一句话）、草稿 Caption（出版级精确度）、节次映射关系
@@ -435,28 +443,32 @@ Format: `[review] Phase X.Step: <description>`. 📖 消息表 + Rollback 命令
    python3 scripts/state_manager.py init-index
    # Creates empty data/literature_index.json + data/synthesis_matrix.json + figures/figure_index.md (idempotent).
    ```
-8. **Update state.json** (writes phase=1 + zotero_root_key, preserving other keys):
+8. **Update state.json** (writes phase=1.7 + zotero_root_key, preserving other keys):
    ```bash
-   python3 scripts/state_manager.py set-phase --phase 1
+   python3 scripts/state_manager.py set-phase --phase 1.7
    python3 scripts/state_manager.py set-root-key --key "[key from step 6]"   # Zotero mode only; skip in None/EndNote
    ```
-9. **Git Checkpoint** (见复用块, msg: `[review] Phase 1: outline confirmed`)
+9. **Git Checkpoint** (见复用块, msg: `[review] Phase 1.7: outline confirmed (post-research)`)
 
-**HALT. Wait for user to confirm outline before Phase 1.5.**
+**HALT. Wait for user to confirm outline before Phase 2.**
 
 ---
 
 ## Phase 1.5: Research Gap Identification（Write Mode only）
 
-**触发时机：** Phase 1 提纲确认后、Phase 2 系统检索前。Polish Mode 跳过（已有成稿）。
-**Entry: Read `outline.md` + `state.json`. If `phase ≥ 1.6` → already done, skip.**
-> **Phase gate:** `state.json` 不存在或 `phase < 1` → HALT，提示先完成 Phase 1。
+> **⭐ 执行顺序（调研先于提纲）：这是 Phase 0 之后的第一个实质阶段。** 提纲不在这里建——先调研（1.5 空白 + 1.6 对标框架），到 **Phase 1.7** 才据调研结果建提纲并落结构签字。
 
-**目的：** 在搭框架前，先基于**已检索的真实文献证据**摸清领域格局——热点、争议、机制线索、研究空白——供用户确认选题方向。综述的 novelty 不来自堆砌文献，而来自识别一个**有证据支撑且尚未被很好综述**的空白。
+**触发时机：** Phase 0 初始化后立即进入（提纲尚未建立，先摸清领域再据此建提纲）。Polish Mode 跳过（已有成稿）。
+**Entry: Read `outline.md`（此时仅有模板骨架）+ `state.json`. If `phase ≥ 1.6`（对标框架已完成）→ already done, skip.**
+> **Phase gate:** `state.json` 不存在 → HALT，提示先完成 Phase 0 初始化（Phase 0.5 生成 outline.md/state.json）。
+
+**目的：** 在建提纲、搭框架前，先基于**已检索的真实文献证据**摸清领域格局——热点、争议、机制线索、研究空白——供用户确认选题方向。综述的 novelty 不来自堆砌文献，而来自识别一个**有证据支撑且尚未被很好综述**的空白。提纲是读透这一步后的产物。
 
 ### 步骤
 
-1. **取证文献：** 围绕 RQ/PICO 做一轮**探索性检索**（串行，≥1s 间隔，工具优先级同 Phase 2）。每篇按 Phase 2 规则入库 `data/literature_index.json` 并跑 `citation_guard.py`——**gap 只能由 verified 文献推出**。本步可与 Phase 2 共享 index（不重复入库）。
+0. **先定 RQ/PICO（提纲的语义锚点）：** 与用户确认研究问题 RQ/PICO（scoping review 用 PCC：Population/Concept/Context），写入 `outline.md` 的 `## Research Question` 区。RQ/PICO 明确后，探索性检索与后续提纲各节才有检验标准。（完整提纲结构在 Phase 1.7 据调研结果建立，此处只锚定研究问题。）
+
+1. **初始化 index 并取证文献：** 先建空索引 `python3 scripts/state_manager.py init-index`（幂等，创建 `data/literature_index.json` + `data/synthesis_matrix.json`）。围绕 RQ/PICO 做一轮**探索性检索**（串行，≥1s 间隔，工具优先级同 Phase 2）。**探索阶段只写 `data/literature_index.json`（不依赖 Zotero 集合树——集合树在 Phase 1.7 建提纲后才创建）**，每篇跑 `citation_guard.py`——**gap 只能由 verified 文献推出**。本步入库可与 Phase 2 共享 index（不重复入库）。
    > ⚠️ 红线：gap 必须从真实文献证据推出，**禁止脑补**。每个 gap 关联 ≥1 篇支撑文献 `[n]`，且该 `[n]` 已 citation_guard verified。
 
 2. **识别四类信号**，写入 `data/research_gap.json`：
@@ -504,8 +516,8 @@ Format: `[review] Phase X.Step: <description>`. 📖 消息表 + Rollback 命令
 
 ## Phase 1.6: Benchmark Review Library + Framing Guide（Write Mode only）
 
-**触发时机：** Phase 1.5 选题确认后、Phase 3 搭框架前（搭框架本身在 Phase 3，但框架素材在此准备）。Polish Mode 跳过。
-**Entry: Read `outline.md` + `state.json`. If `phase ≥ 2` → already done, skip.**
+**触发时机：** Phase 1.5 选题确认后、**Phase 1.7 建提纲前**（对标框架既指导 Phase 1.7 的提纲结构，也在 Phase 3 搭正文框架时复用）。Polish Mode 跳过。
+**Entry: Read `outline.md` + `state.json`. If `phase ≥ 1.7`（提纲已定）→ already done, skip.**
 > **Phase gate:** `phase < 1.5` → HALT，提示先完成 Phase 1.5。
 
 **目的：** 高水平综述的框架不是凭空设计的。检索近年 5–10 篇**对标综述**（同领域顶刊 review），学习其章节框架、论证思路、图表与正文关系、引言-主体-展望的组织方式，提炼可复用的写作思路供 Phase 3 搭框架时直接参照。
@@ -547,9 +559,9 @@ Format: `[review] Phase X.Step: <description>`. 📖 消息表 + Rollback 命令
    git add -A && git commit -m "[review] Phase 1.6: benchmark reviews + framing guide" --allow-empty-message 2>/dev/null || true
    ```
 
-**HALT. 向用户展示对标库与 framing_guide 要点，确认后进 Phase 2。**
+**HALT. 向用户展示对标库与 framing_guide 要点，确认后进 Phase 1.7（据调研建提纲）。**
 
-> **🔗 Phase 3 挂接（搭框架时强制）：** Phase 3 各节搭框架/写作前必须 `Read data/framing_guide.md`，并使框架与其提炼的可复用结构对齐（对应 gate item B4）。这是 Phase 1.6 产出的落地点，不得跳过。
+> **🔗 Phase 1.7 + Phase 3 挂接（强制）：** Phase 1.7 建提纲结构、Phase 3 各节搭正文框架前，都必须 `Read data/framing_guide.md`，并使结构与其提炼的可复用框架对齐（对应 gate item B4）。这是 Phase 1.6 产出的落地点，不得跳过。
 
 ---
 
@@ -559,7 +571,7 @@ Format: `[review] Phase X.Step: <description>`. 📖 消息表 + Rollback 命令
 
 **Start: Read `outline.md` + `state.json`. Skip sections already in `completed_sections`.**
 > **主线依据（防丢主线）：** 开写前 Read `data/research_gap.json`，取 `selected` 的 gap/选题方向作为本轮检索与写作的综述主线，确保不偏离 Phase 1.5 选定的核心 gap。
-> **Phase gate:** if `state.json` does not exist or `phase < 1` → HALT; tell user "Phase 0 init must be completed first (run Phase 0.5 to create outline.md and state.json)"; do not proceed.
+> **Phase gate:** if `state.json` does not exist or `phase < 1.7`（提纲未据调研建立/未落结构签字）→ HALT; tell user "先完成 Phase 1.5（研究空白）→ 1.6（对标框架）→ 1.7（据调研建提纲 + 结构签字），系统主检索按提纲逐节进行"; do not proceed.
 
 ### Search Priority by Discipline
 
@@ -710,6 +722,12 @@ If pending_sections is empty → all sections complete; proceed to Phase 4.
    ```
    > `figures/figure_index.md` is the canonical figure registry for ALL modes (Write, Polish, None). It is NOT inside `drafts/`.
 
+3.5. **🧭 引文核证脚手架（帮你写对的辅助，不是卡后续的墙）：** 落笔前，为本节**承重论点**（load-bearing：机制断言、疗效/因果结论、关键定量声明等支撑全节论证的句子）逐条把"论点 ↔ 它要引的文献"对齐，用文献**检索时原样落盘的真实 abstract**（`data/synthesis_matrix.json` 已含 claim↔文献的绑定，abstract 取自 `data/literature_index.json` 的 `abstract` 字段，**不是可事后编的 key_finding**）判断该引用是否真支撑这句话，写入项目根 `claim_evidence.json`（list，每条：`{section, claim_sentence, is_load_bearing, ref_id, retrieved_abstract, verdict∈support/weak/contradict/unknown, evidence_quote, user_confirmed}`）。背景陈述句列入即可（`is_load_bearing:false`），批量过目、不逐条阻断。
+   然后跑 Phase 0.5 打印的 `CITATION_CHECK_CMD`（绝对路径指向 `_shared/citation_claim_check.py --root <项目根>`；读项目根 `claim_evidence.json`，渲染 claim↔引用支撑矩阵表）：
+   - **承重句** `contradict` / `unknown` / 缺 `retrieved_abstract` / 未 `user_confirmed` → 脚本 fail-closed（exit 2）。对每个被拦的承重句，用 **AskUserQuestion 逐条**呈现（论点 + 拟引文献 + abstract 摘录 + 机器判定），让用户裁决：换引文 / 改写论点 / 确认支撑（确认后在该条置 `user_confirmed:true` 重跑）。
+   - **背景句** 的 weak/contradict 只在矩阵表里标红提示，**批量**过目即可，不逐条打断。
+   - **定位**：这是帮你把引用挂对的脚手架——带着"引用确实支撑论点"的把握再落笔。通过后进 Step 4。（复用已建的 synthesis_matrix，不重复建库。）
+
 4. **Draft:** Write to `drafts/section_XX_XX.md` (zero-pad each part to 2 digits, e.g., section 1.1 → `drafts/section_01_01.md`, section 2.10 → `drafts/section_02_10.md`). Paragraphs only. Citation format `[N]` (N = gid).
    - **Reference the figure caption from Step 3a.** The draft must describe and introduce the figure using its planned caption and key message.
    - Apply Anti-AI Writing rules (English or Chinese mode per outline.md).
@@ -733,13 +751,13 @@ If pending_sections is empty → all sections complete; proceed to Phase 4.
    - **D2 Arbitration & Critical Analysis:** 是否识别 ≥1 处文献矛盾，分析为何矛盾，并给出立场或调和解释（不骑墙）。
    - **D3 Evidence Density & Traceability:** 每个事实断言有引用、关键断言 ≥2 独立来源、证据类型与断言类型匹配（机制→原著，疗效→临床试验）。
    - **D4 Flow & Coherence:** 段首承接上段结论、本节有 setup→evidence→synthesis→implication 内在弧线、无可随意搬移的孤立段。
-   - **D5 Anti-AI Compliance:** 零禁用词、句长有节奏（无连续 3 句近长）、被动句 ≤30%、无模板化转折开头。
-     **量化兜底（先跑脚本再人评）：** 委托盲评前先跑 style_checker 拿客观信号，命中的项必须先改掉，不要靠人眼漏掉。
+   - **D5 Anti-AI Compliance:** 硬项（命中即判 N）：零禁用词/AI 套话、无生僻词/造词、无 scare quotes / 解释性冒号 / trailing -ing 从句、无模板化转折开头。软项（只提示、不判 N）：句长有节奏、被动句约 ≤30%、少用装饰性破折号——按节奏酌情调整即可。
+     **量化兜底（先跑脚本再人评）：** 委托盲评前先跑 style_checker 拿客观信号，**high/medium 项必须先改掉**；`info` 软项（long_sentence / excessive_passive_voice / decorative_em_dash）只提醒不阻断、不扣分，择优处理。
      ```bash
      python3 scripts/style_checker.py --file drafts/section_01_01.md --passive-max 0.30
-     # 检查：forbidden_ai_phrases / long_sentence(>30词) / excessive_passive_voice(>30%)
-     #       / decorative_em_dash / scare_quotes / explanatory_colon_in_prose / trailing_ing_clause
-     # exit 0 = 通过(score≥阈值且无致命项)；非 0 = 据 issues 逐项修复后重跑
+     # 硬项(计分,可致 exit 1)：forbidden_ai_phrases / scare_quotes / explanatory_colon_in_prose / trailing_ing_clause / bullet_points ...
+     # 软项(severity=info,只报告不扣分不阻断)：long_sentence(>30词) / excessive_passive_voice(>30%) / decorative_em_dash
+     # exit 0 = 通过(score≥阈值)；非 0 = 据 issues 里的 high/medium 项修复后重跑（info 项不影响退出码）
      ```
    **优先委托独立 subagent 盲评**（消除自写自评偏差）：派一个 subagent，只给它 `drafts/section_XX_XX.md` 路径 + checklist，不给写作时的上下文，让它独立判定每项 Y/N 并返回结构化结果。
    **Gate:** 任何维度 ≥1 项失败 → 内部修订（最多 2 轮）。2 轮后仍失败 → **HALT**，输出结构化反馈（【问题】+ 证据锚点 + 根源分析 + 修复方向）。修订与 HALT 决策由主 agent 负责（不可委托）。
@@ -790,7 +808,7 @@ If pending_sections is empty → all sections complete; proceed to Phase 4.
 
     - **R22 拉丁短语斜体软提醒(🟡软/人工确认,不阻断)**,`proofread.py` 的 `latin_italic_missing` 类别:正文里 `in vitro`/`in vivo`/`ex vivo`/`in situ`/`de novo`/`post hoc`/`per se` 等公认须斜体的拉丁短语若裸写(未被 `*...*` 斜体标记包裹)则报告。**仅提示,不阻断、不进 `--fail-on`、不扣分**,由人工确认是否补斜体(`et al.`/`e.g.`/`vs.` 等正体惯例不在词表内)。
 
-11. **HALT:** Output summary (content / logic / citation count / word count). Wait for "Continue".
+11. **📋 DoD 结论摆出 + HALT（展示式，不新增硬墙）：** 本节 `delegate_review verify` 盲检通过（exit 0 且 `.review_pass/<section>.json` 已落盘）后，先把**逐项 DoD 结论**摆给用户——从子代理返回的 JSON 里逐条列出每个 `manuscript-dod` item 的 id/name + verdict（pass）+ 证据锚点摘录（systematic 额外 3 项、结构完整性 R15、字符级 R21 一并列出；R5 里降软的长句/被动/破折号如命中只作 info 提示、不影响通过）。再附本节 summary（content / logic / citation count / word count）。**然后 HALT 等用户确认，才写下一节。** 这是"展示 + 可继续"：盲检已过即可放行，此处只保证用户看到每项结论、有机会叫停，不新增硬门。Wait for "Continue".
 
 ### Figure Prompt Generation
 

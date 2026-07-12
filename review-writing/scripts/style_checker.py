@@ -240,20 +240,20 @@ def check_file(filepath: str, passive_max: float = 0.30) -> dict[str, Any]:
     if passive_ratio > passive_max:
         result["issues"].append({
             "type": "excessive_passive_voice",
-            "severity": "medium",
-            "detail": f"Passive ratio {passive_ratio:.1%} (target: <={passive_max:.0%}). Too many passive constructions for review prose.",
+            "severity": "info",  # 软提示：报告但不阻断、不扣分（见 SOFT_ISSUE_TYPES）
+            "detail": f"Passive ratio {passive_ratio:.1%} (soft guide: <={passive_max:.0%}). Consider trimming passive constructions.",
         })
 
     # ── 3b. Long sentences (>30 words) ────────────────────────────────────────
-    # DoD R5: 单句 <=30 词. Flag any sentence exceeding the cap.
+    # 软提示：单句 >30 词只提醒不阻断（节奏建议，非硬门）。
     long_sentences = [(i, l) for i, l in enumerate(lengths) if l > 30]
     if long_sentences:
         result["issues"].append({
             "type": "long_sentence",
-            "severity": "medium",
+            "severity": "info",
             "detail": (
                 f"{len(long_sentences)} sentence(s) exceed 30 words "
-                f"(max={max(l for _, l in long_sentences)}). Split into shorter sentences."
+                f"(max={max(l for _, l in long_sentences)}). Consider splitting for rhythm."
             ),
         })
 
@@ -319,8 +319,8 @@ def check_file(filepath: str, passive_max: float = 0.30) -> dict[str, Any]:
     if em_dash_count >= 1:
         result["issues"].append({
             "type": "decorative_em_dash",
-            "severity": "medium",
-            "detail": f"{em_dash_count} em-dash(es) (—) detected. Replace with comma, period, or restructure sentence.",
+            "severity": "info",  # 软提示：破折号降软，报告不阻断
+            "detail": f"{em_dash_count} em-dash(es) (—) detected. Consider a comma/period if used decoratively.",
         })
 
     # ── 8. Scare quotes (禁挂引号暗示新概念) ──────────────────────────────────
@@ -363,11 +363,16 @@ def check_file(filepath: str, passive_max: float = 0.30) -> dict[str, Any]:
         })
 
     # ── Score calculation ─────────────────────────────────────────────────────
+    # severity == "info" 为软提示（长句 / 被动比例 / 装饰性破折号等），只报告不扣分、
+    # 不影响 gate 通过——降软后这些不再是硬门。high/medium/low 仍计分。
     score = 100
     for issue in result["issues"]:
-        if issue["severity"] == "high":
+        sev = issue["severity"]
+        if sev == "info":
+            continue
+        if sev == "high":
             score -= 15
-        elif issue["severity"] == "medium":
+        elif sev == "medium":
             score -= 8
         else:
             score -= 3
