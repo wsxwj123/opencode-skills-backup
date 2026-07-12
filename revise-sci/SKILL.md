@@ -6,7 +6,7 @@ description: 退稿/返修全管道，同时出逐条回复信+修改后正文do
 # Revise-Sci
 
 ## Overview
-Use this skill to convert reviewer comments, the original manuscript, SI, and attachments into two formal deliverables: a revised manuscript and a structured `Response to Reviewers`, both in Markdown and Word.
+Use this skill to turn reviewer comments, the original manuscript, SI, and attachments into two deliverables: a revised manuscript and a structured `Response to Reviewers`. Both come out in Markdown and Word.
 
 The workflow is script-gated. Do not skip steps. Do not fabricate experiments, data, statistics, or references.
 The comment parser accepts both atomic `comment-unit` HTML and reviewer-simulator style report HTML with critique lists.
@@ -174,7 +174,7 @@ python scripts/run_pipeline.py --comments <comments_path> --manuscript <manuscri
 
 ## [通读定策略·前置阶段]（清单核对通过后、逐条改写前）
 
-真人返修的第一件事不是逐条动手，而是**先把所有意见通读一遍、定下每条的应对策略**。本技能同样如此：意见清单核对通过后、`revise_units.py` 开始逐条改写之前，**先做一轮 triage**，不要从 atomize 直接跳到逐条改。
+真人返修的第一件事不是逐条动手，而是**先把所有意见通读一遍、定下每条的应对策略**。这里也一样：意见清单核对通过后、`revise_units.py` 开始逐条改写之前，**先做一轮 triage**，不要从 atomize 直接跳到逐条改。
 
 对每条 comment 定四选一的策略，并**写进该 unit 的 `revision_strategy` 字段**（`units/*.json`）：
 
@@ -205,7 +205,7 @@ python scripts/run_pipeline.py --comments <comments_path> --manuscript <manuscri
 - **不拆原子架构**：合并只是「分组 + 交叉引用」，每条仍是独立 unit、独立 comment_id、独立覆盖核验，绝不把多条塞进一条。
 
 ## Anti-Forgetfulness And Token-Budget Protocol
-`revise-sci` does **not** load the entire manuscript and all comments into one context window. It follows the same control philosophy used by `article-writing`, `review-writing`, and `sci2doc`, adapted for revise work:
+`revise-sci` does **not** load the entire manuscript and all comments into one context window. It uses the same approach as `article-writing`, `review-writing`, and `sci2doc`, adapted for revise work:
 
 1. **Intake-first routing**: route the comment source first, then lock the branch before loading anything large.
 2. **Section-paragraph atomicization**: only the target section and target paragraph are used for rewrite scope.
