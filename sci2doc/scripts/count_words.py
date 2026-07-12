@@ -187,8 +187,12 @@ def count_words_in_md(
         current_section["chinese_chars"] += counts["chinese_chars"]
         current_section["english_words"] += counts["english_words"]
         if sec_type == "review":
+            # 综述/绪论章计入正文，把凑字压力从研究章分摊出去，缓解逼造数据。
+            # review_* 仍单独统计供展示；body_* 同时纳入让正文字数达标更靠真实内容。
             review_chinese_chars += counts["chinese_chars"]
             review_english_words += counts["english_words"]
+            body_chinese_chars += counts["chinese_chars"]
+            body_english_words += counts["english_words"]
         elif sec_type == "references" and exclude_references:
             pass
         elif sec_type in {"toc", "acknowledgement", "appendix", "achievements", "declaration", "abbreviation_table"}:
@@ -232,7 +236,8 @@ def count_words_in_md(
 
     body_total = body_chinese_chars + body_english_words
     review_total = review_chinese_chars + review_english_words
-    grand_total = body_total + review_total
+    # review 已并入 body（A③），不再另加，避免重复计数。
+    grand_total = body_total
     body_target_chars = max(1, int(body_target_chars or 80000))
     review_target_chars = max(0, int(review_target_chars or 0))
     body_rate = round(body_chinese_chars / body_target_chars, 4)
@@ -259,8 +264,8 @@ def count_words_in_md(
             "total_count": review_total,
         },
         "total": {
-            "chinese_chars": body_chinese_chars + review_chinese_chars,
-            "english_words": body_english_words + review_english_words,
+            "chinese_chars": body_chinese_chars,
+            "english_words": body_english_words,
             "total_count": grand_total,
         },
         "sections": section_stats,
@@ -360,7 +365,8 @@ def count_words_in_atomic_dir(
 
     body_total = body_chinese_chars + body_english_words
     review_total = review_chinese_chars + review_english_words
-    grand_total = body_total + review_total
+    # review 已并入 body（A③），不再另加，避免重复计数。
+    grand_total = body_total
     body_target_chars = max(1, int(body_target_chars or 80000))
     review_target_chars = max(0, int(review_target_chars or 0))
     body_rate = round(body_chinese_chars / body_target_chars, 4)
@@ -388,8 +394,8 @@ def count_words_in_atomic_dir(
             "total_count": review_total,
         },
         "total": {
-            "chinese_chars": body_chinese_chars + review_chinese_chars,
-            "english_words": body_english_words + review_english_words,
+            "chinese_chars": body_chinese_chars,
+            "english_words": body_english_words,
             "total_count": grand_total,
         },
         "sections": all_sections,

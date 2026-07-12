@@ -134,7 +134,10 @@ def check_word_count(doc, body_target_chars=80000, review_target_chars=0, review
 
         chars = sum(1 for char in text if '\u4e00' <= char <= '\u9fff')
         if sec_type == "review":
+            # \u7efc\u8ff0/\u7eea\u8bba\u7ae0\u8ba1\u5165\u6b63\u6587\u5b57\u6570\uff0c\u628a\u51d1\u5b57\u6570\u538b\u529b\u4ece\u7814\u7a76\u7ae0\u5206\u644a\u51fa\u53bb\uff0c\u7f13\u89e3\u903c\u9020\u6570\u636e\u3002
+            # review_chinese \u4ecd\u5355\u72ec\u7edf\u8ba1\u4f9b"\u7efc\u8ff0\u5b57\u6570"\u5c55\u793a\u4e0e review_target \u63d0\u793a\u3002
             review_chinese += chars
+            total_chinese += chars
         elif sec_type in {"references", "toc", "acknowledgement", "appendix", "achievements", "declaration", "abbreviation_table"}:
             continue
         else:
@@ -147,10 +150,11 @@ def check_word_count(doc, body_target_chars=80000, review_target_chars=0, review
 
     if total_chinese < body_target_chars:
         issues.append({
-            'level': 'error',
+            # 软提示（非硬门）：字数地板是目标不是硬拦，避免逼 AT 靠编数据/灌水凑字。
+            'level': 'warning',
             'category': '字数',
-            'message': f'正文字数不足：{total_chinese} / {body_target_chars:,} 字',
-            'suggestion': f'需要扩展内容以达到 {body_target_chars:,} 字要求'
+            'message': f'正文字数不足：{total_chinese} / {body_target_chars:,} 字（提示，非硬门）',
+            'suggestion': f'用真实材料扩展至 {body_target_chars:,} 字目标；宁可少写也不得编造数据凑字'
         })
     
     # 检查综述字数
