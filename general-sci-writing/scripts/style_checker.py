@@ -176,6 +176,7 @@ def check_file(filepath: str, journal: str = "") -> dict[str, Any]:
         "total_words": total_words,
         "issues": [],
         "warnings": [],  # 软提示：不进 score、不阻断 gate
+        "hard_fail": False,  # 硬门禁命中（如破折号）：无论分数一律 fail-close
     }
 
     if not sentences:
@@ -298,15 +299,17 @@ def check_file(filepath: str, journal: str = "") -> dict[str, Any]:
             "detail": f"{bullet_count} bullet/numbered list lines detected in prose body.",
         })
 
-    # ── 7. Decorative em-dash (软提示, 不阻断) ───────────────────────────────
-    # 破折号从硬门降为软提示：进 warnings、不计入 score、不影响 gate 通过与否。
-    # 装饰性破折号仍是 AI 味信号，值得提醒，但不再一票否决。
+    # ── 7. Decorative em-dash (硬门禁, 禁止使用) ─────────────────────────────
+    # 破折号(—/——)硬门禁、禁止使用：进 issues(计入 score 扣分)并置 hard_fail，
+    # 无论总分高低一律 fail-close，不放行。
     em_dash_count = len(EM_DASH_RE.findall(prose))
     if em_dash_count >= 1:
-        result["warnings"].append({
+        result["issues"].append({
             "type": "decorative_em_dash",
-            "detail": f"{em_dash_count} em-dash(es) (—) detected. Consider comma, period, or restructure — soft hint, not a blocker.",
+            "severity": "high",
+            "detail": f"{em_dash_count} em-dash(es) (—/——) detected. 禁止使用破折号(硬门禁)，用逗号/句号/重构替代。",
         })
+        result["hard_fail"] = True
 
     # ── 8. Scare quotes (禁挂引号暗示新概念) ──────────────────────────────────
     scare_hits = SCARE_QUOTE_RE.findall(prose)
@@ -386,7 +389,8 @@ def main() -> int:
     results = [check_file(f, journal=args.journal) for f in files]
     scores = [r["score"] for r in results]
     avg_score = round(sum(scores) / len(scores), 1) if scores else 100
-    all_pass = all(s >= args.threshold for s in scores)
+    any_hard_fail = any(r.get("hard_fail") for r in results)  # 破折号等硬门禁：一票否决
+    all_pass = all(s >= args.threshold for s in scores) and not any_hard_fail
     total_issues = sum(len(r["issues"]) for r in results)
 
     report = {
@@ -402,7 +406,7 @@ def main() -> int:
     Path(args.report).write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps({"ok": all_pass, "avg_score": avg_score, "total_issues": total_issues, "files_checked": len(results)}))
     if all_pass:
-        print("STYLE_CHECK: PASS 仅覆盖形式层(句长方差/被动比软提示/禁词/em-dash 软提示/scare quotes/列点)，"
+        print("STYLE_CHECK: PASS 仅覆盖形式层(句长方差/被动比软提示/禁词/em-dash 硬门禁/scare quotes/列点)，"
               "科学创新度、论证是否成立、这稿配不配目标刊均未自动核验，须作者与通讯作者自行判断。",
               file=sys.stderr)
     return 0 if all_pass else 1
