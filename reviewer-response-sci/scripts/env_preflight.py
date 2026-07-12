@@ -97,7 +97,8 @@ def main():
 
 
 def _install_gate_hook() -> None:
-    """调共享安装器 install_gate_hook.py，回显其人话消息。定位:本文件在
+    """调共享安装器 install_gate_hook.py，回显其人话消息，并额外打印跨会话
+    接续（RESUME/LOG）与新引核证（CITATION_CHECK）命令。定位:本文件在
     skills/reviewer-response-sci/scripts/ → parents[2]=skills/ → _shared/。
     任何异常都吞掉——门禁自检绝不能反过来卡住技能。"""
     import json as _json
@@ -114,6 +115,16 @@ def _install_gate_hook() -> None:
         icon = {"active": "🛡️", "installed": "🛡️", "degraded": "⚠️", "error": "ℹ️"}.get(status, "ℹ️")
         if msg:
             print(f"{icon} 门禁保护[{status}]: {msg}")
+        # 接续 + 引文核证命令（绝对路径，免去 SKILL.md 里相对路径的 cwd 依赖）。
+        # 本技能无结构签字闸（专属强制点属 P3），故不打印 SIGNOFF_CMD；照同样式打印
+        # RESUME/LOG/CITATION_CHECK 三条，供跨会话接续与新引核证直接复制。
+        journal = installer.parent / "session_journal.py"
+        if journal.is_file():
+            print(f'RESUME_CMD: python "{journal}" resume --root <project_root>')
+            print(f'LOG_CMD: python "{journal}" log --root <project_root> --note "<用户临时要求原话>"')
+        citation_check = installer.parent / "citation_claim_check.py"
+        if citation_check.is_file():
+            print(f'CITATION_CHECK_CMD: python "{citation_check}" --root <project_root>')
     except Exception:
         pass
 
