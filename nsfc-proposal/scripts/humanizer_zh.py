@@ -284,11 +284,11 @@ def scan_text(text: str, allow_lists: bool = False) -> dict:
                         }
                     )
 
-    # B1：装饰性破折号
+    # B1：装饰性破折号（硬门禁，禁止使用：severity=ERROR，scan 门禁拦截）
     for m in re.finditer(DASH_PATTERN[0], text):
         issues.append(
             {
-                "severity": "WARNING",
+                "severity": "ERROR",
                 "code": DASH_PATTERN[1],
                 "span": [m.start(), m.end()],
                 "text": m.group(0),
