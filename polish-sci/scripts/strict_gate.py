@@ -30,11 +30,10 @@ from common import (
 CITATION_RE = re.compile(r"\[\d+(?:\s*[-,]\s*\d+)*\]", re.IGNORECASE)
 DOI_RE = re.compile(r"\b10\.\d{4,9}/[^\s\"]+", re.IGNORECASE)
 
-# C 反AI降软:学术散文里破折号/长句/-ing 分词/scare quotes/解释性冒号/修辞铺陈是
-# 正当修辞,硬禁会把文风削平。这些降为软提示(记入 polish_risk_flags/报告,不阻断交付);
-# 只保留 AI 套话禁词表(delve into / cliche: … 等 find_ai_style_markers 的其余 marker)作硬拦主干。
+# 学术散文里长句/-ing 分词/scare quotes/解释性冒号/修辞铺陈是正当修辞,降为软提示
+# (记入 polish_risk_flags/报告,不阻断交付)。破折号(em dash)例外:硬门禁、禁止使用,
+# 不在软集,由 strict_gate 对其 fail-close。硬拦主干还含 AI 套话禁词表(delve into / cliche: … )。
 _SOFT_AI_MARKERS = frozenset({
-    "em dash",
     "not only...but also",
     "rhetorical question",
     "trailing -ing clause",
