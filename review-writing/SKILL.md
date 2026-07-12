@@ -200,7 +200,21 @@ Before any **writing / search / import / Zotero-mutating** action, ask exactly *
 
 ---
 
-## Phase 0: Initialization & Environment Detection
+## 开场监工卡（每次启动本技能必须原样打印给用户）
+
+> **[必做] 每次进入本技能（含续写恢复），在选定 Write/Polish 模式后、出提纲前，先把下面这张卡原样贴给用户。** 目的是让你（用户）知道正常流程该在哪儿停、该抽查什么，别被 AI 一口气写到底。
+
+```
+📋 综述写作监工卡（写综述容易踩的坑，请盯这几条）
+1. 正常会停好几次等你拍板：提纲确认 → 选题方向 → 对标框架 → 每写完一节验收。
+   AI 一口气从头写到尾是不正常的，遇到这几处它必须停下来问你。
+2. 文献真伪要你亲自抽查：随手挑几条引用的 PMID / DOI，自己去 PubMed / 期刊页搜一下核对。
+   （尤其 Windows 上文献检索工具 edirect 常失效，AI 可能凭印象编出看着像真的假文献。）
+3. 每写完一节就停下来给你验收：别让 AI 连着写好几节，写一节你看一节再放行。
+4. 门禁说"通过"不能只信一句话：要求 AI 把门禁脚本的原始输出原文贴出来，
+   不接受只说"✅ 通过"——没有原始输出就当没通过。
+```
+
 
 **Principle:** Complete ALL checks once before any other work. Prevent mid-task failures.
 
@@ -389,6 +403,8 @@ Format: `[review] Phase X.Step: <description>`. 📖 消息表 + Rollback 命令
    > Impact: Related sections [list] may need additional citation targets.
    > ```
    > 修改后须更新 `outline.md`，重新确认 Zotero 集合树（`--init` 是幂等的），并用 Git Checkpoint 记录版本。**不得因回修提纲而删除已完成节次的已有文献入库记录。**
+
+   > **[结构签字·强制门禁落锁]** 用户在对话里明确确认提纲后（且**仅在此之后**），运行 Phase 0.5 `init_project.py` 打印的那条 `SIGNOFF_CMD`（已含解析好的绝对路径与项目根）落盘签字——即 `python "<.../_shared/structure_signoff_gate.py>" confirm --root <项目根> --note "<用户确认原话摘录>"`。这一步解锁正文写作：**未落签字，PreToolUse hook 会物理拦截任何对 `drafts/*.md` 的写入**（这是防跳步的硬门，不是提示词纪律）。若后续回修提纲（上方迭代闸允许），改完让用户重新确认并重跑本命令覆盖签字。⚠️ 严禁在用户未确认时自行运行 confirm——那等于伪造用户签字。
 
 4. **规划贯穿全文的概念框架图（提纲确认后，Phase 1 内完成）：**
    在 `figures/figure_index.md` 中注册一条 `Figure 0`（概念框架图），要求：
