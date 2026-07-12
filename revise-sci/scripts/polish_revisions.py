@@ -15,7 +15,8 @@ import revise_units
 from common import (
     build_section_markdown,
     detect_certainty_upgrade,
-    find_ai_style_markers,
+    hard_ai_style_markers,
+    soft_ai_style_markers,
     normalize_ws,
     numeric_tokens_preserved,
     polish_changed_text_locally,
@@ -404,7 +405,9 @@ def main() -> int:
             unit["polish_driver_mode"] = driver_mode
             locked_prefix = normalize_ws(plan.get("locked_prefix", ""))
             locked_suffix = normalize_ws(plan.get("locked_suffix", ""))
-            guard_markers = find_ai_style_markers(polished_fragment)
+            # C反AI降软：只用 hard 子集判 fail-close；句长/破折号等 soft 项仅记录上报。
+            guard_markers = hard_ai_style_markers(polished_fragment)
+            unit["polish_soft_style_flags"] = soft_ai_style_markers(polished_fragment)
             unit["polish_scope_respected"] = payload_row.get("scope_respected", True)
             unit["polish_meaning_changed"] = payload_row.get("meaning_changed", False)
             unit["polish_locked_context_ok"] = (

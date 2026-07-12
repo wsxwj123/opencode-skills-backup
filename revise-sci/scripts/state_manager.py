@@ -219,6 +219,9 @@ def build_comment_window(
         "reviewer": unit.get("reviewer", ""),
         "severity": unit.get("severity", ""),
         "comment_role": unit.get("comment_role", "comment"),
+        # A③：合并意见——同 merge_group 的多条意见协调回应，窗口带上分组标识以免被封死到不能协同。
+        "merge_group": unit.get("merge_group", ""),
+        "merge_lead": unit.get("merge_lead", ""),
         "target_document": unit.get("target_document", "manuscript"),
         "token_budget": token_budget,
         "tail_lines": tail_lines,
