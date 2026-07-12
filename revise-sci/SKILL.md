@@ -18,9 +18,25 @@ The manuscript atomizer recognizes numbered section headings such as `1`, `1.1`,
 >
 > 1. **拆意见别信 AI 说全了**：拆完 AI 应给你一份意见清单，你拿原始审稿信**数条数**——有没有被合并成一条、有没有整条漏掉。数目对不上就是漏了。
 > 2. **改原意要逐处盯**：每一处改动，AI 应贴「原句 → 改后句」，你确认意思没变、没夹带你没同意的新结论。看不到对照就别放行。
-> 3. **覆盖看对照表**：交付前 AI 应给「意见 × 是否回复 × 是否改稿」对照表，**出现空格就是漏了**，当场让它补。
+> 3. **覆盖看对照表**：交付前 AI 应给「意见 × 是否回复 × 是否改稿 × 结局」对照表。「改稿」列为空**但结局标 `push_back`（有意驳回不改）**的是正常的，不是漏；真正的漏是——某条既没回复、结局又不是 `completed`/`push_back`/`需作者确认`。分清「有意不改」和「漏改」。
 > 4. **缺证据写"需作者确认"是正常的**：AI 没有你的数据/实验时应写「需作者确认」等你补，这不是 bug，请你补齐，别当故障报错。
 > 5. **门禁 PASS 只保形式**：门禁只查格式/覆盖/红线这类机械项，**改得对不对、说理通不通，得你自己核**，别把 PASS 当"改对了"。
+
+## 跨会话接续（每次开局先跑，与监工卡是两件事）
+
+监工卡是「启动提醒」，接续报告是「续上上一会话的进度」。**每次进入本技能、且 `project_root` 已存在时，先跑接续命令再动手**：
+
+```bash
+python "<_shared>/session_journal.py" resume --root <project_root>
+```
+
+`env_preflight.py` 会把这条打印为 `RESUME_CMD`（连同 `LOG_CMD` / `CITATION_CHECK_CMD`，均为解析好的绝对路径）。读完接续报告后，**据它跟用户打接续握手**：复述当前 phase、已处理的 comment、以及 `decisions_log.md` 里用户历次要求，问「我接着做 <下一步>，对吗？还是先插新要求？」**等用户确认再继续**。
+
+用户在会话中途**插入任何临时要求**（改哪节、换策略、加/撤某条意见的处理方式）时，**当场 log**，后续会话必读必守：
+
+```bash
+python "<_shared>/session_journal.py" log --root <project_root> --note "<用户要求原话>"
+```
 
 ## Mandatory Intake Before Any Full Pipeline Run
 When the user provides a `comments_path`, a `manuscript_docx_path`, or both, do **not** jump straight into `run_pipeline.py`.
@@ -156,6 +172,38 @@ python scripts/run_pipeline.py --comments <comments_path> --manuscript <manuscri
 
 **用户确认"都在、没漏"后才继续改写**。用户指出漏掉或被合并的，回去把它补成独立 comment（补进 `units/`、重新原子化）后再继续，不得跳过这一步直接跑 `revise_units.py`。
 
+## [通读定策略·前置阶段]（清单核对通过后、逐条改写前）
+
+真人返修的第一件事不是逐条动手，而是**先把所有意见通读一遍、定下每条的应对策略**。本技能同样如此：意见清单核对通过后、`revise_units.py` 开始逐条改写之前，**先做一轮 triage**，不要从 atomize 直接跳到逐条改。
+
+对每条 comment 定四选一的策略，并**写进该 unit 的 `revision_strategy` 字段**（`units/*.json`）：
+
+| 策略 | `revision_strategy` 值 | 含义 | 结局 |
+|---|---|---|---|
+| 照做 | `comply` | 认可意见，按要求改正文 | 走正常改写 → `completed` / `needs_author_confirmation` |
+| 部分让 | `partial` | 部分采纳，改一部分并说明取舍 | 正常改写 + 回复信说明界限 |
+| 驳回 | `push_back`（或 `驳回`/`reject`） | 不采纳、正文不动，在回复信据理反驳 | 一等结局 `push_back`（见下节） |
+| 补数据 | `needs_data` | 需新增实验/数据/图，当前材料不足 | 落 `needs_author_confirmation`，等作者补 |
+
+**硬规则**：`revise_units.py` 逐条改写前，每条 unit 的 `revision_strategy` 必须先填（该字段已存在也要强制先确认/覆盖，不能留空跳过）。通读定策略是本阶段的产出，把结论落到字段里再进逐条改写。
+
+## [驳回/不改] 是一等合法结局（不是漏改）
+
+除 `completed` / `needs_author_confirmation` 外，新增第三个合法结局 **`push_back`**：**认定某条意见不应采纳，正文一个字不动，只在回复信里据理反驳**。这是真实返修的常态（审稿人误解、超范围要求、与本文定位冲突等），不是缺陷。
+
+- **怎么触发**：该 unit 的 `revision_strategy` 设为 `push_back`（或 `驳回`/`reject` 等，见上表）。`revise_units.py` 即把该条 `status` 置为 `push_back`：正文不改、`revised_excerpt` 记为「N/A — manuscript unchanged」、回复信生成据理反驳的中英回应。反驳理由填 unit 的 `push_back_rationale_zh` / `push_back_rationale_en`（不填则回复信留占位提示作者补）。
+- **覆盖判定别误报**：`issue_matrix.md` 的「修改动作」列会显示「不改（驳回）」、状态列显示 `push_back`；**监工卡第 3 条的对照表里，某条「改稿」列为空但结局是 `push_back` 的，是「有意不改」，不得判成「漏改」**。判漏改的唯一标准是：`status` 既非 `completed`、又非 `push_back`、又非 `needs_author_confirmation`，或该 comment_id 在回复信里根本没有回应。
+- **不阻断交付**：`push_back` 是已决结局，`delivery_status` 只被 `needs_author_confirmation` 卡；`push_back` 计入 `project_state.json` 的 `counts.push_back`，不进待办。
+- **红线仍在**：驳回≠可以不回应。回复信里该条必须有据理反驳的 response（中英），否则仍算漏回。
+
+## [合并意见] 允许多条相关意见协调回应
+
+原子架构默认每条意见一个密封 state window，但相关意见（同一处、同一诉求的不同侧面）应允许**合并成一处协调回应 + 交叉引用**，而不是各写各的、自相矛盾。
+
+- **最小用法**：给相关的几条 unit 设同一个 `merge_group`（任意稳定 id，如 `MG-limitations`），并指定其中一条为 `merge_lead`（主回应所在的 comment_id）。主条写完整协调回应；其余成员条的 response 里**交叉引用**主条（如「详见 R2.3 的统一回应」/ "see our unified response to R2.3"），不重复长篇。
+- **窗口不封死**：`state/comment_windows/<id>.json` 会带上 `merge_group` / `merge_lead`，据此从 `comment_registry.json` 找到同组兄弟条一起看，避免协同时上下文被切断。
+- **不拆原子架构**：合并只是「分组 + 交叉引用」，每条仍是独立 unit、独立 comment_id、独立覆盖核验，绝不把多条塞进一条。
+
 ## Anti-Forgetfulness And Token-Budget Protocol
 `revise-sci` does **not** load the entire manuscript and all comments into one context window. It follows the same control philosophy used by `article-writing`, `review-writing`, and `sci2doc`, adapted for revise work:
 
@@ -223,6 +271,8 @@ Each comment must contain:
 - If a reviewer asks for new literature, only `paper-search` is allowed as the external provider family.
 - `paper_search_results_path` may be used to ingest confirmed paper-search results into citation-oriented comment handling.
 - `paper_search_results_path` is not trusted directly. It must first pass `citation_guard.py`, which performs dual verification using provider trace and identifier/title consistency evidence before citations can auto-complete a comment.
+- **新增文献真实性双验（B②，不许 --offline 交付）**：审稿要求补新文献时，全部新引文献必须过 `citation_guard.py` 的 **在线**真实性双验（DOI/PMID 解析、撤稿检测、逐源标题一致性）。有已 `completed` 的 citation 类意见时，`strict_gate.py` 会读 `paper_search_guard_report.json`：`summary.online_check` 非 `true`（即用 `--offline` 或没加 `--live` 跑的）或 `all_rows_guard_verified` 非 `true`，一律 fail-close。交付前必须 `python scripts/citation_guard.py --live ...` 重跑，不许 `--offline` 跳过。
+- **新引文献↔它支撑的回复论点，须过引文核证（B④）**：真实性通过只说明「文献存在」，不说明「它真支撑你借它下的结论」。对每条「新引文献 → 它在回复信/正文里支撑的论点句」，用该文献**检索到的真实 abstract** 判支撑度，落 `claim_evidence.json`（每条含 `claim_sentence` / `is_load_bearing` / `ref_id` / `retrieved_abstract` / `verdict∈support/weak/contradict/unknown` / `user_confirmed`），再跑共享 `citation_claim_check.py`（`CITATION_CHECK_CMD`）。**承重句被判 `contradict`/`unknown`、缺 abstract、或 support/weak 但未逐条人工确认 → 硬拦**。有 `completed` citation 意见时，`strict_gate.py` 复用共享 `citation_claim_check._row_blockers` 核验 `claim_evidence.json`：文件缺失或任一承重句阻断即 fail-close。abstract 的检索走工作流子代理（本脚本不含 MCP）。
 - `build_literature_index.py` must convert validated citation support into review-writing style canonical artifacts: `data/literature_index.json` and `data/revision_claims.json`.
 - `build_literature_index.py` accepts an optional `--seed-index <path>` to reuse the writing project's existing `literature_index.json` (produced by `gsw`/`review-writing`) as a seed. Seed entries keep their original `global_id`; revision-found references that match a seed entry (dedup key: normalized DOI > PMID > normalized title) reuse the seed number instead of getting a new one, and truly new references continue numbering from `max(seed global_id) + 1`. The seed is read-only — the merged result is written only to revise-sci's own `data/literature_index.json`, never back to the writing project (seed-extension semantics). The seed reader tolerates the looser gsw schema (global id under any of `global_id`/`citation_number`/`id`/`number`/`ref_number`, back-filled by array order when absent) and a seed located either at the project root or under `data/`. Omitting `--seed-index` keeps the original rebuild-from-1 behavior unchanged.
 - `matrix_manager.py` must derive `data/synthesis_matrix.json` from the canonical literature index and emit `data/synthesis_matrix_audit.json` before delivery.
@@ -299,13 +349,13 @@ Each comment must contain:
 - The polishing stage must emit `revision_polish_manifest.json`, `revision_polish_prompt.md`, and `revision_polish_execution.json` so the anti-AI prompt, driver mode, and candidate coverage remain auditable.
 - `strict_gate.py` must verify that completed revised fragments with a non-empty `revision_plan.scope` have polish state, a valid `polish_driver_mode`, and no residual banned AI-style markers.
 - The polishing prompt must be layered, not flat. It must include: role definition, non-negotiable edit/evidence/citation/length constraints, deep anti-AI rewriting protocol, and a JSON-only output contract.
-- **Polish anti-AI 去AI五项（适用于中英文改稿正文）：**
-  1. **禁装饰性破折号**：禁用 —/——/em-dash 充当停顿、补充或强调（如"该结果——尽管样本量小——表明…"）；改用逗号、句号或拆为两句。连字符（"dose-response"）与数值范围不受限。中英文均适用。
+- **Polish anti-AI 去AI五项（适用于中英文改稿正文）。硬/软分层（C反AI降软）：写作时五项都要守；但门禁只对「主干」硬失败——套话禁词、scare quotes、解释性冒号、-ing 假分析从句这类真正的 AI 味硬拦；把「句长 >30 词」「装饰性破折号」降为软提示（`strict_gate.py` 响亮上报、不 fail-close），避免一个破折号就把整份交付卡死。破折号仍被检出并逐条列给作者，只是不再阻断。**
+  1. **禁装饰性破折号（🟡 软提示，不阻断）**：禁用 —/——/em-dash 充当停顿、补充或强调（如"该结果——尽管样本量小——表明…"）；改用逗号、句号或拆为两句。连字符（"dose-response"）与数值范围不受限。中英文均适用。命中只在 `strict_gate.py` 的去AI软提示 banner 列出，不判 FAIL。
   2. **禁 scare quotes**：禁用双引号包裹自造词或普通短语以暗示"新概念/反讽"；保留：术语首次定义、原始审稿人评论直接引用、已固化的术语隐喻。
   3. **禁解释性冒号**：禁用"概念: 解释"或"Concept: explanation"格式的装饰句式；合法冒号包括比例、时间、列表引导、标题、图表标签。
-  4. **英文单句 ≤30 词硬上限**：polished 片段中任何独立英文句子（以 `.!/? ` 分界）词数不得超过 30 词；超限须拆句，不得用分号逃避拆句。**禁止 -ing 分词从句作假分析**：形如 `, reflecting …` / `, ensuring …` / `, highlighting …` / `, suggesting …` 的尾置 -ing 从句禁止用于添加未经数据支撑的推断；已有明确证据锚点的 participial phrase 不受此限。`find_ai_style_markers` 中 "trailing -ing clause" 检测已覆盖以 `,\s*(thus|thereby|therefore)\s+[a-z-]+ing` 模式；追加覆盖 `, (reflecting|ensuring|highlighting|suggesting|demonstrating|indicating|revealing)\b` 模式。
+  4. **英文单句 ≤30 词（🟡 软提示，不阻断）**：polished 片段中任何独立英文句子（以 `.!/? ` 分界）词数应 ≤30 词；超限建议拆句、不要用分号逃避拆句。**句长超限只在 `strict_gate.py` 软提示 banner 上报，不 fail-close**（`sentence >30 words` 已归入 `SOFT_STYLE_MARKERS`）。**禁止 -ing 分词从句作假分析**：形如 `, reflecting …` / `, ensuring …` / `, highlighting …` / `, suggesting …` 的尾置 -ing 从句禁止用于添加未经数据支撑的推断；已有明确证据锚点的 participial phrase 不受此限。`find_ai_style_markers` 中 "trailing -ing clause" 检测已覆盖以 `,\s*(thus|thereby|therefore)\s+[a-z-]+ing` 模式；追加覆盖 `, (reflecting|ensuring|highlighting|suggesting|demonstrating|indicating|revealing)\b` 模式。
   5. **中文单句 ≤50 字、从句 ≤2 层**（如正文含中文）：任何中文句子（句号/问号/感叹号分界）字数不得超过 50 字；嵌套从句层数不超过 2 层（如"A（B（C））"为第 3 层，须拆分）。连续 3 句字数差异 <5 字时应主动变换句长。
-  - `strict_gate.py` 的 `ai_style_flags_removed` 校验应涵盖以上五类标志；若 polished 片段仍含这五类用法，视为残留禁用标志，门禁必须报告。句长规则为软警告（脚本报告超限数量），不单独阻断 strict_gate，但必须在 `notes` 字段记录。
+  - **硬/软实现**：`common.hard_ai_style_markers()` 返回会 fail-close 的主干标志（套话/scare quotes/解释性冒号/-ing 假分析/not only…but also/反问等）；`common.soft_ai_style_markers()` 返回软项（`em dash`、`sentence >30 words`，即 `SOFT_STYLE_MARKERS`）。`polish_revisions.py` 的 `polish_guard_ok` 与 `strict_gate.py` 的 polished-fragment 校验都只对 hard 子集 fail；soft 项由 `strict_gate.py` 汇总为「去AI软提示」banner 逐条列出、并写入 unit 的 `polish_soft_style_flags`，不阻断。中文句长/从句层数同为软警告，记录于 `notes`。
 - `revision_plan` should carry `locked_prefix`, `locked_suffix`, `evidence_boundary_note`, and `citation_strings` so the polishing step can preserve untouched context explicitly rather than infer it.
 - The polishing output schema should include `edit_decision`, `meaning_changed`, `scope_respected`, `ai_style_flags_removed`, and `notes`.
 - `strict_gate.py` must fail if a polished revision reports `meaning_changed=true`, `scope_respected=false`, or if reconstructed paragraph text no longer preserves the locked prefix/suffix context.
@@ -337,9 +387,11 @@ These inline markers are load-bearing and carry the same status as citation mark
 - ❌ 段落定位模糊却硬选一个段落；多候选评分相近时须落 `needs_author_confirmation`，不得激进选段。
 - ❌ 把实质性请求（新机制／新证据／新图／未匹配章节）当 `completed` 自动收口；只有保守的纯文本澄清或限制句可 auto-complete。
 - ❌ Patch 修订哈希不符仍强行套用或自动重定位（fail-closed，整批拒绝、写空、退非零，不静默部分应用）。
-- ❌ 去 AI 五项未过：装饰破折号、scare quotes、解释性冒号、英文 >30 词或挂 -ing 从句、中文 >50 字或从句 >2 层。
-- ❌ 主 agent 自评 DoD 当通过；`strict_gate.py` 前须委托独立子代理盲检，verify 未 exit 0 不得声明改稿完成。
-- ❌ 退稿信漏回某条意见，或某 comment_id 在 `manuscript_edit_plan.md` 中无 revised_excerpt 落点。
+- ❌ 去 AI 主干未过（硬）：scare quotes、解释性冒号、套话禁词、-ing 假分析从句。（装饰破折号、英文 >30 词已降为软提示：上报不阻断，但仍应改。）
+- ❌ 主 agent 自评 DoD 当通过；`strict_gate.py` 前须委托独立子代理盲检，verify 未 exit 0 不得声明改稿完成；盲检过后仍须摆逐项结论 + HALT 等用户确认才收口。
+- ❌ 把「有意驳回不改（`push_back`）」误判成「漏改」，或反过来把真漏改的意见混进 push_back 蒙混；驳回必须在回复信据理反驳，正文不动但回应不能缺。
+- ❌ 退稿信漏回某条意见，或某 `completed` comment_id 在 `manuscript_edit_plan.md` 中无 revised_excerpt 落点（`push_back`/`需作者确认` 不要求 revised_excerpt）。
+- ❌ 补新文献只验真实性（DOI/PMID）就下笔，跳过「引文↔论点」核证；或用 `--offline` 跑 citation_guard 就交付（承重句须过 `citation_claim_check.py`，guard 须 `--live`）。
 - ❌ 引文 `[n]` 与参考列表不对应、缺号或编号不连续就交付（`reference_coverage_audit.json` 须 ok=true）。
 - ❌ `--resume` 时输入指纹或脚本签名已变仍信任旧产物，而非 fail-fast 重建。
 - ❌ 改稿删/换句子时丢失某缩写的唯一首展、在首展前裸用 ABBR、新增术语不首展，或 Title 出现缩写（`abbreviation_index.json` 的 `undefined_use` / `duplicate_definition` / `title_abbreviation` 硬错须清零）。
@@ -373,6 +425,8 @@ These inline markers are load-bearing and carry the same status as citation mark
 | RV-G8 | **Commonsense sanity (🟡 soft report, non-blocking)**: the blind-review subagent also scans rewritten fragments for obvious commonsense/factual errors (absurd unit magnitudes, physiology/mechanism mistakes, internal numeric contradictions) introduced by the rewrite. Report only, never block delivery, never auto-edit content. Distinct from the citation/reference verification gates (RV-G1/RV-G2) and from reviewer-simulator's full scientific audit. | 盲检子代理 LLM 判断（复用现有 `delegate_review` 盲检机制，无新脚本）；命中只在子代理返回 `notes` 报告，软项不进 `strict_gate.py` 硬失败、不计入 `delegate_review verify` 的阻断退出码（与 `references/dod_checklist.json` 硬门禁互不冲突） |
 
 🔴 收口前置闸口：`delegate_review verify` 必须 exit 0（含 RV-R8 结构完整性），否则不得声明改稿完成。任一项 fail 均为阻断。
+
+🛑 **DoD 停·摆结论等确认（strict_gate 前的最后一道人工闸）**：盲检 `delegate_review verify` exit 0 之后、`strict_gate.py` 之前，**不得直接收口**。先把逐项结论摆给用户——每条 DoD（RV-G1~G8 / RV-R1~R12）是 pass / na / 🟡soft-report，软项（RV-G8 常识、RV-R12 拉丁斜体、去AI软提示、句长）列出但标明不阻断；同时给「意见 × 是否回复 × 是否改稿 × 结局（completed/push_back/需作者确认）」对照表。**打印后 HALT，等用户明确说「可以收口」再跑 `strict_gate.py` 并交付**。用户没确认就继续 = 违规。这与开场监工卡、清单核对是三道不同的人工闸：开场提醒 → 拆完核对 → 收口前摆结论。
 
 ### Revise-Sci 特有项（id: RV-R1 ~ RV-R12）
 

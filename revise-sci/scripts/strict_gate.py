@@ -4,7 +4,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from common import ALLOWED_PROVIDER_FAMILIES, blocked_placeholder_found, find_ai_style_markers, normalize_ws, read_docx_paragraphs, read_json
+from common import ALLOWED_PROVIDER_FAMILIES, blocked_placeholder_found, hard_ai_style_markers, soft_ai_style_markers, normalize_ws, read_docx_paragraphs, read_json
 
 
 REQUIRED_RESPONSE_HEADINGS = [
@@ -28,6 +28,42 @@ def missing_atomic_fields(unit: dict) -> list[str]:
 
 def section_label(unit: dict) -> str:
     return "si section" if unit.get("target_document") == "si" else "manuscript section"
+
+
+def _load_shared_claim_check():
+    """Import the shared citation_claim_check module (skills/_shared/). Returns None if unavailable."""
+    import importlib.util
+    shared = Path(__file__).resolve().parents[2] / "_shared" / "citation_claim_check.py"
+    if not shared.is_file():
+        return None
+    spec = importlib.util.spec_from_file_location("_shared_citation_claim_check", shared)
+    if spec is None or spec.loader is None:
+        return None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _citation_claim_failures(project_root: Path) -> list[str]:
+    """B④: 有新引文献自动收口时，必须存在 claim_evidence.json 且承重句核证通过。
+    复用共享 citation_claim_check._row_blockers，不重复实现判定逻辑。"""
+    ev_path = project_root / "claim_evidence.json"
+    if not ev_path.is_file():
+        return [
+            "completed new-citation comments require claim_evidence.json "
+            "(new reference ↔ supported response claim); build it and pass citation_claim_check.py"
+        ]
+    module = _load_shared_claim_check()
+    if module is None:
+        return []  # 共享工具缺失时不倒卡技能，交由人工核（与 hook 降级同理）
+    try:
+        rows = module._load_evidence(ev_path)
+    except Exception as exc:
+        return [f"claim_evidence.json is unreadable: {exc}"]
+    blockers: list[str] = []
+    for row in rows:
+        blockers.extend(module._row_blockers(row))
+    return [f"citation_claim_check: {b}" for b in blockers]
 
 
 def completed_citation_units(units: list[dict]) -> list[dict]:
@@ -168,6 +204,7 @@ def main() -> int:
     state = read_json(project_root / "project_state.json", {})
     units = [read_json(path, {}) for path in sorted((project_root / "units").glob("*.json"))]
     failures: list[str] = []
+    soft_style_notes: list[str] = []  # C反AI降软：句长/破折号等只上报、不阻断
 
     response_md = project_root / "response_to_reviewers.md"
     response_text = response_md.read_text(encoding="utf-8") if response_md.exists() else ""
@@ -246,6 +283,19 @@ def main() -> int:
                 failures.append("synthesis_matrix_audit reports missing_claim gaps")
             if synthesis_audit.get("missing_key_fields", 0) > 0:
                 failures.append("synthesis_matrix_audit reports missing_key_fields gaps")
+        # B②：新引文献必须过真实性双验且不许 --offline 跳过交付。
+        guard_report = read_json(project_root / "paper_search_guard_report.json", {})
+        guard_summary = guard_report.get("summary", {}) if isinstance(guard_report, dict) else {}
+        if not guard_summary.get("online_check"):
+            failures.append(
+                "completed new-citation comments but citation_guard ran offline "
+                "(paper_search_guard_report.json summary.online_check!=true); "
+                "rerun citation_guard.py --live before delivery（不许 --offline 交付）"
+            )
+        if not guard_summary.get("all_rows_guard_verified"):
+            failures.append("completed new-citation comments but citation_guard reports unverified rows (all_rows_guard_verified!=true)")
+        # B④：新引文献 ↔ 它支撑的回复论点，须过 citation_claim_check（承重句 contradict/未确认硬拦）。
+        failures.extend(_citation_claim_failures(project_root))
 
     for unit in units:
         comment_id = unit.get("comment_id", "<unknown>")
@@ -261,7 +311,7 @@ def main() -> int:
         ):
             if blocked_placeholder_found(unit.get(key)):
                 failures.append(f"{comment_id}: placeholder in {key}")
-        if unit.get("severity") == "major" and unit.get("status") not in {"completed", "needs_author_confirmation"}:
+        if unit.get("severity") == "major" and unit.get("status") not in {"completed", "needs_author_confirmation", "push_back"}:
             failures.append(f"{comment_id}: invalid major status")
         if not unit.get("modification_actions"):
             failures.append(f"{comment_id}: missing modification_actions")
@@ -281,8 +331,11 @@ def main() -> int:
             polished_fragment = normalize_ws(str(revision_plan.get("polished_fragment") or revision_plan.get("raw_fragment") or ""))
             if not polished_fragment:
                 failures.append(f"{comment_id}: polished fragment is missing")
-            elif find_ai_style_markers(polished_fragment):
+            elif hard_ai_style_markers(polished_fragment):
                 failures.append(f"{comment_id}: polished fragment still contains banned AI-style markers")
+            soft_here = soft_ai_style_markers(polished_fragment)
+            if soft_here:
+                soft_style_notes.append(f"{comment_id}: {', '.join(soft_here)}")
             if unit.get("polish_guard_ok") is not True:
                 failures.append(f"{comment_id}: polish_guard_ok is false")
             if unit.get("polish_scope_respected") is not True:
@@ -452,6 +505,13 @@ def main() -> int:
         if not_provided:
             print(f"   · {not_provided} 处标记为「Not provided」(非默认图/表留白,需你补内容)")
         print("   这些不阻断门禁,但直接投稿前请逐一核对。")
+        print("=" * 60)
+
+    if soft_style_notes:
+        print("=" * 60)
+        print("🟡 去AI软提示(句长>30词/装饰破折号——只提示、不阻断,建议回片段修订):")
+        for note in soft_style_notes:
+            print(f"   · {note}")
         print("=" * 60)
 
     if failures:

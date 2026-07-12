@@ -226,6 +226,22 @@ def find_ai_style_markers(text: str) -> list[str]:
     return markers
 
 
+# C反AI降软：句长/破折号这类形式项从"硬门禁"降为"软提示"。这些标志仍由
+# find_ai_style_markers 检出并向用户响亮上报，但不再阻断交付（fail-close）；
+# 真正阻断的是套话禁词、scare quotes、解释性冒号、-ing 假分析等"主干" AI 痕迹。
+SOFT_STYLE_MARKERS: frozenset[str] = frozenset({"em dash", "sentence >30 words"})
+
+
+def hard_ai_style_markers(text: str) -> list[str]:
+    """去 AI 硬门禁子集：剔除 SOFT_STYLE_MARKERS，只留会阻断交付的核心 AI 痕迹。"""
+    return [m for m in find_ai_style_markers(text) if m not in SOFT_STYLE_MARKERS]
+
+
+def soft_ai_style_markers(text: str) -> list[str]:
+    """去 AI 软提示子集：句长/破折号等只上报、不阻断的形式项。"""
+    return [m for m in find_ai_style_markers(text) if m in SOFT_STYLE_MARKERS]
+
+
 def numeric_tokens(text: str) -> set[str]:
     """A: extract the set of numeric tokens (ints, decimals, %, p-values, CI, n=N)."""
     normalized = normalize_ws(text)

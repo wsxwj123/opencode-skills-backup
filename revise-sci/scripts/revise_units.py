@@ -810,6 +810,19 @@ def revise_paragraph(
     return plan
 
 
+# A②：「驳回/不改主稿」是一等合法结局。AI 在 A① triage 前置阶段把该条策略写入
+# 单元的 revision_strategy 字段（照做/部分让/驳回/补数据），值命中下列集合即判 push_back：
+# 正文不动、在回复信里据理反驳，coverage 不得判成「漏改」。
+PUSH_BACK_STRATEGIES = frozenset({
+    "push_back", "pushback", "push back", "驳回", "驳回不改", "驳回不改主稿",
+    "reject", "rebut", "decline", "不采纳", "不改", "有意不改",
+})
+
+
+def is_push_back_strategy(unit: dict) -> bool:
+    return normalize_ws(str(unit.get("revision_strategy", ""))).lower() in {s.lower() for s in PUSH_BACK_STRATEGIES}
+
+
 def response_blocks(unit: dict, status: str, needs_reason: str, intent: str) -> tuple[str, str]:
     response_seed_zh = normalize_ws(unit.get("response_seed_zh", ""))
     response_seed_en = normalize_ws(unit.get("response_seed_en", ""))
@@ -829,6 +842,11 @@ def response_blocks(unit: dict, status: str, needs_reason: str, intent: str) -> 
         else:
             generated_zh = "感谢审稿人的宝贵意见。我们已依据该意见修订相关表述，并确保回复内容与正文改动保持一致。"
             generated_en = "We thank the reviewer for this valuable comment. We have revised the relevant text accordingly and aligned the response with the manuscript changes."
+    elif status == "push_back":
+        rationale_zh = normalize_ws(unit.get("push_back_rationale_zh", "")) or "（请作者在此据理说明为何该意见不宜采纳）"
+        rationale_en = normalize_ws(unit.get("push_back_rationale_en", "")) or "(author to state here why this comment should not be adopted)"
+        generated_zh = f"感谢审稿人的意见。经审慎评估，我们认为此处不宜按该意见修改正文，正文保持原状。理由：{rationale_zh}"
+        generated_en = f"We thank the reviewer for this comment. After careful consideration, we respectfully retain the original text without the requested change. Rationale: {rationale_en}"
     else:
         reason = needs_reason or "当前材料仍需作者确认。"
         generated_zh = f"感谢审稿人的重要建议。根据当前用户提供材料，我们已完成定位、问题拆解和可执行修订草案，但该条仍需作者确认：{reason}"
@@ -1201,6 +1219,10 @@ def main() -> int:
             bool(anchored_section and anchored_paragraph),
             unresolved_structured_hint=unresolved_structured_hint,
         )
+        # A②：revision_strategy=驳回 → 一等结局 push_back。正文不动、回复信据理反驳。
+        if is_push_back_strategy(unit):
+            status = "push_back"
+            reasons = []
         response_zh, response_en = response_blocks(unit, status, "；".join(reasons), intent)
         revision_plan = revise_paragraph(original_excerpt, query_text, intent, citation_payload) if status == "completed" else {
             "scope": "none",
@@ -1222,9 +1244,15 @@ def main() -> int:
             revised_excerpt_en = normalize_ws(unit.get("revised_excerpt_seed_en", ""))
         if status != "completed" and is_meaningful_text(unit.get("revised_excerpt_seed_zh", "")):
             revised_excerpt_zh = normalize_ws(unit.get("revised_excerpt_seed_zh", ""))
+        if status == "push_back":
+            revised_excerpt_en = "N/A — manuscript unchanged (comment respectfully declined; rebuttal in response letter)."
+            revised_excerpt_zh = "不适用：正文保持不变（经评估驳回该意见，理由见回复信）。"
         notes_core = ["已逐条建立评论、回复、正文位置和证据来源的对应关系。"]
         notes_support = ["已保留 Evidence Attachments 三模块，并对缺失材料明确标注。"]
-        if status == "needs_author_confirmation":
+        if status == "push_back":
+            notes_core = ["经评估决定不采纳该意见、正文保持不变，已在回复信中据理说明理由。"]
+            notes_support = ["该条为有意不改（驳回），非遗漏；正文无改动。"]
+        elif status == "needs_author_confirmation":
             notes_core = ["该条涉及新增证据需求，当前只能形成边界清晰的修订草案。"]
             notes_support = ["已明确记录需作者确认原因，并限制外部文献 provider 仅为 paper-search。"]
         elif intent == "clarify":
@@ -1270,6 +1298,12 @@ def main() -> int:
                     }
                 )
 
+        if status == "completed":
+            action_label, action_reason = "修改", "根据审稿意见完成保守的文本性修订，并仅修改命中的句子或新增句。"
+        elif status == "push_back":
+            action_label, action_reason = "不改（驳回）", "经评估认为该意见不宜采纳，正文保持不变，已在回复信中据理反驳。"
+        else:
+            action_label, action_reason = "需确认", "当前材料不足以直接完成可投稿改写。"
         unit.update(
             {
                 "reviewer_comment_zh_literal": literal_translate_comment(unit["reviewer_comment_en"]),
@@ -1282,10 +1316,7 @@ def main() -> int:
                 "revised_excerpt_en_raw": revised_excerpt_en,
                 "revised_excerpt_zh": revised_excerpt_zh,
                 "modification_actions": [
-                    {
-                        "action": "修改" if status == "completed" else "需确认",
-                        "reason": "根据审稿意见完成保守的文本性修订，并仅修改命中的句子或新增句。" if status == "completed" else "当前材料不足以直接完成可投稿改写。",
-                    }
+                    {"action": action_label, "reason": action_reason}
                 ],
                 "notes_core_zh": notes_core,
                 "notes_support_zh": notes_support,
@@ -1349,6 +1380,8 @@ def main() -> int:
     state["counts"]["comment_units"] = len(processed_units)
     state["counts"]["completed"] = sum(1 for unit in processed_units if unit["status"] == "completed")
     state["counts"]["needs_author_confirmation"] = sum(1 for unit in processed_units if unit["status"] == "needs_author_confirmation")
+    # A②：push_back 是已决结局（有意不改），不阻断交付。
+    state["counts"]["push_back"] = sum(1 for unit in processed_units if unit["status"] == "push_back")
     state["delivery_status"] = "ready_to_submit" if state["counts"]["needs_author_confirmation"] == 0 else "author_confirmation_required"
     write_json(project_root / "project_state.json", state)
     snapshot_state(project_root, "post-revise")
