@@ -17,6 +17,19 @@ license: Proprietary
 
 ---
 
+## 🔁 每次进入/续写：先接续再动手（Mandatory）
+
+**每次进入本技能、或续写一个已存在的项目，第一步先跑接续报告，把状态贴给用户并握手确认，再开始写。**
+
+1. **跑 RESUME_CMD**：运行 Phase 0 `env_preflight.py` 末尾打印的那条 `RESUME_CMD`（已含解析好的绝对路径）——即 `python "<.../\_shared/session_journal.py>" resume --root <project_root>`。它汇总上次进度、last_section、outline、历次用户决定（`decisions_log.md`），产出一份接续报告。
+2. **贴报告 + 握手**：把接续报告原样贴给用户，说明"我准备从 __ 接着写，对吗？"，**等用户确认后再动手**；用户纠正口径以用户当前会话为准（磁盘旧文件不得反驳用户）。
+3. **用户临时插要求 → 立即 log**：写作过程中用户提出任何临时要求/口径变更，**立即**用 `LOG_CMD` 记进 `decisions_log.md`——即 `python "<.../\_shared/session_journal.py>" log --root <project_root> --note "<用户原话>"`，供后续会话必读遵守。
+4. 首次 `/init` 新项目无历史时 resume 会提示为空，直接进入 Phase 0 即可。
+
+（`RESUME_CMD` / `LOG_CMD` / `CITATION_CHECK_CMD` / `SIGNOFF_CMD` 均由 Phase 0 `env_preflight.py` 打印绝对路径，避免相对路径的 cwd 依赖。）
+
+---
+
 ## 🔴 P0 红线（违反 = 论文报废，优先级高于一切，每次写作前默读一遍）
 
 1. **不编造文献**：每条文献必须来自 MCP 检索原始结果，带 `source_provider`+`source_id`；未过 `citation_guard` 双向核验的，禁止正文 `[n]` 引用，也不进参考列表。
@@ -24,7 +37,7 @@ license: Proprietary
 3. **不编数据**：缺核心定量（P 值/关键 n/效应量）→ 立即停写、输出数据收集表；严禁占位符（"XX%"）填充。
 4. **不改派生稿**：修改/润色只动 `manuscripts/*.md` 原子化源文件；严禁手改 `Full_Manuscript.md` / `*.docx`（`/merge` 会覆盖，工作丢失）。
 5. **先确认再落盘**：每节写完先展示（字数/引用/figure/缩略词/占位数），用户 OK 才写文件；禁止连续自动写多节。
-6. **去 AI 硬线**：单句 ≤30 词、无修辞/生僻词/造词/禁词、数据驱动、正文无列点（详见 `references/anti-ai-protocol.md`）。**语态按目标刊切换（软提示，不阻断）**：Nature/Science/Cell 官方 guideline 推荐主动语态（"We show that…"），不设被动下限；传统刊参考被动 50–70%。`style_checker.py --journal <刊名>` 只把语态偏差写进 warnings，不计入 score、不卡门禁。
+6. **去 AI 硬线（主干硬、风格软）**：**硬禁（一票否决）**——AI 套话/禁词、生僻词、造词、正文列点、编造修辞。**软提示（不阻断，仅提醒）**——句长上限（建议单句 ≤30 词、避免连续等长句，但不硬卡）、装饰性破折号（em-dash，建议改标点或重构，不再一票否决）、被动比例。数据驱动写作。详见 `references/anti-ai-protocol.md`。**语态按目标刊切换（软提示，不阻断）**：Nature/Science/Cell 官方 guideline 推荐主动语态（"We show that…"），不设被动下限；传统刊参考被动 50–70%。`style_checker.py --journal <刊名>` 把语态偏差、破折号、句长写进 warnings，不计入 score、不卡门禁；只有 AI 套话/禁词/生僻词/造词/列点计入 score。
 7. **引用格式**：正文一律 `[n]`（分节矩阵重排后的全局索引），每节末附 Vancouver 列表；严禁 `[Author,2023]`/`(1)`。
 8. **期刊上限**：storyline 必须在 `target_journal` 字数上限内编排，严禁先写超 30% 再砍。
 9. **占位清零**：`CITE_PENDING`/`DATA_PENDING`/`REF_DROPPED` 必须在 `/merge` 前清零（Phase 10 扫描门禁）。
@@ -132,7 +145,7 @@ license: Proprietary
 ### 11. 强制交互结构 (Mandatory Response Architecture)
 每次回复（除极简确认外）必须含 3 部分：
 - **Part 1 执行内容**（用户可见）：对话 / 执行 / 写入结果。**若用户给了数据**：必加 `🧪 实验逻辑批判`，逐项核查 ① Design Check（对照组合理？如有无空白载体对照）② Reliability（n 够？统计明确？）③ Consistency（Fig 间结论矛盾？）④ Verdict（明确 "Reliable" 或 "Flaw Detected"）。
-- **Part 2 状态仪表盘**（默认内部维护，仅用户要审计日志/加载明细时输出）：Word Count（节/总，Key Section >500）、Data Logic（Pass/Flaw）、SI Loop（Pending 数）、Snapshot（Created/Skipped）+ State Persistence Log（仅列本轮更新的状态文件）。
+- **Part 2 状态仪表盘**（默认内部维护，仅用户要审计日志/加载明细时输出）：Word Count（节/总，Key Section 参考 ~500 词，仅提示不硬卡）、Data Logic（Pass/Flaw）、SI Loop（Pending 数）、Snapshot（Created/Skipped）+ State Persistence Log（仅列本轮更新的状态文件）。
 - **Part 3 深度交互**（用户可见）：反向拷问（<100 字犀利挑战）+ 你可能想知道（预测性建议/背景知识）。
 
 ---
@@ -344,6 +357,13 @@ python scripts/state_manager.py add-abbreviation <one.json>
 0. **Scoped Load (Mandatory)**: 先执行章节局部加载命令，确保只读当前章节。
 0a. **🔴 开写前置闸门 (Mandatory，脚本硬拦截)**：开写任何 section 前必须先跑 `python3 scripts/prewrite_gate.py --section [section_id] --root .`，exit≠0 禁止开写。它统一硬检查：上一节完成（`writing_progress.json` 该节最新 status=done）、故事线就位（`storyline.json` 含本节）、素材就位（subprocess 调 `figure_analysis_gate.py`）、上一节占位符清零（无 `CITE_PENDING`/`DATA_PENDING`/`【待`）、缩略词一致（subprocess 调 `abbreviation_consistency.py`）；上一节盲检结果（`.review_pass/<上一节>.json`）缺失即 prewrite_gate 硬拦 exit 1，禁止开写；必须先跑 delegate_review verify --section <上一节> 落盘通过标记。过此闸门后再走下面 0b。
 0b. **🔴 figure_analysis 加载门禁 (Mandatory，脚本兜底)**：跑 `python scripts/figure_analysis_gate.py --section [section_id] --root .`。该 gate 比对 `figures_database.json` 中该节涉及的 figure，确认每张 `figure_analysis/figure_{N}.md` 存在、非空、无 `❓待确认` 残留；任一未就绪 → 脚本 exit 1，**禁止开写**，先回 `/figure` 补齐再回来。Introduction/Methods 等无 figure 的小节脚本自然放行（exit 0）。过 gate 后**必须显式 `Read` 本节对应的 `figure_analysis/figure_{N}.md`**（write-cycle 不自动加载，见 §13 白名单第 7 项），作为 Results/Discussion 的事实依据。
+0c. **🟢 引文核证脚手架 (Citation-Claim Matrix，写对的脚手架，非事后墙)**：开写本节前，先把"本节承重论点 ↔ 拟引文献"建成矩阵，用**真 abstract** 判每条引用是否真支撑它挂的论点，再下笔——避免写完才发现引文不支持、返工重写。
+   - **哪些算承重论点（is_load_bearing=true）**：支撑本节结论方向的机制句、因果句、定量对比结论句。段首背景句、常识铺垫句算背景（is_load_bearing=false，批量核对即可，不逐条阻断）。
+   - **证据只用检索原样落盘的真摘要**：从 `literature_index.json` 里取该 ref 当初 MCP **检索原样落盘的 `abstract`**（不看可编的 key_finding、不脑补），逐条判 `verdict ∈ support/weak/contradict/unknown` 并摘一句 `evidence_quote`。取不到摘要的承重引用先走 §12 摘要补全或换引文，别硬写。
+   - **落盘 `claim_evidence.json`**（list，每条）：`{section, claim_sentence, is_load_bearing, ref_id, retrieved_abstract, verdict, evidence_quote, user_confirmed}`。
+   - **跑核证**：运行 Phase 0 `env_preflight.py` 打印的 `CITATION_CHECK_CMD`——即 `python "<.../\_shared/citation_claim_check.py>" --root <project_root>`。它渲染"观点↔引文↔是否真支持"矩阵表；**承重句 verdict=contradict/unknown、或缺摘要、或未逐条人工确认 → exit 2 fail-closed 硬拦**，据表改引文/改论点/补确认后重跑。
+   - **承重句逐条确认 (AskUserQuestion)**：每条承重引用把"论点句 + 判定 + 摘要证据句"用 AskUserQuestion 逐条给用户确认（确认后把该行 `user_confirmed=true`）；背景句在矩阵表里**批量**呈现让用户扫一眼，不逐条阻断。
+   - **定位**：这是"帮你写对的脚手架"——先核对引文再落笔，不是卡死后续的墙；核证过了才进 step 1 起草。（承重句 contradict 硬拦是防止照着不支持的引文下笔，属科学正确性底线。）
 1. **Pre-Write Check**: 检查数据完整性。
 2. **Drafting (Main)**: 撰写包含 Main Figures 和 References 的初稿。
    - **Citation Format**: 严格使用 `[n]`。
@@ -367,6 +387,8 @@ python scripts/state_manager.py add-abbreviation <one.json>
 
    🔴 **[P4·盲检降级告警]**：若环境派不出真正独立的子代理，**绝不能同一 AI 自问自答冒充盲检**（自证）。告诉用户「本环境盲检不可靠，请你亲自复核：__（列出该盲检本应查的关键点）__」，交回用户。
 
+   🟢 **[①DoD 停·盲检通过后必须展示+握手]**：`delegate_review verify` exit 0（盲检通过）**不等于自动往下写**。通过后 AI 必须把盲检的**逐项结论**（每条 DoD 项 pass/warn + 子代理给的证据要点）摆给用户看，并**HALT 等用户确认**"这节可以定稿、继续下一节吗？"；用户明确同意后才开始写下一节。这是**展示+可继续**的握手停顿，不是加硬墙——脚本层前置闸口（下条）照旧。
+
    🔴 **进入下一节前置闸口**：上一节 `delegate_review verify` 必须 exit 0（含 G13 结构完整性），否则不得开始下一节撰写。写完即检，不过不进。
    🔴 **修复 3 次仍不过 → 回滚兜底**：同一节据盲检证据修复重跑 3 次仍 fail，停止盲目重写，提示用户回滚到上一检查点（git 可用：`git checkout <sha> -- <文件>`；否则 `/rollback` 到上一 snapshot）后重写。
 
@@ -377,8 +399,8 @@ python scripts/state_manager.py add-abbreviation <one.json>
    - [ ] **②citation_guard**：本节新增引用已过 `citation_guard.py --offline` 核验，`ok=true`
    - [ ] **③主线对齐**：本节内容符合 `storyline.json` 对应 section 的核心论点，无跑题或自相矛盾
    - [ ] **④占位清零**：`grep -n "CITE_PENDING\|DATA_PENDING\|REF_DROPPED" <本节文件>` 输出为空
-   - [ ] **⑤去 AI**：`style_checker.py --file <本节文件> --threshold 70` 通过（重点：无 trailing_ing_clause / forbidden_ai_phrases / decorative_em_dash / scare_quotes；见 `references/anti-ai-protocol.md`）
-   - [ ] **⑥字数达标**：本节字数在 storyline 预估区间内，且全文累计未超期刊上限
+   - [ ] **⑤去 AI**：`style_checker.py --file <本节文件> --threshold 70` 通过（硬项：无 trailing_ing_clause / forbidden_ai_phrases / scare_quotes / 列点；**破折号 em-dash、句长、被动比已降为 warnings 软提示，不计入 score、不阻断**——见提醒即酌情改，不强改；见 `references/anti-ai-protocol.md`）
+   - [ ] **⑥字数（软提示，不阻断落盘）**：本节字数**建议**落在 storyline 预估区间内；字数下限（凑字数地板）仅作提醒不硬卡。**唯一硬项是上限**：全文累计不得超期刊字数上限（P0#8）。
 
    **gsw 特有项**（Results/Discussion 节必检）：
    - [ ] **⑦figure data_status 非 pending**：本节引用的所有 figure 在 `figures_database.json` 中 `data_status != "pending"`（否则回到 `/figure` 补核心定量）
@@ -402,9 +424,17 @@ python scripts/state_manager.py add-abbreviation <one.json>
 **融合写作策略**：
 1. **数据呈现 (Results)**：描述Figure结果 + 统计数据。
 2. **即时讨论 (Discussion)**：机制解释 + 文献对比 + 意义阐述。
-3. **深度控制**：Key Section > 500词，Supporting Section ~200词。
+3. **深度控制（软提示，非硬门）**：Key Section 建议 ~500 词展开、Supporting Section ~200 词；字数只作深度参考，不足不阻断落盘（凑字数地板已降软），关键看论点是否讲透。
 
-### Phase 8.6: 目标期刊风格深度学习 (`/journal-study`)
+### Phase 8.6: 目标期刊风格深度学习 (`/journal-study`) —— 🚫 已停用（DEPRECATED，不在写作流程中执行）
+
+> **🚫 本 Phase 已从写作流程移除，不要在写作中/写作后触发 `/journal-study`。** 期刊**语言风格适配**（被动比例、句式、摘要调性、图序惯例）**改到全文完成后的最后一步、用 `polish-sci` 技能做**——语言风格是润色期的事，不该在写作阶段前置学习、更不该卡在 abstract 之前。
+> 
+> **结构目标不受影响、仍然保留**：字数上限、主图张数、Abstract 结构/词数、Methods 形式（Online vs STAR）等**结构约束**由 **Phase 2 `/storyline` 的 `target_journal` 早已捕获并写入 `project_config.word_limits`**，全流程沿用，不依赖本 Phase。停用的只是"写完再回头学期刊语言风格"这一步，不动 Phase 2 的早期结构约束。
+> 
+> 因此 Phase 8 写完所有 Results/Discussion 后**直接进 Phase 9 `/abstract`**；abstract/正文的目标刊语言调性对齐留到末尾 `polish-sci`。下方原步骤仅作归档参考，**不执行**。
+
+<details><summary>（已归档，原 /journal-study 步骤，不执行）</summary>
 
 **定位**：所有 Results/Discussion 小节写完（Phase 8）之后、`/abstract`（Phase 9）之前触发；若项目已生成主图集终稿则紧接其后。深度学习目标期刊近 5 年高分论文/综述的取材、摘要写法、行文风格、图表规范，产出对标学习报告，**指导 Phase 9 abstract 与 Phase 10 正文润色对齐目标刊调性**。
 
@@ -453,8 +483,10 @@ python scripts/state_manager.py add-abbreviation <one.json>
 - [ ] **JS6 防抄袭**：报告只含风格/结构特征，无目标文原句或具体科学论断/数据
 - [ ] **JS7 占位清零**：无 `{{}}`/`TBD`/空必填字段
 
+</details>
+
 ### Phase 9: 摘要撰写 (`/abstract`)
-**时机**：全部正文章节完成、`/journal-study`（Phase 8.6）产出对标报告后、质量控制前。Abstract 是全文的压缩精华，必须最后写。**写前 `Read journal_study/target_journal_study.json`，按其 `abstract_structure_features` 与 `maps_to=abstract` 的 actionable_recommendations 对齐目标刊摘要调性。**
+**时机**：全部正文章节完成后、质量控制前。Abstract 是全文的压缩精华，必须最后写。Abstract 的**结构约束**（结构化与否、词数上限）按 Phase 2 `target_journal` 已捕获的规则来（见 Phase 2 表）；**期刊语言调性对齐留到末尾 `polish-sci`**，本阶段不再依赖 `/journal-study`（已停用）。
 **结构**（严格遵循目标期刊 word limit，默认 ≤250 词）：
 1. **Background**（1-2句）：研究背景与未解决问题
 2. **Methods**（1-2句）：核心方法/策略概述
@@ -480,7 +512,7 @@ python scripts/state_manager.py add-abbreviation <one.json>
 > **Windows**：步骤 5 的 `grep ... 2>/dev/null` 与步骤 6 的 `[ ... ] || grep -q ...` 是 POSIX shell 写法，PowerShell/cmd 不可用。AI 在 Windows 上改用 `Select-String` 或直接用 Python 等价逻辑，完成同样的占位符扫描与 AUTO-GENERATED banner 校验。
 7. `python scripts/abbreviation_consistency.py --root .` — 缩略词一致性扫描（脚本化，不再纯靠 AI 自评）。检测：① **重复定义** 同一缩写在多个 manuscript 文件首次定义；② **未定义就用** 直接用 ABBR 但 `abbreviations.json` 缺、且不在 `UNIVERSAL_ABBREVIATIONS` 白名单；③ **Title 出现缩写**（Title 严禁缩写）。**阻断**：脚本 exit 非 0 → 必修后重跑。通用缩写（DNA/RNA/PCR 等）自动跳过。脚本未覆盖的"已定义但全文未使用"等冗余项可人工补查。
 
-**润色对齐目标刊**：本阶段去 AI/校对的同时，`Read journal_study/target_journal_study.json`，按 `maps_to=正文`/`maps_to=图表` 的 actionable_recommendations 调整正文行文风格与图表呈现，使其贴合目标刊调性（不改科学内容，仅调风格/结构）。
+**期刊语言调性对齐（改到末尾 polish-sci）**：本阶段只做 `/check` 的去 AI/校对；**期刊语言风格深度对齐不在此做**，留到全文定稿后用 `polish-sci` 技能统一处理（不改科学内容，仅调语言风格/结构呈现）。`/journal-study` 已停用，不再产 `journal_study/target_journal_study.json`。
 
 **全部通过 → 进 Phase 10.5 合规门禁**；任一阻断 → 修复后重跑该步及之后步骤。
 
@@ -617,7 +649,7 @@ python scripts/state_manager.py add-abbreviation <one.json>
 | `/figure` | Figure 识图与讨论 | 逐张读图→读图清单确认→存 `figure_analysis/figure_{N}.md` 作正文依据；只读符号化信息，读不到问用户（见 Phase 6） |
 | `/rename-figure` | 重整 figure 编号 | 全局改名 + 同步 figures_database/storyline/正文/识图文件，支持 --dry-run（脚本 rename-figure） |
 | `/write` | 撰写章节 | **章节局部读取 + 自我修正 + 智能快照** |
-| `/journal-study` | 目标期刊风格深度学习 | 正文写完、abstract 前：学近 5 年代表作风格→出 `journal_study/target_journal_study.json`，指导 abstract/正文/图表对齐目标刊（见 Phase 8.6） |
+| `/journal-study` | 🚫 已停用（DEPRECATED） | 期刊语言风格适配改到末尾 `polish-sci`；结构约束由 Phase 2 `target_journal` 早已捕获（见 Phase 8.6 停用说明） |
 | `/abstract` | 撰写摘要 | 全文完成后最后写，≤250词，含定量结果 |
 | `/compliance-check` | 投稿前合规门禁 | /check 通过后强制执行：伦理批号+试验注册号+报告规范+统计完整性+ICMJE署名+reviewer COI+Keywords，缺一阻断（见 Phase 10.5） |
 | `/submission-pack` | 投稿包准备 | Cover letter+DAS+CRediT+COI+Funding+Highlights+Keywords+eTOC+Graphical Abstract+Source Data+Acks+checklist（见 Phase 11） |
@@ -655,7 +687,7 @@ python scripts/state_manager.py add-abbreviation <one.json>
 - ❌ 主 agent 自评 DoD 当通过：节末检查必须委托独立子代理盲检，上一节 verify 未 exit 0 就开写下一节。
 - ❌ 带 CITE_PENDING / DATA_PENDING / REF_DROPPED 占位跑 /merge，跳过 Phase 10 占位扫描门禁。
 - ❌ 先写超期刊上限 30% 再砍：storyline 必须在 target_journal 字数上限内编排。
-- ❌ Discussion 漏写 Limitations 段，或正文用列点符号、单句超 30 词、带破折号修辞。
+- ❌ Discussion 漏写 Limitations 段，或正文用列点符号（硬禁）。（单句超 30 词、破折号修辞已降为软提示，见提醒酌情改，不再列入硬性反例。）
 - ❌ 投稿包残留 `{{VAR}}` 占位、伪造 reviewer 邮箱、瞒报 COI，或 Source Data 数值与图不对应。
 
 ---

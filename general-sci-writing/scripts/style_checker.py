@@ -298,13 +298,14 @@ def check_file(filepath: str, journal: str = "") -> dict[str, Any]:
             "detail": f"{bullet_count} bullet/numbered list lines detected in prose body.",
         })
 
-    # ── 7. Decorative em-dash (禁装饰性破折号) ───────────────────────────────
+    # ── 7. Decorative em-dash (软提示, 不阻断) ───────────────────────────────
+    # 破折号从硬门降为软提示：进 warnings、不计入 score、不影响 gate 通过与否。
+    # 装饰性破折号仍是 AI 味信号，值得提醒，但不再一票否决。
     em_dash_count = len(EM_DASH_RE.findall(prose))
     if em_dash_count >= 1:
-        result["issues"].append({
+        result["warnings"].append({
             "type": "decorative_em_dash",
-            "severity": "medium",
-            "detail": f"{em_dash_count} em-dash(es) (—) detected. Replace with comma, period, or restructure sentence.",
+            "detail": f"{em_dash_count} em-dash(es) (—) detected. Consider comma, period, or restructure — soft hint, not a blocker.",
         })
 
     # ── 8. Scare quotes (禁挂引号暗示新概念) ──────────────────────────────────
@@ -401,7 +402,7 @@ def main() -> int:
     Path(args.report).write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps({"ok": all_pass, "avg_score": avg_score, "total_issues": total_issues, "files_checked": len(results)}))
     if all_pass:
-        print("STYLE_CHECK: PASS 仅覆盖形式层(句长方差/被动比软提示/禁词/em-dash/scare quotes/列点)，"
+        print("STYLE_CHECK: PASS 仅覆盖形式层(句长方差/被动比软提示/禁词/em-dash 软提示/scare quotes/列点)，"
               "科学创新度、论证是否成立、这稿配不配目标刊均未自动核验，须作者与通讯作者自行判断。",
               file=sys.stderr)
     return 0 if all_pass else 1

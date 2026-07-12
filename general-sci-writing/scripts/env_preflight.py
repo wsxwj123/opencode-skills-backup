@@ -117,6 +117,14 @@ def _install_gate_hook() -> None:
         signoff = installer.parent / "structure_signoff_gate.py"
         if signoff.is_file():
             print(f'SIGNOFF_CMD: python "{signoff}" confirm --root <project_root> --note "<用户确认原话>"')
+        # 接续 + 引文核证命令（绝对路径，免去 SKILL.md 里相对路径的 cwd 依赖）。
+        journal = installer.parent / "session_journal.py"
+        if journal.is_file():
+            print(f'RESUME_CMD: python "{journal}" resume --root <project_root>')
+            print(f'LOG_CMD: python "{journal}" log --root <project_root> --note "<用户临时要求原话>"')
+        citation_check = installer.parent / "citation_claim_check.py"
+        if citation_check.is_file():
+            print(f'CITATION_CHECK_CMD: python "{citation_check}" --root <project_root>')
     except Exception:
         pass
 

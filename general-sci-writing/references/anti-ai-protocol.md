@@ -58,11 +58,11 @@
 
 严禁拼接新词或自造缩略。所有词、所有缩写必须能在权威词典 / 领域教科书 / 已发表文献中找到原型。首次出现的缩写必须给全称（如 "extracellular vesicles (EVs)"）。AI 凭语感造的新组合词（"transformomics"、"diseasability" 之类）一律删。
 
-## 🔴 禁长难句 (No Long/Complex Sentences)
+## 🟡 慎用长难句 (Prefer Short Sentences — 软提示，不阻断)
 
-- **硬上限：单句 ≤ 30 词**（含从句）。超过即拆。
-- **从句深度 ≤ 2 层**，禁止"主句套定语从句套状语从句"三层嵌套。
-- 一句话只承担一个核心论点，复合论点拆成两句。
+- **软上限：建议单句 ≤ 30 词**（含从句）。超过时优先拆句，但不硬卡、不一票否决——句长只进 `style_checker.py` 的 warnings，不计入 score。
+- **从句深度建议 ≤ 2 层**，避免"主句套定语从句套状语从句"三层嵌套。
+- 一句话尽量只承担一个核心论点，复合论点优先拆成两句。
 
 ## 🟡 语态按目标刊切换 (Voice by Target Journal — 软提示，不阻断)
 
@@ -70,11 +70,11 @@
 
 - **Nature / Science / Cell 系**：官方 author guideline 明确推荐**主动语态**（"We show that…"、"We find…"）。不设被动下限；仅当被动 > 70%（呆板）才软提示。用 `style_checker.py --journal Nature` 触发此策略。
 - **传统 SCI 刊**：实验描述仍以被动为主流，参考被动 50–70%。Methods / Results → 优先被动（"Cells were treated with..."）；Discussion 表达推断可主动。< 40% 或 > 70% 仅软提示，不扣分。
-- 拿不准目标刊风格 → Phase 7 `/journal-study` 用近 5 年代表作实测被动比例，按实测锚定，别照搬默认区间。
+- 拿不准目标刊语言风格（被动比例/句式）→ 不在写作阶段前置学习；留到**末尾用 polish-sci 润色时**按目标刊调性对齐（`/journal-study` 已停用，见 SKILL.md Phase 8.6）。写作期照本协议通用规则即可。
 
-## 🔴 禁装饰性破折号 (No Decorative Em-dashes)
+## 🟡 慎用装饰性破折号 (Avoid Decorative Em-dashes — 软提示，不阻断)
 
-严禁用 em-dash（—、——）做停顿、补充说明或强调。改用逗号、句号或拆句处理。
+**建议**避免用 em-dash（—、——）做停顿、补充说明或强调，优先改用逗号、句号或拆句处理。破折号已从硬门降为软提示：`style_checker.py` 把它写进 warnings，不计入 score、不卡门禁，见提醒酌情改即可。
 
 **合法保留的连字符/横线用途（不属于本条禁止范围）**：
 - 连字符（hyphen `-`）：复合词 / 术语（如 dose-response, T-cell, non-significant）。
