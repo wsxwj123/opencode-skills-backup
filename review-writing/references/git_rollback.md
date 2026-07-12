@@ -11,7 +11,9 @@ git add -A && git commit -m "[review] <MESSAGE>" --allow-empty-message 2>/dev/nu
 | Checkpoint 位置 | commit message |
 |-----------------|----------------|
 | Phase 0.5 (init script 内) | `[review] Phase 0: project initialized` |
-| Phase 1 Step 9 | `[review] Phase 1: outline confirmed` |
+| Phase 1.5 (research gap 后) | `[review] Phase 1.5: research gap identified` |
+| Phase 1.6 (benchmark 后) | `[review] Phase 1.6: benchmark reviews + framing guide` |
+| Phase 1.7 Step 9 (据调研建提纲后) | `[review] Phase 1.7: outline confirmed (post-research)` |
 | Phase 2 每节 Step 8 | `[review] Phase 2: section X.X search complete` |
 | Phase 2.5 (dedup 后) | `[review] Phase 2.5: dedup + global ID assigned` |
 | Phase 3 每节 Step 9 | `[review] Phase 3: section X.X draft complete` |
