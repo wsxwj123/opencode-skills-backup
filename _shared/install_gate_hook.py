@@ -130,7 +130,8 @@ def main() -> None:
                 result.update(status="installed", action="installed", message=(
                     "已自动安装强制门禁保护到 settings.json（原文件已备份）。"
                     "⚠️ 需【重启一次本会话/客户端】后生效——hook 在启动时加载，无法热生效。"
-                    "重启后再来用即受保护。"))
+                    "重启后再来用即受保护。注意：升级前就写到一半的旧项目，重启后再写正文可能被"
+                    "'结构签字缺失'拦一次——按提示补跑一次 structure_signoff confirm 即可继续，属正常迁移。"))
             else:
                 result.update(status="degraded", action="install-skipped", message=(
                     "未能自动安装门禁 hook：" + msg +

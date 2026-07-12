@@ -1,29 +1,51 @@
 {
-  "_comment": "共享门禁 hook 的技能注册表。academic_gate_hook.py 据此判断一次 Write/Edit 该不该拦。加新技能=加一个条目，不新增 hook。managed_globs 是相对项目根的产物路径模式(fnmatch)，只有命中才跑门禁；其余路径一律放行。设计原则：hook 只强制'从文件状态就能可靠判定'的粗粒度不变量(如结构签字、token 存在)；需要 AI 意图的逐节时序(prewrite_gate --section)留给 AI 调用+token 链，hook 不猜 section。占位符：{python}/{project_root}/{file_path}/{shared_dir}。",
-  "version": 2,
+  "_comment": "共享门禁 hook 的技能注册表。academic_gate_hook.py 据此判断一次 Write/Edit 该不该拦。加新技能=加一个条目。managed_globs 是相对项目根的产物路径模式(fnmatch, * 跨 / 也匹配)，只有命中才跑门禁；其余路径一律放行。多个技能共用同名 state 文件时(如 project_state.json)，分发器靠'被写文件命中谁的 managed_globs'来定技能，故各技能 managed_globs 不重叠即可消歧。设计原则：hook 只强制'从文件状态可靠判定'的粗粒度不变量(结构签字/token)；逐节时序留给 AI 调门禁+token 链。占位符：{python}/{project_root}/{file_path}/{shared_dir}。",
+  "version": 3,
+  "signoff_gate": {
+    "name": "structure_signoff",
+    "command": ["{python}", "{shared_dir}/structure_signoff_gate.py", "check", "--root", "{project_root}"],
+    "when": "always"
+  },
   "skills": {
     "general-sci-writing": {
       "state_files": ["writing_progress.json", "project_config.json"],
       "managed_globs": ["manuscripts/*.md"],
-      "gates": [
-        {
-          "name": "structure_signoff",
-          "command": ["{python}", "{shared_dir}/structure_signoff_gate.py", "check", "--root", "{project_root}"],
-          "when": "always"
-        }
-      ]
+      "signoff": true
     },
     "review-writing": {
       "state_files": ["state.json"],
       "managed_globs": ["drafts/*.md"],
-      "gates": [
-        {
-          "name": "structure_signoff",
-          "command": ["{python}", "{shared_dir}/structure_signoff_gate.py", "check", "--root", "{project_root}"],
-          "when": "always"
-        }
-      ]
+      "signoff": true
+    },
+    "nsfc-proposal": {
+      "state_files": ["project_state.json"],
+      "managed_globs": ["sections/*.md"],
+      "signoff": true
+    },
+    "sci2doc": {
+      "state_files": ["project_state.json"],
+      "managed_globs": ["atomic_md/*/*.md"],
+      "signoff": true
+    },
+    "revise-sci": {
+      "state_files": ["project_state.json"],
+      "managed_globs": ["response_to_reviewers.md", "response_to_reviewers.docx", "manuscript_edit_plan.md"],
+      "signoff": false
+    },
+    "reviewer-response-sci": {
+      "state_files": ["project_state.json"],
+      "managed_globs": ["units/*.json"],
+      "signoff": false
+    },
+    "reviewer-simulator": {
+      "state_files": ["project_config.json"],
+      "managed_globs": ["report_*.html"],
+      "signoff": false
+    },
+    "polish-sci": {
+      "state_files": ["units_index.json"],
+      "managed_globs": ["polished_manuscript.md", "manuscripts/*.md"],
+      "signoff": false
     }
-  },
-  "_pending_skills_note": "nsfc-proposal / sci2doc / reviewer-response-sci / reviewer-simulator / polish-sci 在 P1 铺开时补条目。revise-sci 走 run_pipeline 驱动本就抗跑偏，优先级最低。"
+  }
 }
