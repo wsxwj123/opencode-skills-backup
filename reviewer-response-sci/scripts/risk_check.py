@@ -157,6 +157,9 @@ AI_STYLE_CATEGORIES = {"ai_hedging", "ai_appreciation", "ai_filler", "ai_ing_cla
                        "ai_em_dash", "ai_scare_quote", "ai_explanatory_colon",
                        "forbidden_ai_phrase"}
 FABRICATION_CATEGORIES = {"fabricated_experiment", "fabricated_statistics"}
+# 破折号硬门禁、禁止使用：ai_em_dash 命中即 pipeline-blocking(return 1)。
+# 其余 AI 风格项(scare quotes/解释性冒号/句长等)仍为软提示(WARN-only)。
+HARD_STYLE_CATEGORIES = {"ai_em_dash"}
 
 
 def _check_en_sentence_length(units: list[dict]) -> list[tuple[str, str, str]]:
@@ -300,8 +303,9 @@ def main() -> int:
             all_hits.append(("stdin", cat, pat))
 
     # Separate hard risks (pipeline-blocking) from soft risks (warn-only)
-    hard_hits = [(s, c, p) for s, c, p in all_hits if c in FABRICATION_CATEGORIES]
-    soft_hits = [(s, c, p) for s, c, p in all_hits if c not in FABRICATION_CATEGORIES]
+    _HARD = FABRICATION_CATEGORIES | HARD_STYLE_CATEGORIES
+    hard_hits = [(s, c, p) for s, c, p in all_hits if c in _HARD]
+    soft_hits = [(s, c, p) for s, c, p in all_hits if c not in _HARD]
 
     if hard_hits:
         print("RISK_CHECK: FAIL (hard risk detected)")
