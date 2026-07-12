@@ -296,11 +296,11 @@ def scan_text(text: str, allow_lists: bool = False) -> dict:
             }
         )
 
-    # B2：scare quotes（启发式，可能有少量误报）
+    # B2：scare quotes（硬门禁，禁止使用：severity=ERROR，scan 门禁拦截；启发式，可能有少量误报）
     for m in re.finditer(SCARE_QUOTE_PATTERN[0], text):
         issues.append(
             {
-                "severity": "WARNING",
+                "severity": "ERROR",
                 "code": SCARE_QUOTE_PATTERN[1],
                 "span": [m.start(), m.end()],
                 "text": m.group(0),
@@ -321,7 +321,7 @@ def scan_text(text: str, allow_lists: bool = False) -> dict:
                 continue
             issues.append(
                 {
-                    "severity": "WARNING",
+                    "severity": "ERROR",
                     "code": EXPLANATORY_COLON_PATTERN[1],
                     "line": i,
                     "span": [m.start(), m.end()],
