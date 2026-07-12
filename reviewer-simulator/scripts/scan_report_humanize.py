@@ -11,11 +11,11 @@ reviewer-simulator 的产物是 assets/report_template.html 填充后的 HTML，
     python scan_report_humanize.py --text <纯文本路径>   # 直接扫纯文本/markdown中间产物
 
 B7 阻断项（severity=ERROR 命中即 exit 1）：humanizer BANNED 模板句式/套话/修辞
-（如"综上所述""革命性的""值得注意的是"）+ 装饰破折号 decorative_dash（硬门禁、禁止使用）。
-scare quotes / 解释性冒号 / 中文单句超50字 仍为软提示（WARNING，不阻断，仅供人工修润），
-其余（VAGUE 措辞/bullet/节奏）同为 WARNING。
+（如"综上所述""革命性的""值得注意的是"）+ 去AI必禁三项 装饰破折号 decorative_dash /
+scare quotes / 解释性冒号（均硬门禁、禁止使用）。
+中文单句超50字 仍为软提示（WARNING，不阻断，仅供人工修润），其余（VAGUE 措辞/bullet/节奏）同为 WARNING。
 
-退出码: 0=无 ERROR 级违规（可有软提示 WARNING）; 1=命中 ERROR 级（BANNED/破折号）违规。
+退出码: 0=无 ERROR 级违规（可有软提示 WARNING）; 1=命中 ERROR 级（BANNED/破折号/scare quotes/解释性冒号）违规。
 """
 
 from __future__ import annotations
@@ -67,8 +67,8 @@ def main() -> int:
     scan = h.scan_text(text)
     rhythm = h.rhythm_check(text)
 
-    # B7 阻断项：severity=ERROR = humanizer BANNED 套话句式 + 装饰破折号(硬门禁)。
-    # scare quotes/解释性冒号/中文超50字 仍为软提示(WARNING，不阻断)。
+    # B7 阻断项：severity=ERROR = humanizer BANNED 套话句式 + 去AI必禁三项(破折号/scare quotes/解释性冒号，硬门禁)。
+    # 中文超50字 仍为软提示(WARNING，不阻断)。
     violations = [i for i in scan["issues"] if i.get("severity") == "ERROR"]
     others = [i for i in scan["issues"] if i.get("severity") != "ERROR"]
     long_sents = [i for i in rhythm["issues"] if i.get("type") == "cn_sentence_too_long"]
