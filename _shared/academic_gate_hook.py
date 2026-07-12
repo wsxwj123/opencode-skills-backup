@@ -68,27 +68,33 @@ def _find_project_root(file_path: Path, state_files: set[str]) -> tuple[Path, st
     return None
 
 
-def _identify_skill(root: Path, registry: dict) -> tuple[str, dict] | None:
-    """项目根确定后，判断它属于哪个技能：优先读状态文件里的 skill 字段，
-    否则按"该技能声明的 state_file 是否存在"回退匹配。"""
+def _identify_skill(root: Path, registry: dict, rel_path: str) -> tuple[str, dict] | None:
+    """判断项目属于哪个技能。多个技能可能共用同名 state 文件(如 project_state.json)，
+    故核心消歧靠"被写文件命中谁的 managed_globs"——各技能产物路径不重叠。
+    返回 None 表示：该文件不是任何在场技能的受管产物(交回放行)。"""
     skills = registry.get("skills", {})
-    # 先试状态文件里的显式 skill 声明
-    for skill_name, cfg in skills.items():
-        for sf in cfg.get("state_files", []):
-            p = root / sf
-            if p.is_file():
-                try:
-                    data = json.loads(p.read_text(encoding="utf-8"))
-                    if isinstance(data, dict) and data.get("skill") == skill_name:
-                        return skill_name, cfg
-                except Exception:
-                    pass
-    # 回退：谁的 state_file 在这就算谁（单技能项目根足够可靠）
-    for skill_name, cfg in skills.items():
-        for sf in cfg.get("state_files", []):
-            if (root / sf).is_file():
-                return skill_name, cfg
-    return None
+    present = [(n, c) for n, c in skills.items()
+               if any((root / sf).is_file() for sf in c.get("state_files", []))]
+    if not present:
+        return None
+    matched = [(n, c) for n, c in present
+               if _is_managed(rel_path, c.get("managed_globs", []))]
+    if len(matched) == 1:
+        return matched[0]
+    if len(matched) > 1:
+        # 罕见：多个技能的 glob 都命中 → 再用 state 文件里的 skill 字段消歧
+        for n, c in matched:
+            for sf in c.get("state_files", []):
+                p = root / sf
+                if p.is_file():
+                    try:
+                        d = json.loads(p.read_text(encoding="utf-8"))
+                        if isinstance(d, dict) and d.get("skill") == n:
+                            return n, c
+                    except Exception:
+                        pass
+        return matched[0]
+    return None  # 文件非任何在场技能的产物 → 放行
 
 
 def _is_managed(rel_path: str, globs: list[str]) -> bool:
@@ -104,8 +110,15 @@ def _section_from_filename(file_path: Path) -> str:
     return m.group(1).replace("_", ".") if m else stem
 
 
-def _run_gates(skill_cfg: dict, root: Path, file_path: Path) -> tuple[bool, str]:
-    """跑该技能的门禁。返回 (blocked, message)。任一 gate exit≠0 即 blocked。"""
+def _gates_for(skill_cfg: dict, registry: dict) -> list[dict]:
+    """该技能要跑哪些门禁。signoff:true → 共享结构签字门禁；否则无(仅心跳)。"""
+    if skill_cfg.get("signoff") and registry.get("signoff_gate"):
+        return [registry["signoff_gate"]]
+    return []
+
+
+def _run_gates(gates: list[dict], root: Path, file_path: Path) -> tuple[bool, str]:
+    """跑门禁。返回 (blocked, message)。任一 gate exit≠0 即 blocked。"""
     py = sys.executable or "python"
     section = _section_from_filename(file_path)
     subs = {
@@ -120,7 +133,7 @@ def _run_gates(skill_cfg: dict, root: Path, file_path: Path) -> tuple[bool, str]
             tok = tok.replace(k, v)
         return tok
 
-    for gate in skill_cfg.get("gates", []):
+    for gate in gates:
         cmd = [_subst(tok) for tok in gate.get("command", [])]
         if not cmd:
             continue
@@ -170,20 +183,19 @@ def main() -> None:
         return  # 非学术项目：放行（绝大多数写入走这里，开销≈向上找一次文件）
 
     root, _ = found
-    ident = _identify_skill(root, registry)
-    if not ident:
-        return
-    skill_name, skill_cfg = ident
-
     try:
         rel = str(file_path.resolve().relative_to(root.resolve()))
     except Exception:
         rel = file_path.name
-    if not _is_managed(rel, skill_cfg.get("managed_globs", [])):
-        return  # 学术项目里的非产物文件（state/tmp/figures 等）：放行
+
+    # 识别技能已内含"命中受管产物"判定：认不出/非产物文件 → 放行。
+    ident = _identify_skill(root, registry, rel)
+    if not ident:
+        return
+    skill_name, skill_cfg = ident
 
     _write_heartbeat("gate_evaluated", {"skill": skill_name, "file": rel})
-    blocked, message = _run_gates(skill_cfg, root, file_path)
+    blocked, message = _run_gates(_gates_for(skill_cfg, registry), root, file_path)
     if blocked:
         print(json.dumps({
             "hookSpecificOutput": {

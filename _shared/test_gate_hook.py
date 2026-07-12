@@ -88,6 +88,26 @@ def test_dispatcher_failopen_on_bad_stdin():
     assert p.returncode == 0 and p.stdout.strip() == "", "坏输入必须静默放行"
 
 
+def test_shared_state_file_disambiguation():
+    """project_state.json 被 nsfc/sci2doc/revise/response 共用 → 靠被写文件命中谁的
+    managed_globs 定技能。sections/*.md→nsfc(signoff→未签拦)；units/*.json→
+    reviewer-response(无signoff→放行)。同一个项目根、同一个 state 文件，两种产物走两个技能。"""
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d) / "proj"
+        (root / "sections").mkdir(parents=True)
+        (root / "units").mkdir()
+        (root / "project_state.json").write_text("{}", encoding="utf-8")
+        # sections/*.md → nsfc(signoff) 未签字 → 拦
+        out_n, _ = _run_hook({"tool_name": "Write",
+                              "tool_input": {"file_path": str(root / "sections" / "P1.md")}})
+        assert out_n and json.loads(out_n)["hookSpecificOutput"]["permissionDecision"] == "deny", \
+            "sections/ 应被判为 nsfc 并因未签字拦下"
+        # units/*.json → reviewer-response(无signoff) → 放行
+        out_r, _ = _run_hook({"tool_name": "Write",
+                              "tool_input": {"file_path": str(root / "units" / "001.json")}})
+        assert out_r == "", "units/ 应被判为 reviewer-response(无signoff)并放行"
+
+
 def test_signoff_gate_check_lifecycle():
     with tempfile.TemporaryDirectory() as d:
         root = Path(d)
