@@ -21,9 +21,10 @@ try:
 except Exception:  # pragma: no cover
     fcntl = None
 
-# Valid workflow phases (string-keyed to allow sub-phases 1.5 / 1.6 inserted between integers).
-# 0=init, 1=outline, 1.5=research gap, 1.6=benchmark reviews+framing, 2=search, 3=write, 4=export, 5=submission pack.
-VALID_PHASES = {"0", "1", "1.5", "1.6", "2", "3", "4", "5"}
+# Valid workflow phases (string-keyed to allow sub-phases 1.5 / 1.6 / 1.7 inserted between integers).
+# 调研先于提纲：0=init, 1.5=research gap, 1.6=benchmark reviews+framing, 1.7=outline from research + sign-off,
+# 2=search, 3=write, 4=export, 5=submission pack. (旧 phase=1=outline 仍保留以兼容历史项目 state.json。)
+VALID_PHASES = {"0", "1", "1.5", "1.6", "1.7", "2", "3", "4", "5"}
 
 
 def _parse_phase(value):

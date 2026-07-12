@@ -48,9 +48,9 @@ High-impact reviews are not summaries; they are arguments.
 - **Ban List:** Moreover, Crucial, Landscape, Tapestry, Realm, Pivot, Foster, Underscore, Delve into, Spearhead
 - **Phrases to Avoid:** It is worth noting, In conclusion, As mentioned above, Serves as, Acts as
 - **Structure Ban:** No "Not only...but also"; No "From A to B"; No trailing "-ing" clauses (e.g., ban ", reflecting a shift toward…"; ban ", ensuring that…"; ban ", highlighting the importance of…" — recast as a new finite clause or sentence).
-- **Sentence length — HARD LIMIT:** Single sentence (including all subordinate clauses) ≤30 words. Any sentence exceeding 30 words must be split before submission. This applies to all subordinate clause constructions, not just main clauses.
-- **Rhythm:** Mix short sentences (≤12 words) with mid-range (25–30 words). NEVER 3+ consecutive similar-length sentences.
-- **Voice (review-specific):** For literature reviews: active voice is primary; passive ≤30% per paragraph. This differs from original research articles where passive is 50–70% (methods/results). Do not apply the 50–70% norm to reviews.
+- **Sentence length — soft guide (not a hard gate):** Aim for single sentences ≤30 words; a sentence running longer is a rhythm prompt to consider splitting, not a blocker. style_checker flags this as `info` (advisory) — do not fail a section on length alone.
+- **Rhythm:** Mix short sentences (≤12 words) with mid-range (25–30 words). Avoid long runs of 3+ consecutive similar-length sentences.
+- **Voice (review-specific) — soft guide:** For literature reviews, active voice is primary; passive around ≤30% per paragraph is a target, not a hard limit. Excess passive reads stiff, so trim where natural; style_checker reports it as `info` (advisory), not a gate failure. Reviews still avoid the 50–70% passive norm of original research articles.
 - **Synonym cycling — ban:** Within the same paragraph, use one consistent term for each concept. Do not cycle synonyms (e.g., do not alternate "tumor microenvironment / TME / cancer stroma" within one paragraph — pick one and use it). Cycle across paragraphs is acceptable for stylistic variety.
 - **Transitions:** Ban "Furthermore / In addition / Moreover" bolted-on. Embed causality into main clause.
 
@@ -66,8 +66,8 @@ High-impact reviews are not summaries; they are arguments.
 
 ### Three Additional AI-Marker Bans
 
-**1. Decorative em-dashes (—)**
-- **Ban:** Using — or —— as a pause, supplement, or emphasis device (e.g., "The result was clear—cells died").
+**1. Decorative em-dashes (—) — soft guide (not a hard gate)**
+- **Discouraged:** Using — or —— as a pause, supplement, or emphasis device (e.g., "The result was clear—cells died"). It is a mild AI marker, so prefer to avoid it; style_checker reports em-dashes as `info` (advisory), not a gate failure.
 - **Allowed:** Hyphens in compound modifiers (dose-dependent), numeric ranges (1990–2005), and en-dashes in structured labels.
 - **Fix:** Recast as a comma, period, or separate sentence. "The result was clear—cells died" → "The result was clear: cells died at 48 h."
 

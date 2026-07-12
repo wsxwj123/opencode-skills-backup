@@ -172,6 +172,13 @@ def _install_gate_hook(proj) -> None:
         signoff = installer.parent / "structure_signoff_gate.py"
         if signoff.is_file():
             print(f'SIGNOFF_CMD: python "{signoff}" confirm --root "{proj}" --note "<用户确认原话>"')
+        # 接续报告 + 引文核证命令（照 SIGNOFF_CMD 样式打印绝对路径，供 SKILL 开头/写节前直接调用）
+        journal = installer.parent / "session_journal.py"
+        if journal.is_file():
+            print(f'RESUME_CMD: python "{journal}" resume --root "{proj}"')
+        citecheck = installer.parent / "citation_claim_check.py"
+        if citecheck.is_file():
+            print(f'CITATION_CHECK_CMD: python "{citecheck}" --root "{proj}"')
     except Exception:
         pass
 
