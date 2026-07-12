@@ -117,6 +117,13 @@ def _install_gate_hook() -> None:
         signoff = installer.parent / "structure_signoff_gate.py"
         if signoff.is_file():
             print(f'SIGNOFF_CMD: python "{signoff}" confirm --root <project_root> --note "<用户确认原话>"')
+        # 跨会话接续 + 引文核证命令(绝对路径,同样免 cwd 依赖)。
+        journal = installer.parent / "session_journal.py"
+        if journal.is_file():
+            print(f'RESUME_CMD: python "{journal}" resume --root <project_root>')
+        citecheck = installer.parent / "citation_claim_check.py"
+        if citecheck.is_file():
+            print(f'CITATION_CHECK_CMD: python "{citecheck}" --root <project_root> --evidence <project_root>/claim_evidence.json')
     except Exception:
         pass
 
