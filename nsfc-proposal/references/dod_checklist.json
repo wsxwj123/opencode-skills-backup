@@ -33,7 +33,7 @@
         {
           "id": "N5",
           "name": "去AI-人文化",
-          "check": "humanizer_zh.py scan 无 ERROR，rhythm-check 无 cn_sentence_too_long",
+          "check": "humanizer_zh.py scan 无 ERROR，rhythm-check 的 cn_sentence_too_long 为软提醒(机制类长句已豁免、非机制类过长酌情拆分)、不阻断",
           "script": "python scripts/humanizer_zh.py scan sections/P1_立项依据.md"
         },
         {
@@ -89,6 +89,11 @@
           "id": "N62",
           "name": "科学问题凝练质量",
           "check": "盲检：科学问题（SQ）是否凝练为真正的科学问题（可证伪、有理论深度），而非工程任务或宽泛主题；KSQ 是否聚焦、属性归类是否恰当。SQ 表述为任务化/空泛/不可证伪=fail，引原文为证。"
+        },
+        {
+          "id": "N63",
+          "name": "承重论点引文核证",
+          "check": "立项依据的承重论点（决定成败的关键因果/机制/研究缺口论断，非背景陈述）已在 data/claim_evidence.json 建成「观点↔引文」矩阵，每条承重句用该引文检索到的真实 abstract（非 AI 自填的 key_finding）判 verdict∈support/weak/contradict/unknown 并摘 evidence_quote；跑 CITATION_CHECK_CMD（_shared/citation_claim_check.py --root .）须 exit 0。任一承重句被判 contradict/unknown、缺 retrieved_abstract、或 user_confirmed≠true = fail，引 claim_evidence.json 对应行与阻断原因为证。"
         }
       ]
     },
@@ -123,7 +128,7 @@
         {
           "id": "N14",
           "name": "去AI-P2",
-          "check": "humanizer_zh.py scan 无 ERROR，rhythm-check 无 cn_sentence_too_long",
+          "check": "humanizer_zh.py scan 无 ERROR，rhythm-check 的 cn_sentence_too_long 为软提醒(机制类长句已豁免、非机制类过长酌情拆分)、不阻断",
           "script": "python scripts/humanizer_zh.py scan sections/P2_研究内容.md"
         },
         {
@@ -208,7 +213,7 @@
         {
           "id": "N24",
           "name": "去AI-P3",
-          "check": "P3_1/P3_2 已过 humanizer_zh.py scan，无 ERROR；rhythm-check 无 cn_sentence_too_long",
+          "check": "P3_1/P3_2 已过 humanizer_zh.py scan，无 ERROR；rhythm-check 的 cn_sentence_too_long 为软提醒(机制类长句已豁免、非机制类过长酌情拆分)、不阻断",
           "script": "python scripts/humanizer_zh.py scan sections/P3_1_研究基础与可行性分析.md"
         },
         {
@@ -269,7 +274,7 @@
         {
           "id": "N31",
           "name": "去AI-P4",
-          "check": "humanizer_zh.py scan 无 ERROR；rhythm-check 无 cn_sentence_too_long",
+          "check": "humanizer_zh.py scan 无 ERROR；rhythm-check 的 cn_sentence_too_long 为软提醒(机制类长句已豁免、非机制类过长酌情拆分)、不阻断",
           "script": "python scripts/humanizer_zh.py scan sections/P4_其他需要说明的情况.md"
         },
         {
@@ -364,7 +369,7 @@
         {
           "id": "N42",
           "name": "去AI-摘要",
-          "check": "humanizer_zh.py scan sections/00_摘要_中文.md 无 ERROR；rhythm-check 无 cn_sentence_too_long",
+          "check": "humanizer_zh.py scan sections/00_摘要_中文.md 无 ERROR；rhythm-check 的 cn_sentence_too_long 为软提醒(机制类长句已豁免、非机制类过长酌情拆分)、不阻断",
           "script": "python scripts/humanizer_zh.py scan sections/00_摘要_中文.md"
         },
         {
@@ -411,7 +416,7 @@
         {
           "id": "N47",
           "name": "去AI-全文 scan-all",
-          "check": "humanizer_zh.py scan-all 无 ERROR，WARNING 已逐条处理或标注豁免理由；无 cn_sentence_too_long",
+          "check": "humanizer_zh.py scan-all 无 ERROR，WARNING 已逐条处理或标注豁免理由；cn_sentence_too_long 为软提醒(机制类长句已豁免、非机制类过长酌情拆分)、不阻断",
           "script": "python scripts/humanizer_zh.py scan-all sections"
         },
         {

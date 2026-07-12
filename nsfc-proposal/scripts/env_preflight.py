@@ -117,6 +117,15 @@ def _install_gate_hook() -> None:
         signoff = installer.parent / "structure_signoff_gate.py"
         if signoff.is_file():
             print(f'SIGNOFF_CMD: python "{signoff}" confirm --root <project_root> --note "<用户确认原话>"')
+        # 跨会话接续:每次进入/续写先跑 RESUME_CMD 贴接续报告+握手;用户插要求立即 log。
+        journal = installer.parent / "session_journal.py"
+        if journal.is_file():
+            print(f'RESUME_CMD: python "{journal}" resume --root <project_root>')
+            print(f'JOURNAL_LOG_CMD: python "{journal}" log --root <project_root> --note "<用户临时要求原话>"')
+        # 引文核证:承重论点↔引文,用真摘要判支撑,承重句 contradict/无摘要/未确认即 fail-closed。
+        claimchk = installer.parent / "citation_claim_check.py"
+        if claimchk.is_file():
+            print(f'CITATION_CHECK_CMD: python "{claimchk}" --root <project_root>')
     except Exception:
         pass
 
