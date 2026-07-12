@@ -144,7 +144,36 @@ def main() -> None:
     else:
         print("ℹ️  Git not found — auto-checkpoint disabled (no rollback)")
 
+    # 强制门禁 hook 自动安装 + 打印结构签字命令（共享，跨全部学术技能）。
+    _install_gate_hook(proj)
+
     print(f"\nNext: cd into {proj} before any Phase 1–4 command.")
+
+
+def _install_gate_hook(proj) -> None:
+    """调共享安装器 install_gate_hook.py 自动装强制门禁 hook（备份/校验/回滚 +
+    心跳探测），回显其人话状态；并打印结构签字命令 SIGNOFF_CMD（绝对路径 + 项目根）。
+    定位:本文件在 skills/review-writing/scripts/ → resolve().parents[2]=skills/ →
+    _shared/。任何异常全吞——门禁自检绝不能反过来卡住技能。"""
+    import json as _json
+    import subprocess as _sp
+    try:
+        installer = pathlib.Path(__file__).resolve().parents[2] / "_shared" / "install_gate_hook.py"
+        if not installer.is_file():
+            return
+        proc = _sp.run([sys.executable or "python", str(installer)],
+                       capture_output=True, text=True, timeout=30)
+        line = (proc.stdout or "").strip().splitlines()[-1] if proc.stdout.strip() else ""
+        res = _json.loads(line) if line else {}
+        status, msg = res.get("status", ""), res.get("message", "")
+        icon = {"active": "🛡️", "installed": "🛡️", "degraded": "⚠️", "error": "ℹ️"}.get(status, "ℹ️")
+        if msg:
+            print(f"{icon} 门禁保护[{status}]: {msg}")
+        signoff = installer.parent / "structure_signoff_gate.py"
+        if signoff.is_file():
+            print(f'SIGNOFF_CMD: python "{signoff}" confirm --root "{proj}" --note "<用户确认原话>"')
+    except Exception:
+        pass
 
 
 if __name__ == "__main__":
