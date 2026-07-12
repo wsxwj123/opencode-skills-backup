@@ -692,7 +692,7 @@ _STYLE_CHECKS = [
         # scare quotes（恐惧引号）：双引号/引号包裹 2-10 字中文短语，暗示"新概念"
         # 保守检测：只报引号内全部是中文字符的情况（术语定义、固化术语通常有英文或括号）
         re.compile(r'"[一-鿿]{2,10}"|"[一-鿿]{2,10}"|“[一-鿿]{2,10}”'),
-        'warning', '引号规范',
+        'error', '引号规范',
         '疑似 scare quotes（引号包裹普通中文短语以暗示特殊概念）',
         '仅在术语首次定义、原文引用、已固化术语时使用引号；普通叙述不应使用引号强调'
     ),
@@ -701,7 +701,7 @@ _STYLE_CHECKS = [
         # 排除：图N-N: / 表N-N: 前缀（前面是数字或图/表字符），或冒号后跟数字
         # 注意：保守检测，列表引导（"以下三点："）也会命中，属可接受误报
         re.compile(r'(?:[^表图\d]|^)([\u4e00-\u9fff]{2,15}：)(?=[\u4e00-\u9fff])'),
-        'warning', '标点规范',
+        'error', '标点规范',
         '疑似解释性冒号（"概念：解释"装饰句式）',
         '合法冒号场景：图表标签(表2-1：)、比例(1:2)、数值；正文装饰句式"概念：解释"应改写为陈述句'
     ),
@@ -2882,7 +2882,12 @@ def generate_quality_report(
     # 破折号(——)硬门禁、禁止使用：命中即非零退出，无论总分高低（与上下标/半角同列硬阻断）
     em_dash_count = len([i for i in all_issues
                          if i.get('category') == '标点规范' and i.get('message', '').startswith('使用了破折号')])
-    
+    # 去AI必禁三项之另两项：scare quotes（引号规范）+ 解释性冒号（标点规范），与破折号同级硬阻断
+    scare_quote_count = len([i for i in all_issues
+                             if i.get('category') == '引号规范' and i.get('message', '').startswith('疑似 scare quotes')])
+    explanatory_colon_count = len([i for i in all_issues
+                                   if i.get('category') == '标点规范' and i.get('message', '').startswith('疑似解释性冒号')])
+
     total_score = 100 - error_count * 10 - warning_count * 3 - info_count * 1
     total_score = max(0, min(100, total_score))
     
@@ -2908,7 +2913,9 @@ def generate_quality_report(
             'subsup_bare': subsup_bare_count,
             'halfwidth_punct_in_cn': halfwidth_in_cn_count,
             'english_misspelling': english_misspelling_count,
-            'decorative_em_dash': em_dash_count
+            'decorative_em_dash': em_dash_count,
+            'scare_quotes': scare_quote_count,
+            'explanatory_colon': explanatory_colon_count
         },
         'issues': all_issues,
         'targets': {
@@ -3145,14 +3152,17 @@ def main():
     
     # 返回退出码
     # 硬阻断项：上下标裸写（subsup_bare）+ 中文句内半角标点（halfwidth_punct_in_cn）+ 英文拼写（english_misspelling）
-    # + 破折号（decorative_em_dash，禁止使用）。命中即非零退出，无论总分高低；
-    # 其余 F1 中文错别字仍为 warning（含登陆等同形异义，硬拦会误伤），不在此处阻断。
+    # + 去AI必禁三项：破折号（decorative_em_dash）/ scare quotes / 解释性冒号（均禁止使用）。
+    # 命中即非零退出，无论总分高低；其余 F1 中文错别字仍为 warning（含登陆等同形异义，硬拦会误伤），不在此处阻断。
     subsup_bare_count = report.get('issue_summary', {}).get('subsup_bare', 0)
     halfwidth_in_cn_count = report.get('issue_summary', {}).get('halfwidth_punct_in_cn', 0)
     english_misspelling_count = report.get('issue_summary', {}).get('english_misspelling', 0)
     em_dash_count = report.get('issue_summary', {}).get('decorative_em_dash', 0)
+    scare_quote_count = report.get('issue_summary', {}).get('scare_quotes', 0)
+    explanatory_colon_count = report.get('issue_summary', {}).get('explanatory_colon', 0)
     if (report['overall_score'] >= 80 and subsup_bare_count == 0 and halfwidth_in_cn_count == 0
-            and english_misspelling_count == 0 and em_dash_count == 0):
+            and english_misspelling_count == 0 and em_dash_count == 0
+            and scare_quote_count == 0 and explanatory_colon_count == 0):
         sys.exit(0)
     else:
         sys.exit(1)
