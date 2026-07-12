@@ -416,7 +416,7 @@
         {
           "id": "N47",
           "name": "去AI-全文 scan-all",
-          "check": "humanizer_zh.py scan-all 无 ERROR，WARNING 已逐条处理或标注豁免理由；cn_sentence_too_long 为软提醒(机制类长句已豁免、非机制类过长酌情拆分)、不阻断",
+          "check": "humanizer_zh.py scan-all 无 ERROR，WARNING 已逐条处理或标注豁免理由；cn_sentence_too_long 为软提醒(机制类长句已豁免、非机制类过长酌情拆分)、不阻断。脚本 ERROR 级硬阻断项(必须清零)：halfwidth_punct_in_cn(中文句内紧邻汉字的半角标点，如 细胞,然后/清洗:结果，正文应全角，1,000 千分位与全角标点不误报)、english_misspelling(英文铁错拼如 occured/recieve/seperate，固定错拼表误报率≈0，规范缩写/基因符号不在表内)、装饰破折号、scare quotes；subsup_bare 上下标裸写为 WARNING 软提醒(见 N66)。",
           "script": "python scripts/humanizer_zh.py scan-all sections"
         },
         {
