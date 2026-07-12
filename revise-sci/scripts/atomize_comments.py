@@ -587,6 +587,7 @@ def main() -> int:
     state = read_json(project_root / "project_state.json", {})
     state.setdefault("counts", {})
     state["counts"]["comment_units"] = len(parsed)
+    state.setdefault("skill", "revise-sci")
     write_json(project_root / "project_state.json", state)
 
     if len(parsed) == 0:

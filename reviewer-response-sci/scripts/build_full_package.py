@@ -1288,6 +1288,7 @@ def main() -> int:
     write_json(project_root / "index.json", index_data)
 
     project_state = {
+        "skill": "reviewer-response-sci",
         "project_title": args.title,
         "generated_at": date.today().isoformat(),
         "counts": {

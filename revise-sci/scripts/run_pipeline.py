@@ -246,6 +246,7 @@ def refresh_stored_signatures(project_root: Path, args: argparse.Namespace) -> N
     stored = state.get("input_signatures", {})
     stored.update(current_input_signatures(args))
     state["input_signatures"] = stored
+    state.setdefault("skill", "revise-sci")
     write_json(project_root / "project_state.json", state)
 
 
