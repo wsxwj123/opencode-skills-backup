@@ -185,18 +185,7 @@ Follow phased gates in order:
 
    **【P4·盲检降级告警】** ⚠️ 上述委托盲检若判到 D-01/D-02/D-04（科学意义/创新/可行性）这三个决定成败的维度，而**环境派不出真正独立的子代理**时，**绝不能同一 AI 编一份全 pass 的盲检 JSON 冒充**——那三个维度就裸奔了。此时须告诉用户「本环境盲检不可靠，请你亲自复核立意/创新是否够中标」，交回用户。
 
-   下列清单与 `references/dod_checklist.json` gate=`p1-dod` 逐项对应（改清单先改 JSON），供人工对照；能脚本核的项子代理会先跑脚本：
-
-   - [ ] ①引文 [n] ↔ REF 列表一一对应（无孤儿编号、无缺号、连续无断档）
-   - [ ] ②本节新增引用已过 `citation_guard`（`python scripts/citation_validator.py verify-all`）
-   - [ ] ③论述符合 SQ/H/KSQ 主线，未出现与 consistency_map 矛盾的表述
-   - [ ] ④占位符清零（grep `CITE_PENDING\|DATA_PENDING\|【待` P1 返回空）
-   - [ ] ⑤去 AI：`python scripts/humanizer_zh.py scan sections/P1_立项依据.md` 无 ERROR，WARNING 已逐条处理或标注豁免理由；`rhythm-check` 的 `cn_sentence_too_long` 为软提醒（机制类长句已豁免、非机制类过长酌情拆分）、不阻断
-   - [ ] ⑥字数在目标范围内（`python scripts/word_counter.py count sections/P1_立项依据.md`）
-   - [ ] ⑦H/O/RC/KSQ 与 P1 中 SQ 表述一致（V-01；`python scripts/consistency_mapper.py --path data/consistency_map.json validate --rules V-01` 无 ERROR）
-   - [ ] ⑧科学问题属性四选一已在 profile 中写入且与 P1 论述对应
-   - [ ] ⑨撤稿检测：所有 PMID 已过撤稿核查（`python scripts/citation_validator.py verify-all --index data/literature_index.json --p1 sections/P1_立项依据.md`，撤稿检测已内置）
-   - [ ] ⑩承重论点引文核证（N63）：`data/claim_evidence.json` 已建，承重论点句用真 abstract 判 verdict，`CITATION_CHECK_CMD` exit 0（无 contradict/unknown/缺摘要，承重句均 `user_confirmed=true`）
+   **本 Phase 完整 DoD 判据（全部核查项 + 脚本命令）以 `references/dod_checklist.json` gate=`p1-dod` 为唯一真源**：盲检子代理据此逐项核、能脚本核的先跑脚本，退出码非 0 即 fail-closed。该 gate 含引文对应/citation_guard/占位符清零/去AI/字数/一致性/撤稿检测/承重论点核证等脚本项，及 N52 结构完整性与 N59-N62（科学事实正确、立项论证逻辑、创新性质量、科学问题凝练质量）四项盲检质量核。此处不再内联清单，避免与真源 drift。
 
 4. Phase 2: write P2 研究内容（contains all sub-content: H/O/RC/KSQ, methods, innovations, annual plan）.
    - **🔴 开写前置闸门 (Mandatory，脚本硬拦截)**：开写前先跑 `python3 scripts/prewrite_gate.py --section P2 --root .`，exit≠0 禁止开写（硬检查 P1 完成、`consistency_map` 就位、`data/experimental_design.json` entries 非空、占位符清零；P2←P1 跨 Phase，缺 `.review_pass/P1.json` 盲检标记即硬拦 exit 1，须先跑 `delegate_review verify --section P1` 落盘；P2 正是产出 M 的阶段，M 尚空只降级 warning）。
@@ -218,18 +207,7 @@ Follow phased gates in order:
    2. 派独立子代理（Claude Code 用 `academic-blind-reviewer`），不给写作上下文，要求返回 JSON 数组。
    3. 校验：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate p2-dod --return <返回.json> --section P2 --root <项目根>`；非 0 = fail-closed，修复后重跑。verify 通过会落盘 `.review_pass/P2.json`，P3_1 开写时 `prewrite_gate.py` 会**硬校验**它。
 
-   下列清单与 `references/dod_checklist.json` gate=`p2-dod` 逐项对应（改清单先改 JSON）：
-
-   - [ ] ①H/O/RC/KSQ 1:1 映射无交叉（`consistency_mapper validate --phase 2` V-01~V-05 全 PASS）
-   - [ ] ②每个 M 可追溯到具体 RC，每个 IN 可追溯到 RC 和 M（`--phase 2` 输出中的 V-08）
-   - [ ] ③P2 全文无文献编号引用 [n]（grep `\[[0-9]` P2 返回空）
-   - [ ] ④占位符清零（CITE_PENDING/DATA_PENDING/【待AI】）
-   - [ ] ⑤去 AI：`humanizer_zh.py scan` 无 ERROR，`rhythm-check` 的 `cn_sentence_too_long` 为软提醒（机制类长句已豁免、非机制类过长酌情拆分）、不阻断
-   - [ ] ⑥字数/页数在目标范围内
-   - [ ] ⑦V-06（M→F）/V-07（F 来源）/V-09（预算追溯）/V-11（代表作匹配）依赖 F/预算字段，本阶段用 `validate --phase 2` 即不输出其结论，强制点在 Phase 7 gate-check；V-12（备选路线）只依赖 M.alternative_plan，自 Phase 3 起进入 `--phase 3` 集合为 ERROR 硬门控
-   - [ ] ⑧P2 末尾含独立预期成果小节（论文/专利/人才培养目标三类均有明确数字目标）
-   - [ ] ⑨figure_prompts.md 已生成，技术路线图提示词映射到 ≥1 个 RC
-   - [ ] ⑩常识合理性(🟡软报告,不阻断;json 真源 id: p2-dod/N65),盲检子代理顺带扫本节是否有明显常识/事实硬伤(单位量级离谱、生理/机制常识错误、科学逻辑断裂、前后数值矛盾等)。**仅提示不阻断**,只在发现明显硬伤时记入报告供用户裁决,绝不自动改内容。与 citation_validator 文献核验(管引用真伪/来源合规)区分:本项管"本子论述的科学内容常识上是否成立"。
+   **本 Phase 完整 DoD 判据（全部核查项 + 脚本命令）以 `references/dod_checklist.json` gate=`p2-dod` 为唯一真源**：盲检子代理据此逐项核、能脚本核的先跑脚本，退出码非 0 即 fail-closed。该 gate 含 H/O/RC/KSQ 1:1 映射、M/IN 可追溯、P2 无文献编号、占位符清零、去AI、字数、V 规则分层、预期成果小节、figure_prompts 等，及 N53 结构完整性、N63 四要素一致性盲检、N65 常识合理性（🟡软报告不阻断）。此处不再内联清单，避免与真源 drift。
 
 5. Phase 3: write P3 研究基础（4 sub-files）.
    - **🔴 开写前置闸门 (Mandatory，脚本硬拦截)**：每个子节开写前先跑 `python3 scripts/prewrite_gate.py --section P3_1 --root .`（其余子节同理 P3_2/P3_3/P3_4），exit≠0 禁止开写（硬检查上一节完成、`consistency_map` 含 M、占位符清零；P3_1 额外要求 `data/experimental_design.json` 非空；盲检按 Phase 粒度：P3_1←P2 跨 Phase，缺 `.review_pass/P2.json` 硬拦 exit 1；P3_2/P3_3/P3_4 同属 P3 一次性盲检，同 Phase N/A 不拦）。
@@ -251,16 +229,7 @@ Follow phased gates in order:
    2. 派独立子代理（Claude Code 用 `academic-blind-reviewer`），不给写作上下文，要求返回 JSON 数组。
    3. 校验：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate p3-dod --return <返回.json> --section P3_1 --root <项目根>`；非 0 = fail-closed。verify 通过会落盘 `.review_pass/P3_1.json`（代表 P3 整体盲检；P3_2/P3_3/P3_4 同 Phase 内不单独硬校验）。
 
-   下列清单与 `references/dod_checklist.json` gate=`p3-dod` 逐项对应（改清单先改 JSON）：
-
-   - [ ] ①四个子文件均已生成（P3_1/P3_2/P3_3/P3_4）
-   - [ ] ②consistency_map 中每个 M 至少有一条 F（可行性条目）来自 P3_1 或 P3_2
-   - [ ] ③P3_4 总结字数 ≤500 字（`word_counter` 核验）
-   - [ ] ④涉及人类受试者/动物/生物安全/遗传资源时，P3_1 含伦理审查说明或送审计划
-   - [ ] ⑤占位符清零
-   - [ ] ⑥去 AI：P3_1/P3_2 已过 `humanizer_zh.py scan`，无 ERROR；`rhythm-check` 的 `cn_sentence_too_long` 为软提醒（机制类长句已豁免、非机制类过长酌情拆分）、不阻断
-   - [ ] ⑦H/O/RC/KSQ 与 P1/P2 一致性未因 P3 新增内容产生新矛盾，且 V-12 备选路线已就位（`consistency_mapper validate --phase 3` 仍 PASS）
-   - [ ] ⑧代表作与 H/RC 方向匹配（V-11 人工确认：每篇代表作能对应至少一条 H 或 RC）
+   **本 Phase 完整 DoD 判据（全部核查项 + 脚本命令）以 `references/dod_checklist.json` gate=`p3-dod` 为唯一真源**：盲检子代理据此逐项核、能脚本核的先跑脚本，退出码非 0 即 fail-closed。该 gate 含四子文件齐全、M 可行性覆盖(V-06)、P3_4 字数上限、伦理审查说明、占位符清零、去AI、一致性未引入新矛盾、代表作匹配(V-11)，及 N54 结构完整性、N64 可行性实质盲检。此处不再内联清单，避免与真源 drift。
 
 6. Phase 4: write P4 其他需要说明的情况（≤500字）.
    - 每节先跑 `python scripts/state_manager.py --root . write-cycle --section P4`（逐节预算/上下文注入的预写门控，完整参数见 references/08）；不得跳过直接硬写。
@@ -275,13 +244,7 @@ Follow phased gates in order:
    2. 派独立子代理（Claude Code 用 `academic-blind-reviewer`），不给写作上下文，要求返回 JSON 数组。
    3. 校验：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate p4-dod --return <返回.json>`；非 0 = fail-closed。
 
-   下列清单与 `references/dod_checklist.json` gate=`p4-dod` 逐项对应（改清单先改 JSON）：
-
-   - [ ] ①总字数 ≤500 字（`word_counter` 核验）
-   - [ ] ②涉及伦理/生物安全/遗传资源的说明与 P3_1 无矛盾（人工核查呼应关系）
-   - [ ] ③AI 使用声明已包含（若使用了 AI 辅助写作）
-   - [ ] ④占位符清零
-   - [ ] ⑤去 AI：`humanizer_zh.py scan` 无 ERROR；`rhythm-check` 的 `cn_sentence_too_long` 为软提醒（机制类长句已豁免、非机制类过长酌情拆分）、不阻断
+   **本 Phase 完整 DoD 判据（全部核查项 + 脚本命令）以 `references/dod_checklist.json` gate=`p4-dod` 为唯一真源**：盲检子代理据此逐项核、能脚本核的先跑脚本，退出码非 0 即 fail-closed。该 gate 含字数上限、伦理说明呼应、AI 使用声明、占位符清零、去AI，及 N55 结构完整性。此处不再内联清单，避免与真源 drift。
 
 7. Phase 5: write 预算说明书（B1-B3）.
    - Input: P2 confirmed (M entries define budget items); project profile (budget_total, duration).
@@ -298,13 +261,7 @@ Follow phased gates in order:
    2. 派独立子代理（Claude Code 用 `academic-blind-reviewer`），不给写作上下文，要求返回 JSON 数组。
    3. 校验：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate p5-dod --return <返回.json>`；非 0 = fail-closed。
 
-   下列清单与 `references/dod_checklist.json` gate=`p5-dod` 逐项对应（改清单先改 JSON）：
-
-   - [ ] ①三个子文件均已生成（B1/B2/B3）
-   - [ ] ②各项目预算求和 = profile `budget_total`（人工核算）
-   - [ ] ③每个主要预算条目可追溯到至少一条 M 条目（V-09 人工确认）
-   - [ ] ④直接费用各类别说明完整（设备/材料/测试/差旅/出版/劳务/咨询）
-   - [ ] ⑤占位符清零
+   **本 Phase 完整 DoD 判据（全部核查项 + 脚本命令）以 `references/dod_checklist.json` gate=`p5-dod` 为唯一真源**：盲检子代理据此逐项核、能脚本核的先跑脚本，退出码非 0 即 fail-closed。该 gate 含三子文件齐全、预算总额核算、预算条目可追溯(V-09)、直接费用类别完整、占位符清零，及 N56 结构完整性。此处不再内联清单，避免与真源 drift。
 
 8. Phase 6: write 中英文摘要（abstract-last, based on full draft）.
    - Input: all sections P1–P4 confirmed; run `python scripts/state_manager.py --root . load --global` for full-text summary.
@@ -318,14 +275,7 @@ Follow phased gates in order:
    2. 派独立子代理（Claude Code 用 `academic-blind-reviewer`），不给写作上下文，要求返回 JSON 数组。
    3. 校验：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate p6-dod --return <返回.json>`；非 0 = fail-closed。
 
-   下列清单与 `references/dod_checklist.json` gate=`p6-dod` 逐项对应（改清单先改 JSON）：
-
-   - [ ] ①中文摘要 ≤400 汉字（`word_counter` 核验）
-   - [ ] ②英文摘要 ≤300 英文词（`word_counter` 核验）
-   - [ ] ③摘要关键词与 `consistency_map.keywords_trace` 吻合（人工核查）
-   - [ ] ④摘要中的 H/O/RC/KSQ 表述与正文各 Phase 一致（V-01~V-05 范围内，人工核查）
-   - [ ] ⑤占位符清零
-   - [ ] ⑥去 AI：`humanizer_zh.py scan sections/00_摘要_中文.md` 无 ERROR；`rhythm-check` 的 `cn_sentence_too_long` 为软提醒（机制类长句已豁免、非机制类过长酌情拆分）、不阻断
+   **本 Phase 完整 DoD 判据（全部核查项 + 脚本命令）以 `references/dod_checklist.json` gate=`p6-dod` 为唯一真源**：盲检子代理据此逐项核、能脚本核的先跑脚本，退出码非 0 即 fail-closed。该 gate 含中/英文摘要字数、关键词吻合、摘要 H/O/RC/KSQ 一致、占位符清零、去AI，及 N57 结构完整性。此处不再内联清单，避免与真源 drift。
 
 9. Phase 7: 全文自审与终稿 + merge.
    - Input: all sections (00, B1-B3, P1-P4, REF) confirmed.
@@ -341,18 +291,7 @@ Follow phased gates in order:
    2. 派独立子代理（Claude Code 用 `academic-blind-reviewer`），不给写作上下文，要求返回 JSON 数组。
    3. 校验：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate p7-dod --return <返回.json>`；非 0 = fail-closed，**未过不得声明完成、不得 merge**。
 
-   下列清单与 `references/dod_checklist.json` gate=`p7-dod` 逐项对应（改清单先改 JSON）：
-
-   - [ ] ①`diagnosis_engine.py full-review` 无 ERROR 级问题
-   - [ ] ②`consistency_mapper.py validate` V-01~V-12 全量验证 PASS（V-06/V-07/V-09/V-11/V-12 首次强制执行）
-   - [ ] ③`gate-check --require-mcp` PASS（引文矩阵 / MCP 缓存 / 撤稿检测 / 科学问题属性）
-   - [ ] ④页数 ≤30 页（`page-estimate` 核验；超出则已按报告定位修剪）
-   - [ ] ⑤`humanizer_zh.py scan-all` 无 ERROR，WARNING 已逐条处理或标注豁免理由；`cn_sentence_too_long` 为软提醒（机制类长句已豁免、非机制类过长酌情拆分）、不阻断。**🔴 中文句内半角标点（`code=halfwidth_punct_in_cn`，如 `细胞,然后`/`清洗:结果`）现为 ERROR 级硬阻断**：中文标书正文应全角 `，；：（）`，半角两侧紧邻汉字即报 ERROR、卡在本门禁（数字千分位 `1,000`、全角标点均不误报）。**🔴 英文铁错拼（`code=english_misspelling`，如 `occured`/`recieve`/`seperate`）亦为 ERROR 级硬阻断**：固定错拼表只收从不合法的英文串，误报率≈0；规范英文缩写/术语/基因符号（IL-6、CRISPR、ELISA 等）不在表内、天然不误伤
-   - [ ] ⑤a（soft，N66）上下标裸写提醒：scan-all 的 `subsup_bare` 项已逐条核对——含化学式/离子/半数效应浓度/单位指数的标书（H2O、CO2、Ca2+、IC50、cm2 等）改用 `^..^`/`~..~` 或 sup/sub，docx 才能正确呈现；不含化学式的标书天然无命中。仅报告不阻断
-   - [ ] ⑥全文占位符清零（CITE_PENDING/DATA_PENDING/【待AI】/【待翻译】）
-   - [ ] ⑦V-11 代表作：每篇代表作能对应 ≥1 条 H 或 RC（`consistency_mapper validate` + 人工确认）
-   - [ ] ⑧V-12 备选路线：每条主研究路线（M）含 ≥1 条备选方案或风险应对措施
-   - [ ] ⑨合并顺序正确（00摘要 → B1-B3 → P1 → P2 → P3_1~P3_4 → P4 → REF），输出文件存在且可读
+   **本 Phase 完整 DoD 判据（全部核查项 + 脚本命令）以 `references/dod_checklist.json` gate=`p7-dod` 为唯一真源**：盲检子代理据此逐项核、能脚本核的先跑脚本，退出码非 0 即 fail-closed。该 gate 含 diagnosis_engine 无 ERROR、V-01~V-12 全量验证、gate-check --require-mcp、页数上限、去AI scan-all（`halfwidth_punct_in_cn` 中文句内半角标点、`english_misspelling` 英文铁错拼均为 ERROR 级硬阻断，判据见 JSON N47）、全文占位符清零、V-11 代表作、V-12 备选路线、合并顺序，及 N58 结构完整性、N66 上下标裸写软提醒。此处不再内联清单，避免与真源 drift。
 
 At each phase:
 - snapshot
