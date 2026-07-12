@@ -157,9 +157,9 @@ AI_STYLE_CATEGORIES = {"ai_hedging", "ai_appreciation", "ai_filler", "ai_ing_cla
                        "ai_em_dash", "ai_scare_quote", "ai_explanatory_colon",
                        "forbidden_ai_phrase"}
 FABRICATION_CATEGORIES = {"fabricated_experiment", "fabricated_statistics"}
-# 破折号硬门禁、禁止使用：ai_em_dash 命中即 pipeline-blocking(return 1)。
-# 其余 AI 风格项(scare quotes/解释性冒号/句长等)仍为软提示(WARN-only)。
-HARD_STYLE_CATEGORIES = {"ai_em_dash"}
+# 去AI必禁三项(破折号/scare quotes/解释性冒号)硬门禁、禁止使用：命中即 pipeline-blocking(return 1)。
+# 其余 AI 风格项(hedging/appreciation/filler/-ing 从句/句长等)仍为软提示(WARN-only)。
+HARD_STYLE_CATEGORIES = {"ai_em_dash", "ai_scare_quote", "ai_explanatory_colon"}
 
 
 def _check_en_sentence_length(units: list[dict]) -> list[tuple[str, str, str]]:
