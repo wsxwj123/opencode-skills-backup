@@ -287,7 +287,7 @@ python -c "import os,json; d=os.path.join(os.getcwd(),'data'); os.makedirs(d,exi
 硬门禁:
 1. 若存在未替换占位符(如`{{...}}`),必须终止交付并返工。
 2. 头部`VERDICT_TEXT`与第十部分`FINAL_RECOMMENDATION`必须一致且只能为"拒稿/大修/小修/接收"之一。
-3. **（C 反AI降软）** `scan_report_humanize.py` 只对"**禁套话主干**"硬阻断：命中 humanizer BANNED 模板句/套话/修辞（如"综上所述""革命性的""值得注意的是"）时返回 `HUMANIZE_FAILED`（exit 1），须改写正文后重跑，未过不得交付。**装饰破折号/scare quotes/解释性冒号/超50字中文长句已降为软提示（WARNING，不阻断）**，脚本会列出但不影响退出码；这些软项供人工酌情修润，不作返工强制。脚本无法判定的"从句≤2层"由 B7 盲检人工酌情核。
+3. `scan_report_humanize.py` 硬阻断项（severity=ERROR，exit 1）：**禁套话主干**（humanizer BANNED 模板句/套话/修辞，如"综上所述""革命性的""值得注意的是"）+ **装饰破折号（—/——，禁止使用，硬门禁）**。命中即 `HUMANIZE_FAILED`，须改写正文后重跑，未过不得交付。**scare quotes/解释性冒号/超50字中文长句仍为软提示（WARNING，不阻断）**，脚本会列出但不影响退出码；这些软项供人工酌情修润。脚本无法判定的"从句≤2层"由 B7 盲检人工酌情核。
 4. 仅当上述校验全部通过才允许提交最终报告。
 5. 若 `$SKILL_DIR/scripts/validate_report_html.py` 或 `scan_report_humanize.py` 路径不存在或执行报错，必须在报告头部注明"[自动校验不可用，已人工核查占位符与VERDICT一致性及去AI三禁]"，并逐项人工确认上述门禁，不得静默跳过。
 6. 若校验未通过：不得自行静默修改报告后重新提交，必须向用户说明具体失败原因和位置，列出需要人工确认的条目，等待用户指令后再决定返工或带注释交付。
@@ -324,7 +324,7 @@ python -c "import os,json; d=os.path.join(os.getcwd(),'data'); os.makedirs(d,exi
 - [ ] **B4 · 魔鬼代言人复查已执行**：第五步半五类对抗性审查（rubric 第八节）已完整执行，发现问题已合并至 `{{CRITICAL_ISSUES_HTML}}` 或 `{{FORENSIC_ANALYSIS_HTML}}`
 - [ ] **B5 · 给编辑保密意见**：`{{CONFIDENTIAL_EDITOR_HTML}}` 四项（直接拒稿建议/数据造假怀疑/私评新颖性/利益冲突提示）均有内容或明确写"无"，无项目遗漏
 - [ ] **B6 · 引文真实性**：报告正文中主动引据的外部文献（非稿件自带引用）已过 `citation_guard`，`ok=true` 或已标注"待核验"；未引外部文献时此项标记"无外部引文"
-- [ ] **B7 · 审稿意见本身去AI（C 降软后：只硬核禁套话主干）**：报告正文（含各 `{{*_HTML}}` 填充内容）**禁套话主干**（rubric 第七节 BANNED 模板句/套话/修辞）无残留——**先跑脚本硬核**：`python ~/.claude/skills/reviewer-simulator/scripts/scan_report_humanize.py <报告HTML路径>` 须 `HUMANIZE_OK`（exit 0）。破折号/scare quotes/解释性冒号/中文句长≤50字/从句≤2层已**降为软提示**，脚本会列出、人工酌情修润，**不阻断交付**
+- [ ] **B7 · 审稿意见本身去AI（硬核：禁套话主干 + 禁破折号）**：报告正文（含各 `{{*_HTML}}` 填充内容）**禁套话主干**（rubric 第七节 BANNED 模板句/套话/修辞）+ **禁装饰破折号（—/——）** 无残留——**先跑脚本硬核**：`python ~/.claude/skills/reviewer-simulator/scripts/scan_report_humanize.py <报告HTML路径>` 须 `HUMANIZE_OK`（exit 0）；破折号命中即 ERROR、`HUMANIZE_FAILED`。scare quotes/解释性冒号/中文句长≤50字/从句≤2层为**软提示**，脚本会列出、人工酌情修润，**不阻断交付**
 - [ ] **B8 · 报告结构完整性**：审稿报告含全部规定区块（稿件概要/合规审计/契合度/18点分析/魔鬼代言人/核心问题/给编辑保密意见/回复草案区），无缺块、无空区块（回复草案区默认为一句指路说明，非逐条回复，不算空块）；且多视角并发盲评的所有视角发现均已汇入，无遗漏视角
 
 - [ ] **B11 · 检索证据门（⑥，soft 报告项）**：报告中每条"不新颖/已有高度相似研究/与已发表文献矛盾"批评，均附**检索痕迹（工具+检索式+日期）+ 具名文献（标题+DOI/PMID，已过 citation_guard）**；无检索举证的此类断言必须已改写为"要求作者举证"的中性表述。空 index 不豁免此项。软项：只报告不阻断，但发现空口断言须退回改写。
@@ -532,7 +532,7 @@ AIGC率过高或涉嫌造假
 - ❌ 给非原创稿件（综述／Meta／病例报告／协议）套用对照组、样本量、随机化、盲法等原创专属批评，且不声明所用报告规范。
 - ❌ 用 tavily、websearch、openalex 检索文献，或并行调用检索工具、间隔小于 1 秒。
 - ❌ 文献未写入 literature_index.json 过 citation_guard 就当证据写入正文，或把空 index（status=empty）当核验失败而阻断交付。
-- ❌ 审稿意见正文出现"禁套话主干"（BANNED 模板句/套话/修辞，如"综上所述""革命性的""值得注意的是"）却仍交付（此项硬阻断；破折号/scare quotes/解释性冒号/超长句已降为软提示，列出即可不阻断）。
+- ❌ 审稿意见正文出现"禁套话主干"（BANNED 模板句/套话/修辞，如"综上所述""革命性的""值得注意的是"）或**装饰破折号（—/——，禁止使用）**却仍交付（二者均硬阻断 ERROR；scare quotes/解释性冒号/超长句为软提示，列出即可不阻断）。
 - ❌ 三项输入（稿件全文／目标期刊／研究领域）缺失仍基于猜测推进，或 DoD 子代理盲检未 exit 0 就声明“审稿报告完成”。
 
 
