@@ -30,15 +30,14 @@ from common import (
 CITATION_RE = re.compile(r"\[\d+(?:\s*[-,]\s*\d+)*\]", re.IGNORECASE)
 DOI_RE = re.compile(r"\b10\.\d{4,9}/[^\s\"]+", re.IGNORECASE)
 
-# 学术散文里长句/-ing 分词/scare quotes/解释性冒号/修辞铺陈是正当修辞,降为软提示
-# (记入 polish_risk_flags/报告,不阻断交付)。破折号(em dash)例外:硬门禁、禁止使用,
-# 不在软集,由 strict_gate 对其 fail-close。硬拦主干还含 AI 套话禁词表(delve into / cliche: … )。
+# 学术散文里长句/-ing 分词/修辞铺陈是正当修辞,降为软提示
+# (记入 polish_risk_flags/报告,不阻断交付)。去AI必禁三项——破折号(em dash)、
+# scare quotes、解释性冒号——例外:硬门禁、禁止使用,不在软集,由 strict_gate 对其 fail-close。
+# 硬拦主干还含 AI 套话禁词表(delve into / cliche: … )。
 _SOFT_AI_MARKERS = frozenset({
     "not only...but also",
     "rhetorical question",
     "trailing -ing clause",
-    "scare quotes",
-    "explanatory colon",
 })
 
 
@@ -100,8 +99,8 @@ def check_unit(unit: dict) -> tuple[bool, list[str]]:
     # 非散文(参考文献/作者名单/图注等)保留原文不润色,去AI检测不适用;红线(数值/引用/语气/meaning)仍查
     is_nonprose = unit.get("prose") is False or unit.get("polished_by") == "unchanged-nonprose"
     markers = [] if is_nonprose else find_ai_style_markers(polished)
-    # C 反AI降软:句长、破折号、scare quotes、解释性冒号、-ing 拖尾、not only...but also、
-    # 修辞问句都是学术散文正当修辞,降为软提示不阻断交付;仅 AI 套话禁词表仍硬拦。
+    # C 反AI降软:句长、-ing 拖尾、not only...but also、修辞问句降为软提示不阻断交付;
+    # 去AI必禁三项(破折号/scare quotes/解释性冒号)与 AI 套话禁词表仍硬拦 fail-close。
     blocking = [m for m in markers if not is_soft_ai_marker(m)]
     if blocking:
         problems.append(f"ai markers: {blocking}")
