@@ -10,11 +10,13 @@ reviewer-simulator 的产物是 assets/report_template.html 填充后的 HTML，
     python scan_report_humanize.py <报告HTML路径>
     python scan_report_humanize.py --text <纯文本路径>   # 直接扫纯文本/markdown中间产物
 
-B7 阻断项（任一命中即 exit 1）：三项禁用（装饰破折号 decorative_dash /
-scare quotes / 解释性冒号 explanatory_colon）+ humanizer BANNED 模板句式 +
-中文单句超50字。其余（VAGUE 措辞/bullet/节奏）仅 WARNING，不阻断。
+B7 阻断项（C 反AI降软后，只保留"禁套话主干"硬阻断）：仅 humanizer BANNED
+模板句式/套话/修辞（severity=ERROR，如"综上所述""革命性的""值得注意的是"）命中即
+exit 1。装饰破折号 decorative_dash / scare quotes / 解释性冒号 / 中文单句超50字 已
+**降为软提示**（WARNING，不阻断，仅供人工修润）。其余（VAGUE 措辞/bullet/节奏）同为
+WARNING。
 
-退出码: 0=无 B7 违规（可有 WARNING）; 1=存在 B7 违规。
+退出码: 0=无套话主干违规（可有软提示 WARNING）; 1=命中套话主干（BANNED）违规。
 """
 
 from __future__ import annotations
@@ -66,18 +68,13 @@ def main() -> int:
     scan = h.scan_text(text)
     rhythm = h.rhythm_check(text)
 
-    # B7 阻断项：三禁 + humanizer ERROR(BANNED 句式) + 中文超50字
-    BLOCKING_CODES = {"decorative_dash", "scare_quotes", "explanatory_colon"}
-    violations = []
-    others = []
-    for i in scan["issues"]:
-        if i.get("code") in BLOCKING_CODES or i.get("severity") == "ERROR":
-            violations.append(i)
-        else:
-            others.append(i)
+    # B7 阻断项（C 反AI降软）：只保留"禁套话主干" = humanizer BANNED 句式(severity=ERROR)。
+    # 装饰破折号/scare quotes/解释性冒号/中文超50字 全部降为软提示(WARNING，不阻断)。
+    violations = [i for i in scan["issues"] if i.get("severity") == "ERROR"]
+    others = [i for i in scan["issues"] if i.get("severity") != "ERROR"]
     long_sents = [i for i in rhythm["issues"] if i.get("type") == "cn_sentence_too_long"]
     rhythm_other = [i for i in rhythm["issues"] if i.get("type") != "cn_sentence_too_long"]
-    violations_total = len(violations) + len(long_sents)
+    violations_total = len(violations)  # 句长(long_sents)已降软，不再计入阻断
 
     if args.json:
         print(json.dumps(
@@ -87,16 +84,17 @@ def main() -> int:
             ensure_ascii=False, indent=2))
         return 1 if violations_total else 0
 
+    soft_total = len(others) + len(rhythm_other) + len(long_sents)
     if violations_total:
-        print(f"HUMANIZE_FAILED (B7 违规 {violations_total} 处，须修复后重跑)")
+        print(f"HUMANIZE_FAILED (套话主干违规 {violations_total} 处，须修复后重跑)")
     else:
-        print("HUMANIZE_OK (无 B7 违规)")
-    print(f"- B7违规: {violations_total}  WARNING: {len(others) + len(rhythm_other)}")
+        print("HUMANIZE_OK (无套话主干违规)")
+    print(f"- 套话主干违规: {violations_total}  软提示WARNING: {soft_total}")
 
     for i in violations:
         print(f"  [B7] {i['code']}: {i.get('text','')[:50]}  -> {i.get('suggestion','')}")
     for i in long_sents:
-        print(f"  [B7] cn_sentence_too_long({i['cn_chars']}字): {i.get('text','')[:50]}")
+        print(f"  [WARN] cn_sentence_too_long({i['cn_chars']}字，已降软): {i.get('text','')[:50]}")
     for i in others:
         print(f"  [WARN] {i['code']}: {i.get('text','')[:50]}  -> {i.get('suggestion','')}")
     for i in rhythm_other:
