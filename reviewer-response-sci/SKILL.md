@@ -331,27 +331,7 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
 
 ⚠️ **盲检降级告警**：若环境派不出真正独立的子代理，**绝不能同一 AI 自问自答冒充盲检**。明确告诉用户「本环境盲检不可靠，请你亲自复核：每条审稿意见是否都正面回应了、有没有漏回、承诺的修改是否都有落点」，交回用户。
 
-下列清单与 `references/dod_checklist.json` 逐项对应（**改清单先改 JSON**，此处仅供人工对照；能脚本核的项子代理会先跑脚本）：
-
-### 通用 6 项（全技能必过，对应 RR1–RR6）
-- [ ] ① 引文 [N] ↔ 参考列表一一对应（无孤儿、无缺号、编号连续）→ `citation_ref_tracker.py`
-- [ ] ② 新增引用验真升级（有新引才做）：(a) `citation_guard.py --fail-on-unverified` 真实性硬核验（DOI/PMID/撤稿全验，验不过=FAIL）；(b) `citation_claim_check.py` 支撑度核证，承重论点句 contradict/unknown/无摘要=fail-closed 且人工确认。无新引则 `entries` 为空数组即通过
-- [ ] ③ 全部回复内容符合投稿论文主线（无跑题、无与原稿结论矛盾的表述）→ 人工
-- [ ] ④ 占位符清零（无 `待AI` / `AI_FILL_REQUIRED` / `[PENDING Step 7]`）→ `final_content_gate.py`
-- [ ] ⑤ 去 AI：**硬项**——无 AI 套话禁词（空致谢/对冲/填充/模板重复）、**去AI必禁三项 无 scare quotes / 无解释性冒号 / 无破折号（—/——，禁止使用，risk_check.py 命中即 FAIL）**；**软项**（WARN 非阻断，别机械削平）——英文长句/-ing 分词、中文长句/嵌套按语感处理，明显堆砌才改 → `risk_check.py`（软项只 WARN）+ 人工
-- [ ] ⑥ 字数达标（每条 response_en ≥3 句且 ≤300 词；response_zh 信息等价）→ 人工
-
-### reviewer-response 特有项（对应 RR7–RR13）
-- [ ] 逐条覆盖：每条审稿意见（含 Editor 意见）均有对应 unit，无遗漏 → 人工对照 Step 1.5 解析表
-- [ ] Editor 层独立：Editor 意见为独立顶层节点，未并入任何 Reviewer → HTML TOC 人工核对
-- [ ] Strategy 基调已定：每个 comment unit 的 `content.strategy` 字段均非空 → 人工（Step 1.7 确认后）
-- [ ] 承诺 ↔ 落点一致：`response_en` 里承诺的动作能在 `modification_actions` 或 `revised_excerpt_en` 找到对应落点 → `consistency_check.py`（WARN 需消除）**[此项必须由独立子代理核，主 agent 不得自评]**
-- [ ] `edit_plan` 已聚合回填：`manuscript_edit_plan.md` 无 `[PENDING Step 7]` 行 → `aggregate-edit-plan` 脚本退出码 0
-- [ ] 反驳有据：所有 `Push back` 策略的 unit 均有至少一条具体证据（引文 / 数据 / 方法学依据）→ 人工
-- [ ] Citation registry 已核验：`citation_registry.json` 存在且 `citation_guard.py` 通过；若无新增引用，确认 `citation_registry.json` 的 `entries` 为空数组 → `citation_guard.py`
-- [ ] 各 gate 全通：各独立 gate 脚本退出码均为 0（`strict_gate` / `final_content_gate` / `consistency_check` / `risk_check` / `citation_guard` / `citation_ref_tracker`）→ 见 RR13
-- [ ] 结构完整性（RR14）：每个 response unit 结构完整（审稿意见原文 + 回复正文 + 修改证据/落点定位 三要素齐全），无空 unit；letter 整体覆盖每条意见无遗漏 → 人工
-- [ ] 🔴 字符级硬门禁（RR16，hard）：回复信**作者亲自写的 Response 正文**（仅 `content.response_en` / `response_zh`，**不扫审稿人原话**）过 `proofread.py` 字符级扫描，`misspelling` / `chinese_punct` / `subsup_bare` 三类零容忍（`ok=true`、`fail_on_hits` 为空）；英美混用/术语不一致等低置信项仅报告不阻断 → `python scripts/proofread_response.py --project-root .`。放在生成回复信之后、交付之前；命中任一高置信类别即 fail，不得出具 letter。
+**本节完整 DoD 判据（全部核查项 + 脚本命令）以 `references/dod_checklist.json` gate=`response-dod` 为唯一真源（16 项 RR1-RR16）**：盲检子代理据此逐项核、能脚本核的先跑脚本，退出码非 0 即 fail-closed。含 RR1-RR6 通用（引文对应/新增引用验真+支撑度核证/主线对齐/占位清零/去AI 硬禁三项标点/字数）、RR7-RR14 特有（逐条覆盖无遗漏 / Editor 层独立 / Strategy 基调 / **承诺↔落点一致（`consistency_check.py`，独立子代理核、主 agent 不得自评）** / edit_plan 回填 / 反驳有据 / 各 gate 全通 / RR14 结构完整性），及 **RR15 逐条实质回应盲检（每条意见含各子问点是否被实质回应，而非答非所问/避重就轻/只承诺不落实）**、RR16 字符级硬门禁（仅扫作者写的 Response 正文、不扫审稿人原话，misspelling/chinese_punct/subsup_bare 零容忍，`proofread_response.py`）。此处不再内联清单，避免与真源 drift。
 
 ## Re-Render Workflow
 After manual editing of any unit JSON:
