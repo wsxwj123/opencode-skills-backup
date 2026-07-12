@@ -751,12 +751,12 @@ If pending_sections is empty → all sections complete; proceed to Phase 4.
    - **D2 Arbitration & Critical Analysis:** 是否识别 ≥1 处文献矛盾，分析为何矛盾，并给出立场或调和解释（不骑墙）。
    - **D3 Evidence Density & Traceability:** 每个事实断言有引用、关键断言 ≥2 独立来源、证据类型与断言类型匹配（机制→原著，疗效→临床试验）。
    - **D4 Flow & Coherence:** 段首承接上段结论、本节有 setup→evidence→synthesis→implication 内在弧线、无可随意搬移的孤立段。
-   - **D5 Anti-AI Compliance:** 硬项（命中即判 N）：零禁用词/AI 套话、无生僻词/造词、无 scare quotes / 解释性冒号 / trailing -ing 从句、无模板化转折开头。软项（只提示、不判 N）：句长有节奏、被动句约 ≤30%、少用装饰性破折号——按节奏酌情调整即可。
-     **量化兜底（先跑脚本再人评）：** 委托盲评前先跑 style_checker 拿客观信号，**high/medium 项必须先改掉**；`info` 软项（long_sentence / excessive_passive_voice / decorative_em_dash）只提醒不阻断、不扣分，择优处理。
+   - **D5 Anti-AI Compliance:** 硬项（命中即判 N）：零禁用词/AI 套话、无生僻词/造词、无 scare quotes / 解释性冒号 / trailing -ing 从句、无模板化转折开头、**无装饰性破折号（—/——，禁止使用）**。软项（只提示、不判 N）：句长有节奏、被动句约 ≤30%。
+     **量化兜底（先跑脚本再人评）：** 委托盲评前先跑 style_checker 拿客观信号，**high/medium 项必须先改掉；破折号命中即 hard_fail 一票否决，必须清零**；`info` 软项（long_sentence / excessive_passive_voice）只提醒不阻断、不扣分，择优处理。
      ```bash
      python3 scripts/style_checker.py --file drafts/section_01_01.md --passive-max 0.30
-     # 硬项(计分,可致 exit 1)：forbidden_ai_phrases / scare_quotes / explanatory_colon_in_prose / trailing_ing_clause / bullet_points ...
-     # 软项(severity=info,只报告不扣分不阻断)：long_sentence(>30词) / excessive_passive_voice(>30%) / decorative_em_dash
+     # 硬项(计分/hard_fail,可致 exit 1)：forbidden_ai_phrases / scare_quotes / explanatory_colon_in_prose / trailing_ing_clause / bullet_points / decorative_em_dash(破折号,hard_fail一票否决) ...
+     # 软项(severity=info,只报告不扣分不阻断)：long_sentence(>30词) / excessive_passive_voice(>30%)
      # exit 0 = 通过(score≥阈值)；非 0 = 据 issues 里的 high/medium 项修复后重跑（info 项不影响退出码）
      ```
    **优先委托独立 subagent 盲评**（消除自写自评偏差）：派一个 subagent，只给它 `drafts/section_XX_XX.md` 路径 + checklist，不给写作时的上下文，让它独立判定每项 Y/N 并返回结构化结果。
@@ -808,7 +808,7 @@ If pending_sections is empty → all sections complete; proceed to Phase 4.
 
     - **R22 拉丁短语斜体软提醒(🟡软/人工确认,不阻断)**,`proofread.py` 的 `latin_italic_missing` 类别:正文里 `in vitro`/`in vivo`/`ex vivo`/`in situ`/`de novo`/`post hoc`/`per se` 等公认须斜体的拉丁短语若裸写(未被 `*...*` 斜体标记包裹)则报告。**仅提示,不阻断、不进 `--fail-on`、不扣分**,由人工确认是否补斜体(`et al.`/`e.g.`/`vs.` 等正体惯例不在词表内)。
 
-11. **📋 DoD 结论摆出 + HALT（展示式，不新增硬墙）：** 本节 `delegate_review verify` 盲检通过（exit 0 且 `.review_pass/<section>.json` 已落盘）后，先把**逐项 DoD 结论**摆给用户——从子代理返回的 JSON 里逐条列出每个 `manuscript-dod` item 的 id/name + verdict（pass）+ 证据锚点摘录（systematic 额外 3 项、结构完整性 R15、字符级 R21 一并列出；R5 里降软的长句/被动/破折号如命中只作 info 提示、不影响通过）。再附本节 summary（content / logic / citation count / word count）。**然后 HALT 等用户确认，才写下一节。** 这是"展示 + 可继续"：盲检已过即可放行，此处只保证用户看到每项结论、有机会叫停，不新增硬门。Wait for "Continue".
+11. **📋 DoD 结论摆出 + HALT（展示式，不新增硬墙）：** 本节 `delegate_review verify` 盲检通过（exit 0 且 `.review_pass/<section>.json` 已落盘）后，先把**逐项 DoD 结论**摆给用户——从子代理返回的 JSON 里逐条列出每个 `manuscript-dod` item 的 id/name + verdict（pass）+ 证据锚点摘录（systematic 额外 3 项、结构完整性 R15、字符级 R21 一并列出；R5 里降软的长句/被动如命中只作 info 提示、不影响通过；破折号为硬门禁 hard_fail、命中即不通过）。再附本节 summary（content / logic / citation count / word count）。**然后 HALT 等用户确认，才写下一节。** 这是"展示 + 可继续"：盲检已过即可放行，此处只保证用户看到每项结论、有机会叫停，不新增硬门。Wait for "Continue".
 
 ### Figure Prompt Generation
 

@@ -66,8 +66,8 @@ High-impact reviews are not summaries; they are arguments.
 
 ### Three Additional AI-Marker Bans
 
-**1. Decorative em-dashes (—) — soft guide (not a hard gate)**
-- **Discouraged:** Using — or —— as a pause, supplement, or emphasis device (e.g., "The result was clear—cells died"). It is a mild AI marker, so prefer to avoid it; style_checker reports em-dashes as `info` (advisory), not a gate failure.
+**1. Decorative em-dashes (—): hard gate, banned**
+- **Banned:** Using — or —— as a pause, supplement, or emphasis device (e.g., "The result was clear, cells died"). Em-dashes are prohibited; style_checker flags any em-dash as a `high` issue and sets hard_fail, failing the gate regardless of score.
 - **Allowed:** Hyphens in compound modifiers (dose-dependent), numeric ranges (1990–2005), and en-dashes in structured labels.
 - **Fix:** Recast as a comma, period, or separate sentence. "The result was clear—cells died" → "The result was clear: cells died at 48 h."
 
