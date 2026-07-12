@@ -311,25 +311,29 @@ def check_file(filepath: str, journal: str = "") -> dict[str, Any]:
         })
         result["hard_fail"] = True
 
-    # ── 8. Scare quotes (禁挂引号暗示新概念) ──────────────────────────────────
+    # ── 8. Scare quotes (硬门禁, 禁止使用: 引号暗示新概念) ─────────────────────
+    # 去AI必禁三项之一。与破折号同级：命中即 hard_fail 一票否决，不放行。
     scare_hits = SCARE_QUOTE_RE.findall(prose)
     # Filter obvious false positives: ALL CAPS acronyms, or phrases ≥5 words
     scare_hits = [h for h in scare_hits if len(h.split()) <= 4 and not h.isupper()]
     if len(scare_hits) >= 1:
         result["issues"].append({
             "type": "scare_quotes",
-            "severity": "medium",
-            "detail": f"{len(scare_hits)} likely scare-quote phrase(s): {', '.join(repr(h) for h in scare_hits[:3])}. Remove quotes unless direct citation or established term.",
+            "severity": "high",
+            "detail": f"{len(scare_hits)} likely scare-quote phrase(s): {', '.join(repr(h) for h in scare_hits[:3])}. 禁止使用 scare quotes(硬门禁)，除非直接引用或已固化术语。",
         })
+        result["hard_fail"] = True
 
-    # ── 9. Explanatory colon in prose (禁解释性冒号) ──────────────────────────
+    # ── 9. Explanatory colon in prose (硬门禁, 禁止使用: 解释性冒号) ────────────
+    # 去AI必禁三项之一。与破折号同级：命中即 hard_fail 一票否决，不放行。
     expl_colon_hits = EXPLANATORY_COLON_RE.findall(prose)
     if len(expl_colon_hits) >= 1:
         result["issues"].append({
             "type": "explanatory_colon_in_prose",
-            "severity": "low",
-            "detail": f"{len(expl_colon_hits)} possible explanatory colon(s): {', '.join(repr(h) for h in expl_colon_hits[:3])}. Rewrite as a subordinate clause.",
+            "severity": "high",
+            "detail": f"{len(expl_colon_hits)} possible explanatory colon(s): {', '.join(repr(h) for h in expl_colon_hits[:3])}. 禁止使用解释性冒号(硬门禁)，改写为从句。",
         })
+        result["hard_fail"] = True
 
     # ── 10. Trailing -ing participial clause (禁 -ing 分词悬垂从句) ──────────
     # Sentence-final ", reflecting/demonstrating/suggesting/..." is a hallmark

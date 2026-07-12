@@ -399,7 +399,7 @@ python scripts/state_manager.py add-abbreviation <one.json>
    - [ ] **②citation_guard**：本节新增引用已过 `citation_guard.py --offline` 核验，`ok=true`
    - [ ] **③主线对齐**：本节内容符合 `storyline.json` 对应 section 的核心论点，无跑题或自相矛盾
    - [ ] **④占位清零**：`grep -n "CITE_PENDING\|DATA_PENDING\|REF_DROPPED" <本节文件>` 输出为空
-   - [ ] **⑤去 AI**：`style_checker.py --file <本节文件> --threshold 70` 通过（硬项：无 trailing_ing_clause / forbidden_ai_phrases / scare_quotes / 列点 / **破折号 em-dash（命中即 hard_fail 一票否决，禁止使用）**；**句长、被动比为 warnings 软提示，不计入 score、不阻断**——见提醒即酌情改，不强改；见 `references/anti-ai-protocol.md`）
+   - [ ] **⑤去 AI**：`style_checker.py --file <本节文件> --threshold 70` 通过（硬项：无 trailing_ing_clause / forbidden_ai_phrases / 列点 / **去AI必禁三项 scare_quotes / explanatory_colon / 破折号 em-dash（命中即 hard_fail 一票否决，禁止使用）**；**句长、被动比为 warnings 软提示，不计入 score、不阻断**——见提醒即酌情改，不强改；见 `references/anti-ai-protocol.md`）
    - [ ] **⑥字数（软提示，不阻断落盘）**：本节字数**建议**落在 storyline 预估区间内；字数下限（凑字数地板）仅作提醒不硬卡。**唯一硬项是上限**：全文累计不得超期刊字数上限（P0#8）。
 
    **gsw 特有项**（Results/Discussion 节必检）：
