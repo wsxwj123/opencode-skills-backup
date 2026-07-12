@@ -798,17 +798,17 @@ If pending_sections is empty → all sections complete; proceed to Phase 4.
        ```
        它只放行"上一节盲检"这一项（其余硬检查照常），并写 `.review_pass/<上一节>.json`(manual:true) + 追加 `.review_pass/MANUAL_REVIEW_AUDIT.log`；理由为空则拒绝放行。此后每次 `prewrite_gate` 都会在 warnings 里点名"人工放行、语义未经独立盲检"。**门禁默认行为不变**：不加此参数时，缺盲检标记照旧硬拦。
 
-    `manuscript-dod` gate 共 15 项（通用 6：引文一一对应 / citation_guard 已过 / 符合 storyline / 占位符清零 / 去 AI 合规 / 字数达标；review 特有 5：综合非罗列 / 矛盾仲裁 / 引用类型匹配 / 检索日志已记 / 框架图一致；systematic 额外 3：PRISMA 计数自洽 / RoB 已评级 / GRADE 已分级；结构完整性 R15（全类型通用）；语法拼写与字符级格式 R21（全类型通用机器门禁））。**逐项内容与核验命令以 `references/dod_checklist.json` 为唯一真源**。上面 `pack` 步骤运行时会把该 gate 的每个 item（id / name / check / script）完整打印进盲检任务包，此处不再复述以免与 JSON 漂移。systematic 3 项仅 Review type = systematic 时检查，R15 全类型通用。
+    `manuscript-dod` gate 共 **22 项（20 硬门禁 + R20/R22 两软报告）**，覆盖：通用（引文一一对应 / citation_guard / 符合 storyline / 占位清零 / 去 AI / 字数）、review 特有（综合非罗列 / 矛盾仲裁 / 引用类型匹配 / 检索日志 / 框架图一致）、systematic 额外（PRISMA 自洽 / RoB / GRADE）、结构完整性、**覆盖全面性 / 关键文献遗漏与引用偏倚 / 论证 arc 连贯 / 学术合规披露（R16-R19 盲检质量核）**、字符级机器门禁（R21）。**逐项内容 / severity / 核验命令以 `references/dod_checklist.json` 为唯一真源**——上面 `pack` 步骤运行时会把该 gate 的每个 item（id / name / check / script）完整打印进盲检任务包，此处不逐条枚举以免与 JSON 漂移。systematic 3 项仅 Review type = systematic 时检查，其余全类型通用。
 
     - **R21 语法拼写与字符级格式(🔴机器硬门禁,可阻断)**,跑 `python3 scripts/proofread.py --manuscript-dir drafts --report proofread_report.json --fail-on misspelling,chinese_punct,subsup_bare`。stdlib-only、自包含。高置信三类**零容忍**——misspelling(英文常见错拼)、chinese_punct(中文标点漏入英文)、subsup_bare(应上下标却裸写,如 H2O/CO2/IC50,CJK 安全边界),命中任一即 `ok=false`(脚本 exit 1),据 `proofread_report.json` 的 `fail_on_hits` 定位修复后重跑。其余类别(英美拼写混用、单位格式、术语写法不一致、数字千分位、Methods 时态、学术错拼/中文错别字等)仅在报告里提示、不阻断,由作者择一统一。与 R5 去AI(style_checker)互补:R5 管文风,R21 管字符级机器错。
 
-    附带软报告项（不计入上述 15 项硬 gate，不进 verify 退出码，由盲检子代理 LLM 判断）：
+    附带软报告项（不计入硬门禁退出码，由盲检子代理 LLM 判断）：
 
     - **R20 常识合理性(🟡软报告,不阻断)**,盲检子代理顺带扫正文是否有明显常识/事实硬伤(单位量级离谱、生理/机制常识错误、跨文献综合时的事实拼接错误、前后数值逻辑矛盾等)。**仅提示不阻断**,只在发现明显硬伤时记入盲检反馈供用户裁决,绝不自动改内容。与引用/文献核验门禁区分:本项管"综述论述的内容常识上是否成立"。
 
     - **R22 拉丁短语斜体软提醒(🟡软/人工确认,不阻断)**,`proofread.py` 的 `latin_italic_missing` 类别:正文里 `in vitro`/`in vivo`/`ex vivo`/`in situ`/`de novo`/`post hoc`/`per se` 等公认须斜体的拉丁短语若裸写(未被 `*...*` 斜体标记包裹)则报告。**仅提示,不阻断、不进 `--fail-on`、不扣分**,由人工确认是否补斜体(`et al.`/`e.g.`/`vs.` 等正体惯例不在词表内)。
 
-11. **📋 DoD 结论摆出 + HALT（展示式，不新增硬墙）：** 本节 `delegate_review verify` 盲检通过（exit 0 且 `.review_pass/<section>.json` 已落盘）后，先把**逐项 DoD 结论**摆给用户——从子代理返回的 JSON 里逐条列出每个 `manuscript-dod` item 的 id/name + verdict（pass）+ 证据锚点摘录（systematic 额外 3 项、结构完整性 R15、字符级 R21 一并列出；R5 里降软的长句/被动如命中只作 info 提示、不影响通过；破折号为硬门禁 hard_fail、命中即不通过）。再附本节 summary（content / logic / citation count / word count）。**然后 HALT 等用户确认，才写下一节。** 这是"展示 + 可继续"：盲检已过即可放行，此处只保证用户看到每项结论、有机会叫停，不新增硬门。Wait for "Continue".
+11. **📋 DoD 结论摆出 + HALT（展示式，不新增硬墙）：** 本节 `delegate_review verify` 盲检通过（exit 0 且 `.review_pass/<section>.json` 已落盘）后，先把**逐项 DoD 结论**摆给用户——从子代理返回的 JSON 里**逐条列出每个 `manuscript-dod` item**（id/name + verdict + 证据锚点摘录，以返回 JSON 的实际条目为准、不手点项号，含 systematic 3 项、结构完整性、R16-R19 覆盖全面性/引用偏倚/论证连贯/合规披露、字符级 R21；R5 里降软的长句/被动如命中只作 info 提示、不影响通过；破折号为硬门禁 hard_fail、命中即不通过）。再附本节 summary（content / logic / citation count / word count）。**然后 HALT 等用户确认，才写下一节。** 这是"展示 + 可继续"：盲检已过即可放行，此处只保证用户看到每项结论、有机会叫停，不新增硬门。Wait for "Continue".
 
 ### Figure Prompt Generation
 

@@ -383,23 +383,7 @@ python3 scripts/extract_docx_images.py --manuscript /path/to/source.docx --proje
 
 **🔴 ①DoD停（盲检通过后必须停一次）**：`section-dod` 盲检 exit 0 后，**不得直接开写下一节**。先把该节 DoD **逐项结论**（每项 pass/证据一行）摆给用户，并**HALT 等用户明确说"过，继续下一节"**才动笔。用户未确认前停在此处。
 
-下列清单与 `references/dod_checklist.json` gate=`section-dod` 逐项对应（改清单先改 JSON），供人工对照；能脚本核的项子代理会先跑脚本：
-
-通用项（全技能共享）：
-- [ ] **G1** 编号连续：引文 `[n]` 与参考列表一一对应，无孤儿编号、无缺号（脚本：`atomic_md_workflow.py validate --chapter N`）
-- [ ] **G2** 新增引用已过 citation_guard（`citation_guard.py` 报告 `ok=true`）
-- [ ] **G3** 符合研究主线：本节内容不跑题、不与 `outline.core_argument` 矛盾
-- [ ] **G4** 占位符清零：文中无 `CITE_PENDING` / `DATA_PENDING` / `【待AI】` / `【待翻译】` 等未填占位符
-- [ ] **G5** 去 AI 通过：`check_quality.py check_writing_style()` **硬禁清零**（AI 禁词、破折号/scare quotes/解释性冒号）；句长/句式为软提示不阻断（C 降软）
-- [ ] **G6** 字数达标（软目标）：本节字数贡献符合 `chapter_targets` 分配比例（估算）；不足只提示不阻断，不得编数据凑字
-
-sci2doc 特有项：
-- [ ] **S1** 实验-方法映射标记完整：`[实验] EXP-N-M` 与 `[对应实验] EXP-N-M` 成对出现，无悬空
-- [ ] **S2** 一实验 ≥ 一图表：每个 `[实验] EXP-N-M` 对应至少一个 `[图] 图N-X` 或 `[表] 表N-X`
-- [ ] **S3** 三线表格式：本节所有数据表使用 Markdown 管道语法，无散文替代（脚本：`check_quality.py` 三线表类别）
-- [ ] **S4** 缩略语首展：本节新引入缩略语均已按 `中文全称（English Full Name, ABBR）` 格式首展，已过 `abbreviation_registry.py process`
-- [ ] **S5** 自我抄袭标注：本节复用已发表 SCI 内容处已标注来源文献 `[N]` 及声明（见 Non-Negotiable 第 20 条）
-- [ ] **S-GIT** 检查点已落：本节已落版本检查点——git 可用时 `git_checkpoint.py status .` commit 数随节递增；git 不可用时已生成 snapshot。二者满足其一
+**本节完整 DoD 判据（全部核查项 + 脚本命令）以 `references/dod_checklist.json` gate=`section-dod` 为唯一真源（20 项）**：盲检子代理据此逐项核、能脚本核的先跑脚本，退出码非 0 即 fail-closed。含 G1-G6 通用（编号连续/citation_guard/主线对齐/占位清零/去AI 硬禁三项标点/字数软目标）、S1-S5 sci2doc 特有（实验-方法映射/一实验≥一图表/三线表/缩略语首展/自我抄袭标注）、S-GIT 检查点，及 **S6 结构完整性、S10 数据溯源硬门（含数值却无 `[数据来源]` 标记=编数据嫌疑，fail-closed）、S11 承重引文核证，与 C1 科学事实正确 / I1 论证逻辑闭环 / O3 工作量与原创性 / O4 中英摘要对应 / M3 伦理合规披露 五项盲检质量核**。此处不再内联清单，避免与真源 drift。
 
 ### 5) Merge Chapter Markdown and Convert
 
@@ -426,27 +410,7 @@ sci2doc 特有项：
 
 **🔴 ①DoD停（盲检通过后必须停一次）**：`chapter-dod` 盲检 exit 0 后，**不得直接开写下一章**。先把本章 DoD **逐项结论**（每项 pass/证据一行，含数据溯源 S10、承重引文核证 S11）摆给用户，并**HALT 等用户明确说"过，继续下一章"**才动笔。用户未确认前停在此处。
 
-下列清单与 `references/dod_checklist.json` gate=`chapter-dod` 逐项对应（改清单先改 JSON），供人工对照；能脚本核的项子代理会先跑脚本：
-
-通用项（全技能共享）：
-- [ ] **G1** 全章引文编号连续，无孤儿、无缺号（脚本：`atomic_md_workflow.py validate --chapter N`）
-- [ ] **G2** 本章所有引用已过 citation_guard（`citation_guard.py` 报告 `ok=true`）
-- [ ] **G3** 全章内容符合 `outline` 本章 `core_argument`，无跑题
-- [ ] **G4** 全章占位符清零（`CITE_PENDING` / `DATA_PENDING` / `【待AI】` 全部归零）
-- [ ] **G5** 去 AI 通过：`check_quality.py check_writing_style()` **硬禁清零**（AI 禁词、三项标点规范）；句长/句式软提示不阻断（C 降软）
-- [ ] **G6** 本章字数达标（软目标）：`count_words.py` 输出接近 `chapter_targets[N]`（综述/绪论已计入正文，A③）；不足只提示不阻断，不得编数据凑字
-- [ ] **G7** 常识合理性(🟡软报告,不阻断)，盲检子代理顺带扫本章是否有明显常识/事实硬伤(单位量级离谱、生理/机制常识错误、前后数值逻辑矛盾、转写翻译扭曲原意致常识错误等)。**仅提示不阻断**，只在发现明显硬伤时记入报告供用户裁决，绝不自动改内容。与 Citation Zero-Hallucination Gate(管引用真伪)区分：本项管"转写出的中文内容常识上是否成立"。
-
-sci2doc 特有项：
-- [ ] **S1** 全章实验-方法映射完整：`atomic_md_workflow.py validate-experiment-map --chapter N` 通过
-- [ ] **S2** 全章每个实验 ≥ 一图表（`figure_registry.py validate` 通过）
-- [ ] **S3** 全章所有三线表格式校验通过（`check_quality.py` 三线表类别零 error）
-- [ ] **S4** 缩略语注册表已更新，本章无重复首展、无遗漏（`abbreviation_registry.py validate` 通过）
-- [ ] **S5** GB/T 7714 著录格式：本章新引文已过 `reference_renderer.py validate_all`，零偏差
-- [ ] **S6** 自我抄袭标注完整：本章所有复用 SCI 来源处均有 `[N]` 引用 + 声明
-- [ ] **S7** 章后 self-check 已跑（`atomic_md_workflow.py self-check` 输出 ok=true），无 error 级问题
-- [ ] **S9** 字符级排版契约已遵守：本章斜体（学名/基因/统计符号/拉丁缩写）、上下标（`<sup>`/`<sub>`，无裸写 `H2O`/`CO2` 或 Unicode 上下标字符）、加粗仅用于标题、中英标点半/全角分明，均符合 `## 字符级排版契约`。**🔴 上下标裸写 + 中文句内半角标点 + 英文拼写 = hard 阻断**：`check_quality.py` 的 `check_char_level()` 命中 `code=subsup_bare`（如 `H2O`/`CO2`/`IC50`/`cm2`）、`code=halfwidth_punct_in_cn`（中文句内夹半角 `,;:()`，应全角 `，；：（）`）或 `code=english_misspelling`（固定错拼表 occured/recieve 类，摘要区也扫、误报率≈0）即 `issue_summary` 对应计数>0，脚本非零退出，不过不进；F1 中文错别字仍为 warning 仅提示不阻断（含登陆等同形异义硬拦会误伤；中文紧邻经 `_SS`/`_SE` 边界已处理不误报，数字千分位 `1,000` 不误报）
-- [ ] **S-GIT** 检查点已落：本章已落版本检查点——git 可用时 `git_checkpoint.py status .` commit 数随章递增；git 不可用时已生成 snapshot。二者满足其一
+**本章完整 DoD 判据（全部核查项 + 脚本命令）以 `references/dod_checklist.json` gate=`chapter-dod` 为唯一真源（19 项）**：盲检子代理据此逐项核、能脚本核的先跑脚本，退出码非 0 即 fail-closed。含 G1-G7 通用（编号/citation_guard/主线/占位/去AI/字数/G7 常识软报告）、S1-S7 sci2doc 特有（实验-方法映射/一实验≥一图表/三线表/缩略语注册/GB7714 著录/自我抄袭/章后 self-check）、S9 字符级排版（`subsup_bare` + `halfwidth_punct_in_cn` + `english_misspelling` 任一命中即 `check_quality.py` 非零退出 hard 阻断）、S-GIT 检查点，及 **S8 全章结构完整性、S10 全章数据溯源硬门（数值均标 `[数据来源]`，fail-closed）、S11 全章承重引文核证**。此处不再内联清单，避免与真源 drift。
 
 ### 7) Finalize Chapter State
 

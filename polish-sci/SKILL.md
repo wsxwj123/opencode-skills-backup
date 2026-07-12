@@ -220,7 +220,7 @@ unit=段落是**红线核验的边界**,不是"每段只能就地改、不准动
 - **PL-G4 去AI**,散文单元 find_ai_style_markers 的**硬拦**项(AI 套话禁词表 + **破折号**)无残留;长句/scare quotes/解释性冒号/-ing 拖尾/修辞问句为软提示,记报告不阻断(见 Anti-AI 规则的分级);非散文单元豁免。
 - **PL-G5 meaning 未变**,每段 meaning_changed=false,专名未动,语义层人工逐段对照。
 - **PL-G6 逐段全覆盖**,无 PLACEHOLDER 残留,无遗漏段落。
-- **PL-G7 被动语态合区间**,各段被动比例落在 section_type 目标区间附近。
+- **PL-G7 被动语态合区间(软报告)**,各段被动比例落在 section_type 目标区间附近;区间为软目标,只报告不阻断交付。
 - **PL-G8 术语一致**,全文术语用词前后一致(人工核)。
 - **PL-G9 结构完整性**,合并稿段落顺序与小节结构与原稿一致,引用编号连续。
 - **PL-G10 缩略语首展一致(软报告)**,`abbreviation_index.json` 的 undefined_use / duplicate_definition / title_abbreviation 已列出供人工取舍;润色未破坏既有首展、未新增缩略语问题。纯润色不主动改缩略语定义,原稿固有问题只报告不阻断交付(与 revise-sci 的硬门禁 RV-G7 区分)。

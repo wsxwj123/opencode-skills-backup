@@ -392,31 +392,7 @@ python scripts/state_manager.py add-abbreviation <one.json>
    🔴 **进入下一节前置闸口**：上一节 `delegate_review verify` 必须 exit 0（含 G13 结构完整性），否则不得开始下一节撰写。写完即检，不过不进。
    🔴 **修复 3 次仍不过 → 回滚兜底**：同一节据盲检证据修复重跑 3 次仍 fail，停止盲目重写，提示用户回滚到上一检查点（git 可用：`git checkout <sha> -- <文件>`；否则 `/rollback` 到上一 snapshot）后重写。
 
-   下列清单与 `references/dod_checklist.json` 逐项对应(改清单先改 JSON),供人工对照;能脚本核的项子代理会先跑脚本:
-
-   **通用 6 项**（能脚本核的项挂脚本，不可跳过）：
-   - [ ] **①引文对应**：`[n]` 与节末 Vancouver 列表一一对应、编号连续、无孤儿引用（脚本：`sync-literature --dry-run --strict-references`）
-   - [ ] **②citation_guard**：本节新增引用已过 `citation_guard.py --offline` 核验，`ok=true`
-   - [ ] **③主线对齐**：本节内容符合 `storyline.json` 对应 section 的核心论点，无跑题或自相矛盾
-   - [ ] **④占位清零**：`grep -n "CITE_PENDING\|DATA_PENDING\|REF_DROPPED" <本节文件>` 输出为空
-   - [ ] **⑤去 AI**：`style_checker.py --file <本节文件> --threshold 70` 通过（硬项：无 trailing_ing_clause / forbidden_ai_phrases / 列点 / **去AI必禁三项 scare_quotes / explanatory_colon / 破折号 em-dash（命中即 hard_fail 一票否决，禁止使用）**；**句长、被动比为 warnings 软提示，不计入 score、不阻断**——见提醒即酌情改，不强改；见 `references/anti-ai-protocol.md`）
-   - [ ] **⑥字数（软提示，不阻断落盘）**：本节字数**建议**落在 storyline 预估区间内；字数下限（凑字数地板）仅作提醒不硬卡。**唯一硬项是上限**：全文累计不得超期刊字数上限（P0#8）。
-
-   **gsw 特有项**（Results/Discussion 节必检）：
-   - [ ] **⑦figure data_status 非 pending**：本节引用的所有 figure 在 `figures_database.json` 中 `data_status != "pending"`（否则回到 `/figure` 补核心定量）
-   - [ ] **⑧无像素定量**：本节对图的描述只依据图面已印出的数字/标签，无从像素推断的定量值
-   - [ ] **⑨实验逻辑批判通过**：Part 1 中的 `🧪 实验逻辑批判` Verdict 为 "Reliable"（非 "Flaw Detected"）
-   - [ ] **⑩节末 Vancouver**：本节文件末尾附有该节所引用文献的 Vancouver 格式列表
-   - [ ] **⑪未超期刊字数**：见 ⑥，正文章节累计字数 ≤ `project_config.word_limits` 的 Results+Discussion 上限
-   - [ ] **⑫只改原子化源**：本次写入的目标文件为 `manuscripts/` 下的原子化源文件，非 `Full_Manuscript.md` / `.docx`（见 §3）
-   - [ ] **⑬结构完整性**：本节包含其文体/storyline 规定的全部结构组件，无缺段/空标题/未填骨架；且符合该节类型规定结构（Introduction 漏斗式；Discussion 主要发现→文献对比+机制→Limitations→Outlook 四段；Methods 必备子节）。子代理对照 `storyline.json` 对应 section 的结构要求逐组件核对
-   - [ ] **⑭figure_analysis 加载**：本节涉及的 figure 在 `figures_database.json` 中均有对应 `figure_analysis/figure_{N}.md` 文件、非空、无 `❓待确认` 残留（脚本：`python scripts/figure_analysis_gate.py --section [section_id] --root .` 必须 exit 0）
-   - [ ] **⑮缩略词一致性**：本节新引入缩略词均已规范首展（`Full Name (ABBR)`），无重复定义、无未定义即用、Title 无缩写；已过 `python scripts/abbreviation_consistency.py --root .` 核验（exit 0；通用缩写自动跳过）
-   - [ ] **⑯检查点已落**：本节已落版本检查点——`python scripts/git_checkpoint.py status .` 显示 commit 数随节递增（git 可用时），或 git 不可用时已生成 snapshot（`version_history.json` 有新快照）。二者满足其一即可
-   - [ ] **⑰字符级排版契约已遵守**（人工项）：本节斜体（学名/基因名/统计符号 `*p*`/`*n*`/拉丁缩写）、上标 `^...^`（10^6^、cm^2^）、下标 `~...~`（H~2~O、CO~2~、IC~50~）标记到位，无裸写 `H2O`/`CO2`/`IC50`；中文全角、英文数字半角（见 §字符级排版契约）
-   - [ ] **⑱常识合理性(🟡软报告,不阻断;json 真源 id: section-dod/G23)**,盲检子代理顺带扫本节是否有明显常识/事实硬伤(单位量级离谱、生理/机制常识错误、前后数值逻辑矛盾等)被写入。**仅提示不阻断**,只在发现明显硬伤时记入盲检反馈供用户裁决,绝不自动改内容。与 citation_guard 文献证据核验(管"引用真不真")、结构完整性 G 项区分:本项管"写出来的内容常识上是否成立"。
-   - [ ] **⑲语法拼写与字符级格式(🔴hard;json 真源 id: section-dod/G24)**：`proofread.py` 扫描本节，**高置信类别（misspelling/chinese_punct/subsup_bare）零容忍**（命中即 `ok=false` 阻断）；英美混用/术语不一致等低置信项仅报告不阻断。脚本：`python scripts/proofread.py --manuscript-dir <本节所在目录> --report proofread_report.json --fail-on misspelling,chinese_punct,subsup_bare`（命中高置信类别时 exit 非 0，按 report 修后重跑）。
-   - [ ] **⑳拉丁短语斜体软提醒(🟡软/人工确认,不阻断;json 真源 id: section-dod/G25)**：`proofread.py` 的 `latin_italic_missing` 类别，正文里 `in vitro`/`in vivo`/`ex vivo`/`in situ`/`de novo`/`post hoc`/`per se` 等公认须斜体的拉丁短语若裸写（未被 `*...*` 斜体标记包裹）则报告。**仅提示，不阻断、不进 `--fail-on`、不扣分**，由人工确认是否补斜体（`et al.`/`e.g.`/`vs.` 等正体惯例不在词表内）。
+   **本节完整 DoD 判据（全部核查项 + 脚本命令）以 `references/dod_checklist.json` gate=`section-dod` 为唯一真源（25 项）**：盲检子代理据此逐项核、能脚本核的先跑脚本，退出码非 0 即 fail-closed。该 gate 含引文对应/citation_guard/主线对齐/占位清零/去AI(style_checker，含必禁三项 scare_quotes/explanatory_colon/em-dash 硬门)/字数上限/figure data_status 非 pending/无像素定量/实验逻辑批判/节末 Vancouver/只改原子源/figure_analysis 加载/缩略词一致/检查点/字符级排版(proofread subsup_bare 硬门)/拉丁斜体软提醒等脚本项，及 G13 结构完整性、G23 常识合理性(软)，与 **G17-G22 六项盲检质量核（科学事实正确、统计方法学、论证逻辑闭环、文献完整性与引用偏倚、图表质量与疑似造假、学术合规披露）**。此处不再内联清单，避免与真源 drift。
 10. **Safety Write**: 用户 OK 后写入文件 → 智能快照 → **Git Checkpoint**：`python scripts/git_checkpoint.py commit [Project_Root] "[gsw] section <section_id> done"`（git 不可用时自动 no-op，snapshot 仍是回退兜底）。回退手段：若落盘后用户反悔，`/rollback` 到上一个 snapshot、`git checkout <sha> -- <file>` 回退单节，或直接 Edit 改原子化文件（参见 §3 润色 workflow）。
 
 **Discussion 段落结构 / Online Methods vs STAR Methods**：写 Discussion 或 Methods 章节前 `Read references/writing-templates.md` 对应小节。要点：Discussion 走"主要发现总结→文献对比+机制→**Limitations（强制，缺即退稿高频）**→Outlook"四段式；Methods 按 target_journal 选 Online Methods（Nature 精简版+完整版后置）或 STAR Methods（Cell 五段结构）。
