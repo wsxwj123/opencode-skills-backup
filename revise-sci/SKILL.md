@@ -12,6 +12,16 @@ The workflow is script-gated. Do not skip steps. Do not fabricate experiments, d
 The comment parser accepts both atomic `comment-unit` HTML and reviewer-simulator style report HTML with critique lists.
 The manuscript atomizer recognizes numbered section headings such as `1`, `1.1`, and `2.3.4` even when the source Word paragraph style is not a formal heading style.
 
+## 开场监工卡（每次启动必打印，逐字给用户）
+
+> 返修改稿最容易在这几处翻车，AI 会做但**只有你能核对是不是真做到了**。启动本技能时必须原样打印这张卡：
+>
+> 1. **拆意见别信 AI 说全了**：拆完 AI 应给你一份意见清单，你拿原始审稿信**数条数**——有没有被合并成一条、有没有整条漏掉。数目对不上就是漏了。
+> 2. **改原意要逐处盯**：每一处改动，AI 应贴「原句 → 改后句」，你确认意思没变、没夹带你没同意的新结论。看不到对照就别放行。
+> 3. **覆盖看对照表**：交付前 AI 应给「意见 × 是否回复 × 是否改稿」对照表，**出现空格就是漏了**，当场让它补。
+> 4. **缺证据写"需作者确认"是正常的**：AI 没有你的数据/实验时应写「需作者确认」等你补，这不是 bug，请你补齐，别当故障报错。
+> 5. **门禁 PASS 只保形式**：门禁只查格式/覆盖/红线这类机械项，**改得对不对、说理通不通，得你自己核**，别把 PASS 当"改对了"。
+
 ## Mandatory Intake Before Any Full Pipeline Run
 When the user provides a `comments_path`, a `manuscript_docx_path`, or both, do **not** jump straight into `run_pipeline.py`.
 
