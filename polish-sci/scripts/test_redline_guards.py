@@ -7,14 +7,17 @@ proper-noun / unit alterations. Runs standalone or via pytest.
 """
 from __future__ import annotations
 
+import json
 import os
 import sys
+import tempfile
+from pathlib import Path
 
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 if _SCRIPT_DIR not in sys.path:
     sys.path.insert(0, _SCRIPT_DIR)
 
-from strict_gate import check_unit
+from strict_gate import check_unit, independent_meaning_verdict, is_soft_ai_marker
 
 
 def _unit(raw: str, polished: str) -> dict:
@@ -67,6 +70,70 @@ def test_clean_language_polish_passes() -> None:
         "The results were significant in *TP53* mutants (12% vs 34%) [3].",
         "The findings were significant in *TP53* mutants (12% vs 34%) [3].",
     )
+
+
+# --- C 反AI降软:破折号等修辞降为软提示,不再硬拦交付 ---
+def test_em_dash_no_longer_blocks_delivery() -> None:
+    # 破折号是学术散文正当修辞,check_unit 不应因它判 fail。
+    _passes(
+        "The effect was clear in *TP53* mutants.",
+        "The effect was clear—striking, even—in *TP53* mutants.",
+    )
+
+
+def test_ai_cliche_still_blocks() -> None:
+    # 套话主干仍硬拦。
+    _fails_with(
+        "We examined the role of the gene.",
+        "We delve into the pivotal role of the gene.",
+        "ai markers",
+    )
+
+
+def test_soft_marker_predicate() -> None:
+    assert is_soft_ai_marker("em dash")
+    assert is_soft_ai_marker("sentence >30 words")
+    assert not is_soft_ai_marker("cliche: delve into")
+    assert not is_soft_ai_marker("delve into")
+
+
+# --- ⑥ meaning_changed 只认独立 PL-G11 盲检,自填 false 不作数 ---
+def _root_with_return(entries) -> Path:
+    root = Path(tempfile.mkdtemp())
+    if entries is not None:
+        (root / ".review_return_polish-dod.json").write_text(
+            json.dumps(entries, ensure_ascii=False), encoding="utf-8"
+        )
+    return root
+
+
+def test_meaning_verdict_missing_return_fails() -> None:
+    ok, reason = independent_meaning_verdict(_root_with_return(None))
+    assert not ok and "缺独立 PL-G11" in reason
+
+
+def test_meaning_verdict_pass_with_evidence_ok() -> None:
+    root = _root_with_return([{"id": "PL-G11", "verdict": "pass", "evidence": "逐句比对语义等价"}])
+    ok, _ = independent_meaning_verdict(root)
+    assert ok
+
+
+def test_meaning_verdict_pass_without_evidence_fails() -> None:
+    root = _root_with_return([{"id": "PL-G11", "verdict": "pass", "evidence": ""}])
+    ok, reason = independent_meaning_verdict(root)
+    assert not ok and "证据为空" in reason
+
+
+def test_meaning_verdict_fail_blocks() -> None:
+    root = _root_with_return([{"id": "PL-G11", "verdict": "fail", "evidence": "第3段把'提示'改成'证实'"}])
+    ok, _ = independent_meaning_verdict(root)
+    assert not ok
+
+
+def test_meaning_verdict_missing_plg11_item_fails() -> None:
+    root = _root_with_return([{"id": "PL-G1", "verdict": "pass", "evidence": "x"}])
+    ok, reason = independent_meaning_verdict(root)
+    assert not ok and "缺 PL-G11" in reason
 
 
 if __name__ == "__main__":

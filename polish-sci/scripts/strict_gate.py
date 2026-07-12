@@ -30,6 +30,23 @@ from common import (
 CITATION_RE = re.compile(r"\[\d+(?:\s*[-,]\s*\d+)*\]", re.IGNORECASE)
 DOI_RE = re.compile(r"\b10\.\d{4,9}/[^\s\"]+", re.IGNORECASE)
 
+# C 反AI降软:学术散文里破折号/长句/-ing 分词/scare quotes/解释性冒号/修辞铺陈是
+# 正当修辞,硬禁会把文风削平。这些降为软提示(记入 polish_risk_flags/报告,不阻断交付);
+# 只保留 AI 套话禁词表(delve into / cliche: … 等 find_ai_style_markers 的其余 marker)作硬拦主干。
+_SOFT_AI_MARKERS = frozenset({
+    "em dash",
+    "not only...but also",
+    "rhetorical question",
+    "trailing -ing clause",
+    "scare quotes",
+    "explanatory colon",
+})
+
+
+def is_soft_ai_marker(marker) -> bool:
+    m = str(marker)
+    return m in _SOFT_AI_MARKERS or m.startswith("sentence >")
+
 
 def citation_set(text: str) -> set[str]:
     norm = normalize_ws(text)
@@ -84,9 +101,9 @@ def check_unit(unit: dict) -> tuple[bool, list[str]]:
     # 非散文(参考文献/作者名单/图注等)保留原文不润色,去AI检测不适用;红线(数值/引用/语气/meaning)仍查
     is_nonprose = unit.get("prose") is False or unit.get("polished_by") == "unchanged-nonprose"
     markers = [] if is_nonprose else find_ai_style_markers(polished)
-    # 句长是软目标(科学方法学段落含数据列表的长句合法),记为警告不阻断交付;
-    # 其余去AI标志(破折号/scare quotes/解释性冒号/套话/from-A-to-B 等)仍硬拦。
-    blocking = [m for m in markers if not str(m).startswith("sentence >")]
+    # C 反AI降软:句长、破折号、scare quotes、解释性冒号、-ing 拖尾、not only...but also、
+    # 修辞问句都是学术散文正当修辞,降为软提示不阻断交付;仅 AI 套话禁词表仍硬拦。
+    blocking = [m for m in markers if not is_soft_ai_marker(m)]
     if blocking:
         problems.append(f"ai markers: {blocking}")
 
@@ -94,6 +111,35 @@ def check_unit(unit: dict) -> tuple[bool, list[str]]:
         problems.append("meaning_changed=true")
 
     return (not problems, problems)
+
+
+def independent_meaning_verdict(project_root: Path) -> tuple[bool, str]:
+    """⑥ meaning_changed 不认改写方自填。
+
+    改写方在 polished/<idx>.json 里自填 meaning_changed=false 只是自证,标 false 即蒙混。
+    语义等价的唯一权威是独立 PL-G11 盲检子代理的裁决(delegate_review 写的
+    <root>/.review_return_polish-dod.json)。这里要求其中 PL-G11 verdict==pass 且证据非空;
+    缺文件 / 缺 PL-G11 / 非 pass / 空证据 一律视为"未核",fail-closed 拦下。"""
+    ret = project_root / ".review_return_polish-dod.json"
+    if not ret.is_file():
+        return False, ("缺独立 PL-G11 盲检返回(.review_return_polish-dod.json);"
+                       "改写方自填 meaning_changed=false 不作数,请先跑 delegate_review 委托独立子代理盲检语义等价")
+    try:
+        data = json.loads(ret.read_text(encoding="utf-8"))
+    except Exception as exc:
+        return False, f".review_return_polish-dod.json 解析失败: {exc}"
+    if not isinstance(data, list):
+        return False, "盲检返回格式非法(应为 JSON 数组)"
+    entry = next((e for e in data if isinstance(e, dict) and e.get("id") == "PL-G11"), None)
+    if entry is None:
+        return False, "盲检返回缺 PL-G11 语义等价裁决;meaning_changed 自填不足信"
+    verdict = entry.get("verdict")
+    evidence = (entry.get("evidence") or "").strip()
+    if verdict != "pass":
+        return False, f"PL-G11 独立语义等价盲检未通过(verdict={verdict!r}): {evidence or '(无证据)'}"
+    if not evidence:
+        return False, "PL-G11 verdict=pass 但证据为空,视为未核(防无证据橡皮图章)"
+    return True, "PL-G11 独立语义等价盲检通过"
 
 
 def main() -> int:
@@ -137,6 +183,12 @@ def main() -> int:
     if failures:
         print("STRICT_GATE: FAIL")
         sys.stderr.write("[strict_gate] fail-closed:不得向用户声明润色完成。\n")
+        return 1
+    # ⑥ 语义等价只认独立 PL-G11 盲检,改写方自填 meaning_changed=false 不足信。
+    mv_ok, mv_reason = independent_meaning_verdict(project_root)
+    if not mv_ok:
+        print("STRICT_GATE: FAIL")
+        sys.stderr.write(f"[strict_gate] fail-closed:{mv_reason}\n")
         return 1
     print("STRICT_GATE: PASS")
     return 0
