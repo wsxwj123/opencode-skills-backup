@@ -1,16 +1,15 @@
 {
-  "_comment": "共享门禁 hook 的技能注册表。academic_gate_hook.py 据此判断一次 Write/Edit 该不该拦。加新技能=加一个条目，不新增 hook。managed_globs 是相对项目根的产物路径模式(fnmatch)，只有命中才会跑门禁；其余路径一律放行。gate 命令里 {project_root}/{file_path}/{section} 会被替换。",
-  "version": 1,
+  "_comment": "共享门禁 hook 的技能注册表。academic_gate_hook.py 据此判断一次 Write/Edit 该不该拦。加新技能=加一个条目，不新增 hook。managed_globs 是相对项目根的产物路径模式(fnmatch)，只有命中才跑门禁；其余路径一律放行。设计原则：hook 只强制'从文件状态就能可靠判定'的粗粒度不变量(如结构签字、token 存在)；需要 AI 意图的逐节时序(prewrite_gate --section)留给 AI 调用+token 链，hook 不猜 section。占位符：{python}/{project_root}/{file_path}/{shared_dir}。",
+  "version": 2,
   "skills": {
     "general-sci-writing": {
       "state_files": ["writing_progress.json", "project_config.json"],
-      "managed_globs": ["manuscripts/*.md", "drafts/*.md"],
+      "managed_globs": ["manuscripts/*.md"],
       "gates": [
         {
-          "name": "prewrite_gate",
-          "command": ["{python}", "{project_root}/scripts/prewrite_gate.py", "--section", "{section}", "--root", "{project_root}"],
-          "when": "always",
-          "section_from": "filename"
+          "name": "structure_signoff",
+          "command": ["{python}", "{shared_dir}/structure_signoff_gate.py", "check", "--root", "{project_root}"],
+          "when": "always"
         }
       ]
     },
@@ -19,13 +18,12 @@
       "managed_globs": ["drafts/*.md"],
       "gates": [
         {
-          "name": "prewrite_gate",
-          "command": ["{python}", "{project_root}/scripts/prewrite_gate.py", "--section", "{section}", "--root", "{project_root}"],
-          "when": "always",
-          "section_from": "filename"
+          "name": "structure_signoff",
+          "command": ["{python}", "{shared_dir}/structure_signoff_gate.py", "check", "--root", "{project_root}"],
+          "when": "always"
         }
       ]
     }
   },
-  "_pending_skills_note": "nsfc-proposal / sci2doc / revise-sci / reviewer-response-sci / reviewer-simulator / polish-sci 在 P1 铺开时补条目。revise-sci 走 run_pipeline 驱动本就抗跑偏，优先级最低。"
+  "_pending_skills_note": "nsfc-proposal / sci2doc / reviewer-response-sci / reviewer-simulator / polish-sci 在 P1 铺开时补条目。revise-sci 走 run_pipeline 驱动本就抗跑偏，优先级最低。"
 }
