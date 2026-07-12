@@ -226,10 +226,11 @@ def find_ai_style_markers(text: str) -> list[str]:
     return markers
 
 
-# C反AI降软：句长/破折号这类形式项从"硬门禁"降为"软提示"。这些标志仍由
-# find_ai_style_markers 检出并向用户响亮上报，但不再阻断交付（fail-close）；
-# 真正阻断的是套话禁词、scare quotes、解释性冒号、-ing 假分析等"主干" AI 痕迹。
-SOFT_STYLE_MARKERS: frozenset[str] = frozenset({"em dash", "sentence >30 words"})
+# 句长(sentence >30 words)这类形式项为"软提示"：仍由 find_ai_style_markers 检出并
+# 向用户响亮上报，但不阻断交付（fail-close）。破折号(em dash)是硬门禁、禁止使用——不在软集，
+# 由 hard_ai_style_markers 收回、对破折号 fail-close。真正阻断的还有套话禁词、scare quotes、
+# 解释性冒号、-ing 假分析等"主干" AI 痕迹。
+SOFT_STYLE_MARKERS: frozenset[str] = frozenset({"sentence >30 words"})
 
 
 def hard_ai_style_markers(text: str) -> list[str]:
