@@ -6,14 +6,14 @@ description: Use when drafting, restructuring, or polishing Chinese NSFC proposa
 # NSFC Proposal Skill
 
 ## Overview
-This skill manages end-to-end NSFC proposal writing and polishing under the 2026 structure. It enforces section-level gates, cross-section consistency, literature verification, and restrained academic Chinese style.
+This skill covers NSFC proposal writing and polishing from start to finish under the 2026 template. It gates each section, keeps the sections consistent with one another, verifies the literature, and keeps the academic Chinese restrained.
 
 Use two modes:
 - Write Mode: build from zero in phased gates.
 - Polish Mode: import an existing draft, diagnose first, then revise section by section.
 
 ## 跨会话接续（每次进入/续写必做，Mandatory）
-每次进入本技能或续写一个已存在的项目时，**先跑 Phase 0 env_preflight 打印的那条 `RESUME_CMD`**（`python "<.../_shared/session_journal.py>" resume --root <project_root>`），把它输出的接续报告原样贴给用户，并按报告末尾的握手话术跟用户对齐进度后再动手。用户**中途插入任何临时要求，立即用 `JOURNAL_LOG_CMD`**（`session_journal.py log --root <R> --note "<原话>"`）落进 `decisions_log.md`，后续会话开局的 resume 会重新读出、必须遵守。新项目（无 state）resume 会提示未初始化，照常走 Phase 0。
+每次进入本技能或续写一个已存在的项目时，**先跑 Phase 0 env_preflight 打印的那条 `RESUME_CMD`**（`python "<.../_shared/session_journal.py>" resume --root <project_root>`），把输出的接续报告原样贴给用户，按报告末尾的握手话术跟用户对齐进度，然后再动手。用户**中途插入任何临时要求，立即用 `JOURNAL_LOG_CMD`**（`session_journal.py log --root <R> --note "<原话>"`）落进 `decisions_log.md`，后续会话开局的 resume 会重新读出、必须遵守。新项目（无 state）resume 会提示未初始化，照常走 Phase 0。
 
 ## Mode Handshake Gate (Mandatory)
 Before any drafting/revision action, the assistant must ask exactly one mode-selection question and wait for the user answer:
@@ -519,7 +519,7 @@ When reporting to user, state:
 - full-review: `python scripts/diagnosis_engine.py full-review --sections-dir sections --consistency data/consistency_map.json --index data/literature_index.json --p1 sections/P1_立项依据.md --ref sections/REF_参考文献.md --output data/diagnosis_report.json`
 
 Phase 7 引用的 `consistency_mapper.py validate` 完整形式：`python scripts/consistency_mapper.py --path data/consistency_map.json validate`。
-其余脚本（write-cycle 逐节预算、citation_validator verify-all/verify-entry/matrix-check、humanizer_zh scan-all、load 变体、word_counter summary）为生产级工作流工具，完整 flag 见 references/08。
+其余脚本（write-cycle 逐节预算、citation_validator verify-all/verify-entry/matrix-check、humanizer_zh scan-all、load 变体、word_counter summary）的完整 flag 见 references/08。
 
 
 ## Regression Tests
