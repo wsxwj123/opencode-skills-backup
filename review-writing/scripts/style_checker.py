@@ -185,6 +185,7 @@ def check_file(filepath: str, passive_max: float = 0.30) -> dict[str, Any]:
         "total_sentences": len(sentences),
         "total_words": total_words,
         "issues": [],
+        "hard_fail": False,  # 硬门禁命中（如破折号）：无论分数一律 fail-close
     }
 
     if not sentences:
@@ -314,14 +315,15 @@ def check_file(filepath: str, passive_max: float = 0.30) -> dict[str, Any]:
             "detail": f"{bullet_count} bullet/numbered list lines detected in prose body.",
         })
 
-    # ── 7. Decorative em-dash (禁装饰性破折号) ───────────────────────────────
+    # ── 7. Decorative em-dash (硬门禁, 禁止使用) ─────────────────────────────
     em_dash_count = len(EM_DASH_RE.findall(prose))
     if em_dash_count >= 1:
         result["issues"].append({
             "type": "decorative_em_dash",
-            "severity": "info",  # 软提示：破折号降软，报告不阻断
-            "detail": f"{em_dash_count} em-dash(es) (—) detected. Consider a comma/period if used decoratively.",
+            "severity": "high",  # 硬门禁：破折号禁止使用，计入 score 并置 hard_fail
+            "detail": f"{em_dash_count} em-dash(es) (—/——) detected. 禁止使用破折号(硬门禁)，用逗号/句号/重构替代。",
         })
+        result["hard_fail"] = True
 
     # ── 8. Scare quotes (禁挂引号暗示新概念) ──────────────────────────────────
     scare_hits = SCARE_QUOTE_RE.findall(prose)
@@ -363,8 +365,8 @@ def check_file(filepath: str, passive_max: float = 0.30) -> dict[str, Any]:
         })
 
     # ── Score calculation ─────────────────────────────────────────────────────
-    # severity == "info" 为软提示（长句 / 被动比例 / 装饰性破折号等），只报告不扣分、
-    # 不影响 gate 通过——降软后这些不再是硬门。high/medium/low 仍计分。
+    # severity == "info" 为软提示（长句 / 被动比例等），只报告不扣分、不影响 gate 通过。
+    # 破折号是硬门禁（severity=high 计分 + hard_fail 一票否决）。high/medium/low 仍计分。
     score = 100
     for issue in result["issues"]:
         sev = issue["severity"]
@@ -408,7 +410,8 @@ def main() -> int:
     results = [check_file(f, passive_max=args.passive_max) for f in files]
     scores = [r["score"] for r in results]
     avg_score = round(sum(scores) / len(scores), 1) if scores else 100
-    all_pass = all(s >= args.threshold for s in scores)
+    any_hard_fail = any(r.get("hard_fail") for r in results)  # 破折号等硬门禁：一票否决
+    all_pass = all(s >= args.threshold for s in scores) and not any_hard_fail
     total_issues = sum(len(r["issues"]) for r in results)
 
     report = {
