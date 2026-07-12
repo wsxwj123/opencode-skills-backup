@@ -2879,6 +2879,9 @@ def generate_quality_report(
     subsup_bare_count = len([i for i in all_issues if i.get('code') == 'subsup_bare'])
     halfwidth_in_cn_count = len([i for i in all_issues if i.get('code') == 'halfwidth_punct_in_cn'])
     english_misspelling_count = len([i for i in all_issues if i.get('code') == 'english_misspelling'])
+    # 破折号(——)硬门禁、禁止使用：命中即非零退出，无论总分高低（与上下标/半角同列硬阻断）
+    em_dash_count = len([i for i in all_issues
+                         if i.get('category') == '标点规范' and i.get('message', '').startswith('使用了破折号')])
     
     total_score = 100 - error_count * 10 - warning_count * 3 - info_count * 1
     total_score = max(0, min(100, total_score))
@@ -2904,7 +2907,8 @@ def generate_quality_report(
             'info': info_count,
             'subsup_bare': subsup_bare_count,
             'halfwidth_punct_in_cn': halfwidth_in_cn_count,
-            'english_misspelling': english_misspelling_count
+            'english_misspelling': english_misspelling_count,
+            'decorative_em_dash': em_dash_count
         },
         'issues': all_issues,
         'targets': {
@@ -3141,11 +3145,14 @@ def main():
     
     # 返回退出码
     # 硬阻断项：上下标裸写（subsup_bare）+ 中文句内半角标点（halfwidth_punct_in_cn）+ 英文拼写（english_misspelling）
-    # 命中即非零退出，无论总分高低；其余 F1 中文错别字仍为 warning（含登陆等同形异义，硬拦会误伤），不在此处阻断。
+    # + 破折号（decorative_em_dash，禁止使用）。命中即非零退出，无论总分高低；
+    # 其余 F1 中文错别字仍为 warning（含登陆等同形异义，硬拦会误伤），不在此处阻断。
     subsup_bare_count = report.get('issue_summary', {}).get('subsup_bare', 0)
     halfwidth_in_cn_count = report.get('issue_summary', {}).get('halfwidth_punct_in_cn', 0)
     english_misspelling_count = report.get('issue_summary', {}).get('english_misspelling', 0)
-    if report['overall_score'] >= 80 and subsup_bare_count == 0 and halfwidth_in_cn_count == 0 and english_misspelling_count == 0:
+    em_dash_count = report.get('issue_summary', {}).get('decorative_em_dash', 0)
+    if (report['overall_score'] >= 80 and subsup_bare_count == 0 and halfwidth_in_cn_count == 0
+            and english_misspelling_count == 0 and em_dash_count == 0):
         sys.exit(0)
     else:
         sys.exit(1)
