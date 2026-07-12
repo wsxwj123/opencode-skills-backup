@@ -123,6 +123,7 @@ python scripts/extract_docx_images.py --manuscript <manuscript_path> --project-r
 python scripts/build_issue_matrix.py ...
 python scripts/state_manager.py --project-root <project_root> refresh
 python scripts/citation_guard.py ...   # if paper_search_results_path is provided
+# 🔴 [意见清单核对·必停] atomize_comments 之后、revise_units 之前的强制关卡：见下方「## [意见清单核对·必停]（拆意见后、改写前的强制关卡）」。未经用户确认"条数对、无合并、无遗漏"，不得进入 revise_units。
 python scripts/revise_units.py --project-root <project_root> [--paper-search-results <paper_search_validated.json>] [--comment-id <comment_id>]   # --comment-id 仅处理单条评论,用于迭代调试;默认全量
 python scripts/build_literature_index.py --project-root <project_root> [--seed-index <writing_project_literature_index.json>]   # 不传 --seed-index：行为不变，从 global_id=1 重建库。传 --seed-index：复用撰写项目(gsw/review-writing)已有引文库作种子，**保留种子每条的既有 global_id**，本次返修新查到的文献按去重键(归一DOI>PMID>归一标题)与种子比对——命中种子的复用其编号不新增、真正新的从"种子最大 global_id + 1"续号追加，合并结果写 revise 自己的 data/literature_index.json。**只读种子、不写回撰写项目**(种子扩展语义)。种子读取兼容 gsw 松 schema(global_id/citation_number/id/number/ref_number 任一取号，都缺按数组顺序补号)与根级/data 下任意路径。
 python scripts/matrix_manager.py bootstrap ...
@@ -144,6 +145,16 @@ python scripts/run_pipeline.py --comments <comments_path> --manuscript <manuscri
 ```
 
 `--expected-comments-mode` is strongly recommended after the user confirms the branch chosen by `intake_router.py`. `preflight.py` will block execution if the confirmed mode and the detected mode do not match.
+
+## [意见清单核对·必停]（拆意见后、改写前的强制关卡）
+
+**位置**：`atomize_comments.py` 拆完审稿意见之后、`revise_units.py` 开始改写之前。这是流程内部的硬关卡，与开场监工卡不同——监工卡是启动时提醒，这一步是拆完意见后的当场核对。
+
+拆完审稿意见后，**立即停下**，把**每条 comment_id + 该条前 30 字**列成清单打给用户，并原样问：
+
+> 「请拿**原始审稿信**对照数一遍——条数对不对？有没有哪条被合并成一条、或整段漏掉？（尤其审稿人用连续散文、`(i)(ii)`、罗马数字、或一段里塞多个要求时最容易漏）」
+
+**用户确认"都在、没漏"后才继续改写**。用户指出漏掉或被合并的，回去把它补成独立 comment（补进 `units/`、重新原子化）后再继续，不得跳过这一步直接跑 `revise_units.py`。
 
 ## Anti-Forgetfulness And Token-Budget Protocol
 `revise-sci` does **not** load the entire manuscript and all comments into one context window. It follows the same control philosophy used by `article-writing`, `review-writing`, and `sci2doc`, adapted for revise work:
@@ -344,6 +355,8 @@ These inline markers are load-bearing and carry the same status as citation mark
 2. **派一个独立子代理**（Claude Code 用 `academic-blind-reviewer`；其他平台派通用子代理），把任务包原样给它、**不要给它本次改稿的写作上下文**，要求按任务包返回 JSON 数组。
 3. 校验返回：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate revision-dod --return <子代理返回.json>`；退出码非 0（任一缺项/fail/无证据）= **fail-closed**，据子代理证据修复后重跑，**未过不得声明改稿完成**。
 
+> ⚠️ **盲检降级告警**：若当前环境派不出真正独立的子代理（非 Claude Code 客户端、provider 不支持 Task/子会话），**绝不能用同一个 AI 自问自答冒充盲检**（那就是自证）。此时明确告诉用户：「本环境盲检不可靠，请你亲自复核这几点：__（列出该盲检本应查的关键点，如 RV-G1 引文↔参考一一对应、RV-G3 改动是否跑题、RV-G5 去AI五项、RV-G7 缩略语首展、RV-G8 常识/事实错误等）__」，把判断权交回用户，不得伪造一份"通过"的盲检返回。
+
 下列清单与 `references/dod_checklist.json` 逐项对应（**改清单先改 JSON，再同步此处散文**）；能脚本核的项子代理会先跑脚本：
 
 ### 通用 8 项（id: RV-G1 ~ RV-G8）
@@ -382,3 +395,13 @@ These inline markers are load-bearing and carry the same status as citation mark
 ### 投稿前作者自检（🟡 soft 提醒，不阻断交付）
 
 终稿交付前，对照 `references/presubmission_checklist.md` 过一遍（数字一致性、英美拼写统一、图像无不当处理、Source Data、查重、临床注册号、报告规范附件、投稿材料齐全等）。这些项多需作者掌握原始数据/图像/外部工具，机器无法可靠裁决，故**只提醒、不阻断**；与本技能既有 hard 门禁（引用一一对应、去AI、跨节一致、字符级体检 RV-R11 等）不重复。
+
+## 发现 AI 跳步/漏做了怎么办（用户自救）
+
+如果你怀疑 AI 拆意见拆漏了、改稿改跑了、或直接把半成品当成品交付，下面几句话可直接复制发给它，逼它回到正轨：
+
+- 「审稿信里 Reviewer X 第 N 点你没拆出来，回去把它作为独立 comment 加进 `units/`，重新原子化再重跑 `revise_units.py`。」
+- 「把第 X 条对应的**原句**和你**改后的句子**并排贴给我，我要确认意思没变、没夹带我没同意的新结论。」
+- 「给我一张表：每条审稿意见 × 有没有回复 × 正文改了哪句（引用 `manuscript_edit_plan.md` 的 revised_excerpt）。哪条空着就是漏了，当场补。」
+- 「先别跑完整 pipeline，先只跑到 `atomize_comments.py` 把意见清单给我看，我对照原始审稿信确认条数无误了再往下。」
+- 「你这环境派不出独立子代理就别假装盲检通过了。把这轮该盲检的关键点列给我，我自己核。」
