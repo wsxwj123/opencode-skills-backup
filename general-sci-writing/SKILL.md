@@ -297,7 +297,7 @@ license: Proprietary
 
 ### Phase 6: Figure 识图与讨论 (`/figure`)
 
-**定位**：固化"用户逐张发实验图 → AI 读图产出结果与讨论草稿 → 存为写作依据"这一步。产物 `figure_analysis/figure_{N}.md` 是 Phase 8 撰写对应 Results/Discussion 小节的**上游素材**，非正文，不参与 `/merge` 合并。
+**定位**：把"用户逐张发实验图 → AI 读图产出结果与讨论草稿 → 存为写作依据"这一步固定下来。产物 `figure_analysis/figure_{N}.md` 是 Phase 8 撰写对应 Results/Discussion 小节的**上游素材**，非正文，不参与 `/merge` 合并。
 
 **前置**：必须在 `/figure-plan`（Phase 2.5）完成图集规划、且文献检索（Phase 3）基本完成后才运行。此时每张图的 section_id 与 main/SI 分配已确定（来自 Phase 2.5 的 `figures_database.json` 草版条目），本阶段用真实图文件填充该条目，不再重新规划图序。结构由 storyline 决定（融合式 / Results 与 Discussion 分离 / 方法学后置均可），本阶段只产素材、不假设结构。**本阶段不检索文献**。**与 Phase 8 逐节交替**：不是先识完所有 figure 再统一写，而是每写一个 Results 小节前先对该节对应 figure 跑 `/figure`，再 `/write` 该节。
 
@@ -357,7 +357,7 @@ python scripts/state_manager.py add-abbreviation <one.json>
 0. **Scoped Load (Mandatory)**: 先执行章节局部加载命令，确保只读当前章节。
 0a. **🔴 开写前置闸门 (Mandatory，脚本硬拦截)**：开写任何 section 前必须先跑 `python3 scripts/prewrite_gate.py --section [section_id] --root .`，exit≠0 禁止开写。它统一硬检查：上一节完成（`writing_progress.json` 该节最新 status=done）、故事线就位（`storyline.json` 含本节）、素材就位（subprocess 调 `figure_analysis_gate.py`）、上一节占位符清零（无 `CITE_PENDING`/`DATA_PENDING`/`【待`）、缩略词一致（subprocess 调 `abbreviation_consistency.py`）；上一节盲检结果（`.review_pass/<上一节>.json`）缺失即 prewrite_gate 硬拦 exit 1，禁止开写；必须先跑 delegate_review verify --section <上一节> 落盘通过标记。过此闸门后再走下面 0b。
 0b. **🔴 figure_analysis 加载门禁 (Mandatory，脚本兜底)**：跑 `python scripts/figure_analysis_gate.py --section [section_id] --root .`。该 gate 比对 `figures_database.json` 中该节涉及的 figure，确认每张 `figure_analysis/figure_{N}.md` 存在、非空、无 `❓待确认` 残留；任一未就绪 → 脚本 exit 1，**禁止开写**，先回 `/figure` 补齐再回来。Introduction/Methods 等无 figure 的小节脚本自然放行（exit 0）。过 gate 后**必须显式 `Read` 本节对应的 `figure_analysis/figure_{N}.md`**（write-cycle 不自动加载，见 §13 白名单第 7 项），作为 Results/Discussion 的事实依据。
-0c. **🟢 引文核证脚手架 (Citation-Claim Matrix，写对的脚手架，非事后墙)**：开写本节前，先把"本节承重论点 ↔ 拟引文献"建成矩阵，用**真 abstract** 判每条引用是否真支撑它挂的论点，再下笔——避免写完才发现引文不支持、返工重写。
+0c. **🟢 引文核证脚手架 (Citation-Claim Matrix，写对的脚手架，非事后墙)**：开写本节前，先把"本节承重论点 ↔ 拟引文献"建成矩阵，用**真 abstract** 判每条引用是否真支撑它挂的论点，再下笔，避免写完才发现引文对不上、又得返工重写。
    - **哪些算承重论点（is_load_bearing=true）**：支撑本节结论方向的机制句、因果句、定量对比结论句。段首背景句、常识铺垫句算背景（is_load_bearing=false，批量核对即可，不逐条阻断）。
    - **证据只用检索原样落盘的真摘要**：从 `literature_index.json` 里取该 ref 当初 MCP **检索原样落盘的 `abstract`**（不看可编的 key_finding、不脑补），逐条判 `verdict ∈ support/weak/contradict/unknown` 并摘一句 `evidence_quote`。取不到摘要的承重引用先走 §12 摘要补全或换引文，别硬写。
    - **落盘 `claim_evidence.json`**（list，每条）：`{section, claim_sentence, is_load_bearing, ref_id, retrieved_abstract, verdict, evidence_quote, user_confirmed}`。
@@ -428,7 +428,7 @@ python scripts/state_manager.py add-abbreviation <one.json>
 
 ### Phase 8.6: 目标期刊风格深度学习 (`/journal-study`) —— 🚫 已停用（DEPRECATED，不在写作流程中执行）
 
-> **🚫 本 Phase 已从写作流程移除，不要在写作中/写作后触发 `/journal-study`。** 期刊**语言风格适配**（被动比例、句式、摘要调性、图序惯例）**改到全文完成后的最后一步、用 `polish-sci` 技能做**——语言风格是润色期的事，不该在写作阶段前置学习、更不该卡在 abstract 之前。
+> **🚫 本 Phase 已从写作流程移除，不要在写作中/写作后触发 `/journal-study`。** 期刊**语言风格适配**（被动比例、句式、摘要调性、图序惯例）**改到全文完成后的最后一步、用 `polish-sci` 技能做**。语言风格属于润色期，不该在写作阶段提前学，更不该卡在 abstract 前面。
 > 
 > **结构目标不受影响、仍然保留**：字数上限、主图张数、Abstract 结构/词数、Methods 形式（Online vs STAR）等**结构约束**由 **Phase 2 `/storyline` 的 `target_journal` 早已捕获并写入 `project_config.word_limits`**，全流程沿用，不依赖本 Phase。停用的只是"写完再回头学期刊语言风格"这一步，不动 Phase 2 的早期结构约束。
 > 
@@ -625,7 +625,7 @@ python scripts/state_manager.py add-abbreviation <one.json>
   - **中间版本（给导师 / 自己核对）**：`python scripts/merge_manuscript.py --manuscript-dir manuscripts --output-md manuscripts/Draft_Round{N}_Manuscript.md --skip-docx`，文件名带 round 编号，不覆盖 Full_Manuscript.md。
   - **最终版本（投稿用）**：`python scripts/merge_manuscript.py --manuscript-dir manuscripts`（默认输出 `manuscripts/Full_Manuscript.md` + .docx）。**只在 `/check` 全过 + `/submission-pack` 已生成后才允许跑最终版**；否则视为中间稿。
   - 可选：`--skip-docx`（仅生成 Markdown）
-  - **docx 字体锁定**：`/merge` 默认带上 `--reference-doc templates/reference.docx`（脚本自动按 skill 目录解析），把正文锁为 Times New Roman 12pt、标题 TNR 加粗。**模板是已提交的样式资产，缺失=安装损坏：产出 docx 时若模板缺失，docx 步骤硬失败（退出非零、不产出 docx，md 仍正常生成），并提示运行 `python scripts/make_reference_docx.py` 重新生成**——不会 silently 产出字体不受控的 docx。要改字体/字号：编辑 `scripts/make_reference_docx.py` 顶部常量后重跑 `python scripts/make_reference_docx.py` 重生成模板（基准模板由 `pandoc --print-default-data-file reference.docx > templates/reference.docx` 产生）。
+  - **docx 字体锁定**：`/merge` 默认带上 `--reference-doc templates/reference.docx`（脚本自动按 skill 目录解析），把正文锁为 Times New Roman 12pt、标题 TNR 加粗。**模板是已提交的样式资产，缺失=安装损坏：产出 docx 时若模板缺失，docx 步骤硬失败（退出非零、不产出 docx，md 仍正常生成），并提示运行 `python scripts/make_reference_docx.py` 重新生成**，不会悄悄产出字体不受控的 docx。要改字体/字号：编辑 `scripts/make_reference_docx.py` 顶部常量后重跑 `python scripts/make_reference_docx.py` 重生成模板（基准模板由 `pandoc --print-default-data-file reference.docx > templates/reference.docx` 产生）。
   - 可选：`--patterns "01_Abstract*.md,02_Introduction*.md,03_Methods*.md,04_Results*.md,05_Discussion*.md,06_Conclusion*.md,07_References*.md,*.md"`（自定义合并顺序与兜底匹配；默认值同此，与 `merge_manuscript.py` DEFAULT_PATTERNS 一致）
 - `/export_bib` → `python scripts/export_bibtex.py --index-file literature_index.json --output-file references.bib`
   - 支持 `literature_index.json` 为 list 或 dict（`references/items/entries/data`）
