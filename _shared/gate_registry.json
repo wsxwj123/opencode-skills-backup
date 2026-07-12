@@ -44,7 +44,7 @@
     },
     "polish-sci": {
       "state_files": ["units_index.json"],
-      "managed_globs": ["polished_manuscript.md", "manuscripts/*.md"],
+      "managed_globs": ["polished_manuscript.md"],
       "signoff": false
     }
   }
