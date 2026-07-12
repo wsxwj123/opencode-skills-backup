@@ -311,26 +311,7 @@ python -c "import os,json; d=os.path.join(os.getcwd(),'data'); os.makedirs(d,exi
 
 **🛑 ①DoD 停（盲检通过后仍须停，等用户确认才声明完成）**：delegate_review verify exit 0 **不等于自动交付**。verify 通过后，把 DoD 清单**逐项结论**（每项 pass/na + 一句证据，特别是 verdict 档位与其致命伤锚点）摆给用户，并**HALT 等待用户确认**；用户确认后才可声明"审稿报告完成"。用户若质疑某项（如"这条批评稿里根本没有""这个拒稿档位不成立"），退回修复对应项再走一遍，不得跳过确认径直收口。
 
-> 下列清单与 `references/dod_checklist.json` 逐项对应（改清单先改 JSON），供人工对照；能脚本核的项子代理会先跑脚本。
-
-**A. 脚本可核项（第七步 `validate_report_html.py` 覆盖，通过即✓）**
-- [ ] **A1 · 21占位符全替换**：`validate_report_html.py` 返回 `VALIDATION_OK`，无残留 `{{...}}`
-- [ ] **A2 · verdict 枚举合规**：`decisionVerdict` ∈ {拒稿/大修/小修/接收}，且与 `finalRecommendationText` 完全一致；`VERDICT_CLASS` 与 verdict 一一对应
-
-**B. 流程完整性（人工逐项）**
-- [ ] **B1 · CRITICAL 阻断逻辑**：若第五步半魔鬼代言人发现任一 CRITICAL 级问题，verdict ≠ "接收"（降为大修或拒稿），且 `{{RECOMMENDATION_RATIONALE}}` 中已显式说明触发原因与证据锚点
-- [ ] **B2 · 合规审计完整**：第四步技术合规审计（`references/review_rubric.md` 第五节）7项已逐项核查，缺项已写入第七节核心问题
-- [ ] **B3 · 统计子清单**：原创研究或 Meta 分析已执行统计审查子清单（rubric 第六节）6项；非原创研究此项标记"不适用（稿件类型：X）"
-- [ ] **B4 · 魔鬼代言人复查已执行**：第五步半五类对抗性审查（rubric 第八节）已完整执行，发现问题已合并至 `{{CRITICAL_ISSUES_HTML}}` 或 `{{FORENSIC_ANALYSIS_HTML}}`
-- [ ] **B5 · 给编辑保密意见**：`{{CONFIDENTIAL_EDITOR_HTML}}` 四项（直接拒稿建议/数据造假怀疑/私评新颖性/利益冲突提示）均有内容或明确写"无"，无项目遗漏
-- [ ] **B6 · 引文真实性**：报告正文中主动引据的外部文献（非稿件自带引用）已过 `citation_guard`，`ok=true` 或已标注"待核验"；未引外部文献时此项标记"无外部引文"
-- [ ] **B7 · 审稿意见本身去AI（硬核：禁套话主干 + 去AI必禁三项）**：报告正文（含各 `{{*_HTML}}` 填充内容）**禁套话主干**（rubric 第七节 BANNED 模板句/套话/修辞）+ **去AI必禁三项 装饰破折号（—/——）/ scare quotes / 解释性冒号** 无残留——**先跑脚本硬核**：`python ~/.claude/skills/reviewer-simulator/scripts/scan_report_humanize.py <报告HTML路径>` 须 `HUMANIZE_OK`（exit 0）；三项命中即 ERROR、`HUMANIZE_FAILED`。中文句长≤50字/从句≤2层为**软提示**，脚本会列出、人工酌情修润，**不阻断交付**
-- [ ] **B8 · 报告结构完整性**：审稿报告含全部规定区块（稿件概要/合规审计/契合度/18点分析/魔鬼代言人/核心问题/给编辑保密意见/回复草案区），无缺块、无空区块（回复草案区默认为一句指路说明，非逐条回复，不算空块）；且多视角并发盲评的所有视角发现均已汇入，无遗漏视角
-
-- [ ] **B11 · 检索证据门（⑥，soft 报告项）**：报告中每条"不新颖/已有高度相似研究/与已发表文献矛盾"批评，均附**检索痕迹（工具+检索式+日期）+ 具名文献（标题+DOI/PMID，已过 citation_guard）**；无检索举证的此类断言必须已改写为"要求作者举证"的中性表述。空 index 不豁免此项。软项：只报告不阻断，但发现空口断言须退回改写。
-
-**C. 软项（🟡只报告不阻断，soft）**
-- [ ] **B10 · 审稿报告正文字符级软体检**：`python ~/.claude/skills/reviewer-simulator/scripts/proofread_report.py <报告HTML路径>` 抽正文喂 proofread（不传 `--fail-on`），报告拼写错误/中文标点漏进英文/上下标裸写等字符级问题。**软项**：脚本恒 exit 0，delegate_review verify 对它只汇报不影响退出码，发现问题仅供人工修润，不阻断报告交付。
+**本节完整 DoD 判据（全部核查项 + 脚本命令）以 `references/dod_checklist.json` gate=`report-dod` 为唯一真源（13 项）**：盲检子代理据此逐项核、能脚本核的先跑脚本，退出码非 0 即 fail-closed。含 A1/A2 脚本可核（21 占位符全替换、verdict 枚举合规，`validate_report_html.py`）、B1-B8 流程完整性（CRITICAL 阻断逻辑 / 合规审计 7 项 / 统计子清单 / 魔鬼代言人 / 给编辑保密意见 / 引文真实性 / **B7 审稿意见去AI 硬核（禁套话主干 + 必禁三项破折号/scare quotes/解释性冒号，`scan_report_humanize.py`）** / B8 结构完整性）、B11 检索证据门（soft，新颖性批评须附检索痕迹 + 具名文献），及 **B9 科学事实正确性核查（硬项盲检：稿件存在明确科学错误/单位/剂量硬数值错误而报告漏检=fail）**、B10 字符级软体检（`proofread_report.py`）。此处不再内联清单，避免与真源 drift。
 
 ---
 

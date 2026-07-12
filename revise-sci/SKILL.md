@@ -441,10 +441,11 @@ These inline markers are load-bearing and carry the same status as citation mark
 | RV-R9 | polish 片段级守卫通过：每个 polished 片段 `polish_numbers_ok=true`（无数值漂移/丢失）、`polish_certainty_ok=true`（谨慎动词未被升级为强断言）、无套话禁词残留；`polish_risk_flags` 已落盘到 unit / `revision_polish_execution.json` / `comment_records/<id>.md` | `python scripts/strict_gate.py --project-root <project_root>`（strict_gate 内含 A/B/MID 三项检查，RV-R1 通过则本项通过） |
 | RV-R7 | response_to_reviewers.docx 结构完整：每个 comment block 都有 comment heading / response-section heading / evidence-section heading | `python scripts/strict_gate.py --project-root <project_root>`（strict_gate 解析 docx 核验结构，RV-R1 通过则本项通过） |
 | RV-R8 | 结构完整性：改后稿件结构完整（原结构无破坏、参考文献编号连续、response 各 unit 三要素齐全）；退稿信每条意见在 edit_plan 中有落点无遗漏 | `python scripts/strict_gate.py --project-root <project_root>`（RV-R1 通过则本项通过）；或人工逐段核查 |
+| RV-R10 | 跨节一致性盲检（全局层，超出片段级 RV-R9）：改稿后关键数值/样本量/效应量/主要结论在摘要-正文-图表-结论间仍一一对应、无新引入矛盾；改动未把原谨慎表述升级为新过度声称（因果化/普适化/夸大疗效）。跨节不一致或新增过度声称=fail，列冲突两处原文为证 | `python scripts/cross_section_consistency.py --project-root .`（客观信号）+ 盲检子代理据此判定 |
 | RV-R11 | 语法拼写与字符级格式：对原子化正文 `manuscript_sections/` 跑字符级体检。高置信类别 **misspelling**（英文常见错拼）/ **chinese_punct**（中文标点漏入英文句）/ **subsup_bare**（H2O、IC50、cm² 等应上下标却裸写，含 CJK 安全边界）**零容忍**——命中任一即 `fail_on_hits` 非空、`ok=false`、退出码非 0；其余类别（学术错拼/中文错字/单位/英美混用/数字格式/术语不一致/Methods 时态/断链）**仅报告不阻断**。**只报告供用户决断，绝不自动改正文**（fragment-only 保真），命中后由用户决定是否回片段修订 | `python scripts/proofread.py --manuscript-dir manuscript_sections --report proofread_report.json --fail-on misspelling,chinese_punct,subsup_bare` → `ok=true` 且 `fail_on_hits` 为空 |
 | RV-R12 | 拉丁短语斜体软提醒（🟡软/人工确认，不阻断）：`proofread.py` 的 `latin_italic_missing` 类别，正文里 `in vitro`/`in vivo`/`ex vivo`/`in situ`/`de novo`/`post hoc`/`per se` 等公认须斜体的拉丁短语若裸写（未被 `*...*` 斜体标记包裹）则报告。**仅提示，不阻断、不进 `--fail-on`、不扣分**，由人工确认是否补斜体（`et al.`/`e.g.`/`vs.` 等正体惯例不在词表内） | 同 RV-R11 脚本，读 `proofread_report.json` 中 `latin_italic_missing` 计数供人工决断，不影响 `ok`/退出码 |
 
-> RV-R3 仅在使用 Patch 修订协议时适用，跳过需在 notes 中注明原因。RV-R4/R6/R7/R8/R9 已由 strict_gate 覆盖，RV-R1 通过即视为通过；RV-R5 须确认 pipeline 正式运行产出 comment_registry.json。
+> RV-R3 仅在使用 Patch 修订协议时适用，跳过需在 notes 中注明原因。RV-R4/R6/R7/R8/R9 已由 strict_gate 覆盖，RV-R1 通过即视为通过；RV-R5 须确认 pipeline 正式运行产出 comment_registry.json。RV-R10 为跨节一致性全局盲检（独立脚本 `cross_section_consistency.py` + 子代理判定），**不由 strict_gate 覆盖**，须单独核。
 
 ### 投稿前作者自检（🟡 soft 提醒，不阻断交付）
 
