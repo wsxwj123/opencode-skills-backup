@@ -72,12 +72,13 @@ def test_clean_language_polish_passes() -> None:
     )
 
 
-# --- C 反AI降软:破折号等修辞降为软提示,不再硬拦交付 ---
-def test_em_dash_no_longer_blocks_delivery() -> None:
-    # 破折号是学术散文正当修辞,check_unit 不应因它判 fail。
-    _passes(
+# --- 破折号硬门禁:禁止使用,check_unit 命中即 fail ---
+def test_em_dash_blocks_delivery() -> None:
+    # 破折号是硬门禁,check_unit 应因它判 fail。
+    _fails_with(
         "The effect was clear in *TP53* mutants.",
         "The effect was clear—striking, even—in *TP53* mutants.",
+        "ai markers",
     )
 
 
@@ -91,7 +92,7 @@ def test_ai_cliche_still_blocks() -> None:
 
 
 def test_soft_marker_predicate() -> None:
-    assert is_soft_ai_marker("em dash")
+    assert not is_soft_ai_marker("em dash")  # 破折号硬门禁,不在软集
     assert is_soft_ai_marker("sentence >30 words")
     assert not is_soft_ai_marker("cliche: delve into")
     assert not is_soft_ai_marker("delve into")
