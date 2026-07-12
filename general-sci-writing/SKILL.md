@@ -37,7 +37,7 @@ license: Proprietary
 3. **不编数据**：缺核心定量（P 值/关键 n/效应量）→ 立即停写、输出数据收集表；严禁占位符（"XX%"）填充。
 4. **不改派生稿**：修改/润色只动 `manuscripts/*.md` 原子化源文件；严禁手改 `Full_Manuscript.md` / `*.docx`（`/merge` 会覆盖，工作丢失）。
 5. **先确认再落盘**：每节写完先展示（字数/引用/figure/缩略词/占位数），用户 OK 才写文件；禁止连续自动写多节。
-6. **去 AI 硬线（主干硬、风格软）**：**硬禁（一票否决）**——AI 套话/禁词、生僻词、造词、正文列点、编造修辞。**软提示（不阻断，仅提醒）**——句长上限（建议单句 ≤30 词、避免连续等长句，但不硬卡）、装饰性破折号（em-dash，建议改标点或重构，不再一票否决）、被动比例。数据驱动写作。详见 `references/anti-ai-protocol.md`。**语态按目标刊切换（软提示，不阻断）**：Nature/Science/Cell 官方 guideline 推荐主动语态（"We show that…"），不设被动下限；传统刊参考被动 50–70%。`style_checker.py --journal <刊名>` 把语态偏差、破折号、句长写进 warnings，不计入 score、不卡门禁；只有 AI 套话/禁词/生僻词/造词/列点计入 score。
+6. **去 AI 硬线（主干硬、风格软）**：**硬禁（一票否决）**——AI 套话/禁词、生僻词、造词、正文列点、编造修辞、**装饰性破折号（em-dash —/——，禁止使用）**。**软提示（不阻断，仅提醒）**——句长上限（建议单句 ≤30 词、避免连续等长句，但不硬卡）、被动比例。数据驱动写作。详见 `references/anti-ai-protocol.md`。**语态按目标刊切换（软提示，不阻断）**：Nature/Science/Cell 官方 guideline 推荐主动语态（"We show that…"），不设被动下限；传统刊参考被动 50–70%。`style_checker.py --journal <刊名>` 把语态偏差、句长写进 warnings，不计入 score、不卡门禁；破折号命中即 hard_fail 一票否决，AI 套话/禁词/生僻词/造词/列点计入 score。
 7. **引用格式**：正文一律 `[n]`（分节矩阵重排后的全局索引），每节末附 Vancouver 列表；严禁 `[Author,2023]`/`(1)`。
 8. **期刊上限**：storyline 必须在 `target_journal` 字数上限内编排，严禁先写超 30% 再砍。
 9. **占位清零**：`CITE_PENDING`/`DATA_PENDING`/`REF_DROPPED` 必须在 `/merge` 前清零（Phase 10 扫描门禁）。
@@ -399,7 +399,7 @@ python scripts/state_manager.py add-abbreviation <one.json>
    - [ ] **②citation_guard**：本节新增引用已过 `citation_guard.py --offline` 核验，`ok=true`
    - [ ] **③主线对齐**：本节内容符合 `storyline.json` 对应 section 的核心论点，无跑题或自相矛盾
    - [ ] **④占位清零**：`grep -n "CITE_PENDING\|DATA_PENDING\|REF_DROPPED" <本节文件>` 输出为空
-   - [ ] **⑤去 AI**：`style_checker.py --file <本节文件> --threshold 70` 通过（硬项：无 trailing_ing_clause / forbidden_ai_phrases / scare_quotes / 列点；**破折号 em-dash、句长、被动比已降为 warnings 软提示，不计入 score、不阻断**——见提醒即酌情改，不强改；见 `references/anti-ai-protocol.md`）
+   - [ ] **⑤去 AI**：`style_checker.py --file <本节文件> --threshold 70` 通过（硬项：无 trailing_ing_clause / forbidden_ai_phrases / scare_quotes / 列点 / **破折号 em-dash（命中即 hard_fail 一票否决，禁止使用）**；**句长、被动比为 warnings 软提示，不计入 score、不阻断**——见提醒即酌情改，不强改；见 `references/anti-ai-protocol.md`）
    - [ ] **⑥字数（软提示，不阻断落盘）**：本节字数**建议**落在 storyline 预估区间内；字数下限（凑字数地板）仅作提醒不硬卡。**唯一硬项是上限**：全文累计不得超期刊字数上限（P0#8）。
 
    **gsw 特有项**（Results/Discussion 节必检）：
@@ -687,7 +687,7 @@ python scripts/state_manager.py add-abbreviation <one.json>
 - ❌ 主 agent 自评 DoD 当通过：节末检查必须委托独立子代理盲检，上一节 verify 未 exit 0 就开写下一节。
 - ❌ 带 CITE_PENDING / DATA_PENDING / REF_DROPPED 占位跑 /merge，跳过 Phase 10 占位扫描门禁。
 - ❌ 先写超期刊上限 30% 再砍：storyline 必须在 target_journal 字数上限内编排。
-- ❌ Discussion 漏写 Limitations 段，或正文用列点符号（硬禁）。（单句超 30 词、破折号修辞已降为软提示，见提醒酌情改，不再列入硬性反例。）
+- ❌ Discussion 漏写 Limitations 段，或正文用列点符号，或用装饰性破折号（—/——，硬禁、命中即 fail）。（单句超 30 词为软提示，见提醒酌情改，不列入硬性反例。）
 - ❌ 投稿包残留 `{{VAR}}` 占位、伪造 reviewer 邮箱、瞒报 COI，或 Source Data 数值与图不对应。
 
 ---

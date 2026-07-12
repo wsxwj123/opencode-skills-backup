@@ -72,9 +72,9 @@
 - **传统 SCI 刊**：实验描述仍以被动为主流，参考被动 50–70%。Methods / Results → 优先被动（"Cells were treated with..."）；Discussion 表达推断可主动。< 40% 或 > 70% 仅软提示，不扣分。
 - 拿不准目标刊语言风格（被动比例/句式）→ 不在写作阶段前置学习；留到**末尾用 polish-sci 润色时**按目标刊调性对齐（`/journal-study` 已停用，见 SKILL.md Phase 8.6）。写作期照本协议通用规则即可。
 
-## 🟡 慎用装饰性破折号 (Avoid Decorative Em-dashes — 软提示，不阻断)
+## 🔴 禁装饰性破折号 (Ban Decorative Em-dashes，硬门禁，禁止使用)
 
-**建议**避免用 em-dash（—、——）做停顿、补充说明或强调，优先改用逗号、句号或拆句处理。破折号已从硬门降为软提示：`style_checker.py` 把它写进 warnings，不计入 score、不卡门禁，见提醒酌情改即可。
+**禁止**用 em-dash（—、——）做停顿、补充说明或强调，一律改用逗号、句号或拆句处理。破折号是硬门禁：`style_checker.py` 命中即置 hard_fail 一票否决（无论总分高低），不放行。
 
 **合法保留的连字符/横线用途（不属于本条禁止范围）**：
 - 连字符（hyphen `-`）：复合词 / 术语（如 dose-response, T-cell, non-significant）。
