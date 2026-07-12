@@ -15,8 +15,8 @@
         {
           "id": "RR2",
           "name": "citation_guard",
-          "check": "本次新增引用已过 citation_guard.py 核验（status == 'pass' 或无新增引用）",
-          "script": "python scripts/citation_guard.py --project-root . --offline"
+          "check": "本次有新增引用时：(a) citation_guard.py 带 --fail-on-unverified 核验真实性(DOI/PMID/撤稿全验,验不过=FAIL,不再是 WARN)；(b) 对『新引↔它支撑的回复论点句』用真实 abstract 跑 citation_claim_check.py,承重句 contradict/unknown/无摘要=fail-closed 且须人工确认。无新增引用则 entries 为空数组即 pass。",
+          "script": "python scripts/citation_guard.py --project-root . --fail-on-unverified   # 有新引则再跑 _shared/citation_claim_check.py --root . 核支撑度(承重句 contradict/unknown=fail-closed)"
         },
         {
           "id": "RR3",
@@ -32,7 +32,7 @@
         {
           "id": "RR5",
           "name": "去AI",
-          "check": "英文单句 ≤30 词、无 -ing 分词挂句、无套话禁词；中文单句 ≤50 字、从句 ≤2 层",
+          "check": "硬项：无 AI 套话禁词（空致谢/对冲/填充/模板重复）、无解释性冒号。软项(WARN 非阻断,别机械削平)：英文长句/破折号/-ing 分词、中文长句/嵌套按语感处理,明显堆砌才改",
           "script": "python scripts/risk_check.py --project-root ."
         },
         {
