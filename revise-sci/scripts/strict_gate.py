@@ -509,7 +509,7 @@ def main() -> int:
 
     if soft_style_notes:
         print("=" * 60)
-        print("🟡 去AI软提示(句长>30词/装饰破折号——只提示、不阻断,建议回片段修订):")
+        print("🟡 去AI软提示(句长>30词——只提示、不阻断,建议回片段修订;破折号等属硬门禁,见 FAIL 段):")
         for note in soft_style_notes:
             print(f"   · {note}")
         print("=" * 60)
