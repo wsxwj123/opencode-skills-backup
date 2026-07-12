@@ -772,6 +772,7 @@ If pending_sections is empty → all sections complete; proceed to Phase 4.
        - 其他平台（Codex/OpenCode 等无此 agent）：新开一个干净上下文的子代理/子会话，同样只贴任务包原文。
     3. 校验返回：`python3 scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate manuscript-dod --return <子代理返回.json> --section <当前section_id> --root <项目根>`；退出码非 0（任一缺项 / fail / 无证据）= **fail-closed**，据子代理证据修复后重跑，**未过不得声明完成**。verify 通过会落盘 `.review_pass/<当前section_id>.json`，下一节 `prewrite_gate.py` 会**硬校验**它（缺失即拒绝开写）。
        > **诚实边界：** verify 的 `ok:true` 只代表清单每项都被裁决且形式合规——**PASS 仅覆盖形式层，语义正确性由盲检子代理主观判断、未自动核验**。
+       > **【P4·盲检降级告警】** ⚠️ 若环境派不出真正独立的子代理（非 Claude Code、无 `academic-blind-reviewer`），**绝不能同一 AI 自问自答冒充盲检**。告诉用户「本环境盲检不可靠，请你亲自复核本节」，别让自证闭环静默跑。
     4. **🚪 逃生口（盲检子代理确实跑不起来时，且仅此时）**：若平台无 `academic-blind-reviewer`、通用子代理也反复失败/取不到返回，导致 `verify` 无法落盘标记、下一节被 `prewrite_gate` 永久锁死——**不要卡死或静默跳过**。改为人工逐项盲检本节 DoD 后，用显式放行开锁并留痕：
        ```bash
        python3 scripts/prewrite_gate.py --section <下一节id> --root . \
@@ -848,6 +849,8 @@ Write Mode has no `pending_sections` field so this gate is a no-op (no key → e
    If non-zero exit → list all gaps; block compilation until resolved.
    `--write-back`: persists `verified:true/false` fields into literature_index.json for traceability.
    `--manual-review`: writes unverifiable entries to `data/manual_review_queue.json` for human check; does NOT block compilation unless `--require-mcp` is also set.
+
+   > **【P4·文献抽验·用户必做】** 综述的命是引文。文献进正文前用户应抽 2-3 篇让 AI 报 PMID/DOI 自己去 PubMed 核对。⚠️ 你在 Windows 上 edirect 联网核验常跑不起来（本 SKILL 已注明 edirect 在 PowerShell/CMD 不可用）——**一旦不能真的联网查，AI 必须停下告诉用户，绝不许硬着头皮编 DOI/年份**。`validate_citations.py --live` 跑不起来时明说「联网核验不可用」，不许自判通过。
 3. **Export bibliography:**
    ```
    [Zotero] python3 scripts/zotero_manager.py --export-bibtex \
@@ -1014,3 +1017,13 @@ Three modes: **Zotero**（推荐，实时写入）/ **None**（纯本地 JSON + 
 - **Anti-Flattery:** Objective only.
 - **Reverse Questioning:** Challenge user assumptions when warranted.
 - **Point-by-Point Reply:** Address every query, no skipping.
+
+---
+
+## 发现 AI 跳步/漏做了怎么办（用户自救）
+
+怀疑 AI 偷工减料时，直接把下面的话贴给它（可复制）：
+
+- 「查进度：把 `state.json` 当前 Phase、`drafts/` 下已完成的节、`research_gap.json` / `benchmark_reviews.json` 在不在，逐一报我」（不在=跳了 Phase 1.5/1.6）
+- 「对每条用到的引用跑 `validate_citations.py --live --live-used-only`，把原始输出贴我；`--live` 跑不起来就直说『联网核验不可用』，不许自判通过」
+- 「每写完一节该停下让我验收，别一路写到底」
