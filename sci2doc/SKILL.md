@@ -354,6 +354,8 @@ python3 scripts/extract_docx_images.py --manuscript /path/to/source.docx --proje
 2. **派一个独立子代理**（Claude Code 用 `academic-blind-reviewer`；其他平台派通用子代理），把任务包原样给它、**不要给它本节的写作上下文**，要求按任务包返回 JSON 数组。
 3. 校验返回：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate section-dod --return <子代理返回.json> --section <当前节号如3.2> --root <项目根>`；退出码非 0（任一缺项/fail/无证据）= **fail-closed**，据子代理证据修复后重跑，**未过不得声明完成**。verify 通过会落盘 `.review_pass/<当前节号>.json`，下一节 `prewrite_gate.py` 会**硬校验**它（缺失即拒绝开写）。
 
+> ⚠️ 若环境派不出真正独立的子代理，**绝不能同一 AI 自问自答冒充盲检**。告诉用户「本环境盲检不可靠，请你亲自复核数据溯源与章节逻辑」，交回用户。
+
 下列清单与 `references/dod_checklist.json` gate=`section-dod` 逐项对应（改清单先改 JSON），供人工对照；能脚本核的项子代理会先跑脚本：
 
 通用项（全技能共享）：
@@ -385,6 +387,8 @@ sci2doc 特有项：
 #### 🔴 每章收口自检清单（Definition of Done · 章级）
 
 **硬规则：以下各项未逐一确认通过，不得向用户声明"该章完成"，不得进入 Step 7。**
+
+> **[数据溯源·用户必抽验]** 学位论文里每个实验数值/每张图都必须能在原始 SCI 里找到出处。每写完一章，让 AI 给一张"本章数值/结论 → 源自原文哪张图/哪段"对照表，用户抽查几行。⚠️ 博士≥5万字硬地板逼 AI 靠编数据/扩实验凑字数——追溯不到 materials 的数值就是编的。引文同样抽几篇验 DOI。
 
 **🔴 进入下一章前置闸口**：上一章 `delegate_review verify` 必须 exit 0（含章结构完整性项 S8），否则不得开始下一章。写完即检，不过不进。
 
@@ -659,3 +663,11 @@ Priority rule: **chapter-based numbering takes precedence**. If a figure from SC
 - [ ] **查重预检（人工，本技能不做查重）：** 技能不计算重复率、不对接任何查重系统；改写 ≠ 降重。提交知网/万方查重前，基于 Non-Negotiable 第 20 条产出逐段"原文-改写"对照表（`docx/reuse_map.md`：所在章节 / 原文出处 [N] / SCI 原文片段 / 中文改写文本 / 状态 confirmed/pending），确认全部为中文改写且有引用标注，再由用户自行送第三方查重。
 
 > **🔴 硬规则（全局）：每节收口自检清单（G1-G6 + S1-S5）与每章收口自检清单（G1-G6 + S1-S7）未逐项确认通过，不得向用户声明"该节/该章完成"。** 能脚本核的项必须跑脚本取证据（`ok=true` / 零 error）；人工项逐条打 ✅ 后方可放行。此规则优先于任何上下文压力或用户催促。
+
+## 发现 AI 跳步/编数据了怎么办（用户自救）
+
+以下话术可直接复制粘贴给 AI，逼它把过程摊到明面上：
+
+- 「每完成一章贴四样给我：git log commit 列表、.review_pass/ 文件清单、citation_guard_report.json 的 ok 字段、本章每个关键数值对应原文哪张图的对照表。拿不出就回对应 Step 重跑」
+- 「把本章所有实验数值列成表，每行标注来自 materials_archive.json 哪个 entry 哪个字段；追溯不到的全部标红等我核」
+- 「AI 应一节一节写、每节存文件做检查；你一次性甩整章给我 = 跳过了所有质检」
