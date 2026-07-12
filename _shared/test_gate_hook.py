@@ -22,48 +22,50 @@ def _run_hook(payload: dict, env: dict | None = None) -> tuple[str, int]:
     return p.stdout.strip(), p.returncode
 
 
-def _fake_project(tmp: Path, failing: bool) -> Path:
-    """造一个 general-sci-writing 假项目：state 文件声明 skill，桩 prewrite_gate
-    按 failing 决定 exit 0/2。managed_globs 命中 manuscripts/*.md。"""
+SIGNOFF = SHARED / "structure_signoff_gate.py"
+
+
+def _fake_project(tmp: Path, signed: bool) -> Path:
+    """造一个 general-sci-writing 假项目：state 文件声明 skill；signed 决定是否
+    已落结构签字。registry 现在跑共享的 structure_signoff check(粗粒度)，
+    签字缺失→拦，存在→放行。managed_globs 命中 manuscripts/*.md。"""
     root = tmp / "proj"
     (root / "scripts").mkdir(parents=True)
     (root / "manuscripts").mkdir()
     (root / "writing_progress.json").write_text(
         json.dumps({"skill": "general-sci-writing", "phase": 8}), encoding="utf-8")
-    exit_code = 2 if failing else 0
-    (root / "scripts" / "prewrite_gate.py").write_text(
-        "import sys\n"
-        "print('storyline 未确认' if %d else 'PASS')\n"
-        "sys.exit(%d)\n" % (exit_code, exit_code), encoding="utf-8")
+    if signed:
+        subprocess.run([PY, str(SIGNOFF), "confirm", "--root", str(root),
+                        "--note", "test"], capture_output=True, text=True)
     return root
 
 
-def test_dispatcher_blocks_when_gate_fails():
+def test_dispatcher_blocks_when_unsigned():
     with tempfile.TemporaryDirectory() as d:
-        root = _fake_project(Path(d), failing=True)
-        target = root / "manuscripts" / "results_3.2.md"
+        root = _fake_project(Path(d), signed=False)
+        target = root / "manuscripts" / "03_3.2_Tumor.md"
         out, rc = _run_hook({"tool_name": "Write",
                              "tool_input": {"file_path": str(target)}})
         assert rc == 0, "hook 恒 exit 0"
-        assert out, "门禁失败时应输出 deny JSON"
+        assert out, "结构未签字时应输出 deny JSON"
         obj = json.loads(out)
         assert obj["hookSpecificOutput"]["permissionDecision"] == "deny"
-        assert "storyline" in obj["hookSpecificOutput"]["permissionDecisionReason"]
+        assert "结构签字" in obj["hookSpecificOutput"]["permissionDecisionReason"]
 
 
-def test_dispatcher_allows_when_gate_passes():
+def test_dispatcher_allows_when_signed():
     with tempfile.TemporaryDirectory() as d:
-        root = _fake_project(Path(d), failing=False)
-        target = root / "manuscripts" / "results_3.2.md"
+        root = _fake_project(Path(d), signed=True)
+        target = root / "manuscripts" / "03_3.2_Tumor.md"
         out, rc = _run_hook({"tool_name": "Write",
                              "tool_input": {"file_path": str(target)}})
-        assert rc == 0 and out == "", "门禁通过应放行(无输出)"
+        assert rc == 0 and out == "", "已签字应放行(无输出)"
 
 
 def test_dispatcher_ignores_nonmanaged_path():
     with tempfile.TemporaryDirectory() as d:
-        root = _fake_project(Path(d), failing=True)
-        # tmp/ 不在 managed_globs → 即便门禁会失败也应放行
+        root = _fake_project(Path(d), signed=False)
+        # tmp/ 不在 managed_globs → 即便未签字也应放行
         target = root / "tmp" / "scratch.md"
         target.parent.mkdir()
         out, rc = _run_hook({"tool_name": "Write",
@@ -86,9 +88,29 @@ def test_dispatcher_failopen_on_bad_stdin():
     assert p.returncode == 0 and p.stdout.strip() == "", "坏输入必须静默放行"
 
 
+def test_signoff_gate_check_lifecycle():
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        # 未签字 → check exit 2
+        r1 = subprocess.run([PY, str(SIGNOFF), "check", "--root", str(root)],
+                            capture_output=True, text=True)
+        assert r1.returncode == 2 and "结构签字缺失" in r1.stdout
+        # confirm → check exit 0
+        subprocess.run([PY, str(SIGNOFF), "confirm", "--root", str(root),
+                        "--note", "用户确认了大纲"], capture_output=True, text=True)
+        r2 = subprocess.run([PY, str(SIGNOFF), "check", "--root", str(root)],
+                            capture_output=True, text=True)
+        assert r2.returncode == 0
+        # confirm 覆盖保留历史
+        subprocess.run([PY, str(SIGNOFF), "confirm", "--root", str(root),
+                        "--note", "大纲改了重新确认"], capture_output=True, text=True)
+        data = json.loads((root / "structure_signoff.json").read_text())
+        assert data["confirmed"] and len(data["history"]) == 1
+
+
 def test_heartbeat_written_on_evaluation():
     with tempfile.TemporaryDirectory() as d:
-        root = _fake_project(Path(d), failing=False)
+        root = _fake_project(Path(d), signed=True)
         target = root / "manuscripts" / "results_1.1.md"
         hb = SHARED / "hook_heartbeat.json"
         before = hb.read_text() if hb.is_file() else None

@@ -113,6 +113,7 @@ def _run_gates(skill_cfg: dict, root: Path, file_path: Path) -> tuple[bool, str]
         "{project_root}": str(root),
         "{file_path}": str(file_path),
         "{section}": section,
+        "{shared_dir}": str(_shared_dir()),
     }
     def _subst(tok: str) -> str:
         for k, v in subs.items():
