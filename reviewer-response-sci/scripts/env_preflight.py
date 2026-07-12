@@ -82,6 +82,11 @@ def main():
         return 1
     print("✅ Python OK")
 
+    # 强制门禁 hook 自动安装 + 心跳探测（共享，跨全部学术技能）。零手动步骤：
+    # 未装→自动装(备份/校验/回滚)并提示重启一次;装了没心跳→环境不透传,提示人工盯防。
+    # 本技能不用签字闸(不打印 SIGNOFF_CMD)：只写回复信、无大纲确认，专属强制点属 P3。
+    _install_gate_hook()
+
     for tool, h in missing:
         print(f"⚠️ 缺 {tool} — 安装: {h}")
     if missing:
@@ -89,6 +94,28 @@ def main():
     else:
         print("PRECHECK: OK")
     return 0
+
+
+def _install_gate_hook() -> None:
+    """调共享安装器 install_gate_hook.py，回显其人话消息。定位:本文件在
+    skills/reviewer-response-sci/scripts/ → parents[2]=skills/ → _shared/。
+    任何异常都吞掉——门禁自检绝不能反过来卡住技能。"""
+    import json as _json
+    import subprocess as _sp
+    try:
+        installer = Path(__file__).resolve().parents[2] / "_shared" / "install_gate_hook.py"
+        if not installer.is_file():
+            return
+        proc = _sp.run([sys.executable or "python", str(installer)],
+                       capture_output=True, text=True, timeout=30)
+        line = (proc.stdout or "").strip().splitlines()[-1] if proc.stdout.strip() else ""
+        res = _json.loads(line) if line else {}
+        status, msg = res.get("status", ""), res.get("message", "")
+        icon = {"active": "🛡️", "installed": "🛡️", "degraded": "⚠️", "error": "ℹ️"}.get(status, "ℹ️")
+        if msg:
+            print(f"{icon} 门禁保护[{status}]: {msg}")
+    except Exception:
+        pass
 
 
 if __name__ == "__main__":
