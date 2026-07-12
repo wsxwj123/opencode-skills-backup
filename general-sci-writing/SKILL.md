@@ -216,6 +216,8 @@ license: Proprietary
 - **核对**：选定后必须 cross-check storyline 主线（创新点），title 必须能从一句话浓缩主线得到，不能有 title 没体现的 Results，也不能有 Results 没支撑的 title 承诺。
 
 > **[用户确认检查点 Mandatory]** 展示 storyline 草稿（章节标题、核心论点、关键图序、**各节预估引用数**、**3 个 title 候选**），等待用户明确确认后才进入 Phase 2.5。禁止在故事线未确认的情况下启动图集规划。
+>
+> **[结构签字·强制门禁落锁]** 用户在对话里明确确认 storyline 后（且**仅在此之后**），运行 Phase 0 env_preflight 打印的那条 `SIGNOFF_CMD`（已含解析好的绝对路径）落盘签字——即 `python "<.../\_shared/structure_signoff_gate.py>" confirm --root <project_root> --note "<用户确认原话摘录>"`。这一步解锁正文写作：**未落签字，PreToolUse hook 会物理拦截任何对 `manuscripts/*.md` 的写入**（这是防跳步的硬门，不是提示词纪律）。若后续回修 storyline（Phase 2.5 允许），改完让用户重新确认并重跑本命令覆盖签字。⚠️ 严禁在用户未确认时自行运行 confirm——那等于伪造用户签字。
 
 ### Phase 2.5: 主图集规划 (`/figure-plan`)
 
