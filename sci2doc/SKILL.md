@@ -19,7 +19,7 @@ The workflow is built around:
 
 ## 接续与决定日志（每次启动本技能先跑）
 
-学位论文跨多次会话、用户中途常插要求，靠外置状态而非记忆维持连续性：
+学位论文往往跨多次会话才写完，用户中途还常插新要求。连续性靠外部状态文件维持，不靠模型记忆：
 
 1. **开局先跑接续报告并打握手**：`env_preflight.py` 会打印 `RESUME_CMD`（绝对路径）。照它跑
    `python <..>/session_journal.py resume --root <project_root>`，把输出贴给用户并确认「从这里接着写」再动笔。
@@ -250,7 +250,7 @@ Before initializing any project, also verify:
 
 If source materials are missing or inaccessible, **stop and request them**. Do not proceed to Step 1.
 
-**[可选] 多格式原始材料落盘：** 若用户除 SCI 论文外还提供了其他原始材料（实验数据 Excel/CSV、组会笔记 md、参考 PDF/Word、结果图片等），在提取 SCI 论文文本前先运行材料落盘脚本，将素材分析写入 `materials/` 目录，供后续按章扩写取证引用：
+**[可选] 多格式原始材料落盘：** 若用户除 SCI 论文外还提供了其他原始材料（实验数据 Excel/CSV、组会笔记 md、参考 PDF/Word、结果图片等），在提取 SCI 论文文本前先运行材料落盘脚本，把素材分析写进 `materials/` 目录，供后面按章写作时引用取证：
 
 ```bash
 python3 scripts/material_ingest.py --dir /path/to/raw_materials --save-path "${save_path}"
@@ -278,7 +278,7 @@ python3 scripts/extract_docx_images.py --manuscript /path/to/source.docx --proje
 
 产出：`figures/figure_NN.<ext>` + `figures/image_manifest.json`。脚本只搬运二进制，不做 OCR / 图像识别；图片对应到章节图号的映射仍走 `figure_registry.py` 注册流程。
 
-提取完成后，AI 应先通读全文摘要（Abstract）、结果（Results）、方法（Methods）三节，形成对实验内容的基本理解，再进入 Step 0.5。
+提取完成后，AI 应先通读全文摘要（Abstract）、结果（Results）、方法（Methods）三节，大致读懂做过哪些实验，再进入 Step 0.5。
 
 **SCI 自身参考文献导出（初始种子）：** 在通读的同时，同步扫描源 SCI 论文的 References 部分，将其中每条参考文献按 `literature_index.json` schema 格式整理为初始种子条目，`source_provider` 填 `"sci-source-seed"`，`verified` 填 `false`，写入项目的 `literature_index.json`（若文件已存在则 merge 而非覆盖）。这些种子作为 Step 3 文献检索的**待核验候选清单**（已带 DOI/PMID，省去重新构造检索式、确定检索目标的成本），而非可直接引用的来源。注意：`sci-source-seed` 不在 `citation_guard.py` 的合法 provider 白名单（`pubmed-cli` / `paper-search`）内。种子条目必须在 Step 3 以其 DOI/PMID 为目标经 `pubmed-cli` 或 `paper-search` 正式检索核验，核验通过后将 `source_provider` 更新为实际核验来源并置 `verified=true`，方可引用；未核验的种子不得进入正文。
 
