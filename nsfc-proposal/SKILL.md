@@ -23,6 +23,17 @@ Hard rules:
 - If the user already explicitly states `Write Mode` or `Polish Mode` in the opening message, do not ask again; proceed directly with the specified mode.
 - After user confirms mode, record it in project state/profile and continue with that mode workflow only.
 
+## 开场监工卡（每次启动必打印，Mandatory）
+确认 Mode 后、开始出章节结构前，必须原样向用户打印下面这张卡（这是给非专家看的"AI 会在哪骗你"清单，每次启动都打，别省）：
+
+> **【开场监工卡 · 国自然标书】看住这几条，AI 最会在这翻车：**
+> 1. **立意 / 创新 / 可行性是中标命门，也正是 AI 最会灌水的地方**——脚本只数字数条目、管不住"有没有真东西"。这三块的每一句你都要自己读，觉得空就打回，别信"看起来很专业"。
+> 2. **诊断引擎报的字数、条目数、通过项，只代表"格式齐了"，不代表"写得好"**。绿灯 ≠ 能中，别把跑分当质量。
+> 3. **引用别全信**：我给出的每篇文献，你随手挑几篇让我把 PMID / DOI 报给你，你自己去 PubMed / 期刊官网核一遍（防我编造、防引到已撤稿的文章）。
+> 4. **每写完一章我都会停下等你确认**再往下写；我要是没停就自己连写好几章，你直接喊停——那是跳步。
+> 5. **"研究假说 → 研究目标 → 研究内容 → 关键科学问题"这条链必须对齐**，我会用表格把它们逐条摆给你看，你负责检查有没有对不上、有没有断链。
+> 6. **科学问题、章节结构没经你点头，我不会开写正文**——这一条有硬门禁兜底（见"结构签字落锁"），不是靠我自觉。
+
 ## Core Terminology
 SQ is the upstream root; H/O/RC/KSQ form the 1:1 consistency backbone derived from it.
 
@@ -141,12 +152,16 @@ Follow phased gates in order:
    - [ ] ④`ethics` 字段：涉及人/动物/生物安全/遗传资源任一情形者，已说明审批状态（含批号或送审计划时间节点）；均不涉及者填 "N/A 不涉及"
    - [ ] ⑤用户已显式确认 `experimental_design.json` 覆盖全部 RC、设计无遗漏（回放 ✓ 列表 + 用户书面同意）
 
+   > **[结构签字·强制门禁落锁]** 用户在对话里明确确认「科学问题属性 + H/O/RC/KSQ 章节结构 + 实验设计（Phase 0.5 DoD ⑤）」后（且**仅在此之后**），运行 Phase 0 env_preflight 打印的那条 `SIGNOFF_CMD`（已含解析好的绝对路径）落盘签字——即 `python "<.../\_shared/structure_signoff_gate.py>" confirm --root <project_root> --note "<用户确认原话摘录>"`。这一步解锁正文写作：**未落签字，PreToolUse hook 会物理拦截任何对 `sections/*.md` 的写入**（这是防跳步的硬门，不是提示词纪律）。若后续回修科学问题/章节结构，改完让用户重新确认并重跑本命令覆盖签字。⚠️ 严禁在用户未确认时自行运行 confirm——那等于伪造用户签字。
+
 3. Phase 1: write P1 with full citation pipeline and verification.
    - **🔴 开写前置闸门 (Mandatory，脚本硬拦截)**：开写前先跑 `python3 scripts/prewrite_gate.py --section P1 --root .`，exit≠0 禁止开写（硬检查上一节完成/`consistency_map` 就位/占位符清零；上一节盲检结果（`.review_pass/<上一节>.json`）缺失即 prewrite_gate 硬拦 exit 1，禁止开写；必须先跑 delegate_review verify --section <上一节> 落盘通过标记——仅跨 Phase 边界生效，同 Phase 子节 N/A）。P1 为首节，上一节检查自动放行。
    - 每节先跑 `python scripts/state_manager.py --root . write-cycle --section P1`（逐节预算/上下文注入的预写门控，完整参数见 references/08）；不得跳过直接硬写。
    - Input: confirmed project profile (title, discipline, H/O/RC/KSQ mapping counts).
    - Output: `sections/P1_立项依据.md` + `data/literature_index.json` (all P1 citations verified) + updated `context_memory.md`.
    **Citation Type by Context for P1 (立项依据，MANDATORY):** specific mechanistic/experimental claims (具体科学论点) must cite Original Articles as primary evidence; clinical evidence cites Clinical Trials at the same priority; preprints are last-resort, labeled `[Preprint]`, used only when no peer-reviewed equivalent exists. Full context-to-type mapping and the `role` taxonomy (gap_evidence / method_support / prior_work / comparison / background) live in `references/04_文献管理.md`.
+
+   **【P4·文献抽验·用户必做】** 立项依据里引的文献，用户应抽 3 篇让 AI 报 PMID/DOI 自己去核。撤稿的、编的，AI 不主动说你就不知道。⚠️ 检索工具不可用时 AI 必须明确告知，绝不许凭记忆编文献或就地填假 verified/DOI。
 
    **Phase 1 DoD（收口自检）：未逐项确认通过，不得向用户声明 P1 完成**
 
@@ -157,6 +172,8 @@ Follow phased gates in order:
    1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate p1-dod --files sections/P1_立项依据.md`
    2. **派一个独立子代理**（Claude Code 用 `academic-blind-reviewer`；其他平台派通用子代理），把任务包原样给它、**不要给它 P1 的写作上下文**，要求按任务包返回 JSON 数组。
    3. 校验返回：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate p1-dod --return <子代理返回.json> --section P1 --root <项目根>`；退出码非 0（任一缺项/fail/无证据）= **fail-closed**，据子代理证据修复后重跑，**未过不得声明完成**。verify 通过会落盘 `.review_pass/P1.json`，下一部分 `prewrite_gate.py` 跨 Phase 时会**硬校验**它（缺失即拒绝开写）。
+
+   **【P4·盲检降级告警】** ⚠️ 上述委托盲检若判到 D-01/D-02/D-04（科学意义/创新/可行性）这三个决定成败的维度，而**环境派不出真正独立的子代理**时，**绝不能同一 AI 编一份全 pass 的盲检 JSON 冒充**——那三个维度就裸奔了。此时须告诉用户「本环境盲检不可靠，请你亲自复核立意/创新是否够中标」，交回用户。
 
    下列清单与 `references/dod_checklist.json` gate=`p1-dod` 逐项对应（改清单先改 JSON），供人工对照；能脚本核的项子代理会先跑脚本：
 
@@ -502,3 +519,13 @@ Phase 7 引用的 `consistency_mapper.py validate` 完整形式：`python script
 - 技术路线图：Phase 2 必须生成；研究框架图：Phase 1 推荐生成；预期结果用占位符 `[Preliminary Data Fig N]`。
 - 统一色板（深蓝=主线索，绿色=创新点，橙色=预期产出），每张图须映射到 consistency_map 中至少一个 RC。
 - 完整提示词模板与生成规则见 `references/10_Figure_Prompt规范.md`。
+
+---
+
+## 发现 AI 跳步/灌水了怎么办（用户自救）
+
+怀疑 AI 偷跑门禁、编文献或盲检掺水时，直接复制下面的话术让它把证据摊开：
+
+- 「把刚才那章的 DoD 盲检重跑：真正派一个独立子代理、不给它写作上下文，跑 delegate_review verify，把返回的 JSON 原文和退出码贴我，不许你自己扮演盲检」
+- 「Phase 1 所有文献逐条跑 citation_validator verify-all，把每条 verified 值和反查证据贴我，我挑 3 条去 PubMed 核」
+- 「用表格把'假设-目标-研究内容-科学问题'的对齐关系摆给我」
