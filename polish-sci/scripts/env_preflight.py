@@ -115,6 +115,12 @@ def _install_gate_hook() -> None:
         icon = {"active": "🛡️", "installed": "🛡️", "degraded": "⚠️", "error": "ℹ️"}.get(status, "ℹ️")
         if msg:
             print(f"{icon} 门禁保护[{status}]: {msg}")
+        # 跨会话接续:照 SIGNOFF_CMD 样式打印 RESUME_CMD/LOG_CMD(绝对路径,免相对路径 cwd 依赖)。
+        # polish-sci 无签字闸,只出接续 + 决定日志两条。
+        journal = installer.parent / "session_journal.py"
+        if journal.is_file():
+            print(f'RESUME_CMD: python "{journal}" resume --root <project_root>')
+            print(f'LOG_CMD: python "{journal}" log --root <project_root> --note "<用户临时要求原话>"')
     except Exception:
         pass
 

@@ -36,6 +36,7 @@ from common import (
     read_json,
     write_json,
 )
+from strict_gate import is_soft_ai_marker
 
 CITATION_RE = re.compile(r"\[\d+(?:\s*[-,]\s*\d+)*\]", re.IGNORECASE)
 DOI_RE = re.compile(r"\b10\.\d{4,9}/[^\s\"]+", re.IGNORECASE)
@@ -208,11 +209,14 @@ def cmd_verify(args: argparse.Namespace) -> int:
         meaning_changed = bool(unit.get("meaning_changed", False))
         is_nonprose = unit.get("prose") is False or unit.get("polished_by") == "unchanged-nonprose"
         report = validate_unit(raw, polished, rules, unit.get("section_type", "other"), is_nonprose)
+        # C 反AI降软:软标志(破折号/长句/scare quotes 等)只记 flag 不判 unit 不通过;
+        # 仅 AI 套话禁词表等硬标志影响 unit_ok(与 strict_gate 交付口径一致)。
+        hard_ai_markers = [m for m in report["ai_markers"] if not is_soft_ai_marker(m)]
         unit_ok = (
             report["numbers_ok"]
             and report["certainty_ok"]
             and report["citations_ok"]
-            and not report["ai_markers"]
+            and not hard_ai_markers
             and not meaning_changed
             and unit.get("polished_by") != "PLACEHOLDER"
         )
