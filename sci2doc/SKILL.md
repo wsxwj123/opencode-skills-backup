@@ -17,6 +17,16 @@ The workflow is built around:
 - `state_manager.py` for anti-forgetfulness, token budgeting, gate checks, snapshot/rollback
 - `atomic_md_workflow.py` for atomic subsection markdown files, numbering validation, merge, self-check, section-level snapshot
 
+## 接续与决定日志（每次启动本技能先跑）
+
+学位论文跨多次会话、用户中途常插要求，靠外置状态而非记忆维持连续性：
+
+1. **开局先跑接续报告并打握手**：`env_preflight.py` 会打印 `RESUME_CMD`（绝对路径）。照它跑
+   `python <..>/session_journal.py resume --root <project_root>`，把输出贴给用户并确认「从这里接着写」再动笔。
+2. **用户每插一条新要求/新决定，立即 log**：`python <..>/session_journal.py log --root <project_root> --note "用户要求：<原话>"`。
+   决定写入 `decisions_log.md`（append-only），后续会话必读并遵守。
+3. **引文核证命令**：`env_preflight.py` 同时打印 `CITATION_CHECK_CMD`，见 `## Citation Claim Check (承重论点↔引文)`。
+
 ## 快速流程索引 (Quick Workflow Index)
 
 全流程 7 步顺序如下，详细说明见各节。
@@ -54,7 +64,7 @@ The workflow is built around:
 
 ## Non-Negotiable Requirements
 
-1. Body text target depends on degree type: **≥50,000 characters for doctoral**, **≥30,000 for master's** (defaults; confirmed with user at project start and written to profile as `body_target_chars`). These minimums can be raised by user agreement but not lowered below the floor.
+1. Body text target depends on degree type: **≥50,000 characters for doctoral**, **≥30,000 for master's** (defaults; confirmed with user at project start and written to profile as `body_target_chars`). 这是**软目标**而非硬门（`check_quality.py` 字数不足为 warning）：可经用户同意上调；不达标只提示、不阻断导出。**真实材料撑不到目标时宁可少写，绝不编数据/灌水凑字**（A③ 已把综述/绪论并入正文计数以减压）。
 2. Chapter-level target allocation is **not hardcoded** and must be negotiated with the user for each project.
 3. Chinese abstract must be **1500-2500 characters**.
 4. Main structure is fixed:
@@ -63,7 +73,7 @@ The workflow is built around:
    - independent final Conclusion/Outlook chapter
    - total chapters >= 5
 5. References are unified at the end of the full thesis.
-6. Body word count scope: abstract through end of body text (before full-thesis references). Chapters whose title matches "综述/文献综述/研究综述" (or their English equivalents) and their internal reference sections are **excluded** from body count. Full-thesis references are also excluded. This exclusion is implemented in `check_quality.py` via `classify_heading()` and can be overridden per-project with `format_profile.exclude_from_body_count` (list of chapter title strings).
+6. Body word count scope: abstract through end of body text (before full-thesis references). **综述/绪论章计入正文字数**——把凑字数压力从研究章分摊出去，缓解逼 AI 靠编数据/扩实验凑字（`check_quality.py` / `count_words.py` 已将 review 章并入 body 计数，另单列 `review_words` 供展示）。仅全文末尾统一参考文献、目录、致谢、附录、成果、声明、缩略语表排除在外；若确有整章须排除，用 `format_profile.exclude_from_body_count`（章标题字符串列表）逐章显式声明。
 7. For research chapters, Results & Discussion must map to Methods experiment-by-experiment.
 8. One experiment must map to at least one standalone figure or table.
 9. Atomic markdown is mandatory: one subsection per `.md`, continuous numbering, merge before Word conversion.
@@ -75,7 +85,7 @@ The workflow is built around:
 14. Literature retrieval follows topic-dependent routing (MANDATORY)：细则见 `## Citation Zero-Hallucination Gate`。
 15. 缩写一致性强制执行：首次展开格式 `中文全称（English Full Name, ABBR）`，后续裸缩写；用 `abbreviation_registry.py` 管理；需生成前置缩略语表。细则见 `## Abbreviation Contract`。
 16. 三线表格式强制：所有数据表使用 Markdown 管道语法，`markdown_to_docx.py` 自动转换；边框参数与题注字体字号见 `references/word-format-spec.md § Three-Line Table Borders`。细则见 `## Table Contract`。
-17. 文风约束：见 `## Humanization Contract`（清单集中在那里）；`check_quality.py check_writing_style()` 自动检测，违规必须清零后才能 finalize。
+17. 文风约束：见 `## Humanization Contract`（清单集中在那里）；`check_quality.py check_writing_style()` 自动检测。**硬禁清零项**：破折号/scare quotes/解释性冒号三项标点 + AI 禁词，finalize 前必须归零。**软提示项**（不阻断 finalize）：句长/句式节奏（C 降软）。
 18. 格式对齐规则：正文两端对齐、三线表单元格居中、图占位符居中无首行缩进。完整参数见 `references/word-format-spec.md`。
 19. Bold marker 处理：`**text**` / `__text__` 在 Word 转换时由 `strip_bold_markers()` 自动剥除；单 `*` 统计显著性标记（如 `*p<0.05`）保留原样。
 20. 已发表 SCI 内容复用合规底线：
@@ -120,6 +130,18 @@ Rules:
     - Emerging/cutting-edge claims → Preprints (label as [Preprint]; only when no peer-reviewed equivalent exists).
 - This guard does not change existing chapter writing workflow; it only validates reference correctness.
 - For final delivery strict mode, run with `--require-mcp`.
+
+## Citation Claim Check (承重论点↔引文)
+
+`citation_guard.py` 只验引文**真实性**（DOI/PMID/标题对得上）；它不判「这篇引文到底**支不支持**它挂着的那句论点」。写研究章时，对**承重论点句**（机制/因果/关键定量结论）↔ 其引文，必须再过一道**引文核证**：
+
+1. `literature_index.json` 每条可选带 `key_finding`（该文献真实结论一句话）与 `claim`（本文用它支撑的论点）两字段，最小承载核证语义（schema 见 `references/format_profile_schema.md § literature_index.json schema`）。
+2. 写某研究章前，对每个「承重论点句 ↔ 引文」建一行证据，落 `claim_evidence.json`（list）：`{section, claim_sentence, is_load_bearing, ref_id, retrieved_abstract, verdict∈support/weak/contradict/unknown, evidence_quote, user_confirmed}`。`retrieved_abstract` 用**检索到的真实 abstract**（不看可编的 `key_finding`），取 abstract 走本技能既有文献检索子代理。
+3. 跑共享核证脚本（`env_preflight.py` 打印的 `CITATION_CHECK_CMD`）：
+   `python <_shared>/citation_claim_check.py --root <project_root> --evidence <project_root>/claim_evidence.json`
+   - 承重句 `verdict∈{contradict,unknown}` 或缺 abstract 或未 `user_confirmed` → **fail-closed（exit 2），硬拦 + 人工逐条确认**后方可下笔。
+   - 背景陈述句只在表里批量呈现、不逐条阻断。
+4. 纳入节/章 DoD（见 dod_checklist `section-dod`/`chapter-dod` 的 citation_claim_check 项）。
 
 ## Single Source of Truth
 
@@ -178,6 +200,8 @@ When `write-cycle` runs, `load_state` automatically loads:
 2. `chapter_index.json` — chapter structure with section titles (filtered to current chapter)
 3. `literature_index.json` — references (filtered to current chapter)
 4. `figures_index.json` — figures/tables (filtered to current chapter)
+
+> **A① 跨章综合例外：** 当前章为**绪论（绪论/引言）或结论（结论/总结/小结/展望）**时，`load_state` 不按当前章过滤，而是**全量加载 chapter_index / literature_index / figures_index + 全部研究章的 section digest/key_facts**（`bundle.synthesis_role` = `intro`/`conclusion`，`scope=cross-chapter-synthesis`）。这样绪论能综述全部研究、结论能跨章综合各研究章的真实数据，避免缝线全露。章类型由 `project_state.json.outline` 里该章标题判定。
 5. `context_memory.md` — timestamped operation summaries
 6. `history_log.json` — recent operation events
 7. **`chapter_section_digests`** — lightweight digests extracted from existing `atomic_md/第N章/*.md` files
@@ -331,10 +355,11 @@ python3 scripts/extract_docx_images.py --manuscript /path/to/source.docx --proje
 
 ### 3) Atomic Subsection Writing
 
-- **🔴 开写前置闸门 (Mandatory，脚本硬拦截)**：每节开写前必须先跑 `python3 scripts/prewrite_gate.py --section X.Y --root .`（X.Y 为章.节，如 2.1），exit≠0 禁止开写。它统一硬检查：上一节完成（同章编号紧邻上一节 `atomic_md/第N章/{X.Y-1}_*.md` 存在非空）、大纲就位（`project_state.json.outline` 含本章 + `chapter_index.json`）、素材就位（`figures_index.json` 本章有图表/实验映射条目，无则降级 warning）、上一节占位符清零（无 `CITE_PENDING`/`DATA_PENDING`/`【待`）；上一节盲检结果（`.review_pass/<上一节>.json`）缺失即 prewrite_gate 硬拦 exit 1，禁止开写；必须先跑 delegate_review verify --section <上一节> 落盘通过标记。
+- **🔴 开写前置闸门 (Mandatory，脚本硬拦截)**：每节开写前必须先跑 `python3 scripts/prewrite_gate.py --section X.Y --root .`（X.Y 为章.节，如 2.1），exit≠0 禁止开写。它统一硬检查：上一节完成（同章编号紧邻上一节 `atomic_md/第N章/{X.Y-1}_*.md` 存在非空）、大纲就位（`project_state.json.outline` 含本章 + `chapter_index.json`）、素材就位（`figures_index.json` 本章有图表/实验映射条目，无则降级 warning）、上一节占位符清零（无 `CITE_PENDING`/`DATA_PENDING`/`【待`）；上一节盲检结果（`.review_pass/<上一节>.json`）缺失即 prewrite_gate 硬拦 exit 1，禁止开写；必须先跑 delegate_review verify --section <上一节> 落盘通过标记。**⑥ 数据溯源硬门**：prewrite_gate 还会对上一节跑 `data_trace_gate`——上一节含实验数值却无有效 `[数据来源] materials/<档>#<字段>` 标记（或标记指向不存在的素材档/字段）即硬拦 exit 1（堵编数据）。
 - 文件存于 `${save_path}/atomic_md/第{chapter}章/`，命名 `{section_number}_{section_title}.md`（如 `2.1_研究对象.md`）。
 - **Table reminder**：呈现结构化数据（试剂/仪器/分组/统计）的小节 **必须** 用 Markdown 管道表，见 [Table Contract](#table-contract)，不得用散文描述。
 - 校验：`atomic_md_workflow.py validate --chapter N`（加 `--enforce-research-structure`）+ `validate-experiment-map --chapter N`。**门禁：** 编号断裂 → 修复后才能继续。
+- **⑥ 数据溯源标注（写作时必做，堵编数据）**：凡写入实验数值（浓度/剂量/比率/统计量等），该处必须紧跟标注 `[数据来源] materials/<素材档>#<字段>`，指向真实 `materials/*.md` 素材档里承载该数值的字段。落盘后自查 `python3 scripts/data_trace_gate.py --section X.Y --root .`，exit≠0 必须补标或删除无源数值——**追溯不到 materials 的数值就是编的，不得留在正文**。
 - Post-write 必做：`abbreviation_registry.py process --file ... --in-place`，然后更新 `chapter_index.json` key_facts（AI 责任），再进 Step 4。
 
 ### 4) Subsection Summary Snapshot
@@ -356,6 +381,8 @@ python3 scripts/extract_docx_images.py --manuscript /path/to/source.docx --proje
 
 > ⚠️ 若环境派不出真正独立的子代理，**绝不能同一 AI 自问自答冒充盲检**。告诉用户「本环境盲检不可靠，请你亲自复核数据溯源与章节逻辑」，交回用户。
 
+**🔴 ①DoD停（盲检通过后必须停一次）**：`section-dod` 盲检 exit 0 后，**不得直接开写下一节**。先把该节 DoD **逐项结论**（每项 pass/证据一行）摆给用户，并**HALT 等用户明确说"过，继续下一节"**才动笔。用户未确认前停在此处。
+
 下列清单与 `references/dod_checklist.json` gate=`section-dod` 逐项对应（改清单先改 JSON），供人工对照；能脚本核的项子代理会先跑脚本：
 
 通用项（全技能共享）：
@@ -363,8 +390,8 @@ python3 scripts/extract_docx_images.py --manuscript /path/to/source.docx --proje
 - [ ] **G2** 新增引用已过 citation_guard（`citation_guard.py` 报告 `ok=true`）
 - [ ] **G3** 符合研究主线：本节内容不跑题、不与 `outline.core_argument` 矛盾
 - [ ] **G4** 占位符清零：文中无 `CITE_PENDING` / `DATA_PENDING` / `【待AI】` / `【待翻译】` 等未填占位符
-- [ ] **G5** 去 AI 通过：`check_quality.py` 的 `check_writing_style()` 零违规（含中文句长 ≤50 字、AI 禁词、破折号/scare quotes/解释性冒号）
-- [ ] **G6** 字数达标：本节字数贡献符合 `chapter_targets` 分配比例（估算）
+- [ ] **G5** 去 AI 通过：`check_quality.py check_writing_style()` **硬禁清零**（AI 禁词、破折号/scare quotes/解释性冒号）；句长/句式为软提示不阻断（C 降软）
+- [ ] **G6** 字数达标（软目标）：本节字数贡献符合 `chapter_targets` 分配比例（估算）；不足只提示不阻断，不得编数据凑字
 
 sci2doc 特有项：
 - [ ] **S1** 实验-方法映射标记完整：`[实验] EXP-N-M` 与 `[对应实验] EXP-N-M` 成对出现，无悬空
@@ -388,7 +415,7 @@ sci2doc 特有项：
 
 **硬规则：以下各项未逐一确认通过，不得向用户声明"该章完成"，不得进入 Step 7。**
 
-> **[数据溯源·用户必抽验]** 学位论文里每个实验数值/每张图都必须能在原始 SCI 里找到出处。每写完一章，让 AI 给一张"本章数值/结论 → 源自原文哪张图/哪段"对照表，用户抽查几行。⚠️ 博士≥5万字硬地板逼 AI 靠编数据/扩实验凑字数——追溯不到 materials 的数值就是编的。引文同样抽几篇验 DOI。
+> **[数据溯源·用户必抽验]** 学位论文里每个实验数值/每张图都必须能在原始 SCI 里找到出处。每写完一章，让 AI 给一张"本章数值/结论 → 源自原文哪张图/哪段"对照表，用户抽查几行（`data_trace_gate.py` 已机械校验 `[数据来源]` 标记，⑥）。⚠️ 字数目标已降为**软目标**（A③/C 降软，综述/绪论并入正文减压），就是为了不再逼 AI 靠编数据/扩实验凑字——追溯不到 materials 的数值就是编的。引文同样抽几篇验 DOI。
 
 **🔴 进入下一章前置闸口**：上一章 `delegate_review verify` 必须 exit 0（含章结构完整性项 S8），否则不得开始下一章。写完即检，不过不进。
 
@@ -397,6 +424,8 @@ sci2doc 特有项：
 2. **派一个独立子代理**（Claude Code 用 `academic-blind-reviewer`；其他平台派通用子代理），把任务包原样给它、**不要给它本章的写作上下文**，要求按任务包返回 JSON 数组。
 3. 校验返回：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate chapter-dod --return <子代理返回.json>`；退出码非 0（任一缺项/fail/无证据）= **fail-closed**，据子代理证据修复后重跑，**未通过不得进入 Step 7**。
 
+**🔴 ①DoD停（盲检通过后必须停一次）**：`chapter-dod` 盲检 exit 0 后，**不得直接开写下一章**。先把本章 DoD **逐项结论**（每项 pass/证据一行，含数据溯源 S10、承重引文核证 S11）摆给用户，并**HALT 等用户明确说"过，继续下一章"**才动笔。用户未确认前停在此处。
+
 下列清单与 `references/dod_checklist.json` gate=`chapter-dod` 逐项对应（改清单先改 JSON），供人工对照；能脚本核的项子代理会先跑脚本：
 
 通用项（全技能共享）：
@@ -404,8 +433,8 @@ sci2doc 特有项：
 - [ ] **G2** 本章所有引用已过 citation_guard（`citation_guard.py` 报告 `ok=true`）
 - [ ] **G3** 全章内容符合 `outline` 本章 `core_argument`，无跑题
 - [ ] **G4** 全章占位符清零（`CITE_PENDING` / `DATA_PENDING` / `【待AI】` 全部归零）
-- [ ] **G5** 去 AI 通过：`check_quality.py check_writing_style()` 零违规（含中文句长、AI 禁词、三项标点规范）
-- [ ] **G6** 本章字数达标：`count_words.py` 输出 ≥ `chapter_targets[N]`
+- [ ] **G5** 去 AI 通过：`check_quality.py check_writing_style()` **硬禁清零**（AI 禁词、三项标点规范）；句长/句式软提示不阻断（C 降软）
+- [ ] **G6** 本章字数达标（软目标）：`count_words.py` 输出接近 `chapter_targets[N]`（综述/绪论已计入正文，A③）；不足只提示不阻断，不得编数据凑字
 - [ ] **G7** 常识合理性(🟡软报告,不阻断)，盲检子代理顺带扫本章是否有明显常识/事实硬伤(单位量级离谱、生理/机制常识错误、前后数值逻辑矛盾、转写翻译扭曲原意致常识错误等)。**仅提示不阻断**，只在发现明显硬伤时记入报告供用户裁决，绝不自动改内容。与 Citation Zero-Hallucination Gate(管引用真伪)区分：本项管"转写出的中文内容常识上是否成立"。
 
 sci2doc 特有项：
@@ -449,7 +478,15 @@ For each research chapter (Chapter 2 to Chapter N-1), keep this order:
 4. 实验结论
 5. 小结
 
-Rules:
+**绪论章（第 1 章）写法：跨全部研究章的综述**
+- 把各子研究框进**统一科学问题**（`project_state.json.outline.scientific_question`），逐一预告每个研究章要解决的子问题与贡献点（研究章标题须在绪论正文出现，`check_quality.py check_cross_chapter_coherence` 软核）。
+- 写绪论时 `write-cycle` 会**跨章加载全部研究章 digest**（A①，`synthesis_role=intro`），据此综述全部研究，不得只写第一个研究。
+
+**结论章（末章）写法：逐章综合各研究结果拉回中心问题**
+- 逐个研究章回收其核心发现（研究章标题须在结论正文出现），再综合成回答中心科学问题的整体结论，指出跨研究的一致性/递进关系与整体贡献。
+- 写结论时 `write-cycle` **跨章加载全部研究章 digest/key_facts**（A①，`synthesis_role=conclusion`），结论数值/结论必须来自各研究章真实结果，不得凭空生成或与研究章矛盾。
+
+研究章（第 2 章至第 N-1 章）Rules:
 - Results & Discussion is coupled with each method experiment.
 - Do not place all results first and discuss later in a separate bulk section.
 - **材料与方法 must contain tables** for at least: 实验试剂与耗材, 实验仪器与设备, 实验分组设计. Use Markdown pipe syntax (`| col | col |`). Never describe these as prose paragraphs.
@@ -498,9 +535,10 @@ Before finalizing each chapter:
 2. Invoke the `/humanizer-zh` skill on the chapter's merged markdown. The skill rewrites the text in-place; confirm the output before saving. If `/humanizer-zh` is unavailable, manually apply the following checklist to every paragraph:
 
    **中文正文规则（博论核心，脚本可检测项见括号）：**
-   - [ ] **中文单句 ≤50 字**（含嵌套从句计中文字符；`check_quality.py` 检测 `cn_sentence_too_long`）
-   - [ ] **从句嵌套 ≤2 层**：禁止"当A使B导致C从而D"类四层套叠结构
-   - [ ] **短句（≤15字）与长句（30-50字）交替**：禁连续 3 句字数差异 <5 字（`check_quality.py` 检测 `cn_sentence_monotone`）
+   > C 降软：句长/句式节奏为**软提示**（`cn_sentence_too_long` 为 warning、`cn_sentence_monotone` 为 info，均不阻断 finalize）；**破折号/scare quotes/解释性冒号三项标点与 AI 禁词仍为硬禁清零**（主干保留）。
+   - [ ] **中文单句 ≤50 字**（软提示，尽量拆分；`check_quality.py` 检测 `cn_sentence_too_long`，warning）
+   - [ ] **从句嵌套 ≤2 层**：禁止"当A使B导致C从而D"类四层套叠结构（软提示）
+   - [ ] **短句（≤15字）与长句（30-50字）交替**：连续 3 句字数差异 <5 字建议改写（软提示；`check_quality.py` 检测 `cn_sentence_monotone`，info）
    - [ ] **中文 AI 禁词清零**：`check_quality.py` 的 `去AI-禁词` 类别零违规（覆盖：至关重要/深入探讨/蓬勃发展/革命性的/综上所述/值得注意的是/不仅…而且/大量研究表明 等）
    - [ ] **无模板化过渡句**：删除"由此可见"、"在此基础上"等空洞衔接词
    - [ ] **无重复排比**：连续出现≥3个句式相同的句子→合并或改写
@@ -516,7 +554,7 @@ Before finalizing each chapter:
    - [ ] **英文单句 ≤30 词**：每句不超过 30 个英文单词
    - [ ] **禁 -ing 悬垂从句**：禁用 `, reflecting/ensuring/highlighting/demonstrating/suggesting...` 悬垂分词（改为独立句）
 
-3. Re-run self-check to confirm no regressions（特别确认 `writing_style` 类 + `去AI-禁词` 类 + `句长规范` 类问题归零）
+3. Re-run self-check to confirm no regressions（硬禁项 `writing_style`（三项标点）+ `去AI-禁词` 类必须归零；`句长规范` 类为软提示，尽量优化但不阻断）
 4. Finalize snapshot + gate completion
 
 ## Table Contract
@@ -633,9 +671,8 @@ Priority rule: **chapter-based numbering takes precedence**. If a figure from SC
 
 ## ❌ 反例黑名单（Anti-Patterns）
 
-- ❌ 把综述章及其内部参考文献节算进正文字数，标题含“综述／文献综述／研究综述”的章节须整章排除（`check_quality.py classify_heading()`）。
-- ❌ 把全文末尾的统一参考文献计入正文字数，正文范围只到正文结束、参考文献之前。
-- ❌ 不区分博士与硕士字数下限，博士正文 ≥50000、硕士 ≥30000，且只能上调不能跌破地板。
+- ❌ 把全文末尾的统一参考文献计入正文字数，正文范围只到正文结束、参考文献之前。（注：综述/绪论章按 A③ **计入**正文字数，不再排除。）
+- ❌ 把博士/硕士字数目标当硬门逼 AI 编数据/灌水凑字：地板是**软目标**（`check_quality.py` 已降为 warning），真实内容不够宁可少写也不得造数据。
 - ❌ 看到 QUICK_START 的 init 示例就直接套 `--format-mode default_generic` 跑 init，未经用户确认样式即静默落成内置模板格式并放行 docx 导出。
 - ❌ 在自定义信息不完整、状态仍为 `pending_template` 时生成 `.docx` 或跑格式验收，或手动绕过 `markdown_to_docx.py` 的拒绝。
 - ❌ `outline` 数组为空就进入 Style Selection Gate 与 Step 1，缺 `scientific_question` 或研究章 `core_argument`。
@@ -655,7 +692,7 @@ Priority rule: **chapter-based numbering takes precedence**. If a figure from SC
 格式类参数（字体/字号/边框/对齐/页眉页脚/摘要/目录间距等）由脚本硬编码并强制校验，**不在此复述**，以 `check_quality.py` 各类别通过为准。本清单只保留需人工确认的项：
 
 - [ ] `check_quality.py --enforce-full-structure` 各类别（三线表 / 引用格式 / 标点 / 缩略语 / 字体字号 / 页眉页脚 / **参考文献著录格式**）全部通过
-- [ ] Body target 达到学位地板值（博士 >= 50,000 / 硕士 >= 30,000，或用户在 Step 0.5 协商的更高值）且各章字数已写入 profile
+- [ ] Body target 接近学位软目标值（博士 ~50,000 / 硕士 ~30,000，或用户在 Step 0.5 协商的更高值；综述/绪论已计入正文，A③）且各章字数已写入 profile；不足只提示不阻断，严禁编数据凑字
 - [ ] 结构满足：引言 + 研究章 + 结论，总章数 >= 5；参考文献统一在全文末尾
 - [ ] 原子化工作流：编号校验通过、章节自检已跑、小节快照已建、快照/回滚可用
 - [ ] Humanization pass 已完成（humanizer-zh 或人工清单）

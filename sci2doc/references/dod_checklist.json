@@ -32,12 +32,12 @@
         {
           "id": "G5",
           "name": "去AI通过",
-          "check": "check_quality.py check_writing_style() 零违规（含中文句长≤50字、AI禁词、破折号/scare quotes/解释性冒号）。节末 md 需先合并为 docx 后可跑脚本；无 docx 时人工逐条目视核查"
+          "check": "check_quality.py check_writing_style() 硬禁清零（AI禁词、破折号/scare quotes/解释性冒号）；中文句长/句式节奏为软提示（cn_sentence_too_long=warning、cn_sentence_monotone=info），不阻断。节末 md 需先合并为 docx 后可跑脚本；无 docx 时人工逐条目视核查"
         },
         {
           "id": "G6",
-          "name": "字数达标",
-          "check": "本节字数贡献符合 chapter_targets 分配比例（估算）",
+          "name": "字数达标（软目标）",
+          "check": "本节字数贡献接近 chapter_targets 分配比例（软目标，不足只提示不阻断；综述/绪论已计入正文）。宁可少写也不得编数据凑字",
           "script": "python scripts/count_words.py <本节文件>"
         },
         {
@@ -72,6 +72,19 @@
           "id": "S6",
           "name": "结构完整性",
           "check": "本节含其规定的全部结构组件，无缺段/空标题/未填骨架，符合该节在中文博论章节结构中的定位。子代理对照 outline 逐组件核对"
+        },
+        {
+          "id": "S10",
+          "name": "数据溯源硬门",
+          "check": "含实验数值的段落均标 [数据来源] materials/<档>#<字段>，且指向真实 materials/*.md 素材档的存在字段。fail-closed：含数值却无有效标记=编数据嫌疑，硬拦",
+          "script": "python scripts/data_trace_gate.py --section N.M --root <项目根>",
+          "severity": "hard"
+        },
+        {
+          "id": "S11",
+          "name": "承重引文核证",
+          "check": "本节承重论点句↔引文已建 claim_evidence.json 并过 citation_claim_check，承重句 verdict 非 contradict/unknown 且已人工确认。见 SKILL.md § Citation Claim Check",
+          "script": "python <_shared>/citation_claim_check.py --root <项目根> --evidence <项目根>/claim_evidence.json"
         },
         {
           "id": "S-GIT",
@@ -136,13 +149,13 @@
         {
           "id": "G5",
           "name": "全章去AI通过",
-          "check": "check_quality.py check_writing_style() 零违规（含中文句长、AI禁词、三项标点规范）",
+          "check": "check_quality.py check_writing_style() 硬禁清零（AI禁词、三项标点规范）；中文句长/句式为软提示不阻断（C降软）",
           "script": "python scripts/check_quality.py <章节合并.docx>"
         },
         {
           "id": "G6",
-          "name": "全章字数达标",
-          "check": "count_words.py 输出 ≥ chapter_targets[N]",
+          "name": "全章字数达标（软目标）",
+          "check": "count_words.py 输出接近 chapter_targets[N]（软目标，不足只提示不阻断；综述/绪论已计入正文，A③）。不得编数据凑字",
           "script": "python scripts/count_words.py <章节目录>"
         },
         {
@@ -190,6 +203,19 @@
           "id": "S8",
           "name": "章结构完整性",
           "check": "本章各节齐全、层级完整（引言/方法/结果/讨论或学科对应结构），无缺节、无空章节标题、章末小结齐全"
+        },
+        {
+          "id": "S10",
+          "name": "全章数据溯源硬门",
+          "check": "本章每个含数值小节均过 data_trace_gate（数值均标 [数据来源] materials/<档>#<字段> 且指向真实素材档字段）。fail-closed",
+          "script": "for f in atomic_md/第N章/*.md; do python scripts/data_trace_gate.py --file \"$f\" --root <项目根>; done",
+          "severity": "hard"
+        },
+        {
+          "id": "S11",
+          "name": "全章承重引文核证",
+          "check": "本章所有承重论点句已过 citation_claim_check，无 contradict/unknown 承重句、均人工确认",
+          "script": "python <_shared>/citation_claim_check.py --root <项目根> --evidence <项目根>/claim_evidence.json"
         },
         {
           "id": "S9",

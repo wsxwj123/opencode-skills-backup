@@ -121,9 +121,13 @@ All scripts should follow this profile to avoid rule conflicts and to prevent ac
     "source_provider": "pubmed-cli",
     "source_id": "12345678",
     "chapter": 2,
-    "verified": false
+    "verified": false,
+    "key_finding": "该文献真实结论一句话（可选，供引文核证参照）",
+    "claim": "本文用它支撑的论点（可选，供 citation_claim_check 对齐）"
   }
 ]
 ```
 
 字段规则：`source_provider` 只允许 `"pubmed-cli"` 或 `"paper-search"`；`doi`/`pmid` 至少填一个；`verified` 初始为 `false`，citation_guard 通过后由脚本置 `true`；`chapter` 为该文献首次引用的章节号；未知字段填空字符串，**严禁填写推测值**。
+
+`key_finding` / `claim` 为**引文核证**最小承载字段（B②，均可选）：`key_finding` 记该文献的真实结论、`claim` 记本文用它支撑的论点；二者仅供 `SKILL.md § Citation Claim Check` 建 `claim_evidence.json` 时对齐参照。**核证判 verdict 时以检索到的真实 abstract 为准，不看可编的 `key_finding`**。

@@ -32,6 +32,12 @@ import os
 import re
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    import data_trace_gate  # 同目录：数据溯源硬门（⑥）
+except Exception:  # pragma: no cover - 缺失不应反过来卡住 prewrite
+    data_trace_gate = None
+
 PLACEHOLDER_TOKENS = ("CITE_PENDING", "DATA_PENDING", "【待")
 
 
@@ -223,6 +229,24 @@ def main():
         checks.append({"name": "placeholders", "ok": False, "detail": detail})
     else:
         checks.append({"name": "placeholders", "ok": True})
+
+    # ---- check: 上一节数据溯源（⑥，含数值须标 [数据来源] materials/<档>#<字段>） ----
+    if data_trace_gate is not None and sub is not None and sub > 1:
+        prev_fp = section_files_in_chapter(root, chapter).get(sub - 1)
+        if prev_fp and os.path.isfile(prev_fp):
+            dt_viol, dt_numeric = data_trace_gate.gate(root, [prev_fp])
+            if dt_viol:
+                for v in dt_viol:
+                    failures.append(f"data_trace(prev {chapter}.{sub-1}): {v}")
+                checks.append({"name": "data_trace", "ok": False, "prev": f"{chapter}.{sub-1}",
+                               "violations": dt_viol})
+            else:
+                checks.append({"name": "data_trace", "ok": True, "prev": f"{chapter}.{sub-1}",
+                               "numeric": bool(dt_numeric)})
+        else:
+            checks.append({"name": "data_trace", "ok": True, "note": "prev file absent; prev_section_done already reported"})
+    else:
+        checks.append({"name": "data_trace", "ok": True, "note": "first subsection/chapter-level or gate unavailable; N/A"})
 
     # ---- 缩略词：sci2doc 用 abbreviation_registry（按文件处理，无 --root 扫描）→ skip ----
     checks.append({"name": "abbreviation", "ok": None, "note": "sci2doc uses abbreviation_registry per-file; no root-level scan; skip"})

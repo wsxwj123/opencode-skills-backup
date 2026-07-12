@@ -996,6 +996,42 @@ def filter_for_chapter(data, chapter):
     return data
 
 
+_INTRO_TITLE_KEYS = ("绪论", "引言")
+_CONCL_TITLE_KEYS = ("结论", "总结", "小结", "展望")
+
+
+def _chapter_title(project_root, chapter):
+    """从 project_state.json.outline 里查某章标题；查不到返回空串。"""
+    ps = read_json_cached(project_root, "project_state.json", cache_hint="ps_role")
+    if not isinstance(ps, dict):
+        return ""
+    outline = ps.get("outline")
+    chapters = outline.get("chapters") if isinstance(outline, dict) else outline
+    if not isinstance(chapters, list):
+        return ""
+    for ch in chapters:
+        if not isinstance(ch, dict):
+            continue
+        num = str(ch.get("chapter") or ch.get("chapter_number") or ch.get("id") or "").strip()
+        if num == str(chapter) or num.lstrip("第").rstrip("章") == str(chapter):
+            return str(ch.get("title") or "")
+    return ""
+
+
+def chapter_role(project_root, chapter):
+    """intro / conclusion / research —— 决定写作时是否跨全部研究章加载记忆。
+
+    绪论要综述全部研究章、结论要跨章综合真实结果，二者写作时须读到各研究章的
+    digest/key_facts，不能只加载当前章（否则缝线全露、结论读不到真实数据）。
+    """
+    norm = re.sub(r"\s+", "", _chapter_title(project_root, chapter))
+    if any(k in norm for k in _INTRO_TITLE_KEYS):
+        return "intro"
+    if any(k in norm for k in _CONCL_TITLE_KEYS):
+        return "conclusion"
+    return "research"
+
+
 def find_chapter_doc_files(project_root, chapter):
     pattern = resolve_path(project_root, f"02_分章节文档/第{chapter}章*.docx")
     return sorted(glob.glob(pattern))
@@ -1010,8 +1046,17 @@ def load_state(
     with_global_history=True,
     origin="manual",
 ):
+    # 绪论/结论章写作时须跨全部研究章综合，不能只加载当前章记忆。
+    role = chapter_role(project_root, chapter)
+    cross = role in ("intro", "conclusion")
+
+    def _scope_index(data):
+        # cross（绪论/结论）: 全量加载让其能综述/综合全部研究章；否则按当前章过滤。
+        return data if cross else filter_for_chapter(data, chapter)
+
     bundle = {
-        "scope": "chapter-local",
+        "scope": "cross-chapter-synthesis" if cross else "chapter-local",
+        "synthesis_role": role,
         "chapter": str(chapter),
         "loaded_files": [],
     }
@@ -1024,28 +1069,28 @@ def load_state(
     # Optional files
     chapter_index = read_json_cached(project_root, "chapter_index.json", cache_hint=f"chapter_index:{chapter}")
     if chapter_index is not None:
-        bundle["chapter_index"] = filter_for_chapter(chapter_index, chapter)
+        bundle["chapter_index"] = _scope_index(chapter_index)
         bundle["loaded_files"].append(resolve_path(project_root, "chapter_index.json"))
     else:
         bundle["chapter_index"] = None
 
     literature_index = read_json_cached(project_root, "literature_index.json", cache_hint=f"literature:{chapter}")
     if literature_index is not None:
-        bundle["literature_index"] = filter_for_chapter(literature_index, chapter)
+        bundle["literature_index"] = _scope_index(literature_index)
         bundle["loaded_files"].append(resolve_path(project_root, "literature_index.json"))
     else:
         bundle["literature_index"] = None
 
     figures_index = read_json_cached(project_root, "figures_index.json", cache_hint=f"figures:{chapter}")
     if figures_index is not None:
-        bundle["figures_index"] = filter_for_chapter(figures_index, chapter)
+        bundle["figures_index"] = _scope_index(figures_index)
         bundle["loaded_files"].append(resolve_path(project_root, "figures_index.json"))
     else:
         bundle["figures_index"] = None
 
     figure_map = read_json_cached(project_root, "figure_map.json", cache_hint=f"figure_map:{chapter}")
     if figure_map is not None:
-        bundle["figure_map"] = filter_for_chapter(figure_map, chapter)
+        bundle["figure_map"] = _scope_index(figure_map)
         bundle["loaded_files"].append(resolve_path(project_root, "figure_map.json"))
     else:
         bundle["figure_map"] = None
@@ -1074,18 +1119,22 @@ def load_state(
     # extract only structural markers: headings, table captions, and key
     # experimental terms. This gives the AI enough context to avoid
     # contradicting earlier subsections (e.g. wrong reagents, wrong grouping).
-    chapter_md_dir = resolve_path(project_root, f"atomic_md/第{chapter}章")
-    if os.path.isdir(chapter_md_dir):
-        digests = []
-        md_files = sorted(glob.glob(os.path.join(chapter_md_dir, "*.md")))
-        for md_path in md_files:
+    # 绪论/结论章：加载全部研究章的 digest，让绪论能综述全部研究、结论能跨章综合真实数据。
+    if cross:
+        digest_dirs = sorted(glob.glob(resolve_path(project_root, "atomic_md/第*章")))
+    else:
+        d = resolve_path(project_root, f"atomic_md/第{chapter}章")
+        digest_dirs = [d] if os.path.isdir(d) else []
+    digests = []
+    for cdir in digest_dirs:
+        if not os.path.isdir(cdir):
+            continue
+        for md_path in sorted(glob.glob(os.path.join(cdir, "*.md"))):
             digest = _extract_section_digest(md_path)
             if digest:
                 digests.append(digest)
                 bundle["loaded_files"].append(md_path)
-        bundle["chapter_section_digests"] = digests
-    else:
-        bundle["chapter_section_digests"] = []
+    bundle["chapter_section_digests"] = digests
 
     if include_draft:
         docs = find_chapter_doc_files(project_root, chapter)
