@@ -1657,6 +1657,7 @@ def init_project(
     def mutate_project_state(state):
         if not isinstance(state, dict) or not state:
             return {
+                "skill": "sci2doc",
                 "project_info": {
                     "title": title,
                     "title_en": title_en,

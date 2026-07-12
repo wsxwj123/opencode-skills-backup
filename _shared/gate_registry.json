@@ -14,7 +14,7 @@
     },
     "review-writing": {
       "state_files": ["state.json"],
-      "managed_globs": ["drafts/*.md"],
+      "managed_globs": ["drafts/section_*.md"],
       "signoff": true
     },
     "nsfc-proposal": {

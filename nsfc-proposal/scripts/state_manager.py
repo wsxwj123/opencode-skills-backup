@@ -115,7 +115,7 @@ def init_project(root: Path) -> None:
     save_json(root / "proposal_profile.json", DEFAULT_PROFILE)
     save_json(root / "data/literature_index.json", {"metadata": {"verification_status": "pending"}, "entries": []})
     save_json(root / "data/consistency_map.json", consistency_mapper.load_map(Path("__missing__")))
-    save_json(root / "project_state.json", {"phase": "phase0", "gate": "init", "updated_at": utc_now()})
+    save_json(root / "project_state.json", {"skill": "nsfc-proposal", "phase": "phase0", "gate": "init", "updated_at": utc_now()})
     save_json(root / "history_log.json", {"events": []})
 
     (root / "context_memory.md").write_text("# Context Memory\n\n", encoding="utf-8")
@@ -427,6 +427,7 @@ def _auto_fix_project(root: Path) -> dict[str, Any]:
     if not isinstance(ps, dict):
         ps = {"phase": "phase0", "gate": "init", "updated_at": utc_now()}
         fixed.append("reset:project_state.json")
+    ps.setdefault("skill", "nsfc-proposal")
     ps.setdefault("phase", "phase0")
     ps.setdefault("gate", "init")
     ps["updated_at"] = utc_now()
