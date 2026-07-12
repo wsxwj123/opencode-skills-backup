@@ -12,6 +12,9 @@ Use two modes:
 - Write Mode: build from zero in phased gates.
 - Polish Mode: import an existing draft, diagnose first, then revise section by section.
 
+## 跨会话接续（每次进入/续写必做，Mandatory）
+每次进入本技能或续写一个已存在的项目时，**先跑 Phase 0 env_preflight 打印的那条 `RESUME_CMD`**（`python "<.../_shared/session_journal.py>" resume --root <project_root>`），把它输出的接续报告原样贴给用户，并按报告末尾的握手话术跟用户对齐进度后再动手。用户**中途插入任何临时要求，立即用 `JOURNAL_LOG_CMD`**（`session_journal.py log --root <R> --note "<原话>"`）落进 `decisions_log.md`，后续会话开局的 resume 会重新读出、必须遵守。新项目（无 state）resume 会提示未初始化，照常走 Phase 0。
+
 ## Mode Handshake Gate (Mandatory)
 Before any drafting/revision action, the assistant must ask exactly one mode-selection question and wait for the user answer:
 - `Write Mode` (from scratch)
@@ -163,6 +166,13 @@ Follow phased gates in order:
 
    **【P4·文献抽验·用户必做】** 立项依据里引的文献，用户应抽 3 篇让 AI 报 PMID/DOI 自己去核。撤稿的、编的，AI 不主动说你就不知道。⚠️ 检索工具不可用时 AI 必须明确告知，绝不许凭记忆编文献或就地填假 verified/DOI。
 
+   **🔴 承重论点引文核证（Mandatory，接进本节文献确认节点）：** `literature_index`（引文，`key_finding` 是 AI 自填、不可作证）与 `consistency_map`（SQ↔H↔O↔KSQ 论证链，本身不挂引文）互不连接。P1 落盘前必须把二者打通——用**检索到的真 abstract** 判「立项依据的关键论点是否真被它挂的引文支撑」：
+   1. **挑承重论点句**：从 P1 里圈出决定成败的关键论断（关键因果 / 机制 / 研究缺口 / 「前人未解决 X」这类），标 `is_load_bearing=true`；纯背景陈述标 false（只批量呈现、不逐条阻断）。
+   2. **取真摘要判支撑**：对每条承重论点↔其引用，走 Tooling Rules 的检索路径（PubMed CLI / paper-search MCP，取摘要那半由工作流子代理执行）拿该文献**检索到的真实 abstract**（**不是** `literature_index.key_finding`），判 `verdict∈support/weak/contradict/unknown` 并从摘要摘一句 `evidence_quote`。
+   3. **写 `data/claim_evidence.json`**：list，每条 `{section:"P1_立项依据", claim_sentence, is_load_bearing, ref_id, retrieved_abstract, verdict, evidence_quote, user_confirmed}`。
+   4. **跑核证**：`CITATION_CHECK_CMD`（Phase 0 env_preflight 已打印绝对路径，即 `python "<.../_shared/citation_claim_check.py>" --root .`）。承重句凡 `contradict/unknown`、缺 `retrieved_abstract`、或 `user_confirmed≠true` → **fail-closed（exit 2）硬拦，禁止照此下笔**。
+   5. **承重句逐条 AskUserQuestion 确认**：每条承重论点句把「论点 + 引文 + verdict + 摘要证据句」摆给用户，逐条 `AskUserQuestion` 请其确认后置 `user_confirmed=true` 再重跑；被判 `contradict` 的必须先改引文或改论点（不得靠确认放行），改完重跑至 exit 0。背景句在核证矩阵表里批量呈现供用户扫一眼即可，不逐条阻断。
+
    **Phase 1 DoD（收口自检）：未逐项确认通过，不得向用户声明 P1 完成**
 
    **🔴 进入下一部分前置闸口（适用所有 Phase）：本部分 delegate_review verify 必须 exit 0（含结构完整性），否则不得进入下一部分撰写。写完即检，不过不进。**
@@ -181,11 +191,12 @@ Follow phased gates in order:
    - [ ] ②本节新增引用已过 `citation_guard`（`python scripts/citation_validator.py verify-all`）
    - [ ] ③论述符合 SQ/H/KSQ 主线，未出现与 consistency_map 矛盾的表述
    - [ ] ④占位符清零（grep `CITE_PENDING\|DATA_PENDING\|【待` P1 返回空）
-   - [ ] ⑤去 AI：`python scripts/humanizer_zh.py scan sections/P1_立项依据.md` 无 ERROR，WARNING 已逐条处理或标注豁免理由；`rhythm-check` 无 `cn_sentence_too_long`
+   - [ ] ⑤去 AI：`python scripts/humanizer_zh.py scan sections/P1_立项依据.md` 无 ERROR，WARNING 已逐条处理或标注豁免理由；`rhythm-check` 的 `cn_sentence_too_long` 为软提醒（机制类长句已豁免、非机制类过长酌情拆分）、不阻断
    - [ ] ⑥字数在目标范围内（`python scripts/word_counter.py count sections/P1_立项依据.md`）
    - [ ] ⑦H/O/RC/KSQ 与 P1 中 SQ 表述一致（V-01；`python scripts/consistency_mapper.py --path data/consistency_map.json validate --rules V-01` 无 ERROR）
    - [ ] ⑧科学问题属性四选一已在 profile 中写入且与 P1 论述对应
    - [ ] ⑨撤稿检测：所有 PMID 已过撤稿核查（`python scripts/citation_validator.py verify-all --index data/literature_index.json --p1 sections/P1_立项依据.md`，撤稿检测已内置）
+   - [ ] ⑩承重论点引文核证（N63）：`data/claim_evidence.json` 已建，承重论点句用真 abstract 判 verdict，`CITATION_CHECK_CMD` exit 0（无 contradict/unknown/缺摘要，承重句均 `user_confirmed=true`）
 
 4. Phase 2: write P2 研究内容（contains all sub-content: H/O/RC/KSQ, methods, innovations, annual plan）.
    - **🔴 开写前置闸门 (Mandatory，脚本硬拦截)**：开写前先跑 `python3 scripts/prewrite_gate.py --section P2 --root .`，exit≠0 禁止开写（硬检查 P1 完成、`consistency_map` 就位、`data/experimental_design.json` entries 非空、占位符清零；P2←P1 跨 Phase，缺 `.review_pass/P1.json` 盲检标记即硬拦 exit 1，须先跑 `delegate_review verify --section P1` 落盘；P2 正是产出 M 的阶段，M 尚空只降级 warning）。
@@ -213,7 +224,7 @@ Follow phased gates in order:
    - [ ] ②每个 M 可追溯到具体 RC，每个 IN 可追溯到 RC 和 M（`--phase 2` 输出中的 V-08）
    - [ ] ③P2 全文无文献编号引用 [n]（grep `\[[0-9]` P2 返回空）
    - [ ] ④占位符清零（CITE_PENDING/DATA_PENDING/【待AI】）
-   - [ ] ⑤去 AI：`humanizer_zh.py scan` 无 ERROR，`rhythm-check` 无 `cn_sentence_too_long`
+   - [ ] ⑤去 AI：`humanizer_zh.py scan` 无 ERROR，`rhythm-check` 的 `cn_sentence_too_long` 为软提醒（机制类长句已豁免、非机制类过长酌情拆分）、不阻断
    - [ ] ⑥字数/页数在目标范围内
    - [ ] ⑦V-06（M→F）/V-07（F 来源）/V-09（预算追溯）/V-11（代表作匹配）依赖 F/预算字段，本阶段用 `validate --phase 2` 即不输出其结论，强制点在 Phase 7 gate-check；V-12（备选路线）只依赖 M.alternative_plan，自 Phase 3 起进入 `--phase 3` 集合为 ERROR 硬门控
    - [ ] ⑧P2 末尾含独立预期成果小节（论文/专利/人才培养目标三类均有明确数字目标）
@@ -247,7 +258,7 @@ Follow phased gates in order:
    - [ ] ③P3_4 总结字数 ≤500 字（`word_counter` 核验）
    - [ ] ④涉及人类受试者/动物/生物安全/遗传资源时，P3_1 含伦理审查说明或送审计划
    - [ ] ⑤占位符清零
-   - [ ] ⑥去 AI：P3_1/P3_2 已过 `humanizer_zh.py scan`，无 ERROR；`rhythm-check` 无 `cn_sentence_too_long`
+   - [ ] ⑥去 AI：P3_1/P3_2 已过 `humanizer_zh.py scan`，无 ERROR；`rhythm-check` 的 `cn_sentence_too_long` 为软提醒（机制类长句已豁免、非机制类过长酌情拆分）、不阻断
    - [ ] ⑦H/O/RC/KSQ 与 P1/P2 一致性未因 P3 新增内容产生新矛盾，且 V-12 备选路线已就位（`consistency_mapper validate --phase 3` 仍 PASS）
    - [ ] ⑧代表作与 H/RC 方向匹配（V-11 人工确认：每篇代表作能对应至少一条 H 或 RC）
 
@@ -270,7 +281,7 @@ Follow phased gates in order:
    - [ ] ②涉及伦理/生物安全/遗传资源的说明与 P3_1 无矛盾（人工核查呼应关系）
    - [ ] ③AI 使用声明已包含（若使用了 AI 辅助写作）
    - [ ] ④占位符清零
-   - [ ] ⑤去 AI：`humanizer_zh.py scan` 无 ERROR；`rhythm-check` 无 `cn_sentence_too_long`
+   - [ ] ⑤去 AI：`humanizer_zh.py scan` 无 ERROR；`rhythm-check` 的 `cn_sentence_too_long` 为软提醒（机制类长句已豁免、非机制类过长酌情拆分）、不阻断
 
 7. Phase 5: write 预算说明书（B1-B3）.
    - Input: P2 confirmed (M entries define budget items); project profile (budget_total, duration).
@@ -314,7 +325,7 @@ Follow phased gates in order:
    - [ ] ③摘要关键词与 `consistency_map.keywords_trace` 吻合（人工核查）
    - [ ] ④摘要中的 H/O/RC/KSQ 表述与正文各 Phase 一致（V-01~V-05 范围内，人工核查）
    - [ ] ⑤占位符清零
-   - [ ] ⑥去 AI：`humanizer_zh.py scan sections/00_摘要_中文.md` 无 ERROR；`rhythm-check` 无 `cn_sentence_too_long`
+   - [ ] ⑥去 AI：`humanizer_zh.py scan sections/00_摘要_中文.md` 无 ERROR；`rhythm-check` 的 `cn_sentence_too_long` 为软提醒（机制类长句已豁免、非机制类过长酌情拆分）、不阻断
 
 9. Phase 7: 全文自审与终稿 + merge.
    - Input: all sections (00, B1-B3, P1-P4, REF) confirmed.
@@ -336,7 +347,7 @@ Follow phased gates in order:
    - [ ] ②`consistency_mapper.py validate` V-01~V-12 全量验证 PASS（V-06/V-07/V-09/V-11/V-12 首次强制执行）
    - [ ] ③`gate-check --require-mcp` PASS（引文矩阵 / MCP 缓存 / 撤稿检测 / 科学问题属性）
    - [ ] ④页数 ≤30 页（`page-estimate` 核验；超出则已按报告定位修剪）
-   - [ ] ⑤`humanizer_zh.py scan-all` 无 ERROR，WARNING 已逐条处理或标注豁免理由；无 `cn_sentence_too_long`。**🔴 中文句内半角标点（`code=halfwidth_punct_in_cn`，如 `细胞,然后`/`清洗:结果`）现为 ERROR 级硬阻断**：中文标书正文应全角 `，；：（）`，半角两侧紧邻汉字即报 ERROR、卡在本门禁（数字千分位 `1,000`、全角标点均不误报）。**🔴 英文铁错拼（`code=english_misspelling`，如 `occured`/`recieve`/`seperate`）亦为 ERROR 级硬阻断**：固定错拼表只收从不合法的英文串，误报率≈0；规范英文缩写/术语/基因符号（IL-6、CRISPR、ELISA 等）不在表内、天然不误伤
+   - [ ] ⑤`humanizer_zh.py scan-all` 无 ERROR，WARNING 已逐条处理或标注豁免理由；`cn_sentence_too_long` 为软提醒（机制类长句已豁免、非机制类过长酌情拆分）、不阻断。**🔴 中文句内半角标点（`code=halfwidth_punct_in_cn`，如 `细胞,然后`/`清洗:结果`）现为 ERROR 级硬阻断**：中文标书正文应全角 `，；：（）`，半角两侧紧邻汉字即报 ERROR、卡在本门禁（数字千分位 `1,000`、全角标点均不误报）。**🔴 英文铁错拼（`code=english_misspelling`，如 `occured`/`recieve`/`seperate`）亦为 ERROR 级硬阻断**：固定错拼表只收从不合法的英文串，误报率≈0；规范英文缩写/术语/基因符号（IL-6、CRISPR、ELISA 等）不在表内、天然不误伤
    - [ ] ⑤a（soft，N66）上下标裸写提醒：scan-all 的 `subsup_bare` 项已逐条核对——含化学式/离子/半数效应浓度/单位指数的标书（H2O、CO2、Ca2+、IC50、cm2 等）改用 `^..^`/`~..~` 或 sup/sub，docx 才能正确呈现；不含化学式的标书天然无命中。仅报告不阻断
    - [ ] ⑥全文占位符清零（CITE_PENDING/DATA_PENDING/【待AI】/【待翻译】）
    - [ ] ⑦V-11 代表作：每篇代表作能对应 ≥1 条 H 或 RC（`consistency_mapper validate` + 人工确认）
@@ -347,6 +358,8 @@ At each phase:
 - snapshot
 - sync required state files
 - halt for user confirmation
+
+**🔴 DoD 停（适用所有 Phase，Mandatory）：** 每个 Phase 的 `delegate_review verify` 盲检 exit 0 通过后，**不得径直进入下一 Phase**。必须先把该 Phase 的 DoD 逐项结论（每项 pass/fail + 盲检返回的证据摘录，含软项 soft_flags）摆成清单给用户看，然后 **HALT 明确等用户确认**「本 Phase 通过、可进入下一 Phase」。用户未确认前不开写下一 Phase。若盲检环境派不出独立子代理（见各 Phase【P4·盲检降级告警】），一并如实告知用户由其亲自复核。
 
 ### Polish Mode
 1. Import draft and split into atomic section files by original heading hierarchy.
@@ -452,7 +465,7 @@ Use atomic gate command for final checks:
 - ❌ 在 P2 研究内容里使用文献编号引用 [n]，或把编号引用用在 P1 之外的部分。
 - ❌ 正文用项目符号或编号列表展开论述，而非段落式叙事（年度计划、P3_3／P3_4 清单、预算三线表是仅有的例外）。
 - ❌ 使用禁用句式与修辞：“不是…而是…”“不仅…而且…”“值得注意的是”“至关重要”“综上所述”、排比、比喻、反问、夸张。
-- ❌ 留下装饰性破折号、scare quotes、解释性冒号，或中文单句超 50 字、定语从句嵌套超 2 层（humanizer_zh／rhythm-check 报错）。
+- ❌ 留下装饰性破折号、scare quotes、解释性冒号，或定语从句嵌套超 2 层（humanizer_zh 报 ERROR）。中文单句超 50 字为 `rhythm-check` 软提醒（机制类严密长句已豁免、不阻断），非机制类过长酌情拆分即可。
 - ❌ 超篇幅：正文 >30 页、中文摘要 >400 字、英文摘要 >300 词、P4 或 P3_4 >500 字。
 - ❌ 在任一 Phase 不跑委托盲检（或降级独立重核），主 agent 写完就自评打勾、verify 未 exit 0 就声明完成或执行 merge。
 
