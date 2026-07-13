@@ -265,6 +265,101 @@ def cluster_suspicions(pairs: list[dict]) -> list[dict]:
     return suspicions
 
 
+# ---------------------------------------------------------------------------
+# 双向 section 对账（--reconcile-sections）：storyline.json 的 section_id ↔
+# manuscripts/*.md 文件。报告式：正向找孤儿（manuscripts 有、storyline 没有）、
+# 反向找漏建（storyline 有、manuscripts 缺）。有差异 exit 1，全齐 exit 0。
+# gsw 文件名不强绑 section_id（04_Results_3.1_Characterization.md ↔ results_3.1），
+# 故映射用「文件名边界匹配 或 文件内容含该 section_id 字符串」双信号。
+# ---------------------------------------------------------------------------
+def load_storyline_section_ids(root: str) -> list[str]:
+    """storyline.json 的 sections[].id（fallback section_id），保序去空。"""
+    path = os.path.join(root, "storyline.json")
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            payload = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return []
+    if not isinstance(payload, dict):
+        return []
+    out: list[str] = []
+    for item in payload.get("sections") or []:
+        if isinstance(item, dict):
+            sid = item.get("id") or item.get("section_id")
+            if sid:
+                out.append(str(sid))
+    return out
+
+
+def _section_terms(section: str) -> set[str]:
+    raw = section.strip().lower()
+    return {v for v in {raw, raw.replace("_", "."), raw.replace(".", "_"),
+                        raw.replace("-", "_"), raw.replace("-", ".")} if v}
+
+
+def _file_covers_section(basename: str, content: str, section: str) -> bool:
+    """文件是否覆盖该 section_id：文件名边界匹配 或 正文含 section_id 变体。"""
+    base = basename.lower()
+    body = content.lower()
+    for term in sorted(_section_terms(section), key=len, reverse=True):
+        esc = re.escape(term)
+        if re.search(rf"(^|[_\-.]){esc}([_\-.]|$)", base):
+            return True
+        if term in body:
+            return True
+    return False
+
+
+def reconcile_sections(root: str) -> dict:
+    section_ids = load_storyline_section_ids(root)
+    files = collect_manuscript_files(root)
+    file_contents: dict[str, str] = {}
+    for fp in files:
+        try:
+            with open(fp, "r", encoding="utf-8") as f:
+                file_contents[fp] = f.read()
+        except OSError:
+            file_contents[fp] = ""
+
+    # 反向：storyline 有、manuscripts 缺（漏建）。
+    missing = [
+        sid for sid in section_ids
+        if not any(_file_covers_section(os.path.basename(fp), c, sid)
+                   for fp, c in file_contents.items())
+    ]
+    # 正向：manuscripts 有、storyline 没有（孤儿）——文件不匹配任何 section_id。
+    orphans = [
+        os.path.basename(fp) for fp, c in file_contents.items()
+        if not any(_file_covers_section(os.path.basename(fp), c, sid)
+                   for sid in section_ids)
+    ]
+    return {
+        "storyline_section_ids": section_ids,
+        "manuscript_files": [os.path.basename(fp) for fp in files],
+        "missing_in_manuscripts": missing,   # storyline 有、稿子缺
+        "orphan_manuscripts": orphans,       # 稿子有、storyline 无
+        "ok": not missing and not orphans,
+    }
+
+
+def run_reconcile(root: str) -> int:
+    if not os.path.isdir(root):
+        print(json.dumps({"ok": False, "summary": f"root not a directory: {root}"}))
+        return 1
+    r = reconcile_sections(root)
+    print(json.dumps(r, ensure_ascii=False, indent=2))
+    if r["ok"]:
+        print("SECTION_RECONCILE_OK: storyline 与 manuscripts 一一对应。", file=sys.stderr)
+        return 0
+    if r["missing_in_manuscripts"]:
+        print("SECTION_RECONCILE_MISSING（storyline 有、稿子漏建）: "
+              + ", ".join(r["missing_in_manuscripts"]), file=sys.stderr)
+    if r["orphan_manuscripts"]:
+        print("SECTION_RECONCILE_ORPHAN（稿子有、storyline 未列）: "
+              + ", ".join(r["orphan_manuscripts"]), file=sys.stderr)
+    return 1
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="跨段数值一致性检查（WARN 级，扫 manuscripts/*.md）。"
@@ -275,9 +370,15 @@ def main() -> int:
                         help="仅输出 JSON（默认也输出 JSON + 人读摘要行）")
     parser.add_argument("--include-sample-size", action="store_true",
                         help="额外扫 n=<int> 样本量（默认关闭，噪声高）")
+    parser.add_argument("--reconcile-sections", action="store_true",
+                        help="双向对账 storyline.json section_id ↔ manuscripts/*.md："
+                             "报漏建/孤儿；有差异 exit 1，全齐 exit 0（报告式，非门禁）")
     args = parser.parse_args()
 
     root = os.path.abspath(args.root)
+    if args.reconcile_sections:
+        return run_reconcile(root)
+
     if not os.path.isdir(root):
         print(json.dumps({"suspicions": [], "files_scanned": 0,
                           "summary": f"root not a directory: {root}"}))

@@ -533,17 +533,27 @@ def verify_all(
     t0 = time.perf_counter()
     now_utc = datetime.now(timezone.utc)
 
-    out = [
-        validate_entry(
-            dict(e),
-            p1_text=p1_text,
-            online_check=online_check,
-            mcp_index=mcp_index,
-            mcp_ttl_days=mcp_ttl_days,
-            now_utc=now_utc,
+    # L1 short-circuit: an entry already verified within the freshness window
+    # reuses its persisted verified + verification_details instead of re-hitting
+    # Crossref/PubMed. entry_is_fresh_verified only returns True when the RAW
+    # entry has verified is True, so a downgraded/unverified entry (e.g. one
+    # carrying mcp_unresolved) is never short-circuited and still re-verifies
+    # below; the require_mcp downgrade further down is therefore not bypassed.
+    out: list[dict[str, Any]] = []
+    for e in entries:
+        if core.entry_is_fresh_verified(e, mcp_ttl_days, now_utc):
+            out.append(dict(e))
+            continue
+        out.append(
+            validate_entry(
+                dict(e),
+                p1_text=p1_text,
+                online_check=online_check,
+                mcp_index=mcp_index,
+                mcp_ttl_days=mcp_ttl_days,
+                now_utc=now_utc,
+            )
         )
-        for e in entries
-    ]
 
     if require_mcp:
         for e in out:

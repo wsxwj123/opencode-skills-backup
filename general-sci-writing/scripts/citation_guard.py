@@ -29,6 +29,7 @@ from citation_guard_core import (  # noqa: E402
     check_completeness,
     check_recency,
     check_self_citation,
+    entry_is_fresh_verified,
     validate_core,
 )
 
@@ -257,6 +258,9 @@ def validate_entry(
     sources = dict(details.get("sources", {}))
     sources["source_provider"] = source_provider
     details["sources"] = sources
+    # Per-entry freshness stamp: next run's entry_is_fresh_verified reads this to
+    # short-circuit re-verification. setdefault preserves a core-supplied stamp.
+    details.setdefault("checked_at", now_utc.isoformat())
     return {
         **entry,
         "verified": result["verified"],
@@ -315,17 +319,28 @@ def main() -> int:
 
     t0 = time.perf_counter()
     now_utc = datetime.now(timezone.utc)
-    checked = [
-        validate_entry(
-            dict(e),
-            online_check=not args.offline,
-            mcp_index=mcp_index,
-            require_mcp=args.require_mcp,
-            mcp_ttl_days=max(0, int(args.mcp_ttl_days)),
-            now_utc=now_utc,
-        )
-        for e in entries
-    ]
+    ttl_days = max(0, int(args.mcp_ttl_days))
+    # L1 per-entry short-circuit: an entry already verified within the TTL reuses
+    # its persisted verification result (from a prior --write-back) instead of
+    # re-hitting Crossref/PubMed. Stale/unverified entries fall through to a full
+    # validate_entry. entry_is_fresh_verified is fail-safe (missing/old timestamp
+    # or verified!=True -> re-verify), so the gate never weakens.
+    checked = []
+    for e in entries:
+        e = dict(e)
+        if entry_is_fresh_verified(e, ttl_days, now_utc):
+            checked.append(e)  # reuse cached verified result verbatim
+        else:
+            checked.append(
+                validate_entry(
+                    e,
+                    online_check=not args.offline,
+                    mcp_index=mcp_index,
+                    require_mcp=args.require_mcp,
+                    mcp_ttl_days=ttl_days,
+                    now_utc=now_utc,
+                )
+            )
 
     failure_counter: Counter[str] = Counter()
     manual = []

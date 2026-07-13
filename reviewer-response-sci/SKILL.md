@@ -203,11 +203,19 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
    **2b. 新文献验真（只要本次新增了引用就必须做，两道关）：**
    > 反驳时甩一篇新文献最容易翻车，引了不存在、被撤、或根本不支持你论点的文章，审稿人一查就崩。所以新引比原稿引用把关更严，从 WARN 升到 fail-closed。
    1. **真实性硬核验**：`python3 scripts/citation_guard.py --project-root <root> --fail-on-unverified`（DOI/PMID 核对 + 撤稿检测；撤稿一律 FAIL，任一新引验不过即非零退出）。不带 `--fail-on-unverified` 的 pipeline 内 WARN 级不够——新引这里必须带上，验不过就删/换，别硬留。
-   2. **支撑度核证**（引文是否真支持它挂的那句回复论点，而非只验真实）：对每条"新引 ↔ 它在 response_en 里支撑的论点句"，用**检索到的真实 abstract**（不看可编的 key_finding）判支撑度，写 `project_root/claim_evidence.json`（每行 `{section, claim_sentence, is_load_bearing, ref_id, retrieved_abstract, verdict∈support/weak/contradict/unknown, evidence_quote, user_confirmed}`），再跑：
+   2. **支撑度核证**（引文是否真支持它挂的那句回复论点，而非只验真实）。对每条"新引 ↔ 它在 response_en 里支撑的论点句"，用**检索到的真实 abstract**（不看可编的 key_finding）判支撑度，写 `project_root/claim_evidence.json`（每行 `{section, claim_sentence, is_load_bearing, ref_id, retrieved_abstract, verdict∈support/weak/contradict/unknown, evidence_quote, user_confirmed}`），再跑：
       ```
       python3 "<_shared>/citation_claim_check.py" --root <project_root>
       ```
-      （对应 preflight 打印的 `CITATION_CHECK_CMD`。）**承重论点句**（用来支撑 Push back / 关键主张的）若 verdict∈{contradict,unknown} 或取不到摘要 → **fail-closed（exit 2）硬拦**，禁止照此下笔；承重句还须逐条人工确认（`user_confirmed=true`）。背景陈述句只在表里批量呈现、不逐条阻断。取 abstract 走 Step 2 的检索工作流（PubMed CLI / paper-search MCP），不并行、间隔 ≥1s。
+      （对应 preflight 打印的 `CITATION_CHECK_CMD`。）
+
+      **跨批复用（脚本自动做，AI 不必手动记字段）**。脚本核证前自动从项目根 `ref_evidence_cache.json` 回填缺失字段、核证后强制落盘，所以：
+      - 已在别处验过的文献，这一行可留 `retrieved_abstract` 空，脚本按 abstract 是文献全局事实自动回填；不必为每行重抄一遍摘要。
+      - 完全同一篇文献支撑完全同一句论点、且此前已确认过的，脚本自动复用已有 verdict 与确认，免掉重复反向验证。
+      - 只有**新的（文献，论点）组合**才要重新反向验证并逐条人工确认；同一篇文献拿去支撑另一句论点仍算新组合，须独立判定，不复用旧确认。
+      - 这条修的是"AI 漏写 `retrieved_abstract`/`verdict` 字段导致同一文献被反复核证"；缓存缺失或损坏时脚本回落全量核验，绝不放行。
+
+      **承重论点句**（用来支撑 Push back / 关键主张的）若 verdict∈{contradict,unknown} 或取不到摘要 → **fail-closed（exit 2）硬拦**，禁止照此下笔；承重句还须逐条人工确认（`user_confirmed=true`）。回填复用不改门禁强度，凑不齐真摘要与确认照样 exit 2。背景陈述句只在表里批量呈现、不逐条阻断。取 abstract 走 Step 2 的检索工作流（PubMed CLI / paper-search MCP），不并行、间隔 ≥1s。
 3. Atomize manuscript and SI into section-level units (heading + body + corresponding figure captions).
 3.5. **[User Checkpoint]** Print a summary table:
    - Total section-level units extracted (manuscript count / SI count)
@@ -302,7 +310,7 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
 - ❌ 越界改主稿或生成 Word track-changes 稿，本技能只出回复包（HTML），改稿一律落到 `manuscript_edit_plan.md` 由用户手工执行。
 - ❌ 虚构实验、统计或引用来回应意见；证据缺失时不写 `Not provided by user` 而是编造数据。
 - ❌ response_en 里承诺的动作（we added／clarified／revised）在 `modification_actions` 或 `revised_excerpt_en` 找不到落点（承诺↔落点不一致，consistency_check WARN 必须消除）。
-- ❌ 主 agent 自评承诺↔落点一致性与 DoD 清单，必须委托独立上下文子代理盲检，delegate_review verify 未 exit 0 就出具回复信。
+- ❌ 主 agent 自评承诺↔落点一致性与 DoD 清单，必须委托独立上下文subagent盲检，delegate_review verify 未 exit 0 就出具回复信。
 - ❌ 漏回任何一条意见，尤其把 Editor 意见并入某个 Reviewer，而非作为独立顶层节点。
 - ❌ 用 tavily、websearch 或 openalex（pyalex）查文献；生命医学不走 PubMed CLI、CS/AI 不走 paper-search MCP。
 - ❌ 并行发起检索请求，必须串行且相邻调用间隔 ≥1s。
@@ -319,19 +327,19 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
 
 > **硬规则：清单未逐项确认通过，不得向用户声明"回复包完成"。** 能脚本核的项直接跑对应 gate；人工项逐条确认。
 
-**🔴 委托盲检（不得主 agent 自评）**：你刚写完回复包，自评容易失真，会想当然地判自己通过、还容易漏项。**承诺↔落点一致性尤其如此**，主 agent 写了回复再自核"承诺有没有落地"几乎必然失真。`run_pipeline.py` 退出码 0 后、声明完成前，必须把 DoD 清单**委托给独立上下文的子代理盲检**，自己不直接打勾：
+**🔴 委托盲检（不得主 agent 自评）**：你刚写完回复包，自评容易失真，会想当然地判自己通过、还容易漏项。**承诺↔落点一致性尤其如此**，主 agent 写了回复再自核"承诺有没有落地"几乎必然失真。`run_pipeline.py` 退出码 0 后、声明完成前，必须把 DoD 清单**委托给独立上下文的subagent盲检**，自己不直接打勾：
 
 🔴 出具前置闸口：delegate_review verify 必须 exit 0（含 RR14 结构完整性），否则不得向用户出具 response letter。
 
 1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate response-dod --files <project_root>/units/*.json --comments <comments_docx_path>`（Windows PowerShell/cmd 不展开 `*.json`，需把 `units/` 下的 json 显式逐个列在 `--files` 后，或在 WSL/bash 里运行）
-   - **必须带 `--comments`**：把**原始审稿信全文**嵌进任务包，盲检子代理才能对照原信逐条点名核对——被 fallback 塌成一条 general unit 的多诉求意见(连续散文/`(i)(ii)`/罗马数字/项目符号/一段多诉求)只有对照原文才查得出漏回。不带 `--comments` 时盲检只能看已生成的 units，被吞掉的意见永远发现不了(RR7/RR14/RR15 形同虚设)。
-2. **派一个独立子代理**（Claude Code 用 `academic-blind-reviewer`；其他平台派通用子代理），把任务包原样给它、**不要给它回复包的写作上下文**，要求按任务包返回 JSON 数组。
-3. 校验返回：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate response-dod --return <子代理返回.json>`；退出码非 0（任一缺项/fail/无证据）= **fail-closed**，据子代理证据修复后重跑，**未过不得声明完成**。
-4. **盲检通过后 HALT，先摆结论再出信（不得静默直接出回复信）**：verify exit 0 后，把 DoD 逐项结论摆给用户——每项 RR 的通过/告警状态 + 子代理给的关键证据一句话（尤其逐条覆盖、承诺↔落点、反驳有据、新引验真几项），并附 Step 7.5 的承诺↔落点对照表。然后停下问用户：「盲检已过，上面是逐项结论，确认出具回复信吗？(yes / 看某项证据 / 改某条)」**等用户明确确认后才生成/交付回复信**。
+   - **必须带 `--comments`**：把**原始审稿信全文**嵌进任务包，盲检subagent才能对照原信逐条点名核对——被 fallback 塌成一条 general unit 的多诉求意见(连续散文/`(i)(ii)`/罗马数字/项目符号/一段多诉求)只有对照原文才查得出漏回。不带 `--comments` 时盲检只能看已生成的 units，被吞掉的意见永远发现不了(RR7/RR14/RR15 形同虚设)。
+2. **派一个独立subagent**（Claude Code 用 `academic-blind-reviewer`；其他平台派通用subagent），把任务包原样给它、**不要给它回复包的写作上下文**，要求按任务包返回 JSON 数组。
+3. 校验返回：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate response-dod --return <subagent返回.json>`；退出码非 0（任一缺项/fail/无证据）= **fail-closed**，据subagent证据修复后重跑，**未过不得声明完成**。
+4. **盲检通过后 HALT，先摆结论再出信（不得静默直接出回复信）**：verify exit 0 后，把 DoD 逐项结论摆给用户——每项 RR 的通过/告警状态 + subagent给的关键证据一句话（尤其逐条覆盖、承诺↔落点、反驳有据、新引验真几项），并附 Step 7.5 的承诺↔落点对照表。然后停下问用户：「盲检已过，上面是逐项结论，确认出具回复信吗？(yes / 看某项证据 / 改某条)」**等用户明确确认后才生成/交付回复信**。
 
-⚠️ **盲检降级告警**：若环境派不出真正独立的子代理，**绝不能同一 AI 自问自答冒充盲检**。明确告诉用户「本环境盲检不可靠，请你亲自复核：每条审稿意见是否都正面回应了、有没有漏回、承诺的修改是否都有落点」，交回用户。
+⚠️ **盲检降级告警**：若环境派不出真正独立的subagent，**绝不能同一 AI 自问自答冒充盲检**。明确告诉用户「本环境盲检不可靠，请你亲自复核：每条审稿意见是否都正面回应了、有没有漏回、承诺的修改是否都有落点」，交回用户。
 
-**本节完整 DoD 判据（全部核查项 + 脚本命令）以 `references/dod_checklist.json` gate=`response-dod` 为唯一真源（16 项 RR1-RR16）**：盲检子代理据此逐项核、能脚本核的先跑脚本，退出码非 0 即 fail-closed。含 RR1-RR6 通用（引文对应/新增引用验真+支撑度核证/主线对齐/占位清零/去AI 硬禁三项标点/字数）、RR7-RR14 特有（逐条覆盖无遗漏 / Editor 层独立 / Strategy 基调 / **承诺↔落点一致（`consistency_check.py`，独立子代理核、主 agent 不得自评）** / edit_plan 回填 / 反驳有据 / 各 gate 全通 / RR14 结构完整性），及 **RR15 逐条实质回应盲检（每条意见含各子问点是否被实质回应，而非答非所问/避重就轻/只承诺不落实）**、RR16 字符级硬门禁（仅扫作者写的 Response 正文、不扫审稿人原话，misspelling/chinese_punct/subsup_bare 零容忍，`proofread_response.py`）。此处不再内联清单，避免与真源 drift。
+**本节完整 DoD 判据（全部核查项 + 脚本命令）以 `references/dod_checklist.json` gate=`response-dod` 为唯一真源（16 项 RR1-RR16）**：盲检subagent据此逐项核、能脚本核的先跑脚本，退出码非 0 即 fail-closed。含 RR1-RR6 通用（引文对应/新增引用验真+支撑度核证/主线对齐/占位清零/去AI 硬禁三项标点/字数）、RR7-RR14 特有（逐条覆盖无遗漏 / Editor 层独立 / Strategy 基调 / **承诺↔落点一致（`consistency_check.py`，独立subagent核、主 agent 不得自评）** / edit_plan 回填 / 反驳有据 / 各 gate 全通 / RR14 结构完整性），及 **RR15 逐条实质回应盲检（每条意见含各子问点是否被实质回应，而非答非所问/避重就轻/只承诺不落实）**、RR16 字符级硬门禁（仅扫作者写的 Response 正文、不扫审稿人原话，misspelling/chinese_punct/subsup_bare 零容忍，`proofread_response.py`）。此处不再内联清单，避免与真源 drift。
 
 ## Re-Render Workflow
 After manual editing of any unit JSON:

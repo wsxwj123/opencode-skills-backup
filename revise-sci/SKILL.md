@@ -272,7 +272,7 @@ Each comment must contain:
 - `paper_search_results_path` may be used to ingest confirmed paper-search results into citation-oriented comment handling.
 - `paper_search_results_path` is not trusted directly. It must first pass `citation_guard.py`, which performs dual verification using provider trace and identifier/title consistency evidence before citations can auto-complete a comment.
 - **新增文献真实性双验（B②，不许 --offline 交付）**：审稿要求补新文献时，全部新引文献必须过 `citation_guard.py` 的 **在线**真实性双验（DOI/PMID 解析、撤稿检测、逐源标题一致性）。有已 `completed` 的 citation 类意见时，`strict_gate.py` 会读 `paper_search_guard_report.json`：`summary.online_check` 非 `true`（即用 `--offline` 或没加 `--live` 跑的）或 `all_rows_guard_verified` 非 `true`，一律 fail-close。交付前必须 `python scripts/citation_guard.py --live ...` 重跑，不许 `--offline` 跳过。
-- **新引文献↔它支撑的回复论点，须过引文核证（B④）**：真实性通过只说明「文献存在」，不说明「它真支撑你借它下的结论」。对每条「新引文献 → 它在回复信/正文里支撑的论点句」，用该文献**检索到的真实 abstract** 判支撑度，落 `claim_evidence.json`（每条含 `claim_sentence` / `is_load_bearing` / `ref_id` / `retrieved_abstract` / `verdict∈support/weak/contradict/unknown` / `user_confirmed`），再跑共享 `citation_claim_check.py`（`CITATION_CHECK_CMD`）。**承重句被判 `contradict`/`unknown`、缺 abstract、或 support/weak 但未逐条人工确认 → 硬拦**。有 `completed` citation 意见时，`strict_gate.py` 复用共享 `citation_claim_check._row_blockers` 核验 `claim_evidence.json`：文件缺失或任一承重句阻断即 fail-close。abstract 的检索走工作流子代理（本脚本不含 MCP）。
+- **新引文献↔它支撑的回复论点，须过引文核证（B④）**：真实性通过只说明该文献存在，不说明它真支撑你借它下的结论。对每条「新引文献 → 它在回复信/正文里支撑的论点句」，用该文献**检索到的真实 abstract** 判支撑度，落 `claim_evidence.json`（每条含 `claim_sentence` / `is_load_bearing` / `ref_id` / `retrieved_abstract` / `verdict∈support/weak/contradict/unknown` / `user_confirmed`），再跑共享 `citation_claim_check.py`（`CITATION_CHECK_CMD`）。跨批复用由脚本自动完成，AI 不必手动记账。脚本在核证前从项目根 `ref_evidence_cache.json` 自动回填缺失字段，核证后强制落盘。已在别处验过 abstract 的文献，本批该行 `retrieved_abstract` 可留空，脚本按 `ref_id` 回填。同一篇文献且完全同一论点句此前已人工确认过的，脚本自动复用其 `verdict` 与 `user_confirmed`，不再重复反向验证与逐条确认。只有新的 (文献, 论点) 组合才需要你补 abstract、判支撑度并逐条人工确认。门禁强度不变，承重句被判 `contradict`/`unknown`、缺 abstract、或 support/weak 但未确认一律硬拦，新 (文献, 论点) 无 verdict 仍 fail-close。同一篇文献换去支撑另一句论点，不复用旧确认，须独立判定。有 `completed` citation 意见时，`strict_gate.py` 复用共享 `citation_claim_check._row_blockers` 核验 `claim_evidence.json`，文件缺失或任一承重句阻断即 fail-close。abstract 的检索走工作流subagent（本脚本不含 MCP）。
 - `build_literature_index.py` must convert validated citation support into review-writing style canonical artifacts: `data/literature_index.json` and `data/revision_claims.json`.
 - `build_literature_index.py` accepts an optional `--seed-index <path>` to reuse the writing project's existing `literature_index.json` (produced by `gsw`/`review-writing`) as a seed. Seed entries keep their original `global_id`; revision-found references that match a seed entry (dedup key: normalized DOI > PMID > normalized title) reuse the seed number instead of getting a new one, and truly new references continue numbering from `max(seed global_id) + 1`. The seed is read-only — the merged result is written only to revise-sci's own `data/literature_index.json`, never back to the writing project (seed-extension semantics). The seed reader tolerates the looser gsw schema (global id under any of `global_id`/`citation_number`/`id`/`number`/`ref_number`, back-filled by array order when absent) and a seed located either at the project root or under `data/`. Omitting `--seed-index` keeps the original rebuild-from-1 behavior unchanged.
 - `matrix_manager.py` must derive `data/synthesis_matrix.json` from the canonical literature index and emit `data/synthesis_matrix_audit.json` before delivery.
@@ -388,7 +388,7 @@ These inline markers are load-bearing and carry the same status as citation mark
 - ❌ 把实质性请求（新机制／新证据／新图／未匹配章节）当 `completed` 自动收口；只有保守的纯文本澄清或限制句可 auto-complete。
 - ❌ Patch 修订哈希不符仍强行套用或自动重定位（fail-closed，整批拒绝、写空、退非零，不静默部分应用）。
 - ❌ 去 AI 主干未过（硬）：scare quotes、解释性冒号、套话禁词、-ing 假分析从句、**装饰破折号（禁止使用，命中即 FAIL）**。（仅英文 >30 词为软提示：上报不阻断，但仍应改。）
-- ❌ 主 agent 自评 DoD 当通过；`strict_gate.py` 前须委托独立子代理盲检，verify 未 exit 0 不得声明改稿完成；盲检过后仍须摆逐项结论 + HALT 等用户确认才收口。
+- ❌ 主 agent 自评 DoD 当通过；`strict_gate.py` 前须委托独立subagent盲检，verify 未 exit 0 不得声明改稿完成；盲检过后仍须摆逐项结论 + HALT 等用户确认才收口。
 - ❌ 把「有意驳回不改（`push_back`）」误判成「漏改」，或反过来把真漏改的意见混进 push_back 蒙混；驳回必须在回复信据理反驳，正文不动但回应不能缺。
 - ❌ 退稿信漏回某条意见，或某 `completed` comment_id 在 `manuscript_edit_plan.md` 中无 revised_excerpt 落点（`push_back`/`需作者确认` 不要求 revised_excerpt）。
 - ❌ 补新文献只验真实性（DOI/PMID）就下笔，跳过「引文↔论点」核证；或用 `--offline` 跑 citation_guard 就交付（承重句须过 `citation_claim_check.py`，guard 须 `--live`）。
@@ -401,15 +401,15 @@ These inline markers are load-bearing and carry the same status as citation mark
 
 **位置**：polish 完成后、`strict_gate.py` 运行前。**硬规则：清单未逐项确认通过，不得向用户声明"改稿完成"。**
 
-**🔴 委托盲检（不得主 agent 自评）**：改稿完成后自评容易默认通过且漏项。`strict_gate.py` 运行前必须把 DoD 清单**委托给独立上下文的子代理盲检**，不得自己直接打勾：
+**🔴 委托盲检（不得主 agent 自评）**：改稿完成后自评容易默认通过且漏项。`strict_gate.py` 运行前必须把 DoD 清单**委托给独立上下文的subagent盲检**，不得自己直接打勾：
 
 1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate revision-dod --files <改稿相关文件>`
-2. **派一个独立子代理**（Claude Code 用 `academic-blind-reviewer`；其他平台派通用子代理），把任务包原样给它、**不要给它本次改稿的写作上下文**，要求按任务包返回 JSON 数组。
-3. 校验返回：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate revision-dod --return <子代理返回.json>`；退出码非 0（任一缺项/fail/无证据）= **fail-closed**，据子代理证据修复后重跑，**未过不得声明改稿完成**。
+2. **派一个独立subagent**（Claude Code 用 `academic-blind-reviewer`；其他平台派通用subagent），把任务包原样给它、**不要给它本次改稿的写作上下文**，要求按任务包返回 JSON 数组。
+3. 校验返回：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate revision-dod --return <subagent返回.json>`；退出码非 0（任一缺项/fail/无证据）= **fail-closed**，据subagent证据修复后重跑，**未过不得声明改稿完成**。
 
-> ⚠️ **盲检降级告警**：若当前环境派不出真正独立的子代理（非 Claude Code 客户端、provider 不支持 Task/子会话），**绝不能用同一个 AI 自问自答冒充盲检**（那就是自证）。此时明确告诉用户：「本环境盲检不可靠，请你亲自复核这几点：__（列出该盲检本应查的关键点，如 RV-G1 引文↔参考一一对应、RV-G3 改动是否跑题、RV-G5 去AI五项、RV-G7 缩略语首展、RV-G8 常识/事实错误等）__」，把判断权交回用户，不得伪造一份"通过"的盲检返回。
+> ⚠️ **盲检降级告警**：若当前环境派不出真正独立的subagent（非 Claude Code 客户端、provider 不支持 Task/子会话），**绝不能用同一个 AI 自问自答冒充盲检**（那就是自证）。此时明确告诉用户：「本环境盲检不可靠，请你亲自复核这几点：__（列出该盲检本应查的关键点，如 RV-G1 引文↔参考一一对应、RV-G3 改动是否跑题、RV-G5 去AI五项、RV-G7 缩略语首展、RV-G8 常识/事实错误等）__」，把判断权交回用户，不得伪造一份"通过"的盲检返回。
 
-下列清单与 `references/dod_checklist.json` 逐项对应（**改清单先改 JSON，再同步此处散文**）；能脚本核的项子代理会先跑脚本：
+下列清单与 `references/dod_checklist.json` 逐项对应（**改清单先改 JSON，再同步此处散文**）；能脚本核的项subagent会先跑脚本：
 
 ### 通用 8 项（id: RV-G1 ~ RV-G8）
 
@@ -422,7 +422,7 @@ These inline markers are load-bearing and carry the same status as citation mark
 | RV-G5 | 去 AI 五项（破折号/scare quotes/解释性冒号/英文≤30词/-ing从句/中文≤50字≤2层从句）通过 | `python scripts/strict_gate.py --project-root <project_root>` → `ai_style_flags_removed` 无残留；句长警告记录于 notes |
 | RV-G6 | 字数达标（改动前后正文字数在期刊要求范围内） | 人工或期刊要求核对 |
 | RV-G7 | 缩略语首展一致：`abbreviation_index.json` 无 `undefined_use` / `duplicate_definition` / `title_abbreviation` 硬错；改稿未破坏既有首展，Title 不含缩写（`defined_unused` 为软警告可人工豁免） | `python scripts/manuscript_index.py --manuscript <output_md> --project-root <project_root>` 后读 `abbreviation_index.json`，硬错 orphan 零命中（启发式索引，可疑项人工复核） |
-| RV-G8 | **Commonsense sanity (🟡 soft report, non-blocking)**: the blind-review subagent also scans rewritten fragments for obvious commonsense/factual errors (absurd unit magnitudes, physiology/mechanism mistakes, internal numeric contradictions) introduced by the rewrite. Report only, never block delivery, never auto-edit content. Distinct from the citation/reference verification gates (RV-G1/RV-G2) and from reviewer-simulator's full scientific audit. | 盲检子代理 LLM 判断（复用现有 `delegate_review` 盲检机制，无新脚本）；命中只在子代理返回 `notes` 报告，软项不进 `strict_gate.py` 硬失败、不计入 `delegate_review verify` 的阻断退出码（与 `references/dod_checklist.json` 硬门禁互不冲突） |
+| RV-G8 | **Commonsense sanity (🟡 soft report, non-blocking)**: the blind-review subagent also scans rewritten fragments for obvious commonsense/factual errors (absurd unit magnitudes, physiology/mechanism mistakes, internal numeric contradictions) introduced by the rewrite. Report only, never block delivery, never auto-edit content. Distinct from the citation/reference verification gates (RV-G1/RV-G2) and from reviewer-simulator's full scientific audit. | 盲检subagent LLM 判断（复用现有 `delegate_review` 盲检机制，无新脚本）；命中只在subagent返回 `notes` 报告，软项不进 `strict_gate.py` 硬失败、不计入 `delegate_review verify` 的阻断退出码（与 `references/dod_checklist.json` 硬门禁互不冲突） |
 
 🔴 收口前置闸口：`delegate_review verify` 必须 exit 0（含 RV-R8 结构完整性），否则不得声明改稿完成。任一项 fail 均为阻断。
 
@@ -441,11 +441,11 @@ These inline markers are load-bearing and carry the same status as citation mark
 | RV-R9 | polish 片段级守卫通过：每个 polished 片段 `polish_numbers_ok=true`（无数值漂移/丢失）、`polish_certainty_ok=true`（谨慎动词未被升级为强断言）、无套话禁词残留；`polish_risk_flags` 已落盘到 unit / `revision_polish_execution.json` / `comment_records/<id>.md` | `python scripts/strict_gate.py --project-root <project_root>`（strict_gate 内含 A/B/MID 三项检查，RV-R1 通过则本项通过） |
 | RV-R7 | response_to_reviewers.docx 结构完整：每个 comment block 都有 comment heading / response-section heading / evidence-section heading | `python scripts/strict_gate.py --project-root <project_root>`（strict_gate 解析 docx 核验结构，RV-R1 通过则本项通过） |
 | RV-R8 | 结构完整性：改后稿件结构完整（原结构无破坏、参考文献编号连续、response 各 unit 三要素齐全）；退稿信每条意见在 edit_plan 中有落点无遗漏 | `python scripts/strict_gate.py --project-root <project_root>`（RV-R1 通过则本项通过）；或人工逐段核查 |
-| RV-R10 | 跨节一致性盲检（全局层，超出片段级 RV-R9）：改稿后关键数值/样本量/效应量/主要结论在摘要-正文-图表-结论间仍一一对应、无新引入矛盾；改动未把原谨慎表述升级为新过度声称（因果化/普适化/夸大疗效）。跨节不一致或新增过度声称=fail，列冲突两处原文为证 | `python scripts/cross_section_consistency.py --project-root .`（客观信号）+ 盲检子代理据此判定 |
+| RV-R10 | 跨节一致性盲检（全局层，超出片段级 RV-R9）：改稿后关键数值/样本量/效应量/主要结论在摘要-正文-图表-结论间仍一一对应、无新引入矛盾；改动未把原谨慎表述升级为新过度声称（因果化/普适化/夸大疗效）。跨节不一致或新增过度声称=fail，列冲突两处原文为证 | `python scripts/cross_section_consistency.py --project-root .`（客观信号）+ 盲检subagent据此判定 |
 | RV-R11 | 语法拼写与字符级格式：对原子化正文 `manuscript_sections/` 跑字符级体检。高置信类别 **misspelling**（英文常见错拼）/ **chinese_punct**（中文标点漏入英文句）/ **subsup_bare**（H2O、IC50、cm² 等应上下标却裸写，含 CJK 安全边界）**零容忍**——命中任一即 `fail_on_hits` 非空、`ok=false`、退出码非 0；其余类别（学术错拼/中文错字/单位/英美混用/数字格式/术语不一致/Methods 时态/断链）**仅报告不阻断**。**只报告供用户决断，绝不自动改正文**（fragment-only 保真），命中后由用户决定是否回片段修订 | `python scripts/proofread.py --manuscript-dir manuscript_sections --report proofread_report.json --fail-on misspelling,chinese_punct,subsup_bare` → `ok=true` 且 `fail_on_hits` 为空 |
 | RV-R12 | 拉丁短语斜体软提醒（🟡软/人工确认，不阻断）：`proofread.py` 的 `latin_italic_missing` 类别，正文里 `in vitro`/`in vivo`/`ex vivo`/`in situ`/`de novo`/`post hoc`/`per se` 等公认须斜体的拉丁短语若裸写（未被 `*...*` 斜体标记包裹）则报告。**仅提示，不阻断、不进 `--fail-on`、不扣分**，由人工确认是否补斜体（`et al.`/`e.g.`/`vs.` 等正体惯例不在词表内） | 同 RV-R11 脚本，读 `proofread_report.json` 中 `latin_italic_missing` 计数供人工决断，不影响 `ok`/退出码 |
 
-> RV-R3 仅在使用 Patch 修订协议时适用，跳过需在 notes 中注明原因。RV-R4/R6/R7/R8/R9 已由 strict_gate 覆盖，RV-R1 通过即视为通过；RV-R5 须确认 pipeline 正式运行产出 comment_registry.json。RV-R10 为跨节一致性全局盲检（独立脚本 `cross_section_consistency.py` + 子代理判定），**不由 strict_gate 覆盖**，须单独核。
+> RV-R3 仅在使用 Patch 修订协议时适用，跳过需在 notes 中注明原因。RV-R4/R6/R7/R8/R9 已由 strict_gate 覆盖，RV-R1 通过即视为通过；RV-R5 须确认 pipeline 正式运行产出 comment_registry.json。RV-R10 为跨节一致性全局盲检（独立脚本 `cross_section_consistency.py` + subagent判定），**不由 strict_gate 覆盖**，须单独核。
 
 ### 投稿前作者自检（🟡 soft 提醒，不阻断交付）
 
@@ -459,4 +459,4 @@ These inline markers are load-bearing and carry the same status as citation mark
 - 「把第 X 条对应的**原句**和你**改后的句子**并排贴给我，我要确认意思没变、没夹带我没同意的新结论。」
 - 「给我一张表：每条审稿意见 × 有没有回复 × 正文改了哪句（引用 `manuscript_edit_plan.md` 的 revised_excerpt）。哪条空着就是漏了，当场补。」
 - 「先别跑完整 pipeline，先只跑到 `atomize_comments.py` 把意见清单给我看，我对照原始审稿信确认条数无误了再往下。」
-- 「你这环境派不出独立子代理就别假装盲检通过了。把这轮该盲检的关键点列给我，我自己核。」
+- 「你这环境派不出独立subagent就别假装盲检通过了。把这轮该盲检的关键点列给我，我自己核。」

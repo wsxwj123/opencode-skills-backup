@@ -29,16 +29,16 @@
     },
     "revise-sci": {
       "state_files": ["project_state.json"],
-      "managed_globs": ["response_to_reviewers.md", "response_to_reviewers.docx", "manuscript_edit_plan.md"],
+      "managed_globs": ["response_to_reviewers.md", "response_to_reviewers.docx", "manuscript_edit_plan.md", "manuscript_sections/*.md", "si_sections/*.md"],
       "signoff": false
     },
     "reviewer-response-sci": {
       "state_files": ["project_state.json"],
-      "managed_globs": ["units/*.json"],
+      "managed_globs": ["units/*.json", "manuscript_edit_plan.md"],
       "signoff": false
     },
     "reviewer-simulator": {
-      "state_files": ["project_config.json"],
+      "state_files": [".reviewer_sim_project.json"],
       "managed_globs": ["report_*.html"],
       "signoff": false
     },
