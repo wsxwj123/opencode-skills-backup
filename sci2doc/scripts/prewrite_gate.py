@@ -15,6 +15,9 @@ section_id 形如 "2.1"（章.节）。
 4. 占位符清零：上一节 atomic_md 文件无 CITE_PENDING/DATA_PENDING/【待 残留
 5. 上一节盲检通过：<root>/.review_pass/<上一节>.json 存在且 passed:true
    （由 delegate_review.py verify --section <上一节> 落盘）；缺失 → 硬拦
+6. 每章首节（sub<=1 且非第 1 章）：上一章章级盲检 <root>/.review_pass/第<N-1>章.json
+   存在且 passed:true（由 delegate_review.py verify --section 第<N-1>章 落盘）；缺失 → 硬拦。
+   第 1 章首节无上一章，放行。
 
 降级 warning（不阻断）：
 - 缩略词一致：sci2doc 用 abbreviation_registry（无 --root 式扫描接口）→ skip 并注明
@@ -205,6 +208,28 @@ def main():
             checks.append({"name": "blind_review", "ok": False, "prev": prev})
     else:
         checks.append({"name": "blind_review", "ok": True, "note": "first subsection or chapter-level, N/A"})
+
+    # ---- check: 每章首节硬校验上一章章级盲检通过（硬，章级） ----
+    # 每章首节(sub<=1)且非第1章：上一章 chapter-dod 盲检标记必须存在且 passed。
+    # 缺标记 → 硬拦，堵住「未过章级盲检就开写下一章」的跳步。第1章无上一章，放行。
+    try:
+        chapter_int = int(chapter)
+    except (TypeError, ValueError):
+        chapter_int = None
+    if sub is not None and sub <= 1 and chapter_int is not None and chapter_int > 1:
+        prev_ch = f"第{chapter_int - 1}章"
+        ch_pass_path = os.path.join(root, ".review_pass", f"{prev_ch}.json")
+        ch_marker = _load_json(ch_pass_path)
+        if isinstance(ch_marker, dict) and ch_marker.get("passed") is True:
+            checks.append({"name": "prev_chapter_blind_review", "ok": True, "prev": prev_ch})
+        else:
+            failures.append(
+                f"previous chapter {prev_ch!r} blind review not passed or marker missing; "
+                f"run: delegate_review.py verify --section {prev_ch}")
+            checks.append({"name": "prev_chapter_blind_review", "ok": False, "prev": prev_ch})
+    else:
+        checks.append({"name": "prev_chapter_blind_review", "ok": True,
+                       "note": "first chapter or non-first subsection; N/A"})
 
     # ---- check 3: 素材就位（本章 figure/实验映射） ----
     n_fig = figures_for_chapter(root, chapter)

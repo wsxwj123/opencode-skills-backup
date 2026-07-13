@@ -643,6 +643,11 @@ def main():
         for r in results:
             if r["issues_total"]:
                 print(f"  [{r['file']}] score={r['score']} types={r['issues_by_type']}")
+    # 诚实化：PASS 只代表字符级形式层过关，别当成内容/科学层已核验（stderr，不污染 stdout JSON）。
+    if all_pass:
+        sys.stderr.write(
+            "PROOFREAD: PASS — 仅覆盖字符级形式层（拼写/标点/上下标/交叉引用编号）；"
+            "论点是否被文献支持、结论科学价值未自动核验。\n")
     return 0 if all_pass else 1
 
 

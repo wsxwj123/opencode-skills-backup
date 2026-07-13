@@ -230,6 +230,10 @@ def cmd_verify(args: argparse.Namespace) -> int:
             "[delegate_review] 盲检未通过(fail-closed):不得向用户声明本节/本报告完成。\n"
         )
         return 1
+    sys.stderr.write(
+        "[delegate_review] 盲检通过仅代表 DoD 清单逐项有据(形式合规 + 子代理对内容的主观判断);"
+        "不等于科学创新度达标、这稿配得上目标刊——顶刊靠 conceptual advance 收稿,须通讯作者定夺。\n"
+    )
     # 全过且提供了 --section 时,落盘通过标记供下一节 prewrite_gate 硬校验。
     # 标记写入失败不改变 verify 结果(仍 exit 0),仅打 warning。
     if getattr(args, "section", None):
