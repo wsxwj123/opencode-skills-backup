@@ -27,7 +27,8 @@
 7. **不确定处理**：无法完成同源核验的条目必须标记为 `unverified`；未带 `source_provider` / `source_id` 的条目不得入库。`unverified` 与 `needs_manual_review=true` 条目都**禁止在正文使用 `[n]` 引用**，也不得进入参考文献列表。
 8. **补全边界**：摘要补全协议仅允许补全 `abstract` 字段，禁止改写已核验文献的核心元数据（标题/作者/期刊/年份/DOI）。
 9. **强制核验门禁**：任何正文写作前与交付前，必须执行：
-   - `python scripts/citation_guard.py --index literature_index.json --mcp-cache mcp_literature_cache.json --mcp-ttl-days 30 --manual-review manual_review_queue.json --log verification_run_log.json --report citation_guard_report.json`（Windows 用 `python` 或 `py` 代替 `python3`）
+   - `python scripts/citation_guard.py --index literature_index.json --mcp-cache mcp_literature_cache.json --mcp-ttl-days 30 --manual-review manual_review_queue.json --log verification_run_log.json --report citation_guard_report.json --write-back`（Windows 用 `python` 或 `py` 代替 `python3`）
+   - **`--write-back` 必带（别靠 AI 记得）**：它把每条 `verified` + `verification_details.checked_at` 落盘回 `literature_index.json`。这是 L1 逐条短路的前提。下次核验时，TTL（`--mcp-ttl-days`）内的已验条目直接复用落盘结果、跳过在线抓取；不写回则每次全量重验，等于白验。过期/未验条目仍照常重新核验，门禁强度不变。
    - 若返回非零或报告 `ok=false`，立即阻断写作；必须先处理 `manual_review_queue.json` 后再继续。
    - guard 报告必须显式包含 provider policy、bidirectional failure 与 manual review 触发原因，便于追溯。
    - 不改变检索优先级（学科路由：生命科学→PubMed CLI / CS/AI→paper-search MCP）；仅增加核验门禁。

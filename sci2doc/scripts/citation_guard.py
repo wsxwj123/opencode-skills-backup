@@ -29,6 +29,7 @@ from citation_guard_core import (  # noqa: E402
     check_completeness,
     check_recency,
     check_self_citation,
+    entry_is_fresh_verified,
     validate_core,
 )
 
@@ -320,17 +321,31 @@ def main() -> int:
 
     t0 = time.perf_counter()
     now_utc = datetime.now(timezone.utc)
-    checked = [
-        validate_entry(
-            dict(e),
-            online_check=not args.offline,
-            mcp_index=mcp_index,
-            require_mcp=args.require_mcp,
-            mcp_ttl_days=max(0, int(args.mcp_ttl_days)),
-            now_utc=now_utc,
+    ttl_days = max(0, int(args.mcp_ttl_days))
+    checked: list[dict[str, Any]] = []
+    reused_count = 0
+    for e in entries:
+        ent = dict(e)
+        # L1 per-entry short-circuit. An entry already verified=True and still
+        # within the TTL reuses its persisted verification_details (checked_at
+        # comes from validate_core on the prior --write-back run) instead of
+        # re-hitting Crossref/PubMed. Seeds (verified=false), stale, and
+        # unverified entries all return False here and fall through to a full
+        # online re-check, so retraction/freshness safety is unchanged.
+        if entry_is_fresh_verified(ent, ttl_days, now_utc):
+            reused_count += 1
+            checked.append(ent)
+            continue
+        checked.append(
+            validate_entry(
+                ent,
+                online_check=not args.offline,
+                mcp_index=mcp_index,
+                require_mcp=args.require_mcp,
+                mcp_ttl_days=ttl_days,
+                now_utc=now_utc,
+            )
         )
-        for e in entries
-    ]
 
     failure_counter: Counter[str] = Counter()
     manual = []
@@ -360,6 +375,7 @@ def main() -> int:
         "shape": shape,
         "checked_entries": len(checked),
         "verified_count": verified_count,
+        "reused_fresh_verified_count": reused_count,
         "manual_review_count": len(manual),
         "avg_confidence": round(sum(int(e.get("verification_confidence", 0)) for e in checked) / len(checked), 2)
         if checked
@@ -369,7 +385,7 @@ def main() -> int:
         "checked_at": now_utc.isoformat(),
         "online_check": not args.offline,
         "require_mcp": bool(args.require_mcp),
-        "mcp_ttl_days": max(0, int(args.mcp_ttl_days)),
+        "mcp_ttl_days": ttl_days,
         "provider_policy": {
             "allowed_provider_families": sorted(ALLOWED_PROVIDER_FAMILIES),
             "forbidden_provider_families": sorted(FORBIDDEN_PROVIDER_FAMILIES),

@@ -25,6 +25,7 @@ from citation_guard_core import (  # noqa: E402
     FORBIDDEN_PROVIDER_FAMILIES,
     TITLE_VERIFY_THRESHOLD,
     _provider_family,
+    entry_is_fresh_verified,
     validate_core,
 )
 
@@ -177,17 +178,30 @@ def main() -> int:
 
     t0 = time.perf_counter()
     now_utc = datetime.now(timezone.utc)
-    checked = [
-        validate_entry(
+    mcp_ttl_days = max(0, int(args.mcp_ttl_days))
+    checked = []
+    for e in entries:
+        # L1 短路：本条已在 TTL 内被脚本核验过（verified:true + 新鲜 checked_at）→
+        # 复用已存 verified/verification_details，跳过在线 DOI/PMID 核验，避免重复联网。
+        # entry_is_fresh_verified 是 fail-safe：未验/过期/无时间戳一律回落全量核验。
+        if entry_is_fresh_verified(e, mcp_ttl_days, now_utc):
+            checked.append(dict(e))
+            continue
+        res = validate_entry(
             dict(e),
             online_check=not args.offline,
             mcp_index=mcp_index,
             require_mcp=args.require_mcp,
-            mcp_ttl_days=max(0, int(args.mcp_ttl_days)),
+            mcp_ttl_days=mcp_ttl_days,
             now_utc=now_utc,
         )
-        for e in entries
-    ]
+        # 给本次真正核验过的条目盖 per-entry 时间戳（写进 verification_details.checked_at），
+        # --write-back 时落盘，下次可命中短路；短路复用的条目保留其原 checked_at，
+        # TTL 到期仍会重新核验，撤稿/时效安全不被削弱。
+        vd = res.get("verification_details")
+        if isinstance(vd, dict):
+            res["verification_details"] = {**vd, "checked_at": now_utc.isoformat()}
+        checked.append(res)
 
     failure_counter: Counter[str] = Counter()
     manual = []

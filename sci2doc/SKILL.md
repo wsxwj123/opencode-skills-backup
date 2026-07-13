@@ -100,7 +100,9 @@ The workflow is built around:
 
 Before writing any chapter section and before final full-thesis merge, run:
 
-`python3 scripts/citation_guard.py --index "${save_path}/literature_index.json" --mcp-cache "${save_path}/mcp_literature_cache.json" --mcp-ttl-days 30 --manual-review "${save_path}/manual_review_queue.json" --log "${save_path}/verification_run_log.json" --report "${save_path}/citation_guard_report.json"`
+`python3 scripts/citation_guard.py --index "${save_path}/literature_index.json" --mcp-cache "${save_path}/mcp_literature_cache.json" --mcp-ttl-days 30 --write-back --manual-review "${save_path}/manual_review_queue.json" --log "${save_path}/verification_run_log.json" --report "${save_path}/citation_guard_report.json"`
+
+`--write-back` 由脚本把每条 `verified` 与 `verification_details.checked_at` 落回 `literature_index.json`（AI 不手动改 `verified`）。据此下一轮核验对**已 verified 且未过 TTL** 的条目自动短路复用、跳过在线重验；`sci-source-seed` 种子（`verified=false`）与过期/未验条目照常走完整在线核验，撤稿与新鲜度安全不受影响。报告字段 `reused_fresh_verified_count` 记录本轮命中短路的条目数。
 
 Rules:
 - Immediately after each retrieval/import batch updates `literature_index.json`, run the guard once before any drafting.
@@ -136,9 +138,8 @@ Rules:
 `citation_guard.py` 只验引文**真实性**（DOI/PMID/标题对得上）；它不判「这篇引文到底**支不支持**它挂着的那句论点」。写研究章时，对**承重论点句**（机制/因果/关键定量结论）↔ 其引文，必须再过一道**引文核证**：
 
 1. `literature_index.json` 每条可选带 `key_finding`（该文献真实结论一句话）与 `claim`（本文用它支撑的论点）两字段，最小承载核证语义（schema 见 `references/format_profile_schema.md § literature_index.json schema`）。
-2. 写某研究章前，对每个「承重论点句 ↔ 引文」建一行证据，落 `claim_evidence.json`（list）：`{section, claim_sentence, is_load_bearing, ref_id, retrieved_abstract, verdict∈support/weak/contradict/unknown, evidence_quote, user_confirmed}`。`retrieved_abstract` 用**检索到的真实 abstract**（不看可编的 `key_finding`），取 abstract 走本技能既有文献检索子代理。
-3. 跑共享核证脚本（`env_preflight.py` 打印的 `CITATION_CHECK_CMD`）：
-   `python <_shared>/citation_claim_check.py --root <project_root> --evidence <project_root>/claim_evidence.json`
+2. 写某研究章前，对每个「承重论点句 ↔ 引文」建一行证据，落 `claim_evidence.json`（list），字段 `{section, claim_sentence, is_load_bearing, ref_id, retrieved_abstract, verdict∈support/weak/contradict/unknown, evidence_quote, user_confirmed}`。`retrieved_abstract` 用**检索到的真实 abstract**（不看可编的 `key_finding`），取 abstract 走本技能既有文献检索subagent。**已建过证据的可留空以省事**：脚本读写 `ref_evidence_cache.json`，对某条 `ref_id` 已缓存过 abstract 的行自动回填 abstract、AI 不必重新检索；同一 `(ref_id, claim_sentence)` 已判定过的行自动复用上次结论，AI 只需对**新的 (文献, 论点) 组合**做反向验证。
+3. 跑共享核证脚本（`env_preflight.py` 打印的 `CITATION_CHECK_CMD`），命令 `python <_shared>/citation_claim_check.py --root <project_root> --evidence <project_root>/claim_evidence.json`。脚本自动读写 `ref_evidence_cache.json`（回填 abstract + 复用同 (文献,论点) 已确认结论），门禁强度不变。
    - 承重句 `verdict∈{contradict,unknown}` 或缺 abstract 或未 `user_confirmed` → **fail-closed（exit 2），硬拦 + 人工逐条确认**后方可下笔。
    - 背景陈述句只在表里批量呈现、不逐条阻断。
 4. 纳入节/章 DoD（见 dod_checklist `section-dod`/`chapter-dod` 的 citation_claim_check 项）。
@@ -201,7 +202,7 @@ When `write-cycle` runs, `load_state` automatically loads:
 3. `literature_index.json` — references (filtered to current chapter)
 4. `figures_index.json` — figures/tables (filtered to current chapter)
 
-> **A① 跨章综合例外：** 当前章为**绪论（绪论/引言）或结论（结论/总结/小结/展望）**时，`load_state` 不按当前章过滤，而是**全量加载 chapter_index / literature_index / figures_index + 全部研究章的 section digest/key_facts**（`bundle.synthesis_role` = `intro`/`conclusion`，`scope=cross-chapter-synthesis`）。这样绪论能综述全部研究、结论能跨章综合各研究章的真实数据，避免缝线全露。章类型由 `project_state.json.outline` 里该章标题判定。
+> **A① 跨章综合例外：** 当前章为**绪论（绪论/引言）或结论（结论/总结/小结/展望）**时，`load_state` 不按当前章过滤，而是**全量加载 chapter_index / literature_index / figures_index + 全部研究章的 section digest/key_facts**（`bundle.synthesis_role` = `intro`/`conclusion`，`scope=cross-chapter-synthesis`）。这样绪论能综述全部研究、结论能跨章综合各研究章的真实数据，避免缝线全露。章类型由 `project_state.json.outline` 里该章标题判定。**引文核证不整批重验**：绪论/结论引用的文献若已在某研究章验过（承重论点↔引文那道核证），`citation_claim_check.py` 经 `ref_evidence_cache.json` 自动复用该 (文献, 论点) 的既有 abstract 与确认结论，AI 不必对全量引文手动重记证据；只有**新出现的 (文献, 论点) 组合**才需反向验证，fail-closed 不放松。
 5. `context_memory.md` — timestamped operation summaries
 6. `history_log.json` — recent operation events
 7. **`chapter_section_digests`** — lightweight digests extracted from existing `atomic_md/第N章/*.md` files
@@ -374,16 +375,16 @@ python3 scripts/extract_docx_images.py --manuscript /path/to/source.docx --proje
 **🔴 进入下一节前置闸口**：上一节 `delegate_review verify` 必须 exit 0（含结构完整性项 S6），否则不得开始下一节。写完即检，不过不进。
 **🔴 修复 3 次仍不过 → 回滚兜底**：同一节/章据盲检证据修复重跑 3 次仍 fail，停止盲目重写，提示用户回滚到上一检查点（git 可用 `git checkout <sha> -- <文件>`；否则 `state_manager.py rollback --target snapshot`）后重写。
 
-**🔴 委托盲检（不得主 agent 自评）**：落盘前必须把 DoD 清单**委托给独立上下文的子代理盲检**，自己不直接打勾：
+**🔴 委托盲检（不得主 agent 自评）**：落盘前必须把 DoD 清单**委托给独立上下文的subagent盲检**，自己不直接打勾：
 1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate section-dod --files <本节文件>`
-2. **派一个独立子代理**（Claude Code 用 `academic-blind-reviewer`；其他平台派通用子代理），把任务包原样给它、**不要给它本节的写作上下文**，要求按任务包返回 JSON 数组。
-3. 校验返回：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate section-dod --return <子代理返回.json> --section <当前节号如3.2> --root <项目根>`；退出码非 0（任一缺项/fail/无证据）= **fail-closed**，据子代理证据修复后重跑，**未过不得声明完成**。verify 通过会落盘 `.review_pass/<当前节号>.json`，下一节 `prewrite_gate.py` 会**硬校验**它（缺失即拒绝开写）。
+2. **派一个独立subagent**（Claude Code 用 `academic-blind-reviewer`；其他平台派通用subagent），把任务包原样给它、**不要给它本节的写作上下文**，要求按任务包返回 JSON 数组。
+3. 校验返回：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate section-dod --return <subagent返回.json> --section <当前节号如3.2> --root <项目根>`；退出码非 0（任一缺项/fail/无证据）= **fail-closed**，据subagent证据修复后重跑，**未过不得声明完成**。verify 通过会落盘 `.review_pass/<当前节号>.json`，下一节 `prewrite_gate.py` 会**硬校验**它（缺失即拒绝开写）。
 
-> ⚠️ 若环境派不出真正独立的子代理，**绝不能同一 AI 自问自答冒充盲检**。告诉用户「本环境盲检不可靠，请你亲自复核数据溯源与章节逻辑」，交回用户。
+> ⚠️ 若环境派不出真正独立的subagent，**绝不能同一 AI 自问自答冒充盲检**。告诉用户「本环境盲检不可靠，请你亲自复核数据溯源与章节逻辑」，交回用户。
 
 **🔴 ①DoD停（盲检通过后必须停一次）**：`section-dod` 盲检 exit 0 后，**不得直接开写下一节**。先把该节 DoD **逐项结论**（每项 pass/证据一行）摆给用户，并**HALT 等用户明确说"过，继续下一节"**才动笔。用户未确认前停在此处。
 
-**本节完整 DoD 判据（全部核查项 + 脚本命令）以 `references/dod_checklist.json` gate=`section-dod` 为唯一真源（20 项）**：盲检子代理据此逐项核、能脚本核的先跑脚本，退出码非 0 即 fail-closed。含 G1-G6 通用（编号连续/citation_guard/主线对齐/占位清零/去AI 硬禁三项标点/字数软目标）、S1-S5 sci2doc 特有（实验-方法映射/一实验≥一图表/三线表/缩略语首展/自我抄袭标注）、S-GIT 检查点，及 **S6 结构完整性、S10 数据溯源硬门（含数值却无 `[数据来源]` 标记=编数据嫌疑，fail-closed）、S11 承重引文核证，与 C1 科学事实正确 / I1 论证逻辑闭环 / O3 工作量与原创性 / O4 中英摘要对应 / M3 伦理合规披露 五项盲检质量核**。此处不再内联清单，避免与真源 drift。
+**本节完整 DoD 判据（全部核查项 + 脚本命令）以 `references/dod_checklist.json` gate=`section-dod` 为唯一真源（20 项）**：盲检subagent据此逐项核、能脚本核的先跑脚本，退出码非 0 即 fail-closed。含 G1-G6 通用（编号连续/citation_guard/主线对齐/占位清零/去AI 硬禁三项标点/字数软目标）、S1-S5 sci2doc 特有（实验-方法映射/一实验≥一图表/三线表/缩略语首展/自我抄袭标注）、S-GIT 检查点，及 **S6 结构完整性、S10 数据溯源硬门（含数值却无 `[数据来源]` 标记=编数据嫌疑，fail-closed）、S11 承重引文核证，与 C1 科学事实正确 / I1 论证逻辑闭环 / O3 工作量与原创性 / O4 中英摘要对应 / M3 伦理合规披露 五项盲检质量核**。此处不再内联清单，避免与真源 drift。
 
 ### 5) Merge Chapter Markdown and Convert
 
@@ -403,14 +404,14 @@ python3 scripts/extract_docx_images.py --manuscript /path/to/source.docx --proje
 
 **🔴 进入下一章前置闸口**：上一章 `delegate_review verify` 必须 exit 0（含章结构完整性项 S8），否则不得开始下一章。写完即检，不过不进。
 
-**🔴 委托盲检（不得主 agent 自评）**：章级闸口同样委托独立子代理盲检，不得主 agent 自评：
+**🔴 委托盲检（不得主 agent 自评）**：章级闸口同样委托独立subagent盲检，不得主 agent 自评：
 1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate chapter-dod --files <章节合并文件>`
-2. **派一个独立子代理**（Claude Code 用 `academic-blind-reviewer`；其他平台派通用子代理），把任务包原样给它、**不要给它本章的写作上下文**，要求按任务包返回 JSON 数组。
-3. 校验返回：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate chapter-dod --return <子代理返回.json>`；退出码非 0（任一缺项/fail/无证据）= **fail-closed**，据子代理证据修复后重跑，**未通过不得进入 Step 7**。
+2. **派一个独立subagent**（Claude Code 用 `academic-blind-reviewer`；其他平台派通用subagent），把任务包原样给它、**不要给它本章的写作上下文**，要求按任务包返回 JSON 数组。
+3. 校验返回：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate chapter-dod --return <subagent返回.json>`；退出码非 0（任一缺项/fail/无证据）= **fail-closed**，据subagent证据修复后重跑，**未通过不得进入 Step 7**。
 
 **🔴 ①DoD停（盲检通过后必须停一次）**：`chapter-dod` 盲检 exit 0 后，**不得直接开写下一章**。先把本章 DoD **逐项结论**（每项 pass/证据一行，含数据溯源 S10、承重引文核证 S11）摆给用户，并**HALT 等用户明确说"过，继续下一章"**才动笔。用户未确认前停在此处。
 
-**本章完整 DoD 判据（全部核查项 + 脚本命令）以 `references/dod_checklist.json` gate=`chapter-dod` 为唯一真源（19 项）**：盲检子代理据此逐项核、能脚本核的先跑脚本，退出码非 0 即 fail-closed。含 G1-G7 通用（编号/citation_guard/主线/占位/去AI/字数/G7 常识软报告）、S1-S7 sci2doc 特有（实验-方法映射/一实验≥一图表/三线表/缩略语注册/GB7714 著录/自我抄袭/章后 self-check）、S9 字符级排版（`subsup_bare` + `halfwidth_punct_in_cn` + `english_misspelling` 任一命中即 `check_quality.py` 非零退出 hard 阻断）、S-GIT 检查点，及 **S8 全章结构完整性、S10 全章数据溯源硬门（数值均标 `[数据来源]`，fail-closed）、S11 全章承重引文核证**。此处不再内联清单，避免与真源 drift。
+**本章完整 DoD 判据（全部核查项 + 脚本命令）以 `references/dod_checklist.json` gate=`chapter-dod` 为唯一真源（19 项）**：盲检subagent据此逐项核、能脚本核的先跑脚本，退出码非 0 即 fail-closed。含 G1-G7 通用（编号/citation_guard/主线/占位/去AI/字数/G7 常识软报告）、S1-S7 sci2doc 特有（实验-方法映射/一实验≥一图表/三线表/缩略语注册/GB7714 著录/自我抄袭/章后 self-check）、S9 字符级排版（`subsup_bare` + `halfwidth_punct_in_cn` + `english_misspelling` 任一命中即 `check_quality.py` 非零退出 hard 阻断）、S-GIT 检查点，及 **S8 全章结构完整性、S10 全章数据溯源硬门（数值均标 `[数据来源]`，fail-closed）、S11 全章承重引文核证**。此处不再内联清单，避免与真源 drift。
 
 ### 7) Finalize Chapter State
 
@@ -648,7 +649,7 @@ Priority rule: **chapter-based numbering takes precedence**. If a figure from SC
 - ❌ 编造实验数据或参考文献，引用数值／结论必须可追溯到 `materials/` 对应 entry。
 - ❌ 跳过 `write-cycle` 预写门禁就写新小节，它是唯一加载跨章记忆的机制。
 - ❌ 把材料与方法、分组、统计等结构化数据写成散文段落，3 项以上同属性数据必须用 Markdown 管道三线表。
-- ❌ 主 agent 自评 DoD 清单代替独立子代理盲检，或上一节／上一章 `delegate_review verify` 未 exit 0 就开始下一节／下一章。
+- ❌ 主 agent 自评 DoD 清单代替独立subagent盲检，或上一节／上一章 `delegate_review verify` 未 exit 0 就开始下一节／下一章。
 - ❌ 把结果全部前置、后面集中讨论，研究章结果与讨论必须按实验逐一耦合，且每个实验至少配一张图或表。
 
 ## Acceptance Checklist

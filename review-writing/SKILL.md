@@ -289,14 +289,23 @@ Run the 9-step environment detection (Step 0–8) (📖 full commands in `refere
 
 > 📖 完整设置步骤（账号注册、API key 生成、权限配置、连接测试、安全规则）详见 `references/zotero_setup.md`。
 
-Key rule: `lib_id` → 写入 `outline.md`；`api_key` → 每次会话口头询问，**绝不写入任何文件**。
+**凭据持久化：存一次，之后自动复用。** 凭据存于 `~/.config/academic-skills/zotero.json`（用户主目录、chmod 600、不入 git，与技能仓库分离）。
+
+- **已存凭据** → 所有命令自动读取，**无需**再传 `--lib-id/--api-key`。开工时先 `--status` 验证即可（不带凭据参数）。
+- **未存凭据** → 引导用户去 https://www.zotero.org/settings/keys 拿 userID + API key（勾选 write 权限），运行一次：
 
 ```bash
-python3 scripts/zotero_manager.py --status --lib-id [NUMBER] --api-key [KEY]
+# 首次：保存凭据（仅需一次）
+python3 scripts/zotero_manager.py save-credentials --lib-id [NUMBER] --api-key [KEY]
+
+# 之后：无需再传凭据
+python3 scripts/zotero_manager.py --status
 # Expected: ✅ Connected to Zotero library ...
 ```
 
-If `--status` lists multiple libraries (personal + group), show the list and ask user which to use. Write chosen `lib_id` to `outline.md`.
+优先级：命令行参数 > 已存 config > 提示保存。`api_key` 绝不明文回显（日志仅显示后 4 位）。若命令行显式传入 `--lib-id/--api-key` 仍可覆盖 config（不落盘）。
+
+If `--status` lists multiple libraries (personal + group), show the list and ask user which to use, then re-run `save-credentials` with the chosen `lib_id`.
 
 ### 0.4 Subagent Model Detection
 
@@ -424,14 +433,14 @@ Format: `[review] Phase X.Step: <description>`. 📖 消息表 + Rollback 命令
    }
    ```
 
-3. **DoD 自检（gate `research-gap-dod`，委托独立子代理盲检）：**
+3. **DoD 自检（gate `research-gap-dod`，委托独立subagent盲检）：**
    ```bash
    python3 scripts/delegate_review.py pack --checklist references/dod_checklist.json \
      --gate research-gap-dod --files data/research_gap.json --workdir .
-   # → 派独立子代理（Claude Code 用 academic-blind-reviewer），不给写作上下文，按任务包返回 JSON
+   # → 派独立subagent（Claude Code 用 academic-blind-reviewer），不给写作上下文，按任务包返回 JSON
    python3 scripts/delegate_review.py verify --checklist references/dod_checklist.json \
      --gate research-gap-dod --return .review_return_research-gap-dod.json
-   # 退出码非 0 = fail-closed，据子代理证据修复后重跑，未过不得声明完成
+   # 退出码非 0 = fail-closed，据subagent证据修复后重跑，未过不得声明完成
    ```
    gate 5 项：G1 每 gap ≥1 verified 文献支撑 / G2 与 literature_index 一致（无孤儿）/ G3 从真实证据推出（禁脑补）/ G4 含 novelty_risk 比较 / G5 占位符清零。逐项内容以 `references/dod_checklist.json` 为唯一真源。
 
@@ -480,7 +489,7 @@ Format: `[review] Phase X.Step: <description>`. 📖 消息表 + Rollback 命令
    - 引言-主体-展望的组织套路
    - 对**本综述**的具体建议（结合 Phase 1.5 的 gap，而非泛泛而谈）
 
-4. **DoD 自检（gate `benchmark-reviews-dod`，委托独立子代理盲检）：**
+4. **DoD 自检（gate `benchmark-reviews-dod`，委托独立subagent盲检）：**
    ```bash
    python3 scripts/delegate_review.py pack --checklist references/dod_checklist.json \
      --gate benchmark-reviews-dod --files data/benchmark_reviews.json data/framing_guide.md --workdir .
@@ -543,9 +552,8 @@ Format: `[review] Phase X.Step: <description>`. 📖 消息表 + Rollback 命令
    ```bash
    # First check if collection tree already exists (idempotent, safe on re-entry):
    ROOT_KEY=$(python3 scripts/zotero_manager.py --status --find-root-title "[TITLE]" \
-     --lib-id LIB_ID --api-key API_KEY 2>/dev/null) && echo "Root exists: $ROOT_KEY" \
-     || python3 scripts/zotero_manager.py --init --title "[TITLE]" --outline outline.md \
-        --lib-id LIB_ID --api-key API_KEY
+     2>/dev/null) && echo "Root exists: $ROOT_KEY" \
+     || python3 scripts/zotero_manager.py --init --title "[TITLE]" --outline outline.md
    ```
    - `--find-root-title` exit 0 → root already exists (stdout = key, reuse it); exit 3 → no match, the `||` branch runs `--init`; exit 4 → ambiguous (multiple same-named roots), stdout lists candidate keys. **Stop and ask user to pick** rather than letting `--init` create a duplicate.
    - Creates root collection + subcollections matching outline hierarchy.
@@ -597,8 +605,7 @@ for each section in outline.md (e.g., section ID = "2.1"):
   4. Write papers (run ONLY the branch matching the project's Reference Manager; they are alternatives, not sequential):
      [Zotero] python3 scripts/zotero_manager.py --add-batch \
        --section "X.X" --papers tmp/papers_X_X.json \
-       --root-key ROOT_KEY --index data/literature_index.json \
-       --lib-id LIB_ID --api-key API_KEY
+       --root-key ROOT_KEY --index data/literature_index.json
        # ROOT_KEY from state.json; --add-batch deduplicates at write time + auto-writes literature_index.json.
 
      [None/EndNote] python3 scripts/state_manager.py append-literature \
@@ -619,8 +626,10 @@ for each section in outline.md (e.g., section ID = "2.1"):
   6. Run anti-hallucination guard (all modes):
        python3 scripts/citation_guard.py \
          --index data/literature_index.json \
-         --log data/citation_guard_report.json
+         --log data/citation_guard_report.json \
+         --write-back
      If guard exits non-zero → do NOT continue to next section; fix flagged entries first.
+     `--write-back` 把每条的 verified 与 per-entry checked_at 落盘到 literature_index.json，下一节复用已验条目、跳过重复联网核验（L1 短路，TTL 30 天）。verified 由脚本写、不靠 AI 记。
   7. Confirm write success → update state.json (add section to completed_sections):
      python3 scripts/state_manager.py complete-section --section X.X
      # Adds X.X to completed_sections (idempotent), preserves all other keys.
@@ -690,12 +699,12 @@ If pending_sections is empty → all sections complete; proceed to Phase 4.
 
 ### Per-Section Cycle
 
-0. **🔴 开写前置闸门 (Mandatory，脚本硬拦截)**：开写本 section 前必须先跑 `python3 scripts/prewrite_gate.py --section X.X --root .`，exit≠0 禁止开写。它统一硬检查：上一节完成（上一节 ∈ `state.json.completed_sections`）、大纲就位（`outline.md` 含本节标题）、素材就位（`data/synthesis_matrix.json` 本节文献矩阵非空）、上一节占位符清零（`drafts/` 无 `CITE_PENDING`/`DATA_PENDING`/`【待`）；上一节盲检结果（`.review_pass/<上一节>.json`）缺失即 prewrite_gate 硬拦 exit 1，禁止开写；必须先跑 delegate_review verify --section <上一节> 落盘通过标记。**盲检子代理确实跑不起来时**，用 `--allow-manual-review "<理由>"` 显式人工放行（仅放行盲检项、留痕审计，见规则 10 的逃生口）；不加则门禁默认硬拦行为不变。PASS 时脚本会注明"仅覆盖形式层，语义正确性未自动核验"。Polish Mode `keep` 节跳过本节循环故无需跑。
+0. **🔴 开写前置闸门 (Mandatory，脚本硬拦截)**：开写本 section 前必须先跑 `python3 scripts/prewrite_gate.py --section X.X --root .`，exit≠0 禁止开写。它统一硬检查：上一节完成（上一节 ∈ `state.json.completed_sections`）、大纲就位（`outline.md` 含本节标题）、素材就位（`data/synthesis_matrix.json` 本节文献矩阵非空）、上一节占位符清零（`drafts/` 无 `CITE_PENDING`/`DATA_PENDING`/`【待`）；上一节盲检结果（`.review_pass/<上一节>.json`）缺失即 prewrite_gate 硬拦 exit 1，禁止开写；必须先跑 delegate_review verify --section <上一节> 落盘通过标记。**盲检subagent确实跑不起来时**，用 `--allow-manual-review "<理由>"` 显式人工放行（仅放行盲检项、留痕审计，见规则 10 的逃生口）；不加则门禁默认硬拦行为不变。PASS 时脚本会注明"仅覆盖形式层，语义正确性未自动核验"。Polish Mode `keep` 节跳过本节循环故无需跑。
 
 1. **Load context:**
    ```
    [Zotero] python3 scripts/zotero_manager.py --get-section "X.X" \
-              --root-key ROOT_KEY --lib-id LIB_ID --api-key API_KEY
+              --root-key ROOT_KEY
    [None/EndNote]   python3 scripts/matrix_manager.py focus --section X.X
             # Shows papers + existing claim bindings for this section from synthesis_matrix.json
             # Also read data/literature_index.json filtered by related_sections containing X.X
@@ -723,6 +732,7 @@ If pending_sections is empty → all sections complete; proceed to Phase 4.
    > `figures/figure_index.md` is the canonical figure registry for ALL modes (Write, Polish, None). It is NOT inside `drafts/`.
 
 3.5. **🧭 引文核证脚手架（帮你写对的辅助，不是卡后续的墙）：** 落笔前，为本节**承重论点**（load-bearing：机制断言、疗效/因果结论、关键定量声明等支撑全节论证的句子）逐条把"论点 ↔ 它要引的文献"对齐，用文献**检索时原样落盘的真实 abstract**（`data/synthesis_matrix.json` 已含 claim↔文献的绑定，abstract 取自 `data/literature_index.json` 的 `abstract` 字段，**不是可事后编的 key_finding**）判断该引用是否真支撑这句话，写入项目根 `claim_evidence.json`（list，每条：`{section, claim_sentence, is_load_bearing, ref_id, retrieved_abstract, verdict∈support/weak/contradict/unknown, evidence_quote, user_confirmed}`）。背景陈述句列入即可（`is_load_bearing:false`），批量过目、不逐条阻断。
+   > **跨节复用（脚本自动读写 `ref_evidence_cache.json`，AI 不必手记字段）：** 已在别节验过的文献，本节该行的 `retrieved_abstract` 可留空，脚本按 `ref_id` 从项目根 `ref_evidence_cache.json` 自动回填真实 abstract；完全同一 `(ref_id, 论点句)` 且此前已 `user_confirmed` 的承重句，脚本自动复用其 verdict 与确认，不再反向验证、不再 AskUserQuestion。只有**新的 (文献, 论点) 组合**才需重新判支撑并逐条确认。核证后脚本强制把已验 abstract 与已确认承重 verdict 落盘，已验状态由脚本维护。此复用**不放松门禁**：缺 abstract、承重句 contradict/unknown、未 `user_confirmed`，仍 fail-closed（见下 exit 2）。
    然后跑 Phase 0.5 打印的 `CITATION_CHECK_CMD`（绝对路径指向 `_shared/citation_claim_check.py --root <项目根>`；读项目根 `claim_evidence.json`，渲染 claim↔引用支撑矩阵表）：
    - **承重句** `contradict` / `unknown` / 缺 `retrieved_abstract` / 未 `user_confirmed` → 脚本 fail-closed（exit 2）。对每个被拦的承重句，用 **AskUserQuestion 逐条**呈现（论点 + 拟引文献 + abstract 摘录 + 机器判定），让用户裁决：换引文 / 改写论点 / 确认支撑（确认后在该条置 `user_confirmed:true` 重跑）。
    - **背景句** 的 weak/contradict 只在矩阵表里标红提示，**批量**过目即可，不逐条打断。
@@ -783,18 +793,18 @@ If pending_sections is empty → all sections complete; proceed to Phase 4.
 
     **🔴 进入下一节前置闸口：上一节 delegate_review verify 必须 exit 0（含 R15 结构完整性），否则不得开始下一节撰写。写完即检，不过不进。**
 
-    **🔴 委托盲检（不得主 agent 自评）**：你刚写完本节，自评会失真地默认通过、且易漏项。落盘前必须把 DoD 清单**委托给独立上下文的子代理盲检**，自己不直接打勾：
-    1. 生成任务包：`python3 scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate manuscript-dod --files <本节文件> --workdir .`（会在 stderr 打印 `RETURN_PATH=...`，即子代理返回要写入的约定路径）
-    2. **派一个独立子代理**（不给它本节写作上下文），把任务包原样贴给它，要求把 JSON 数组写到 `RETURN_PATH`。**可直接复制执行的派发指令**：
+    **🔴 委托盲检（不得主 agent 自评）**：你刚写完本节，自评会失真地默认通过、且易漏项。落盘前必须把 DoD 清单**委托给独立上下文的subagent盲检**，自己不直接打勾：
+    1. 生成任务包：`python3 scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate manuscript-dod --files <本节文件> --workdir .`（会在 stderr 打印 `RETURN_PATH=...`，即subagent返回要写入的约定路径）
+    2. **派一个独立subagent**（不给它本节写作上下文），把任务包原样贴给它，要求把 JSON 数组写到 `RETURN_PATH`。**可直接复制执行的派发指令**：
        - Claude Code：用 `Task` 工具，`subagent_type="academic-blind-reviewer"`（无此 agent 时退回 `general-purpose`），prompt = pack 打印出的整段任务包原文（含"你的角色/待检文件/检查清单/返回格式/返回写到这个文件"），**不附加任何本节写作说明**。
-       - 其他平台（Codex/OpenCode 等无此 agent）：新开一个干净上下文的子代理/子会话，同样只贴任务包原文。
-    3. 校验返回：`python3 scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate manuscript-dod --return <子代理返回.json> --section <当前section_id> --root <项目根>`；退出码非 0（任一缺项 / fail / 无证据）= **fail-closed**，据子代理证据修复后重跑，**未过不得声明完成**。verify 通过会落盘 `.review_pass/<当前section_id>.json`，下一节 `prewrite_gate.py` 会**硬校验**它（缺失即拒绝开写）。
-       > **诚实边界：** verify 的 `ok:true` 只代表清单每项都被裁决且形式合规——**PASS 仅覆盖形式层，语义正确性由盲检子代理主观判断、未自动核验**。
-       > **【P4·盲检降级告警】** ⚠️ 若环境派不出真正独立的子代理（非 Claude Code、无 `academic-blind-reviewer`），**绝不能同一 AI 自问自答冒充盲检**。告诉用户「本环境盲检不可靠，请你亲自复核本节」，别让自证闭环静默跑。
-    4. **🚪 逃生口（盲检子代理确实跑不起来时，且仅此时）**：若平台无 `academic-blind-reviewer`、通用子代理也反复失败/取不到返回，导致 `verify` 无法落盘标记、下一节被 `prewrite_gate` 永久锁死——**不要卡死或静默跳过**。改为人工逐项盲检本节 DoD 后，用显式放行开锁并留痕：
+       - 其他平台（Codex/OpenCode 等无此 agent）：新开一个干净上下文的subagent/子会话，同样只贴任务包原文。
+    3. 校验返回：`python3 scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate manuscript-dod --return <subagent返回.json> --section <当前section_id> --root <项目根>`；退出码非 0（任一缺项 / fail / 无证据）= **fail-closed**，据subagent证据修复后重跑，**未过不得声明完成**。verify 通过会落盘 `.review_pass/<当前section_id>.json`，下一节 `prewrite_gate.py` 会**硬校验**它（缺失即拒绝开写）。
+       > **诚实边界：** verify 的 `ok:true` 只代表清单每项都被裁决且形式合规——**PASS 仅覆盖形式层，语义正确性由盲检subagent主观判断、未自动核验**。
+       > **【P4·盲检降级告警】** ⚠️ 若环境派不出真正独立的subagent（非 Claude Code、无 `academic-blind-reviewer`），**绝不能同一 AI 自问自答冒充盲检**。告诉用户「本环境盲检不可靠，请你亲自复核本节」，别让自证闭环静默跑。
+    4. **🚪 逃生口（盲检subagent确实跑不起来时，且仅此时）**：若平台无 `academic-blind-reviewer`、通用subagent也反复失败/取不到返回，导致 `verify` 无法落盘标记、下一节被 `prewrite_gate` 永久锁死——**不要卡死或静默跳过**。改为人工逐项盲检本节 DoD 后，用显式放行开锁并留痕：
        ```bash
        python3 scripts/prewrite_gate.py --section <下一节id> --root . \
-         --allow-manual-review "谁放行 + 为何盲检子代理不可用 + 已人工核过哪些项"
+         --allow-manual-review "谁放行 + 为何盲检subagent不可用 + 已人工核过哪些项"
        ```
        它只放行"上一节盲检"这一项（其余硬检查照常），并写 `.review_pass/<上一节>.json`(manual:true) + 追加 `.review_pass/MANUAL_REVIEW_AUDIT.log`；理由为空则拒绝放行。此后每次 `prewrite_gate` 都会在 warnings 里点名"人工放行、语义未经独立盲检"。**门禁默认行为不变**：不加此参数时，缺盲检标记照旧硬拦。
 
@@ -802,13 +812,13 @@ If pending_sections is empty → all sections complete; proceed to Phase 4.
 
     - **R21 语法拼写与字符级格式(🔴机器硬门禁,可阻断)**,跑 `python3 scripts/proofread.py --manuscript-dir drafts --report proofread_report.json --fail-on misspelling,chinese_punct,subsup_bare`。stdlib-only、自包含。高置信三类**零容忍**——misspelling(英文常见错拼)、chinese_punct(中文标点漏入英文)、subsup_bare(应上下标却裸写,如 H2O/CO2/IC50,CJK 安全边界),命中任一即 `ok=false`(脚本 exit 1),据 `proofread_report.json` 的 `fail_on_hits` 定位修复后重跑。其余类别(英美拼写混用、单位格式、术语写法不一致、数字千分位、Methods 时态、学术错拼/中文错别字等)仅在报告里提示、不阻断,由作者择一统一。与 R5 去AI(style_checker)互补:R5 管文风,R21 管字符级机器错。
 
-    附带软报告项（不计入硬门禁退出码，由盲检子代理 LLM 判断）：
+    附带软报告项（不计入硬门禁退出码，由盲检subagent LLM 判断）：
 
-    - **R20 常识合理性(🟡软报告,不阻断)**,盲检子代理顺带扫正文是否有明显常识/事实硬伤(单位量级离谱、生理/机制常识错误、跨文献综合时的事实拼接错误、前后数值逻辑矛盾等)。**仅提示不阻断**,只在发现明显硬伤时记入盲检反馈供用户裁决,绝不自动改内容。与引用/文献核验门禁区分:本项管"综述论述的内容常识上是否成立"。
+    - **R20 常识合理性(🟡软报告,不阻断)**,盲检subagent顺带扫正文是否有明显常识/事实硬伤(单位量级离谱、生理/机制常识错误、跨文献综合时的事实拼接错误、前后数值逻辑矛盾等)。**仅提示不阻断**,只在发现明显硬伤时记入盲检反馈供用户裁决,绝不自动改内容。与引用/文献核验门禁区分:本项管"综述论述的内容常识上是否成立"。
 
     - **R22 拉丁短语斜体软提醒(🟡软/人工确认,不阻断)**,`proofread.py` 的 `latin_italic_missing` 类别:正文里 `in vitro`/`in vivo`/`ex vivo`/`in situ`/`de novo`/`post hoc`/`per se` 等公认须斜体的拉丁短语若裸写(未被 `*...*` 斜体标记包裹)则报告。**仅提示,不阻断、不进 `--fail-on`、不扣分**,由人工确认是否补斜体(`et al.`/`e.g.`/`vs.` 等正体惯例不在词表内)。
 
-11. **📋 DoD 结论摆出 + HALT（展示式，不新增硬墙）：** 本节 `delegate_review verify` 盲检通过（exit 0 且 `.review_pass/<section>.json` 已落盘）后，先把**逐项 DoD 结论**摆给用户——从子代理返回的 JSON 里**逐条列出每个 `manuscript-dod` item**（id/name + verdict + 证据锚点摘录，以返回 JSON 的实际条目为准、不手点项号，含 systematic 3 项、结构完整性、R16-R19 覆盖全面性/引用偏倚/论证连贯/合规披露、字符级 R21；R5 里降软的长句/被动如命中只作 info 提示、不影响通过；破折号为硬门禁 hard_fail、命中即不通过）。再附本节 summary（content / logic / citation count / word count）。**然后 HALT 等用户确认，才写下一节。** 这是"展示 + 可继续"：盲检已过即可放行，此处只保证用户看到每项结论、有机会叫停，不新增硬门。Wait for "Continue".
+11. **📋 DoD 结论摆出 + HALT（展示式，不新增硬墙）：** 本节 `delegate_review verify` 盲检通过（exit 0 且 `.review_pass/<section>.json` 已落盘）后，先把**逐项 DoD 结论**摆给用户——从subagent返回的 JSON 里**逐条列出每个 `manuscript-dod` item**（id/name + verdict + 证据锚点摘录，以返回 JSON 的实际条目为准、不手点项号，含 systematic 3 项、结构完整性、R16-R19 覆盖全面性/引用偏倚/论证连贯/合规披露、字符级 R21；R5 里降软的长句/被动如命中只作 info 提示、不影响通过；破折号为硬门禁 hard_fail、命中即不通过）。再附本节 summary（content / logic / citation count / word count）。**然后 HALT 等用户确认，才写下一节。** 这是"展示 + 可继续"：盲检已过即可放行，此处只保证用户看到每项结论、有机会叫停，不新增硬门。Wait for "Continue".
 
 ### Figure Prompt Generation
 
@@ -872,7 +882,7 @@ Write Mode has no `pending_sections` field so this gate is a no-op (no key → e
 3. **Export bibliography:**
    ```
    [Zotero] python3 scripts/zotero_manager.py --export-bibtex \
-              --output exports/references.bib --root-key ROOT_KEY --lib-id LIB_ID --api-key API_KEY
+              --output exports/references.bib --root-key ROOT_KEY
    [None/EndNote]   python3 scripts/export_bibtex.py \
               --input data/literature_index.json \
               --output exports/references.bib \
@@ -974,7 +984,7 @@ Write Mode has no `pending_sections` field so this gate is a no-op (no key → e
 
 3. **合规核对**（综述相关项，对齐 gsw compliance-gate）：署名 ICMJE 四准则、Reviewer COI 回避；伦理/注册号/统计报告对 narrative 综述标 N/A，仅 systematic/scoping 走 PRISMA。细则见 submission_checklist.md 第 3–4 节。
 
-4. **DoD 自检（gate `submission-pack-dod`，委托独立子代理盲检）：**
+4. **DoD 自检（gate `submission-pack-dod`，委托独立subagent盲检）：**
    ```bash
    python3 scripts/delegate_review.py pack --checklist references/dod_checklist.json \
      --gate submission-pack-dod \
@@ -982,7 +992,7 @@ Write Mode has no `pending_sections` field so this gate is a no-op (no key → e
              exports/coi_statement.md exports/keywords.md --workdir .
    python3 scripts/delegate_review.py verify --checklist references/dod_checklist.json \
      --gate submission-pack-dod --return .review_return_submission-pack-dod.json
-   # 退出码非 0 = fail-closed，据子代理证据修复后重跑，未过不得声明完成
+   # 退出码非 0 = fail-closed，据subagent证据修复后重跑，未过不得声明完成
    ```
    gate 5 项：S1 强制件齐全（Cover Letter+Title Page+CRediT+COI+Keywords）/ S2 COI·Funding·DAS 非空（无则声明无）/ S3 Keywords 3–6 且不与标题雷同 / S4 通讯作者一致 / S5 无占位符·无伪造。真源见 `references/dod_checklist.json`。
 
@@ -1010,7 +1020,7 @@ Three modes: **Zotero**（推荐，实时写入）/ **None**（纯本地 JSON + 
 
 | Issue | Handling |
 |-------|---------|
-| Zotero API key invalid / 403 error | Re-ask user for api_key; do NOT proceed until --status returns ✅ |
+| Zotero API key invalid / 403 error | Re-run `save-credentials` with a fresh key; do NOT proceed until `--status` returns ✅ |
 | Mid-search crash | state.json `completed_sections` tracks progress; resume skips done |
 | PubMed CLI + paper-search MCP both unavailable | HALT; suggest install edirect or enable paper-search MCP; do NOT fallback to websearch/tavily |
 
