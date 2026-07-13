@@ -155,7 +155,7 @@ Follow phased gates in order:
    - [ ] ④`ethics` 字段：涉及人/动物/生物安全/遗传资源任一情形者，已说明审批状态（含批号或送审计划时间节点）；均不涉及者填 "N/A 不涉及"
    - [ ] ⑤用户已显式确认 `experimental_design.json` 覆盖全部 RC、设计无遗漏（回放 ✓ 列表 + 用户书面同意）
 
-   > **[结构签字·强制门禁落锁]** 用户在对话里明确确认「科学问题属性 + H/O/RC/KSQ 章节结构 + 实验设计（Phase 0.5 DoD ⑤）」后（且**仅在此之后**），运行 Phase 0 env_preflight 打印的那条 `SIGNOFF_CMD`（已含解析好的绝对路径）落盘签字——即 `python "<.../\_shared/structure_signoff_gate.py>" confirm --root <project_root> --note "<用户确认原话摘录>"`。这一步解锁正文写作：**未落签字，PreToolUse hook 会物理拦截任何对 `sections/*.md` 的写入**（这是防跳步的硬门，不是提示词纪律）。若后续回修科学问题/章节结构，改完让用户重新确认并重跑本命令覆盖签字。⚠️ 严禁在用户未确认时自行运行 confirm——那等于伪造用户签字。
+   > **[结构签字·强制门禁落锁]** 用户在对话里明确确认「科学问题属性 + H/O/RC/KSQ 章节结构 + 实验设计（Phase 0.5 DoD ⑤）」后（且**仅在此之后**），运行 Phase 0 env_preflight 打印的那条 `SIGNOFF_CMD`（已含解析好的绝对路径）落盘签字——即 `python "<.../\_shared/structure_signoff_gate.py>" confirm --root <project_root> --note "<用户确认原话摘录>"`。这一步解锁正文写作：**未落签字，PreToolUse hook 会物理拦截任何对 `sections/*.md` 的写入**（这是防跳步的硬门，不是提示词纪律）。该 hook 由 Phase 0 `env_preflight.py` 开工时经 `_shared/install_gate_hook.py` 自动安装并校验（含备份/回滚），状态 active 即在岗；若报 degraded/error 或提示降级，需人工留意其拦截可能失效。若后续回修科学问题/章节结构，改完让用户重新确认并重跑本命令覆盖签字。⚠️ 严禁在用户未确认时自行运行 confirm——那等于伪造用户签字。
 
 3. Phase 1: write P1 with full citation pipeline and verification.
    - **🔴 开写前置闸门 (Mandatory，脚本硬拦截)**：开写前先跑 `python3 scripts/prewrite_gate.py --section P1 --root .`，exit≠0 禁止开写（硬检查上一节完成/`consistency_map` 就位/占位符清零；上一节盲检结果（`.review_pass/<上一节>.json`）缺失即 prewrite_gate 硬拦 exit 1，禁止开写；必须先跑 delegate_review verify --section <上一节> 落盘通过标记——仅跨 Phase 边界生效，同 Phase 子节 N/A）。P1 为首节，上一节检查自动放行。

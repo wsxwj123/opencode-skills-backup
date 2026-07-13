@@ -3,12 +3,12 @@
 本技能内部的轻量质量 checklist，不是 reviewer-simulator 技能。禁止据此调用或进入 reviewer-simulator 技能，禁止生成任何 HTML 审稿报告。
 For each dimension, answer every checklist item (Y/N). Dimension passes when ALL items = Y.
 
-## 执行方式（优先盲评）
+## 执行方式（本文件 = Phase 3 Step 6 主 agent 自查参照）
 
-为消除"自写自评"偏差，**优先委托独立 subagent 盲评**：
+**独立盲检不在 Step 6 做。** 为避免每节两次评分轴高度重叠的委派，本 D1-D5 的独立盲检已并入 Phase 3 **Step 10** 的单次 `manuscript-dod` 盲检（D1 新颖→R23、D2 仲裁→R8、D3 证据→R7+R9、D4 连贯→R18、D5 去 AI→R5），fail-closed 门禁、`.review_pass` 落盘与修复子代理循环全在 Step 10。
 
-- **委托盲评（推荐）：** 主 agent 派一个 subagent，输入仅为 `drafts/section_XX_XX.md` 路径 + 本 checklist，**不提供写作时的判断或上下文**。subagent 像真实审稿人一样只看成品，逐项判定 Y/N，返回结构化结果（失败项 + 证据锚点）。
-- **决策边界：** 评审执行（打分/找问题）可委托；修订方案与是否 HALT 由主 agent 决定，不可委托。
+- **Step 6（本文件用途）：** 主 agent 落笔后对照下列 D1-D5 做一遍**轻量自查**（配合 `style_checker.py`），把明显问题就地改掉，为 Step 10 兜底。此步不派 subagent、不落盘、不阻断。
+- **决策边界：** Step 10 盲检的评审执行（打分/找问题）可委托 subagent；修订方案与是否 HALT 由主 agent 决定，不可委托。
 
 ## D1 — Novelty & Contribution
 
@@ -41,10 +41,9 @@ For each dimension, answer every checklist item (Y/N). Dimension passes when ALL
 - [ ] Passive voice ≤30% of sentences per paragraph (EN mode)
 - [ ] No templated transitions ("Furthermore", "In addition", "Moreover" as sentence openers)
 
-## Gate Rule
+## Gate Rule（在 Phase 3 Step 10 的 manuscript-dod 盲检上执行，非 Step 6）
 
-Any dimension with ≥1 failed item → internal revision targeting that item (max 2 rounds).
-After 2 rounds, if any item still fails → **HALT**, output the specific failed checklist items as structured feedback:
+Step 6 自查发现的问题就地改掉即可、不阻断。真正的 gate 在 Step 10：任一 `manuscript-dod` 项失败 → 派修复子代理针对性修改（max 2 rounds）。After 2 rounds, if any item still fails → **HALT**, output the specific failed items as structured feedback:
 
 ```
 【问题】(failed item description)

@@ -124,6 +124,11 @@
           "name": "拉丁短语斜体软提醒",
           "check": "proofread.py 的 latin_italic_missing 软提醒：in vitro/in vivo/ex vivo/in situ/de novo/post hoc/per se 等公认须斜体的拉丁短语，若正文裸写（未被 *...* 斜体标记包裹）则报告。仅提示，不阻断、不进 --fail-on、不扣分，由人工确认是否补斜体。",
           "severity": "soft"
+        },
+        {
+          "id": "R23",
+          "name": "新颖性与贡献",
+          "check": "盲检：本节是否提出至少一个新框架/假说/分类/视角（而非仅复述既有综述），并有明确的 gap→contribution 陈述、说明本节相较既有工作推进了什么。只堆砌已有工作、无新贡献陈述=fail，指出缺失处为证。（原逐节自检 D1 轴并入此处，与 D2→R8 / D3→R7+R9 / D4→R18 / D5→R5 一起由本 gate 单次盲检承接，不再于写作循环 Step 6 重复委派。）"
         }
       ]
     },
@@ -186,11 +191,6 @@
         },
         {
           "id": "B4",
-          "name": "Phase 3 搭框架显式 Read framing_guide",
-          "check": "确认 Phase 3 搭框架时已 Read data/framing_guide.md 作为写作上下文（子代理核：框架/各节结构与 framing_guide 提炼的可复用框架对齐，非默认模板）"
-        },
-        {
-          "id": "B5",
           "name": "占位符清零",
           "check": "benchmark_reviews.json 与 framing_guide.md 无 CITE_PENDING / DATA_PENDING / TODO / 待AI 等占位符",
           "script": "grep -nE 'CITE_PENDING|DATA_PENDING|【待AI|待AI翻译|\\[TODO\\]|TBD' data/benchmark_reviews.json data/framing_guide.md || echo CLEAN"

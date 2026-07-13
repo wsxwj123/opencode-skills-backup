@@ -496,7 +496,7 @@ Format: `[review] Phase X.Step: <description>`. 📖 消息表 + Rollback 命令
    python3 scripts/delegate_review.py verify --checklist references/dod_checklist.json \
      --gate benchmark-reviews-dod --return .review_return_benchmark-reviews-dod.json
    ```
-   gate 5 项：B1 ≥5 篇 verified / B2 每篇含框架大纲 / B3 framing_guide 含可操作建议 / B4 Phase 3 搭框架显式 Read framing_guide / B5 占位符清零。真源见 `references/dod_checklist.json`。
+   gate 4 项：B1 ≥5 篇 verified / B2 每篇含框架大纲 / B3 framing_guide 含可操作建议 / B4 占位符清零。真源见 `references/dod_checklist.json`。（framing_guide 是否真被用于搭框架，是 Phase 3 才发生的动作，不在此 Phase 1.6 gate 里核，改由 Phase 3 framing hook 强制落实、见 SKILL.md Phase 3 “Framing hook”。）
 
 5. **更新 state + Git Checkpoint：**
    ```bash
@@ -506,7 +506,7 @@ Format: `[review] Phase X.Step: <description>`. 📖 消息表 + Rollback 命令
 
 **HALT. 向用户展示对标库与 framing_guide 要点，确认后进 Phase 1.7（据调研建提纲）。**
 
-> **🔗 Phase 1.7 + Phase 3 挂接（强制）：** Phase 1.7 建提纲结构、Phase 3 各节搭正文框架前，都必须 `Read data/framing_guide.md`，并使结构与其提炼的可复用框架对齐（对应 gate item B4）。这是 Phase 1.6 产出的落地点，不得跳过。
+> **🔗 Phase 1.7 + Phase 3 挂接（强制）：** Phase 1.7 建提纲结构、Phase 3 各节搭正文框架前，都必须 `Read data/framing_guide.md`，并使结构与其提炼的可复用框架对齐（由 Phase 3 “Framing hook” 强制落实）。这是 Phase 1.6 产出的落地点，不得跳过。
 
 ---
 
@@ -519,7 +519,7 @@ Format: `[review] Phase X.Step: <description>`. 📖 消息表 + Rollback 命令
 
 1. **据调研建提纲（不是凭空设计）：** RQ/PICO 已在 Phase 1.5 定义。以 **Phase 1.5 选定的 gap/主线** 为骨架、参照 **Phase 1.6 framing_guide 的可复用章节框架**，提出提纲结构："Funnel" Introduction + "Thematic" Body（≤2 层级）。每个主体节次应能对应到某个 gap / 争议 / 主线分支，避免与既有对标综述结构简单雷同（呼应 novelty_risk）。
    - Scoping review：研究问题用 PCC（Population / Concept / Context）。
-2. **对齐对标框架：** 显式说明本提纲如何借鉴/区别于 framing_guide 提炼的结构（对应 gate item B4）。
+2. **对齐对标框架：** 显式说明本提纲如何借鉴/区别于 framing_guide 提炼的结构（由 Phase 3 “Framing hook” 强制落实）。
 3. **Confirm outline with user.** Update `outline.md`.
 
    > **⚠️ 迭代闸（Iteration Gate）：提纲在此可回修。**
@@ -532,7 +532,7 @@ Format: `[review] Phase X.Step: <description>`. 📖 消息表 + Rollback 命令
    > ```
    > 修改后须更新 `outline.md`，重新确认 Zotero 集合树（`--init` 是幂等的），并用 Git Checkpoint 记录版本。**不得因回修提纲而删除已完成节次的已有文献入库记录。**
 
-   > **[结构签字·强制门禁落锁]** 用户在对话里明确确认提纲后（且**仅在此之后**），运行 Phase 0.5 `init_project.py` 打印的那条 `SIGNOFF_CMD`（已含解析好的绝对路径与项目根）落盘签字——即 `python "<.../_shared/structure_signoff_gate.py>" confirm --root <项目根> --note "<用户确认原话摘录>"`。这一步解锁正文写作：**未落签字，PreToolUse hook 会物理拦截任何对 `drafts/*.md` 的写入**（这是防跳步的硬门，不是提示词纪律）。若后续回修提纲（上方迭代闸允许），改完让用户重新确认并重跑本命令覆盖签字。⚠️ 严禁在用户未确认时自行运行 confirm——那等于伪造用户签字。
+   > **[结构签字·强制门禁落锁]** 用户在对话里明确确认提纲后（且**仅在此之后**），运行 Phase 0.5 `init_project.py` 打印的那条 `SIGNOFF_CMD`（已含解析好的绝对路径与项目根）落盘签字——即 `python "<.../_shared/structure_signoff_gate.py>" confirm --root <项目根> --note "<用户确认原话摘录>"`。这一步解锁正文写作：**未落签字，PreToolUse hook 会物理拦截任何对 `drafts/*.md` 的写入**（这是防跳步的硬门，不是提示词纪律）。该 hook 由 Phase 0 `init_project.py` 开工时经 `_shared/install_gate_hook.py` 自动安装并校验（备份原 settings / 只追加不覆写 / 校验失败即回滚），init 回显 `门禁保护[active]` 即在岗生效；若回显 `[degraded]` 或 `[error]`（安装/校验未通过），hook 未在岗、物理拦截降级为提示词纪律，此时需人工留意别在未签字时写 `drafts/`。若后续回修提纲（上方迭代闸允许），改完让用户重新确认并重跑本命令覆盖签字。⚠️ 严禁在用户未确认时自行运行 confirm——那等于伪造用户签字。
 
 4. **规划贯穿全文的概念框架图（提纲确认后，Phase 1.7 内完成）：**
    在 `figures/figure_index.md` 中注册一条 `Figure 0`（概念框架图），要求：
@@ -683,7 +683,7 @@ python3 scripts/state_manager.py set-phase --phase 3
 ```
 **Skip completed sections (check `completed_sections` list).**
 
-> **🔗 Framing hook (Write Mode, MANDATORY before building any section's framework):** `Read data/framing_guide.md` (produced in Phase 1.6) and use its reusable章节框架/论证思路 as the basis for each section's structure — do NOT fall back to a generic default template. (Polish Mode: file may not exist — skip if absent.) This satisfies gate item B4.
+> **🔗 Framing hook (Write Mode, MANDATORY before building any section's framework):** `Read data/framing_guide.md` (produced in Phase 1.6) and use its reusable章节框架/论证思路 as the basis for each section's structure — do NOT fall back to a generic default template. (Polish Mode: file may not exist — skip if absent.) This IS where framing-guide alignment is actually enforced; the Phase 1.6 benchmark gate no longer checks this Phase 3 action, and the resulting structure is reviewed downstream by manuscript-dod (R15/R16/R18).
 
 **Polish Mode branch (if `state.json` contains `"mode": "polish"`):**
 ```
@@ -756,23 +756,16 @@ If pending_sections is empty → all sections complete; proceed to Phase 4.
    - Does NOT do online DOI/PMID verification here (that's Phase 4 `citation_guard.py`'s job).
    - [Zotero mode] Also cross-check against `--get-section` output: every gid used in draft should appear in the section's Zotero collection.
 
-6. **逐节质量自检（本技能内部轻量 checklist，基于 `references/reviewer_checklist.md`）：** 执行 5 维度 16 项 Y/N 判定（📖 完整 16 项详见该文件）。
-   **🔴 硬约束，这是本技能内部的质量 checklist，不是 reviewer-simulator 技能。禁止调用或进入 reviewer-simulator 技能，禁止逐节生成任何 HTML 审稿报告（report_*.html 或其他报告文件）。本步只在会话内产出结构化审稿意见，不落任何报告文件。**
-   5 个维度（每项任一 N 即该维度失败）：
-   - **D1 Novelty & Contribution:** 是否提出新框架/假说/视角，明写 gap→contribution，不只是罗列已有工作。
-   - **D2 Arbitration & Critical Analysis:** 是否识别 ≥1 处文献矛盾，分析为何矛盾，并给出立场或调和解释（不骑墙）。
-   - **D3 Evidence Density & Traceability:** 每个事实断言有引用、关键断言 ≥2 独立来源、证据类型与断言类型匹配（机制→原著，疗效→临床试验）。
-   - **D4 Flow & Coherence:** 段首承接上段结论、本节有 setup→evidence→synthesis→implication 内在弧线、无可随意搬移的孤立段。
-   - **D5 Anti-AI Compliance:** 硬项（命中即判 N）：零禁用词/AI 套话、无生僻词/造词、无 scare quotes / 解释性冒号 / trailing -ing 从句、无模板化转折开头、**无装饰性破折号（—/——，禁止使用）**。软项（只提示、不判 N）：句长有节奏、被动句约 ≤30%。
-     **量化兜底（先跑脚本再人评）：** 委托盲评前先跑 style_checker 拿客观信号，**high/medium 项必须先改掉；破折号命中即 hard_fail 一票否决，必须清零**；`info` 软项（long_sentence / excessive_passive_voice）只提醒不阻断、不扣分，择优处理。
-     ```bash
-     python3 scripts/style_checker.py --file drafts/section_01_01.md --passive-max 0.30
-     # 硬项(计分/hard_fail,可致 exit 1)：forbidden_ai_phrases / scare_quotes / explanatory_colon_in_prose / trailing_ing_clause / bullet_points / decorative_em_dash(破折号,hard_fail一票否决) ...
-     # 软项(severity=info,只报告不扣分不阻断)：long_sentence(>30词) / excessive_passive_voice(>30%)
-     # exit 0 = 通过(score≥阈值)；非 0 = 据 issues 里的 high/medium 项修复后重跑（info 项不影响退出码）
-     ```
-   **委托独立 subagent 盲评**（消除自写自评偏差）：派一个 subagent，只给它 `drafts/section_XX_XX.md` 路径 + checklist，不给写作时的上下文，让它独立判定每维度 Y/N，只返回**结构化审稿意见**（每维度 Y/N + 具体问题 + 证据锚点），不产出任何报告文件。
-   **Gate（意见 → 主会话 → 派修复子代理 → 复评）：** 主会话拿到盲评意见后，任一维度失败即派一个**修复子代理**执行针对性修改（输入 = 结构化意见 + 本节 `drafts/section_XX_XX.md`），改完对该节复评。修满 2 轮仍有维度失败 → **HALT**，输出结构化反馈（【问题】+ 证据锚点 + 根源分析 + 修复方向）。是否修订、是否 HALT 的**决策由主会话把关，不可委托**。
+6. **逐节质量自查（主 agent 轻量自查，为 Step 10 盲检兜底——不在此派独立盲检）：** 落笔后先由主 agent 自查一遍，尽早改掉明显问题、减少 Step 10 往返。**独立盲检不在这里做**：原每节两次委派（Step 6 评 D1-D5 + Step 10 跑 manuscript-dod）评分轴高度重叠，已合并为 Step 10 的**单次** manuscript-dod 盲检（D1 新颖并入 R23、D2 仲裁→R8、D3 证据→R7+R9、D4 连贯→R18、D5 去 AI→R5 已等价覆盖）。故本步只自查、不落盘、不阻断、不派 subagent；真正的独立盲检 + fail-closed 门禁 + 修复循环全在 Step 10。
+   **🔴 硬约束：这是本技能内部的轻量质量 checklist，不是 reviewer-simulator 技能。禁止调用或进入 reviewer-simulator 技能，禁止逐节生成任何 HTML 审稿报告（report_*.html 或其他报告文件）。**
+   **量化兜底（先跑脚本再自读）：** 先跑 style_checker 拿客观信号，**high/medium 项必须先改掉；破折号命中即 hard_fail 一票否决，必须清零**；`info` 软项（long_sentence / excessive_passive_voice）只提醒不阻断、不扣分，择优处理。
+   ```bash
+   python3 scripts/style_checker.py --file drafts/section_01_01.md --passive-max 0.30
+   # 硬项(计分/hard_fail,可致 exit 1)：forbidden_ai_phrases / scare_quotes / explanatory_colon_in_prose / trailing_ing_clause / bullet_points / decorative_em_dash(破折号,hard_fail一票否决) ...
+   # 软项(severity=info,只报告不扣分不阻断)：long_sentence(>30词) / excessive_passive_voice(>30%)
+   # exit 0 = 通过(score≥阈值)；非 0 = 据 issues 里的 high/medium 项修复后重跑（info 项不影响退出码）
+   ```
+   然后主 agent 自读本节，对照 `references/reviewer_checklist.md` 的 D1-D5（新颖 / 仲裁 / 证据 / 连贯 / 去 AI）过一遍，把一眼能看出的问题就地改掉。这只是自查，是否通过不决定能否进下一步——门禁在 Step 10。
 
 7. **Word count check:**
    ```bash
@@ -800,7 +793,7 @@ If pending_sections is empty → all sections complete; proceed to Phase 4.
     2. **派一个独立subagent**（不给它本节写作上下文），把任务包原样贴给它，要求把 JSON 数组写到 `RETURN_PATH`。**可直接复制执行的派发指令**：
        - Claude Code：用 `Task` 工具，`subagent_type="academic-blind-reviewer"`（无此 agent 时退回 `general-purpose`），prompt = pack 打印出的整段任务包原文（含"你的角色/待检文件/检查清单/返回格式/返回写到这个文件"），**不附加任何本节写作说明**。
        - 其他平台（Codex/OpenCode 等无此 agent）：新开一个干净上下文的subagent/子会话，同样只贴任务包原文。
-    3. 校验返回：`python3 scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate manuscript-dod --return <subagent返回.json> --section <当前section_id> --root <项目根>`；退出码非 0（任一缺项 / fail / 无证据）= **fail-closed**，据subagent证据修复后重跑，**未过不得声明完成**。verify 通过会落盘 `.review_pass/<当前section_id>.json`，下一节 `prewrite_gate.py` 会**硬校验**它（缺失即拒绝开写）。
+    3. 校验返回：`python3 scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate manuscript-dod --return <subagent返回.json> --section <当前section_id> --root <项目根>`；退出码非 0（任一缺项 / fail / 无证据）= **fail-closed**。**修复循环（原 Step 6 的修复委派并入此处）：** 任一项失败即派一个**修复子代理**（输入 = 盲检返回的结构化意见 + 本节 `drafts/section_XX_XX.md`，不给写作上下文）做针对性修改，改完重跑 `pack → verify` 复评；修满 2 轮仍失败 → **HALT**，输出结构化反馈（【问题】+ 证据锚点 + 根源分析 + 修复方向）交用户裁决。是否修订 / 是否 HALT 的决策由主会话把关，不可委托。**未过不得声明完成。** verify 通过会落盘 `.review_pass/<当前section_id>.json`，下一节 `prewrite_gate.py` 会**硬校验**它（缺失即拒绝开写）。
        > **诚实边界：** verify 的 `ok:true` 只代表清单每项都被裁决且形式合规——**PASS 仅覆盖形式层，语义正确性由盲检subagent主观判断、未自动核验**。
        > **【P4·盲检降级告警】** ⚠️ 若环境派不出真正独立的subagent（非 Claude Code、无 `academic-blind-reviewer`），**绝不能同一 AI 自问自答冒充盲检**。告诉用户「本环境盲检不可靠，请你亲自复核本节」，别让自证闭环静默跑。
     4. **🚪 逃生口（盲检subagent确实跑不起来时，且仅此时）**：若平台无 `academic-blind-reviewer`、通用subagent也反复失败/取不到返回，导致 `verify` 无法落盘标记、下一节被 `prewrite_gate` 永久锁死——**不要卡死或静默跳过**。改为人工逐项盲检本节 DoD 后，用显式放行开锁并留痕：
@@ -810,7 +803,7 @@ If pending_sections is empty → all sections complete; proceed to Phase 4.
        ```
        它只放行"上一节盲检"这一项（其余硬检查照常），并写 `.review_pass/<上一节>.json`(manual:true) + 追加 `.review_pass/MANUAL_REVIEW_AUDIT.log`；理由为空则拒绝放行。此后每次 `prewrite_gate` 都会在 warnings 里点名"人工放行、语义未经独立盲检"。**门禁默认行为不变**：不加此参数时，缺盲检标记照旧硬拦。
 
-    `manuscript-dod` gate 共 **22 项（20 硬门禁 + R20/R22 两软报告）**，覆盖：通用（引文一一对应 / citation_guard / 符合 storyline / 占位清零 / 去 AI / 字数）、review 特有（综合非罗列 / 矛盾仲裁 / 引用类型匹配 / 检索日志 / 框架图一致）、systematic 额外（PRISMA 自洽 / RoB / GRADE）、结构完整性、**覆盖全面性 / 关键文献遗漏与引用偏倚 / 论证 arc 连贯 / 学术合规披露（R16-R19 盲检质量核）**、字符级机器门禁（R21）。**逐项内容 / severity / 核验命令以 `references/dod_checklist.json` 为唯一真源**——上面 `pack` 步骤运行时会把该 gate 的每个 item（id / name / check / script）完整打印进盲检任务包，此处不逐条枚举以免与 JSON 漂移。systematic 3 项仅 Review type = systematic 时检查，其余全类型通用。
+    `manuscript-dod` gate 共 **23 项（21 硬门禁 + R20/R22 两软报告）**，覆盖：通用（引文一一对应 / citation_guard / 符合 storyline / 占位清零 / 去 AI / 字数）、review 特有（综合非罗列 / 矛盾仲裁 / 引用类型匹配 / 检索日志 / 框架图一致）、systematic 额外（PRISMA 自洽 / RoB / GRADE）、结构完整性、**覆盖全面性 / 关键文献遗漏与引用偏倚 / 论证 arc 连贯 / 学术合规披露（R16-R19 盲检质量核）/ 新颖性与贡献（R23 盲检质量核）**、字符级机器门禁（R21）。**本次盲检已一并承接原 Step 6 逐节自检的 D1-D5 轴：D1 新颖→R23、D2 仲裁→R8、D3 证据→R7+R9、D4 连贯→R18、D5 去 AI→R5，故每节只在此做一次独立盲检，不再于 Step 6 重复委派。** **逐项内容 / severity / 核验命令以 `references/dod_checklist.json` 为唯一真源**——上面 `pack` 步骤运行时会把该 gate 的每个 item（id / name / check / script）完整打印进盲检任务包，此处不逐条枚举以免与 JSON 漂移。systematic 3 项仅 Review type = systematic 时检查，其余全类型通用。
 
     - **R21 语法拼写与字符级格式(🔴机器硬门禁,可阻断)**,跑 `python3 scripts/proofread.py --manuscript-dir drafts --report proofread_report.json --fail-on misspelling,chinese_punct,subsup_bare`。stdlib-only、自包含。高置信三类**零容忍**——misspelling(英文常见错拼)、chinese_punct(中文标点漏入英文)、subsup_bare(应上下标却裸写,如 H2O/CO2/IC50,CJK 安全边界),命中任一即 `ok=false`(脚本 exit 1),据 `proofread_report.json` 的 `fail_on_hits` 定位修复后重跑。其余类别(英美拼写混用、单位格式、术语写法不一致、数字千分位、Methods 时态、学术错拼/中文错别字等)仅在报告里提示、不阻断,由作者择一统一。与 R5 去AI(style_checker)互补:R5 管文风,R21 管字符级机器错。
 
@@ -820,7 +813,7 @@ If pending_sections is empty → all sections complete; proceed to Phase 4.
 
     - **R22 拉丁短语斜体软提醒(🟡软/人工确认,不阻断)**,`proofread.py` 的 `latin_italic_missing` 类别:正文里 `in vitro`/`in vivo`/`ex vivo`/`in situ`/`de novo`/`post hoc`/`per se` 等公认须斜体的拉丁短语若裸写(未被 `*...*` 斜体标记包裹)则报告。**仅提示,不阻断、不进 `--fail-on`、不扣分**,由人工确认是否补斜体(`et al.`/`e.g.`/`vs.` 等正体惯例不在词表内)。
 
-11. **📋 DoD 结论摆出 + HALT（展示式，不新增硬墙）：** 本节 `delegate_review verify` 盲检通过（exit 0 且 `.review_pass/<section>.json` 已落盘）后，先把**逐项 DoD 结论**摆给用户——从subagent返回的 JSON 里**逐条列出每个 `manuscript-dod` item**（id/name + verdict + 证据锚点摘录，以返回 JSON 的实际条目为准、不手点项号，含 systematic 3 项、结构完整性、R16-R19 覆盖全面性/引用偏倚/论证连贯/合规披露、字符级 R21；R5 里降软的长句/被动如命中只作 info 提示、不影响通过；破折号为硬门禁 hard_fail、命中即不通过）。再附本节 summary（content / logic / citation count / word count）。**然后 HALT 等用户确认，才写下一节。** 这是"展示 + 可继续"：盲检已过即可放行，此处只保证用户看到每项结论、有机会叫停，不新增硬门。Wait for "Continue".
+11. **📋 DoD 结论摆出 + HALT（展示式，不新增硬墙）：** 本节 `delegate_review verify` 盲检通过（exit 0 且 `.review_pass/<section>.json` 已落盘）后，先把**逐项 DoD 结论**摆给用户——从subagent返回的 JSON 里**逐条列出每个 `manuscript-dod` item**（id/name + verdict + 证据锚点摘录，以返回 JSON 的实际条目为准、不手点项号，含 systematic 3 项、结构完整性、R16-R19 覆盖全面性/引用偏倚/论证连贯/合规披露、R23 新颖性与贡献、字符级 R21；R5 里降软的长句/被动如命中只作 info 提示、不影响通过；破折号为硬门禁 hard_fail、命中即不通过）。再附本节 summary（content / logic / citation count / word count）。**然后 HALT 等用户确认，才写下一节。** 这是"展示 + 可继续"：盲检已过即可放行，此处只保证用户看到每项结论、有机会叫停，不新增硬门。Wait for "Continue".
 
 ### Figure Prompt Generation
 
@@ -1032,10 +1025,10 @@ Three modes: **Zotero**（推荐，实时写入）/ **None**（纯本地 JSON + 
 
 > 📖 完整 CLI 参数和用法详见 `references/scripts_reference.md`
 
-9 个活跃脚本（`[project]/scripts/`，Phase 0 init 时复制）：
-`zotero_manager.py` | `state_manager.py` | `citation_utils.py`（import-only） | `export_bibtex.py` | `matrix_manager.py` | `word_counter.py` | `validate_citations.py` | `citation_guard.py` | `check_global_citation_sequence.py`
+18 个活跃脚本（`[project]/scripts/`，Phase 0 init 时全量镜像 `scripts/*.py`，除 `test_*.py` 与 `init_project.py`）：
+`zotero_manager.py` | `state_manager.py` | `matrix_manager.py` | `word_counter.py` | `validate_citations.py` | `citation_guard.py` | `check_global_citation_sequence.py` | `export_bibtex.py` | `prewrite_gate.py` | `delegate_review.py` | `style_checker.py` | `proofread.py` | `abbreviation_consistency.py` | `consolidate_references.py` | `export_docx.py` | `make_reference_docx.py` | `citation_utils.py`（import-only） | `citation_guard_core.py`（import-only）
 
-> `scripts/init_project.py` 是 Phase 0.5 一次性脚手架（从 SKILL_DIR 运行，不复制进项目），负责创建目录/复制上述脚本/写 state.json+outline.md/git init。`state_manager.py` 新增 `set-phase` / `complete-section` 子命令管理 workflow `state.json`。
+> `scripts/init_project.py` 是 Phase 0.5 一次性脚手架（从 SKILL_DIR 运行，不复制进项目），负责创建目录/全量镜像上述脚本/写 state.json+outline.md/git init。`state_manager.py` 新增 `set-phase` / `complete-section` 子命令管理 workflow `state.json`。
 
 ---
 

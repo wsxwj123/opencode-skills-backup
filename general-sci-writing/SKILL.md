@@ -47,6 +47,7 @@ license: Proprietary
 
 | 文件 | 必须 Read 的时机 |
 |---|---|
+| `references/citation-policy.md` | 文献检索/入库/核验的核心依据；Phase 3 检索前、每轮增量检索与文献编号、Zero-Fabrication 核验时 |
 | `references/anti-ai-protocol.md` | 撰写/润色任何英文正文段落前；`/check` 前 |
 | `references/writing-templates.md` | 写 Introduction / Methods / Discussion 章节前；生成 Figure Prompt 时 |
 | `references/stat-decision-tree.md` | `/stat-helper`（用户不确定用什么统计检验）时 |
@@ -238,7 +239,7 @@ license: Proprietary
 
 > **[用户确认检查点 Mandatory]** 展示 storyline 草稿（章节标题、核心论点、关键图序、**各节预估引用数**、**3 个 title 候选**），等待用户明确确认后才进入 Phase 2.5。禁止在故事线未确认的情况下启动图集规划。
 >
-> **[结构签字·强制门禁落锁]** 用户在对话里明确确认 storyline 后（且**仅在此之后**），运行 Phase 0 env_preflight 打印的那条 `SIGNOFF_CMD`（已含解析好的绝对路径）落盘签字——即 `python "<.../\_shared/structure_signoff_gate.py>" confirm --root <project_root> --note "<用户确认原话摘录>"`。这一步解锁正文写作：**未落签字，PreToolUse hook 会物理拦截任何对 `manuscripts/*.md` 的写入**（这是防跳步的硬门，不是提示词纪律）。若后续回修 storyline（Phase 2.5 允许），改完让用户重新确认并重跑本命令覆盖签字。⚠️ 严禁在用户未确认时自行运行 confirm——那等于伪造用户签字。
+> **[结构签字·强制门禁落锁]** 用户在对话里明确确认 storyline 后（且**仅在此之后**），运行 Phase 0 env_preflight 打印的那条 `SIGNOFF_CMD`（已含解析好的绝对路径）落盘签字——即 `python "<.../\_shared/structure_signoff_gate.py>" confirm --root <project_root> --note "<用户确认原话摘录>"`。这一步解锁正文写作：**未落签字，PreToolUse hook 会物理拦截任何对 `manuscripts/*.md` 的写入**（这是防跳步的硬门，不是提示词纪律）。该 hook 由 Phase 0 `env_preflight.py` 开工时经 `_shared/install_gate_hook.py` 自动安装并校验（改 `settings.json` 前先备份、只追加不覆盖、校验失败即回滚），preflight 返回 `active` 表示 hook 已在岗、物理拦截真实生效；若返回 `degraded`/`error`，preflight 会输出告警，此时物理硬门已降级为提示词纪律，需人工留意并手动守住未签字不写正文。若后续回修 storyline（Phase 2.5 允许），改完让用户重新确认并重跑本命令覆盖签字。⚠️ 严禁在用户未确认时自行运行 confirm——那等于伪造用户签字。
 
 ### Phase 2.5: 主图集规划 (`/figure-plan`)
 
