@@ -61,14 +61,14 @@ why_how_what_note: |
 - **Phase 1.6:** 检索 5–10 篇对标综述 → `data/benchmark_reviews.json` + `data/framing_guide.md` → 委托盲检 → **HALT**
 - **Phase 1.7:** 据调研（selected gap + 对标框架）建提纲 → 用户确认 → **结构签字落锁** → Zotero 集合树 → **HALT**
 - **Phase 2:** 逐节搜索（**串行，≥1s 间隔**）→ 写入 Zotero/index → **HALT** dedup
-- **Phase 3:** Read framing_guide 搭框架 → 逐节写作 → citation spot-check → Reviewer Simulator → **HALT**
+- **Phase 3:** Read framing_guide 搭框架 → 逐节写作 → citation spot-check → 逐节质量自检（内部 checklist，禁 HTML/禁调 reviewer-simulator）→ **HALT**
 - **Phase 4:** 引用总量校验 → citation guard → 编译 → 连贯性扫描 → 缩写扫描 → 导出
 - **Phase 5:** 对齐 gsw submission-guide/compliance-gate → 生成投稿包（Cover Letter/Title Page/CRediT/COI/Funding/DAS/Keywords...）→ 委托盲检
 
 ### 绝对禁止
 - 并行搜索调用
 - websearch/tavily 查文献
-- 跳过 Reviewer Simulator
+- 跳过逐节质量自检（内部 checklist）
 - 跳过 state.json 更新
 - 跳过 Git Checkpoint
 
@@ -164,7 +164,7 @@ http_proxy=http://127.0.0.1:PORT esearch -db pubmed -query "QUERY" < /dev/null |
 
 > 📖 可委托任务清单及规则详见 `references/subagent_guide.md`
 
-**NOT delegatable:** Outline design, synthesis writing, Reviewer Simulator decisions, user interaction, HALT decisions.
+**NOT delegatable:** Outline design, synthesis writing, 逐节质量自检的修订/HALT decisions, user interaction, HALT decisions.
 
 ---
 
@@ -745,7 +745,7 @@ If pending_sections is empty → all sections complete; proceed to Phase 4.
    - Synthesis not summary; arbitration of contradictions; alternate claim/evidence order.
    - **Abbreviation rule:** First occurrence of any abbreviation in this section must use "Full Name (ABBR)" format. If the abbreviation was already defined in a previous section, use ABBR directly. `exports/abbreviation_list.md` does not exist yet (it is generated in Phase 4 Step 4c); to check prior definitions, grep the already-written `drafts/section_*.md` files for the `Full Name (ABBR)` pattern.
 
-5. **Citation spot-check** (lightweight, runs per-section; catches hallucinated `[N]` before Reviewer Simulator):
+5. **Citation spot-check** (lightweight, runs per-section; catches hallucinated `[N]` before 逐节质量自检):
    ```bash
    # Scans all drafts/ but only this section's file matters (previous sections already passed).
    # --fail-on-orphan exits non-zero if any [N] in draft has no match in literature_index.json.
@@ -756,7 +756,9 @@ If pending_sections is empty → all sections complete; proceed to Phase 4.
    - Does NOT do online DOI/PMID verification here (that's Phase 4 `citation_guard.py`'s job).
    - [Zotero mode] Also cross-check against `--get-section` output: every gid used in draft should appear in the section's Zotero collection.
 
-6. **Reviewer Simulator:** 执行 5 维度 16 项 Y/N checklist（📖 完整 16 项详见 `references/reviewer_checklist.md`）。5 个维度（每项任一 N 即该维度失败）：
+6. **逐节质量自检（本技能内部轻量 checklist，基于 `references/reviewer_checklist.md`）：** 执行 5 维度 16 项 Y/N 判定（📖 完整 16 项详见该文件）。
+   **🔴 硬约束，这是本技能内部的质量 checklist，不是 reviewer-simulator 技能。禁止调用或进入 reviewer-simulator 技能，禁止逐节生成任何 HTML 审稿报告（report_*.html 或其他报告文件）。本步只在会话内产出结构化审稿意见，不落任何报告文件。**
+   5 个维度（每项任一 N 即该维度失败）：
    - **D1 Novelty & Contribution:** 是否提出新框架/假说/视角，明写 gap→contribution，不只是罗列已有工作。
    - **D2 Arbitration & Critical Analysis:** 是否识别 ≥1 处文献矛盾，分析为何矛盾，并给出立场或调和解释（不骑墙）。
    - **D3 Evidence Density & Traceability:** 每个事实断言有引用、关键断言 ≥2 独立来源、证据类型与断言类型匹配（机制→原著，疗效→临床试验）。
@@ -769,8 +771,8 @@ If pending_sections is empty → all sections complete; proceed to Phase 4.
      # 软项(severity=info,只报告不扣分不阻断)：long_sentence(>30词) / excessive_passive_voice(>30%)
      # exit 0 = 通过(score≥阈值)；非 0 = 据 issues 里的 high/medium 项修复后重跑（info 项不影响退出码）
      ```
-   **优先委托独立 subagent 盲评**（消除自写自评偏差）：派一个 subagent，只给它 `drafts/section_XX_XX.md` 路径 + checklist，不给写作时的上下文，让它独立判定每项 Y/N 并返回结构化结果。
-   **Gate:** 任何维度 ≥1 项失败 → 内部修订（最多 2 轮）。2 轮后仍失败 → **HALT**，输出结构化反馈（【问题】+ 证据锚点 + 根源分析 + 修复方向）。修订与 HALT 决策由主 agent 负责（不可委托）。
+   **委托独立 subagent 盲评**（消除自写自评偏差）：派一个 subagent，只给它 `drafts/section_XX_XX.md` 路径 + checklist，不给写作时的上下文，让它独立判定每维度 Y/N，只返回**结构化审稿意见**（每维度 Y/N + 具体问题 + 证据锚点），不产出任何报告文件。
+   **Gate（意见 → 主会话 → 派修复子代理 → 复评）：** 主会话拿到盲评意见后，任一维度失败即派一个**修复子代理**执行针对性修改（输入 = 结构化意见 + 本节 `drafts/section_XX_XX.md`），改完对该节复评。修满 2 轮仍有维度失败 → **HALT**，输出结构化反馈（【问题】+ 证据锚点 + 根源分析 + 修复方向）。是否修订、是否 HALT 的**决策由主会话把关，不可委托**。
 
 7. **Word count check:**
    ```bash

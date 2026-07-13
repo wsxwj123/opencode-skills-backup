@@ -30,7 +30,9 @@ import shutil
 import subprocess
 import sys
 
-# keep aligned with SKILL.md Phase 0.2 Step 8 required[] and Phase 0.5 REQUIRED_SCRIPTS
+# Minimum-viable set: full copy below mirrors ALL scripts/*.py, so this list is
+# only a post-copy sanity assertion (not the copy source). No drift risk if it
+# lags behind SKILL.md — a new script still gets copied by the glob.
 REQUIRED_SCRIPTS = [
     "zotero_manager.py",
     "export_bibtex.py",
@@ -106,16 +108,21 @@ def main() -> None:
     if not fig_index.exists():
         fig_index.write_text("# Figure Index\n\n", encoding="utf-8")
 
-    # Whitelist: copy ONLY the scripts the SKILL.md workflow actively calls.
-    missing = []
-    for name in REQUIRED_SCRIPTS:
-        src = skill_dir / "scripts" / name
-        if not src.exists():
-            missing.append(name)
+    # Full copy: mirror ALL scripts/*.py into the project (except tests and this
+    # bootstrap itself). Root-causes whitelist drift — SKILL.md adding/renaming a
+    # script (or an import dependency) can never silently miss a copy again.
+    copied = 0
+    for src in sorted((skill_dir / "scripts").glob("*.py")):
+        if src.name.startswith("test_") or src.name == "init_project.py":
             continue
-        shutil.copy(src, proj / "scripts" / name)
+        shutil.copy(src, proj / "scripts" / src.name)
+        copied += 1
+
+    # REQUIRED_SCRIPTS kept as a minimum-viable-set assertion: full copy should
+    # already include them; if any is absent the skill install is broken.
+    missing = [n for n in REQUIRED_SCRIPTS if not (proj / "scripts" / n).exists()]
     if missing:
-        sys.exit(f"❌ Missing scripts in SKILL_DIR: {missing}. Verify --skill-dir={skill_dir}")
+        sys.exit(f"❌ Missing required scripts after copy: {missing}. Verify --skill-dir={skill_dir}")
 
     # export_docx.py resolves templates/reference.docx as __file__.parent.parent/
     # templates/reference.docx — i.e. proj/templates/reference.docx once copied.
@@ -126,7 +133,7 @@ def main() -> None:
         shutil.copy(ref_docx, proj / "templates" / "reference.docx")
 
     print(f"✅ Project created at: {proj}")
-    print(f"   Copied {len(REQUIRED_SCRIPTS)} active scripts")
+    print(f"   Copied {copied} scripts (full scripts/*.py mirror)")
 
     # state.json + outline.md
     (proj / "state.json").write_text(STATE_JSON, encoding="utf-8")
