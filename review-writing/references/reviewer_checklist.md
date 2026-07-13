@@ -1,6 +1,6 @@
-# Reviewer Simulator Checklist
+# 逐节质量自检 Checklist（本技能内部）
 
-Checklist-anchored evaluation per reviewer-simulator skill methodology.
+本技能内部的轻量质量 checklist，不是 reviewer-simulator 技能。禁止据此调用或进入 reviewer-simulator 技能，禁止生成任何 HTML 审稿报告。
 For each dimension, answer every checklist item (Y/N). Dimension passes when ALL items = Y.
 
 ## 执行方式（优先盲评）

@@ -93,7 +93,7 @@
         {
           "id": "N63",
           "name": "承重论点引文核证",
-          "check": "立项依据的承重论点（决定成败的关键因果/机制/研究缺口论断，非背景陈述）已在 data/claim_evidence.json 建成「观点↔引文」矩阵，每条承重句用该引文检索到的真实 abstract（非 AI 自填的 key_finding）判 verdict∈support/weak/contradict/unknown 并摘 evidence_quote；跑 CITATION_CHECK_CMD（_shared/citation_claim_check.py --root .）须 exit 0。任一承重句被判 contradict/unknown、缺 retrieved_abstract、或 user_confirmed≠true = fail，引 claim_evidence.json 对应行与阻断原因为证。"
+          "check": "立项依据的承重论点（决定成败的关键因果/机制/研究缺口论断，非背景陈述）已在项目根 claim_evidence.json 建成「观点↔引文」矩阵，每条承重句用该引文检索到的真实 abstract（非 AI 自填的 key_finding）判 verdict∈support/weak/contradict/unknown 并摘 evidence_quote；跑 CITATION_CHECK_CMD（_shared/citation_claim_check.py --root .）须 exit 0。任一承重句被判 contradict/unknown、缺 retrieved_abstract、或 user_confirmed≠true = fail，引 claim_evidence.json 对应行与阻断原因为证。"
         }
       ]
     },
