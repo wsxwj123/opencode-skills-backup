@@ -10,11 +10,14 @@ CLI：python3 prewrite_gate.py --section <section_id> --root <project_root>
 硬检查（FAIL → exit 1）：
 1. 上一节完成：storyline 顺序里本节的上一节，其 writing_progress 最新状态为 done/completed
 2. 故事线就位：storyline.json 存在且本 section 有对应条目
-3. 素材就位：subprocess 调 figure_analysis_gate.py（复用，不重写）
-4. 占位符清零：上一节 manuscript 文件无 CITE_PENDING/DATA_PENDING/【待 残留
-5. 缩略词一致：subprocess 调 abbreviation_consistency.py（复用，不重写）
-6. 上一节盲检通过：<root>/.review_pass/<上一节>.json 存在且 passed:true
+3. 占位符清零：上一节 manuscript 文件无 CITE_PENDING/DATA_PENDING/【待 残留
+4. 缩略词一致：subprocess 调 abbreviation_consistency.py（复用，不重写）
+5. 上一节盲检通过：<root>/.review_pass/<上一节>.json 存在且 passed:true
    （由 delegate_review.py verify --section <上一节> 落盘）；缺失 → 硬拦
+
+仅信息（不阻断）：
+- 素材就位：subprocess 探查 figure_analysis_gate.py 并记录，硬判定统一交给 step0b
+  的 figure_analysis_gate.py --section（exit1 阻断），避免同一 gate 双跑。
 
 输出：stdout 一行 JSON {"ok":bool,"section":...,"checks":[...],"warnings":[...]}
 任一硬检查失败额外打印 PREWRITE_GATE: FAIL + 原因 并 exit 1。
@@ -181,7 +184,8 @@ def main():
     else:
         checks.append({"name": "blind_review", "ok": True, "note": "first section, N/A"})
 
-    # ---- check 3: 素材就位（subprocess figure_analysis_gate.py，复用） ----
+    # ---- check 3: 素材就位（figure_analysis，仅信息，硬判定交给 step0b figure_analysis_gate.py） ----
+    # 只跑一次探查并记录，绝不阻断——避免与 step0b 的硬门 figure_analysis_gate 双跑同一 gate。
     fig_ok, fig_out = run_subprocess_gate("figure_analysis_gate.py", ["--section", section], root)
     if fig_ok is None:
         warnings.append(f"figure_analysis_gate.py unavailable: {fig_out}")
@@ -189,8 +193,8 @@ def main():
     elif fig_ok:
         checks.append({"name": "figure_analysis", "ok": True})
     else:
-        failures.append(f"figure_analysis_gate failed: {fig_out}")
-        checks.append({"name": "figure_analysis", "ok": False, "detail": fig_out})
+        warnings.append(f"figure_analysis not ready (info only, enforced by step0b): {fig_out}")
+        checks.append({"name": "figure_analysis", "ok": False, "info_only": True, "detail": fig_out})
 
     # ---- check 4: 占位符清零（上一节文件） ----
     placeholder_hits = scan_placeholders(manuscript_files_for_section(root, section))
