@@ -16,4 +16,4 @@ Delegate mechanical tasks to subagent; main agent focuses on synthesis and writi
 
 ## NOT Delegatable
 
-Outline design, synthesis writing, Reviewer Simulator decisions, user interaction, HALT decisions.
+Outline design, synthesis writing, 逐节质量自检的修订/HALT decisions, user interaction, HALT decisions.
