@@ -115,6 +115,39 @@ def _is_mcp_fresh(record: dict[str, Any], ttl_days: int, now_utc: datetime) -> t
     return True, None
 
 
+def entry_is_fresh_verified(
+    raw_entry: dict[str, Any], ttl_days: int, now_utc: datetime | None = None
+) -> bool:
+    """True when a RAW index entry is already verified within the freshness window.
+
+    Adapters call this BEFORE re-running validate_core: a fresh-verified entry may
+    reuse its persisted verification result instead of re-hitting Crossref/PubMed.
+    The timestamp may live at the entry top level (``verified_at``/``checked_at``)
+    or inside ``verification_details.checked_at`` (adapter-dependent).
+
+    Fail-safe by construction: verified is not True, ttl_days<=0, or a
+    missing/unparseable timestamp all return False, so the caller falls through to
+    a full re-verification. A stale (out-of-TTL) entry also returns False and is
+    re-verified — retraction/freshness safety is preserved.
+    """
+    if ttl_days <= 0:
+        return False
+    if raw_entry.get("verified") is not True:
+        return False
+    if now_utc is None:
+        now_utc = datetime.now(timezone.utc)
+    details = raw_entry.get("verification_details")
+    ts_raw = (
+        raw_entry.get("verified_at")
+        or raw_entry.get("checked_at")
+        or (details.get("checked_at") if isinstance(details, dict) else None)
+    )
+    ts = _parse_dt(str(ts_raw or ""))
+    if ts is None:
+        return False
+    return ts >= now_utc - timedelta(days=ttl_days)
+
+
 def _fetch_crossref_by_doi(doi: str) -> dict[str, Any] | None:
     encoded = urllib.parse.quote(doi, safe="")
     payload = _http_get_json(f"https://api.crossref.org/works/{encoded}")

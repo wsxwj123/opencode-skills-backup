@@ -1,6 +1,6 @@
 ---
 name: general-sci-writing
-description: 用于从零撰写或润色符合Nature/Science/Cell标准的SCI研究论文（Article类型），适用于多学科。触发词：写论文、SCI论文、学术写作、科研写作、论文润色、研究论文、学术投稿、投稿、润色论文、polish paper、write SCI paper、academic writing、draft paper、manuscript writing。路由说明：退稿/返修改主稿→用revise-sci；只写审稿意见回复→用reviewer-response-sci；本技能侧重写新稿与润色，Phase 13B含内部初步退稿自查但不出回复包也不出修订稿docx。
+description: 用于从零撰写或润色符合Nature/Science/Cell标准的SCI研究论文（Article类型），适用于多学科。触发词：写论文、SCI论文、学术写作、科研写作、论文润色、研究论文、学术投稿、投稿、润色论文、polish paper、write SCI paper、academic writing、draft paper、manuscript writing。路由说明：退稿/返修改主稿→用revise-sci；只写审稿意见回复→用reviewer-response-sci；独立成稿的纯语言润色（拿到别人写好的整稿只改语言、不进本管道）→用polish-sci，本技能的润色仅指管道内 Phase 10 对自写稿的润色；综述/文献综述→用review-writing。本技能侧重写新稿与自写稿润色，Phase 13B含内部初步退稿自查但不出回复包也不出修订稿docx。
 license: Proprietary
 ---
 
@@ -199,6 +199,14 @@ license: Proprietary
 **输出**：3000词可行性报告，包含：选题价值、数据充分性评估、拟发表期刊建议、关键风险点。
 **决策门**：用户阅读报告后确认继续，或调整研究设计再回到 Phase 0。
 
+### Phase 1.9: 体裁前置确认（Mandatory，提示级闸门）
+构建 storyline 前必须先向用户确认稿件体裁，体裁错了后面全白做（本闸脚本无法判定体裁，靠提示级把关）：
+- **研究论文（Article / IMRaD，有原始数据与结果）** → 留在本技能，进入 Phase 2。
+- **综述 / 文献综述（无原始实验，梳理与综合已有文献）** → 停下，转 **review-writing** 技能。
+- **学位论文 / 毕业论文（博士 / 硕士，中文，SCI 转学位论文）** → 停下，转 **sci2doc** 技能。
+
+拿不准就问用户一句"这是投期刊的研究论文、综述、还是学位论文？"，得到明确答复再继续；**严禁默认当研究论文直接开写 storyline**。
+
 ### Phase 2: 故事脉络构建 (`/storyline`)
 构建融合Results与Discussion的提纲。
 
@@ -361,8 +369,9 @@ python scripts/state_manager.py add-abbreviation <one.json>
    - **哪些算承重论点（is_load_bearing=true）**：支撑本节结论方向的机制句、因果句、定量对比结论句。段首背景句、常识铺垫句算背景（is_load_bearing=false，批量核对即可，不逐条阻断）。
    - **证据只用检索原样落盘的真摘要**：从 `literature_index.json` 里取该 ref 当初 MCP **检索原样落盘的 `abstract`**（不看可编的 key_finding、不脑补），逐条判 `verdict ∈ support/weak/contradict/unknown` 并摘一句 `evidence_quote`。取不到摘要的承重引用先走 §12 摘要补全或换引文，别硬写。
    - **落盘 `claim_evidence.json`**（list，每条）：`{section, claim_sentence, is_load_bearing, ref_id, retrieved_abstract, verdict, evidence_quote, user_confirmed}`。
+   - **🟢 跨节复用（修"AI 漏写字段导致重复验证"的关键）**：核证脚本会**自动读写项目根 `ref_evidence_cache.json`**，已验状态由脚本落盘，**AI 不必手动记忆或回写任何字段**。因此建矩阵时：① 对**已在别节验过的同一 `ref_id`**，`retrieved_abstract` 可留空，脚本核证前会按 ref_id 从 cache 回填摘要，无需重抓；② 对**同一 `ref_id` + 完全同一论点句**且此前已确认的，脚本自动复用已确认的 verdict/`user_confirmed`，不再 AskUserQuestion 打扰用户；③ **只对新出现的 (ref_id, 论点句) 组合**做反向验证与逐条确认。门禁强度不变：新 (ref, claim) 无 verdict 仍 fail-closed。
    - **跑核证**：运行 Phase 0 `env_preflight.py` 打印的 `CITATION_CHECK_CMD`——即 `python "<.../\_shared/citation_claim_check.py>" --root <project_root>`。它渲染"观点↔引文↔是否真支持"矩阵表；**承重句 verdict=contradict/unknown、或缺摘要、或未逐条人工确认 → exit 2 fail-closed 硬拦**，据表改引文/改论点/补确认后重跑。
-   - **承重句逐条确认 (AskUserQuestion)**：每条承重引用把"论点句 + 判定 + 摘要证据句"用 AskUserQuestion 逐条给用户确认（确认后把该行 `user_confirmed=true`）；背景句在矩阵表里**批量**呈现让用户扫一眼，不逐条阻断。
+   - **承重句逐条确认 (AskUserQuestion)**：**只对新出现的承重 (ref_id, 论点句)** 把"论点句 + 判定 + 摘要证据句"用 AskUserQuestion 逐条给用户确认（确认后脚本把该行 `user_confirmed=true` 落盘）；此前已确认过的同一组合由脚本自动复用、不再打扰；背景句在矩阵表里**批量**呈现让用户扫一眼，不逐条阻断。
    - **定位**：这是"帮你写对的脚手架"——先核对引文再落笔，不是卡死后续的墙；核证过了才进 step 1 起草。（承重句 contradict 硬拦是防止照着不支持的引文下笔，属科学正确性底线。）
 1. **Pre-Write Check**: 检查数据完整性。
 2. **Drafting (Main)**: 撰写包含 Main Figures 和 References 的初稿。
@@ -380,19 +389,19 @@ python scripts/state_manager.py add-abbreviation <one.json>
 
    **🔴 DoD 自检清单（硬规则：清单未逐项确认通过，不得向用户声明"本节完成"）**
 
-   **🔴 委托盲检（不得主 agent 自评）**：你刚写完本节，自评会失真地默认通过、且易漏项。落盘前必须把 DoD 清单**委托给独立上下文的子代理盲检**，自己不直接打勾：
+   **🔴 委托盲检（不得主 agent 自评）**：你刚写完本节，自评会失真地默认通过、且易漏项。落盘前必须把 DoD 清单**委托给独立上下文的subagent盲检**，自己不直接打勾：
    1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate section-dod --files <本节文件>`
-   2. **派一个独立子代理**(Claude Code 用 `academic-blind-reviewer`;其他平台派通用子代理)，把任务包原样给它、**不要给它本节的写作上下文**，要求按任务包返回 JSON 数组。
-   3. 校验返回:`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate section-dod --return <子代理返回.json> --section <当前section_id> --root <项目根>`;退出码非 0(任一缺项/fail/无证据)= **fail-closed**,据子代理证据修复后重跑,**未过不得声明完成**。verify 通过会落盘 `.review_pass/<当前section_id>.json`,下一节 `prewrite_gate.py` 会**硬校验**它(缺失即拒绝开写)。
+   2. **派一个独立subagent**(Claude Code 用 `academic-blind-reviewer`;其他平台派通用subagent)，把任务包原样给它、**不要给它本节的写作上下文**，要求按任务包返回 JSON 数组。
+   3. 校验返回:`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate section-dod --return <subagent返回.json> --section <当前section_id> --root <项目根>`;退出码非 0(任一缺项/fail/无证据)= **fail-closed**,据subagent证据修复后重跑,**未过不得声明完成**。verify 通过会落盘 `.review_pass/<当前section_id>.json`,下一节 `prewrite_gate.py` 会**硬校验**它(缺失即拒绝开写)。
 
-   🔴 **[P4·盲检降级告警]**：若环境派不出真正独立的子代理，**绝不能同一 AI 自问自答冒充盲检**（自证）。告诉用户「本环境盲检不可靠，请你亲自复核：__（列出该盲检本应查的关键点）__」，交回用户。
+   🔴 **[P4·盲检降级告警]**：若环境派不出真正独立的subagent，**绝不能同一 AI 自问自答冒充盲检**（自证）。告诉用户「本环境盲检不可靠，请你亲自复核：__（列出该盲检本应查的关键点）__」，交回用户。
 
-   🟢 **[①DoD 停·盲检通过后必须展示+握手]**：`delegate_review verify` exit 0（盲检通过）**不等于自动往下写**。通过后 AI 必须把盲检的**逐项结论**（每条 DoD 项 pass/warn + 子代理给的证据要点）摆给用户看，并**HALT 等用户确认**"这节可以定稿、继续下一节吗？"；用户明确同意后才开始写下一节。这是**展示+可继续**的握手停顿，不是加硬墙——脚本层前置闸口（下条）照旧。
+   🟢 **[①DoD 停·盲检通过后必须展示+握手]**：`delegate_review verify` exit 0（盲检通过）**不等于自动往下写**。通过后 AI 必须把盲检的**逐项结论**（每条 DoD 项 pass/warn + subagent给的证据要点）摆给用户看，并**HALT 等用户确认**"这节可以定稿、继续下一节吗？"；用户明确同意后才开始写下一节。这是**展示+可继续**的握手停顿，不是加硬墙——脚本层前置闸口（下条）照旧。
 
    🔴 **进入下一节前置闸口**：上一节 `delegate_review verify` 必须 exit 0（含 G13 结构完整性），否则不得开始下一节撰写。写完即检，不过不进。
    🔴 **修复 3 次仍不过 → 回滚兜底**：同一节据盲检证据修复重跑 3 次仍 fail，停止盲目重写，提示用户回滚到上一检查点（git 可用：`git checkout <sha> -- <文件>`；否则 `/rollback` 到上一 snapshot）后重写。
 
-   **本节完整 DoD 判据（全部核查项 + 脚本命令）以 `references/dod_checklist.json` gate=`section-dod` 为唯一真源（25 项）**：盲检子代理据此逐项核、能脚本核的先跑脚本，退出码非 0 即 fail-closed。该 gate 含引文对应/citation_guard/主线对齐/占位清零/去AI(style_checker，含必禁三项 scare_quotes/explanatory_colon/em-dash 硬门)/字数上限/figure data_status 非 pending/无像素定量/实验逻辑批判/节末 Vancouver/只改原子源/figure_analysis 加载/缩略词一致/检查点/字符级排版(proofread subsup_bare 硬门)/拉丁斜体软提醒等脚本项，及 G13 结构完整性、G23 常识合理性(软)，与 **G17-G22 六项盲检质量核（科学事实正确、统计方法学、论证逻辑闭环、文献完整性与引用偏倚、图表质量与疑似造假、学术合规披露）**。此处不再内联清单，避免与真源 drift。
+   **本节完整 DoD 判据（全部核查项 + 脚本命令）以 `references/dod_checklist.json` gate=`section-dod` 为唯一真源（25 项）**：盲检subagent据此逐项核、能脚本核的先跑脚本，退出码非 0 即 fail-closed。该 gate 含引文对应/citation_guard/主线对齐/占位清零/去AI(style_checker，含必禁三项 scare_quotes/explanatory_colon/em-dash 硬门)/字数上限/figure data_status 非 pending/无像素定量/实验逻辑批判/节末 Vancouver/只改原子源/figure_analysis 加载/缩略词一致/检查点/字符级排版(proofread subsup_bare 硬门)/拉丁斜体软提醒等脚本项，及 G13 结构完整性、G23 常识合理性(软)，与 **G17-G22 六项盲检质量核（科学事实正确、统计方法学、论证逻辑闭环、文献完整性与引用偏倚、图表质量与疑似造假、学术合规披露）**。此处不再内联清单，避免与真源 drift。
 10. **Safety Write**: 用户 OK 后写入文件 → 智能快照 → **Git Checkpoint**：`python scripts/git_checkpoint.py commit [Project_Root] "[gsw] section <section_id> done"`（git 不可用时自动 no-op，snapshot 仍是回退兜底）。回退手段：若落盘后用户反悔，`/rollback` 到上一个 snapshot、`git checkout <sha> -- <file>` 回退单节，或直接 Edit 改原子化文件（参见 §3 润色 workflow）。
 
 **Discussion 段落结构 / Online Methods vs STAR Methods**：写 Discussion 或 Methods 章节前 `Read references/writing-templates.md` 对应小节。要点：Discussion 走"主要发现总结→文献对比+机制→**Limitations（强制，缺即退稿高频）**→Outlook"四段式；Methods 按 target_journal 选 Online Methods（Nature 精简版+完整版后置）或 STAR Methods（Cell 五段结构）。
@@ -445,10 +454,10 @@ python scripts/state_manager.py add-abbreviation <one.json>
 
 **🔴 红线**：① 对标文必须 `citation_guard --require-mcp` 验证真实存在、不编造，每篇 `verified=true`；② 只学公开风格特征，严禁复制具体科学内容或句子（防抄袭）；③ `target_journal` 须与 `storyline.json` 一致；④ 占位符（`{{}}`/`TBD`/空字段）清零。
 
-**🔴 DoD 自检（gate `journal-study-dod`，落盘前委托独立子代理盲检，不得主 agent 自评）**：
+**🔴 DoD 自检（gate `journal-study-dod`，落盘前委托独立subagent盲检，不得主 agent 自评）**：
 1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate journal-study-dod --files journal_study/target_journal_study.json`
-2. 派独立子代理（Claude Code 用 `academic-blind-reviewer`），不给写作上下文，要求按任务包返回 JSON 数组。
-3. 校验：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate journal-study-dod --return <子代理返回.json>`；退出码非 0 = **fail-closed**，据证据修复后重跑，未过不得声明完成、不得进 Phase 9。
+2. 派独立subagent（Claude Code 用 `academic-blind-reviewer`），不给写作上下文，要求按任务包返回 JSON 数组。
+3. 校验：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate journal-study-dod --return <subagent返回.json>`；退出码非 0 = **fail-closed**，据证据修复后重跑，未过不得声明完成、不得进 Phase 9。
 
 清单各项（与 `references/dod_checklist.json` 的 `journal-study-dod` 逐项对应）：
 - [ ] **JS1 代表作数量**：`recent_representative_papers` ≥5 篇且均为近 5 年
@@ -487,6 +496,7 @@ python scripts/state_manager.py add-abbreviation <one.json>
 
 > **Windows**：步骤 5 的 `grep ... 2>/dev/null` 与步骤 6 的 `[ ... ] || grep -q ...` 是 POSIX shell 写法，PowerShell/cmd 不可用。AI 在 Windows 上改用 `Select-String` 或直接用 Python 等价逻辑，完成同样的占位符扫描与 AUTO-GENERATED banner 校验。
 7. `python scripts/abbreviation_consistency.py --root .` — 缩略词一致性扫描（脚本化，不再纯靠 AI 自评）。检测：① **重复定义** 同一缩写在多个 manuscript 文件首次定义；② **未定义就用** 直接用 ABBR 但 `abbreviations.json` 缺、且不在 `UNIVERSAL_ABBREVIATIONS` 白名单；③ **Title 出现缩写**（Title 严禁缩写）。**阻断**：脚本 exit 非 0 → 必修后重跑。通用缩写（DNA/RNA/PCR 等）自动跳过。脚本未覆盖的"已定义但全文未使用"等冗余项可人工补查。
+8. `python scripts/cross_section_consistency.py --root . --reconcile-sections`（section 双向对账，🟡 报告式软门，非硬拦、无签字门禁）。同时报：① **漏建**（storyline 有该 section_id、manuscripts 无对应文件）；② **孤儿**（manuscripts 有文件、不属于任何 storyline section）。exit 1 = 有差异：把 `missing_in_manuscripts` / `orphan_manuscripts` 列给用户，漏建的补写、孤儿的确认是否并入某节或从 storyline 补登，处置后重跑至 exit 0 再合并。exit 0 直接放行。
 
 **期刊语言调性对齐（改到末尾 polish-sci）**：本阶段只做 `/check` 的去 AI/校对；**期刊语言风格深度对齐不在此做**，留到全文定稿后用 `polish-sci` 技能统一处理（不改科学内容，仅调语言风格/结构呈现）。`/journal-study` 已停用，不再产 `journal_study/target_journal_study.json`。
 
@@ -594,7 +604,7 @@ python scripts/state_manager.py add-abbreviation <one.json>
 ### Phase 16: 最终合并与导出 (`/merge`, `/export_bib`)
 > **[用户确认检查点 Mandatory]** 合并前必须展示各章节字数、引用总数和 gate-check 状态，等待用户确认后才执行合并。
 
-**合并前强制核验**：执行 `python scripts/citation_guard.py --index literature_index.json --mcp-cache mcp_literature_cache.json --require-mcp --report citation_guard_report.json`，仅当 `ok=true` 才允许合并。
+**合并前强制核验**：执行 `python scripts/citation_guard.py --index literature_index.json --mcp-cache mcp_literature_cache.json --require-mcp --report citation_guard_report.json --write-back`，仅当 `ok=true` 才允许合并。（`--write-back` 必带：落盘每条 `verified`+`checked_at`，供 L1 逐条短路复用，避免每次全量重验；过期/未验条目仍照常重验。）
 
 生成Word文档和BibTeX引用文件。
 - **`/merge` 中间版本 vs 最终版本**：
@@ -660,7 +670,7 @@ python scripts/state_manager.py add-abbreviation <one.json>
 - ❌ 手改派生稿：编辑 Full_Manuscript.md 或 .docx，而不是改 manuscripts/ 下的原子化源文件。
 - ❌ 把整个 Results 或 Introduction 写进一个文件，违反一个 sub-section 一个 markdown 的原子化规则。
 - ❌ 连续自动写多节：每节落盘前不展示字数、引用、figure、缩略词、占位数给用户确认就直接写。
-- ❌ 主 agent 自评 DoD 当通过：节末检查必须委托独立子代理盲检，上一节 verify 未 exit 0 就开写下一节。
+- ❌ 主 agent 自评 DoD 当通过：节末检查必须委托独立subagent盲检，上一节 verify 未 exit 0 就开写下一节。
 - ❌ 带 CITE_PENDING / DATA_PENDING / REF_DROPPED 占位跑 /merge，跳过 Phase 10 占位扫描门禁。
 - ❌ 先写超期刊上限 30% 再砍：storyline 必须在 target_journal 字数上限内编排。
 - ❌ Discussion 漏写 Limitations 段，或正文用列点符号，或用装饰性破折号（—/——，硬禁、命中即 fail）。（单句超 30 词为软提示，见提醒酌情改，不列入硬性反例。）
