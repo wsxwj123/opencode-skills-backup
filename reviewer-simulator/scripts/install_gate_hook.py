@@ -22,7 +22,9 @@ registry(hook 的开关+版本提交点)最后落盘:中途被杀只造成暂时
 from __future__ import annotations
 
 import json
+import os
 import shutil
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -55,10 +57,43 @@ def _settings_path() -> Path:
     return Path.home() / ".claude" / "settings.json"
 
 
+def _interpreter() -> str:
+    """挑 hook 命令用的解释器:探测 PATH 上真实存在的裸名(fire 时再由 PATH 解析)。
+    全新 macOS 只有 python3 没有 python(裸写 python → exit 127,Claude Code 对非 2
+    退出码不阻断,物理锁会静默失效);老 Windows 反之只有 python。按探测不按平台猜,
+    还能覆盖'Windows 装了 python3 别名'等平台规则会猜错的组合。两个裸名都不在
+    PATH(极罕见,毕竟本脚本正在被某个 Python 跑)时退回 sys.executable 绝对路径
+    兜底——绝对路径有 venv 删了跟着死的风险,故只作最后手段。
+    每次安装/自检都重新探测:解释器环境变了(如 pyenv 卸载),_reconcile_entries
+    的精确命令比对会自动把旧 entry 迁移成新命令,自愈。"""
+    for name in ("python3", "python"):
+        if shutil.which(name):
+            return name
+    return sys.executable or "python3"
+
+
 def _target_command() -> str:
     hook = _gate_dir() / "academic_gate_hook.py"
-    # 引号包路径以容纳空格;python 交给 PATH(Windows 上用户须保证 python 可用)
-    return f'python "{hook}"'
+    interp = _interpreter()
+    if " " in interp or os.sep in interp or (os.altsep and os.altsep in interp):
+        interp = f'"{interp}"'  # 绝对路径兜底时可能含空格/分隔符,加引号
+    # hook 路径引号包以容纳空格
+    return f'{interp} "{hook}"'
+
+
+def _hook_command_runs() -> bool:
+    """双保险:把写进 settings 的那条命令原样经 shell 真跑一遍(灌良性 {} 输入,
+    hook 无 file_path 会静默 exit 0)。跑不起来(127 解释器缺失/126 不可执行/超时)
+    即物理锁实际失效,必须报 degraded 告警,不许假装 installed。
+    shell=True 是刻意的:Claude Code 执行 hook 命令就是经 shell(PATH 解析/引号
+    语义都走 shell),用列表形式测不到真实执行路径;命令串全部来自自控路径
+    (探测的裸解释器名 + 本脚本拼的 hook 路径),无用户输入,无注入面。"""
+    try:
+        p = subprocess.run(_target_command(), shell=True, input="{}",
+                           capture_output=True, text=True, timeout=15)
+        return p.returncode == 0
+    except Exception:
+        return False
 
 
 def _bundle_version(d: Path) -> int:
@@ -207,6 +242,13 @@ def main() -> None:
         if not ok:
             result.update(status="degraded", action="install-skipped", message=(
                 "未能自动安装门禁 hook：" + action + "。请当作未受保护，按监工卡人工盯防。"))
+        elif not _hook_command_runs():
+            # 双保险:entry 写对了但命令本身跑不起来(如解释器缺失)=物理锁静默失效
+            result.update(status="degraded", action=action, message=(
+                "门禁 hook 已写入 settings.json，但该命令在本机跑不起来"
+                "（未找到 python3/python 解释器？）——物理拦截未生效。"
+                "请安装 Python3 后重新运行本技能（会自动修复 hook 命令）；"
+                "在此之前当作未受保护，按监工卡人工盯防。"))
         elif action == "already-present":
             hb = _heartbeat_status()
             if hb == "fresh":
