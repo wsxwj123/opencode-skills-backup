@@ -94,7 +94,7 @@ An academic consultant for high-impact literature reviews (Nature Reviews, Cell,
    - Mechanistic/experimental claims → Original Articles (mandatory; do NOT substitute a Review).
    - Clinical claims → Clinical Trials.
    - Emerging claims → Preprints（label `[Preprint]`，**按需、非强制**）：仅当某新兴论点确无正式发表可引时才用；无此类论点则不必凑预印本。
-   - **文献量不足时怎么办**：先分清是"领域本就小/短篇综述"还是"检索不充分"。前者按实际写、在搜索日志注明检索范围，不硬凑；后者回 Phase 2 补检索（扩同义词 / 放宽年限 / 换库）。**绝不为达数而引入弱相关或未读文献**——凑数引用比数量少更伤质量。
+   - **文献量不足时怎么办**：先分清是"领域本就小/短篇综述"还是"检索不充分"。前者按实际写、在搜索日志注明检索范围，不硬凑；后者回 Phase 2 补检索（扩同义词 / 放宽年限 / 换库）。**绝不为达数而引入弱相关或未读文献**。凑数引用比数量少更伤质量。
 3. **Numbering:** Global Sequential (`[1]`, `[2]`, … `[N]`). Never reset per chapter.
 4. **Timeliness:** Core focus past 5 years.
 5. **Truthfulness:** ZERO TOLERANCE for hallucinated citations. Verify every paper via search tools.
@@ -187,7 +187,7 @@ Before any **writing / search / import / Zotero-mutating** action, ask exactly *
 > Write Mode:  Phase 0 (init) → Phase 1.5 (research gap) → Phase 1.6 (benchmark reviews+framing) → Phase 1.7 (outline from research + sign-off) → Phase 2 (search) → Phase 3 (write) → Phase 4 (export) → Phase 5 (submission pack)
 > Polish Mode: Phase 0 (init) → Phase 0-P (import+diagnose) → Phase 3 (write) → Phase 4 (export) → Phase 5 (submission pack)
 > ```
-> **调研先于提纲**：Write Mode 先调研（1.5 研究空白 + 1.6 对标框架），提纲在 Phase 1.7 据调研结果建立并落结构签字——提纲是读透文献后的产物，不是开工前置。
+> **调研先于提纲**（核心顺序见 Quick Reference Card）：Write Mode 先调研（1.5 研究空白 + 1.6 对标框架），提纲在 Phase 1.7 据调研结果建立并落结构签字。
 > Phase 1.5 / 1.6 / 1.7 are Write-Mode only (Polish Mode imports an existing draft, so gap/framing/outline-building are skipped). Phase 5 runs in both modes.
 >
 > Resume rule: if `state.json` already exists in the project folder, read it first.  
@@ -202,7 +202,7 @@ Before any **writing / search / import / Zotero-mutating** action, ask exactly *
 > After locating, `cd` into the project directory before any further operation.
 
 > **🔁 接续与决定日志（每次进入/续写的第一动作，项目已存在时必做）：**
-> 1. 定位到项目根后，**第一件事先跑 Phase 0.5 打印的 `RESUME_CMD`**（绝对路径指向 `_shared/session_journal.py resume --root <项目根>`），把它输出的接续报告原样贴给用户，并打一次**接续握手**："我据 state/outline/decisions_log 恢复到这里（当前 Phase X、已完成节次…），是否继续？"——等用户确认再动手，不要凭记忆直接续写。
+> 1. 定位到项目根后，**第一件事先跑 Phase 0.5 打印的 `RESUME_CMD`**（绝对路径指向 `_shared/session_journal.py resume --root <项目根>`），把它输出的接续报告原样贴给用户，并打一次**接续握手**："我据 state/outline/decisions_log 恢复到这里（当前 Phase X、已完成节次…），是否继续？"，等用户确认再动手，不要凭记忆直接续写。
 > 2. **用户中途插入任何临时要求**（改结构、调顺序、换重点等），立即用 `session_journal.py log --root <项目根> --note "用户要求：<原话>"` 追加到 `decisions_log.md`（append-only，后续会话必读），再执行。
 > 3. `RESUME_CMD` 只读展示、绝不阻断；新项目（state.json 尚不存在）跳过本步，直接走 Mode Handshake Gate。
 
@@ -220,7 +220,7 @@ Before any **writing / search / import / Zotero-mutating** action, ask exactly *
    （尤其 Windows 上文献检索工具 edirect 常失效，AI 可能凭印象编出看着像真的假文献。）
 3. 每写完一节就停下来给你验收：别让 AI 连着写好几节，写一节你看一节再放行。
 4. 门禁说"通过"不能只信一句话：要求 AI 把门禁脚本的原始输出原文贴出来，
-   不接受只说"✅ 通过"——没有原始输出就当没通过。
+   不接受只说"✅ 通过"，没有原始输出就当没通过。
 ```
 
 
@@ -244,7 +244,7 @@ Ask all parameters at once. State defaults; user may accept silently.
 | Subagent model | Same as current session | AI scans available models, user confirms |
 
 **If Chinese writing selected**, notify at end of Phase 0:
-> 本技能使用 PubMed/paper-search MCP 检索英文文献。中文数据库（CNKI/万方）补充流程详见 `references/citation_styles.md` § CNKI / 万方中文文献导入。建议在初稿完成后统一补充，避免 gid 编号冲突。
+> 本技能使用 PubMed/paper-search MCP 检索英文文献。中文数据库（CNKI/万方）补充流程详见 `references/citation_styles.md` § CNKI / 万方中文文献导入。在初稿完成后统一补充，避免 gid 编号冲突。
 
 #### 系统综述模式触发点（仅当 Review type = systematic）
 
@@ -402,7 +402,7 @@ Format: `[review] Phase X.Step: <description>`. 📖 消息表 + Rollback 命令
 
 ## Phase 1.5: Research Gap Identification（Write Mode only）
 
-> **⭐ 执行顺序（调研先于提纲）：这是 Phase 0 之后的第一个实质阶段。** 提纲不在这里建——先调研（1.5 空白 + 1.6 对标框架），到 **Phase 1.7** 才据调研结果建提纲并落结构签字。
+> **⭐ 执行顺序（调研先于提纲）：这是 Phase 0 之后的第一个实质阶段。** 提纲不在这里建，先调研（1.5 空白 + 1.6 对标框架），到 **Phase 1.7** 才据调研结果建提纲并落结构签字。
 
 **触发时机：** Phase 0 初始化后立即进入（提纲尚未建立，先摸清领域再据此建提纲）。Polish Mode 跳过（已有成稿）。
 **Entry: Read `outline.md`（此时仅有模板骨架）+ `state.json`. If `phase ≥ 1.6`（对标框架已完成）→ already done, skip.**
@@ -414,7 +414,7 @@ Format: `[review] Phase X.Step: <description>`. 📖 消息表 + Rollback 命令
 
 0. **先定 RQ/PICO（提纲的语义锚点）：** 与用户确认研究问题 RQ/PICO（scoping review 用 PCC：Population/Concept/Context），写入 `outline.md` 的 `## Research Question` 区。RQ/PICO 明确后，探索性检索与后续提纲各节才有检验标准。（完整提纲结构在 Phase 1.7 据调研结果建立，此处只锚定研究问题。）
 
-1. **初始化 index 并取证文献：** 先建空索引 `python3 scripts/state_manager.py init-index`（幂等，创建 `data/literature_index.json` + `data/synthesis_matrix.json`）。围绕 RQ/PICO 做一轮**探索性检索**（串行，≥1s 间隔，工具优先级同 Phase 2）。**探索阶段只写 `data/literature_index.json`（不依赖 Zotero 集合树——集合树在 Phase 1.7 建提纲后才创建）**，每篇跑 `citation_guard.py`——**gap 只能由 verified 文献推出**。本步入库可与 Phase 2 共享 index（不重复入库）。
+1. **初始化 index 并取证文献：** 先建空索引 `python3 scripts/state_manager.py init-index`（幂等，创建 `data/literature_index.json` + `data/synthesis_matrix.json`）。围绕 RQ/PICO 做一轮**探索性检索**（串行，≥1s 间隔，工具优先级同 Phase 2）。**探索阶段只写 `data/literature_index.json`（不依赖 Zotero 集合树，集合树在 Phase 1.7 建提纲后才创建）**，每篇跑 `citation_guard.py`，**gap 只能由 verified 文献推出**。本步入库可与 Phase 2 共享 index（不重复入库）。
    > ⚠️ 红线：gap 必须从真实文献证据推出，**禁止脑补**。每个 gap 关联 ≥1 篇支撑文献 `[n]`，且该 `[n]` 已 citation_guard verified。
 
 2. **识别四类信号**，写入 `data/research_gap.json`：
@@ -470,7 +470,7 @@ Format: `[review] Phase X.Step: <description>`. 📖 消息表 + Rollback 命令
 
 ### 步骤
 
-1. **检索对标综述：** 工具优先级同 Phase 2（串行，≥1s）。目标 5–10 篇近年同领域高水平综述（Nature Reviews / Cell / Lancet 系等）。每篇**必须真实存在并走 citation_guard 验证**——禁编造。
+1. **检索对标综述：** 工具优先级同 Phase 2（串行，≥1s）。目标 5–10 篇近年同领域高水平综述（Nature Reviews / Cell / Lancet 系等）。每篇**必须真实存在并走 citation_guard 验证**，禁编造。
    > ⚠️ 红线：对标综述真实存在、走 `citation_guard.py` 验证，不编造标题/期刊/年份。
 
 2. **建对标库 `data/benchmark_reviews.json`：** 每篇含
@@ -533,7 +533,7 @@ Format: `[review] Phase X.Step: <description>`. 📖 消息表 + Rollback 命令
    > ```
    > 修改后须更新 `outline.md`，重新确认 Zotero 集合树（`--init` 是幂等的），并用 Git Checkpoint 记录版本。**不得因回修提纲而删除已完成节次的已有文献入库记录。**
 
-   > **[结构签字·强制门禁落锁]** 用户在对话里明确确认提纲后（且**仅在此之后**），运行 Phase 0.5 `init_project.py` 打印的那条 `SIGNOFF_CMD`（已含解析好的绝对路径与项目根）落盘签字——即 `python "<.../_shared/structure_signoff_gate.py>" confirm --root <项目根> --note "<用户确认原话摘录>"`。这一步解锁正文写作：**未落签字，PreToolUse hook 会物理拦截任何对 `drafts/*.md` 的写入**（这是防跳步的硬门，不是提示词纪律）。该 hook 由 Phase 0 `init_project.py` 开工时经 `_shared/install_gate_hook.py` 自动安装并校验（备份原 settings / 只追加不覆写 / 校验失败即回滚），init 回显 `门禁保护[active]` 即在岗生效；若回显 `[degraded]` 或 `[error]`（安装/校验未通过），hook 未在岗、物理拦截降级为提示词纪律，此时需人工留意别在未签字时写 `drafts/`。若后续回修提纲（上方迭代闸允许），改完让用户重新确认并重跑本命令覆盖签字。⚠️ 严禁在用户未确认时自行运行 confirm——那等于伪造用户签字。
+   > **[结构签字·强制门禁落锁]** 用户在对话里明确确认提纲后（且**仅在此之后**），运行 Phase 0.5 `init_project.py` 打印的那条 `SIGNOFF_CMD`（已含解析好的绝对路径与项目根）落盘签字，即 `python "<.../_shared/structure_signoff_gate.py>" confirm --root <项目根> --note "<用户确认原话摘录>"`。这一步解锁正文写作：**未落签字，PreToolUse hook 会物理拦截任何对 `drafts/*.md` 的写入**（这是防跳步的硬门，不是提示词纪律）。该 hook 由 Phase 0 `init_project.py` 开工时经 `_shared/install_gate_hook.py` 自动安装并校验（备份原 settings / 只追加不覆写 / 校验失败即回滚），init 回显 `门禁保护[active]` 即在岗生效；若回显 `[degraded]` 或 `[error]`（安装/校验未通过），hook 未在岗、物理拦截降级为提示词纪律，此时需人工留意别在未签字时写 `drafts/`。若后续回修提纲（上方迭代闸允许），改完让用户重新确认并重跑本命令覆盖签字。⚠️ 严禁在用户未确认时自行运行 confirm，那等于伪造用户签字。
 
 4. **规划贯穿全文的概念框架图（提纲确认后，Phase 1.7 内完成）：**
    在 `figures/figure_index.md` 中注册一条 `Figure 0`（概念框架图），要求：
@@ -686,7 +686,7 @@ python3 scripts/state_manager.py set-phase --phase 3
 ```
 **Skip completed sections (check `completed_sections` list).**
 
-> **🔗 Framing hook (Write Mode, MANDATORY before building any section's framework):** `Read data/framing_guide.md` (produced in Phase 1.6) and use its reusable章节框架/论证思路 as the basis for each section's structure — do NOT fall back to a generic default template. (Polish Mode: file may not exist — skip if absent.) This IS where framing-guide alignment is actually enforced; the Phase 1.6 benchmark gate no longer checks this Phase 3 action, and the resulting structure is reviewed downstream by manuscript-dod (R15/R16/R18).
+> **🔗 Framing hook (Write Mode, MANDATORY before building any section's framework):** `Read data/framing_guide.md` (produced in Phase 1.6) and use its reusable章节框架/论证思路 as the basis for each section's structure. Do NOT fall back to a generic default template. (Polish Mode: file may not exist, skip if absent.) This IS where framing-guide alignment is actually enforced; the Phase 1.6 benchmark gate no longer checks this Phase 3 action, and the resulting structure is reviewed downstream by manuscript-dod (R15/R16/R18).
 
 **Polish Mode branch (if `state.json` contains `"mode": "polish"`):**
 ```
@@ -739,7 +739,7 @@ If pending_sections is empty → all sections complete; proceed to Phase 4.
    然后跑 Phase 0.5 打印的 `CITATION_CHECK_CMD`（绝对路径指向 `_shared/citation_claim_check.py --root <项目根>`；读项目根 `claim_evidence.json`，渲染 claim↔引用支撑矩阵表）：
    - **承重句** `contradict` / `unknown` / 缺 `retrieved_abstract` / 未 `user_confirmed` → 脚本 fail-closed（exit 2）。对每个被拦的承重句，用 **AskUserQuestion 逐条**呈现（论点 + 拟引文献 + abstract 摘录 + 机器判定），让用户裁决：换引文 / 改写论点 / 确认支撑（确认后在该条置 `user_confirmed:true` 重跑）。
    - **背景句** 的 weak/contradict 只在矩阵表里标红提示，**批量**过目即可，不逐条打断。
-   - **定位**：这是帮你把引用挂对的脚手架——带着"引用确实支撑论点"的把握再落笔。通过后进 Step 4。（复用已建的 synthesis_matrix，不重复建库。）
+   - **定位**：这是帮你把引用挂对的脚手架，带着"引用确实支撑论点"的把握再落笔。通过后进 Step 4。（复用已建的 synthesis_matrix，不重复建库。）
 
 4. **Draft:** Write to `drafts/section_XX_XX.md` (zero-pad each part to 2 digits, e.g., section 1.1 → `drafts/section_01_01.md`, section 2.10 → `drafts/section_02_10.md`). Paragraphs only. Citation format `[N]` (N = gid).
    - **Reference the figure caption from Step 3a.** The draft must describe and introduce the figure using its planned caption and key message.
@@ -759,7 +759,7 @@ If pending_sections is empty → all sections complete; proceed to Phase 4.
    - Does NOT do online DOI/PMID verification here (that's Phase 4 `citation_guard.py`'s job).
    - [Zotero mode] Also cross-check against `--get-section` output: every gid used in draft should appear in the section's Zotero collection.
 
-6. **逐节质量自查（主 agent 轻量自查，为 Step 10 盲检兜底——不在此派独立盲检）：** 落笔后先由主 agent 自查一遍，尽早改掉明显问题、减少 Step 10 往返。**独立盲检不在这里做**：原每节两次委派（Step 6 评 D1-D5 + Step 10 跑 manuscript-dod）评分轴高度重叠，已合并为 Step 10 的**单次** manuscript-dod 盲检（D1 新颖并入 R23、D2 仲裁→R8、D3 证据→R7+R9、D4 连贯→R18、D5 去 AI→R5 已等价覆盖）。故本步只自查、不落盘、不阻断、不派 subagent；真正的独立盲检 + fail-closed 门禁 + 修复循环全在 Step 10。
+6. **逐节质量自查（主 agent 轻量自查，为 Step 10 盲检兜底，不在此派独立盲检）：** 落笔后先由主 agent 自查一遍，尽早改掉明显问题、减少 Step 10 往返。**独立盲检不在这里做**：原每节两次委派（Step 6 评 D1-D5 + Step 10 跑 manuscript-dod）评分轴高度重叠，已合并为 Step 10 的**单次** manuscript-dod 盲检（D1 新颖并入 R23、D2 仲裁→R8、D3 证据→R7+R9、D4 连贯→R18、D5 去 AI→R5 已等价覆盖）。故本步只自查、不落盘、不阻断、不派 subagent；真正的独立盲检 + fail-closed 门禁 + 修复循环全在 Step 10。
    **🔴 硬约束：这是本技能内部的轻量质量 checklist，不是 reviewer-simulator 技能。禁止调用或进入 reviewer-simulator 技能，禁止逐节生成任何 HTML 审稿报告（report_*.html 或其他报告文件）。**
    **量化兜底（先跑脚本再自读）：** 先跑 style_checker 拿客观信号，**high/medium 项必须先改掉；破折号命中即 hard_fail 一票否决，必须清零**；`info` 软项（long_sentence / excessive_passive_voice）只提醒不阻断、不扣分，择优处理。
    ```bash
@@ -768,7 +768,7 @@ If pending_sections is empty → all sections complete; proceed to Phase 4.
    # 软项(severity=info,只报告不扣分不阻断)：long_sentence(>30词) / excessive_passive_voice(>30%)
    # exit 0 = 通过(score≥阈值)；非 0 = 据 issues 里的 high/medium 项修复后重跑（info 项不影响退出码）
    ```
-   然后主 agent 自读本节，对照 `references/reviewer_checklist.md` 的 D1-D5（新颖 / 仲裁 / 证据 / 连贯 / 去 AI）过一遍，把一眼能看出的问题就地改掉。这只是自查，是否通过不决定能否进下一步——门禁在 Step 10。
+   然后主 agent 自读本节，对照 `references/reviewer_checklist.md` 的 D1-D5（新颖 / 仲裁 / 证据 / 连贯 / 去 AI）过一遍，把一眼能看出的问题就地改掉。这只是自查，是否通过不决定能否进下一步，门禁在 Step 10。
 
 7. **Word count check:**
    ```bash
@@ -797,18 +797,18 @@ If pending_sections is empty → all sections complete; proceed to Phase 4.
        - Claude Code：用 `Task` 工具，`subagent_type="academic-blind-reviewer"`（无此 agent 时退回 `general-purpose`），prompt = pack 打印出的整段任务包原文（含"你的角色/待检文件/检查清单/返回格式/返回写到这个文件"），**不附加任何本节写作说明**。
        - 其他平台（Codex/OpenCode 等无此 agent）：新开一个干净上下文的subagent/子会话，同样只贴任务包原文。
     3. 校验返回：`python3 scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate manuscript-dod --return <subagent返回.json> --section <当前section_id> --root <项目根>`；退出码非 0（任一缺项 / fail / 无证据）= **fail-closed**。**修复循环（原 Step 6 的修复委派并入此处）：** 任一项失败即派一个**修复子代理**（输入 = 盲检返回的结构化意见 + 本节 `drafts/section_XX_XX.md`，不给写作上下文）做针对性修改，改完重跑 `pack → verify` 复评；修满 2 轮仍失败 → **HALT**，输出结构化反馈（【问题】+ 证据锚点 + 根源分析 + 修复方向）交用户裁决。是否修订 / 是否 HALT 的决策由主会话把关，不可委托。**未过不得声明完成。** verify 通过会落盘 `.review_pass/<当前section_id>.json`，下一节 `prewrite_gate.py` 会**硬校验**它（缺失即拒绝开写）。
-       > **诚实边界：** verify 的 `ok:true` 只代表清单每项都被裁决且形式合规——**PASS 仅覆盖形式层，语义正确性由盲检subagent主观判断、未自动核验**。
+       > **诚实边界：** verify 的 `ok:true` 只代表清单每项都被裁决且形式合规，**PASS 仅覆盖形式层，语义正确性由盲检subagent主观判断、未自动核验**。
        > **【P4·盲检降级告警】** ⚠️ 若环境派不出真正独立的subagent（非 Claude Code、无 `academic-blind-reviewer`），**绝不能同一 AI 自问自答冒充盲检**。告诉用户「本环境盲检不可靠，请你亲自复核本节」，别让自证闭环静默跑。
-    4. **🚪 逃生口（盲检subagent确实跑不起来时，且仅此时）**：若平台无 `academic-blind-reviewer`、通用subagent也反复失败/取不到返回，导致 `verify` 无法落盘标记、下一节被 `prewrite_gate` 永久锁死——**不要卡死或静默跳过**。改为人工逐项盲检本节 DoD 后，用显式放行开锁并留痕：
+    4. **🚪 逃生口（盲检subagent确实跑不起来时，且仅此时）**：若平台无 `academic-blind-reviewer`、通用subagent也反复失败/取不到返回，导致 `verify` 无法落盘标记、下一节被 `prewrite_gate` 永久锁死，**不要卡死或静默跳过**。改为人工逐项盲检本节 DoD 后，用显式放行开锁并留痕：
        ```bash
        python3 scripts/prewrite_gate.py --section <下一节id> --root . \
          --allow-manual-review "谁放行 + 为何盲检subagent不可用 + 已人工核过哪些项"
        ```
        它只放行"上一节盲检"这一项（其余硬检查照常），并写 `.review_pass/<上一节>.json`(manual:true) + 追加 `.review_pass/MANUAL_REVIEW_AUDIT.log`；理由为空则拒绝放行。此后每次 `prewrite_gate` 都会在 warnings 里点名"人工放行、语义未经独立盲检"。**门禁默认行为不变**：不加此参数时，缺盲检标记照旧硬拦。
 
-    `manuscript-dod` gate 共 **23 项（21 硬门禁 + R20/R22 两软报告）**，覆盖：通用（引文一一对应 / citation_guard / 符合 storyline / 占位清零 / 去 AI / 字数）、review 特有（综合非罗列 / 矛盾仲裁 / 引用类型匹配 / 检索日志 / 框架图一致）、systematic 额外（PRISMA 自洽 / RoB / GRADE）、结构完整性、**覆盖全面性 / 关键文献遗漏与引用偏倚 / 论证 arc 连贯 / 学术合规披露（R16-R19 盲检质量核）/ 新颖性与贡献（R23 盲检质量核）**、字符级机器门禁（R21）。**本次盲检已一并承接原 Step 6 逐节自检的 D1-D5 轴：D1 新颖→R23、D2 仲裁→R8、D3 证据→R7+R9、D4 连贯→R18、D5 去 AI→R5，故每节只在此做一次独立盲检，不再于 Step 6 重复委派。** **逐项内容 / severity / 核验命令以 `references/dod_checklist.json` 为唯一真源**——上面 `pack` 步骤运行时会把该 gate 的每个 item（id / name / check / script）完整打印进盲检任务包，此处不逐条枚举以免与 JSON 漂移。systematic 3 项仅 Review type = systematic 时检查，其余全类型通用。
+    `manuscript-dod` gate 共 **23 项（21 硬门禁 + R20/R22 两软报告）**，覆盖：通用（引文一一对应 / citation_guard / 符合 storyline / 占位清零 / 去 AI / 字数）、review 特有（综合非罗列 / 矛盾仲裁 / 引用类型匹配 / 检索日志 / 框架图一致）、systematic 额外（PRISMA 自洽 / RoB / GRADE）、结构完整性、**覆盖全面性 / 关键文献遗漏与引用偏倚 / 论证 arc 连贯 / 学术合规披露（R16-R19 盲检质量核）/ 新颖性与贡献（R23 盲检质量核）**、字符级机器门禁（R21）。**本次盲检已一并承接原 Step 6 逐节自检的 D1-D5 轴：D1 新颖→R23、D2 仲裁→R8、D3 证据→R7+R9、D4 连贯→R18、D5 去 AI→R5，故每节只在此做一次独立盲检，不再于 Step 6 重复委派。** **逐项内容 / severity / 核验命令以 `references/dod_checklist.json` 为唯一真源**，上面 `pack` 步骤运行时会把该 gate 的每个 item（id / name / check / script）完整打印进盲检任务包，此处不逐条枚举以免与 JSON 漂移。systematic 3 项仅 Review type = systematic 时检查，其余全类型通用。
 
-    - **R21 语法拼写与字符级格式(🔴机器硬门禁,可阻断)**,跑 `python3 scripts/proofread.py --manuscript-dir drafts --report proofread_report.json --fail-on misspelling,chinese_punct,subsup_bare`。stdlib-only、自包含。高置信三类**零容忍**——misspelling(英文常见错拼)、chinese_punct(中文标点漏入英文)、subsup_bare(应上下标却裸写,如 H2O/CO2/IC50,CJK 安全边界),命中任一即 `ok=false`(脚本 exit 1),据 `proofread_report.json` 的 `fail_on_hits` 定位修复后重跑。其余类别(英美拼写混用、单位格式、术语写法不一致、数字千分位、Methods 时态、学术错拼/中文错别字等)仅在报告里提示、不阻断,由作者择一统一。与 R5 去AI(style_checker)互补:R5 管文风,R21 管字符级机器错。
+    - **R21 语法拼写与字符级格式(🔴机器硬门禁,可阻断)**,跑 `python3 scripts/proofread.py --manuscript-dir drafts --report proofread_report.json --fail-on misspelling,chinese_punct,subsup_bare`。stdlib-only、自包含。高置信三类**零容忍**：misspelling(英文常见错拼)、chinese_punct(中文标点漏入英文)、subsup_bare(应上下标却裸写,如 H2O/CO2/IC50,CJK 安全边界),命中任一即 `ok=false`(脚本 exit 1),据 `proofread_report.json` 的 `fail_on_hits` 定位修复后重跑。其余类别(英美拼写混用、单位格式、术语写法不一致、数字千分位、Methods 时态、学术错拼/中文错别字等)仅在报告里提示、不阻断,由作者择一统一。与 R5 去AI(style_checker)互补:R5 管文风,R21 管字符级机器错。
 
     附带软报告项（不计入硬门禁退出码，由盲检subagent LLM 判断）：
 
@@ -816,7 +816,7 @@ If pending_sections is empty → all sections complete; proceed to Phase 4.
 
     - **R22 拉丁短语斜体软提醒(🟡软/人工确认,不阻断)**,`proofread.py` 的 `latin_italic_missing` 类别:正文里 `in vitro`/`in vivo`/`ex vivo`/`in situ`/`de novo`/`post hoc`/`per se` 等公认须斜体的拉丁短语若裸写(未被 `*...*` 斜体标记包裹)则报告。**仅提示,不阻断、不进 `--fail-on`、不扣分**,由人工确认是否补斜体(`et al.`/`e.g.`/`vs.` 等正体惯例不在词表内)。
 
-11. **📋 DoD 结论摆出 + HALT（展示式，不新增硬墙）：** 本节 `delegate_review verify` 盲检通过（exit 0 且 `.review_pass/<section>.json` 已落盘）后，先把**逐项 DoD 结论**摆给用户——从subagent返回的 JSON 里**逐条列出每个 `manuscript-dod` item**（id/name + verdict + 证据锚点摘录，以返回 JSON 的实际条目为准、不手点项号，含 systematic 3 项、结构完整性、R16-R19 覆盖全面性/引用偏倚/论证连贯/合规披露、R23 新颖性与贡献、字符级 R21；R5 里降软的长句/被动如命中只作 info 提示、不影响通过；破折号为 hard_fail 一票否决、命中即不通过）。再附本节 summary（content / logic / citation count / word count）。**然后 HALT 等用户确认，才写下一节。** 这是"展示 + 可继续"：盲检已过即可放行，此处只保证用户看到每项结论、有机会叫停，不新增硬门。Wait for "Continue".
+11. **📋 DoD 结论摆出 + HALT（展示式，不新增硬墙）：** 本节 `delegate_review verify` 盲检通过（exit 0 且 `.review_pass/<section>.json` 已落盘）后，先把**逐项 DoD 结论**摆给用户，从subagent返回的 JSON 里**逐条列出每个 `manuscript-dod` item**（id/name + verdict + 证据锚点摘录，以返回 JSON 的实际条目为准、不手点项号，含 systematic 3 项、结构完整性、R16-R19 覆盖全面性/引用偏倚/论证连贯/合规披露、R23 新颖性与贡献、字符级 R21；R5 里降软的长句/被动如命中只作 info 提示、不影响通过；破折号为 hard_fail 一票否决、命中即不通过）。再附本节 summary（content / logic / citation count / word count）。**然后 HALT 等用户确认，才写下一节。** 这是"展示 + 可继续"：盲检已过即可放行，此处只保证用户看到每项结论、有机会叫停，不新增硬门。Wait for "Continue".
 
 ### Figure Prompt Generation
 
@@ -876,7 +876,7 @@ Write Mode has no `pending_sections` field so this gate is a no-op (no key → e
    `--write-back`: persists `verified:true/false` fields into literature_index.json for traceability.
    `--manual-review`: writes unverifiable entries to `data/manual_review_queue.json` for human check; does NOT block compilation unless `--require-mcp` is also set.
 
-   > **【P4·文献抽验·用户必做】** 综述的命是引文。文献进正文前用户应抽 2-3 篇让 AI 报 PMID/DOI 自己去 PubMed 核对。⚠️ 你在 Windows 上 edirect 联网核验常跑不起来（本 SKILL 已注明 edirect 在 PowerShell/CMD 不可用）——**一旦不能真的联网查，AI 必须停下告诉用户，绝不许硬着头皮编 DOI/年份**。`validate_citations.py --live` 跑不起来时明说「联网核验不可用」，不许自判通过。
+   > **【P4·文献抽验·用户必做】** 综述的命是引文。文献进正文前用户应抽 2-3 篇让 AI 报 PMID/DOI 自己去 PubMed 核对。⚠️ 你在 Windows 上 edirect 联网核验常跑不起来（本 SKILL 已注明 edirect 在 PowerShell/CMD 不可用），**一旦不能真的联网查，AI 必须停下告诉用户，绝不许硬着头皮编 DOI/年份**。`validate_citations.py --live` 跑不起来时明说「联网核验不可用」，不许自判通过。
 3. **Export bibliography:**
    ```
    [Zotero] python3 scripts/zotero_manager.py --export-bibtex \
@@ -901,7 +901,7 @@ Write Mode has no `pending_sections` field so this gate is a no-op (no key → e
      --md exports/Final_Review.md \
      --index data/literature_index.json
    ```
-   > 写作阶段（Phase 3 规则 7）每节自带 `## References` 是**自包含核验用**——保证每节引用都能当场对账。`cat` 拼接会把这些每节列表全部塞进最终稿，导致 docx 出现多个参考表。本步把正文里散落的所有每节 `## References` 块**剥掉**，按全局编号 `[n]` 升序在**文末重建唯一一个** `## References`（Vancouver 条目来自 `literature_index.json`）。脚本幂等；若某 `[n]` 在 index 查不到，stderr 警告但不阻断导出（退出码仍 0），按需补 index 后重跑。
+   > 写作阶段（Phase 3 规则 7）每节自带 `## References` 是**自包含核验用**，保证每节引用都能当场对账。`cat` 拼接会把这些每节列表全部塞进最终稿，导致 docx 出现多个参考表。本步把正文里散落的所有每节 `## References` 块**剥掉**，按全局编号 `[n]` 升序在**文末重建唯一一个** `## References`（Vancouver 条目来自 `literature_index.json`）。脚本幂等；若某 `[n]` 在 index 查不到，stderr 警告但不阻断导出（退出码仍 0），按需补 index 后重跑。
    4b. **Cross-section coherence scan** (on compiled `exports/Final_Review.md`):
    Read the full compiled text sequentially and check:
    - **Transition continuity:** The opening of each section/subsection must logically connect to the closing of the previous one. Flag abrupt topic jumps with no bridging sentence.
@@ -954,7 +954,7 @@ Write Mode has no `pending_sections` field so this gate is a no-op (no key → e
 
 **📖 进入本阶段必读：**
 1. `references/submission_checklist.md`（综述版投稿清单 + 强制/询问分级 + 红线 + 产出路径）
-2. general-sci-writing 的 `references/submission-guide.md` 与 `references/compliance-gate.md` 的逐项标准——**只读，不改 gsw**。读取以对齐 Cover Letter 询问明细、CRediT 11 类分配、Acknowledgements 类别、合规门禁判定。
+2. general-sci-writing 的 `references/submission-guide.md` 与 `references/compliance-gate.md` 的逐项标准，**只读，不改 gsw**。读取以对齐 Cover Letter 询问明细、CRediT 11 类分配、Acknowledgements 类别、合规门禁判定。
 3. `references/presubmission_checklist.md`（投稿前作者自检清单，**soft 提醒不阻断**）：终稿交付前对照逐项自查，重点是机器无法可靠裁决、需作者掌握原始数据/图像/外部工具的项（图像不当处理、Source Data、查重、注册号、报告规范附件、投稿材料齐全等）。已被本技能 hard 门禁覆盖的维度不重复，仅提醒，不阻断交付。
 
 ### 强制 / 询问分级（对齐 gsw，不静默留白）
