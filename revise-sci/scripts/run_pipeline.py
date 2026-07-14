@@ -455,6 +455,7 @@ def main() -> int:
     parser.add_argument("--opencode-driver-command", default="")
     parser.add_argument("--context-token-budget", type=int, default=4200)
     parser.add_argument("--context-tail-lines", type=int, default=80)
+    parser.add_argument("--force-shared", action="store_true", help="跳过 preflight 的 PROJECT_ROOT 归属冲突检测(该目录已被别的技能占用时)。与独立 preflight.py 的同名逃生口保持一致。")
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--resume-from", choices=STEP_ORDER)
     parser.add_argument("--resume-keep-unaffected", action="store_true", help="On --resume with changed inputs, if the change touches no located comment unit (comments/manuscript/si only), keep all curated units and continue instead of demanding a full rebuild. If any unit is affected, list them and stop.")
@@ -585,7 +586,8 @@ def main() -> int:
     search_results_path = effective_paper_search_results_path(args, project_root)
 
     if not args.resume or not (project_root / "precheck_report.md").exists():
-        run_step([py, str(script_dir / "preflight.py")] + common_args)
+        preflight_args = common_args + (["--force-shared"] if args.force_shared else [])
+        run_step([py, str(script_dir / "preflight.py")] + preflight_args)
     search_results_path = effective_paper_search_results_path(args, project_root)
     if search_results_path and (not args.resume or not has_citation_guard_outputs(project_root)):
         guard_args = [

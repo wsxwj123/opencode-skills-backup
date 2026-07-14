@@ -16,6 +16,8 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
+from unit_glob import iter_units
+
 try:
     import fcntl
 except Exception:  # pragma: no cover
@@ -57,7 +59,7 @@ def _lock(project_root: Path):
 
 
 def _unit_files(project_root: Path) -> list[Path]:
-    return sorted((project_root / "units").glob("*.json"))
+    return [p for p, _ in iter_units(project_root / "units")]
 
 
 def _state_path(project_root: Path) -> Path:

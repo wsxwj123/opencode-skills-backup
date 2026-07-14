@@ -76,11 +76,13 @@ def load_outline_order(root):
     - 配置段标题（`## Parameters`/`## Outline (...)` 等模板里的非小节标题）——
       否则它们会混进顺序链，同样污染第一个可写小节的「上一节」判定。
     这样 outline 模板下 order = ['1.1','1.2','2.1',...]，1.1 即第一个、idx==0 放行。
+    正则兼容三级 X.Y 与四级 X.Y.Z（`2.1.1` 不被截成 `2.1`）。层级由 section_id 段数
+    推得：level = section_id.count('.')+2（`2.1`=三级、`2.1.1`=四级）。
     """
     path = os.path.join(root, "outline.md")
     if not os.path.exists(path):
         return []
-    subsection_pattern = re.compile(r"^(\d+\.\d+)\b")
+    subsection_pattern = re.compile(r"^(\d+(?:\.\d+)+)\b")
     order = []
     try:
         with open(path, "r", encoding="utf-8") as f:
@@ -253,13 +255,30 @@ def main():
     else:
         checks.append({"name": "blind_review", "ok": True, "note": "first section, N/A"})
 
-    # ---- check 3: 素材就位（本 section 文献矩阵非空） ----
+    # ---- check 3: 素材就位（本 section 文献矩阵按层级硬地板，只卡叶子） ----
+    # 层级：level = section_id.count('.')+2（`2.1`=三级=3、`2.1.1`=四级=4）。
+    # 硬地板 floor={3:6,4:3}，其余层级=1；容器父节（order 里有更深子节）放宽到 1。
+    # 软目标 三级≥10 / 四级≥5，不达只进 warnings 不阻断（仅叶子节）。
     n_rows = matrix_rows_for_section(root, section)
-    if n_rows > 0:
-        checks.append({"name": "literature_matrix", "ok": True, "rows": n_rows})
+    level = section.count(".") + 2
+    is_container = any(s != section and s.startswith(section + ".") for s in order)
+    floor = 1 if is_container else {3: 6, 4: 3}.get(level, 1)
+    if n_rows >= floor:
+        chk = {"name": "literature_matrix", "ok": True, "rows": n_rows,
+               "level": level, "floor": floor}
+        if is_container:
+            chk["container"] = True
+        soft_target = {3: 10, 4: 5}.get(level)
+        if soft_target and not is_container and n_rows < soft_target:
+            warnings.append(
+                f"section {section!r}(level {level}) 文献 {n_rows} 条 < 软目标 {soft_target}；"
+                f"建议补足以保证综述覆盖度（不阻断）")
+        checks.append(chk)
     else:
-        failures.append(f"synthesis_matrix has no rows for section {section!r}")
-        checks.append({"name": "literature_matrix", "ok": False})
+        failures.append(
+            f"section {section!r}(level {level}) 文献矩阵仅 {n_rows} 条 < 硬地板 {floor}")
+        checks.append({"name": "literature_matrix", "ok": False, "rows": n_rows,
+                       "level": level, "floor": floor})
 
     # ---- check 4: 占位符清零（drafts） ----
     placeholder_hits = scan_placeholders(draft_files(root))

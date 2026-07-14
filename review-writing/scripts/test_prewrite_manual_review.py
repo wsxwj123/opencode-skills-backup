@@ -25,8 +25,10 @@ def _build_project(root: Path) -> None:
     (root / "state.json").write_text(
         json.dumps({"completed_sections": ["1.1"]}), encoding="utf-8")
     (root / "data").mkdir(exist_ok=True)
+    # 1.2 是三级叶子节：需 ≥6 条满足 check3 硬地板，才让本测试聚焦盲检放行链路。
     (root / "data" / "synthesis_matrix.json").write_text(
-        json.dumps([{"related_sections": ["1.2"], "pmid": "1"}]), encoding="utf-8")
+        json.dumps([{"related_sections": ["1.2"], "pmid": str(i)} for i in range(6)]),
+        encoding="utf-8")
     (root / "drafts").mkdir(exist_ok=True)
     (root / "drafts" / "section_01_01.md").write_text("clean draft.\n", encoding="utf-8")
 

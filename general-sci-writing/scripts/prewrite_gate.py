@@ -34,6 +34,72 @@ import sys
 PLACEHOLDER_TOKENS = ("CITE_PENDING", "DATA_PENDING", "【待")
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
+# 按 section 角色的软文献门：只有 Intro / Discussion 设低地板，其余（Methods /
+# Results / 其它）一律不设篇数门（研究论文引用数学科差异大，硬门只在 Intro /
+# Discussion 兜底）。(hard_floor, soft_target)：hard 不达→failures 硬拦；
+# soft 不达→warnings 提醒。
+ROLE_LIT_FLOORS = {
+    "introduction": (6, 10),
+    "discussion": (8, 12),
+}
+
+# 复用 state_manager 的矩阵解析（同技能目录，非受保护文件）；导入失败则降级跳过。
+sys.path.insert(0, SCRIPT_DIR)
+try:
+    from state_manager import load_literature_matrix, sanitize_section_id
+except Exception:  # pragma: no cover - 降级路径
+    load_literature_matrix = None
+    sanitize_section_id = None
+
+
+def infer_section_role(section_dict, section_id):
+    """判定 section 角色：优先读显式 role 字段，否则从 id 关键词推断。
+
+    gsw storyline 无强制 role 字段（模板只有 id/type），故 id 兜底：含 intro→
+    introduction、含 discuss→discussion，其余（含 results/methods/conclusion）→
+    other（不设文献门）。gsw 融合 Results+Discussion，results_* 归 results 无门。
+    """
+    raw = ""
+    if isinstance(section_dict, dict):
+        raw = str(section_dict.get("role") or "").strip().lower()
+    if not raw:
+        raw = str(section_id or "").lower()
+    # results_/methods_ 前置判定：gsw 融合 Results+Discussion，results_* 一律归 other 无门，
+    # 即使 id 含 intro/discuss 子串（如 results_reintroduction / results_discussion），
+    # 避免结果节被误套 Intro/Discussion 硬地板而 false block（与本函数 docstring 一致）。
+    if raw.startswith(("results", "result_", "method", "conclusion")):
+        return "other"
+    if "intro" in raw:
+        return "introduction"
+    if "discuss" in raw:
+        return "discussion"
+    return "other"
+
+
+def load_storyline_sections(root):
+    """返回 storyline.json 的 sections 列表（dict 元素），无则 []。"""
+    payload = _load_json(os.path.join(root, "storyline.json"))
+    if not isinstance(payload, dict):
+        return []
+    sections = payload.get("sections")
+    return [s for s in sections if isinstance(s, dict)] if isinstance(sections, list) else []
+
+
+def count_section_literature(root, section):
+    """统计矩阵里归属该 section 的文献条数（合并 literature_matrix.json + storyline 内嵌）。"""
+    if load_literature_matrix is None:
+        return None
+    try:
+        matrix, _ = load_literature_matrix(
+            matrix_file=os.path.join(root, "literature_matrix.json"),
+            storyline_file=os.path.join(root, "storyline.json"),
+        )
+    except Exception:
+        return None
+    key = sanitize_section_id(str(section)) if sanitize_section_id else str(section)
+    refs = matrix.get(key)
+    return len(refs) if isinstance(refs, list) else 0
+
 
 def _load_json(path):
     if not os.path.exists(path):
@@ -215,6 +281,29 @@ def main():
     else:
         failures.append(f"abbreviation_consistency failed: {abbr_out}")
         checks.append({"name": "abbreviation", "ok": False, "detail": abbr_out})
+
+    # ---- check 6: 按 section 角色的软文献门（Intro/Discussion 低地板，余不设门） ----
+    if order and section in order:
+        sections = load_storyline_sections(root)
+        sec_dict = next((s for s in sections
+                         if str(s.get("id") or s.get("section_id") or "") == str(section)), None)
+        role = infer_section_role(sec_dict, section)
+        floor = ROLE_LIT_FLOORS.get(role)
+        n = count_section_literature(root, section)
+        if n is None:
+            warnings.append("literature matrix unreadable (state_manager unavailable), skip literature floor")
+            checks.append({"name": "literature_role", "ok": None, "role": role})
+        elif floor is None:
+            checks.append({"name": "literature_role", "ok": True, "role": role, "count": n, "note": "no floor"})
+        else:
+            hard, soft = floor
+            if n < hard:
+                failures.append(f"{role} literature count {n} < hard floor {hard}")
+                checks.append({"name": "literature_role", "ok": False, "role": role, "count": n, "hard": hard})
+            else:
+                checks.append({"name": "literature_role", "ok": True, "role": role, "count": n, "hard": hard})
+                if n < soft:
+                    warnings.append(f"{role} literature count {n} < soft target {soft} (info only)")
 
     ok = not failures
     print(json.dumps({"ok": ok, "section": section, "checks": checks,

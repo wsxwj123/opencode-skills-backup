@@ -7,6 +7,8 @@ import argparse
 import json
 from pathlib import Path
 
+from unit_glob import load_units
+
 
 def read_json(path: Path):
     return json.loads(path.read_text(encoding="utf-8"))
@@ -25,7 +27,7 @@ def main() -> int:
     s_dir = root / "si_units"
     idx = read_json(root / "index.json")
 
-    units = [read_json(p) for p in sorted(units_dir.glob("*.json"))]
+    units = load_units(units_dir)
     comment_units = [u for u in units if u.get("section") != "email"]
 
     leaf_ids = []

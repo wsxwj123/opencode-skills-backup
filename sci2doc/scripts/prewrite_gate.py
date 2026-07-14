@@ -19,6 +19,13 @@ section_id 形如 "2.1"（章.节）。
    存在且 passed:true（由 delegate_review.py verify --section 第<N-1>章 落盘）；缺失 → 硬拦。
    第 1 章首节无上一章，放行。
 
+逃生口（--allow-manual-review "<理由>"，默认行为不变）：
+   盲检子代理不可用（平台无 academic-blind-reviewer / 子代理反复失败）时，才用此显式
+   人工放行。只放行上面两处盲检项（per-section 与 per-chapter 章边界），其余硬检查
+   （上一节文件/大纲/占位符/data_trace 等）照常拦。放行必留痕：写对应 .review_pass/
+   <sec>.json（manual:true+reason+timestamp）并追加 MANUAL_REVIEW_AUDIT.log；两处各打
+   独立 warning；理由为空即拒绝放行。不是静默跳过。
+
 降级 warning（不阻断）：
 - 缩略词一致：sci2doc 用 abbreviation_registry（无 --root 式扫描接口）→ skip 并注明
 
@@ -34,6 +41,7 @@ import json
 import os
 import re
 import sys
+from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 try:
@@ -42,6 +50,24 @@ except Exception:  # pragma: no cover - 缺失不应反过来卡住 prewrite
     data_trace_gate = None
 
 PLACEHOLDER_TOKENS = ("CITE_PENDING", "DATA_PENDING", "【待")
+
+
+def record_manual_review(root, section, reason):
+    """逃生口留痕：盲检子代理不可用时对某盲检项做显式人工放行。
+
+    写 <root>/.review_pass/<section>.json（manual:true+reason+timestamp）+ 追加
+    <root>/.review_pass/MANUAL_REVIEW_AUDIT.log，使后续 prewrite_gate 天然通过且
+    全程可追溯。section 既可为节级('2.1')也可为章级('第1章')，命名天然对上。绝非静默跳过。
+    """
+    pass_dir = os.path.join(root, ".review_pass")
+    os.makedirs(pass_dir, exist_ok=True)
+    ts = datetime.now(timezone.utc).isoformat()
+    marker = {"passed": True, "manual": True, "section": section,
+              "reason": reason, "timestamp": ts}
+    with open(os.path.join(pass_dir, f"{section}.json"), "w", encoding="utf-8") as f:
+        json.dump(marker, f, ensure_ascii=False, indent=2)
+    with open(os.path.join(pass_dir, "MANUAL_REVIEW_AUDIT.log"), "a", encoding="utf-8") as f:
+        f.write(f"{ts}\tsection={section}\tmanual_review_override\treason={reason}\n")
 
 
 def _load_json(path):
@@ -157,6 +183,11 @@ def main():
     )
     parser.add_argument("--section", required=True, help="章.节，例如 2.1")
     parser.add_argument("--root", required=True, help="project root")
+    parser.add_argument(
+        "--allow-manual-review", default=None, metavar="REASON",
+        help="逃生口：盲检子代理不可用时，对上一节/上一章盲检做显式人工放行（附非空理由）。"
+             "只放行两处盲检项，其余硬检查照常；会写对应 <root>/.review_pass/<sec>.json(manual) "
+             "并追加 MANUAL_REVIEW_AUDIT.log 留痕。不传则门禁默认行为不变（缺盲检标记即硬拦）。")
     args = parser.parse_args()
 
     root = os.path.abspath(args.root)
@@ -200,11 +231,31 @@ def main():
         pass_path = os.path.join(root, ".review_pass", f"{prev}.json")
         marker = _load_json(pass_path)
         if isinstance(marker, dict) and marker.get("passed") is True:
-            checks.append({"name": "blind_review", "ok": True, "prev": prev})
+            chk = {"name": "blind_review", "ok": True, "prev": prev}
+            if marker.get("manual"):
+                chk["manual"] = True
+                warnings.append(
+                    f"section {prev!r} 盲检为人工放行(manual override, reason={marker.get('reason', '')!r})；"
+                    f"语义正确性未经独立盲检核验")
+            checks.append(chk)
+        elif args.allow_manual_review is not None:
+            reason = (args.allow_manual_review or "").strip()
+            if not reason:
+                failures.append(
+                    "--allow-manual-review 需附非空理由（谁放行、为何盲检子代理不可用）")
+                checks.append({"name": "blind_review", "ok": False, "prev": prev})
+            else:
+                record_manual_review(root, prev, reason)
+                warnings.append(
+                    f"section {prev!r} 盲检由 --allow-manual-review 人工放行；已留痕 "
+                    f".review_pass/{prev}.json + .review_pass/MANUAL_REVIEW_AUDIT.log；"
+                    f"语义正确性未经独立盲检核验")
+                checks.append({"name": "blind_review", "ok": True, "prev": prev, "manual": True})
         else:
             failures.append(
                 f"previous section {prev!r} blind review not passed or marker missing; "
-                f"run: delegate_review.py verify --section {prev}")
+                f"run: delegate_review.py verify --section {prev}"
+                f"（盲检子代理不可用时可显式人工放行：加 --allow-manual-review \"<理由>\"）")
             checks.append({"name": "blind_review", "ok": False, "prev": prev})
     else:
         checks.append({"name": "blind_review", "ok": True, "note": "first subsection or chapter-level, N/A"})
@@ -221,11 +272,31 @@ def main():
         ch_pass_path = os.path.join(root, ".review_pass", f"{prev_ch}.json")
         ch_marker = _load_json(ch_pass_path)
         if isinstance(ch_marker, dict) and ch_marker.get("passed") is True:
-            checks.append({"name": "prev_chapter_blind_review", "ok": True, "prev": prev_ch})
+            chk = {"name": "prev_chapter_blind_review", "ok": True, "prev": prev_ch}
+            if ch_marker.get("manual"):
+                chk["manual"] = True
+                warnings.append(
+                    f"chapter {prev_ch!r} 章级盲检为人工放行(manual override, "
+                    f"reason={ch_marker.get('reason', '')!r})；语义正确性未经独立盲检核验")
+            checks.append(chk)
+        elif args.allow_manual_review is not None:
+            reason = (args.allow_manual_review or "").strip()
+            if not reason:
+                failures.append(
+                    "--allow-manual-review 需附非空理由（谁放行、为何盲检子代理不可用）")
+                checks.append({"name": "prev_chapter_blind_review", "ok": False, "prev": prev_ch})
+            else:
+                record_manual_review(root, prev_ch, reason)
+                warnings.append(
+                    f"chapter {prev_ch!r} 章级盲检由 --allow-manual-review 人工放行；已留痕 "
+                    f".review_pass/{prev_ch}.json + .review_pass/MANUAL_REVIEW_AUDIT.log；"
+                    f"语义正确性未经独立盲检核验")
+                checks.append({"name": "prev_chapter_blind_review", "ok": True, "prev": prev_ch, "manual": True})
         else:
             failures.append(
                 f"previous chapter {prev_ch!r} blind review not passed or marker missing; "
-                f"run: delegate_review.py verify --section {prev_ch}")
+                f"run: delegate_review.py verify --section {prev_ch}"
+                f"（盲检子代理不可用时可显式人工放行：加 --allow-manual-review \"<理由>\"）")
             checks.append({"name": "prev_chapter_blind_review", "ok": False, "prev": prev_ch})
     else:
         checks.append({"name": "prev_chapter_blind_review", "ok": True,

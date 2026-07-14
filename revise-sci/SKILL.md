@@ -404,7 +404,7 @@ These inline markers are load-bearing and carry the same status as citation mark
 
 **🔴 委托盲检（不得主 agent 自评）**：改稿完成后自评容易默认通过且漏项。`strict_gate.py` 运行前必须把 DoD 清单**委托给独立上下文的subagent盲检**，不得自己直接打勾：
 
-1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate revision-dod --files <改稿相关文件>`
+1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate revision-dod --files <改稿相关文件> --comments <comments_path>`（`--comments` 传本次审稿信原文，盲检子代理据原信逐条点名核对漏回/答非所问；同一 `comments_path` 与 `run_pipeline.py --comments` 一致）
 2. **派一个独立subagent**（Claude Code 用 `academic-blind-reviewer`；其他平台派通用subagent），把任务包原样给它、**不要给它本次改稿的写作上下文**，要求按任务包返回 JSON 数组。
 3. 校验返回：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate revision-dod --return <subagent返回.json>`；退出码非 0（任一缺项/fail/无证据）= **fail-closed**，据subagent证据修复后重跑，**未过不得声明改稿完成**。
 

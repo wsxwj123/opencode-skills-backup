@@ -37,6 +37,13 @@ BODY_STYLES = {
     "Bibliography": 12,     # reference list entries (keep consistent with body)
 }
 
+# 正文段前段后清零：这三个样式承载绝大多数正文段落，SCI 正文不留段间距。
+# Compact 保留自带小间距（紧凑列表用），不清零。
+# Bibliography basedOn Normal，Normal 清零后会被继承带零导致条目粘连，故显式补回
+# space_after 保证参考文献条目间仍有间隔。
+ZERO_SPACING_STYLES = ("Normal", "Body Text", "First Paragraph")
+BIBLIOGRAPHY_AFTER_PT = 6
+
 # Heading / title styles: name -> (point size, bold). TNR bold, descending sizes.
 HEADING_STYLES = {
     "Title": (18, True),
@@ -68,6 +75,13 @@ def set_style_font(style, size_pt, bold=None):
     rfonts.set(qn("w:ascii"), FONT_NAME)
     rfonts.set(qn("w:hAnsi"), FONT_NAME)
     rfonts.set(qn("w:cs"), FONT_NAME)
+
+
+def set_para_spacing(style, before_pt, after_pt):
+    """强制段前段后间距（字体不动）。"""
+    pf = style.paragraph_format
+    pf.space_before = Pt(before_pt)
+    pf.space_after = Pt(after_pt)
 
 
 def main():
@@ -105,6 +119,16 @@ def main():
         if name in styles:
             set_style_font(styles[name], size, bold=bold)
             applied.append(f"{name} -> {FONT_NAME} {size}pt bold={bold}")
+
+    # 正文段前段后清零（字体已在上面设好，这里只动间距）。
+    for name in ZERO_SPACING_STYLES:
+        if name in styles:
+            set_para_spacing(styles[name], 0, 0)
+            applied.append(f"{name} -> spacing before/after 0pt")
+    # Bibliography 显式补回 space_after（否则继承已清零的 Normal 导致条目粘连）。
+    if "Bibliography" in styles:
+        set_para_spacing(styles["Bibliography"], 0, BIBLIOGRAPHY_AFTER_PT)
+        applied.append(f"Bibliography -> spacing after {BIBLIOGRAPHY_AFTER_PT}pt (anti-stick)")
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     doc.save(str(output_path))

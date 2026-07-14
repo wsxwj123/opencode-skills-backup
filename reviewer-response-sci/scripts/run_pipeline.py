@@ -95,6 +95,7 @@ def main() -> int:
     parser.add_argument("--fail-on-conflict", action="store_true", help="Fail pipeline if consistency conflicts found")
     parser.add_argument("--fail-on-gap", action="store_true", help="Fail pipeline if final consistency report has gaps")
     parser.add_argument("--resume", action="store_true", help="Resume from last successful checkpoint if signature matches")
+    parser.add_argument("--force-shared", action="store_true", help="Allow running on a PROJECT_ROOT owned by another skill (skip ownership conflict check)")
     args = parser.parse_args()
 
     script_dir = Path(__file__).resolve().parent
@@ -116,6 +117,8 @@ def main() -> int:
     preflight_cmd = [sys.executable, str(preflight), "--comments", args.comments, "--manuscript", args.manuscript, "--project-root", args.project_root, "--output-html", args.output_html]
     if args.si:
         preflight_cmd.extend(["--si", args.si])
+    if args.force_shared:
+        preflight_cmd.append("--force-shared")
 
     build_cmd = [sys.executable, str(build), "--comments", args.comments, "--manuscript", args.manuscript, "--project-root", args.project_root, "--output-html", args.output_html, "--title", args.title]
     if args.si:

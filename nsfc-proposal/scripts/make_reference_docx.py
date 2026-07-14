@@ -34,6 +34,13 @@ TITLE_PT = H1_PT
 # 正文类样式（西文 TNR + eastAsia 宋体 + 小四）
 BODY_STYLES = ["Normal", "Body Text", "First Paragraph", "Compact"]
 
+# 段前段后清零的正文样式（国自然正文不留段间距）。
+# Compact 已自带 1.8pt 小间距（紧凑列表用）保持不动；
+# Bibliography basedOn Normal，Normal 清零后会被继承带零，故须显式补回小间距，
+# 保证参考文献条目之间仍有间隔。
+ZERO_SPACING_STYLES = ["Normal", "Body Text", "First Paragraph"]
+BIBLIOGRAPHY_AFTER_PT = 6
+
 # 标题类样式：(样式名, 字号, 是否加粗)
 # 黑体本身够区分层级，国自然标题习惯不强制加粗，统一 bold=False
 HEADING_STYLES = [
@@ -58,11 +65,26 @@ def _apply_western_and_size(style, size_pt: int) -> None:
     style.font.size = Pt(size_pt)
 
 
+def _set_para_spacing(style, before_pt: float, after_pt: float) -> None:
+    pf = style.paragraph_format
+    pf.space_before = Pt(before_pt)
+    pf.space_after = Pt(after_pt)
+
+
 def apply_styles(doc) -> None:
     for name in BODY_STYLES:
         style = doc.styles[name]
         _apply_western_and_size(style, BODY_PT)
         _set_east_asia(style, BODY_EAST_ASIA)
+
+    # 正文段前段后清零（字体不动）。
+    for name in ZERO_SPACING_STYLES:
+        _set_para_spacing(doc.styles[name], 0, 0)
+    # Bibliography 显式补回小间距（否则继承已清零的 Normal）。
+    try:
+        _set_para_spacing(doc.styles["Bibliography"], 0, BIBLIOGRAPHY_AFTER_PT)
+    except KeyError:
+        pass
 
     for name, size_pt, bold in HEADING_STYLES:
         style = doc.styles[name]

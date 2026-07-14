@@ -18,15 +18,13 @@ import sys
 import tempfile
 from pathlib import Path
 
+from unit_glob import iter_units
+
 _SCRIPT_DIR = Path(__file__).resolve().parent
 FAIL_ON = "misspelling,chinese_punct,subsup_bare"
 
 # 只扫这两个字段:作者写给编辑的回复正文。审稿人原话字段一律不碰。
 AUTHOR_RESPONSE_FIELDS = ("response_en", "response_zh")
-
-
-def _read_json(path: Path):
-    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def _extract_author_response(unit: dict) -> str:
@@ -60,11 +58,7 @@ def main() -> int:
     with tempfile.TemporaryDirectory() as tmp:
         tmp_dir = Path(tmp)
         dumped = 0
-        for p in sorted(units_dir.glob("*.json")):
-            try:
-                unit = _read_json(p)
-            except Exception:
-                continue
+        for p, unit in iter_units(units_dir):
             text = _extract_author_response(unit)
             if not text:
                 continue

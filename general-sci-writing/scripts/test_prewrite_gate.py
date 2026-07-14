@@ -82,6 +82,51 @@ def test_prewrite_gate_bidirectional() -> None:
         assert "storyline" in r.stdout.lower(), r.stdout
 
 
+def _build_first_section(root: Path, section_id: str, n_refs: int) -> None:
+    """造一个"写首节 section_id"的工程，literature_matrix 给 n_refs 条文献。
+
+    首节无上一节，绕开 done/盲检门，单独隔离软文献门这一条。
+    """
+    (root / "storyline.json").write_text(
+        json.dumps({"sections": [{"id": section_id}, {"id": "results_1"}]}),
+        encoding="utf-8")
+    (root / "literature_matrix.json").write_text(
+        json.dumps({section_id: [f"ref_{i}" for i in range(n_refs)]}),
+        encoding="utf-8")
+
+
+def test_literature_role_floor() -> None:
+    """按 section 角色的软文献门：Intro 硬地板6/软10；Methods 不设门。"""
+    # Intro n=4 < 硬地板6 → 硬拦
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        _build_first_section(root, "intro", 4)
+        r = _run(root, section="intro")
+        assert r.returncode == 1, f"intro n=4 must block\n{r.stdout}"
+        assert "hard floor" in r.stdout, r.stdout
+
+    # Intro n=7 ∈ [6,10) → 过但 soft warn
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        _build_first_section(root, "intro", 7)
+        r = _run(root, section="intro")
+        assert r.returncode == 0, f"intro n=7 must pass\n{r.stdout}\n{r.stderr}"
+        payload = json.loads([ln for ln in r.stdout.splitlines() if ln.startswith("{")][0])
+        assert any("soft target" in w for w in payload["warnings"]), payload
+
+    # Methods n=0 → 不设门放行
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        _build_first_section(root, "methods", 0)
+        r = _run(root, section="methods")
+        assert r.returncode == 0, f"methods any count must pass\n{r.stdout}\n{r.stderr}"
+        payload = json.loads([ln for ln in r.stdout.splitlines() if ln.startswith("{")][0])
+        role_check = next(c for c in payload["checks"] if c["name"] == "literature_role")
+        assert role_check["role"] == "other" and role_check.get("note") == "no floor", role_check
+
+
 if __name__ == "__main__":
     test_prewrite_gate_bidirectional()
-    print("OK: prewrite_gate — compliant pass; blind-marker/placeholder/storyline blocks")
+    test_literature_role_floor()
+    print("OK: prewrite_gate — compliant pass; blind-marker/placeholder/storyline blocks; "
+          "literature floor intro-hard/intro-soft/methods-open")

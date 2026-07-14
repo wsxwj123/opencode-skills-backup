@@ -354,6 +354,9 @@ DEFAULT_PROFILE = {
         "review_in_scope": False,
         "review_target_chars": 0,
         "references_min_count": 80,
+        # 按章软文献地板（warning，不阻断；总量 references_min_count 仍为硬门）。
+        # None → load 时按 degree_type 填充：博 {intro_review:30, research:12}；硕地板更低。
+        "per_chapter_ref_floor": None,
         "min_chapters": 5,
     },
     "chapter_targets": {},
@@ -1089,13 +1092,26 @@ def _derive_body_target(profile):
     return profile
 
 
+def _derive_per_chapter_ref_floor(profile):
+    """按章软文献地板：per_chapter_ref_floor 为 None 时按 degree_type 填充默认值。
+    博 {intro_review:30, research:12}；硕地板更低 {intro_review:20, research:8}。"""
+    targets = profile.setdefault("targets", {})
+    if targets.get("per_chapter_ref_floor") is None:
+        degree = str(profile.get("format_profile", {}).get("degree_type", "")).strip()
+        if "硕士" in degree or "master" in degree.lower():
+            targets["per_chapter_ref_floor"] = {"intro_review": 20, "research": 8}
+        else:
+            targets["per_chapter_ref_floor"] = {"intro_review": 30, "research": 12}
+    return profile
+
+
 def load_profile(project_root, profile_path=None):
     path = resolve_profile_path(project_root, profile_path)
     if not os.path.exists(path):
-        return _derive_body_target(ensure_format_profile(deep_merge(DEFAULT_PROFILE, {}))), path
+        return _derive_per_chapter_ref_floor(_derive_body_target(ensure_format_profile(deep_merge(DEFAULT_PROFILE, {})))), path
     with open(path, "r", encoding="utf-8") as f:
         payload = json.load(f)
-    return _derive_body_target(ensure_format_profile(deep_merge(DEFAULT_PROFILE, payload))), path
+    return _derive_per_chapter_ref_floor(_derive_body_target(ensure_format_profile(deep_merge(DEFAULT_PROFILE, payload)))), path
 
 
 def save_profile(path, profile):

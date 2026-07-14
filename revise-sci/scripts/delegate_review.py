@@ -89,6 +89,29 @@ def _pkg_record_path(workdir: str, gate: str) -> Path:
     return Path(workdir) / f".review_pkg_{gate}.json"
 
 
+def _read_comments_text(path: str) -> str:
+    """Read the original reviewer letter as plain text (.docx or .txt/.md).
+
+    The blind reviewer needs the ORIGINAL letter, not the already-parsed units:
+    a comment collapsed into one unit is invisible when checking against units alone.
+    """
+    p = Path(path)
+    if not p.exists():
+        sys.stderr.write(f"[delegate_review] 审稿信文件不存在: {path}\n")
+        sys.exit(2)
+    if p.suffix.lower() == ".docx":
+        try:
+            from docx import Document  # python-docx is a skill dependency
+        except ImportError:
+            sys.stderr.write(
+                "[delegate_review] 读取 .docx 需 python-docx；请改传纯文本审稿信(.txt/.md)\n"
+            )
+            sys.exit(2)
+        doc = Document(str(p))
+        return "\n".join(par.text for par in doc.paragraphs)
+    return p.read_text(encoding="utf-8", errors="replace")
+
+
 def cmd_pack(args: argparse.Namespace) -> int:
     checklist = _load_json(args.checklist)
     skill = checklist.get("skill", "?")
@@ -119,6 +142,20 @@ def cmd_pack(args: argparse.Namespace) -> int:
     for f in args.files:
         lines.append(f"- {f}")
     lines.append("")
+    if getattr(args, "comments", None):
+        comments_text = _read_comments_text(args.comments)
+        lines.append("## 审稿信原文(逐条点名核对，防漏回/答非所问)")
+        lines.append(
+            "下面是**未经解析的原始审稿信全文**。逐条覆盖类清单项(如 RR7/RR14/RR15)"
+            "**必须以本原文为准**，而不是只看已生成的 units：把原信中每一条独立诉求(含"
+            "连续散文里的多个问点、`(i)(ii)`、罗马数字、项目符号、一段多诉求)逐个点名，"
+            "回到 units 里找到对应回复；**找不到对应 unit = 漏回(fail)**，回复不对题 = 答非所问(fail)。"
+        )
+        lines.append("")
+        lines.append("```text")
+        lines.append(comments_text.strip())
+        lines.append("```")
+        lines.append("")
     lines.append("## 检查清单(逐项裁决,不得跳过)")
     for it in items:
         seg = f"- [{it['id']}] {it.get('name', '')}:{it.get('check', '')}"
@@ -260,6 +297,8 @@ def main() -> int:
     p_pack.add_argument("--checklist", required=True, help="DoD 清单 JSON 路径")
     p_pack.add_argument("--gate", required=True, help="清单内的 gate id")
     p_pack.add_argument("--files", nargs="+", required=True, help="待检文件路径")
+    p_pack.add_argument("--comments", default=None,
+                        help="原始审稿信路径(.docx/.txt/.md/.html)；传入后全文嵌入任务包，供盲检子代理逐条点名核对漏回/答非所问。强烈建议传。注意 .html 会原样含标签")
     p_pack.add_argument("--workdir", default=".", help="任务包记录写入目录(默认 cwd)")
     p_pack.set_defaults(func=cmd_pack)
 

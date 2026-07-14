@@ -487,6 +487,67 @@ def is_chapter_heading_text(text):
     return bool(re.match(r"^第[一二三四五六七八九十百千万零〇0-9]+章", t))
 
 
+_CITE_MARKER_RE = re.compile(r"\[\d+(?:\s*[-–,，]\s*\d+)*\]")
+
+
+def check_chapter_reference_distribution(doc, per_chapter_ref_floor):
+    """按章软文献统计（warning，不阻断）：绪论/文献综述章 [n] 引用数 < intro_review 地板、
+    研究/实验章 < research 地板 → warning。阈值来自 thesis_profile 的 per_chapter_ref_floor
+    （硕/博分档）。总量硬门仍由 check_reference_count 负责。结论章不设文献地板。"""
+    issues = []
+    if not isinstance(per_chapter_ref_floor, dict):
+        return issues
+    intro_floor = int(per_chapter_ref_floor.get("intro_review", 0) or 0)
+    research_floor = int(per_chapter_ref_floor.get("research", 0) or 0)
+    if intro_floor <= 0 and research_floor <= 0:
+        return issues
+
+    skip_kinds = {"references", "toc", "abstract", "acknowledgement", "appendix",
+                  "achievements", "declaration", "abbreviation_table"}
+    chapters = []  # {title, bucket, count}
+    cur = None
+
+    for para in doc.paragraphs:
+        text = para.text.strip()
+        if not text:
+            continue
+        lvl = heading_level(getattr(para.style, "name", ""))
+        if lvl is not None and is_chapter_heading_text(text):
+            if cur is not None:
+                chapters.append(cur)
+            kind = classify_heading(text)
+            norm = normalize_text(text)
+            if kind in skip_kinds:
+                cur = None
+                continue
+            if kind == "review" or any(k in norm for k in ("绪论", "引言", "文献综述", "综述", "研究背景", "研究进展")):
+                bucket = "intro_review"
+            elif any(k in norm for k in ("总结", "结论", "展望", "结束语")):
+                bucket = None  # 结论章不设文献地板
+            else:
+                bucket = "research"
+            cur = {"title": text, "bucket": bucket, "count": 0} if bucket else None
+            continue
+        if cur is not None and lvl is None:
+            cur["count"] += len(_CITE_MARKER_RE.findall(text))
+    if cur is not None:
+        chapters.append(cur)
+
+    for ch in chapters:
+        floor = intro_floor if ch["bucket"] == "intro_review" else research_floor
+        if floor <= 0:
+            continue
+        if ch["count"] < floor:
+            label = "绪论/文献综述章" if ch["bucket"] == "intro_review" else "研究/实验章"
+            issues.append({
+                'level': 'warning',
+                'category': '文献引用分布',
+                'message': f'{ch["title"][:20]}（{label}）文献引用偏少：{ch["count"]} / 建议≥{floor} 处',
+                'suggestion': f'{label}建议引用不少于 {floor} 处文献，当前仅 {ch["count"]} 处，请补充支撑或确认合理',
+            })
+    return issues
+
+
 def check_reference_position(doc):
     """
     校验参考文献位置：
@@ -2678,6 +2739,7 @@ def generate_quality_report(
     min_chapters=5,
     enforce_full_structure=False,
     md_path=None,
+    per_chapter_ref_floor=None,
 ):
     """生成完整质量报告"""
     gate_payload = _pending_template_payload(docx_path)
@@ -2728,6 +2790,9 @@ def generate_quality_report(
         print("🔍 检查参考文献...")
     ref_issues, ref_count = check_reference_count(doc, min_reference_count=references_min_count)
     all_issues.extend(ref_issues)
+
+    # 5.0.1 按章软文献分布（warning，不阻断）
+    all_issues.extend(check_chapter_reference_distribution(doc, per_chapter_ref_floor))
 
     # 5.1 参考文献位置校验
     reference_position_issues = check_reference_position(doc)
@@ -2878,7 +2943,10 @@ def generate_quality_report(
     
     # 计算总分（简化评分）
     error_count = len([i for i in all_issues if i['level'] == 'error'])
-    warning_count = len([i for i in all_issues if i['level'] == 'warning'])
+    # 按章文献密度为软提醒(soft target)，不计入导出评分，避免累积软告警把总分压到 80 门槛下、
+    # 间接把"软目标"变成硬拦(与用户"软目标只提醒不阻断"的决策一致)。
+    warning_count = len([i for i in all_issues
+                         if i['level'] == 'warning' and i.get('category') != '文献引用分布'])
     info_count = len([i for i in all_issues if i['level'] == 'info'])
     # 上下标裸写 / 中文句内半角标点 为硬阻断项：单独计数，纳入 ok/退出码判定（不改其评分权重）
     subsup_bare_count = len([i for i in all_issues if i.get('code') == 'subsup_bare'])
@@ -3120,8 +3188,9 @@ def main():
         args.references_min if args.references_min is not None else targets.get("references_min_count", 80)
     )
     min_chapters = int(args.min_chapters if args.min_chapters is not None else targets.get("min_chapters", 5))
+    per_chapter_ref_floor = targets.get("per_chapter_ref_floor")
     enforce_full_structure = bool(args.enforce_full_structure or ("完整博士论文" in os.path.basename(docx_path)))
-    
+
     # 生成报告
     report = generate_quality_report(
         docx_path,
@@ -3133,6 +3202,7 @@ def main():
         min_chapters=min_chapters,
         enforce_full_structure=enforce_full_structure,
         md_path=args.md_path,
+        per_chapter_ref_floor=per_chapter_ref_floor,
     )
     
     if not report.get('success'):

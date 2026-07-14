@@ -48,9 +48,9 @@ def _mark(root: Path, name: str) -> Path:
     return p
 
 
-def _run(root: Path, section: str) -> subprocess.CompletedProcess:
+def _run(root: Path, section: str, *extra: str) -> subprocess.CompletedProcess:
     return subprocess.run(
-        [sys.executable, str(SCRIPT), "--section", section, "--root", str(root)],
+        [sys.executable, str(SCRIPT), "--section", section, "--root", str(root), *extra],
         capture_output=True, text=True)
 
 
@@ -135,9 +135,68 @@ def test_mid_chapter_section_uses_existing_checks() -> None:
         assert ch and ch["ok"] is True, ch  # 章边界块保持 N/A,非本次失败原因
 
 
+def test_allow_manual_review_releases_chapter_gate_with_trail() -> None:
+    """遗留2:第2章首节 2.1 缺 第1章 章级标记 + --allow-manual-review "理由"
+    → 放行 exit0，且落痕 第1章.json(manual:true+reason) + MANUAL_REVIEW_AUDIT.log。"""
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        _build(root, chapters=("1", "2"))
+        r = _run(root, "2.1", "--allow-manual-review", "平台无 academic-blind-reviewer，负责人张三放行")
+        assert r.returncode == 0, f"manual override must pass\n{r.stdout}\n{r.stderr}"
+        ch = _check(_payload(r), "prev_chapter_blind_review")
+        assert ch and ch["ok"] is True and ch.get("manual") is True, ch
+        marker = json.loads((root / ".review_pass" / "第1章.json").read_text(encoding="utf-8"))
+        assert marker.get("manual") is True and marker.get("passed") is True, marker
+        assert "张三" in marker.get("reason", ""), marker
+        audit = (root / ".review_pass" / "MANUAL_REVIEW_AUDIT.log").read_text(encoding="utf-8")
+        assert "第1章" in audit and "manual_review_override" in audit, audit
+
+
+def test_allow_manual_review_empty_reason_rejected() -> None:
+    """空理由 → 拒绝放行，章级盲检仍硬拦 exit≠0，且不落痕。"""
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        _build(root, chapters=("1", "2"))
+        r = _run(root, "2.1", "--allow-manual-review", "   ")
+        assert r.returncode != 0, f"empty reason must be rejected\n{r.stdout}"
+        assert "非空理由" in r.stdout, r.stdout
+        assert not (root / ".review_pass" / "第1章.json").exists(), "空理由不得落痕"
+
+
+def test_manual_review_does_not_bypass_other_hard_gates() -> None:
+    """逃生口只开盲检门:大纲缺本章等其余硬门照拦。
+    大纲仅含第1章 → 2.1 的 outline 检查失败,即便带 --allow-manual-review 仍 exit≠0。"""
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        _build(root, chapters=("1",))  # outline 无 第2章
+        r = _run(root, "2.1", "--allow-manual-review", "盲检子代理不可用")
+        assert r.returncode != 0, f"outline hard gate must still block\n{r.stdout}"
+        pay = _payload(r)
+        assert _check(pay, "outline")["ok"] is False, pay
+
+
+def test_allow_manual_review_releases_per_section_gate() -> None:
+    """per-section 盲检门同样可放行:第2章 2.2 缺 2.1 节级盲检标记
+    + --allow-manual-review → 放行并落痕 2.1.json。"""
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        _build(root, chapters=("2",))
+        _write_section(root, "2", 1)  # 上一节 2.1 存在非空(prev_section_done 过)
+        r = _run(root, "2.2", "--allow-manual-review", "盲检子代理反复失败，人工放行")
+        assert r.returncode == 0, f"per-section manual override must pass\n{r.stdout}\n{r.stderr}"
+        ch = _check(_payload(r), "blind_review")
+        assert ch and ch["ok"] is True and ch.get("manual") is True, ch
+        assert (root / ".review_pass" / "2.1.json").exists(), "per-section 放行须落痕"
+
+
 if __name__ == "__main__":
     test_ch1_first_section_passes()
     test_ch2_first_section_missing_prev_chapter_blocks()
     test_ch2_first_section_with_marker_passes()
     test_mid_chapter_section_uses_existing_checks()
-    print("OK: prewrite_gate chapter-boundary gate — ch1 pass / ch2 block→pass / mid-chapter existing-checks (bidirectional)")
+    test_allow_manual_review_releases_chapter_gate_with_trail()
+    test_allow_manual_review_empty_reason_rejected()
+    test_manual_review_does_not_bypass_other_hard_gates()
+    test_allow_manual_review_releases_per_section_gate()
+    print("OK: prewrite_gate chapter-boundary gate — ch1 pass / ch2 block→pass / mid-chapter existing-checks (bidirectional)"
+          " + manual-review escape hatch (per-section & per-chapter release w/ trail, empty-reason reject, other hard gates still block)")
