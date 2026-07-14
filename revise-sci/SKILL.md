@@ -350,7 +350,7 @@ Each comment must contain:
 - The polishing stage must emit `revision_polish_manifest.json`, `revision_polish_prompt.md`, and `revision_polish_execution.json` so the anti-AI prompt, driver mode, and candidate coverage remain auditable.
 - `strict_gate.py` must verify that completed revised fragments with a non-empty `revision_plan.scope` have polish state, a valid `polish_driver_mode`, and no residual banned AI-style markers.
 - The polishing prompt must be layered, not flat. It must include: role definition, non-negotiable edit/evidence/citation/length constraints, deep anti-AI rewriting protocol, and a JSON-only output contract.
-- **Polish anti-AI 去AI五项（适用于中英文改稿正文）。硬/软分层：写作时五项都要守；门禁对「主干」硬失败——套话禁词、scare quotes、解释性冒号、-ing 假分析从句、**装饰性破折号**这类真正的 AI 味硬拦（fail-close）；只把「句长 >30 词」降为软提示（`strict_gate.py` 响亮上报、不 fail-close）。破折号禁止使用，命中即 FAIL。**
+- **Polish anti-AI 去AI五项（适用于中英文改稿正文）。硬/软分层：写作时五项都要守；门禁对「主干」硬失败——套话禁词、scare quotes、解释性冒号、-ing 假分析从句、**装饰性破折号**这类真正的 AI 味硬拦（fail-close）；只把「句长 >30 词」降为软提示（`strict_gate.py` 响亮上报、不 fail-close）。装饰性破折号禁止使用，命中即 FAIL。**
   1. **禁装饰性破折号（🔴 硬门禁，禁止使用，命中即 FAIL）**：禁用 —/——/em-dash 充当停顿、补充或强调（如"该结果——尽管样本量小——表明…"）；改用逗号、句号或拆为两句。连字符（"dose-response"）与数值范围不受限。中英文均适用。`strict_gate.py`/`polish_guard` 对破折号 fail-close，不放行。
   2. **禁 scare quotes**：禁用双引号包裹自造词或普通短语以暗示"新概念/反讽"；保留：术语首次定义、原始审稿人评论直接引用、已固化的术语隐喻。
   3. **禁解释性冒号**：禁用"概念: 解释"或"Concept: explanation"格式的装饰句式；合法冒号包括比例、时间、列表引导、标题、图表标签。
@@ -388,7 +388,7 @@ These inline markers are load-bearing and carry the same status as citation mark
 - ❌ 段落定位模糊却硬选一个段落；多候选评分相近时须落 `needs_author_confirmation`，不得激进选段。
 - ❌ 把实质性请求（新机制／新证据／新图／未匹配章节）当 `completed` 自动收口；只有保守的纯文本澄清或限制句可 auto-complete。
 - ❌ Patch 修订哈希不符仍强行套用或自动重定位（fail-closed，整批拒绝、写空、退非零，不静默部分应用）。
-- ❌ 去 AI 主干未过（硬）：scare quotes、解释性冒号、套话禁词、-ing 假分析从句、**装饰破折号（禁止使用，命中即 FAIL）**。（仅英文 >30 词为软提示：上报不阻断，但仍应改。）
+- ❌ 去 AI 主干未过（硬）：scare quotes、解释性冒号、套话禁词、-ing 假分析从句、**装饰性破折号（🔴 硬门禁，禁止使用，命中即 FAIL）**。（仅英文 >30 词为软提示：上报不阻断，但仍应改。）
 - ❌ 主 agent 自评 DoD 当通过；`strict_gate.py` 前须委托独立subagent盲检，verify 未 exit 0 不得声明改稿完成；盲检过后仍须摆逐项结论 + HALT 等用户确认才收口。
 - ❌ 把「有意驳回不改（`push_back`）」误判成「漏改」，或反过来把真漏改的意见混进 push_back 蒙混；驳回必须在回复信据理反驳，正文不动但回应不能缺。
 - ❌ 退稿信漏回某条意见，或某 `completed` comment_id 在 `manuscript_edit_plan.md` 中无 revised_excerpt 落点（`push_back`/`需作者确认` 不要求 revised_excerpt）。

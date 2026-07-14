@@ -27,14 +27,18 @@ Note: PyZotero uses **Zotero Web API** (cloud). Desktop app does NOT need to run
    → Click "Save Key"
    → Copy the generated key immediately (shown only once)
 
-④ Test connection
-   python3 scripts/zotero_manager.py --status --lib-id [NUMBER] --api-key [KEY]
+④ Save credentials once (reused automatically afterwards)
+   python3 scripts/zotero_manager.py save-credentials --lib-id [NUMBER] --api-key [KEY]
+   → stored in ~/.config/academic-skills/zotero.json (chmod 600, never in git)
+
+⑤ Test connection (no credentials needed after step ④)
+   python3 scripts/zotero_manager.py --status
    Expected output: ✅ Connected to Zotero library ...
 
-⑤ Security rules
-   - Write lib_id to outline.md (safe, not secret)
-   - NEVER write api_key to any file — ask user at each new session start
-   - If 403 Forbidden error: re-ask user for api_key; re-run --status before continuing
+⑥ Security rules
+   - Credentials live only in ~/.config/academic-skills/zotero.json (600, outside the skill repo)
+   - NEVER write api_key to outline.md or any repo file; the CLI never echoes it in full (last 4 chars only)
+   - If 403 Forbidden error: re-run save-credentials with a fresh key; re-run --status before continuing
 ```
 
-If `--status` lists multiple libraries (personal + group), show the list and ask user which to use. Write chosen `lib_id` to `outline.md`.
+If `--status` lists multiple libraries (personal + group), show the list and ask user which to use, then re-run `save-credentials` with the chosen `lib_id`.

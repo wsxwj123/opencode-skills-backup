@@ -7,6 +7,8 @@ import argparse
 import json
 from pathlib import Path
 
+from unit_glob import load_units
+
 
 REQUIRED_UNIT_KEYS = ["unit_id", "order", "reviewer", "section", "comment_number", "title", "source", "links", "content", "status"]
 REQUIRED_CONTENT_KEYS = ["reviewer_comment_zh", "reviewer_comment_en", "response_en", "atomic_location", "revised_excerpt_en", "notes_core_zh", "notes_support_zh", "evidence"]
@@ -59,9 +61,7 @@ def main() -> int:
 
     state = read_json(state_p)
     index_data = read_json(index_p)
-    unit_files = sorted(units_dir.glob("*.json"))
-
-    units = [read_json(p) for p in unit_files]
+    units = load_units(units_dir)
     unit_map = {u.get("unit_id", ""): u for u in units}
 
     # Basic key checks

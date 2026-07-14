@@ -9,9 +9,15 @@ except Exception:
 """
 zotero_manager.py — PyZotero Web API wrapper for general-review-writing skill.
 
+Credentials: saved once, reused automatically.
+  python3 zotero_manager.py save-credentials --lib-id X --api-key Y
+  -> stored in ~/.config/academic-skills/zotero.json (chmod 600, never in git).
+  After that, --lib-id/--api-key are optional on every command.
+  Priority: CLI flags > saved config > prompt to save once.
+
 Usage:
-  python3 zotero_manager.py --status --lib-id X --api-key Y
-  python3 zotero_manager.py --init --title "T" --outline outline.md --lib-id X --api-key Y
+  python3 zotero_manager.py --status
+  python3 zotero_manager.py --init --title "T" --outline outline.md
   python3 zotero_manager.py --add-batch --section "2.1" --papers tmp/papers_2_1.json --root-key ROOT_KEY --index data/literature_index.json --lib-id X --api-key Y
   python3 zotero_manager.py --dedup --scope ROOT_KEY --lib-id X --api-key Y   # repair only
   python3 zotero_manager.py --get-section "2.1" --lib-id X --api-key Y
@@ -32,6 +38,58 @@ from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
 # pyzotero is imported lazily inside connect() so --help works without it installed
+
+
+# ─────────────────────────────────────────────
+# Credential persistence
+# ─────────────────────────────────────────────
+# Stored outside the skill repo (never enters git), 700 dir / 600 file.
+CREDENTIALS_PATH = Path.home() / ".config" / "academic-skills" / "zotero.json"
+
+
+def _mask(api_key: str) -> str:
+    """Never echo an API key in full — show only the last 4 chars for logs."""
+    return f"****{api_key[-4:]}" if api_key and len(api_key) >= 4 else "****"
+
+
+def load_credentials(path: Path = CREDENTIALS_PATH) -> Optional[dict]:
+    """Read persisted Zotero credentials, or None if the file is absent/unreadable."""
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except (FileNotFoundError, ValueError, OSError):
+        return None
+
+
+def save_credentials(lib_id: str, api_key: str, path: Path = CREDENTIALS_PATH) -> None:
+    """Persist credentials with restrictive perms (dir 700, file 600)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    os.chmod(path.parent, 0o700)
+    data = {"library_id": lib_id, "api_key": api_key, "library_type": "user"}
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+    os.chmod(path, 0o600)
+
+
+def resolve_credentials(cli_lib_id: Optional[str], cli_api_key: Optional[str]) -> Tuple[str, str]:
+    """Resolve credentials by priority: CLI args > config file > prompt-and-exit.
+
+    Returns (lib_id, api_key). Exits with clear guidance if neither source has them.
+    """
+    lib_id, api_key = cli_lib_id, cli_api_key
+    if not (lib_id and api_key):
+        cfg = load_credentials(CREDENTIALS_PATH) or {}
+        lib_id = lib_id or cfg.get("library_id")
+        api_key = api_key or cfg.get("api_key")
+    if not (lib_id and api_key):
+        sys.exit(
+            "❌ 未找到 Zotero 凭据。请先保存一次（之后自动复用）：\n"
+            "   1. 打开 https://www.zotero.org/settings/keys 获取 userID 和 API key\n"
+            "      （API key 需勾选 Allow write access 写权限）\n"
+            "   2. 运行：python3 zotero_manager.py save-credentials --lib-id <userID> --api-key <API_KEY>\n"
+            f"   凭据将安全存于 {CREDENTIALS_PATH}（权限 600，不入 git）。"
+        )
+    return lib_id, api_key
 
 
 # ─────────────────────────────────────────────
@@ -842,11 +900,22 @@ def cmd_export_bibtex(zot: zotero.Zotero, output_path: str, root_key: Optional[s
 # ─────────────────────────────────────────────
 
 def main() -> None:
+    # One-time credential save: `zotero_manager.py save-credentials --lib-id X --api-key Y`
+    if len(sys.argv) > 1 and sys.argv[1] == "save-credentials":
+        sub = argparse.ArgumentParser(prog="zotero_manager.py save-credentials")
+        sub.add_argument("--lib-id", required=True, help="Zotero library ID / userID (numeric)")
+        sub.add_argument("--api-key", required=True, help="Zotero API key (Write access)")
+        sargs = sub.parse_args(sys.argv[2:])
+        save_credentials(sargs.lib_id, sargs.api_key)
+        print(f"✅ 凭据已保存到 {CREDENTIALS_PATH}（权限 600）")
+        print(f"   library_id={sargs.lib_id}  api_key={_mask(sargs.api_key)}")
+        return
+
     parser = argparse.ArgumentParser(
         description="Zotero Web API manager for general-review-writing skill"
     )
-    parser.add_argument("--lib-id", required=True, help="Zotero library ID (numeric)")
-    parser.add_argument("--api-key", required=True, help="Zotero API key (Write access)")
+    parser.add_argument("--lib-id", help="Zotero library ID (numeric); optional if saved via save-credentials")
+    parser.add_argument("--api-key", help="Zotero API key (Write access); optional if saved via save-credentials")
 
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--status", action="store_true", help="Test connection and list collections")
@@ -882,7 +951,8 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    zot = connect(args.lib_id, args.api_key)
+    lib_id, api_key = resolve_credentials(args.lib_id, args.api_key)
+    zot = connect(lib_id, api_key)
 
     if args.status:
         cmd_status(zot, json_out=args.json, find_root_title=args.find_root_title)

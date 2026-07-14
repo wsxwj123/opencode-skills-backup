@@ -8,6 +8,8 @@ import json
 import re
 from pathlib import Path
 
+from unit_glob import load_units
+
 
 def read_json(path: Path):
     return json.loads(path.read_text(encoding="utf-8"))
@@ -61,7 +63,7 @@ def main() -> int:
     rules_path = Path(args.rules) if args.rules else Path(__file__).resolve().parents[1] / "references" / "consistency-rules.json"
     rules = read_json(rules_path)
 
-    units = [read_json(p) for p in sorted((root / "units").glob("*.json"))]
+    units = load_units(root / "units")
     text_by_unit = {u.get("unit_id", ""): collect_unit_text(u) for u in units}
     merged_text = "\n".join(text_by_unit.values())
 

@@ -4,8 +4,9 @@
 from __future__ import annotations
 
 import argparse
-import json
 from pathlib import Path
+
+from unit_glob import iter_units
 
 
 def _norm(v: object) -> str:
@@ -27,10 +28,6 @@ def _is_placeholder(v: object) -> bool:
     return any(m in n for m in markers)
 
 
-def _read_json(path: Path) -> dict:
-    return json.loads(path.read_text(encoding="utf-8"))
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description="Fail if placeholder content remains in units/*.json")
     parser.add_argument("--project-root", required=True)
@@ -49,8 +46,7 @@ def main() -> int:
         return 1
 
     failures: list[str] = []
-    for p in sorted(units_dir.glob("*.json")):
-        unit = _read_json(p)
+    for p, unit in iter_units(units_dir):
         if unit.get("section") == "email":
             continue
         uid = unit.get("unit_id", p.name)
