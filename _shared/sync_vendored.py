@@ -40,10 +40,14 @@ MANIFEST: dict[str, list[str]] = {
         "general-sci-writing", "nsfc-proposal", "sci2doc",
         "review-writing", "revise-sci", "reviewer-response-sci",
     ],
-    # 结构签字 confirm 侧:4 家(registry signoff:true)
-    "structure_signoff_gate.py": [
-        "general-sci-writing", "nsfc-proposal", "sci2doc", "review-writing",
-    ],
+    # 结构签字:Phase A 时仅 4 家 confirm 侧;Phase B 起它是门禁四件套部署源成员,
+    # 8 家全铺(installer 从自身同目录取四件套部署到 ~/.claude/academic-gate/)
+    "structure_signoff_gate.py": ALL8,
+    # 门禁四件套其余三件(Phase B):每技能自带安装能力,装出全局唯一钩子。
+    # 心跳 hook_heartbeat.json 是运行时产物,绝不入 MANIFEST。
+    "academic_gate_hook.py": ALL8,
+    "install_gate_hook.py": ALL8,
+    "gate_registry.json": ALL8,
     # 既有 vendored,纳管防漂
     "md_runs.py": ["revise-sci", "polish-sci", "sci2doc"],
     "citation_guard_core.py": [
