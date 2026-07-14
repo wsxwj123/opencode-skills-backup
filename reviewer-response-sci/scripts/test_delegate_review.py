@@ -44,7 +44,7 @@ def test_pack_emits_package() -> None:
                  "--files", str(target), "--workdir", str(root))
         assert r.returncode == 0, f"pack should exit 0\n{r.stderr}"
         assert "盲检任务包" in r.stdout, r.stdout
-        assert (root / ".review_pkg_g1.json").exists(), "pack must write record file"
+        assert not list(root.glob(".review_pkg_*.json")), "pack 不应写 .review_pkg 记录(无消费者)"
 
 
 def test_verify_pass() -> None:

@@ -2,7 +2,7 @@
 """Smoke test for delegate_review.py (blind-review delegation, fail-closed).
 
 Bidirectional, self-contained, standalone (`python3 test_delegate_review_gate.py`):
-- pack  -> exit 0, prints the checklist ids into the task package, writes .review_pkg_<gate>.json.
+- pack  -> exit 0, prints the checklist ids into the task package (no record file written).
 - verify with a fully-adjudicated return -> exit 0 (合规).
 - verify with a hard item verdict=fail -> exit 1 (违规, fail-closed).
 - verify with a hard item missing from the return -> exit 1 (违规, 缺漏未裁决).
@@ -64,7 +64,7 @@ def test_pack_emits_task_package():
         r = _pack(tmp, ck, files)
         assert r.returncode == 0, r.stderr
         assert "A1" in r.stdout and "A2" in r.stdout, r.stdout
-        assert (tmp / ".review_pkg_g1.json").exists()
+        assert not list(tmp.glob(".review_pkg_*.json")), "pack 不应写 .review_pkg 记录(无消费者)"
 
 
 def test_verify_all_adjudicated_passes():

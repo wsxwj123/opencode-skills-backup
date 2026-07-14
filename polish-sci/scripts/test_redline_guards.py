@@ -17,6 +17,7 @@ _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 if _SCRIPT_DIR not in sys.path:
     sys.path.insert(0, _SCRIPT_DIR)
 
+from common import find_ai_style_markers
 from strict_gate import check_unit, independent_meaning_verdict, is_soft_ai_marker
 
 
@@ -96,6 +97,29 @@ def test_soft_marker_predicate() -> None:
     assert is_soft_ai_marker("sentence >30 words")
     assert not is_soft_ai_marker("cliche: delve into")
     assert not is_soft_ai_marker("delve into")
+
+
+# --- 去AI必禁三项的其余两项:scare quotes / 解释性冒号 也硬拦 ---
+def test_scare_quotes_marker_produced_and_hard() -> None:
+    # find_ai_style_markers 确实产出 'scare quotes';且它非软、硬拦阻断交付。
+    assert "scare quotes" in find_ai_style_markers('The so-called "gold standard" method was applied.')
+    assert not is_soft_ai_marker("scare quotes")
+    _fails_with(
+        "The so-called gold standard method was applied.",
+        'The so-called "gold standard" method was applied.',
+        "ai markers",
+    )
+
+
+def test_explanatory_colon_marker_produced_and_hard() -> None:
+    # find_ai_style_markers 确实产出 'explanatory colon';且它非软、硬拦阻断交付。
+    assert "explanatory colon" in find_ai_style_markers("We used one approach: the samples were incubated overnight.")
+    assert not is_soft_ai_marker("explanatory colon")
+    _fails_with(
+        "We used one approach where the samples were incubated overnight.",
+        "We used one approach: the samples were incubated overnight.",
+        "ai markers",
+    )
 
 
 # --- ⑥ meaning_changed 只认独立 PL-G11 盲检,自填 false 不作数 ---

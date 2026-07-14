@@ -3,7 +3,7 @@
 
 verify 读子代理返回的裁决 JSON + DoD checklist,逐项校验:每个清单 id 都被裁决、
 verdict 合法、evidence 非空;任一缺项 / verdict=fail / 空证据 → exit 1(阻断"声明完成");
-全部 pass 且附证据 → exit 0。pack 先生成任务包 + .review_pkg 记录(exit 0)。
+全部 pass 且附证据 → exit 0。pack 只打印任务包,不落盘记录文件(exit 0)。
 
 双向断言:
   1) 返回含 fail 裁决 → exit 1(拦截);
@@ -50,11 +50,11 @@ def test_verify_fail_blocks_and_pass_passes() -> None:
         checklist = root / "checklist.json"
         checklist.write_text(json.dumps(CHECKLIST, ensure_ascii=False), encoding="utf-8")
 
-        # pack 生成任务包(应 exit 0 并落 .review_pkg 记录)
+        # pack 生成任务包(应 exit 0,且不落盘任何 .review_pkg 记录)
         r = _run("pack", "--checklist", str(checklist), "--gate", "manuscript-dod",
                  "--files", "drafts/s1.md", "--workdir", str(td), cwd=str(td))
         assert r.returncode == 0, f"pack 应成功,got {r.returncode}\n{r.stderr}"
-        assert (root / ".review_pkg_manuscript-dod.json").exists(), "pack 未落任务包记录"
+        assert not list(root.glob(".review_pkg_*.json")), "pack 不应写 .review_pkg 记录(无消费者)"
 
         # 1) 返回含 fail → 拦截
         bad = root / "bad_return.json"

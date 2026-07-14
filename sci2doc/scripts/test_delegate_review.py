@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """delegate_review.py 冒烟测试 —— pack/verify 双向 + 通过标记落盘。
 
-pack:  读 checklist 的 gate,写 .review_pkg_<gate>.json(记录期望 item id),打印任务包。
+pack:  读 checklist 的 gate,打印任务包(不落盘记录文件)。
 verify(fail-closed):
   - 全 pass + 附证据 → exit 0,且 --section 时在 <root>/.review_pass/<section>.json 落盘 passed:true
   - 硬项 verdict=fail → exit 1(不落标记)
@@ -60,9 +60,8 @@ def test_pack_writes_record() -> None:
         r = _run("pack", "--checklist", str(cl), "--gate", "g1",
                  "--files", str(f), "--workdir", str(root))
         assert r.returncode == 0, f"pack failed\n{r.stderr}"
-        rec = json.loads((root / ".review_pkg_g1.json").read_text(encoding="utf-8"))
-        assert rec["item_ids"] == ["A1", "A2"], rec
-        assert "盲检任务包" in r.stdout and "A1" in r.stdout, r.stdout
+        assert not list(root.glob(".review_pkg_*.json")), "pack 不应写 .review_pkg 记录(无消费者)"
+        assert "盲检任务包" in r.stdout and "A1" in r.stdout and "A2" in r.stdout, r.stdout
 
 
 def test_verify_all_pass_writes_marker() -> None:
