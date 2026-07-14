@@ -97,32 +97,42 @@ def main():
 
 
 def _install_gate_hook() -> None:
-    """调共享安装器 install_gate_hook.py，回显其人话消息。定位:本文件在
-    skills/revise-sci/scripts/ → parents[2]=skills/ → _shared/。
-    任何异常都吞掉——门禁自检绝不能反过来卡住技能。
-    本技能无签字闸,故不打印 SIGNOFF_CMD,只装 hook + 回显门禁保护[status]。"""
+    """双轨定位:接续/核证纯库(session_journal.py + citation_claim_check.py)已 vendored
+    进本技能 scripts/(与本文件同目录),故 RESUME/LOG/CITATION_CHECK 命令从
+    Path(__file__).parent 解析,自足、不依赖 _shared。强制门禁安装器
+    install_gate_hook.py 暂留 _shared/(parents[2]),Phase B 再迁入本目录。
+    本技能无签字闸(返修改稿无大纲确认),故不打印 SIGNOFF_CMD。
+    任何异常都吞掉——门禁自检绝不能反过来卡住技能。"""
     import json as _json
     import subprocess as _sp
     try:
         installer = Path(__file__).resolve().parents[2] / "_shared" / "install_gate_hook.py"
         if not installer.is_file():
-            return
-        proc = _sp.run([sys.executable or "python", str(installer)],
-                       capture_output=True, text=True, timeout=30)
-        line = (proc.stdout or "").strip().splitlines()[-1] if proc.stdout.strip() else ""
-        res = _json.loads(line) if line else {}
-        status, msg = res.get("status", ""), res.get("message", "")
-        icon = {"active": "🛡️", "installed": "🛡️", "degraded": "⚠️", "error": "ℹ️"}.get(status, "ℹ️")
-        if msg:
-            print(f"{icon} 门禁保护[{status}]: {msg}")
-        # 接续 + 引文核证命令（绝对路径，免去 SKILL.md 里相对路径的 cwd 依赖）。
-        journal = installer.parent / "session_journal.py"
+            print("⚠️ 强制门禁安装器缺失(_shared/install_gate_hook.py 不在)——物理门禁不可用，降级为提示词纪律，请严格按 SKILL.md 手动守规。")
+            print("   units/state 的物理保护不可用(本技能无签字闸，仅靠 hook 拦写入，现降级为人工盯防)。")
+            print("   修复:安装完整技能仓库，或补回 _shared/install_gate_hook.py。")
+        else:
+            proc = _sp.run([sys.executable or "python", str(installer)],
+                           capture_output=True, text=True, timeout=30)
+            line = (proc.stdout or "").strip().splitlines()[-1] if proc.stdout.strip() else ""
+            res = _json.loads(line) if line else {}
+            status, msg = res.get("status", ""), res.get("message", "")
+            icon = {"active": "🛡️", "installed": "🛡️", "degraded": "⚠️", "error": "ℹ️"}.get(status, "ℹ️")
+            if msg:
+                print(f"{icon} 门禁保护[{status}]: {msg}")
+        # 接续 + 引文核证命令（同目录 vendored 副本，绝对路径，免去 cwd 依赖）。
+        here = Path(__file__).resolve().parent
+        journal = here / "session_journal.py"
         if journal.is_file():
             print(f'RESUME_CMD: python "{journal}" resume --root <project_root>')
             print(f'LOG_CMD: python "{journal}" log --root <project_root> --note "<用户临时要求原话>"')
-        citation_check = installer.parent / "citation_claim_check.py"
+        else:
+            print("⚠️ 缺少 scripts/session_journal.py(vendored 副本)，跨会话接续降级——跑 python3 _shared/sync_vendored.py --sync 或重装完整技能包。")
+        citation_check = here / "citation_claim_check.py"
         if citation_check.is_file():
             print(f'CITATION_CHECK_CMD: python "{citation_check}" --root <project_root>')
+        else:
+            print("⚠️ 缺少 scripts/citation_claim_check.py(vendored 副本)，新引核证降级——跑 python3 _shared/sync_vendored.py --sync 或重装完整技能包。")
     except Exception:
         pass
 

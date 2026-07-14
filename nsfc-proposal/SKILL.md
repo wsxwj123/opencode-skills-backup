@@ -1,6 +1,6 @@
 ---
 name: nsfc-proposal
-version: 2.21.0
+version: 2.22.0
 description: Use when drafting, restructuring, or polishing Chinese NSFC proposals (2026 template), especially when strict section-by-section gating, hypothesis-objective-content-problem consistency, literature verification via paper-search MCP, and anti-AI Chinese academic writing constraints are required. 触发词：国自然、国家自然科学基金、基金申请书、科研申请、NSFC、标书、本子、面上项目、青年基金。
 ---
 
@@ -14,7 +14,7 @@ Use two modes:
 - Polish Mode: import an existing draft, diagnose first, then revise section by section.
 
 ## 跨会话接续（每次进入/续写必做，Mandatory）
-每次进入本技能或续写一个已存在的项目时，**先跑 Phase 0 env_preflight 打印的那条 `RESUME_CMD`**（`python "<.../_shared/session_journal.py>" resume --root <project_root>`），把输出的接续报告原样贴给用户，按报告末尾的握手话术跟用户对齐进度，然后再动手。用户**中途插入任何临时要求，立即用 `JOURNAL_LOG_CMD`**（`session_journal.py log --root <R> --note "<原话>"`）落进 `decisions_log.md`，后续会话开局的 resume 会重新读出、必须遵守。新项目（无 state）resume 会提示未初始化，照常走 Phase 0。
+每次进入本技能或续写一个已存在的项目时，**先跑 Phase 0 env_preflight 打印的那条 `RESUME_CMD`**（`python "<本技能>/scripts/session_journal.py" resume --root <project_root>`），把输出的接续报告原样贴给用户，按报告末尾的握手话术跟用户对齐进度，然后再动手。用户**中途插入任何临时要求，立即用 `JOURNAL_LOG_CMD`**（`<本技能>/scripts/session_journal.py log --root <R> --note "<原话>"`）落进 `decisions_log.md`，后续会话开局的 resume 会重新读出、必须遵守。新项目（无 state）resume 会提示未初始化，照常走 Phase 0。
 
 ## Mode Handshake Gate (Mandatory)
 Before any drafting/revision action, the assistant must ask exactly one mode-selection question and wait for the user answer:
@@ -156,7 +156,7 @@ Follow phased gates in order:
    - [ ] ④`ethics` 字段：涉及人/动物/生物安全/遗传资源任一情形者，已说明审批状态（含批号或送审计划时间节点）；均不涉及者填 "N/A 不涉及"
    - [ ] ⑤用户已显式确认 `experimental_design.json` 覆盖全部 RC、设计无遗漏（回放 ✓ 列表 + 用户书面同意）
 
-   > **[结构签字·强制门禁落锁]** 用户在对话里明确确认「科学问题属性 + H/O/RC/KSQ 章节结构 + 实验设计（Phase 0.5 DoD ⑤）」后（且**仅在此之后**），运行 Phase 0 env_preflight 打印的那条 `SIGNOFF_CMD`（已含解析好的绝对路径）落盘签字，即 `python "<.../\_shared/structure_signoff_gate.py>" confirm --root <project_root> --note "<用户确认原话摘录>"`。这一步解锁正文写作：**未落签字，PreToolUse hook 会物理拦截任何对 `sections/*.md` 的写入**（这是防跳步的硬门，不是提示词纪律）。该 hook 由 Phase 0 `env_preflight.py` 开工时经 `_shared/install_gate_hook.py` 自动安装并校验（含备份/回滚），状态 active 即在岗；若报 degraded/error 或提示降级，需人工留意其拦截可能失效。若后续回修科学问题/章节结构，改完让用户重新确认并重跑本命令覆盖签字。⚠️ 严禁在用户未确认时自行运行 confirm，那等于伪造用户签字。
+   > **[结构签字·强制门禁落锁]** 用户在对话里明确确认「科学问题属性 + H/O/RC/KSQ 章节结构 + 实验设计（Phase 0.5 DoD ⑤）」后（且**仅在此之后**），运行 Phase 0 env_preflight 打印的那条 `SIGNOFF_CMD`（已含解析好的绝对路径）落盘签字，即 `python "<本技能>/scripts/structure_signoff_gate.py" confirm --root <project_root> --note "<用户确认原话摘录>"`。这一步解锁正文写作：**未落签字，PreToolUse hook 会物理拦截任何对 `sections/*.md` 的写入**（这是防跳步的硬门，不是提示词纪律）。该 hook 由 Phase 0 `env_preflight.py` 开工时经 `_shared/install_gate_hook.py` 自动安装并校验（含备份/回滚），状态 active 即在岗；若报 degraded/error 或提示降级，需人工留意其拦截可能失效。若后续回修科学问题/章节结构，改完让用户重新确认并重跑本命令覆盖签字。⚠️ 严禁在用户未确认时自行运行 confirm，那等于伪造用户签字。
 
 **🔴 委托盲检总则（适用下列 Phase 1–7 每一个 DoD 闸口，Mandatory）：** 以下每个闸口一律遵守同一条铁律。每个 Phase 落盘前，DoD 清单必须委托一个独立上下文的 subagent 盲检（Claude Code 用 `academic-blind-reviewer`，其他平台派通用 subagent），不给它本稿的写作上下文；主 agent 不得自评打勾。各闸口只列本 Phase 专属的 `<gate>`/`<files>`/`<section>` 参数，套用下方三步命令模板执行；盲检的角色与纪律统一遵此总则，不再逐处复述。**降级告警**：若判到科学意义/创新/可行性等决定成败的维度，而环境派不出真正独立的 subagent，绝不能同一 AI 编一份全 pass 的盲检 JSON 冒充（那几个维度就裸奔了）。此时须告诉用户「本环境盲检不可靠，请你亲自复核」，把判断交回用户，绝不自问自答冒充盲检。
 
@@ -179,7 +179,7 @@ Follow phased gates in order:
    1. **挑承重论点句**：从 P1 里圈出决定成败的关键论断（关键因果 / 机制 / 研究缺口 / 「前人未解决 X」这类），标 `is_load_bearing=true`；纯背景陈述标 false（只批量呈现、不逐条阻断）。
    2. **取真摘要判支撑**。对每条承重论点↔其引用，走 Tooling Rules 的检索路径（PubMed CLI / paper-search MCP，取摘要那半由工作流subagent执行）拿该文献**检索到的真实 abstract**（**不是** `literature_index.key_finding`），判 `verdict∈support/weak/contradict/unknown` 并从摘要摘一句 `evidence_quote`。**只对缓存里没有的 (文献,论点) 组合做这一步反向验证**。已被前一批核证过的同篇 abstract、以及完全同 `ref_id`+同论点句且已人工确认的 verdict，脚本会自动回填，无需再取摘要、无需再逐条确认。故这一步只做新 (文献,论点) 对。
    3. **写 `claim_evidence.json`（项目根，与 CITATION_CHECK_CMD 的 `--root .` 同目录）**。list，每条 `{section:"P1_立项依据", claim_sentence, is_load_bearing, ref_id, retrieved_abstract, verdict, evidence_quote, user_confirmed}`。已在 `ref_evidence_cache.json` 命中的文献可留 `retrieved_abstract` 为空，脚本按 `ref_id` 回填该文献的真 abstract；同篇不同论点仍会独立判定，缓存只补文献全局事实，不替新论点伪造 verdict。
-   4. **跑核证**。`CITATION_CHECK_CMD`（Phase 0 env_preflight 已打印绝对路径，即 `python "<.../_shared/citation_claim_check.py>" --root .`）。脚本自动读写 `ref_evidence_cache.json`（默认在项目根，与 `--root` 同目录），落盘已验 abstract 与已确认承重 verdict 供下一批复用，AI 不必手动记录这些字段。承重句凡 `contradict/unknown`、缺 `retrieved_abstract`、或 `user_confirmed≠true` → **fail-closed（exit 2）硬拦，禁止照此下笔**；缓存缺失或损坏一律当空处理、回落全量核验，门禁强度不变。
+   4. **跑核证**。`CITATION_CHECK_CMD`（Phase 0 env_preflight 已打印绝对路径，即 `python "<本技能>/scripts/citation_claim_check.py" --root .`）。脚本自动读写 `ref_evidence_cache.json`（默认在项目根，与 `--root` 同目录），落盘已验 abstract 与已确认承重 verdict 供下一批复用，AI 不必手动记录这些字段。承重句凡 `contradict/unknown`、缺 `retrieved_abstract`、或 `user_confirmed≠true` → **fail-closed（exit 2）硬拦，禁止照此下笔**；缓存缺失或损坏一律当空处理、回落全量核验，门禁强度不变。
    5. **只有新承重 (文献,论点) 对需逐条 AskUserQuestion 确认**。对缓存未命中的承重论点句把「论点 + 引文 + verdict + 摘要证据句」摆给用户，逐条 `AskUserQuestion` 请其确认后置 `user_confirmed=true` 再重跑；同 `ref_id`+同论点句已在前一批确认过的，脚本自动回填 `user_confirmed=true`，不再重复问。被判 `contradict` 的必须先改引文或改论点（不得靠确认放行），改完重跑至 exit 0。背景句在核证矩阵表里批量呈现供用户扫一眼即可，不逐条阻断。
 
    **Phase 1 DoD（收口自检）：未逐项确认通过，不得向用户声明 P1 完成**
@@ -451,7 +451,7 @@ Phase 7 引用的 `consistency_mapper.py validate` 完整形式：`python script
 
 
 ## Regression Tests
-测试位于 `scripts/`（test_delegate_review / test_format_contract / test_literature_gate / test_prewrite_gate）与 `_shared/`，统一入口 `python3 _shared/run_all_tests.py --skill nsfc-proposal`（当前 4/4 通过）。
+测试位于 `scripts/`（test_delegate_review / test_format_contract / test_literature_gate / test_prewrite_gate）与 `_shared/`，统一入口 `python3 _shared/run_all_tests.py --skill nsfc-proposal`（仓库完整克隆下，当前 4/4 通过）。
 `test-prompts.json` 仅验证触发与门禁交互，未被上述 suite 覆盖的脚本逻辑需人工抽查。
 
 ---

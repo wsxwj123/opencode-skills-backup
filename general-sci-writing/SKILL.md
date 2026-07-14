@@ -1,6 +1,6 @@
 ---
 name: general-sci-writing
-version: 2.21.0
+version: 2.22.0
 description: 用于从零撰写或润色符合Nature/Science/Cell标准的SCI研究论文（Article类型），适用于多学科。触发词：写论文、SCI论文、学术写作、科研写作、论文润色、研究论文、学术投稿、投稿、润色论文、polish paper、write SCI paper、academic writing、draft paper、manuscript writing。路由说明：退稿/返修改主稿→用revise-sci；只写审稿意见回复→用reviewer-response-sci；独立成稿的纯语言润色（拿到别人写好的整稿只改语言、不进本管道）→用polish-sci，本技能的润色仅指管道内 Phase 10 对自写稿的润色；综述/文献综述→用review-writing。本技能侧重写新稿与自写稿润色，Phase 13B含内部初步退稿自查但不出回复包也不出修订稿docx。
 license: Proprietary
 ---
@@ -22,9 +22,9 @@ license: Proprietary
 
 **每次进入本技能、或续写一个已存在的项目，第一步先跑接续报告，把状态贴给用户并握手确认，再开始写。**
 
-1. **跑 RESUME_CMD**：运行 Phase 0 `env_preflight.py` 末尾打印的那条 `RESUME_CMD`（已含解析好的绝对路径），即 `python "<.../\_shared/session_journal.py>" resume --root <project_root>`。它汇总上次进度、last_section、outline、历次用户决定（`decisions_log.md`），产出一份接续报告。
+1. **跑 RESUME_CMD**：运行 Phase 0 `env_preflight.py` 末尾打印的那条 `RESUME_CMD`（已含解析好的绝对路径），即 `python "<本技能>/scripts/session_journal.py" resume --root <project_root>`。它汇总上次进度、last_section、outline、历次用户决定（`decisions_log.md`），产出一份接续报告。
 2. **贴报告 + 握手**：把接续报告原样贴给用户，说明"我准备从 __ 接着写，对吗？"，**等用户确认后再动手**；用户纠正口径以用户当前会话为准（磁盘旧文件不得反驳用户）。
-3. **用户临时插要求 → 立即 log**：写作过程中用户提出任何临时要求/口径变更，**立即**用 `LOG_CMD` 记进 `decisions_log.md`，即 `python "<.../\_shared/session_journal.py>" log --root <project_root> --note "<用户原话>"`，供后续会话必读遵守。
+3. **用户临时插要求 → 立即 log**：写作过程中用户提出任何临时要求/口径变更，**立即**用 `LOG_CMD` 记进 `decisions_log.md`，即 `python "<本技能>/scripts/session_journal.py" log --root <project_root> --note "<用户原话>"`，供后续会话必读遵守。
 4. 首次 `/init` 新项目无历史时 resume 会提示为空，直接进入 Phase 0 即可。
 
 （`RESUME_CMD` / `LOG_CMD` / `CITATION_CHECK_CMD` / `SIGNOFF_CMD` 均由 Phase 0 `env_preflight.py` 打印绝对路径，避免相对路径的 cwd 依赖。）
@@ -240,7 +240,7 @@ license: Proprietary
 
 > **[用户确认检查点 Mandatory]** 展示 storyline 草稿（章节标题、核心论点、关键图序、**各节预估引用数**、**3 个 title 候选**），等待用户明确确认后才进入 Phase 2.5。禁止在故事线未确认的情况下启动图集规划。
 >
-> **[结构签字·强制门禁落锁]** 用户在对话里明确确认 storyline 后（且**仅在此之后**），运行 Phase 0 env_preflight 打印的那条 `SIGNOFF_CMD`（已含解析好的绝对路径）落盘签字，即 `python "<.../\_shared/structure_signoff_gate.py>" confirm --root <project_root> --note "<用户确认原话摘录>"`。这一步解锁正文写作：**未落签字，PreToolUse hook 会物理拦截任何对 `manuscripts/*.md` 的写入**（这是防跳步的硬门，不是提示词纪律）。该 hook 由 Phase 0 `env_preflight.py` 开工时经 `_shared/install_gate_hook.py` 自动安装并校验（改 `settings.json` 前先备份、只追加不覆盖、校验失败即回滚），preflight 返回 `active` 表示 hook 已在岗、物理拦截真实生效；若返回 `degraded`/`error`，preflight 会输出告警，此时物理硬门已降级为提示词纪律，需人工留意并手动守住未签字不写正文。若后续回修 storyline（Phase 2.5 允许），改完让用户重新确认并重跑本命令覆盖签字。⚠️ 严禁在用户未确认时自行运行 confirm，那等于伪造用户签字。
+> **[结构签字·强制门禁落锁]** 用户在对话里明确确认 storyline 后（且**仅在此之后**），运行 Phase 0 env_preflight 打印的那条 `SIGNOFF_CMD`（已含解析好的绝对路径）落盘签字，即 `python "<本技能>/scripts/structure_signoff_gate.py" confirm --root <project_root> --note "<用户确认原话摘录>"`。这一步解锁正文写作：**未落签字，PreToolUse hook 会物理拦截任何对 `manuscripts/*.md` 的写入**（这是防跳步的硬门，不是提示词纪律）。该 hook 由 Phase 0 `env_preflight.py` 开工时经 `_shared/install_gate_hook.py` 自动安装并校验（改 `settings.json` 前先备份、只追加不覆盖、校验失败即回滚），preflight 返回 `active` 表示 hook 已在岗、物理拦截真实生效；若返回 `degraded`/`error`，preflight 会输出告警，此时物理硬门已降级为提示词纪律，需人工留意并手动守住未签字不写正文。若后续回修 storyline（Phase 2.5 允许），改完让用户重新确认并重跑本命令覆盖签字。⚠️ 严禁在用户未确认时自行运行 confirm，那等于伪造用户签字。
 
 ### Phase 2.5: 主图集规划 (`/figure-plan`)
 
@@ -372,7 +372,7 @@ python scripts/state_manager.py add-abbreviation <one.json>
    - **证据只用检索原样落盘的真摘要**：从 `literature_index.json` 里取该 ref 当初 MCP **检索原样落盘的 `abstract`**（不看可编的 key_finding、不脑补），逐条判 `verdict ∈ support/weak/contradict/unknown` 并摘一句 `evidence_quote`。取不到摘要的承重引用先走 §12 摘要补全或换引文，别硬写。
    - **落盘 `claim_evidence.json`**（list，每条）：`{section, claim_sentence, is_load_bearing, ref_id, retrieved_abstract, verdict, evidence_quote, user_confirmed}`。
    - **🟢 跨节复用（修"AI 漏写字段导致重复验证"的关键）**：核证脚本会**自动读写项目根 `ref_evidence_cache.json`**，已验状态由脚本落盘，**AI 不必手动记忆或回写任何字段**。因此建矩阵时：① 对**已在别节验过的同一 `ref_id`**，`retrieved_abstract` 可留空，脚本核证前会按 ref_id 从 cache 回填摘要，无需重抓；② 对**同一 `ref_id` + 完全同一论点句**且此前已确认的，脚本自动复用已确认的 verdict/`user_confirmed`，不再 AskUserQuestion 打扰用户；③ **只对新出现的 (ref_id, 论点句) 组合**做反向验证与逐条确认。门禁强度不变：新 (ref, claim) 无 verdict 仍 fail-closed。
-   - **跑核证**：运行 Phase 0 `env_preflight.py` 打印的 `CITATION_CHECK_CMD`，即 `python "<.../\_shared/citation_claim_check.py>" --root <project_root>`。它渲染"观点↔引文↔是否真支持"矩阵表；**承重句 verdict=contradict/unknown、或缺摘要、或未逐条人工确认 → exit 2 fail-closed 硬拦**，据表改引文/改论点/补确认后重跑。
+   - **跑核证**：运行 Phase 0 `env_preflight.py` 打印的 `CITATION_CHECK_CMD`，即 `python "<本技能>/scripts/citation_claim_check.py" --root <project_root>`。它渲染"观点↔引文↔是否真支持"矩阵表；**承重句 verdict=contradict/unknown、或缺摘要、或未逐条人工确认 → exit 2 fail-closed 硬拦**，据表改引文/改论点/补确认后重跑。
    - **承重句逐条确认 (AskUserQuestion)**：**只对新出现的承重 (ref_id, 论点句)** 把"论点句 + 判定 + 摘要证据句"用 AskUserQuestion 逐条给用户确认（确认后脚本把该行 `user_confirmed=true` 落盘）；此前已确认过的同一组合由脚本自动复用、不再打扰；背景句在矩阵表里**批量**呈现让用户扫一眼，不逐条阻断。
    - **定位**：这是"帮你写对的脚手架"：先核对引文再落笔，不是卡死后续的墙；核证过了才进 step 1 起草。（承重句 contradict 硬拦是防止照着不支持的引文下笔，属科学正确性底线。）
 1. **Pre-Write Check**: 检查数据完整性。

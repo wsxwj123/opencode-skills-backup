@@ -30,18 +30,26 @@ def section_label(unit: dict) -> str:
     return "si section" if unit.get("target_document") == "si" else "manuscript section"
 
 
-def _load_shared_claim_check():
-    """Import the shared citation_claim_check module (skills/_shared/). Returns None if unavailable."""
+def _load_claim_check():
+    """Import citation_claim_check. 同目录 vendored 副本优先(scripts/citation_claim_check.py),
+    不存在再回退 skills/_shared/citation_claim_check.py。两处都无 → 打一行大字告警并返回 None,
+    调用方保持 fail-open(return []),绝不倒卡技能。"""
     import importlib.util
-    shared = Path(__file__).resolve().parents[2] / "_shared" / "citation_claim_check.py"
-    if not shared.is_file():
-        return None
-    spec = importlib.util.spec_from_file_location("_shared_citation_claim_check", shared)
-    if spec is None or spec.loader is None:
-        return None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    here = Path(__file__).resolve().parent
+    for candidate in (here / "citation_claim_check.py",
+                      here.parents[1] / "_shared" / "citation_claim_check.py"):
+        if not candidate.is_file():
+            continue
+        spec = importlib.util.spec_from_file_location("_vendored_citation_claim_check", candidate)
+        if spec is None or spec.loader is None:
+            continue
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+    import sys as _sys
+    print("⚠️ citation_claim_check 库缺失，引文核证子检查跳过(fail-open)，请补 vendored 副本"
+          "(python3 _shared/sync_vendored.py --sync)。", file=_sys.stderr)
+    return None
 
 
 def _citation_claim_failures(project_root: Path) -> list[str]:
@@ -53,9 +61,9 @@ def _citation_claim_failures(project_root: Path) -> list[str]:
             "completed new-citation comments require claim_evidence.json "
             "(new reference ↔ supported response claim); build it and pass citation_claim_check.py"
         ]
-    module = _load_shared_claim_check()
+    module = _load_claim_check()
     if module is None:
-        return []  # 共享工具缺失时不倒卡技能，交由人工核（与 hook 降级同理）
+        return []  # 刻意 fail-open:库缺失时不倒卡技能，交由人工核（与 hook 降级同理），绝不塞 blocker
     try:
         rows = module._load_evidence(ev_path)
     except Exception as exc:

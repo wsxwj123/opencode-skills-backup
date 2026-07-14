@@ -1,6 +1,6 @@
 ---
 name: sci2doc
-version: 2.21.0
+version: 2.22.0
 description: 用于将SCI论文材料转化为中文博士或硕士学位论文草稿，执行严格的章节结构、原子化Markdown工作流、门禁检查和版本回滚。当用户提到博士论文、硕士论文、学位论文、毕业论文、SCI转论文、doctoral thesis、master thesis、dissertation 时优先调用。
 ---
 
@@ -140,7 +140,7 @@ Rules:
 
 1. `literature_index.json` 每条可选带 `key_finding`（该文献真实结论一句话）与 `claim`（本文用它支撑的论点）两字段，最小承载核证语义（schema 见 `references/format_profile_schema.md § literature_index.json schema`）。
 2. 写某研究章前，对每个「承重论点句 ↔ 引文」建一行证据，落 `claim_evidence.json`（list），字段 `{section, claim_sentence, is_load_bearing, ref_id, retrieved_abstract, verdict∈support/weak/contradict/unknown, evidence_quote, user_confirmed}`。`retrieved_abstract` 用**检索到的真实 abstract**（不看可编的 `key_finding`），取 abstract 走本技能既有文献检索subagent。**已建过证据的可留空以省事**：脚本读写 `ref_evidence_cache.json`，对某条 `ref_id` 已缓存过 abstract 的行自动回填 abstract、AI 不必重新检索；同一 `(ref_id, claim_sentence)` 已判定过的行自动复用上次结论，AI 只需对**新的 (文献, 论点) 组合**做反向验证。
-3. 跑共享核证脚本（`env_preflight.py` 打印的 `CITATION_CHECK_CMD`），命令 `python <_shared>/citation_claim_check.py --root <project_root> --evidence <project_root>/claim_evidence.json`。脚本自动读写 `ref_evidence_cache.json`（回填 abstract + 复用同 (文献,论点) 已确认结论），门禁强度不变。
+3. 跑共享核证脚本（`env_preflight.py` 打印的 `CITATION_CHECK_CMD`），命令 `python <sci2doc>/scripts/citation_claim_check.py --root <project_root> --evidence <project_root>/claim_evidence.json`。脚本自动读写 `ref_evidence_cache.json`（回填 abstract + 复用同 (文献,论点) 已确认结论），门禁强度不变。
    - 承重句 `verdict∈{contradict,unknown}` 或缺 abstract 或未 `user_confirmed` → **fail-closed（exit 2），硬拦 + 人工逐条确认**后方可下笔。
    - 背景陈述句只在表里批量呈现、不逐条阻断。
 4. 纳入节/章 DoD（见 dod_checklist `section-dod`/`chapter-dod` 的 citation_claim_check 项）。
@@ -338,7 +338,7 @@ python3 scripts/extract_docx_images.py --manuscript /path/to/source.docx --proje
 
 **章节字数协商在此阶段完成（不在 init 后）：** 基于各章实际承载内容（实验数量/图表数量/方法复杂度），与用户协商每章字数目标，写入 profile 的 `chapter_targets`，再执行 Step 1 init。
 
-> **[章节结构签字·强制门禁落锁]** 用户在对话里明确确认上面的研究主线 / 章节结构映射表后（且**仅在此之后**），运行开局 `env_preflight.py` 打印的那条 `SIGNOFF_CMD`（已含解析好的绝对路径）落盘签字。注意 `env_preflight.py` 在会话开场就运行（即本 Step 0.5 签字之前，见本文件开头第 1 条握手；它文档虽列在 Step 1，实际执行在最前），所以此刻 `SIGNOFF_CMD` 早已拿到，不存在签字时还没拿到命令的次序歧义：即 `python "<.../\_shared/structure_signoff_gate.py>" confirm --root <项目根> --note "<用户确认原话摘录>"`。这一步解锁正文写作：**未落签字，PreToolUse hook 会物理拦截任何对 `atomic_md/*/*.md`（学位论文各章正文）的写入**（这是防跳步的硬门，不是提示词纪律）。这道拦截 hook 由 `env_preflight.py` 开工时经 `_shared/install_gate_hook.py` 自动安装并校验（带备份与回滚），门禁状态 active 即在岗；报 degraded 或 error 时会告警，此时无法物理拦截、只能靠人工盯，需留意。若后续章节结构又改，改完让用户重新确认并重跑本命令覆盖签字。⚠️ 严禁在用户未确认时自行运行 confirm，那等于伪造用户签字。
+> **[章节结构签字·强制门禁落锁]** 用户在对话里明确确认上面的研究主线 / 章节结构映射表后（且**仅在此之后**），运行开局 `env_preflight.py` 打印的那条 `SIGNOFF_CMD`（已含解析好的绝对路径）落盘签字。注意 `env_preflight.py` 在会话开场就运行（即本 Step 0.5 签字之前，见本文件开头第 1 条握手；它文档虽列在 Step 1，实际执行在最前），所以此刻 `SIGNOFF_CMD` 早已拿到，不存在签字时还没拿到命令的次序歧义：即 `python "<sci2doc>/scripts/structure_signoff_gate.py" confirm --root <项目根> --note "<用户确认原话摘录>"`。这一步解锁正文写作：**未落签字，PreToolUse hook 会物理拦截任何对 `atomic_md/*/*.md`（学位论文各章正文）的写入**（这是防跳步的硬门，不是提示词纪律）。这道拦截 hook 由 `env_preflight.py` 开工时经 `_shared/install_gate_hook.py` 自动安装并校验（带备份与回滚），门禁状态 active 即在岗；若报 degraded / error（如缺 `_shared`），物理拦截不可用，签字仅留痕、无强制，需人工守住「未签字不写正文」。若后续章节结构又改，改完让用户重新确认并重跑本命令覆盖签字。⚠️ 严禁在用户未确认时自行运行 confirm，那等于伪造用户签字。
 >
 > 注意：本签字闸管的是**章节结构确认**，与 `## Style Selection Gate`（样式/格式确认，阻断 init 与 docx 导出）是**两道独立的门**，各管各的，别混淆或相互替代。
 

@@ -1,12 +1,12 @@
 ---
 name: polish-sci
-version: 2.21.0
+version: 2.22.0
 description: 纯论文润色全管道。输入一份已写完的稿子(无审稿意见),逐段提升语言表达,绝不改内容/数据/结论。触发词：润色、polish、语言润色、润色论文、polish paper、language polish、proofread manuscript、母语化、润色稿子。路由说明：与revise-sci区分,revise-sci由审稿意见驱动、只改被点名片段;polish-sci无意见、全文逐段润色覆盖每一段。与general-sci-writing区分,gsw从零写新稿,polish-sci只润色现成稿。
 ---
 
 # Polish-Sci
 
-> 🔁 **每次进入/续写先接续**:开工或换会话续写前,先跑 `env_preflight` 打印的 **RESUME_CMD**(`python <_shared>/session_journal.py resume --root <project_root>`),把接续报告贴给用户并打一次接续握手(确认进度到哪、之前的要求都读了、下一步做什么),等用户确认再动手。用户中途插入任何临时要求,立刻用 **LOG_CMD**(`session_journal.py log --root <project_root> --note "<原话>"`)记进 `decisions_log.md`,后续会话必读必守。
+> 🔁 **每次进入/续写先接续**:开工或换会话续写前,先跑 `env_preflight` 打印的 **RESUME_CMD**(`python <polish-sci>/scripts/session_journal.py resume --root <project_root>`),把接续报告贴给用户并打一次接续握手(确认进度到哪、之前的要求都读了、下一步做什么),等用户确认再动手。用户中途插入任何临时要求,立刻用 **LOG_CMD**(`session_journal.py log --root <project_root> --note "<原话>"`)记进 `decisions_log.md`,后续会话必读必守。
 
 ## Overview
 本技能只做一件事,纯语言润色一份已写完的稿子。输入是完整稿(md 或 docx),没有审稿意见。输出是逐段润色后的稿子,加一份逐段改动报告。**默认走交互式逐段润色**(每段先贴原文/润色/逐处改动给你看、你确认或要求调整后才写回,见"交互式逐段润色协议"专节),方便你边润边对照改自己的原稿。

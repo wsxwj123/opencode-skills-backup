@@ -1,6 +1,6 @@
 ---
 name: revise-sci
-version: 2.21.0
+version: 2.22.0
 description: 退稿/返修全管道，同时出逐条回复信+修改后正文docx+Patch修订。触发词：改稿、修改稿子、修订正文、退稿改进、返修、revise manuscript、major revision、minor revision、revise and resubmit、point-by-point response、revised manuscript。路由说明：与reviewer-response-sci区分，本技能同时改主稿+出回复包，后者只出回复不改稿；与gsw区分，gsw写新稿，本技能专处理已有稿子的审稿意见驱动修改。
 ---
 
@@ -28,7 +28,7 @@ The manuscript atomizer recognizes numbered section headings such as `1`, `1.1`,
 监工卡是「启动提醒」，接续报告是「续上上一会话的进度」。**每次进入本技能、且 `project_root` 已存在时，先跑接续命令再动手**：
 
 ```bash
-python "<_shared>/session_journal.py" resume --root <project_root>
+python "<技能>/scripts/session_journal.py" resume --root <project_root>
 ```
 
 `env_preflight.py` 会把这条打印为 `RESUME_CMD`（连同 `LOG_CMD` / `CITATION_CHECK_CMD`，均为解析好的绝对路径）。读完接续报告后，**据它跟用户打接续握手**：复述当前 phase、已处理的 comment、以及 `decisions_log.md` 里用户历次要求，问「我接着做 <下一步>，对吗？还是先插新要求？」**等用户确认再继续**。
@@ -36,7 +36,7 @@ python "<_shared>/session_journal.py" resume --root <project_root>
 用户在会话中途**插入任何临时要求**（改哪节、换策略、加/撤某条意见的处理方式）时，**当场 log**，后续会话必读必守：
 
 ```bash
-python "<_shared>/session_journal.py" log --root <project_root> --note "<用户要求原话>"
+python "<技能>/scripts/session_journal.py" log --root <project_root> --note "<用户要求原话>"
 ```
 
 ## Mandatory Intake Before Any Full Pipeline Run

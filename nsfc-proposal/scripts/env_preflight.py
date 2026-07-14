@@ -96,36 +96,50 @@ def main():
 
 
 def _install_gate_hook() -> None:
-    """调共享安装器 install_gate_hook.py，回显其人话消息。定位:本文件在
-    skills/nsfc-proposal/scripts/ → parents[2]=skills/ → _shared/。
+    """安装/自检强制门禁 hook,并打印各绝对路径命令(免去 SKILL.md 相对路径的 cwd 依赖)。
+
+    双轨路径(故意不同,勿"顺手统一"):
+      - 纯库(RESUME/JOURNAL_LOG/SIGNOFF/CITATION 对应脚本)= 本技能 scripts/ 的 vendored 副本,
+        与本文件同目录(Path(__file__).parent),不依赖 _shared。
+      - hook 安装器 install_gate_hook.py 仍在 skills/_shared/(Phase B 将迁
+        ~/.claude/academic-gate)——所以下面对 _shared 与本地 scripts/ 两类路径来源不一致,是有意为之。
     任何异常都吞掉——门禁自检绝不能反过来卡住技能。"""
     import json as _json
     import subprocess as _sp
     try:
-        installer = Path(__file__).resolve().parents[2] / "_shared" / "install_gate_hook.py"
-        if not installer.is_file():
-            return
-        proc = _sp.run([sys.executable or "python", str(installer)],
-                       capture_output=True, text=True, timeout=30)
-        line = (proc.stdout or "").strip().splitlines()[-1] if proc.stdout.strip() else ""
-        res = _json.loads(line) if line else {}
-        status, msg = res.get("status", ""), res.get("message", "")
-        icon = {"active": "🛡️", "installed": "🛡️", "degraded": "⚠️", "error": "ℹ️"}.get(status, "ℹ️")
-        if msg:
-            print(f"{icon} 门禁保护[{status}]: {msg}")
-        # 打印解析好的结构签字命令(绝对路径,免去 SKILL.md 里相对路径的 cwd 依赖)。
-        signoff = installer.parent / "structure_signoff_gate.py"
+        here = Path(__file__).resolve().parent               # 本技能 scripts/,放 vendored 纯库副本
+        installer = here.parents[1] / "_shared" / "install_gate_hook.py"  # hook 安装器仍在 _shared
+        if installer.is_file():
+            proc = _sp.run([sys.executable or "python", str(installer)],
+                           capture_output=True, text=True, timeout=30)
+            line = (proc.stdout or "").strip().splitlines()[-1] if proc.stdout.strip() else ""
+            res = _json.loads(line) if line else {}
+            status, msg = res.get("status", ""), res.get("message", "")
+            icon = {"active": "🛡️", "installed": "🛡️", "degraded": "⚠️", "error": "ℹ️"}.get(status, "ℹ️")
+            if msg:
+                print(f"{icon} 门禁保护[{status}]: {msg}")
+        else:
+            print("⚠️ 未找到 _shared/install_gate_hook.py:物理门禁 hook 无法安装,防跳步硬拦不可用(降级为提示词纪律)。")
+            print("结构签字 confirm 仍可落盘但仅留痕、无物理强制。")
+            print("修复:安装完整技能仓库(含 skills/_shared/)或手动补齐该目录。")
+
+        # 各命令一律指向本技能 scripts/ 的 vendored 副本,即使上面安装器缺失也照常可用。
+        signoff = here / "structure_signoff_gate.py"
         if signoff.is_file():
             print(f'SIGNOFF_CMD: python "{signoff}" confirm --root <project_root> --note "<用户确认原话>"')
-        # 跨会话接续:每次进入/续写先跑 RESUME_CMD 贴接续报告+握手;用户插要求立即 log。
-        journal = installer.parent / "session_journal.py"
+        else:
+            print("⚠️ 缺少 scripts/structure_signoff_gate.py(vendored 副本),对应功能不可用;跑 python3 _shared/sync_vendored.py --sync 或重新安装完整技能包")
+        journal = here / "session_journal.py"
         if journal.is_file():
             print(f'RESUME_CMD: python "{journal}" resume --root <project_root>')
             print(f'JOURNAL_LOG_CMD: python "{journal}" log --root <project_root> --note "<用户临时要求原话>"')
-        # 引文核证:承重论点↔引文,用真摘要判支撑,承重句 contradict/无摘要/未确认即 fail-closed。
-        claimchk = installer.parent / "citation_claim_check.py"
+        else:
+            print("⚠️ 缺少 scripts/session_journal.py(vendored 副本),对应功能不可用;跑 python3 _shared/sync_vendored.py --sync 或重新安装完整技能包")
+        claimchk = here / "citation_claim_check.py"
         if claimchk.is_file():
             print(f'CITATION_CHECK_CMD: python "{claimchk}" --root <project_root>')
+        else:
+            print("⚠️ 缺少 scripts/citation_claim_check.py(vendored 副本),对应功能不可用;跑 python3 _shared/sync_vendored.py --sync 或重新安装完整技能包")
     except Exception:
         pass
 

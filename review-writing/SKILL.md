@@ -1,6 +1,6 @@
 ---
 name: review-writing
-version: 2.21.0
+version: 2.22.0
 description: "Universal assistant for writing high-impact academic literature reviews (Nature/Cell/Lancet level). Supports real-time Zotero integration, outline persistence, and multi-mode reference management. Use when writing a comprehensive review article requiring systematic search, synthesis, and citation management. 触发词：写综述、文献综述、综述写作、literature review、review article、改综述、完善综述、继续写综述、improve review。"
 triggers:
   - "写综述"
@@ -202,7 +202,7 @@ Before any **writing / search / import / Zotero-mutating** action, ask exactly *
 > After locating, `cd` into the project directory before any further operation.
 
 > **🔁 接续与决定日志（每次进入/续写的第一动作，项目已存在时必做）：**
-> 1. 定位到项目根后，**第一件事先跑 Phase 0.5 打印的 `RESUME_CMD`**（绝对路径指向 `_shared/session_journal.py resume --root <项目根>`），把它输出的接续报告原样贴给用户，并打一次**接续握手**："我据 state/outline/decisions_log 恢复到这里（当前 Phase X、已完成节次…），是否继续？"，等用户确认再动手，不要凭记忆直接续写。
+> 1. 定位到项目根后，**第一件事先跑 Phase 0.5 打印的 `RESUME_CMD`**（绝对路径指向 `<review-writing>/scripts/session_journal.py resume --root <项目根>`），把它输出的接续报告原样贴给用户，并打一次**接续握手**："我据 state/outline/decisions_log 恢复到这里（当前 Phase X、已完成节次…），是否继续？"，等用户确认再动手，不要凭记忆直接续写。
 > 2. **用户中途插入任何临时要求**（改结构、调顺序、换重点等），立即用 `session_journal.py log --root <项目根> --note "用户要求：<原话>"` 追加到 `decisions_log.md`（append-only，后续会话必读），再执行。
 > 3. `RESUME_CMD` 只读展示、绝不阻断；新项目（state.json 尚不存在）跳过本步，直接走 Mode Handshake Gate。
 
@@ -533,7 +533,7 @@ Format: `[review] Phase X.Step: <description>`. 📖 消息表 + Rollback 命令
    > ```
    > 修改后须更新 `outline.md`，重新确认 Zotero 集合树（`--init` 是幂等的），并用 Git Checkpoint 记录版本。**不得因回修提纲而删除已完成节次的已有文献入库记录。**
 
-   > **[结构签字·强制门禁落锁]** 用户在对话里明确确认提纲后（且**仅在此之后**），运行 Phase 0.5 `init_project.py` 打印的那条 `SIGNOFF_CMD`（已含解析好的绝对路径与项目根）落盘签字，即 `python "<.../_shared/structure_signoff_gate.py>" confirm --root <项目根> --note "<用户确认原话摘录>"`。这一步解锁正文写作：**未落签字，PreToolUse hook 会物理拦截任何对 `drafts/*.md` 的写入**（这是防跳步的硬门，不是提示词纪律）。该 hook 由 Phase 0 `init_project.py` 开工时经 `_shared/install_gate_hook.py` 自动安装并校验（备份原 settings / 只追加不覆写 / 校验失败即回滚），init 回显 `门禁保护[active]` 即在岗生效；若回显 `[degraded]` 或 `[error]`（安装/校验未通过），hook 未在岗、物理拦截降级为提示词纪律，此时需人工留意别在未签字时写 `drafts/`。若后续回修提纲（上方迭代闸允许），改完让用户重新确认并重跑本命令覆盖签字。⚠️ 严禁在用户未确认时自行运行 confirm，那等于伪造用户签字。
+   > **[结构签字·强制门禁落锁]** 用户在对话里明确确认提纲后（且**仅在此之后**），运行 Phase 0.5 `init_project.py` 打印的那条 `SIGNOFF_CMD`（已含解析好的绝对路径与项目根）落盘签字，即 `python "<review-writing>/scripts/structure_signoff_gate.py" confirm --root <项目根> --note "<用户确认原话摘录>"`。这一步解锁正文写作：**未落签字，PreToolUse hook 会物理拦截任何对 `drafts/*.md` 的写入**（这是防跳步的硬门，不是提示词纪律）。该 hook 由 Phase 0 `init_project.py` 开工时经 `_shared/install_gate_hook.py` 自动安装并校验（备份原 settings / 只追加不覆写 / 校验失败即回滚），init 回显 `门禁保护[active]` 即在岗生效；若回显 `[degraded]` 或 `[error]`（安装/校验未通过，如缺 `_shared`），物理拦截不可用、降级为提示词纪律，签字仅留痕、无强制，需人工守住「未签字不写 `drafts/`」。若后续回修提纲（上方迭代闸允许），改完让用户重新确认并重跑本命令覆盖签字。⚠️ 严禁在用户未确认时自行运行 confirm，那等于伪造用户签字。
 
 4. **规划贯穿全文的概念框架图（提纲确认后，Phase 1.7 内完成）：**
    在 `figures/figure_index.md` 中注册一条 `Figure 0`（概念框架图），要求：
@@ -736,7 +736,7 @@ If pending_sections is empty → all sections complete; proceed to Phase 4.
 
 3.5. **🧭 引文核证脚手架（帮你写对的辅助，不是卡后续的墙）：** 落笔前，为本节**承重论点**（load-bearing：机制断言、疗效/因果结论、关键定量声明等支撑全节论证的句子）逐条把"论点 ↔ 它要引的文献"对齐，用文献**检索时原样落盘的真实 abstract**（`data/synthesis_matrix.json` 已含 claim↔文献的绑定，abstract 取自 `data/literature_index.json` 的 `abstract` 字段，**不是可事后编的 key_finding**）判断该引用是否真支撑这句话，写入项目根 `claim_evidence.json`（list，每条：`{section, claim_sentence, is_load_bearing, ref_id, retrieved_abstract, verdict∈support/weak/contradict/unknown, evidence_quote, user_confirmed}`）。背景陈述句列入即可（`is_load_bearing:false`），批量过目、不逐条阻断。
    > **跨节复用（脚本自动读写 `ref_evidence_cache.json`，AI 不必手记字段）：** 已在别节验过的文献，本节该行的 `retrieved_abstract` 可留空，脚本按 `ref_id` 从项目根 `ref_evidence_cache.json` 自动回填真实 abstract；完全同一 `(ref_id, 论点句)` 且此前已 `user_confirmed` 的承重句，脚本自动复用其 verdict 与确认，不再反向验证、不再 AskUserQuestion。只有**新的 (文献, 论点) 组合**才需重新判支撑并逐条确认。核证后脚本强制把已验 abstract 与已确认承重 verdict 落盘，已验状态由脚本维护。此复用**不放松门禁**：缺 abstract、承重句 contradict/unknown、未 `user_confirmed`，仍 fail-closed（见下 exit 2）。
-   然后跑 Phase 0.5 打印的 `CITATION_CHECK_CMD`（绝对路径指向 `_shared/citation_claim_check.py --root <项目根>`；读项目根 `claim_evidence.json`，渲染 claim↔引用支撑矩阵表）：
+   然后跑 Phase 0.5 打印的 `CITATION_CHECK_CMD`（绝对路径指向 `<review-writing>/scripts/citation_claim_check.py --root <项目根>`；读项目根 `claim_evidence.json`，渲染 claim↔引用支撑矩阵表）：
    - **承重句** `contradict` / `unknown` / 缺 `retrieved_abstract` / 未 `user_confirmed` → 脚本 fail-closed（exit 2）。对每个被拦的承重句，用 **AskUserQuestion 逐条**呈现（论点 + 拟引文献 + abstract 摘录 + 机器判定），让用户裁决：换引文 / 改写论点 / 确认支撑（确认后在该条置 `user_confirmed:true` 重跑）。
    - **背景句** 的 weak/contradict 只在矩阵表里标红提示，**批量**过目即可，不逐条打断。
    - **定位**：这是帮你把引用挂对的脚手架，带着"引用确实支撑论点"的把握再落笔。通过后进 Step 4。（复用已建的 synthesis_matrix，不重复建库。）
