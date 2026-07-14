@@ -50,6 +50,9 @@ REQUIRED_SCRIPTS = [
     "proofread.py",  # Phase 3 R21 字符级机器硬门禁(可阻断)
     "consolidate_references.py",  # Phase 4 合并参考文献为单一列表
     "export_docx.py",  # Phase 5d 最终 docx 交付物(需 templates/reference.docx)
+    "structure_signoff_gate.py",  # vendored: 结构签字硬门(SIGNOFF_CMD)
+    "session_journal.py",  # vendored: 跨会话接续(RESUME_CMD)
+    "citation_claim_check.py",  # vendored: 承重论点↔引文核证(CITATION_CHECK_CMD)
 ]
 
 STATE_JSON = '{"phase": 0, "completed_sections": [], "zotero_root_key": "", "authors": []}\n'
@@ -159,33 +162,50 @@ def main() -> None:
 
 def _install_gate_hook(proj) -> None:
     """调共享安装器 install_gate_hook.py 自动装强制门禁 hook（备份/校验/回滚 +
-    心跳探测），回显其人话状态；并打印结构签字命令 SIGNOFF_CMD（绝对路径 + 项目根）。
-    定位:本文件在 skills/review-writing/scripts/ → resolve().parents[2]=skills/ →
-    _shared/。任何异常全吞——门禁自检绝不能反过来卡住技能。"""
+    心跳探测），回显其人话状态；并打印结构签字 / 接续 / 引文核证三条命令。
+
+    双轨定位（故意不同，勿顺手统一）：
+    - 纯库脚本（structure_signoff_gate / session_journal / citation_claim_check）
+      已 vendored 进本技能 scripts/，就地取用 `pathlib.Path(__file__).resolve().parent`，
+      不依赖 _shared。
+    - installer（install_gate_hook.py）仍在 _shared/（Phase B 才迁移），所以下面
+      两个 base 不一样，这是有意为之。
+    任何异常全吞——门禁自检绝不能反过来卡住技能。"""
     import json as _json
     import subprocess as _sp
     try:
-        installer = pathlib.Path(__file__).resolve().parents[2] / "_shared" / "install_gate_hook.py"
-        if not installer.is_file():
-            return
-        proc = _sp.run([sys.executable or "python", str(installer)],
-                       capture_output=True, text=True, timeout=30)
-        line = (proc.stdout or "").strip().splitlines()[-1] if proc.stdout.strip() else ""
-        res = _json.loads(line) if line else {}
-        status, msg = res.get("status", ""), res.get("message", "")
-        icon = {"active": "🛡️", "installed": "🛡️", "degraded": "⚠️", "error": "ℹ️"}.get(status, "ℹ️")
-        if msg:
-            print(f"{icon} 门禁保护[{status}]: {msg}")
-        signoff = installer.parent / "structure_signoff_gate.py"
+        scripts_dir = pathlib.Path(__file__).resolve().parent
+        installer = scripts_dir.parents[1] / "_shared" / "install_gate_hook.py"
+        if installer.is_file():
+            proc = _sp.run([sys.executable or "python", str(installer)],
+                           capture_output=True, text=True, timeout=30)
+            line = (proc.stdout or "").strip().splitlines()[-1] if proc.stdout.strip() else ""
+            res = _json.loads(line) if line else {}
+            status, msg = res.get("status", ""), res.get("message", "")
+            icon = {"active": "🛡️", "installed": "🛡️", "degraded": "⚠️", "error": "ℹ️"}.get(status, "ℹ️")
+            if msg:
+                print(f"{icon} 门禁保护[{status}]: {msg}")
+        else:
+            # installer 缺失 → 物理门禁装不上，降级为提示词纪律。
+            print("⚠️ 门禁保护[degraded]: 缺 _shared/install_gate_hook.py，物理拦截不可用，降级为提示词纪律。")
+            print("   签字仅留痕、无强制拦截，需人工守住「未签字不写正文」。")
+            print("   修复：重装完整技能仓库，或补回 _shared/install_gate_hook.py。")
+        # 以下三条命令均指本地 vendored 副本，不依赖 _shared，故 installer 缺失时照常打印。
+        signoff = scripts_dir / "structure_signoff_gate.py"
         if signoff.is_file():
             print(f'SIGNOFF_CMD: python "{signoff}" confirm --root "{proj}" --note "<用户确认原话>"')
-        # 接续报告 + 引文核证命令（照 SIGNOFF_CMD 样式打印绝对路径，供 SKILL 开头/写节前直接调用）
-        journal = installer.parent / "session_journal.py"
+        else:
+            print('⚠️ 缺 scripts/structure_signoff_gate.py(vendored 副本)——跑 python3 _shared/sync_vendored.py --sync 或重装完整技能包')
+        journal = scripts_dir / "session_journal.py"
         if journal.is_file():
             print(f'RESUME_CMD: python "{journal}" resume --root "{proj}"')
-        citecheck = installer.parent / "citation_claim_check.py"
+        else:
+            print('⚠️ 缺 scripts/session_journal.py(vendored 副本)——跑 python3 _shared/sync_vendored.py --sync 或重装完整技能包')
+        citecheck = scripts_dir / "citation_claim_check.py"
         if citecheck.is_file():
             print(f'CITATION_CHECK_CMD: python "{citecheck}" --root "{proj}"')
+        else:
+            print('⚠️ 缺 scripts/citation_claim_check.py(vendored 副本)——跑 python3 _shared/sync_vendored.py --sync 或重装完整技能包')
     except Exception:
         pass
 
