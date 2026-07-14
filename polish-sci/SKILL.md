@@ -182,7 +182,7 @@ unit=段落是**红线核验的边界**,不是"每段只能就地改、不准动
 
 **硬拦项(strict_gate 阻断交付,exit 1)**:
 - AI 套话禁词表(delve into、pivotal role、underscore、testament、It is worth noting that、值得注意的是、综上所述、至关重要 等,中英双语,见 common.py 的 `AI_STYLE_BANNED_PATTERNS` 与 `AI_CLICHE_TERMS_EN/ZH`)。这些是 AI 腔的硬指纹,润色后一律清零。
-- **修辞性破折号 `—` / `——` / em-dash:禁止使用,硬门禁**。strict_gate 对破折号 fail-close,命中即阻断,不放行。
+- **修辞性破折号 `—` / `——` / em-dash:禁止使用,硬拦**。strict_gate 对破折号 fail-close,命中即阻断,不放行。
 
 **软提示项(记入 `polish_risk_flags` / `polish_change_report.md`,**不阻断交付**,由人工取舍)——学术散文正当修辞,别硬削平**:
 - 英文单句>30词 / 中文单句>50字(科学方法学段落常含数据列表的合法长句)。
@@ -191,7 +191,7 @@ unit=段落是**红线核验的边界**,不是"每段只能就地改、不准动
 - 解释性冒号(概念冒号后接句子片段)。
 - `not only...but also`、修辞问句。
 
-> 降软不等于放任:软提示仍逐段列给用户看,该收敛就收敛;只是它不再 fail-closed 卡交付,把"这处长句要不要改"的判断权交回作者,而不是脚本替作者一律铲平。破折号例外:它是硬门禁、禁止使用,不交作者取舍。`from A to B` 检测已从 common.py 移除(科学文本高频合法,信噪比差)。
+> 降软不等于放任:软提示仍逐段列给用户看,该收敛就收敛;只是它不再 fail-closed 卡交付,把"这处长句要不要改"的判断权交回作者,而不是脚本替作者一律铲平。破折号例外:它是硬拦、禁止使用,不交作者取舍。`from A to B` 检测已从 common.py 移除(科学文本高频合法,信噪比差)。
 
 **非散文豁免**:参考文献、作者名单、单位、资助、关键词、致谢、图表标题、纯数据清单等(atomize 标 `prose=false` 或润色器标 `polished_by=unchanged-nonprose`)保留原文不润色,**去AI/句长检测对它们不适用**(否则参考文献标题里的冒号/范围/问句会被误判);红线(数值/引用/语气/meaning)仍对全部单元核验。
 

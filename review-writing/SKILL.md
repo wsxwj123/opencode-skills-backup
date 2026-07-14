@@ -762,7 +762,7 @@ If pending_sections is empty → all sections complete; proceed to Phase 4.
    **量化兜底（先跑脚本再自读）：** 先跑 style_checker 拿客观信号，**high/medium 项必须先改掉；破折号命中即 hard_fail 一票否决，必须清零**；`info` 软项（long_sentence / excessive_passive_voice）只提醒不阻断、不扣分，择优处理。
    ```bash
    python3 scripts/style_checker.py --file drafts/section_01_01.md --passive-max 0.30
-   # 硬项(计分/hard_fail,可致 exit 1)：forbidden_ai_phrases / scare_quotes / explanatory_colon_in_prose / trailing_ing_clause / bullet_points / decorative_em_dash(破折号,hard_fail一票否决) ...
+   # 硬项(计分/hard_fail,可致 exit 1)：forbidden_ai_phrases / scare_quotes / explanatory_colon_in_prose / trailing_ing_clause / bullet_points / decorative_em_dash(破折号,hard_fail 一票否决) ...
    # 软项(severity=info,只报告不扣分不阻断)：long_sentence(>30词) / excessive_passive_voice(>30%)
    # exit 0 = 通过(score≥阈值)；非 0 = 据 issues 里的 high/medium 项修复后重跑（info 项不影响退出码）
    ```
@@ -814,7 +814,7 @@ If pending_sections is empty → all sections complete; proceed to Phase 4.
 
     - **R22 拉丁短语斜体软提醒(🟡软/人工确认,不阻断)**,`proofread.py` 的 `latin_italic_missing` 类别:正文里 `in vitro`/`in vivo`/`ex vivo`/`in situ`/`de novo`/`post hoc`/`per se` 等公认须斜体的拉丁短语若裸写(未被 `*...*` 斜体标记包裹)则报告。**仅提示,不阻断、不进 `--fail-on`、不扣分**,由人工确认是否补斜体(`et al.`/`e.g.`/`vs.` 等正体惯例不在词表内)。
 
-11. **📋 DoD 结论摆出 + HALT（展示式，不新增硬墙）：** 本节 `delegate_review verify` 盲检通过（exit 0 且 `.review_pass/<section>.json` 已落盘）后，先把**逐项 DoD 结论**摆给用户——从subagent返回的 JSON 里**逐条列出每个 `manuscript-dod` item**（id/name + verdict + 证据锚点摘录，以返回 JSON 的实际条目为准、不手点项号，含 systematic 3 项、结构完整性、R16-R19 覆盖全面性/引用偏倚/论证连贯/合规披露、R23 新颖性与贡献、字符级 R21；R5 里降软的长句/被动如命中只作 info 提示、不影响通过；破折号为硬门禁 hard_fail、命中即不通过）。再附本节 summary（content / logic / citation count / word count）。**然后 HALT 等用户确认，才写下一节。** 这是"展示 + 可继续"：盲检已过即可放行，此处只保证用户看到每项结论、有机会叫停，不新增硬门。Wait for "Continue".
+11. **📋 DoD 结论摆出 + HALT（展示式，不新增硬墙）：** 本节 `delegate_review verify` 盲检通过（exit 0 且 `.review_pass/<section>.json` 已落盘）后，先把**逐项 DoD 结论**摆给用户——从subagent返回的 JSON 里**逐条列出每个 `manuscript-dod` item**（id/name + verdict + 证据锚点摘录，以返回 JSON 的实际条目为准、不手点项号，含 systematic 3 项、结构完整性、R16-R19 覆盖全面性/引用偏倚/论证连贯/合规披露、R23 新颖性与贡献、字符级 R21；R5 里降软的长句/被动如命中只作 info 提示、不影响通过；破折号为 hard_fail 一票否决、命中即不通过）。再附本节 summary（content / logic / citation count / word count）。**然后 HALT 等用户确认，才写下一节。** 这是"展示 + 可继续"：盲检已过即可放行，此处只保证用户看到每项结论、有机会叫停，不新增硬门。Wait for "Continue".
 
 ### Figure Prompt Generation
 

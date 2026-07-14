@@ -110,7 +110,7 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
 - If a reviewer comment cannot be matched to any manuscript paragraph (location confidence below threshold), set `atomic_location.confidence = "low"` and mark the unit `needs_manual_revision`; do not fabricate a location.
 - Gate fix loop must not exceed **3 iterations**; if gate still fails after 3 direct JSON edits, halt and report remaining failures to the user with a list of unresolved unit IDs.
 - **AI Style Control:** English responses must avoid AI-typical phrasing patterns.
-  - **强度说明（先读）：** 分三类。**AI 套话主干（硬）**——空致谢/对冲词/填充语/模板化重复——是真的 AI 味，必须清。**去AI必禁三项（硬门禁，禁止使用）**——破折号（`—/——/em-dash`）/ scare quotes / 解释性冒号——`risk_check.py` 命中即 hard risk、pipeline-blocking（exit 1），不放行。**句式偏好（软提示，别机械削平）**——单句长度、-ing 分词——是**倾向性提醒不是硬门禁**：真人写的 rebuttal 里长句、分词从句本就是常态，为了压指标把自然句子剁碎反而写出更假的"防 AI 腔"。这几项按语感判断，明显堆砌才改；`risk_check.py` 对它们只报 WARN、不阻断。
+  - **强度说明（先读）：** 分三类。**AI 套话主干（硬）**——空致谢/对冲词/填充语/模板化重复——是真的 AI 味，必须清。**去AI必禁三项（硬门禁，禁止使用）**——破折号（`—/——/em-dash`）/ scare quotes / 解释性冒号——`risk_check.py` 命中即 FAIL（hard risk、pipeline-blocking，exit 1），必须清零。**句式偏好（软提示，别机械削平）**——单句长度、-ing 分词——是**倾向性提醒不是硬门禁**：真人写的 rebuttal 里长句、分词从句本就是常态，为了压指标把自然句子剁碎反而写出更假的"防 AI 腔"。这几项按语感判断，明显堆砌才改；`risk_check.py` 对它们只报 WARN、不阻断。
   - Hedging overuse: "it is important to note that", "it should be noted that", "notably", "importantly"
   - Empty appreciation: "we greatly appreciate your insightful comments", "this is an excellent suggestion"
     - **外交缓冲豁免（仅 Push back / Partial 基调）**：rebuttal 里适度致谢与缓冲是不激怒审稿人的润滑剂，不算"空致谢"。反驳/部分接受的 unit **允许一句**克制的开场缓冲——`decision-rules.md` B 段推荐句式如 "We thank the reviewer for this valuable comment." / "We appreciate this suggestion; however, ..." 是**允许**的。禁的仍是：副词叠加的浮夸致谢（"we greatly/sincerely/deeply appreciate"）、`this is an excellent suggestion`、以及 ≥3 条回复用同一句致谢开头。缓冲句之外仍须紧跟实质回应，不得只致谢不作答。`risk_check.py` 的 `ai_appreciation` 正则已按此放行无副词的单句致谢，两文件口径一致。
@@ -118,8 +118,8 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
   - Structural repetition: ≥3 responses must not open with the same template sentence
   - **（软）English sentence length — 倾向 ≤30 words/句。** 一句明显冗长（>30 词且塞了多重从句）就拆，但**别为压指标机械剁句**：意思连贯的一个长句好过三个断句。绝不靠删必要内容达标。`risk_check.py` 只 WARN。
   - **（软）-ing participial clause — 少用逗号挂 -ing 分词收尾**（如 ", reflecting our commitment to…", ", ensuring that…"）：这是常见 AI 尾巴，堆多了显假；但真人也用分词从句，**偶尔一句自然的分词不必强拆**，明显成串堆砌才改。
-  - **（🔴 硬门禁）Decorative em-dash — 破折号禁止使用**（如 "This result—while preliminary—suggests…"）：`—/——/em-dash` 一律禁用，改用逗号、句号或拆句。`risk_check.py` 命中即 hard risk、pipeline-blocking（exit 1），必须清零。复合词连字符（"dose-response"）与数值区间（en-dash）不受影响。
-  - **（🔴 硬门禁）Scare-quote — 禁给普通词/自造词加引号暗示新颖或反讽**（如 "robust" findings、"novel" approach）：`risk_check.py` 命中即 hard risk、pipeline-blocking（exit 1），必须清零。豁免：首次定义术语、逐字引用审稿人原话、约定俗成的固定表达。
+  - **（🔴 硬门禁）Decorative em-dash — 破折号禁止使用**（如 "This result—while preliminary—suggests…"）：`—/——/em-dash` 一律禁用，改用逗号、句号或拆句。`risk_check.py` 命中即 FAIL（hard risk、pipeline-blocking，exit 1），必须清零。复合词连字符（"dose-response"）与数值区间（en-dash）不受影响。
+  - **（🔴 硬门禁）Scare-quote — 禁给普通词/自造词加引号暗示新颖或反讽**（如 "robust" findings、"novel" approach）：`risk_check.py` 命中即 FAIL（hard risk、pipeline-blocking，exit 1），必须清零。豁免：首次定义术语、逐字引用审稿人原话、约定俗成的固定表达。
   - **Explanatory-colon ban:** do not use the pattern "concept: explanation" as a decorative sentence structure (e.g., "Main revision: we added a new control group"). Legitimate colons include ratios (2:1), clock times, list lead-ins, section headings, and figure labels ("Figure 3A:").
   - `risk_check.py` scans for these patterns automatically (including sentence length and -ing clause detection); WARN-level issues should be fixed before delivery
 - **Chinese response style (中文回复规则，软提示同上)：**
@@ -318,7 +318,7 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
 - ❌ 把 `revised_excerpt_en` 留作占位符、留空、或与 `original_excerpt_en` 完全相同（仅改标点也算未改），strict_gate 必拦。
 - ❌ 交付时残留 `待AI` / `AI_FILL_REQUIRED` / `[PENDING Step 7]` 占位符，或 Step 7 后漏跑 `aggregate-edit-plan` 回填 edit_plan。
 - ❌ 英文回复堆套话（硬）：空致谢（we greatly appreciate your insightful comments）、对冲词（it is important to note that）、填充语、≥3 条回复用同一模板开头；解释性冒号（"Main revision: we added..."）。
-- 🔴 破折号（—/——）硬门禁、禁止使用：`risk_check.py` 命中即 FAIL（pipeline-blocking），必须清零。
+- 🔴 破折号（—/——）硬门禁、禁止使用：`risk_check.py` 命中即 FAIL（hard risk、pipeline-blocking，exit 1），必须清零。
 - ⚠️ 句式软项（WARN 非 FAIL，别机械削平）：英文单句明显 >30 词、成串 -ing 分词挂句、中文单句明显 >50 字或三重嵌套——明显堆砌才改，真人常态句子不必强拆（见 AI Style Control 强度说明）。scare quotes 不在软项，属去AI必禁三项硬门禁。
 - ❌ 意见无法匹配到任何段落时硬编一个 location，而非置 `confidence=low` 并标 `needs_manual_revision`。
 - ❌ gate 失败时新建临时修复脚本（fix_gate_errors.py 之类）或逐个手跑 gate，应直接改 `units/*.json` 重跑且修复循环 ≤3 次。

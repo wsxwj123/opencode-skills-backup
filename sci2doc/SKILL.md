@@ -86,7 +86,7 @@ The workflow is built around:
 14. Literature retrieval follows topic-dependent routing (MANDATORY)：细则见 `## Citation Zero-Hallucination Gate`。
 15. 缩写一致性强制执行：首次展开格式 `中文全称（English Full Name, ABBR）`，后续裸缩写；用 `abbreviation_registry.py` 管理；需生成前置缩略语表。细则见 `## Abbreviation Contract`。
 16. 三线表格式强制：所有数据表使用 Markdown 管道语法，`markdown_to_docx.py` 自动转换；边框参数与题注字体字号见 `references/word-format-spec.md § Three-Line Table Borders`。细则见 `## Table Contract`。
-17. 文风约束：见 `## Humanization Contract`（清单集中在那里）；`check_quality.py check_writing_style()` 自动检测。**硬禁清零项**：破折号/scare quotes/解释性冒号三项标点 + AI 禁词，finalize 前必须归零。**软提示项**（不阻断 finalize）：句长/句式节奏（C 降软）。
+17. 文风约束：见 `## Humanization Contract`（清单集中在那里）；`check_quality.py check_writing_style()` 自动检测。**硬禁清零项**：破折号（——）/scare quotes/解释性冒号三项标点 + AI 禁词，finalize 前必须归零。**软提示项**（不阻断 finalize）：句长/句式节奏（C 降软）。
 18. 格式对齐规则：正文两端对齐、三线表单元格居中、图占位符居中无首行缩进。完整参数见 `references/word-format-spec.md`。
 19. Bold marker 处理：`**text**` / `__text__` 在 Word 转换时由 `strip_bold_markers()` 自动剥除；单 `*` 统计显著性标记（如 `*p<0.05`）保留原样。
 20. 已发表 SCI 内容复用合规底线：
@@ -501,7 +501,7 @@ Before finalizing each chapter:
 2. Invoke the `/humanizer-zh` skill on the chapter's merged markdown. The skill rewrites the text in-place; confirm the output before saving. If `/humanizer-zh` is unavailable, manually apply the following checklist to every paragraph:
 
    **中文正文规则（博论核心，脚本可检测项见括号）：**
-   > C 降软：句长/句式节奏为**软提示**（`cn_sentence_too_long` 为 warning、`cn_sentence_monotone` 为 info，均不阻断 finalize）；**破折号/scare quotes/解释性冒号三项标点与 AI 禁词仍为硬禁清零**（主干保留）。
+   > C 降软：句长/句式节奏为**软提示**（`cn_sentence_too_long` 为 warning、`cn_sentence_monotone` 为 info，均不阻断 finalize）；**破折号（——）/scare quotes/解释性冒号三项标点与 AI 禁词仍为硬禁清零**（主干保留）。
    - [ ] **中文单句 ≤50 字**（软提示，尽量拆分；`check_quality.py` 检测 `cn_sentence_too_long`，warning）
    - [ ] **从句嵌套 ≤2 层**：禁止"当A使B导致C从而D"类四层套叠结构（软提示）
    - [ ] **短句（≤15字）与长句（30-50字）交替**：连续 3 句字数差异 <5 字建议改写（软提示；`check_quality.py` 检测 `cn_sentence_monotone`，info）

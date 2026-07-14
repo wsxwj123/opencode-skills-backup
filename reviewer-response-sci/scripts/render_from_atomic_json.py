@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 from build_full_package import render_html
+from unit_glob import load_units
 
 
 def read_json(path: Path):
@@ -23,9 +24,7 @@ def main() -> int:
     index_data = read_json(root / "index.json")
     units_dir = root / "units"
 
-    units = []
-    for p in sorted(units_dir.glob("*.json")):
-        units.append(read_json(p))
+    units = load_units(units_dir)
 
     html = render_html(project_title=args.title, index_data=index_data, units=units)
     out = Path(args.output_html)

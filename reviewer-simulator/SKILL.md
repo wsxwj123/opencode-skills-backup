@@ -312,7 +312,7 @@ python -c "import os,json; r=os.getcwd(); d=os.path.join(r,'data'); os.makedirs(
 
 **🛑 ①DoD 停（盲检通过后仍须停，等用户确认才声明完成）**：delegate_review verify exit 0 **不等于自动交付**。verify 通过后，把 DoD 清单**逐项结论**（每项 pass/na + 一句证据，特别是 verdict 档位与其致命伤锚点）摆给用户，并**HALT 等待用户确认**；用户确认后才可声明"审稿报告完成"。用户若质疑某项（如"这条批评稿里根本没有""这个拒稿档位不成立"），退回修复对应项再走一遍，不得跳过确认径直收口。
 
-**本节完整 DoD 判据（全部核查项 + 脚本命令）以 `references/dod_checklist.json` gate=`report-dod` 为唯一真源（13 项）**：盲检subagent据此逐项核、能脚本核的先跑脚本，退出码非 0 即 fail-closed。含 A1/A2 脚本可核（21 占位符全替换、verdict 枚举合规，`validate_report_html.py`）、B1-B8 流程完整性（CRITICAL 阻断逻辑 / 合规审计 7 项 / 统计子清单 / 魔鬼代言人 / 给编辑保密意见 / 引文真实性 / **B7 审稿意见去AI 硬核（禁套话主干 + 必禁三项破折号/scare quotes/解释性冒号，`scan_report_humanize.py`）** / B8 结构完整性）、B11 检索证据门（soft，新颖性批评须附检索痕迹 + 具名文献），及 **B9 科学事实正确性核查（硬项盲检：稿件存在明确科学错误/单位/剂量硬数值错误而报告漏检=fail）**、B10 字符级软体检（`proofread_report.py`）。此处不再内联清单，避免与真源 drift。
+**本节完整 DoD 判据（全部核查项 + 脚本命令）以 `references/dod_checklist.json` gate=`report-dod` 为唯一真源（13 项）**：盲检subagent据此逐项核、能脚本核的先跑脚本，退出码非 0 即 fail-closed。含 A1/A2 脚本可核（21 占位符全替换、verdict 枚举合规，`validate_report_html.py`）、B1-B8 流程完整性（CRITICAL 阻断逻辑 / 合规审计 7 项 / 统计子清单 / 魔鬼代言人 / 给编辑保密意见 / 引文真实性 / **B7 审稿意见去AI 硬核（禁套话主干 + 必禁三项 装饰破折号（—/——）/ scare quotes / 解释性冒号，`scan_report_humanize.py`）** / B8 结构完整性）、B11 检索证据门（soft，新颖性批评须附检索痕迹 + 具名文献），及 **B9 科学事实正确性核查（硬项盲检：稿件存在明确科学错误/单位/剂量硬数值错误而报告漏检=fail）**、B10 字符级软体检（`proofread_report.py`）。此处不再内联清单，避免与真源 drift。
 
 ---
 
