@@ -7,8 +7,7 @@
 且容易漏项。本脚本把"委托盲检"拆成两个确定性步骤:
 
   pack    读 checklist JSON 的指定 gate -> 打印给独立子代理的"盲检任务包"
-          (角色框定 + 待检文件 + 完整清单 + 返回格式),并写一份
-          .review_pkg_<gate>.json 记录本次期望裁决的 item id 集合。
+          (角色框定 + 待检文件 + 完整清单 + 返回格式)。
   verify  读子代理返回的 JSON + checklist -> 校验每个清单项都被裁决、
           fail/na 附证据;任一缺项 / verdict=fail / 证据为空 -> 退出码 1
           (fail-closed,阻断"声明本节完成")。
@@ -85,10 +84,6 @@ def _get_items(gate_obj: Any, gate: str) -> list:
     return items
 
 
-def _pkg_record_path(workdir: str, gate: str) -> Path:
-    return Path(workdir) / f".review_pkg_{gate}.json"
-
-
 def _read_comments_text(path: str) -> str:
     """Read the original reviewer letter as plain text (.docx or .txt/.md).
 
@@ -118,12 +113,6 @@ def cmd_pack(args: argparse.Namespace) -> int:
     gate = _get_gate(checklist, args.gate)
     items = _get_items(gate, args.gate)
     item_ids = [it["id"] for it in items]
-
-    # 写任务包记录(verify 用它确认 gate 一致 + 期望 id)
-    record = {"skill": skill, "gate": args.gate, "item_ids": item_ids, "files": args.files}
-    _pkg_record_path(args.workdir, args.gate).write_text(
-        json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
 
     # 打印给子代理的盲检任务包(纯文本,跨平台可粘贴)
     lines: list[str] = []
@@ -299,7 +288,7 @@ def main() -> int:
     p_pack.add_argument("--files", nargs="+", required=True, help="待检文件路径")
     p_pack.add_argument("--comments", default=None,
                         help="原始审稿信路径(.docx/.txt/.md/.html)；传入后全文嵌入任务包，供盲检子代理逐条点名核对漏回/答非所问。强烈建议传。注意 .html 会原样含标签")
-    p_pack.add_argument("--workdir", default=".", help="任务包记录写入目录(默认 cwd)")
+    p_pack.add_argument("--workdir", default=".", help="项目工作目录,用于推导 .review_return_<gate>.json 落点(默认 cwd)")
     p_pack.set_defaults(func=cmd_pack)
 
     p_ver = sub.add_parser("verify", help="校验子代理返回(fail-closed)")
@@ -307,7 +296,7 @@ def main() -> int:
     p_ver.add_argument("--gate", required=True, help="清单内的 gate id")
     p_ver.add_argument("--return", dest="return_path", default=None,
                        help="子代理返回的 JSON 路径(默认用 pack 约定的 .review_return_<gate>.json)")
-    p_ver.add_argument("--workdir", default=".", help="任务包记录目录(默认 cwd)")
+    p_ver.add_argument("--workdir", default=".", help="项目工作目录,用于推导返回文件与 .review_pass 落点(默认 cwd)")
     p_ver.add_argument("--section", default=None,
                        help="本次盲检对应的 section id;提供后全过会在 <root>/.review_pass/<section>.json 落盘通过标记(供下一节 prewrite_gate 硬校验)。不传则行为与旧版完全一致")
     p_ver.add_argument("--root", default=None,

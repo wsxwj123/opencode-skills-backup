@@ -74,8 +74,8 @@ def test_pack_lists_items():
         r = _pack(d, checklist, target)
         assert r.returncode == 0, r.stderr
         assert "H1" in r.stdout and "H2" in r.stdout, r.stdout
-        # 任务包记录已落盘
-        assert (d / ".review_pkg_g1.json").exists()
+        # pack 不再落盘记录文件(无消费者)
+        assert not list(d.glob(".review_pkg_*.json")), "pack 不应写 .review_pkg 记录"
 
 
 def test_verify_all_hard_pass_ok():

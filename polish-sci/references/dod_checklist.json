@@ -27,7 +27,7 @@
         {
           "id": "PL-G4",
           "name": "去AI(硬拦主干)",
-          "check": "散文单元 AI 套话禁词表无残留(delve into/pivotal role/值得注意的是/综上所述 等,find_ai_style_markers 的套话 marker)+ 破折号/em-dash(—/——)无残留——这两项是硬拦、阻断交付(破折号禁止使用)。英文单句>30词/中文>50字、-ing 拖尾从句、scare quotes、解释性冒号、not only...but also、修辞问句为学术散文正当修辞,软提示(记 polish_risk_flags/报告,不阻断,由人工取舍),分级见 strict_gate.is_soft_ai_marker;非散文单元豁免",
+          "check": "散文单元 AI 套话禁词表无残留(delve into/pivotal role/值得注意的是/综上所述 等,find_ai_style_markers 的套话 marker)+ 去AI必禁三项(破折号 —/—— 、scare quotes、解释性冒号)无残留——套话禁词与这三项均硬拦、阻断交付(禁止使用)。英文单句>30词/中文>50字、-ing 拖尾从句、not only...but also、修辞问句为学术散文正当修辞,软提示(记 polish_risk_flags/报告,不阻断,由人工取舍),分级见 strict_gate.is_soft_ai_marker;非散文单元豁免",
           "script": "python scripts/strict_gate.py --project-root ."
         },
         {
