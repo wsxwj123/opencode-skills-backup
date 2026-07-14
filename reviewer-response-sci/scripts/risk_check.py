@@ -4,10 +4,11 @@
 from __future__ import annotations
 
 import argparse
-import json
 import re
 import sys
 from pathlib import Path
+
+from unit_glob import iter_units
 
 # ---------------------------------------------------------------------------
 # Sentence-length and -ing clause helpers
@@ -264,11 +265,7 @@ def main() -> int:
             return 0
         loaded_units = []
         comment_units = []
-        for p in sorted(units_dir.glob("*.json")):
-            try:
-                unit = json.loads(p.read_text(encoding="utf-8"))
-            except Exception:
-                continue
+        for p, unit in iter_units(units_dir):
             loaded_units.append(unit)
             is_email = unit.get("section") == "email" or "email" in str(unit.get("unit_id", "")).lower()
             if not is_email:

@@ -158,6 +158,8 @@ Follow phased gates in order:
 
    > **[结构签字·强制门禁落锁]** 用户在对话里明确确认「科学问题属性 + H/O/RC/KSQ 章节结构 + 实验设计（Phase 0.5 DoD ⑤）」后（且**仅在此之后**），运行 Phase 0 env_preflight 打印的那条 `SIGNOFF_CMD`（已含解析好的绝对路径）落盘签字——即 `python "<.../\_shared/structure_signoff_gate.py>" confirm --root <project_root> --note "<用户确认原话摘录>"`。这一步解锁正文写作：**未落签字，PreToolUse hook 会物理拦截任何对 `sections/*.md` 的写入**（这是防跳步的硬门，不是提示词纪律）。该 hook 由 Phase 0 `env_preflight.py` 开工时经 `_shared/install_gate_hook.py` 自动安装并校验（含备份/回滚），状态 active 即在岗；若报 degraded/error 或提示降级，需人工留意其拦截可能失效。若后续回修科学问题/章节结构，改完让用户重新确认并重跑本命令覆盖签字。⚠️ 严禁在用户未确认时自行运行 confirm——那等于伪造用户签字。
 
+**🔴 委托盲检总则（适用下列 Phase 1–7 每一个 DoD 闸口，Mandatory）：** 以下每个闸口一律遵守同一条铁律。每个 Phase 落盘前，DoD 清单必须委托一个独立上下文的 subagent 盲检（Claude Code 用 `academic-blind-reviewer`，其他平台派通用 subagent），不给它本稿的写作上下文；主 agent 不得自评打勾。各闸口只保留本 Phase 专属的 `delegate_review.py` pack/verify 命令与待检文件，盲检的角色与纪律统一遵此总则，不再逐处复述。**降级告警**：若判到科学意义/创新/可行性等决定成败的维度，而环境派不出真正独立的 subagent，绝不能同一 AI 编一份全 pass 的盲检 JSON 冒充（那几个维度就裸奔了）。此时须告诉用户「本环境盲检不可靠，请你亲自复核」，把判断交回用户，绝不自问自答冒充盲检。
+
 3. Phase 1: write P1 with full citation pipeline and verification.
    - **🔴 开写前置闸门 (Mandatory，脚本硬拦截)**：开写前先跑 `python3 scripts/prewrite_gate.py --section P1 --root .`，exit≠0 禁止开写（硬检查上一节完成/`consistency_map` 就位/占位符清零；上一节盲检结果（`.review_pass/<上一节>.json`）缺失即 prewrite_gate 硬拦 exit 1，禁止开写；必须先跑 delegate_review verify --section <上一节> 落盘通过标记——仅跨 Phase 边界生效，同 Phase 子节 N/A）。P1 为首节，上一节检查自动放行。
    - 每节先跑 `python scripts/state_manager.py --root . write-cycle --section P1`（逐节预算/上下文注入的预写门控，完整参数见 references/08）；不得跳过直接硬写。
@@ -179,12 +181,12 @@ Follow phased gates in order:
    **🔴 进入下一部分前置闸口（适用所有 Phase）：本部分 delegate_review verify 必须 exit 0（含结构完整性），否则不得进入下一部分撰写。写完即检，不过不进。**
    **🔴 修复 3 次仍不过 → 回滚兜底**：某部分据盲检证据修复重跑 3 次仍 fail，停止盲目重写，提示用户回滚到上一检查点（git 可用 `git checkout <sha> -- <文件>`；否则 `state_manager.py rollback`）后重写。
 
-   **🔴 委托盲检（不得主 agent 自评）**：P1 自评易漏项、易默认通过。落盘前必须把 DoD 清单**委托给独立上下文的subagent盲检**，自己不直接打勾：
+   **🔴 委托盲检（遵上方总则，主 agent 不得自评）**：P1 自评易漏项、易默认通过，落盘前必须把 DoD 清单委托独立 subagent 盲检。本 Phase 专属命令：
    1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate p1-dod --files sections/P1_立项依据.md`
    2. **派一个独立subagent**（Claude Code 用 `academic-blind-reviewer`；其他平台派通用subagent），把任务包原样给它、**不要给它 P1 的写作上下文**，要求按任务包返回 JSON 数组。
    3. 校验返回：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate p1-dod --return <subagent返回.json> --section P1 --root <项目根>`；退出码非 0（任一缺项/fail/无证据）= **fail-closed**，据subagent证据修复后重跑，**未过不得声明完成**。verify 通过会落盘 `.review_pass/P1.json`，下一部分 `prewrite_gate.py` 跨 Phase 时会**硬校验**它（缺失即拒绝开写）。
 
-   **【P4·盲检降级告警】** ⚠️ 上述委托盲检若判到 D-01/D-02/D-04（科学意义/创新/可行性）这三个决定成败的维度，而**环境派不出真正独立的subagent**时，**绝不能同一 AI 编一份全 pass 的盲检 JSON 冒充**——那三个维度就裸奔了。此时须告诉用户「本环境盲检不可靠，请你亲自复核立意/创新是否够中标」，交回用户。
+   **【P4·盲检降级告警】** ⚠️ 适用上方总则的降级告警：本闸口尤其针对 D-01/D-02/D-04（科学意义/创新/可行性）这三个决定成败的维度，环境派不出真正独立的 subagent 时按总则交回用户亲自复核立意/创新是否够中标，绝不自问自答编一份全 pass 冒充。
 
    **本 Phase 完整 DoD 判据（全部核查项 + 脚本命令）以 `references/dod_checklist.json` gate=`p1-dod` 为唯一真源**：盲检subagent据此逐项核、能脚本核的先跑脚本，退出码非 0 即 fail-closed。该 gate 含引文对应/citation_guard/占位符清零/去AI/字数/一致性/撤稿检测/承重论点核证等脚本项，及 N52 结构完整性与 N59-N62（科学事实正确、立项论证逻辑、创新性质量、科学问题凝练质量）四项盲检质量核。此处不再内联清单，避免与真源 drift。
 
@@ -203,7 +205,7 @@ Follow phased gates in order:
 
    **Phase 2 DoD（收口自检）：未逐项确认通过，不得向用户声明 P2 完成**
 
-   **🔴 委托盲检（不得主 agent 自评）**：落盘前委托独立subagent盲检：
+   **🔴 委托盲检（遵上方总则，主 agent 不得自评）**：落盘前按总则委托独立 subagent 盲检。本 Phase 专属命令：
    1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate p2-dod --files sections/P2_研究内容.md`
    2. 派独立subagent（Claude Code 用 `academic-blind-reviewer`），不给写作上下文，要求返回 JSON 数组。
    3. 校验：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate p2-dod --return <返回.json> --section P2 --root <项目根>`；非 0 = fail-closed，修复后重跑。verify 通过会落盘 `.review_pass/P2.json`，P3_1 开写时 `prewrite_gate.py` 会**硬校验**它。
@@ -225,7 +227,7 @@ Follow phased gates in order:
 
    **Phase 3 DoD（收口自检）：未逐项确认通过，不得向用户声明 P3 完成**
 
-   **🔴 委托盲检（不得主 agent 自评）**：落盘前委托独立subagent盲检：
+   **🔴 委托盲检（遵上方总则，主 agent 不得自评）**：落盘前按总则委托独立 subagent 盲检。本 Phase 专属命令：
    1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate p3-dod --files sections/P3_1_研究基础与可行性分析.md sections/P3_2_工作条件.md sections/P3_3_正在承担的相关项目.md sections/P3_4_完成基金项目情况.md`
    2. 派独立subagent（Claude Code 用 `academic-blind-reviewer`），不给写作上下文，要求返回 JSON 数组。
    3. 校验：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate p3-dod --return <返回.json> --section P3_1 --root <项目根>`；非 0 = fail-closed。verify 通过会落盘 `.review_pass/P3_1.json`（代表 P3 整体盲检；P3_2/P3_3/P3_4 同 Phase 内不单独硬校验）。
@@ -240,7 +242,7 @@ Follow phased gates in order:
 
    **Phase 4 DoD（收口自检）：未逐项确认通过，不得向用户声明 P4 完成**
 
-   **🔴 委托盲检（不得主 agent 自评）**：落盘前委托独立subagent盲检：
+   **🔴 委托盲检（遵上方总则，主 agent 不得自评）**：落盘前按总则委托独立 subagent 盲检。本 Phase 专属命令：
    1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate p4-dod --files sections/P4_其他需要说明的情况.md`
    2. 派独立subagent（Claude Code 用 `academic-blind-reviewer`），不给写作上下文，要求返回 JSON 数组。
    3. 校验：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate p4-dod --return <返回.json>`；非 0 = fail-closed。
@@ -257,7 +259,7 @@ Follow phased gates in order:
 
    **Phase 5 DoD（收口自检）：未逐项确认通过，不得向用户声明 P5/预算完成**
 
-   **🔴 委托盲检（不得主 agent 自评）**：落盘前委托独立subagent盲检：
+   **🔴 委托盲检（遵上方总则，主 agent 不得自评）**：落盘前按总则委托独立 subagent 盲检。本 Phase 专属命令：
    1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate p5-dod --files sections/B1_预算说明_直接费用.md sections/B2_预算说明_合作外拨.md sections/B3_预算说明_其他来源.md`
    2. 派独立subagent（Claude Code 用 `academic-blind-reviewer`），不给写作上下文，要求返回 JSON 数组。
    3. 校验：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate p5-dod --return <返回.json>`；非 0 = fail-closed。
@@ -271,7 +273,7 @@ Follow phased gates in order:
 
    **Phase 6 DoD（收口自检）：未逐项确认通过，不得向用户声明摘要完成**
 
-   **🔴 委托盲检（不得主 agent 自评）**：落盘前委托独立subagent盲检：
+   **🔴 委托盲检（遵上方总则，主 agent 不得自评）**：落盘前按总则委托独立 subagent 盲检。本 Phase 专属命令：
    1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate p6-dod --files sections/00_摘要_中文.md sections/00_摘要_英文.md`
    2. 派独立subagent（Claude Code 用 `academic-blind-reviewer`），不给写作上下文，要求返回 JSON 数组。
    3. 校验：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate p6-dod --return <返回.json>`；非 0 = fail-closed。
@@ -287,7 +289,7 @@ Follow phased gates in order:
 
    **Phase 7 DoD（收口自检）：未逐项确认通过，不得向用户声明全文终稿完成**
 
-   **🔴 委托盲检（不得主 agent 自评）**：merge 前委托独立subagent盲检：
+   **🔴 委托盲检（遵上方总则，主 agent 不得自评）**：merge 前按总则委托独立 subagent 盲检。本 Phase 专属命令：
    1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate p7-dod --files sections/P1_立项依据.md sections/P2_研究内容.md sections/P3_1_研究基础与可行性分析.md sections/P4_其他需要说明的情况.md sections/00_摘要_中文.md`
    2. 派独立subagent（Claude Code 用 `academic-blind-reviewer`），不给写作上下文，要求返回 JSON 数组。
    3. 校验：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate p7-dod --return <返回.json>`；非 0 = fail-closed，**未过不得声明完成、不得 merge**。

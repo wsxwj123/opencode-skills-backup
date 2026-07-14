@@ -1,0 +1,143 @@
+#!/usr/bin/env python3
+"""prewrite_gate.py 冒烟测试 —— 重点覆盖「每章首节章边界硬门」四种情形 + 双向。
+
+章边界块(prewrite_gate.py 内 prev_chapter_blind_review 检查):每章首节(sub<=1)
+且非第1章,必须先有上一章章级盲检标记 <root>/.review_pass/第<N-1>章.json(passed:true),
+否则硬拦 exit≠0。第1章无上一章放行;章内非首节(sub>1)该块 N/A,走既有 per-section 校验。
+
+四种情形:
+  1) 第1章首节(1.1)   → 放行(章边界块 N/A:无上一章)
+  2) 第2章首节(2.1)   → 缺 第1章 标记 → exit≠0(章边界块硬拦)
+  3) 造出 第1章 标记   → 2.1 放行(章边界块通过)
+  4) 章内非首节(2.2)   → 章边界块 N/A,走既有校验:
+       - 无 第1章 标记仍放行(证明该块对 sub>1 不生效)
+       - 抽掉上一节 2.1 盲检标记 → exit≠0(既有 per-section blind_review 触发,非章边界块)
+
+standalone: `python3 test_prewrite_gate.py`。
+"""
+from __future__ import annotations
+
+import json
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+SCRIPT = Path(__file__).resolve().parent / "prewrite_gate.py"
+
+
+def _build(root: Path, chapters=("1", "2")) -> None:
+    (root / "project_state.json").write_text(
+        json.dumps({"outline": {"chapters": [{"chapter": c} for c in chapters]}}),
+        encoding="utf-8")
+
+
+def _write_section(root: Path, chapter: str, sub: int,
+                   text: str = "本节内容已完成，无实验数值。\n") -> None:
+    d = root / "atomic_md" / f"第{chapter}章"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / f"{chapter}.{sub}_节.md").write_text(text, encoding="utf-8")
+
+
+def _mark(root: Path, name: str) -> Path:
+    """写盲检通过标记。name 形如 '第1章'(章级) 或 '2.1'(节级)。"""
+    d = root / ".review_pass"
+    d.mkdir(exist_ok=True)
+    p = d / f"{name}.json"
+    p.write_text(json.dumps({"passed": True}), encoding="utf-8")
+    return p
+
+
+def _run(root: Path, section: str) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        [sys.executable, str(SCRIPT), "--section", section, "--root", str(root)],
+        capture_output=True, text=True)
+
+
+def _payload(proc: subprocess.CompletedProcess) -> dict:
+    for ln in proc.stdout.splitlines():
+        if ln.startswith("{"):
+            return json.loads(ln)
+    raise AssertionError(f"no JSON payload in stdout:\n{proc.stdout}")
+
+
+def _check(payload: dict, name: str) -> dict | None:
+    for c in payload["checks"]:
+        if c.get("name") == name:
+            return c
+    return None
+
+
+def test_ch1_first_section_passes() -> None:
+    """情形1:第1章首节 1.1 放行(章边界块 N/A,无上一章)。"""
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        _build(root, chapters=("1",))
+        r = _run(root, "1.1")
+        assert r.returncode == 0, f"ch1 first section must pass\n{r.stdout}\n{r.stderr}"
+        ch = _check(_payload(r), "prev_chapter_blind_review")
+        assert ch and ch["ok"] is True and "N/A" in ch.get("note", ""), ch
+
+
+def test_ch2_first_section_missing_prev_chapter_blocks() -> None:
+    """情形2:第2章首节 2.1 缺 第1章 标记 → 章边界块硬拦 exit≠0。"""
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        _build(root, chapters=("1", "2"))
+        r = _run(root, "2.1")
+        assert r.returncode != 0, f"missing prev-chapter marker must block\n{r.stdout}"
+        assert "第1章" in r.stdout, r.stdout
+        ch = _check(_payload(r), "prev_chapter_blind_review")
+        assert ch and ch["ok"] is False, ch
+
+
+def test_ch2_first_section_with_marker_passes() -> None:
+    """情形3:造出 第1章 标记 → 2.1 放行(章边界块通过)。"""
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        _build(root, chapters=("1", "2"))
+        _mark(root, "第1章")
+        r = _run(root, "2.1")
+        assert r.returncode == 0, f"with prev-chapter marker must pass\n{r.stdout}"
+        ch = _check(_payload(r), "prev_chapter_blind_review")
+        assert ch and ch["ok"] is True and ch.get("prev") == "第1章", ch
+
+
+def test_mid_chapter_section_uses_existing_checks() -> None:
+    """情形4:章内非首节 2.2 走既有校验,章边界块 N/A。
+
+    双向:
+    - 无 第1章 标记仍放行(章边界块对 sub>1 不生效)。
+    - 抽掉 2.1 节级盲检标记 → 既有 per-section blind_review 硬拦(非章边界块)。
+    """
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        _build(root, chapters=("2",))          # 大纲仅含第2章,且无 第1章 标记
+        _write_section(root, "2", 1)            # 上一节 2.1 存在且干净
+        marker = _mark(root, "2.1")             # 上一节盲检标记
+
+        # 放行方向:章边界块 N/A,尽管无 第1章 标记
+        r = _run(root, "2.2")
+        assert r.returncode == 0, f"mid-chapter section must pass w/o prev-chapter marker\n{r.stdout}\n{r.stderr}"
+        pay = _payload(r)
+        ch = _check(pay, "prev_chapter_blind_review")
+        assert ch and ch["ok"] is True and "N/A" in ch.get("note", ""), ch
+        assert _check(pay, "blind_review")["ok"] is True, pay  # 既有校验确实跑了
+
+        # 拦截方向:抽掉上一节盲检标记 → 既有 per-section 校验触发,章边界块仍 N/A
+        marker.unlink()
+        r = _run(root, "2.2")
+        assert r.returncode != 0, f"missing prev-section marker must block\n{r.stdout}"
+        assert "2.1" in r.stdout, r.stdout
+        pay = _payload(r)
+        assert _check(pay, "blind_review")["ok"] is False, pay
+        ch = _check(pay, "prev_chapter_blind_review")
+        assert ch and ch["ok"] is True, ch  # 章边界块保持 N/A,非本次失败原因
+
+
+if __name__ == "__main__":
+    test_ch1_first_section_passes()
+    test_ch2_first_section_missing_prev_chapter_blocks()
+    test_ch2_first_section_with_marker_passes()
+    test_mid_chapter_section_uses_existing_checks()
+    print("OK: prewrite_gate chapter-boundary gate — ch1 pass / ch2 block→pass / mid-chapter existing-checks (bidirectional)")

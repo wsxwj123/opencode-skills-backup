@@ -836,7 +836,12 @@ _EN_MISSPELL_RE = re.compile(
 
 
 def check_char_level(doc):
-    """字符级检查（D1 半角标点 / D2 上下标裸写 / F1 中文错别字 = WARN；F2 英文拼写 = ERROR 硬拦）。
+    """字符级检查。severity 级别：D1 半角标点 / D2 上下标裸写 / F1 中文错别字 = WARN；F2 英文拼写 = ERROR。
+
+    注意：severity 级别 ≠ 是否硬阻断。D1(halfwidth_punct_in_cn) / D2(subsup_bare) / F2(english_misspelling)
+    三项都是退出码硬门——主流程按 issue_summary 计数判定，任一 >0 即 check_quality.py 非零退出，
+    与其 warning/error 标签无关（详见 __main__ 退出码逻辑，与 dod_checklist.json S9 一致）。
+    唯 F1 中文错别字仅 WARN、不进硬门（含登陆等同形异义，硬拦会误伤）。
 
     跳过参考文献与摘要区（与 check_writing_style 同口径），避免英文/DOI 误报。
     例外：F2 英文拼写在摘要区也扫——英文主要出现在英文摘要，固定错拼表误报率≈0。
