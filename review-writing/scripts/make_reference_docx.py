@@ -30,6 +30,12 @@ BODY_SIZE_PT = 12
 # Paragraph styles that carry running body text.
 BODY_STYLES = ["Normal", "Body Text", "First Paragraph"]
 
+# Zero the paragraph before/after spacing on body styles so exported prose has
+# no inter-paragraph gaps. Compact keeps its own small list spacing (untouched).
+# Bibliography is basedOn Normal, so it would inherit the zeroed spacing and glue
+# entries together — restore an explicit after-gap so refs stay separated.
+BIBLIOGRAPHY_AFTER_PT = 6
+
 # Heading style -> point size. All headings are bold TNR.
 HEADING_SIZES = {
     "Title": 18,
@@ -65,6 +71,12 @@ def _set_font(style, *, size_pt, bold=None):
     rfonts.set(qn("w:hAnsi"), BODY_FONT)
 
 
+def _set_para_spacing(style, before_pt, after_pt):
+    pf = style.paragraph_format
+    pf.space_before = Pt(before_pt)
+    pf.space_after = Pt(after_pt)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Bake the English-review house style into a pandoc reference.docx."
@@ -94,6 +106,12 @@ def main():
     for name in BODY_STYLES:
         if name in style_names:
             _set_font(doc.styles[name], size_pt=BODY_SIZE_PT)
+            _set_para_spacing(doc.styles[name], 0, 0)
+
+    # Bibliography inherits zeroed Normal → restore an explicit after-gap so
+    # reference entries don't glue together. Compact keeps its own spacing.
+    if "Bibliography" in style_names:
+        _set_para_spacing(doc.styles["Bibliography"], 0, BIBLIOGRAPHY_AFTER_PT)
 
     for name, size in HEADING_SIZES.items():
         if name in style_names:

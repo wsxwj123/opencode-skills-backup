@@ -19,22 +19,26 @@ from docx.oxml.ns import qn
 from docx.shared import Inches, Pt
 
 from common import read_json, read_docx_paragraphs, strip_inline_format_markers
+from md_runs import clamp_heading_level, inline_md_to_runs
 
 
 PROFILE_PRESETS: dict[str, dict[str, Any]] = {
     "journal-manuscript": {
         "body_font": "Times New Roman",
         "body_size": 11,
-        "title_font": "Arial",
+        "title_font": "Times New Roman",
         "title_size": 16,
-        "heading_font": "Arial",
+        "heading_font": "Times New Roman",
         "heading1_size": 13,
         "heading2_size": 12,
         "heading3_size": 11.5,
         "heading4_size": 10.5,
         "label_font": "Arial",
         "body_line_spacing": 1.15,
-        "body_space_after": 6,
+        "body_space_after": 0,
+        "body_space_before": 0,
+        "heading_space_before": 0,
+        "heading_space_after": 0,
         "header_text_align": WD_ALIGN_PARAGRAPH.CENTER,
         "ref_size": 9.5,
         "abstract_size": 10.5,
@@ -238,6 +242,7 @@ def ensure_custom_styles(doc: Document, profile_name: str, doc_kind: str) -> Non
     normal_style = doc.styles["Normal"]
     body_style = doc.styles["ReviseSciBody"]
     body_style.paragraph_format.line_spacing = profile["body_line_spacing"]
+    body_style.paragraph_format.space_before = Pt(profile.get("body_space_before", 0))
     body_style.paragraph_format.space_after = Pt(profile["body_space_after"])
     body_style.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
     ref_style = doc.styles["ReviseSciRefEntry"]
@@ -260,17 +265,32 @@ def ensure_custom_styles(doc: Document, profile_name: str, doc_kind: str) -> Non
     for heading_name in ("Heading 1", "Heading 2", "Heading 3", "Heading 4"):
         style = doc.styles[heading_name]
         set_style_font(style, profile["heading_font"], profile[f"{heading_name.lower().replace(' ', '')}_size"], bold=True)
-    doc.styles["Heading 1"].paragraph_format.space_before = Pt(12)
-    doc.styles["Heading 1"].paragraph_format.space_after = Pt(6)
-    doc.styles["Heading 2"].paragraph_format.space_before = Pt(10)
-    doc.styles["Heading 2"].paragraph_format.space_after = Pt(4)
-    doc.styles["Heading 3"].paragraph_format.space_before = Pt(8)
-    doc.styles["Heading 3"].paragraph_format.space_after = Pt(3)
-    doc.styles["Heading 4"].paragraph_format.space_before = Pt(6)
-    doc.styles["Heading 4"].paragraph_format.space_after = Pt(2)
+    hsb = profile.get("heading_space_before")
+    hsa = profile.get("heading_space_after")
+    doc.styles["Heading 1"].paragraph_format.space_before = Pt(12 if hsb is None else hsb)
+    doc.styles["Heading 1"].paragraph_format.space_after = Pt(6 if hsa is None else hsa)
+    doc.styles["Heading 2"].paragraph_format.space_before = Pt(10 if hsb is None else hsb)
+    doc.styles["Heading 2"].paragraph_format.space_after = Pt(4 if hsa is None else hsa)
+    doc.styles["Heading 3"].paragraph_format.space_before = Pt(8 if hsb is None else hsb)
+    doc.styles["Heading 3"].paragraph_format.space_after = Pt(3 if hsa is None else hsa)
+    doc.styles["Heading 4"].paragraph_format.space_before = Pt(6 if hsb is None else hsb)
+    doc.styles["Heading 4"].paragraph_format.space_after = Pt(2 if hsa is None else hsa)
     if doc_kind == "response":
         reviewer_style.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.LEFT
         comment_style.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.LEFT
+
+
+def _rebuild_runs(paragraph, text: str) -> None:
+    """Rebuild-path inline renderer: full md inline (bold/italic/underscore/code/
+    link/sup/sub) via the shared md_runs parser, Times New Roman + forced black."""
+    inline_md_to_runs(paragraph, text, latin="Times New Roman", black=True)
+
+
+def add_heading_runs(paragraph, text: str) -> None:
+    """Heading text with inline md stripped/rendered; every run forced bold (headings
+    are bold as a whole) + TNR + black."""
+    for run in inline_md_to_runs(paragraph, text, latin="Times New Roman", black=True):
+        run.bold = True
 
 
 def add_markdown_paragraph(doc: Document, line: str, in_references: bool = False, in_abstract: bool = False) -> None:
@@ -279,18 +299,18 @@ def add_markdown_paragraph(doc: Document, line: str, in_references: bool = False
         paragraph = doc.add_paragraph(style="ReviseSciLabel")
         paragraph.add_run(label_match.group(1)).bold = True
         return
-    bullet_match = re.match(r"^- (.+)$", line)
+    bullet_match = re.match(r"^[-*+] (.+)$", line)
     if bullet_match:
         paragraph = doc.add_paragraph(style="List Bullet")
-        add_runs_with_bold(paragraph, bullet_match.group(1))
+        _rebuild_runs(paragraph, bullet_match.group(1))
         return
     number_match = re.match(r"^\d+\. (.+)$", line)
     if number_match:
         paragraph = doc.add_paragraph(style="ReviseSciRefEntry" if in_references else "List Number")
-        add_runs_with_bold(paragraph, line if in_references else number_match.group(1))
+        _rebuild_runs(paragraph, line if in_references else number_match.group(1))
         return
     paragraph = doc.add_paragraph(style="ReviseSciRefEntry" if in_references else ("ReviseSciAbstractBody" if in_abstract else "ReviseSciBody"))
-    add_runs_with_bold(paragraph, line)
+    _rebuild_runs(paragraph, line)
 
 
 def parse_markdown_table_row(line: str) -> list[str]:
@@ -431,35 +451,43 @@ def markdown_to_docx(
             if seen_comment:
                 doc.add_page_break()
             seen_comment = True
-        if line.startswith("#### "):
+        h56_match = re.match(r"^(#{5,6}) (.+)$", line)
+        if h56_match:
             in_abstract = False
-            doc.add_heading(line[5:], level=4)
+            heading = doc.add_heading("", level=clamp_heading_level(len(h56_match.group(1)), 4))
+            add_heading_runs(heading, h56_match.group(2))
+        elif line.startswith("#### "):
+            in_abstract = False
+            heading = doc.add_heading("", level=4)
+            add_heading_runs(heading, line[5:])
         elif line.startswith("### "):
             in_abstract = False
             paragraph = doc.add_paragraph(style="ReviseSciCommentHeading")
-            paragraph.add_run(line[4:]).bold = True
+            add_heading_runs(paragraph, line[4:])
         elif line.startswith("## "):
             heading_text = line[3:]
             in_references = heading_text.lower() in {"references", "reference", "参考文献"}
             in_abstract = heading_text.lower() in {"abstract", "摘要"}
             if in_abstract:
                 paragraph = doc.add_paragraph(style="ReviseSciAbstractLabel")
-                paragraph.add_run(heading_text).bold = True
+                add_heading_runs(paragraph, heading_text)
             else:
-                doc.add_heading(heading_text, level=2)
+                heading = doc.add_heading("", level=2)
+                add_heading_runs(heading, heading_text)
         elif line.startswith("# "):
             heading_text = line[2:]
             in_references = heading_text.lower() in {"references", "reference", "参考文献"}
             in_abstract = heading_text.lower() in {"abstract", "摘要"}
             if doc_kind == "manuscript" and not seen_title:
                 paragraph = doc.add_paragraph(style="ReviseSciTitle")
-                paragraph.add_run(heading_text).bold = True
+                add_heading_runs(paragraph, heading_text)
                 seen_title = True
             elif page_break_before_comment and (heading_text.startswith("Reviewer #") or heading_text.startswith("Editor")):
                 paragraph = doc.add_paragraph(style="ReviseSciReviewerHeading")
-                paragraph.add_run(heading_text).bold = True
+                add_heading_runs(paragraph, heading_text)
             else:
-                doc.add_heading(heading_text, level=1)
+                heading = doc.add_heading("", level=1)
+                add_heading_runs(heading, heading_text)
             if include_toc and not toc_inserted:
                 add_toc_block(doc)
                 toc_inserted = True

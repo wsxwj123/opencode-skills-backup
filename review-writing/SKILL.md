@@ -640,6 +640,8 @@ for each section in outline.md (e.g., section ID = "2.1"):
 
 **Global target:** ≥100 papers total (before dedup). If a section yields <10 papers, warn and prompt user to broaden keywords.
 
+**Per-subsection density（按标题层级，prewrite_gate check3 硬拦）:** level = section_id 段数+1（`2.1`=三级、`2.1.1`=四级）。硬地板：三级叶子节 ≥6 条、四级叶子节 ≥3 条，其余层级 ≥1；低于地板 prewrite_gate exit 1 禁止开写。容器父节（大纲里还有更深子节的节，如 `2.1` 下有 `2.1.1`）本身不承载文献，放宽到 ≥1。软目标：三级 ≥10、四级 ≥5，未达只进 warnings 提示补足、不阻断。
+
 **Chinese writing mode:** Search tools identical to English mode. Read language setting from outline.md.
 
 ### Phase 2.5: Dedup + Global ID Assignment
@@ -700,7 +702,7 @@ If pending_sections is empty → all sections complete; proceed to Phase 4.
 
 ### Per-Section Cycle
 
-0. **🔴 开写前置闸门 (Mandatory，脚本硬拦截)**：开写本 section 前必须先跑 `python3 scripts/prewrite_gate.py --section X.X --root .`，exit≠0 禁止开写。它统一硬检查：上一节完成（上一节 ∈ `state.json.completed_sections`）、大纲就位（`outline.md` 含本节标题）、素材就位（`data/synthesis_matrix.json` 本节文献矩阵非空）、上一节占位符清零（`drafts/` 无 `CITE_PENDING`/`DATA_PENDING`/`【待`）；上一节盲检结果（`.review_pass/<上一节>.json`）缺失即 prewrite_gate 硬拦 exit 1，禁止开写；必须先跑 delegate_review verify --section <上一节> 落盘通过标记。**盲检subagent确实跑不起来时**，用 `--allow-manual-review "<理由>"` 显式人工放行（仅放行盲检项、留痕审计，见规则 10 的逃生口）；不加则门禁默认硬拦行为不变。PASS 时脚本会注明"仅覆盖形式层，语义正确性未自动核验"。Polish Mode `keep` 节跳过本节循环故无需跑。
+0. **🔴 开写前置闸门 (Mandatory，脚本硬拦截)**：开写本 section 前必须先跑 `python3 scripts/prewrite_gate.py --section X.X --root .`，exit≠0 禁止开写。它统一硬检查：上一节完成（上一节 ∈ `state.json.completed_sections`）、大纲就位（`outline.md` 含本节标题）、素材就位（`data/synthesis_matrix.json` 本节文献矩阵按标题层级达硬地板：三级叶子≥6/四级叶子≥3/容器父节≥1；软目标三级≥10、四级≥5 未达只 warn 不拦）、上一节占位符清零（`drafts/` 无 `CITE_PENDING`/`DATA_PENDING`/`【待`）；上一节盲检结果（`.review_pass/<上一节>.json`）缺失即 prewrite_gate 硬拦 exit 1，禁止开写；必须先跑 delegate_review verify --section <上一节> 落盘通过标记。**盲检subagent确实跑不起来时**，用 `--allow-manual-review "<理由>"` 显式人工放行（仅放行盲检项、留痕审计，见规则 10 的逃生口）；不加则门禁默认硬拦行为不变。PASS 时脚本会注明"仅覆盖形式层，语义正确性未自动核验"。Polish Mode `keep` 节跳过本节循环故无需跑。
 
 1. **Load context:**
    ```

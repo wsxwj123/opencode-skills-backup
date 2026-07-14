@@ -113,25 +113,54 @@ def build_markdown(project_root: Path) -> tuple[str, list[dict]]:
     return "\n\n".join(p for p in parts if p).strip() + "\n", ordered_units
 
 
+_HEADING_LINE = re.compile(r"^(#{1,6})\s+(.*)$")
+_BULLET_LINE = re.compile(r"^\s*[-*+]\s+(.*)$")
+_NUMBER_LINE = re.compile(r"^\s*\d+[.)]\s+(.*)$")
+
+
 def export_docx(md_text: str, docx_path: Path) -> bool:
+    """手搓 md 重建导出(回退路径,不保原格式)。逐行解析:标题/列表/散文段落,
+    行内标记经 md_runs.inline_md_to_runs 去净并转 run 级格式。polish 英文 SCI:
+    显式锁 Normal 样式 Times New Roman + 段前段后=0,每个 run 强制 TNR + 黑。"""
     try:
         from docx import Document
+        from docx.shared import Pt
     except ImportError:
         return False
+    from md_runs import clamp_heading_level, inline_md_to_runs
+
     doc = Document()
+    # rebuild 路径锁 Normal 样式:Times New Roman + 零段距
+    normal = doc.styles["Normal"]
+    normal.font.name = LATIN_FONT
+    normal.paragraph_format.space_before = Pt(0)
+    normal.paragraph_format.space_after = Pt(0)
+
     for block in md_text.split("\n\n"):
-        block = block.strip()
-        if not block:
+        if not block.strip():
             continue
-        m = re.match(r"^(#{1,6})\s+(.*)$", block, re.DOTALL)
-        if m:
-            # `#` 个数 -> Heading 级别(clamp 到 1-9,python-docx 上限)
-            level = max(1, min(9, len(m.group(1))))
-            heading = doc.add_heading(m.group(2).strip(), level=level)
-            for run in heading.runs:
-                _set_run_font(run)
-        else:
-            add_inline_paragraph(doc, block)
+        for line in block.split("\n"):
+            if not line.strip():
+                continue
+            m = _HEADING_LINE.match(line)
+            if m:
+                level = clamp_heading_level(len(m.group(1)), 6)
+                heading = doc.add_heading("", level=level)
+                inline_md_to_runs(heading, m.group(2).strip(),
+                                  latin=LATIN_FONT, black=True)
+                continue
+            mb = _BULLET_LINE.match(line)
+            if mb:
+                p = doc.add_paragraph(style="List Bullet")
+                inline_md_to_runs(p, mb.group(1).strip(), latin=LATIN_FONT, black=True)
+                continue
+            mn = _NUMBER_LINE.match(line)
+            if mn:
+                p = doc.add_paragraph(style="List Number")
+                inline_md_to_runs(p, mn.group(1).strip(), latin=LATIN_FONT, black=True)
+                continue
+            p = doc.add_paragraph()
+            inline_md_to_runs(p, line.strip(), latin=LATIN_FONT, black=True)
     doc.save(str(docx_path))
     return True
 

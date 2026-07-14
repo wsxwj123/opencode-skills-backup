@@ -335,6 +335,26 @@ def gate_check(
     matrix_ok = bool(matrix.get("ok"))
 
     profile = load_json(root / "proposal_profile.json", DEFAULT_PROFILE)
+
+    # 总量文献门：min_total 为硬门（<min_total 阻断交付），近5年/中文/P1段为软 warn。
+    # ponytail: 直接读 verify_all 写入 metadata 的计数，无需重新统计。
+    citation_targets = profile.get("citation_targets") or DEFAULT_PROFILE["citation_targets"]
+    min_total = int(citation_targets.get("min_total", 30))
+    min_recent = int(citation_targets.get("min_recent_5yr", 20))
+    min_cn = int(citation_targets.get("min_cn_journals", 5))
+    lit_meta = idx.get("metadata", {})
+    total_count = int(lit_meta.get("total_count", len(idx.get("entries", []))))
+    recent_count = int(lit_meta.get("recent_5yr_count", 0))
+    cn_count = int(lit_meta.get("cn_journal_count", 0))
+    p1_cite_count = int(matrix.get("p1_count", 0))
+    literature_ok = total_count >= min_total  # 硬门
+    literature_warnings: list[str] = []
+    if recent_count < min_recent:
+        literature_warnings.append(f"[LIT-WARN] 近5年文献 {recent_count} 篇 < 软目标 {min_recent} 篇")
+    if cn_count < min_cn:
+        literature_warnings.append(f"[LIT-WARN] 中文期刊文献 {cn_count} 篇 < 软目标 {min_cn} 篇")
+    if p1_cite_count < 20:  # ponytail: 立项依据 P1 段软目标固定 20，nsfc 文献集中在立项依据
+        literature_warnings.append(f"[LIT-WARN] 立项依据(P1)引用 {p1_cite_count} 处 < 软目标 20 处")
     spa = profile.get("science_problem_attribute")
     profile_ok = isinstance(spa, str) and spa.strip() in SCIENCE_PROBLEM_ATTRIBUTES
 
@@ -348,13 +368,15 @@ def gate_check(
     )
     review_ok = review.get("pass_status") == "pass" and int(review.get("d_count", 0)) == 0 and int(review.get("c_count", 0)) <= 3
 
-    overall_ok = profile_ok and sync_ok and citation_ok and matrix_ok and review_ok
+    overall_ok = profile_ok and sync_ok and citation_ok and literature_ok and matrix_ok and review_ok
     if not profile_ok:
         failed_at = "profile"
     elif not sync_ok:
         failed_at = "sync"
     elif not citation_ok:
         failed_at = "citation"
+    elif not literature_ok:
+        failed_at = "literature_total"
     elif not matrix_ok:
         failed_at = "matrix"
     elif not review_ok:
@@ -381,6 +403,15 @@ def gate_check(
             "verification_status": idx.get("metadata", {}).get("verification_status"),
             "stats": run_stats,
             "manual_review_count": len(manual_queue),
+        },
+        "literature": {
+            "ok": literature_ok,
+            "total_count": total_count,
+            "min_total": min_total,
+            "recent_5yr_count": recent_count,
+            "cn_journal_count": cn_count,
+            "p1_citation_count": p1_cite_count,
+            "warnings": literature_warnings,
         },
         "matrix": matrix,
         "review": {

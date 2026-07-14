@@ -174,7 +174,7 @@ def _parse_outline_sections(outline_path: str) -> List[Dict]:
     """
     sections = []
     # Order matters: try the more specific level-2 pattern first (N.M), fallback to level-1 (N.)
-    level2_pattern = re.compile(r"^#{2,}\s+(\d+\.\d+)\s+(.+)$")
+    level2_pattern = re.compile(r"^#{2,}\s+(\d+\.\d+(?:\.\d+)*)\s+(.+)$")
     level1_pattern = re.compile(r"^#{2,}\s+(\d+)\.\s+(.+)$")
 
     with open(outline_path, encoding="utf-8") as f:
