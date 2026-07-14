@@ -16,9 +16,19 @@ INSTALLER = SHARED / "install_gate_hook.py"
 PY = sys.executable or "python"
 
 
+def _hook_env(extra: dict | None = None) -> dict:
+    """分发器测试直接测 _shared 本文件逻辑:关闭转发(否则本机已部署
+    academic-gate 时会转去测部署副本,开发期改了真源测的却是旧副本)。"""
+    env = dict(os.environ)
+    env["ACADEMIC_GATE_NO_FORWARD"] = "1"
+    if extra:
+        env.update(extra)
+    return env
+
+
 def _run_hook(payload: dict, env: dict | None = None) -> tuple[str, int]:
     p = subprocess.run([PY, str(HOOK)], input=json.dumps(payload),
-                       capture_output=True, text=True, env=env)
+                       capture_output=True, text=True, env=env or _hook_env())
     return p.stdout.strip(), p.returncode
 
 
@@ -84,7 +94,7 @@ def test_dispatcher_ignores_non_academic_path():
 
 def test_dispatcher_failopen_on_bad_stdin():
     p = subprocess.run([PY, str(HOOK)], input="not-json",
-                       capture_output=True, text=True)
+                       capture_output=True, text=True, env=_hook_env())
     assert p.returncode == 0 and p.stdout.strip() == "", "坏输入必须静默放行"
 
 
@@ -145,12 +155,24 @@ def test_heartbeat_written_on_evaluation():
             hb.unlink()
 
 
-def _run_installer(home: Path) -> dict:
+BUNDLE = ("structure_signoff_gate.py", "academic_gate_hook.py",
+          "install_gate_hook.py", "gate_registry.json")
+
+
+def _run_installer(home: Path, installer: Path | None = None,
+                   args: list[str] | None = None) -> dict:
     env = dict(os.environ)
     env["HOME"] = str(home)
     env["USERPROFILE"] = str(home)  # Windows Path.home() 读这个
-    p = subprocess.run([PY, str(INSTALLER)], capture_output=True, text=True, env=env)
+    p = subprocess.run([PY, str(installer or INSTALLER)] + (args or []),
+                       capture_output=True, text=True, env=env)
     return json.loads(p.stdout.strip())
+
+
+def _entry_cmds(home: Path) -> list[str]:
+    settings = json.loads((home / ".claude" / "settings.json").read_text())
+    return [h["command"] for e in settings["hooks"]["PreToolUse"] for h in e["hooks"]
+            if "academic_gate_hook.py" in h["command"]]
 
 
 def test_installer_fresh_install():
@@ -158,9 +180,13 @@ def test_installer_fresh_install():
         home = Path(d)
         res = _run_installer(home)
         assert res["status"] == "installed"
-        settings = json.loads((home / ".claude" / "settings.json").read_text())
-        cmds = [h["command"] for e in settings["hooks"]["PreToolUse"] for h in e["hooks"]]
-        assert any("academic_gate_hook.py" in c for c in cmds)
+        cmds = _entry_cmds(home)
+        assert len(cmds) == 1 and "academic-gate" in cmds[0], \
+            "entry 必须指向 ~/.claude/academic-gate/ 稳定位置"
+        gate = home / ".claude" / "academic-gate"
+        for name in BUNDLE:
+            assert (gate / name).is_file(), f"四件套须部署到 academic-gate: 缺 {name}"
+        assert not (gate / "hook_heartbeat.json").is_file(), "心跳是运行时产物,不得随部署复制"
 
 
 def test_installer_idempotent():
@@ -203,6 +229,154 @@ def test_installer_refuses_broken_settings_without_damage():
         res = _run_installer(home)
         assert res["status"] == "degraded", "坏 settings 应跳过安装而非崩"
         assert (sp / "settings.json").read_text() == broken, "坏文件不得被改动"
+
+
+def test_installer_migrates_old_shared_entry():
+    """旧 _shared 路径的 entry 必须被替换为 academic-gate 路径,且收敛为恰好一条。"""
+    with tempfile.TemporaryDirectory() as d:
+        home = Path(d)
+        sp = home / ".claude"
+        sp.mkdir(parents=True)
+        old_cmd = f'python "{SHARED / "academic_gate_hook.py"}"'
+        (sp / "settings.json").write_text(json.dumps({"hooks": {"PreToolUse": [
+            {"matcher": "Write|Edit",
+             "hooks": [{"type": "command", "command": old_cmd, "timeout": 60}]}]}},
+            ensure_ascii=False), encoding="utf-8")
+        res = _run_installer(home)
+        assert res["action"] == "migrated", f"旧 entry 应触发迁移,得到 {res['action']}"
+        cmds = _entry_cmds(home)
+        assert len(cmds) == 1 and "academic-gate" in cmds[0] and str(SHARED) not in cmds[0], \
+            "迁移后应只剩一条指向 academic-gate 的 entry"
+
+
+def test_installer_converges_duplicate_entries():
+    """新旧并存/重复 entry → 收敛为一条;同 entry 里用户自己的其它 hook 保留。"""
+    with tempfile.TemporaryDirectory() as d:
+        home = Path(d)
+        sp = home / ".claude"
+        sp.mkdir(parents=True)
+        gate_cmd = f'python "{home / ".claude" / "academic-gate" / "academic_gate_hook.py"}"'
+        old_cmd = f'python "/old/path/_shared/academic_gate_hook.py"'
+        (sp / "settings.json").write_text(json.dumps({"hooks": {"PreToolUse": [
+            {"matcher": "Write|Edit", "hooks": [
+                {"type": "command", "command": old_cmd, "timeout": 60},
+                {"type": "command", "command": "echo user-own"}]},
+            {"matcher": "Write|Edit",
+             "hooks": [{"type": "command", "command": gate_cmd, "timeout": 60}]}]}},
+            ensure_ascii=False), encoding="utf-8")
+        _run_installer(home)
+        cmds = _entry_cmds(home)
+        assert len(cmds) == 1 and "academic-gate" in cmds[0], "必须收敛为一条指向 academic-gate"
+        settings = json.loads((sp / "settings.json").read_text())
+        all_cmds = [h["command"] for e in settings["hooks"]["PreToolUse"] for h in e["hooks"]]
+        assert "echo user-own" in all_cmds, "用户自己的 hook 不得被误删"
+
+
+def _deployed_version(home: Path) -> int:
+    reg = home / ".claude" / "academic-gate" / "gate_registry.json"
+    return int(json.loads(reg.read_text(encoding="utf-8")).get("version", 0))
+
+
+def test_deploy_version_compare_and_force():
+    """目标更新→不覆盖;更旧→覆盖;--force→同版重刷。"""
+    with tempfile.TemporaryDirectory() as d:
+        home = Path(d)
+        _run_installer(home)
+        gate = home / ".claude" / "academic-gate"
+        hook_file = gate / "academic_gate_hook.py"
+        marker = "\n# LOCAL-MARK\n"
+        # ① 目标版更高 → 不覆盖(改动保留)
+        reg = json.loads((gate / "gate_registry.json").read_text(encoding="utf-8"))
+        src_ver = reg["version"]
+        reg["version"] = src_ver + 99
+        (gate / "gate_registry.json").write_text(json.dumps(reg, ensure_ascii=False), encoding="utf-8")
+        hook_file.write_text(hook_file.read_text(encoding="utf-8") + marker, encoding="utf-8")
+        _run_installer(home)
+        assert marker in hook_file.read_text(encoding="utf-8"), "目标更新时不得覆盖"
+        # ② 目标版更旧 → 覆盖(改动被刷掉)
+        reg["version"] = 1
+        (gate / "gate_registry.json").write_text(json.dumps(reg, ensure_ascii=False), encoding="utf-8")
+        _run_installer(home)
+        assert marker not in hook_file.read_text(encoding="utf-8"), "目标更旧时必须覆盖"
+        assert _deployed_version(home) == src_ver
+        # ③ 同版 + 改动 + --force → 重刷
+        hook_file.write_text(hook_file.read_text(encoding="utf-8") + marker, encoding="utf-8")
+        _run_installer(home)
+        assert marker in hook_file.read_text(encoding="utf-8"), "同版默认不重刷"
+        _run_installer(home, args=["--force"])
+        assert marker not in hook_file.read_text(encoding="utf-8"), "--force 应同版重刷"
+
+
+def test_signoff_cross_copy_contract():
+    """契约冻结:真源副本 confirm 落盘的文件,必须通过部署副本的 check(v1 只看 confirmed)。"""
+    with tempfile.TemporaryDirectory() as d:
+        home = Path(d)
+        _run_installer(home)
+        deployed_signoff = home / ".claude" / "academic-gate" / "structure_signoff_gate.py"
+        root = Path(d) / "proj"
+        root.mkdir()
+        subprocess.run([PY, str(SIGNOFF), "confirm", "--root", str(root),
+                        "--note", "契约测试"], capture_output=True, text=True)
+        r = subprocess.run([PY, str(deployed_signoff), "check", "--root", str(root)],
+                           capture_output=True, text=True)
+        assert r.returncode == 0, "真源 confirm 的落盘必须过部署副本 check"
+
+
+def test_vendored_installer_full_chain():
+    """模拟单技能分发:installer+四件套只存在于技能 scripts/(无 _shared),
+    从那里跑安装 → 部署到临时 HOME 的 academic-gate + entry 指部署位。"""
+    with tempfile.TemporaryDirectory() as d:
+        home = Path(d) / "home"
+        skill_scripts = Path(d) / "skills" / "some-skill" / "scripts"
+        skill_scripts.mkdir(parents=True)
+        for name in BUNDLE:
+            (skill_scripts / name).write_bytes((SHARED / name).read_bytes())
+        res = _run_installer(home, installer=skill_scripts / "install_gate_hook.py")
+        assert res["status"] == "installed", f"vendored 全链应装成功,得到 {res}"
+        cmds = _entry_cmds(home)
+        assert len(cmds) == 1 and "academic-gate" in cmds[0] and "some-skill" not in cmds[0], \
+            "entry 必须指部署位,绝不指技能目录(否则删技能=悬空)"
+        for name in BUNDLE:
+            assert (home / ".claude" / "academic-gate" / name).is_file()
+
+
+def test_installer_tolerates_null_hooks():
+    """hooks/PreToolUse 被其它工具写成显式 null → 应 coerce 安装,不得退化成 error。"""
+    with tempfile.TemporaryDirectory() as d:
+        home = Path(d)
+        sp = home / ".claude"
+        sp.mkdir(parents=True)
+        (sp / "settings.json").write_text(json.dumps({"hooks": None}), encoding="utf-8")
+        res = _run_installer(home)
+        assert res["status"] == "installed", f"null hooks 应被 coerce 后安装,得到 {res}"
+        assert len(_entry_cmds(home)) == 1
+        (sp / "settings.json").write_text(
+            json.dumps({"hooks": {"PreToolUse": None}}), encoding="utf-8")
+        res2 = _run_installer(home)
+        assert res2["status"] == "installed", f"null PreToolUse 同理,得到 {res2}"
+        assert len(_entry_cmds(home)) == 1
+
+
+def test_shared_hook_forwards_to_deployed():
+    """悬空防护:_shared 的 hook 被旧 entry 调起时,若部署副本存在应转发执行它。"""
+    with tempfile.TemporaryDirectory() as d:
+        home = Path(d)
+        gate = home / ".claude" / "academic-gate"
+        gate.mkdir(parents=True)
+        (gate / "academic_gate_hook.py").write_text(
+            "import sys; sys.stdout.write('FORWARDED-MARK')", encoding="utf-8")
+        env = dict(os.environ)
+        env["HOME"] = str(home)
+        env["USERPROFILE"] = str(home)
+        env.pop("ACADEMIC_GATE_NO_FORWARD", None)
+        p = subprocess.run([PY, str(HOOK)], input="{}",
+                           capture_output=True, text=True, env=env)
+        assert "FORWARDED-MARK" in p.stdout, "_shared hook 应转发到部署副本"
+        # NO_FORWARD=1 时不转发(测试逃生口)
+        env["ACADEMIC_GATE_NO_FORWARD"] = "1"
+        p2 = subprocess.run([PY, str(HOOK)], input="{}",
+                            capture_output=True, text=True, env=env)
+        assert "FORWARDED-MARK" not in p2.stdout, "NO_FORWARD 应关闭转发"
 
 
 if __name__ == "__main__":

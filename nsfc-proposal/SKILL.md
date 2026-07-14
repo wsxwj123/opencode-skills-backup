@@ -1,6 +1,6 @@
 ---
 name: nsfc-proposal
-version: 2.22.0
+version: 2.23.0
 description: Use when drafting, restructuring, or polishing Chinese NSFC proposals (2026 template), especially when strict section-by-section gating, hypothesis-objective-content-problem consistency, literature verification via paper-search MCP, and anti-AI Chinese academic writing constraints are required. 触发词：国自然、国家自然科学基金、基金申请书、科研申请、NSFC、标书、本子、面上项目、青年基金。
 ---
 
@@ -156,7 +156,7 @@ Follow phased gates in order:
    - [ ] ④`ethics` 字段：涉及人/动物/生物安全/遗传资源任一情形者，已说明审批状态（含批号或送审计划时间节点）；均不涉及者填 "N/A 不涉及"
    - [ ] ⑤用户已显式确认 `experimental_design.json` 覆盖全部 RC、设计无遗漏（回放 ✓ 列表 + 用户书面同意）
 
-   > **[结构签字·强制门禁落锁]** 用户在对话里明确确认「科学问题属性 + H/O/RC/KSQ 章节结构 + 实验设计（Phase 0.5 DoD ⑤）」后（且**仅在此之后**），运行 Phase 0 env_preflight 打印的那条 `SIGNOFF_CMD`（已含解析好的绝对路径）落盘签字，即 `python "<本技能>/scripts/structure_signoff_gate.py" confirm --root <project_root> --note "<用户确认原话摘录>"`。这一步解锁正文写作：**未落签字，PreToolUse hook 会物理拦截任何对 `sections/*.md` 的写入**（这是防跳步的硬门，不是提示词纪律）。该 hook 由 Phase 0 `env_preflight.py` 开工时经 `_shared/install_gate_hook.py` 自动安装并校验（含备份/回滚），状态 active 即在岗；若报 degraded/error 或提示降级，需人工留意其拦截可能失效。若后续回修科学问题/章节结构，改完让用户重新确认并重跑本命令覆盖签字。⚠️ 严禁在用户未确认时自行运行 confirm，那等于伪造用户签字。
+   > **[结构签字·强制门禁落锁]** 用户在对话里明确确认「科学问题属性 + H/O/RC/KSQ 章节结构 + 实验设计（Phase 0.5 DoD ⑤）」后（且**仅在此之后**），运行 Phase 0 env_preflight 打印的那条 `SIGNOFF_CMD`（已含解析好的绝对路径）落盘签字，即 `python "<本技能>/scripts/structure_signoff_gate.py" confirm --root <project_root> --note "<用户确认原话摘录>"`。这一步解锁正文写作：**未落签字，PreToolUse hook 会物理拦截任何对 `sections/*.md` 的写入**（这是防跳步的硬门，不是提示词纪律）。该 hook 由 Phase 0 `env_preflight.py` 开工时经本技能 `scripts/install_gate_hook.py`（vendored）自动安装并校验，它先把门禁四件套部署到 `~/.claude/academic-gate/`（稳定位置，不随技能目录增删而动），再让 `settings.json` 的 hook 指向那里，单独分发的技能也能自装（含备份/回滚），状态 active 即在岗；若报 degraded/error 或提示降级，需人工留意其拦截可能失效。若后续回修科学问题/章节结构，改完让用户重新确认并重跑本命令覆盖签字。⚠️ 严禁在用户未确认时自行运行 confirm，那等于伪造用户签字。
 
 **🔴 委托盲检总则（适用下列 Phase 1–7 每一个 DoD 闸口，Mandatory）：** 以下每个闸口一律遵守同一条铁律。每个 Phase 落盘前，DoD 清单必须委托一个独立上下文的 subagent 盲检（Claude Code 用 `academic-blind-reviewer`，其他平台派通用 subagent），不给它本稿的写作上下文；主 agent 不得自评打勾。各闸口只列本 Phase 专属的 `<gate>`/`<files>`/`<section>` 参数，套用下方三步命令模板执行；盲检的角色与纪律统一遵此总则，不再逐处复述。**降级告警**：若判到科学意义/创新/可行性等决定成败的维度，而环境派不出真正独立的 subagent，绝不能同一 AI 编一份全 pass 的盲检 JSON 冒充（那几个维度就裸奔了）。此时须告诉用户「本环境盲检不可靠，请你亲自复核」，把判断交回用户，绝不自问自答冒充盲检。
 

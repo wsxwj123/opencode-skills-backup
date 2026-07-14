@@ -100,15 +100,18 @@ def _install_gate_hook() -> None:
     """双轨定位:接续/核证纯库(session_journal.py + citation_claim_check.py)已 vendored
     进本技能 scripts/(与本文件同目录),故 RESUME/LOG/CITATION_CHECK 命令从
     Path(__file__).parent 解析,自足、不依赖 _shared。强制门禁安装器
-    install_gate_hook.py 暂留 _shared/(parents[2]),Phase B 再迁入本目录。
-    本技能无签字闸(返修改稿无大纲确认),故不打印 SIGNOFF_CMD。
+    install_gate_hook.py=同目录 vendored 副本优先,部署四件套到 ~/.claude/academic-gate/;
+    _shared 仅完整仓库回退。本技能无签字闸(返修改稿无大纲确认),故不打印 SIGNOFF_CMD。
     任何异常都吞掉——门禁自检绝不能反过来卡住技能。"""
     import json as _json
     import subprocess as _sp
     try:
-        installer = Path(__file__).resolve().parents[2] / "_shared" / "install_gate_hook.py"
+        here = Path(__file__).resolve().parent
+        installer = here / "install_gate_hook.py"          # vendored 副本(单技能分发也在)
         if not installer.is_file():
-            print("⚠️ 强制门禁安装器缺失(_shared/install_gate_hook.py 不在)——物理门禁不可用，降级为提示词纪律，请严格按 SKILL.md 手动守规。")
+            installer = here.parents[1] / "_shared" / "install_gate_hook.py"  # 完整仓库回退
+        if not installer.is_file():
+            print("⚠️ 强制门禁安装器缺失(install_gate_hook.py 在 scripts/ 与 _shared/ 均无)——物理门禁不可用，降级为提示词纪律，请严格按 SKILL.md 手动守规。")
             print("   units/state 的物理保护不可用(本技能无签字闸，仅靠 hook 拦写入，现降级为人工盯防)。")
             print("   修复:安装完整技能仓库，或补回 _shared/install_gate_hook.py。")
         else:

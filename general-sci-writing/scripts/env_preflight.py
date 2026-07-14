@@ -101,14 +101,17 @@ def _install_gate_hook() -> None:
     双轨路径(故意不同,勿"顺手统一"):
       - 纯库(RESUME/LOG/SIGNOFF/CITATION 对应脚本)= 本技能 scripts/ 的 vendored 副本,
         与本文件同目录(Path(__file__).parent),不依赖 _shared。
-      - hook 安装器 install_gate_hook.py 仍在 skills/_shared/(Phase B 将迁
-        ~/.claude/academic-gate)——所以下面对 _shared 与本地 scripts/ 两类路径来源不一致,是有意为之。
+      - hook 安装器 install_gate_hook.py = 同目录 vendored 副本优先,会把门禁四件套部署到
+        ~/.claude/academic-gate/(稳定位置,不随技能目录增删而动),settings.json 的 hook 指向那里;
+        _shared 仅完整仓库回退。
     任何异常都吞掉——门禁自检绝不能反过来卡住技能。"""
     import json as _json
     import subprocess as _sp
     try:
         here = Path(__file__).resolve().parent               # 本技能 scripts/,放 vendored 纯库副本
-        installer = here.parents[1] / "_shared" / "install_gate_hook.py"  # hook 安装器仍在 _shared
+        installer = here / "install_gate_hook.py"            # vendored 副本(单技能分发也在)
+        if not installer.is_file():
+            installer = here.parents[1] / "_shared" / "install_gate_hook.py"  # 完整仓库回退
         if installer.is_file():
             proc = _sp.run([sys.executable or "python", str(installer)],
                            capture_output=True, text=True, timeout=30)
@@ -119,7 +122,7 @@ def _install_gate_hook() -> None:
             if msg:
                 print(f"{icon} 门禁保护[{status}]: {msg}")
         else:
-            print("⚠️ 未找到 _shared/install_gate_hook.py:物理门禁 hook 无法安装,防跳步硬拦不可用(降级为提示词纪律)。")
+            print("⚠️ 未找到 install_gate_hook.py(scripts/ 与 _shared/ 均无):物理门禁 hook 无法安装,防跳步硬拦不可用(降级为提示词纪律)。")
             print("结构签字 confirm 仍可落盘但仅留痕、无物理强制。")
             print("修复:安装完整技能仓库(含 skills/_shared/)或手动补齐该目录。")
 
