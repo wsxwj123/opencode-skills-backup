@@ -103,14 +103,17 @@ def _install_gate_hook() -> None:
     - 纯库脚本（structure_signoff_gate / session_journal / citation_claim_check）
       已 vendored 进本技能 scripts/，就地取用 `Path(__file__).resolve().parent`，
       不依赖 _shared。
-    - installer（install_gate_hook.py）仍在 _shared/（Phase B 才迁移），所以下面
-      两个 base 不一样，这是有意为之。
+    - installer（install_gate_hook.py）= 同目录 vendored 副本优先，会把门禁四件套部署到
+      ~/.claude/academic-gate/（稳定位置，不随技能目录增删而动），settings.json 的 hook 指向那里；
+      _shared 仅完整仓库回退。所以下面两个 base 不一样，这是有意为之。
     任何异常都吞掉——门禁自检绝不能反过来卡住技能。"""
     import json as _json
     import subprocess as _sp
     try:
         scripts_dir = Path(__file__).resolve().parent
-        installer = scripts_dir.parents[1] / "_shared" / "install_gate_hook.py"
+        installer = scripts_dir / "install_gate_hook.py"     # vendored 副本(单技能分发也在)
+        if not installer.is_file():
+            installer = scripts_dir.parents[1] / "_shared" / "install_gate_hook.py"  # 完整仓库回退
         if installer.is_file():
             proc = _sp.run([sys.executable or "python", str(installer)],
                            capture_output=True, text=True, timeout=30)
@@ -122,7 +125,7 @@ def _install_gate_hook() -> None:
                 print(f"{icon} 门禁保护[{status}]: {msg}")
         else:
             # installer 缺失 → 物理门禁装不上，降级为提示词纪律。
-            print("⚠️ 门禁保护[degraded]: 缺 _shared/install_gate_hook.py，物理拦截不可用，降级为提示词纪律。")
+            print("⚠️ 门禁保护[degraded]: 缺 install_gate_hook.py（scripts/ 与 _shared/ 均无），物理拦截不可用，降级为提示词纪律。")
             print("   签字仅留痕、无强制拦截，需人工守住「未签字不写正文」。")
             print("   修复：重装完整技能仓库，或补回 _shared/install_gate_hook.py。")
         # 以下三条命令均指本地 vendored 副本，不依赖 _shared，故 installer 缺失时照常打印。

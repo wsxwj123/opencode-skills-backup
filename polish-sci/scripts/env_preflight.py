@@ -98,16 +98,20 @@ def main():
 
 def _install_gate_hook() -> None:
     """双轨:接续库 session_journal.py 已 vendored 进本技能 scripts/(与本文件同目录),
-    纯本地引用、不依赖 _shared;门禁安装器 install_gate_hook.py 暂留 _shared(Phase B 再迁)。
+    纯本地引用、不依赖 _shared;门禁安装器 install_gate_hook.py=同目录 vendored 副本优先,
+    部署四件套到 ~/.claude/academic-gate/,_shared 仅完整仓库回退。
     调安装器回显其人话消息,随后照 SIGNOFF_CMD 样式打印 RESUME_CMD/LOG_CMD(绝对路径,
     免相对路径 cwd 依赖)。polish-sci 无签字闸(逐段停即核对),故不打印 SIGNOFF_CMD。
     任何异常都吞掉——门禁自检绝不能反过来卡住技能。"""
     import json as _json
     import subprocess as _sp
     try:
-        installer = Path(__file__).resolve().parents[2] / "_shared" / "install_gate_hook.py"
+        here = Path(__file__).resolve().parent
+        installer = here / "install_gate_hook.py"          # vendored 副本(单技能分发也在)
         if not installer.is_file():
-            print("⚠️ 未找到 _shared/install_gate_hook.py:物理门禁 hook 无法安装,产物保护降级为提示词纪律。"
+            installer = here.parents[1] / "_shared" / "install_gate_hook.py"  # 完整仓库回退
+        if not installer.is_file():
+            print("⚠️ 未找到 install_gate_hook.py(scripts/ 与 _shared/ 均无):物理门禁 hook 无法安装,产物保护降级为提示词纪律。"
                   "修复:安装完整技能仓库(含 skills/_shared/)或手动补齐。")
         else:
             proc = _sp.run([sys.executable or "python", str(installer)],
