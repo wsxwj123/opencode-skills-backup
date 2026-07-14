@@ -481,6 +481,17 @@ def main() -> int:
         print("--live-citation-verify and --offline-citation-verify cannot be used together", file=sys.stderr)
         raise SystemExit(2)
 
+    # PROJECT_ROOT 归属冲突检测(fail-closed):必须在 force-rebuild/resume 清空 state 之前做。
+    # 否则下面的 clear_project_outputs 会先删掉 project_state.json，冲突信号丢失、preflight 的
+    # 同名检查(那时才跑)读到空 state 而放行——即这两条清空路径能绕过冲突检测。--force-shared 跳过。
+    if not args.force_shared:
+        prior_skill = (read_json(project_root / "project_state.json", {}).get("skill") or "").strip()
+        if prior_skill and prior_skill != "revise-sci":
+            sys.exit(
+                f"PROJECT_ROOT 冲突:此目录已被 {prior_skill} 使用(project_state.json 的 skill={prior_skill})。"
+                f"revise-sci 与它同目录会互相覆盖 state/units;请另指空 --project-root，或确知安全时加 --force-shared 跳过。"
+            )
+
     if args.force_rebuild:
         project_root.mkdir(parents=True, exist_ok=True)
         clear_project_outputs(project_root)
