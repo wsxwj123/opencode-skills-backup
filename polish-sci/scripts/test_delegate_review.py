@@ -3,7 +3,7 @@
 
 覆盖:
 - pack: 读真实 dod_checklist.json 的 polish-dod gate → 打印盲检任务包
-  (含角色框定 + 待检文件 + 逐项清单 + 返回格式),写 .review_pkg_<gate>.json,
+  (含角色框定 + 待检文件 + 逐项清单 + 返回格式,不落盘记录文件),
   并在 stderr 打出 RETURN_PATH=<约定返回路径>。
 - verify(全 pass):每个硬项 pass+证据非空 → exit 0(不阻断)。
 - verify(遇 fail):某硬项 verdict=fail → exit≠0,阻断"声明本节完成"。
@@ -53,10 +53,8 @@ def test_pack_produces_package_and_return_path(tmp: Path) -> None:
     assert str(unit) in r.stdout
     for iid in _gate_item_ids():
         assert iid in r.stdout, f"清单项 {iid} 未出现在任务包"
-    # 记录文件落盘
-    rec = tmp / f".review_pkg_{GATE}.json"
-    assert rec.exists(), "未写 .review_pkg 记录"
-    assert json.loads(rec.read_text(encoding="utf-8"))["item_ids"] == _gate_item_ids()
+    # pack 不再落盘记录文件(无消费者)
+    assert not list(tmp.glob(".review_pkg_*.json")), "pack 不应写 .review_pkg 记录"
     # RETURN_PATH 打到 stderr,且指向约定的 .review_return_<gate>.json
     ret_line = [l for l in r.stderr.splitlines() if l.startswith("RETURN_PATH=")]
     assert ret_line, "stderr 无 RETURN_PATH"

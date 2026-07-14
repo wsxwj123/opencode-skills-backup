@@ -140,7 +140,11 @@ def parse_markdown_line(line):
         tuple: (type, content, level)
     """
     line = line.rstrip()
-    
+
+    # 剥行首 [图]/[表] 前缀（前缀式占位符 "[图] 图2-1：xxx"），让剩余的裸格式题注
+    # 自然落进下方 figure/table 分支，避免 [图] 字面残留且题注不居中。
+    line = re.sub(r'^\[(图|表)\]\s*', '', line)
+
     # 空行
     if not line.strip():
         return ('empty', '', 0)
@@ -918,7 +922,8 @@ def markdown_to_docx(md_content, output_path, chapter_num=None, project_root=Non
                 render_heading_with_inline(para, content, h3_spec, word_style="Heading 3")
             
             elif line_type == 'figure':
-                para = doc.add_paragraph(content)
+                # 括号式占位符 [图 X-X：标题] 剥掉方括号，与 table 分支一致，避免 [ ] 残留。
+                para = doc.add_paragraph(content.strip('[]').strip())
                 apply_default_caption_style(para, render_context=render_context, caption_key="figure_caption")
             
             elif line_type == 'table':

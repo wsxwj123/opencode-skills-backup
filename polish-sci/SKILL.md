@@ -1,6 +1,6 @@
 ---
 name: polish-sci
-version: 2.23.1
+version: 2.23.2
 description: 纯论文润色全管道。输入一份已写完的稿子(无审稿意见),逐段提升语言表达,绝不改内容/数据/结论。触发词：润色、polish、语言润色、润色论文、polish paper、language polish、proofread manuscript、母语化、润色稿子。路由说明：与revise-sci区分,revise-sci由审稿意见驱动、只改被点名片段;polish-sci无意见、全文逐段润色覆盖每一段。与general-sci-writing区分,gsw从零写新稿,polish-sci只润色现成稿。
 ---
 
@@ -182,16 +182,14 @@ unit=段落是**红线核验的边界**,不是"每段只能就地改、不准动
 
 **硬拦项(strict_gate 阻断交付,exit 1)**:
 - AI 套话禁词表(delve into、pivotal role、underscore、testament、It is worth noting that、值得注意的是、综上所述、至关重要 等,中英双语,见 common.py 的 `AI_STYLE_BANNED_PATTERNS` 与 `AI_CLICHE_TERMS_EN/ZH`)。这些是 AI 腔的硬指纹,润色后一律清零。
-- **修辞性破折号 `—` / `——` / em-dash:禁止使用,硬拦**。strict_gate 对破折号 fail-close,命中即阻断,不放行。
+- **去AI必禁三项——修辞性破折号(`—` / `——` / em-dash)、scare quotes(普通短语裹双引号)、解释性冒号(概念冒号后接句子片段)——三者禁止使用,硬拦阻断交付**。strict_gate 对这三项 fail-close,命中即 exit 1,不放行、不交作者取舍。
 
 **软提示项(记入 `polish_risk_flags` / `polish_change_report.md`,**不阻断交付**,由人工取舍),学术散文正当修辞,别硬削平**:
 - 英文单句>30词 / 中文单句>50字(科学方法学段落常含数据列表的合法长句)。
 - `-ing` 拖尾从句(`, thereby ...ing` / `, reflecting ...`)。
-- scare quotes(普通短语裹双引号)。
-- 解释性冒号(概念冒号后接句子片段)。
 - `not only...but also`、修辞问句。
 
-> 降软不等于放任:软提示仍逐段列给用户看,该收敛就收敛;只是它不再 fail-closed 卡交付,把"这处长句要不要改"的判断权交回作者,而不是脚本替作者一律铲平。破折号例外:它是硬拦、禁止使用,不交作者取舍。`from A to B` 检测已从 common.py 移除(科学文本高频合法,信噪比差)。
+> 降软不等于放任:软提示仍逐段列给用户看,该收敛就收敛;只是它不再 fail-closed 卡交付,把"这处长句要不要改"的判断权交回作者,而不是脚本替作者一律铲平。去AI必禁三项(破折号/scare quotes/解释性冒号)例外:硬拦、禁止使用,不交作者取舍。`from A to B` 检测已从 common.py 移除(科学文本高频合法,信噪比差)。
 
 **非散文豁免**:参考文献、作者名单、单位、资助、关键词、致谢、图表标题、纯数据清单等(atomize 标 `prose=false` 或润色器标 `polished_by=unchanged-nonprose`)保留原文不润色,**去AI/句长检测对它们不适用**(否则参考文献标题里的冒号/范围/问句会被误判);红线(数值/引用/语气/meaning)仍对全部单元核验。
 
@@ -206,7 +204,7 @@ unit=段落是**红线核验的边界**,不是"每段只能就地改、不准动
 - ❌ 凭空增加原文没有的程度词(significantly/extensively/显著 等),等同升级语气,meaning_changed 必为 false
 - ❌ 为求变化做同义替换、破坏全文术语一致,见 Polish Prompt #4
 - ❌ 裸写需排版字符(H2O 不写成 H<sub>2</sub>O、10^6 不写成 10<sup>6</sup>、基因斜体退化为正体),见 字符级排版契约
-- ❌ 润色后残留 AI 套话禁词(delve into / 值得注意的是 等)或**装饰性破折号(—/——)**,二者均 Anti-AI **硬拦**、命中即 exit 1;长句/scare quotes/解释性冒号/-ing 拖尾为软提示(记报告不阻断),别硬删削平文风
+- ❌ 润色后残留 AI 套话禁词(delve into / 值得注意的是 等)或**去AI必禁三项(装饰性破折号 —/—— 、scare quotes、解释性冒号)**,均 Anti-AI **硬拦**、命中即 exit 1;长句/-ing 拖尾为软提示(记报告不阻断),别硬删削平文风
 - ❌ 只改被点名片段而非全文逐段覆盖,本技能是纯润色,覆盖每一段
 - ❌ 未经用户确认就把该段写回 polished/,见 交互式逐段润色协议
 - ❌ 主 agent 自评 DoD 不委托独立盲检subagent,见 DoD 委托盲检(强制)
@@ -218,7 +216,7 @@ unit=段落是**红线核验的边界**,不是"每段只能就地改、不准动
 - **PL-G1 数值保留**,每段数值/统计量集合与原文一字不差。
 - **PL-G2 无语气升级**,不确定性动词未被升级。
 - **PL-G3 引用保留**,引用标记与 DOI 集合前后一致。
-- **PL-G4 去AI**,散文单元 find_ai_style_markers 的**硬拦**项(AI 套话禁词表 + **破折号**)无残留;长句/scare quotes/解释性冒号/-ing 拖尾/修辞问句为软提示,记报告不阻断(见 Anti-AI 规则的分级);非散文单元豁免。
+- **PL-G4 去AI**,散文单元 find_ai_style_markers 的**硬拦**项(AI 套话禁词表 + 去AI必禁三项 破折号/scare quotes/解释性冒号)无残留;长句/-ing 拖尾/not only...but also/修辞问句为软提示,记报告不阻断(见 Anti-AI 规则的分级);非散文单元豁免。
 - **PL-G5 meaning 未变**,每段 meaning_changed=false,专名未动,语义层人工逐段对照。
 - **PL-G6 逐段全覆盖**,无 PLACEHOLDER 残留,无遗漏段落。
 - **PL-G7 被动语态合区间(软报告)**,各段被动比例落在 section_type 目标区间附近;区间为软目标,只报告不阻断交付。

@@ -105,7 +105,18 @@ def append_context(root: Path, content: str) -> None:
         f.write(content.strip() + "\n\n")
 
 
-def init_project(root: Path) -> None:
+def init_project(root: Path, force_shared: bool = False) -> None:
+    # PROJECT_ROOT 归属冲突检测(fail-closed)：写任何东西之前，若该目录 project_state.json
+    # 已被别的技能占用(skill 非空且≠nsfc-proposal)，拒绝，避免两技能同目录互相覆盖 state。
+    if not force_shared:
+        existing_state = load_json(root / "project_state.json", {})
+        prior_skill = (existing_state.get("skill") or "").strip()
+        if prior_skill and prior_skill != "nsfc-proposal":
+            _sys.exit(
+                f"PROJECT_ROOT 冲突：此目录已被 {prior_skill} 使用(project_state.json 的 skill={prior_skill})。"
+                f"nsfc-proposal 与它同目录会互相覆盖 state；请另指空 --root，或确知安全时加 --force-shared 跳过。"
+            )
+
     for d in ["sections", "output", "data", ".state", "snapshots"]:
         (root / d).mkdir(parents=True, exist_ok=True)
 
@@ -116,8 +127,12 @@ def init_project(root: Path) -> None:
     dst_dir = root / "scripts"
     if src_dir.resolve() != dst_dir.resolve():
         dst_dir.mkdir(parents=True, exist_ok=True)
-        for src in glob.glob(str(src_dir / "*.py")):
-            shutil.copy2(src, dst_dir / os.path.basename(src))
+        # 拷 *.py 与 *.json（gate_registry.json 等必须进项目），跳过 test_*.py（测试不进产物）
+        for src in glob.glob(str(src_dir / "*.py")) + glob.glob(str(src_dir / "*.json")):
+            name = os.path.basename(src)
+            if name.startswith("test_"):
+                continue
+            shutil.copy2(src, dst_dir / name)
 
     save_json(root / "proposal_profile.json", DEFAULT_PROFILE)
     save_json(root / "data/literature_index.json", {"metadata": {"verification_status": "pending"}, "entries": []})
@@ -141,7 +156,14 @@ def deep_merge(base: dict[str, Any], patch: dict[str, Any]) -> dict[str, Any]:
 
 
 def do_snapshot(root: Path, name: str) -> Path:
-    snap = root / "snapshots" / f"{ts()}_{name}"
+    # ts() 只到秒，同秒内多次快照(如连续 rollback 各写一个 pre_rollback)会撞名致 copytree 崩，
+    # 撞名则加数字后缀保唯一。
+    base = root / "snapshots" / f"{ts()}_{name}"
+    snap = base
+    i = 1
+    while snap.exists():
+        snap = Path(f"{base}_{i}")
+        i += 1
     snap.mkdir(parents=True, exist_ok=True)
 
     for d in ["sections", "data", "output", ".state"]:
@@ -158,7 +180,38 @@ def do_snapshot(root: Path, name: str) -> Path:
     return snap
 
 
-def rollback(root: Path, snapshot_dir: Path) -> None:
+def _resolve_snapshot(root: Path, snapshot_dir: Path) -> Path:
+    """裸快照名(如 20260714_x_good)解析到 root/snapshots/<名>；已是有效路径则原样返回。"""
+    if not snapshot_dir.exists():
+        candidate = root / "snapshots" / snapshot_dir.name
+        if candidate.exists():
+            return candidate
+    return snapshot_dir
+
+
+def _snapshot_has_content(snapshot_dir: Path) -> bool:
+    """快照至少含 sections/data/output/.state 之一或 project_state.json 才算有内容。"""
+    if not snapshot_dir.is_dir():
+        return False
+    for name in ["sections", "data", "output", ".state", "project_state.json"]:
+        if (snapshot_dir / name).exists():
+            return True
+    return False
+
+
+def rollback(root: Path, snapshot_dir: Path) -> bool:
+    """回滚到指定快照。丢稿守卫：先解析裸名+校验快照非空，任何 rmtree 之前拒绝并返回 False。"""
+    resolved = _resolve_snapshot(root, snapshot_dir)
+    if not _snapshot_has_content(resolved):
+        print(
+            f"❌ rollback 拒绝：快照 '{snapshot_dir}' 解析为 '{resolved}'，"
+            f"不存在或为空(未含 sections/data/output/.state/project_state.json 任一)。"
+            f"工作区未改动。请核对快照名(可用裸名如 20260714_x)或路径。",
+            file=_sys.stderr,
+        )
+        return False
+
+    snapshot_dir = resolved
     do_snapshot(root, "pre_rollback")
 
     for d in ["sections", "data", "output", ".state"]:
@@ -176,6 +229,7 @@ def rollback(root: Path, snapshot_dir: Path) -> None:
 
     append_history(root, "rollback", {"snapshot": str(snapshot_dir)})
     append_context(root, f"Rolled back to snapshot: {snapshot_dir}")
+    return True
 
 
 def _phase_number(state: dict[str, Any]) -> int:
@@ -656,7 +710,9 @@ def main() -> int:
     parser.add_argument("--root", default=".")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
-    sub.add_parser("init")
+    p_init = sub.add_parser("init")
+    p_init.add_argument("--force-shared", action="store_true",
+                        help="跳过 PROJECT_ROOT 归属冲突检查(该目录已被别的技能占用时的逃生口)")
 
     p_profile = sub.add_parser("profile")
     p_profile.add_argument("--json", required=True)
@@ -708,7 +764,7 @@ def main() -> int:
     root = Path(args.root).resolve()
 
     if args.cmd == "init":
-        init_project(root)
+        init_project(root, force_shared=bool(getattr(args, "force_shared", False)))
         print(json.dumps({"ok": True, "root": str(root)}, ensure_ascii=False))
         return 0
 
@@ -741,9 +797,9 @@ def main() -> int:
         return 0
 
     if args.cmd == "rollback":
-        rollback(root, Path(args.snapshot))
-        print(json.dumps({"ok": True}, ensure_ascii=False))
-        return 0
+        ok = rollback(root, Path(args.snapshot))
+        print(json.dumps({"ok": ok}, ensure_ascii=False))
+        return 0 if ok else 2
 
     if args.cmd == "word-count":
         data = word_counter.count_all(root / args.sections_dir)

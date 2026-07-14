@@ -1611,6 +1611,7 @@ def init_project(
     header_left_text=None,
     format_profile_json=None,
     project_info_json=None,
+    force_shared=False,
 ):
     if save_path is None:
         effective_root = os.path.abspath(project_root)
@@ -1619,6 +1620,22 @@ def init_project(
     else:
         effective_root = resolve_path(project_root, save_path)
     effective_root = os.path.abspath(effective_root)
+
+    # PROJECT_ROOT 归属冲突检测(fail-closed)：写任何东西之前，若该目录的 project_state.json
+    # 已由别的技能写过(skill 非空、非 sci2doc)，直接拒绝，避免两技能 state/units 同目录互相覆盖。
+    # --force-shared 逃生口跳过。
+    if not force_shared:
+        existing_state = safe_json_load(
+            resolve_path(effective_root, "project_state.json"), default={}
+        )
+        prior_skill = ""
+        if isinstance(existing_state, dict):
+            prior_skill = (existing_state.get("skill") or "").strip()
+        if prior_skill and prior_skill != "sci2doc":
+            sys.exit(
+                f"PROJECT_ROOT 冲突：此目录已被 {prior_skill} 使用(project_state.json 的 skill={prior_skill})。"
+                f"sci2doc 与它同目录会互相覆盖 state/units；请另指空 --save-path，或确知安全时加 --force-shared 跳过。"
+            )
 
     # Core folders — only directories actually used by the workflow.
     # Removed dead dirs: 01_文献分析, 05_参考文献, chapter_memory
@@ -1732,8 +1749,13 @@ def init_project(
         src_dir = os.path.dirname(os.path.abspath(__file__))
         dst_dir = resolve_path(effective_root, "scripts")
         os.makedirs(dst_dir, exist_ok=True)
-        for src in glob.glob(os.path.join(src_dir, "*.py")):
-            dst = os.path.join(dst_dir, os.path.basename(src))
+        # 拷 *.py + *.json（gate_registry.json 等配置必须进项目），跳过 test_* 测试文件。
+        srcs = glob.glob(os.path.join(src_dir, "*.py")) + glob.glob(os.path.join(src_dir, "*.json"))
+        for src in srcs:
+            base = os.path.basename(src)
+            if base.startswith("test_"):
+                continue
+            dst = os.path.join(dst_dir, base)
             shutil.copy2(src, dst)
             copied_scripts.append(dst)
 
@@ -2182,6 +2204,8 @@ def parse_args():
     init_p.add_argument("--header-left-text")
     init_p.add_argument("--format-profile-json", help="JSON object or @file path merged into format_profile")
     init_p.add_argument("--project-info-json", help="JSON object or @file path merged into project_state.project_info")
+    init_p.add_argument("--force-shared", action="store_true",
+                        help="跳过 PROJECT_ROOT 归属冲突检查(该目录已被别的技能占用时的逃生口)")
 
     wc_p = subparsers.add_parser("word-count", help="Count words from .md file or atomic_md directory")
     wc_p.add_argument("--docx", dest="target_path", help="(deprecated alias for --target)")
@@ -2309,6 +2333,7 @@ def main():
                 header_left_text=getattr(args, "header_left_text", None),
                 format_profile_json=format_profile_json,
                 project_info_json=project_info_json,
+                force_shared=getattr(args, "force_shared", False),
             )
         elif args.command == "preflight":
             preflight_validate_state(

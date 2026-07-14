@@ -1,6 +1,6 @@
 ---
 name: nsfc-proposal
-version: 2.23.1
+version: 2.23.2
 description: Use when drafting, restructuring, or polishing Chinese NSFC proposals (2026 template), especially when strict section-by-section gating, hypothesis-objective-content-problem consistency, literature verification via paper-search MCP, and anti-AI Chinese academic writing constraints are required. 触发词：国自然、国家自然科学基金、基金申请书、科研申请、NSFC、标书、本子、面上项目、青年基金。
 ---
 
@@ -210,7 +210,7 @@ Follow phased gates in order:
 
    **🔴 委托盲检（遵上方总则的三步命令模板，主 agent 不得自评）**：`<gate>`=`p2-dod`，`<files>`=`sections/P2_研究内容.md`，`<section>`=`P2`。
 
-   **本 Phase 完整 DoD 判据（全部核查项 + 脚本命令）以 `references/dod_checklist.json` gate=`p2-dod` 为唯一真源**：盲检subagent据此逐项核、能脚本核的先跑脚本，退出码非 0 即 fail-closed。该 gate 含 H/O/RC/KSQ 1:1 映射、M/IN 可追溯、P2 无文献编号、占位符清零、去AI、字数、V 规则分层、预期成果小节、figure_prompts 等，及 N53 结构完整性、N63 四要素一致性盲检、N65 常识合理性（🟡软报告不阻断）。此处不再内联清单，避免与真源 drift。
+   **本 Phase 完整 DoD 判据（全部核查项 + 脚本命令）以 `references/dod_checklist.json` gate=`p2-dod` 为唯一真源**：盲检subagent据此逐项核、能脚本核的先跑脚本，退出码非 0 即 fail-closed。该 gate 含 H/O/RC/KSQ 1:1 映射、M/IN 可追溯、P2 无文献编号、占位符清零、去AI、字数、V 规则分层、预期成果小节、figure_prompts 等，及 N53 结构完整性、N67 四要素一致性盲检、N65 常识合理性（🟡软报告不阻断）。此处不再内联清单，避免与真源 drift。
 
 5. Phase 3: write P3 研究基础（4 sub-files）.
    - **🔴 开写前置闸门 (Mandatory，脚本硬拦截)**：每个子节开写前先跑 `python3 scripts/prewrite_gate.py --section P3_1 --root .`（其余子节同理 P3_2/P3_3/P3_4），exit≠0 禁止开写（硬检查上一节完成、`consistency_map` 含 M、占位符清零；P3_1 额外要求 `data/experimental_design.json` 非空；盲检按 Phase 粒度：P3_1←P2 跨 Phase，缺 `.review_pass/P2.json` 硬拦 exit 1；P3_2/P3_3/P3_4 同属 P3 一次性盲检，同 Phase N/A 不拦）。

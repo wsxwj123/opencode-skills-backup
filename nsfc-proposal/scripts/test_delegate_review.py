@@ -57,9 +57,8 @@ def test_pack_writes_record() -> None:
              "--files", "sections/x.md", "--workdir", str(root)],
             capture_output=True, text=True)
         assert r.returncode == 0, f"pack should exit 0\n{r.stderr}"
-        rec = json.loads((root / ".review_pkg_g.json").read_text(encoding="utf-8"))
-        assert rec["item_ids"] == ["A1", "A2"], rec
-        assert "盲检任务包" in r.stdout, r.stdout
+        assert not list(root.glob(".review_pkg_*.json")), "pack 不应写 .review_pkg 记录(无消费者)"
+        assert "盲检任务包" in r.stdout and "A1" in r.stdout and "A2" in r.stdout, r.stdout
 
 
 def test_verify_compliant_passes_and_writes_marker() -> None:

@@ -1,6 +1,6 @@
 ---
 name: general-sci-writing
-version: 2.23.1
+version: 2.23.2
 description: 用于从零撰写或润色符合Nature/Science/Cell标准的SCI研究论文（Article类型），适用于多学科。触发词：写论文、SCI论文、学术写作、科研写作、论文润色、研究论文、学术投稿、投稿、润色论文、polish paper、write SCI paper、academic writing、draft paper、manuscript writing。路由说明：退稿/返修改主稿→用revise-sci；只写审稿意见回复→用reviewer-response-sci；独立成稿的纯语言润色（拿到别人写好的整稿只改语言、不进本管道）→用polish-sci，本技能的润色仅指管道内 Phase 10 对自写稿的润色；综述/文献综述→用review-writing。本技能侧重写新稿与自写稿润色，Phase 13B含内部初步退稿自查但不出回复包也不出修订稿docx。
 license: Proprietary
 ---
@@ -76,7 +76,7 @@ license: Proprietary
 - **路径询问（Mandatory）**：`/init` 前必须先问用户保存路径。建议 Mac `~/Desktop/Manuscripts`，Windows `C:\Users\[User]\Desktop\Manuscripts`。
 - **Command Logic**（便携部署：把运行所需文件拷进项目根，换机也能用）：
   1. `mkdir -p [Target_Path]/scripts [Target_Path]/configs [Target_Path]/manuscripts [Target_Path]/section_memory [Target_Path]/figures [Target_Path]/figure_analysis [Target_Path]/reviews [Target_Path]/submission`
-  2. `cp [Skill_Path]/scripts/*.py [Target_Path]/scripts/`
+  2. `cp [Skill_Path]/scripts/*.py [Skill_Path]/scripts/*.json [Target_Path]/scripts/`（同时拷入 gate_registry.json 等 json；测试文件 test_*.py 属技能自测、不进项目,拷完即删:`rm -f [Target_Path]/scripts/test_*.py`,保证项目 scripts/ 有 gate_registry.json、无 test_*.py）
   3. `cp [Skill_Path]/templates/*.json [Target_Path]/`
   4. `cp [Skill_Path]/configs/*.json [Target_Path]/configs/`
 

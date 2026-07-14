@@ -2,7 +2,7 @@
 """delegate_review.py 双向 smoke test — 自包含、tempfile 造输入、standalone 可跑。
 
 覆盖盲检委托的 pack/verify 两步(fail-closed):
-  pack: 读 checklist gate → 打印任务包 + 写 .review_pkg_<gate>.json，exit 0
+  pack: 读 checklist gate → 打印任务包(不落盘记录文件)，exit 0
   verify 合规: 每项 verdict=pass 且附证据 → exit 0，并落 .review_pass/<section>.json
   verify 违规1: verdict=fail → exit 1(fail-closed)
   verify 违规2: 漏裁一项 → exit 1(缺漏未裁决)
@@ -60,7 +60,7 @@ def test_delegate_review_bidirectional() -> None:
         r = _run(root, "pack", "--checklist", str(checklist), "--gate", "g1",
                  "--files", str(target), "--workdir", str(root))
         assert r.returncode == 0, f"pack should exit 0\n{r.stderr}"
-        assert (root / ".review_pkg_g1.json").exists(), "pack must write pkg record"
+        assert not list(root.glob(".review_pkg_*.json")), "pack 不应写 .review_pkg 记录(无消费者)"
         return_path = root / ".review_return_g1.json"
 
         # --- verify 合规: 全 pass + 证据 → exit 0，落盘通过标记 ---

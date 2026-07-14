@@ -955,8 +955,14 @@ def check_char_level(doc):
                     'code': 'halfwidth_punct_in_cn',
                 })
 
-        # D2：应上下标却裸写（先剥离已正确标注的片段）
-        stripped = _SUBSUP_WRAPPED_RE.sub(' ', text)
+        # D2：应上下标却裸写。检测输入用"非上下标 run 的拼接"——已被 markdown_to_docx
+        # 渲染成 subscript/superscript run 的字符（如 CO₂ 的 "2"）不进检测文本，避免与
+        # 导出器自相矛盾误报；真裸写（全 plain run）照进照报。仍剥离残留的 md/HTML 文本标记。
+        subsup_source = "".join(
+            r.text for r in para.runs
+            if not r.font.superscript and not r.font.subscript
+        )
+        stripped = _SUBSUP_WRAPPED_RE.sub(' ', subsup_source)
         seen = set()
         for pat, desc in _SUBSUP_PATTERNS:
             for m in pat.finditer(stripped):

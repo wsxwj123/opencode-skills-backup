@@ -115,7 +115,7 @@ def main() -> None:
     # bootstrap itself). Root-causes whitelist drift — SKILL.md adding/renaming a
     # script (or an import dependency) can never silently miss a copy again.
     copied = 0
-    for src in sorted((skill_dir / "scripts").glob("*.py")):
+    for src in sorted((skill_dir / "scripts").glob("*.py")) + sorted((skill_dir / "scripts").glob("*.json")):
         if src.name.startswith("test_") or src.name == "init_project.py":
             continue
         shutil.copy(src, proj / "scripts" / src.name)
