@@ -97,30 +97,36 @@ def main():
 
 
 def _install_gate_hook() -> None:
-    """调共享安装器 install_gate_hook.py，回显其人话消息。定位:本文件在
-    skills/polish-sci/scripts/ → parents[2]=skills/ → _shared/。
-    polish-sci 无签字闸(逐段停即核对),故不打印 SIGNOFF_CMD。
+    """双轨:接续库 session_journal.py 已 vendored 进本技能 scripts/(与本文件同目录),
+    纯本地引用、不依赖 _shared;门禁安装器 install_gate_hook.py 暂留 _shared(Phase B 再迁)。
+    调安装器回显其人话消息,随后照 SIGNOFF_CMD 样式打印 RESUME_CMD/LOG_CMD(绝对路径,
+    免相对路径 cwd 依赖)。polish-sci 无签字闸(逐段停即核对),故不打印 SIGNOFF_CMD。
     任何异常都吞掉——门禁自检绝不能反过来卡住技能。"""
     import json as _json
     import subprocess as _sp
     try:
         installer = Path(__file__).resolve().parents[2] / "_shared" / "install_gate_hook.py"
         if not installer.is_file():
-            return
-        proc = _sp.run([sys.executable or "python", str(installer)],
-                       capture_output=True, text=True, timeout=30)
-        line = (proc.stdout or "").strip().splitlines()[-1] if proc.stdout.strip() else ""
-        res = _json.loads(line) if line else {}
-        status, msg = res.get("status", ""), res.get("message", "")
-        icon = {"active": "🛡️", "installed": "🛡️", "degraded": "⚠️", "error": "ℹ️"}.get(status, "ℹ️")
-        if msg:
-            print(f"{icon} 门禁保护[{status}]: {msg}")
-        # 跨会话接续:照 SIGNOFF_CMD 样式打印 RESUME_CMD/LOG_CMD(绝对路径,免相对路径 cwd 依赖)。
-        # polish-sci 无签字闸,只出接续 + 决定日志两条。
-        journal = installer.parent / "session_journal.py"
+            print("⚠️ 未找到 _shared/install_gate_hook.py:物理门禁 hook 无法安装,产物保护降级为提示词纪律。"
+                  "修复:安装完整技能仓库(含 skills/_shared/)或手动补齐。")
+        else:
+            proc = _sp.run([sys.executable or "python", str(installer)],
+                           capture_output=True, text=True, timeout=30)
+            line = (proc.stdout or "").strip().splitlines()[-1] if proc.stdout.strip() else ""
+            res = _json.loads(line) if line else {}
+            status, msg = res.get("status", ""), res.get("message", "")
+            icon = {"active": "🛡️", "installed": "🛡️", "degraded": "⚠️", "error": "ℹ️"}.get(status, "ℹ️")
+            if msg:
+                print(f"{icon} 门禁保护[{status}]: {msg}")
+        # 跨会话接续:vendored 副本就在本文件同目录,纯本地引用。polish-sci 无签字闸,
+        # 只出接续 + 决定日志两条。
+        journal = Path(__file__).resolve().parent / "session_journal.py"
         if journal.is_file():
             print(f'RESUME_CMD: python "{journal}" resume --root <project_root>')
             print(f'LOG_CMD: python "{journal}" log --root <project_root> --note "<用户临时要求原话>"')
+        else:
+            print("⚠️ 缺少 scripts/session_journal.py(vendored 副本):跨会话接续不可用。"
+                  "修复:跑 python3 _shared/sync_vendored.py --sync 或重装完整技能包。")
     except Exception:
         pass
 
