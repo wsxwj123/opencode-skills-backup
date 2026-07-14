@@ -88,7 +88,7 @@ The workflow is built around:
 16. 三线表格式强制：所有数据表使用 Markdown 管道语法，`markdown_to_docx.py` 自动转换；边框参数与题注字体字号见 `references/word-format-spec.md § Three-Line Table Borders`。细则见 `## Table Contract`。
 17. 文风约束：见 `## Humanization Contract`（清单集中在那里）；`check_quality.py check_writing_style()` 自动检测。**硬禁清零项**：破折号（——）/scare quotes/解释性冒号三项标点 + AI 禁词，finalize 前必须归零。**软提示项**（不阻断 finalize）：句长/句式节奏（C 降软）。
 18. 格式对齐规则：正文两端对齐、三线表单元格居中、图占位符居中无首行缩进。完整参数见 `references/word-format-spec.md`。
-19. Bold marker 处理：`**text**` / `__text__` 在 Word 转换时由 `strip_bold_markers()` 自动剥除；单 `*` 统计显著性标记（如 `*p<0.05`）保留原样。
+19. Bold marker 处理：`**text**` / `__text__` 在 Word 转换时由 `md_runs.inline_md_to_runs()` 解析为真正的粗体 run；单 `*` 统计显著性标记（如 `*p<0.05`）由其内置保护规则保留原样。
 20. 已发表 SCI 内容复用合规底线：
     - 正文复用必须**改写**为中文学术表述，不得直接翻译粘贴。
     - 每章首次复用处必须标注来源文献（正文引用 [N] + 声明"本章部分内容已发表于 [N]"）。

@@ -14,9 +14,8 @@ from pathlib import Path
 
 from common import read_json, write_text
 
-# 默认字体:西文 Times New Roman,中文宋体(走 w:eastAsia)
+# 默认字体:西文 Times New Roman(行内 run 的中文字体由 md_runs 处理)
 LATIN_FONT = "Times New Roman"
-EAST_ASIA_FONT = "SimSun"
 
 # 行内标记:**bold** / *italic* / <sup>…</sup> / <sub>…</sub>
 # 注意 **bold** 必须在 *italic* 之前匹配,否则 ** 会被当成两个 *
@@ -28,52 +27,6 @@ _INLINE_RE = re.compile(
     re.DOTALL,
 )
 
-
-def _set_run_font(run) -> None:
-    """给 run 设西文字体并显式声明 w:eastAsia,避免 Word 回退到意外的中文字体。"""
-    from docx.oxml.ns import qn
-
-    run.font.name = LATIN_FONT
-    rpr = run._element.get_or_add_rPr()
-    rfonts = rpr.get_or_add_rFonts()
-    rfonts.set(qn("w:eastAsia"), EAST_ASIA_FONT)
-
-
-def _add_styled_run(paragraph, text: str, *, bold=False, italic=False,
-                    superscript=False, subscript=False) -> None:
-    if not text:
-        return
-    run = paragraph.add_run(text)
-    if bold:
-        run.bold = True
-    if italic:
-        run.italic = True
-    if superscript:
-        run.font.superscript = True
-    if subscript:
-        run.font.subscript = True
-    _set_run_font(run)
-
-
-def add_inline_paragraph(doc, text: str):
-    """解析行内 markdown 标记,逐 run 写入段落,每个 run 都设 eastAsia 字体。"""
-    paragraph = doc.add_paragraph()
-    pos = 0
-    for m in _INLINE_RE.finditer(text):
-        if m.start() > pos:
-            _add_styled_run(paragraph, text[pos:m.start()])
-        if m.group("bold") is not None:
-            _add_styled_run(paragraph, m.group("bold"), bold=True)
-        elif m.group("italic") is not None:
-            _add_styled_run(paragraph, m.group("italic"), italic=True)
-        elif m.group("sup") is not None:
-            _add_styled_run(paragraph, m.group("sup"), superscript=True)
-        elif m.group("sub") is not None:
-            _add_styled_run(paragraph, m.group("sub"), subscript=True)
-        pos = m.end()
-    if pos < len(text):
-        _add_styled_run(paragraph, text[pos:])
-    return paragraph
 
 SECTION_TITLE = {
     "abstract": "Abstract",

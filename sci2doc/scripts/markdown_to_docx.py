@@ -510,45 +510,6 @@ def add_toc_section(doc, toc_entries=None, render_context=None):
 
 
 # ---------------------------------------------------------------------------
-# 正文 Markdown 粗体/斜体处理
-# ---------------------------------------------------------------------------
-
-# 匹配 **bold** 或 __bold__（双星号/双下划线粗体）
-_BOLD_RE = re.compile(r'\*\*(.+?)\*\*|__(.+?)__')
-# 匹配显著性标记保护：星号(1-4个) + 可选空格 + P/p + 比较符
-_SIGNIFICANCE_PROTECT_RE = re.compile(r'(\*{1,4})(\s*)([pP][<>≤≥=])')
-
-
-def strip_bold_markers(text):
-    """去除正文中的 **粗体** 标记，但保留统计学显著性标记 *p<0.05 等。
-
-    逻辑：
-    1. 保护显著性标记（如 **P<0.01），替换为占位符。
-    2. 执行去除粗体操作。
-    3. 还原占位符。
-    这防止了 "A(**P<0.01)B(**P<0.01)" 被误判为粗体包裹。
-    """
-    placeholders = []
-
-    def protect(m):
-        # 将整个匹配串（如 "**P<"）替换为占位符
-        token = f"§SIG{len(placeholders)}§"
-        placeholders.append(m.group(0))
-        return token
-
-    # 1. 保护
-    temp_text = _SIGNIFICANCE_PROTECT_RE.sub(protect, text)
-
-    # 2. 去粗体
-    stripped_text = _BOLD_RE.sub(lambda m: m.group(1) or m.group(2), temp_text)
-
-    # 3. 还原
-    for i, original in enumerate(placeholders):
-        stripped_text = stripped_text.replace(f"§SIG{i}§", original)
-
-    return stripped_text
-
-
 # ---------------------------------------------------------------------------
 # 行内字符级排版解析：**bold** / *italic* / <sup>..</sup> / <sub>..</sub>
 # ---------------------------------------------------------------------------
