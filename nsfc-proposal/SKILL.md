@@ -415,6 +415,7 @@ Failure handling playbook:
 - `failed_at=profile`: 科学问题属性未选定或取值非四类官方措辞之一。回到 Phase 0 与用户确认四选一，写入 profile `science_problem_attribute`（`python scripts/state_manager.py --root . profile --json '{"science_problem_attribute":"聚焦前沿、独辟蹊径"}'`），再 re-run `gate-check`。
 - `failed_at=sync`: run `sync-all --auto-fix`, then re-run `gate-check`.
 - `failed_at=citation`: repair index/cache, re-run `verify-all --require-mcp`, then `gate-check`.
+- `failed_at=literature_total`: 文献总量硬门未过（`literature_index.metadata.total_count` < `citation_targets.min_total`，默认30）。补充检索录入到 ≥30 篇，再 re-run `gate-check`。近5年≥20、中文≥5、P1段引用≥20为软 warn，见报告 `literature.warnings`，不阻断但建议补足。
 - `failed_at=matrix`: run `matrix-check` and `reorder`, then `gate-check`.
 - `failed_at=review`: fix D/C dimensions from review report, then `gate-check`.
 

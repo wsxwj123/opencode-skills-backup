@@ -358,6 +358,7 @@ python3 scripts/extract_docx_images.py --manuscript /path/to/source.docx --proje
 ### 3) Atomic Subsection Writing
 
 - **🔴 开写前置闸门 (Mandatory，脚本硬拦截)**：每节开写前必须先跑 `python3 scripts/prewrite_gate.py --section X.Y --root .`（X.Y 为章.节，如 2.1），exit≠0 禁止开写。它统一硬检查：上一节完成（同章编号紧邻上一节 `atomic_md/第N章/{X.Y-1}_*.md` 存在非空）、大纲就位（`project_state.json.outline` 含本章 + `chapter_index.json`）、素材就位（`figures_index.json` 本章有图表/实验映射条目，无则降级 warning）、上一节占位符清零（无 `CITE_PENDING`/`DATA_PENDING`/`【待`）；上一节盲检结果（`.review_pass/<上一节>.json`）缺失即 prewrite_gate 硬拦 exit 1，禁止开写；必须先跑 delegate_review verify --section <上一节> 落盘通过标记。**⑥ 数据溯源硬门**：prewrite_gate 还会对上一节跑 `data_trace_gate`——上一节含实验数值却无有效 `[数据来源] materials/<档>#<字段>` 标记（或标记指向不存在的素材档/字段）即硬拦 exit 1（堵编数据）。
+- **盲检逃生口（仅盲检子代理不可用时）**：本环境派不出独立盲检子代理（平台无 academic-blind-reviewer 或子代理反复失败）才可加 `--allow-manual-review "<非空理由>"`，对上一节或上一章章级盲检做显式人工放行。它只放行这两处盲检项，上一节文件/大纲/占位符/data_trace 等其余硬门照常拦。放行会写 `.review_pass/<sec>.json`（`manual:true`+理由+时间戳）并追加 `.review_pass/MANUAL_REVIEW_AUDIT.log` 留痕，绝非静默跳过；理由为空即拒绝放行。用了此逃生口等于承认盲检未做，须请用户亲自复核数据溯源与章节逻辑。
 - 文件存于 `${save_path}/atomic_md/第{chapter}章/`，命名 `{section_number}_{section_title}.md`（如 `2.1_研究对象.md`）。
 - **Table reminder**：呈现结构化数据（试剂/仪器/分组/统计）的小节 **必须** 用 Markdown 管道表，见 [Table Contract](#table-contract)，不得用散文描述。
 - 校验：`atomic_md_workflow.py validate --chapter N`（加 `--enforce-research-structure`）+ `validate-experiment-map --chapter N`。**门禁：** 编号断裂 → 修复后才能继续。
@@ -429,6 +430,7 @@ python3 scripts/extract_docx_images.py --manuscript /path/to/source.docx --proje
 
 - 字数：`state_manager.py word-count` 或 `count_words.py <路径>`（支持 .md / atomic_md 目录）。
 - 全文质检：`check_quality.py ".../完整博士论文.docx" --output json --enforce-full-structure`。
+- **参考文献两道门**：全文总量 `references_min_count`（默认 ≥80）为硬门（error，阻断）。另有按章软门（warning，不阻断，阈值在 `thesis_profile` 的 `per_chapter_ref_floor`，硕/博分档，硕地板低于博）：绪论/文献综述章 `[n]` 引用偏少、研究/实验章引用偏少各自提示补充，结论章不设地板。软门只提醒不阻断导出。
 
 ### 10) Rollback if Needed
 

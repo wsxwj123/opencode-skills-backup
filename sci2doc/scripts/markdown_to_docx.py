@@ -33,6 +33,7 @@ try:
     from thesis_profile import build_format_render_context, load_profile, normalize_style_profile
     from shared_utils import infer_project_root_for_profile
     from abbreviation_registry import load_registry, get_all as get_all_abbreviations
+    from md_runs import inline_md_to_runs, clamp_heading_level
 except Exception:  # pragma: no cover
     _script_dir = os.path.dirname(os.path.abspath(__file__))
     if _script_dir not in sys.path:
@@ -41,6 +42,7 @@ except Exception:  # pragma: no cover
         from thesis_profile import build_format_render_context, load_profile, normalize_style_profile
         from shared_utils import infer_project_root_for_profile
         from abbreviation_registry import load_registry, get_all as get_all_abbreviations
+        from md_runs import inline_md_to_runs, clamp_heading_level
     except ImportError:
         build_format_render_context = None
         load_profile = None
@@ -48,6 +50,8 @@ except Exception:  # pragma: no cover
         infer_project_root_for_profile = None
         load_registry = None
         get_all_abbreviations = None
+        inline_md_to_runs = None
+        clamp_heading_level = None
 
 
 # ---------------------------------------------------------------------------
@@ -143,38 +147,38 @@ def parse_markdown_line(line):
     if line.strip().startswith('<!--') and line.strip().endswith('-->'):
         return ('empty', '', 0)
     
-    # 一级标题 # Title
-    if line.startswith('# ') and not line.startswith('## '):
-        return ('heading1', line[2:].strip(), 1)
-    
-    # 二级标题 ## Title
-    elif line.startswith('## ') and not line.startswith('### '):
-        return ('heading2', line[3:].strip(), 2)
-    
-    # 四级标题 #### Title（须先于 ### 判断，否则 #### 会泄漏 # 字面到正文）
-    # TODO: 当前无独立 Heading 4 样式，暂复用三级标题样式；如需独立层级再扩 apply_default_heading4_style
-    elif line.startswith('#### '):
-        return ('heading3', line[5:].strip(), 3)
+    # ATX 标题 #~###### Title：按 # 个数定级，h4/h5/h6 收敛到已有最深层级(3)，
+    # 避免 ##### 等字面 # 泄漏到正文。sci2doc 仅 heading1~3 有独立样式，h4+ 复用 h3。
+    _h = re.match(r'^(#{1,6})\s+(.*)$', line)
+    if _h:
+        n = len(_h.group(1))
+        lvl = clamp_heading_level(n, 3) if clamp_heading_level else min(n, 3)
+        return (f'heading{lvl}', _h.group(2).strip(), lvl)
 
-    # 三级标题 ### Title
-    elif line.startswith('### '):
-        return ('heading3', line[4:].strip(), 3)
+    # 无序列表 - item / * item（* 需带空格，避免吞 *斜体*）
+    _bullet = re.match(r'^[-*]\s+(.*)$', line.strip())
+    if _bullet:
+        return ('bullet', _bullet.group(1).strip(), 0)
+
+    # 有序列表 1. item
+    _number = re.match(r'^\d+\.\s+(.*)$', line.strip())
+    if _number:
+        return ('number', _number.group(1).strip(), 0)
 
     # 图片占位符 [图 1-1：标题] 或裸格式 图 1-1：标题
-    elif re.match(r'\[图\s*\d+-\d+[：:].+\]', line):
+    if re.match(r'\[图\s*\d+-\d+[：:].+\]', line):
         return ('figure', line.strip(), 0)
-    elif re.match(r'^图\s*\d+-\d+[：:]', line.strip()):
+    if re.match(r'^图\s*\d+-\d+[：:]', line.strip()):
         return ('figure', line.strip(), 0)
-    
+
     # 表格标题 [表 1-1：标题] 或裸格式 表 1-1：标题
-    elif re.match(r'\[表\s*\d+-\d+[：:].+\]', line):
+    if re.match(r'\[表\s*\d+-\d+[：:].+\]', line):
         return ('table', line.strip(), 0)
-    elif re.match(r'^表\s*\d+-\d+[：:]', line.strip()):
+    if re.match(r'^表\s*\d+-\d+[：:]', line.strip()):
         return ('table', line.strip(), 0)
-    
+
     # 正文段落
-    else:
-        return ('paragraph', line.strip(), 0)
+    return ('paragraph', line.strip(), 0)
 
 
 def set_run_font(run, latin, east_asia, size_pt, bold=None):
@@ -549,39 +553,6 @@ def strip_bold_markers(text):
 # 行内字符级排版解析：**bold** / *italic* / <sup>..</sup> / <sub>..</sub>
 # ---------------------------------------------------------------------------
 
-# 行内片段切分：优先 ** 再 *，再上下标标签。**...** 必须先于 *...* 以免被误吞。
-_INLINE_SEGMENT_RE = re.compile(
-    r'\*\*(?P<bold>.+?)\*\*'                 # **bold**
-    r'|\*(?P<italic>[^*]+?)\*'               # *italic*（不含 *，避免吞 **）
-    r'|<sup>(?P<sup>.*?)</sup>'              # 上标
-    r'|<sub>(?P<sub>.*?)</sub>',             # 下标
-    re.IGNORECASE,
-)
-
-
-def _add_styled_run(paragraph, text, spec, bold=None, italic=None,
-                    superscript=False, subscript=False, set_text_black=False):
-    """建一个 run，走 set_run_font 保证中英双字体，再叠加 inline 格式。"""
-    if not text:
-        return
-    run = paragraph.add_run(text)
-    set_run_font(
-        run,
-        latin=spec.get("font_latin", "Times New Roman"),
-        east_asia=spec.get("font_east_asia", "SimSun"),
-        size_pt=spec.get("font_size_pt", 12),
-        bold=bold if bold is not None else spec.get("bold"),
-    )
-    if italic:
-        run.italic = True
-    if superscript:
-        run.font.superscript = True
-    if subscript:
-        run.font.subscript = True
-    if set_text_black:
-        run.font.color.rgb = RGBColor(0, 0, 0)
-
-
 def _clear_paragraph_runs(paragraph):
     """移除段落内已有的所有 run（保留段落本身及其格式），便于用 add_inline_runs 重建。"""
     for run in list(paragraph.runs):
@@ -614,52 +585,26 @@ def render_cell_with_inline(cell, text, spec, set_text_black=False):
 
 
 def add_inline_runs(paragraph, text, spec, set_text_black=False):
-    """解析行内排版标记，为每个片段建独立 run。
+    """解析行内排版标记，为每个片段建独立 run（走共享 md_runs.inline_md_to_runs）。
 
-    优先级：**bold** → *italic* → <sup>..</sup> → <sub>..</sub>。
-    每个 run 都走 set_run_font（含 eastAsia），叠加 bold/italic/superscript/subscript。
-    保护统计显著性写法（如 **P*<0.05 中紧贴比较符的星号不被当作 markdown）。
+    共享模块统一支持 **b**/__b__/*i*/_i_/`code`/[t](u)/<sup>/<sub>，并保护统计显著性
+    写法(*p<0.05)与词内下划线(x_i)、正文引用[12]。字体走 sci2doc style_profile 现值
+    （latin/east_asia/size），black 按 set_text_black 口径，绝不引入 TNR 或清零段距。
+    标题/表头 spec['bold']=True 时，非粗体片段回退加粗，保持整行加粗（原语义）。
     """
     if not text:
         return
-
-    # 1. 保护显著性星号（星号紧贴 p/P + 比较符），避免被当 markdown 解析
-    placeholders = []
-
-    def _protect(m):
-        token = f"§SIG{len(placeholders)}§"
-        placeholders.append(m.group(0))
-        return token
-
-    protected = _SIGNIFICANCE_PROTECT_RE.sub(_protect, text)
-
-    def _restore(s):
-        for i, original in enumerate(placeholders):
-            s = s.replace(f"§SIG{i}§", original)
-        return s
-
-    pos = 0
-    for m in _INLINE_SEGMENT_RE.finditer(protected):
-        if m.start() > pos:
-            _add_styled_run(paragraph, _restore(protected[pos:m.start()]), spec,
-                            set_text_black=set_text_black)
-        if m.group('bold') is not None:
-            _add_styled_run(paragraph, _restore(m.group('bold')), spec,
-                            bold=True, set_text_black=set_text_black)
-        elif m.group('italic') is not None:
-            _add_styled_run(paragraph, _restore(m.group('italic')), spec,
-                            italic=True, set_text_black=set_text_black)
-        elif m.group('sup') is not None:
-            _add_styled_run(paragraph, _restore(m.group('sup')), spec,
-                            superscript=True, set_text_black=set_text_black)
-        elif m.group('sub') is not None:
-            _add_styled_run(paragraph, _restore(m.group('sub')), spec,
-                            subscript=True, set_text_black=set_text_black)
-        pos = m.end()
-
-    if pos < len(protected):
-        _add_styled_run(paragraph, _restore(protected[pos:]), spec,
-                        set_text_black=set_text_black)
+    runs = inline_md_to_runs(
+        paragraph, text,
+        latin=spec.get("font_latin", "Times New Roman"),
+        east_asia=spec.get("font_east_asia", "SimSun"),
+        size_pt=spec.get("font_size_pt", 12),
+        black=set_text_black,
+    )
+    if spec.get("bold"):
+        for r in runs:
+            if not r.bold:
+                r.bold = True
 
 
 # ---------------------------------------------------------------------------
@@ -1020,6 +965,19 @@ def markdown_to_docx(md_content, output_path, chapter_num=None, project_root=Non
                 table_caption = content.strip('[]')
                 # 不立即渲染，等待后续表格行
             
+            elif line_type in ('bullet', 'number'):
+                if content:
+                    # - → List Bullet；1. → List Number。用 Word 内置列表样式承载项目符号，
+                    # 行内 run 仍走 body_spec(宋体/TNR/字号)，不清零段距、不强改字体。
+                    word_style = 'List Bullet' if line_type == 'bullet' else 'List Number'
+                    try:
+                        para = doc.add_paragraph(style=word_style)
+                    except KeyError:  # 模板缺内置列表样式时退化为普通段落
+                        para = doc.add_paragraph()
+                        apply_default_normal_style(para, render_context=render_context)
+                    body_spec = _resolve_style_profile(render_context).get("body", {})
+                    add_inline_runs(para, content, body_spec)
+
             elif line_type == 'paragraph':
                 if content:
                     para = doc.add_paragraph()

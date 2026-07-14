@@ -24,6 +24,8 @@ import json
 import re
 from pathlib import Path
 
+from unit_glob import iter_units
+
 # Regex: matches [1], [1,2], [1-5], [1, 3-5, 7]
 _CITATION_GROUP_RE = re.compile(
     r"\[((?:\s*\d+(?:\s*[-–]\s*\d+)?\s*)(?:[,;]\s*\d+(?:\s*[-–]\s*\d+)?\s*)*)\]"
@@ -91,11 +93,7 @@ def main() -> int:
     unit_citations: dict[str, set[int]] = {}  # unit_id -> set of citation numbers
     all_cited: set[int] = set()
 
-    for p in sorted(units_dir.glob("*.json")):
-        try:
-            unit = json.loads(p.read_text(encoding="utf-8"))
-        except Exception:
-            continue
+    for p, unit in iter_units(units_dir):
         uid = unit.get("unit_id", p.stem)
         content = unit.get("content", {})
         combined = " ".join(

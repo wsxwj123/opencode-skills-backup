@@ -3,9 +3,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
-from common import autodiscover_reference_source, compute_tree_signature, detect_comments_input_mode, directory_signature, path_signature, write_json, write_text
+from common import autodiscover_reference_source, compute_tree_signature, detect_comments_input_mode, directory_signature, path_signature, read_json, write_json, write_text
 
 
 def describe_file(path: Path) -> dict[str, object]:
@@ -83,7 +84,21 @@ def main() -> int:
     parser.add_argument("--opencode-driver-command", default="")
     parser.add_argument("--context-token-budget", type=int, default=4200)
     parser.add_argument("--context-tail-lines", type=int, default=80)
+    parser.add_argument("--force-shared", action="store_true",
+                        help="跳过 PROJECT_ROOT 归属冲突检查(该目录已被别的技能占用时的逃生口)")
     args = parser.parse_args()
+
+    # PROJECT_ROOT 归属冲突检测(fail-closed):若该目录的 project_state.json 已由
+    # 别的技能写过(skill 非 revise-sci、非空)，直接拒绝，避免两个技能的 state/units
+    # 同目录互相覆盖。--force-shared 逃生口跳过。
+    if not args.force_shared:
+        existing_state = read_json(Path(args.project_root) / "project_state.json", {})
+        prior_skill = (existing_state.get("skill") or "").strip()
+        if prior_skill and prior_skill != "revise-sci":
+            sys.exit(
+                f"PROJECT_ROOT 冲突:此目录已被 {prior_skill} 使用(project_state.json 的 skill={prior_skill})。"
+                f"revise-sci 与它同目录会互相覆盖 state/units;请另指空 --project-root，或确知安全时加 --force-shared 跳过。"
+            )
 
     comments = Path(args.comments)
     manuscript = Path(args.manuscript)
