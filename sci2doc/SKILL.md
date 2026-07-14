@@ -52,8 +52,8 @@ The workflow is built around:
 
 初始化或起草前，AI **必须** 让用户在两种样式中二选一：
 
-1. `默认设置` — 内置默认学位论文模板（通用格式，可自定义为任意院校）。机构字段为占位符（`示例大学`/`[学校代码]`），用户应替换为本校信息。
-2. `自定义样式` — 用户须提供目标院校 + 详细 Word 格式要求和/或模板证据文件。
+1. `默认设置`：内置默认学位论文模板（通用格式，可自定义为任意院校）。机构字段为占位符（`示例大学`/`[学校代码]`），用户应替换为本校信息。
+2. `自定义样式`：用户须提供目标院校 + 详细 Word 格式要求和/或模板证据文件。
 
 🔴 **CHECKPOINT（阻断 init）：** 未与用户明确确认样式前，**不得运行 `state_manager.py init`**。即使用户可能想用内置默认模板，也必须先得到用户对"就用内置默认模板"的明确确认，再带样式参数运行 init。**禁止** 因看到 QUICK_START 的 init 示例就直接套用默认 `--format-mode default_generic` 跑 init（该默认会静默落成内置模板格式且立即放行 docx 导出）。
 
@@ -74,7 +74,7 @@ The workflow is built around:
    - independent final Conclusion/Outlook chapter
    - total chapters >= 5
 5. References are unified at the end of the full thesis.
-6. Body word count scope: abstract through end of body text (before full-thesis references). **综述/绪论章计入正文字数**——把凑字数压力从研究章分摊出去，缓解逼 AI 靠编数据/扩实验凑字（`check_quality.py` / `count_words.py` 已将 review 章并入 body 计数，另单列 `review_words` 供展示）。仅全文末尾统一参考文献、目录、致谢、附录、成果、声明、缩略语表排除在外；若确有整章须排除，用 `format_profile.exclude_from_body_count`（章标题字符串列表）逐章显式声明。
+6. Body word count scope: abstract through end of body text (before full-thesis references). **综述/绪论章计入正文字数**，把凑字数压力从研究章分摊出去，缓解逼 AI 靠编数据/扩实验凑字（`check_quality.py` / `count_words.py` 已将 review 章并入 body 计数，另单列 `review_words` 供展示）。仅全文末尾统一参考文献、目录、致谢、附录、成果、声明、缩略语表排除在外；若确有整章须排除，用 `format_profile.exclude_from_body_count`（章标题字符串列表）逐章显式声明。
 7. For research chapters, Results & Discussion must map to Methods experiment-by-experiment.
 8. One experiment must map to at least one standalone figure or table.
 9. Atomic markdown is mandatory: one subsection per `.md`, continuous numbering, merge before Word conversion.
@@ -95,7 +95,7 @@ The workflow is built around:
     - 复用成果须同时体现在"攻读学位期间取得的成果"清单与"独创性声明"中。
     - 缺标注的已发表内容复用等同未注明引用，触发学位办自我抄袭/重复发表红线。
     - **本技能不做查重，改写 ≠ 降重**：技能只把英文材料改写成中文学术表述并做文风/翻译腔软检测，不计算重复率、不对接知网/万方/Turnitin。是否达标须用户自行送第三方查重系统核验。
-    - **逐段"原文-改写"对照表（人工产出）**：凡复用已发表 SCI 内容的段落，须在 `docx/reuse_map.md`（或交付附件）中逐段列出对照表——列：所在章节 / 原文出处 [N] / SCI 原文片段 / 中文改写文本 / 改写状态(confirmed/pending)，供用户自查重复率与送查重。
+    - **逐段"原文-改写"对照表（人工产出）**：凡复用已发表 SCI 内容的段落，须在 `docx/reuse_map.md`（或交付附件）中逐段列出对照表，列：所在章节 / 原文出处 [N] / SCI 原文片段 / 中文改写文本 / 改写状态(confirmed/pending)，供用户自查重复率与送查重。
 
 ## Citation Zero-Hallucination Gate (Mandatory)
 
@@ -198,20 +198,20 @@ AI **must only** create or write files into the directories listed above. Any ar
 
 When `write-cycle` runs, `load_state` automatically loads:
 
-1. `project_state.json` — project metadata, progress, and **outline**（含研究主线 `scientific_question` + 各章 `core_argument`，是写作一致性的锚点）
-2. `chapter_index.json` — chapter structure with section titles (filtered to current chapter)
-3. `literature_index.json` — references (filtered to current chapter)
-4. `figures_index.json` — figures/tables (filtered to current chapter)
+1. `project_state.json`：project metadata, progress, and **outline**（含研究主线 `scientific_question` + 各章 `core_argument`，是写作一致性的锚点）
+2. `chapter_index.json`：chapter structure with section titles (filtered to current chapter)
+3. `literature_index.json`：references (filtered to current chapter)
+4. `figures_index.json`：figures/tables (filtered to current chapter)
 
 > **A① 跨章综合例外：** 当前章为**绪论（绪论/引言）或结论（结论/总结/小结/展望）**时，`load_state` 不按当前章过滤，而是**全量加载 chapter_index / literature_index / figures_index + 全部研究章的 section digest/key_facts**（`bundle.synthesis_role` = `intro`/`conclusion`，`scope=cross-chapter-synthesis`）。这样绪论能综述全部研究、结论能跨章综合各研究章的真实数据，避免缝线全露。章类型由 `project_state.json.outline` 里该章标题判定。**引文核证不整批重验**：绪论/结论引用的文献若已在某研究章验过（承重论点↔引文那道核证），`citation_claim_check.py` 经 `ref_evidence_cache.json` 自动复用该 (文献, 论点) 的既有 abstract 与确认结论，AI 不必对全量引文手动重记证据；只有**新出现的 (文献, 论点) 组合**才需反向验证，fail-closed 不放松。
-5. `context_memory.md` — timestamped operation summaries
-6. `history_log.json` — recent operation events
-7. **`chapter_section_digests`** — lightweight digests extracted from existing `atomic_md/第N章/*.md` files
+5. `context_memory.md`：timestamped operation summaries
+6. `history_log.json`：recent operation events
+7. **`chapter_section_digests`**：lightweight digests extracted from existing `atomic_md/第N章/*.md` files
 
 Item 7 is the cross-section consistency mechanism. It does NOT load full markdown content (that would blow the token budget). Instead, it extracts only:
 - Headings (section structure)
 - Table captions (表 X-X：...)
-- Key experimental facts (grouping, reagents, concentrations, methods — max 10 per section, 80 chars each)
+- Key experimental facts (grouping, reagents, concentrations, methods, max 10 per section, 80 chars each)
 - Character count (progress tracking)
 
 This gives the AI enough context to avoid contradicting earlier subsections (e.g. wrong experimental design, wrong reagent lists) without consuming significant tokens.
@@ -338,7 +338,7 @@ python3 scripts/extract_docx_images.py --manuscript /path/to/source.docx --proje
 
 **章节字数协商在此阶段完成（不在 init 后）：** 基于各章实际承载内容（实验数量/图表数量/方法复杂度），与用户协商每章字数目标，写入 profile 的 `chapter_targets`，再执行 Step 1 init。
 
-> **[章节结构签字·强制门禁落锁]** 用户在对话里明确确认上面的研究主线 / 章节结构映射表后（且**仅在此之后**），运行开局 `env_preflight.py` 打印的那条 `SIGNOFF_CMD`（已含解析好的绝对路径）落盘签字。注意 `env_preflight.py` 在会话开场就运行（即本 Step 0.5 签字之前，见本文件开头第 1 条握手；它文档虽列在 Step 1，实际执行在最前），所以此刻 `SIGNOFF_CMD` 早已拿到，不存在签字时还没拿到命令的次序歧义——即 `python "<.../\_shared/structure_signoff_gate.py>" confirm --root <项目根> --note "<用户确认原话摘录>"`。这一步解锁正文写作：**未落签字，PreToolUse hook 会物理拦截任何对 `atomic_md/*/*.md`（学位论文各章正文）的写入**（这是防跳步的硬门，不是提示词纪律）。这道拦截 hook 由 `env_preflight.py` 开工时经 `_shared/install_gate_hook.py` 自动安装并校验（带备份与回滚），门禁状态 active 即在岗；报 degraded 或 error 时会告警，此时无法物理拦截、只能靠人工盯，需留意。若后续章节结构又改，改完让用户重新确认并重跑本命令覆盖签字。⚠️ 严禁在用户未确认时自行运行 confirm——那等于伪造用户签字。
+> **[章节结构签字·强制门禁落锁]** 用户在对话里明确确认上面的研究主线 / 章节结构映射表后（且**仅在此之后**），运行开局 `env_preflight.py` 打印的那条 `SIGNOFF_CMD`（已含解析好的绝对路径）落盘签字。注意 `env_preflight.py` 在会话开场就运行（即本 Step 0.5 签字之前，见本文件开头第 1 条握手；它文档虽列在 Step 1，实际执行在最前），所以此刻 `SIGNOFF_CMD` 早已拿到，不存在签字时还没拿到命令的次序歧义：即 `python "<.../\_shared/structure_signoff_gate.py>" confirm --root <项目根> --note "<用户确认原话摘录>"`。这一步解锁正文写作：**未落签字，PreToolUse hook 会物理拦截任何对 `atomic_md/*/*.md`（学位论文各章正文）的写入**（这是防跳步的硬门，不是提示词纪律）。这道拦截 hook 由 `env_preflight.py` 开工时经 `_shared/install_gate_hook.py` 自动安装并校验（带备份与回滚），门禁状态 active 即在岗；报 degraded 或 error 时会告警，此时无法物理拦截、只能靠人工盯，需留意。若后续章节结构又改，改完让用户重新确认并重跑本命令覆盖签字。⚠️ 严禁在用户未确认时自行运行 confirm，那等于伪造用户签字。
 >
 > 注意：本签字闸管的是**章节结构确认**，与 `## Style Selection Gate`（样式/格式确认，阻断 init 与 docx 导出）是**两道独立的门**，各管各的，别混淆或相互替代。
 
@@ -357,12 +357,12 @@ python3 scripts/extract_docx_images.py --manuscript /path/to/source.docx --proje
 
 ### 3) Atomic Subsection Writing
 
-- **🔴 开写前置闸门 (Mandatory，脚本硬拦截)**：每节开写前必须先跑 `python3 scripts/prewrite_gate.py --section X.Y --root .`（X.Y 为章.节，如 2.1），exit≠0 禁止开写。它统一硬检查：上一节完成（同章编号紧邻上一节 `atomic_md/第N章/{X.Y-1}_*.md` 存在非空）、大纲就位（`project_state.json.outline` 含本章 + `chapter_index.json`）、素材就位（`figures_index.json` 本章有图表/实验映射条目，无则降级 warning）、上一节占位符清零（无 `CITE_PENDING`/`DATA_PENDING`/`【待`）；上一节盲检结果（`.review_pass/<上一节>.json`）缺失即 prewrite_gate 硬拦 exit 1，禁止开写；必须先跑 delegate_review verify --section <上一节> 落盘通过标记。**⑥ 数据溯源硬门**：prewrite_gate 还会对上一节跑 `data_trace_gate`——上一节含实验数值却无有效 `[数据来源] materials/<档>#<字段>` 标记（或标记指向不存在的素材档/字段）即硬拦 exit 1（堵编数据）。
+- **🔴 开写前置闸门 (Mandatory，脚本硬拦截)**：每节开写前必须先跑 `python3 scripts/prewrite_gate.py --section X.Y --root .`（X.Y 为章.节，如 2.1），exit≠0 禁止开写。它统一硬检查：上一节完成（同章编号紧邻上一节 `atomic_md/第N章/{X.Y-1}_*.md` 存在非空）、大纲就位（`project_state.json.outline` 含本章 + `chapter_index.json`）、素材就位（`figures_index.json` 本章有图表/实验映射条目，无则降级 warning）、上一节占位符清零（无 `CITE_PENDING`/`DATA_PENDING`/`【待`）；上一节盲检结果（`.review_pass/<上一节>.json`）缺失即 prewrite_gate 硬拦 exit 1，禁止开写；必须先跑 delegate_review verify --section <上一节> 落盘通过标记。**⑥ 数据溯源硬门**：prewrite_gate 还会对上一节跑 `data_trace_gate`：上一节含实验数值却无有效 `[数据来源] materials/<档>#<字段>` 标记（或标记指向不存在的素材档/字段）即硬拦 exit 1（堵编数据）。
 - **盲检逃生口（仅盲检子代理不可用时）**：本环境派不出独立盲检子代理（平台无 academic-blind-reviewer 或子代理反复失败）才可加 `--allow-manual-review "<非空理由>"`，对上一节或上一章章级盲检做显式人工放行。它只放行这两处盲检项，上一节文件/大纲/占位符/data_trace 等其余硬门照常拦。放行会写 `.review_pass/<sec>.json`（`manual:true`+理由+时间戳）并追加 `.review_pass/MANUAL_REVIEW_AUDIT.log` 留痕，绝非静默跳过；理由为空即拒绝放行。用了此逃生口等于承认盲检未做，须请用户亲自复核数据溯源与章节逻辑。
 - 文件存于 `${save_path}/atomic_md/第{chapter}章/`，命名 `{section_number}_{section_title}.md`（如 `2.1_研究对象.md`）。
 - **Table reminder**：呈现结构化数据（试剂/仪器/分组/统计）的小节 **必须** 用 Markdown 管道表，见 [Table Contract](#table-contract)，不得用散文描述。
 - 校验：`atomic_md_workflow.py validate --chapter N`（加 `--enforce-research-structure`）+ `validate-experiment-map --chapter N`。**门禁：** 编号断裂 → 修复后才能继续。
-- **⑥ 数据溯源标注（写作时必做，堵编数据）**：凡写入实验数值（浓度/剂量/比率/统计量等），该处必须紧跟标注 `[数据来源] materials/<素材档>#<字段>`，指向真实 `materials/*.md` 素材档里承载该数值的字段。落盘后自查 `python3 scripts/data_trace_gate.py --section X.Y --root .`，exit≠0 必须补标或删除无源数值——**追溯不到 materials 的数值就是编的，不得留在正文**。
+- **⑥ 数据溯源标注（写作时必做，堵编数据）**：凡写入实验数值（浓度/剂量/比率/统计量等），该处必须紧跟标注 `[数据来源] materials/<素材档>#<字段>`，指向真实 `materials/*.md` 素材档里承载该数值的字段。落盘后自查 `python3 scripts/data_trace_gate.py --section X.Y --root .`，exit≠0 必须补标或删除无源数值，**追溯不到 materials 的数值就是编的，不得留在正文**。
 - Post-write 必做：`abbreviation_registry.py process --file ... --in-place`，然后更新 `chapter_index.json` key_facts（AI 责任），再进 Step 4。
 
 ### 4) Subsection Summary Snapshot
@@ -402,7 +402,7 @@ python3 scripts/extract_docx_images.py --manuscript /path/to/source.docx --proje
 
 **硬规则：以下各项未逐一确认通过，不得向用户声明"该章完成"，不得进入 Step 7。**
 
-> **[数据溯源·用户必抽验]** 学位论文里每个实验数值/每张图都必须能在原始 SCI 里找到出处。每写完一章，让 AI 给一张"本章数值/结论 → 源自原文哪张图/哪段"对照表，用户抽查几行（`data_trace_gate.py` 已机械校验 `[数据来源]` 标记，⑥）。⚠️ 字数目标已降为**软目标**（A③/C 降软，综述/绪论并入正文减压），就是为了不再逼 AI 靠编数据/扩实验凑字——追溯不到 materials 的数值就是编的。引文同样抽几篇验 DOI。
+> **[数据溯源·用户必抽验]** 学位论文里每个实验数值/每张图都必须能在原始 SCI 里找到出处。每写完一章，让 AI 给一张"本章数值/结论 → 源自原文哪张图/哪段"对照表，用户抽查几行（`data_trace_gate.py` 已机械校验 `[数据来源]` 标记，⑥）。⚠️ 字数目标已降为**软目标**（A③/C 降软，综述/绪论并入正文减压），就是为了不再逼 AI 靠编数据/扩实验凑字，追溯不到 materials 的数值就是编的。引文同样抽几篇验 DOI。
 
 **🔴 进入下一章前置闸口**：上一章 `delegate_review verify` 必须 exit 0（含章结构完整性项 S8），否则不得开始下一章。写完即检，不过不进。现在 `prewrite_gate.py` 已对这道闸口硬校验，不再只靠提示词纪律：写下一章首节（如第 N 章的 N.1）前，它会读 `.review_pass/第<N-1>章.json`，缺标记或未 passed 即 exit≠0 硬拦。前提是上一章 chapter-dod 盲检已用 `delegate_review.py verify --section 第<N-1>章` 落盘通过标记。第 1 章首节无上一章，放行。
 
@@ -551,10 +551,10 @@ Rules:
 ### Applicable Sections
 
 Three-line tables are mandatory in (but not limited to):
-- 实验试剂与耗材 — columns: 试剂名称, 规格/货号, 生产厂家
-- 实验仪器与设备 — columns: 仪器名称, 型号, 生产厂家
-- 实验分组设计 — columns: 组别, 处理方式, 样本数
-- 数据统计结果 — columns vary by experiment
+- 实验试剂与耗材，columns: 试剂名称, 规格/货号, 生产厂家
+- 实验仪器与设备，columns: 仪器名称, 型号, 生产厂家
+- 实验分组设计，columns: 组别, 处理方式, 样本数
+- 数据统计结果，columns vary by experiment
 - Any section presenting structured data
 
 **Writing rule**: If a subsection contains 3+ items sharing the same attributes (name+spec+source, group+treatment+n, etc.), it MUST be written as a Markdown pipe table, never as a prose list or paragraph.
@@ -572,7 +572,7 @@ Three-line tables are mandatory in (but not limited to):
   - 拉丁缩写：`*in vitro*`、`*in vivo*`、`*et al.*`、`*vs.*`。
 - **上标**：用 `<sup>...</sup>`。例：`10<sup>6</sup>` cells/mL、`cm<sup>2</sup>`、`Ca<sup>2+</sup>`。
 - **下标**：用 `<sub>...</sub>`。例：`H<sub>2</sub>O`、`CO<sub>2</sub>`、`IC<sub>50</sub>`、`Na<sup>+</sup>/K<sup>+</sup>`。
-  - **禁止裸写 `H2O` / `CO2` / `IC50`，禁止直接粘贴 Unicode 上下标字符（如 `²`、`₂`、`⁶`）**——必须用 `<sup>`/`<sub>` 标记。
+  - **禁止裸写 `H2O` / `CO2` / `IC50`，禁止直接粘贴 Unicode 上下标字符（如 `²`、`₂`、`⁶`）**，必须用 `<sup>`/`<sub>` 标记。
 - **加粗**：用 `**...**`，**仅限标题**（如分组小标题）。学位论文正文不得用加粗做强调；强调改用句式或斜体。
 - **半角 / 全角**：中文句内标点用全角（`，。；：（）`）；英文、数字、DOI、URL、公式用半角；同一句内不得中英标点混用。
 

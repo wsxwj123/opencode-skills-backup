@@ -46,7 +46,7 @@ Default mode is **one-shot full package with atomic storage**. Two secondary mod
 ## Save Path Confirmation (Mandatory)
 Before running the pipeline, first ask the user where output files should be saved.
 
-**环境预检（软门禁，确认 project_root 后、跑 pipeline 前）：** `python3 scripts/env_preflight.py <project_root> --cli esearch --py docx`，写 `env_status.json`，末行 `PRECHECK: OK|ASK|BLOCKED`。`BLOCKED`（Python 过低）→ 停并引导升级；`ASK`（缺 esearch/python-docx 等可选工具）→ 逐项问用户是否安装并给指引，用户答"已装/不装"后才继续；`OK` → 继续。回退靠 `state_manager.py snapshot`（不建 git 检查点）。**preflight 还会打印 `RESUME_CMD` / `LOG_CMD` / `CITATION_CHECK_CMD`（绝对路径）**——分别用于跨会话接续（见「跨会话接续」段）、记录用户临时要求、新引核证（见 Step 2）。
+**环境预检（软门禁，确认 project_root 后、跑 pipeline 前）：** `python3 scripts/env_preflight.py <project_root> --cli esearch --py docx`，写 `env_status.json`，末行 `PRECHECK: OK|ASK|BLOCKED`。`BLOCKED`（Python 过低）→ 停并引导升级；`ASK`（缺 esearch/python-docx 等可选工具）→ 逐项问用户是否安装并给指引，用户答"已装/不装"后才继续；`OK` → 继续。回退靠 `state_manager.py snapshot`（不建 git 检查点）。**preflight 还会打印 `RESUME_CMD` / `LOG_CMD` / `CITATION_CHECK_CMD`（绝对路径）**，分别用于跨会话接续（见「跨会话接续」段）、记录用户临时要求、新引核证（见 Step 2）。
 
 Default behavior if user does not specify a custom location:
 1. Use the current project directory.
@@ -110,10 +110,10 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
 - If a reviewer comment cannot be matched to any manuscript paragraph (location confidence below threshold), set `atomic_location.confidence = "low"` and mark the unit `needs_manual_revision`; do not fabricate a location.
 - Gate fix loop must not exceed **3 iterations**; if gate still fails after 3 direct JSON edits, halt and report remaining failures to the user with a list of unresolved unit IDs.
 - **AI Style Control:** English responses must avoid AI-typical phrasing patterns.
-  - **强度说明（先读）：** 分三类。**AI 套话主干（硬）**——空致谢/对冲词/填充语/模板化重复——是真的 AI 味，必须清。**去AI必禁三项（硬门禁，禁止使用）**——破折号（`—/——/em-dash`）/ scare quotes / 解释性冒号——`risk_check.py` 命中即 FAIL（hard risk、pipeline-blocking，exit 1），必须清零。**句式偏好（软提示，别机械削平）**——单句长度、-ing 分词——是**倾向性提醒不是硬门禁**：真人写的 rebuttal 里长句、分词从句本就是常态，为了压指标把自然句子剁碎反而写出更假的"防 AI 腔"。这几项按语感判断，明显堆砌才改；`risk_check.py` 对它们只报 WARN、不阻断。
+  - **强度说明（先读）：** 分三类。**AI 套话主干（硬）**，即空致谢/对冲词/填充语/模板化重复，是真的 AI 味，必须清。**去AI必禁三项（硬门禁，禁止使用）**，即破折号（`—/——/em-dash`）/ scare quotes / 解释性冒号，`risk_check.py` 命中即 FAIL（hard risk、pipeline-blocking，exit 1），必须清零。**句式偏好（软提示，别机械削平）**，即单句长度、-ing 分词，是**倾向性提醒不是硬门禁**：真人写的 rebuttal 里长句、分词从句本就是常态，为了压指标把自然句子剁碎反而写出更假的"防 AI 腔"。这几项按语感判断，明显堆砌才改；`risk_check.py` 对它们只报 WARN、不阻断。
   - Hedging overuse: "it is important to note that", "it should be noted that", "notably", "importantly"
   - Empty appreciation: "we greatly appreciate your insightful comments", "this is an excellent suggestion"
-    - **外交缓冲豁免（仅 Push back / Partial 基调）**：rebuttal 里适度致谢与缓冲是不激怒审稿人的润滑剂，不算"空致谢"。反驳/部分接受的 unit **允许一句**克制的开场缓冲——`decision-rules.md` B 段推荐句式如 "We thank the reviewer for this valuable comment." / "We appreciate this suggestion; however, ..." 是**允许**的。禁的仍是：副词叠加的浮夸致谢（"we greatly/sincerely/deeply appreciate"）、`this is an excellent suggestion`、以及 ≥3 条回复用同一句致谢开头。缓冲句之外仍须紧跟实质回应，不得只致谢不作答。`risk_check.py` 的 `ai_appreciation` 正则已按此放行无副词的单句致谢，两文件口径一致。
+    - **外交缓冲豁免（仅 Push back / Partial 基调）**：rebuttal 里适度致谢与缓冲是不激怒审稿人的润滑剂，不算"空致谢"。反驳/部分接受的 unit **允许一句**克制的开场缓冲，`decision-rules.md` B 段推荐句式如 "We thank the reviewer for this valuable comment." / "We appreciate this suggestion; however, ..." 是**允许**的。禁的仍是：副词叠加的浮夸致谢（"we greatly/sincerely/deeply appreciate"）、`this is an excellent suggestion`、以及 ≥3 条回复用同一句致谢开头。缓冲句之外仍须紧跟实质回应，不得只致谢不作答。`risk_check.py` 的 `ai_appreciation` 正则已按此放行无副词的单句致谢，两文件口径一致。
   - Filler phrases: "in order to", "we would like to point out that", "as the reviewer rightly noted"
   - Structural repetition: ≥3 responses must not open with the same template sentence
   - **（软）English sentence length — 倾向 ≤30 words/句。** 一句明显冗长（>30 词且塞了多重从句）就拆，但**别为压指标机械剁句**：意思连贯的一个长句好过三个断句。绝不靠删必要内容达标。`risk_check.py` 只 WARN。
@@ -151,7 +151,7 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
    - Full list: reviewer × section × comment index × first 20 words of each comment
    Ask the user: "Comment parsing complete. Does this match the reviewer letter? (yes / abort / correct:N)"
    Do not continue to step 1.7 until user confirms.
-   - **[对照原信数诉求]** 展示解析清单时，必须提示用户：「请拿**原始审稿信**逐段对照——我把某段拆成了 N 条，如果你觉得这段其实含多个要求(常见于连续散文/`(i)(ii)`/一段多问)，告诉我。」把"对照原文数诉求"从用户脑补变成 AI 主动摆出来。用户确认没漏才继续。
+   - **[对照原信数诉求]** 展示解析清单时，必须提示用户：「请拿**原始审稿信**逐段对照，我把某段拆成了 N 条，如果你觉得这段其实含多个要求(常见于连续散文/`(i)(ii)`/一段多问)，告诉我。」把"对照原文数诉求"从用户脑补变成 AI 主动摆出来。用户确认没漏才继续。
 
 1.7. **[Strategy Planning]** Build a rebuttal strategy table before writing any responses:
    | Reviewer | # | Section | Strategy | Rationale | Data Needed |
@@ -203,7 +203,7 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
 
    **2b. 新文献验真（只要本次新增了引用就必须做，两道关）：**
    > 反驳时甩一篇新文献最容易翻车，引了不存在、被撤、或根本不支持你论点的文章，审稿人一查就崩。所以新引比原稿引用把关更严，从 WARN 升到 fail-closed。
-   1. **真实性硬核验**：`python3 scripts/citation_guard.py --project-root <root> --fail-on-unverified`（DOI/PMID 核对 + 撤稿检测；撤稿一律 FAIL，任一新引验不过即非零退出）。不带 `--fail-on-unverified` 的 pipeline 内 WARN 级不够——新引这里必须带上，验不过就删/换，别硬留。
+   1. **真实性硬核验**：`python3 scripts/citation_guard.py --project-root <root> --fail-on-unverified`（DOI/PMID 核对 + 撤稿检测；撤稿一律 FAIL，任一新引验不过即非零退出）。不带 `--fail-on-unverified` 的 pipeline 内 WARN 级不够，新引这里必须带上，验不过就删/换，别硬留。
    2. **支撑度核证**（引文是否真支持它挂的那句回复论点，而非只验真实）。对每条"新引 ↔ 它在 response_en 里支撑的论点句"，用**检索到的真实 abstract**（不看可编的 key_finding）判支撑度，写 `project_root/claim_evidence.json`（每行 `{section, claim_sentence, is_load_bearing, ref_id, retrieved_abstract, verdict∈support/weak/contradict/unknown, evidence_quote, user_confirmed}`），再跑：
       ```
       python3 "<_shared>/citation_claim_check.py" --root <project_root>
@@ -280,9 +280,9 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
    - 抽查通过后方可进入 Step 7.5
 
    7.5. **[User Checkpoint — Quality Review]** 展示回复质量摘要供用户审查：
-   - 逐条打印：每条 comment 的 unit_id | reviewer | section，紧跟**该条审稿意见摘要 + 完整 `response_en` 全文**（不截断——前 50 字看不出是否答非所问/避重就轻/只承诺不落实，这是唯一人肉关口，必须给用户看全）| revised_excerpt 状态（有修改/无/needs_manual）
+   - 逐条打印：每条 comment 的 unit_id | reviewer | section，紧跟**该条审稿意见摘要 + 完整 `response_en` 全文**（不截断，前 50 字看不出是否答非所问/避重就轻/只承诺不落实，这是唯一人肉关口，必须给用户看全）| revised_excerpt 状态（有修改/无/needs_manual）
    - 标记需人工关注的条目：`needs_manual_revision` 的 unit、`confidence=low` 的定位、revised_excerpt_en 为 `无` 但 comment 明确要求改文的
-   - **兑现"承诺↔落点对照表"承诺（监工卡第 3 条）**：生成并摆给用户——
+   - **兑现"承诺↔落点对照表"承诺（监工卡第 3 条）**：生成并摆给用户：
      ```
      python3 scripts/consistency_check.py --project-root <root> --emit-table <root>/commitment_landing_table.md
      ```
@@ -319,7 +319,7 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
 - ❌ 交付时残留 `待AI` / `AI_FILL_REQUIRED` / `[PENDING Step 7]` 占位符，或 Step 7 后漏跑 `aggregate-edit-plan` 回填 edit_plan。
 - ❌ 英文回复堆套话（硬）：空致谢（we greatly appreciate your insightful comments）、对冲词（it is important to note that）、填充语、≥3 条回复用同一模板开头；解释性冒号（"Main revision: we added..."）。
 - 🔴 破折号（—/——）硬门禁、禁止使用：`risk_check.py` 命中即 FAIL（hard risk、pipeline-blocking，exit 1），必须清零。
-- ⚠️ 句式软项（WARN 非 FAIL，别机械削平）：英文单句明显 >30 词、成串 -ing 分词挂句、中文单句明显 >50 字或三重嵌套——明显堆砌才改，真人常态句子不必强拆（见 AI Style Control 强度说明）。scare quotes 不在软项，属去AI必禁三项硬门禁。
+- ⚠️ 句式软项（WARN 非 FAIL，别机械削平）：英文单句明显 >30 词、成串 -ing 分词挂句、中文单句明显 >50 字或三重嵌套，明显堆砌才改，真人常态句子不必强拆（见 AI Style Control 强度说明）。scare quotes 不在软项，属去AI必禁三项硬门禁。
 - ❌ 意见无法匹配到任何段落时硬编一个 location，而非置 `confidence=low` 并标 `needs_manual_revision`。
 - ❌ gate 失败时新建临时修复脚本（fix_gate_errors.py 之类）或逐个手跑 gate，应直接改 `units/*.json` 重跑且修复循环 ≤3 次。
 - ❌ Push back 策略的 unit 没有任何具体证据（引文／数据／方法学依据）就硬顶审稿人。
@@ -333,10 +333,10 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
 🔴 出具前置闸口：delegate_review verify 必须 exit 0（含 RR14 结构完整性），否则不得向用户出具 response letter。
 
 1. 生成任务包：`python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate response-dod --files <project_root>/units/*.json --comments <comments_docx_path>`（Windows PowerShell/cmd 不展开 `*.json`，需把 `units/` 下的 json 显式逐个列在 `--files` 后，或在 WSL/bash 里运行）
-   - **必须带 `--comments`**：把**原始审稿信全文**嵌进任务包，盲检subagent才能对照原信逐条点名核对——被 fallback 塌成一条 general unit 的多诉求意见(连续散文/`(i)(ii)`/罗马数字/项目符号/一段多诉求)只有对照原文才查得出漏回。不带 `--comments` 时盲检只能看已生成的 units，被吞掉的意见永远发现不了(RR7/RR14/RR15 形同虚设)。
+   - **必须带 `--comments`**：把**原始审稿信全文**嵌进任务包，盲检subagent才能对照原信逐条点名核对，被 fallback 塌成一条 general unit 的多诉求意见(连续散文/`(i)(ii)`/罗马数字/项目符号/一段多诉求)只有对照原文才查得出漏回。不带 `--comments` 时盲检只能看已生成的 units，被吞掉的意见永远发现不了(RR7/RR14/RR15 形同虚设)。
 2. **派一个独立subagent**（Claude Code 用 `academic-blind-reviewer`；其他平台派通用subagent），把任务包原样给它、**不要给它回复包的写作上下文**，要求按任务包返回 JSON 数组。
 3. 校验返回：`python scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate response-dod --return <subagent返回.json>`；退出码非 0（任一缺项/fail/无证据）= **fail-closed**，据subagent证据修复后重跑，**未过不得声明完成**。
-4. **盲检通过后 HALT，先摆结论再出信（不得静默直接出回复信）**：verify exit 0 后，把 DoD 逐项结论摆给用户——每项 RR 的通过/告警状态 + subagent给的关键证据一句话（尤其逐条覆盖、承诺↔落点、反驳有据、新引验真几项），并附 Step 7.5 的承诺↔落点对照表。然后停下问用户：「盲检已过，上面是逐项结论，确认出具回复信吗？(yes / 看某项证据 / 改某条)」**等用户明确确认后才生成/交付回复信**。
+4. **盲检通过后 HALT，先摆结论再出信（不得静默直接出回复信）**：verify exit 0 后，把 DoD 逐项结论摆给用户，每项 RR 的通过/告警状态 + subagent给的关键证据一句话（尤其逐条覆盖、承诺↔落点、反驳有据、新引验真几项），并附 Step 7.5 的承诺↔落点对照表。然后停下问用户：「盲检已过，上面是逐项结论，确认出具回复信吗？(yes / 看某项证据 / 改某条)」**等用户明确确认后才生成/交付回复信**。
 
 ⚠️ **盲检降级告警**：若环境派不出真正独立的subagent，**绝不能同一 AI 自问自答冒充盲检**。明确告诉用户「本环境盲检不可靠，请你亲自复核：每条审稿意见是否都正面回应了、有没有漏回、承诺的修改是否都有落点」，交回用户。
 
@@ -355,7 +355,7 @@ After manual editing of any unit JSON:
    - If gate fails, fix the offending `units/*.json` directly and re-run from step 2. Do not skip.
 
 ## Scripts
-**入口：** `scripts/run_pipeline.py`，一站式串行执行 preflight → build → 全部 gate → consistency report → html gate。5 个必需参数：`--comments` / `--manuscript` / `--si`（可选）/ `--project-root` / `--output-html`。
+**入口：** `scripts/run_pipeline.py`，一条命令串行执行 preflight → build → 全部 gate → consistency report → html gate。5 个必需参数：`--comments` / `--manuscript` / `--si`（可选）/ `--project-root` / `--output-html`。
 
 最小可执行示例（占位符首轮预览，加 `--allow-placeholder` 放宽内容门禁出骨架；正式交付去掉该 flag）：
 ```bash
