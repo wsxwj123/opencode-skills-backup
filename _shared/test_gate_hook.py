@@ -340,6 +340,42 @@ def test_vendored_installer_full_chain():
             assert (home / ".claude" / "academic-gate" / name).is_file()
 
 
+def test_interpreter_probe_and_command_runs():
+    """entry 的解释器必须是 PATH 上真实存在的(全新 macOS 无 python 只有 python3,
+    裸写 python → exit 127,物理锁静默失效);且写完的命令 shell 真跑得起来。"""
+    import shutil as _sh
+    with tempfile.TemporaryDirectory() as d:
+        home = Path(d)
+        res = _run_installer(home)
+        assert res["status"] == "installed", f"命令可跑时应 installed,得到 {res}"
+        cmd = _entry_cmds(home)[0]
+        interp = cmd.split(' "', 1)[0].strip('"')
+        assert _sh.which(interp) or Path(interp).is_file(), \
+            f"解释器 {interp!r} 必须在 PATH 或为存在的绝对路径"
+        p = subprocess.run(cmd, shell=True, input="{}",
+                           capture_output=True, text=True, timeout=15,
+                           env={**os.environ, "HOME": str(home), "USERPROFILE": str(home)})
+        assert p.returncode == 0, f"写进 settings 的命令必须真跑得通,rc={p.returncode}"
+
+
+def test_stale_interpreter_selfheals():
+    """解释器变了(如 pyenv 卸载留下 python 裸名 entry)→ 下次安装按新探测迁移命令。"""
+    with tempfile.TemporaryDirectory() as d:
+        home = Path(d)
+        _run_installer(home)  # 部署四件套
+        sp = home / ".claude" / "settings.json"
+        gate_hook = home / ".claude" / "academic-gate" / "academic_gate_hook.py"
+        stale = json.loads(sp.read_text())
+        stale["hooks"]["PreToolUse"] = [{"matcher": "Write|Edit", "hooks": [
+            {"type": "command", "command": f'no-such-python "{gate_hook}"', "timeout": 60}]}]
+        sp.write_text(json.dumps(stale, ensure_ascii=False), encoding="utf-8")
+        res = _run_installer(home)
+        assert res["action"] == "migrated", f"过期解释器 entry 应被迁移,得到 {res}"
+        cmds = _entry_cmds(home)
+        assert len(cmds) == 1 and not cmds[0].startswith("no-such-python"), \
+            "命令应被改写为当前探测到的解释器"
+
+
 def test_installer_tolerates_null_hooks():
     """hooks/PreToolUse 被其它工具写成显式 null → 应 coerce 安装,不得退化成 error。"""
     with tempfile.TemporaryDirectory() as d:
