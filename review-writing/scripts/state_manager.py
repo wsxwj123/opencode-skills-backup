@@ -511,9 +511,12 @@ def _remap_reference_section(text, old_to_new, strict, unresolved):
                     new_num = old
                 else:
                     new_num = old_to_new[old]
-                new_line = f"{m.group(1)}{new_num}{m.group(3)}{m.group(4)}"
-                if new_line != line:
-                    changed += 1
+                if new_num == old:
+                    out.append(line)  # unchanged: preserve line verbatim (incl. terminator)
+                    continue
+                term = line[m.end():]  # trailing \n / \r\n, or "" on a final unterminated line
+                new_line = f"{m.group(1)}{new_num}{m.group(3)}{m.group(4)}{term}"
+                changed += 1
                 out.append(new_line)
                 continue
 
