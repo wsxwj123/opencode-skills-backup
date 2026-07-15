@@ -11,7 +11,7 @@
 
 | 件 | 级别 | 说明 |
 |----|------|------|
-| Cover Letter | **强制** | 目标期刊编辑、significance 一句话、3 个 key message、适配理由、通讯作者信息 |
+| Cover Letter | **强制** | 目标期刊编辑、开场卖点句、3 条框架级贡献、**按目标刊 Aims & Scope 原文写的契合段（非通用套话）**、通讯作者信息。写法见 `references/cover-letter-guide.md` |
 | Title Page | **强制** | 题名 / 作者列表 / 单位 / 通讯作者(含邮箱) / ORCID |
 | Author Contributions (CRediT) | **强制** | 综述常用 role：Conceptualization / Writing–original draft / Writing–review & editing / Visualization / Supervision / Funding acquisition |
 | COI | **强制** | 无则写 "The authors declare no competing interests." 不留空 |
@@ -29,7 +29,7 @@
 
 ## 2. 各件要点（综述适配）
 
-- **Cover Letter**：综述的卖点是 *synthesis / framing / gap→展望*，而非新数据。一句话 significance 应突出"本综述提出的新框架/视角"。引用 Phase 1.5 的 gap 与 Phase 1.6 的 framing 作为"为什么现在需要这篇综述"的论据。
+- **Cover Letter**（详细写法见 `references/cover-letter-guide.md`）：综述的卖点是 *synthesis / framing / gap→展望*，而非新数据。一句话卖点应突出"本综述提出的新框架/视角"。引用 Phase 1.5 的 gap 与 Phase 1.6 的 framing 作为"为什么现在需要这篇综述"的论据。**scope 契合段强制**：基于目标刊 Aims & Scope 原文（向用户索取）写具体契合，禁 "broad readership" 类通用套话，换成别的刊仍成立即须重写。
 - **Title Page**：题名禁缩写（DNA/RNA/PCR 等公知除外）；共同一作 `†`，通讯 `*`，共同通讯双 `*`。
 - **CRediT**：综述无 Investigation/Formal analysis（无实验）时，对应作者写覆盖到的 role 即可，未覆盖的 11 类标 N/A 并说明（综述常缺 Resources / Methodology-wet-lab）。通讯作者通常 ≥3 个 role（含 Supervision/Funding）。分配细则见 gsw `submission-guide.md` 第 5 节。
 - **Keywords**：从 outline.md 的 RQ/PICO 与各节主题提炼；MeSH 术语优先（医学刊）。

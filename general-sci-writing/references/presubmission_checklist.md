@@ -31,7 +31,7 @@
 - [ ] RCT→CONSORT 流程图+清单；观察性→STROBE；动物→ARRIVE 2.0（essential 10）；系统综述/Meta→PRISMA 2020+PROSPERO 注册号。流程图与 checklist 作为投稿附件一并提交。
 
 ## G. 投稿材料齐全
-- [ ] Cover letter（significance + 3 个 key findings + 适配目标刊理由）。
+- [ ] Cover letter（开场创新点强调句 + 3 Innovations + 3 Contributions + **按目标刊 Aims & Scope 原文写的契合段，非 "broad readership" 类通用套话**）。写法见 `references/cover-letter-guide.md`。
 - [ ] 推荐/回避审稿人（推荐附邮箱，近 3 年无共同发表/共同基金/同单位/师生关系）。
 - [ ] Highlights（Cell 系，3–5 条，每条 ≤85 字符）/ One-sentence summary（Nature 系）/ Graphical abstract（按刊要求）。
 - [ ] 正文字数、主图数量在期刊上限内；补充材料（SI）图表编号连续、格式与主文一致。

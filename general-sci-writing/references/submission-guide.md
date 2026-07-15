@@ -4,7 +4,7 @@
 
 ## 1. 逐项询问明细（必须主动问，不要静默用空白）
 
-- **Cover letter**：目标期刊编辑姓名 / 核心 significance 一句话 / 3 个 key findings / 适配期刊的理由 / 3 位 suggested reviewer 名字与邮箱 / 是否有 opposed reviewer / 通讯作者信息+ORCID
+- **Cover letter**（**详细写法必读 `references/cover-letter-guide.md`**）：目标期刊编辑姓名 / 开场创新点强调句 / 3 条 Key Innovation + 3 条 Major Contribution（区分：Innovation=做了什么新东西，Contribution=对领域什么用）/ **目标刊 Aims & Scope 原文（向用户索取，据此写强制的 scope 契合段，禁通用套话）** / 3 位 suggested reviewer 名字与邮箱 / 是否有 opposed reviewer / 通讯作者信息+ORCID
 - **Data Availability**：原始数据是否 deposit？哪个 repository？accession number？源数据 Supp Data 编号？
 - **Code Availability**：是否有自定义代码？GitHub URL？license？Zenodo DOI？
 - **CRediT**：每位作者承担哪些 role（11 类），用作者首字母缩写（分配指南见第 5 节）
@@ -18,6 +18,8 @@
 ## 2. 目标期刊适配（按需读取）
 
 从 `project_config.json` 读 `target_journal`，挑出该期刊的 `required_by` 项强制：如 Nature 必给 one-sentence summary 与 DAS，Cell 必给 highlights + graphical abstract。
+
+**Cover letter 的 scope 契合（强制）**：投稿包必须让 cover letter 论证本文与目标刊 Aims & Scope 的契合。技能不自动抓期刊页，须主动向用户索取该刊 **Aims & Scope 原文**并据此撰写具体契合段。判定与正反例见 `references/cover-letter-guide.md` 第 3 节。
 
 ## 3. 报告规范 checklist（强制）
 
