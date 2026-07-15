@@ -397,6 +397,37 @@ def split_inline_back_matter_heading(text: str) -> tuple[str, str]:
     return (simplify_ws(m.group(1)), simplify_ws(m.group(2)))
 
 
+# Sentence-terminating punctuation that can precede a genuine inline heading.
+_HEADING_PREFIX_END = ".!?;:。！？；："
+
+
+def _is_inline_back_matter_heading(text: str, m: "re.Match[str]") -> bool:
+    """
+    A back-matter keyword is a real heading (worth splitting on) only when it is
+    grammatically detached, not a common noun inside a running clause.
+
+    Two cheap, defensible signals distinguish "... results. References Smith 2020"
+    (a heading) from "See details in the references section below." (a noun):
+      * the prefix must terminate at a sentence boundary — a heading sits between
+        blocks; a common noun ("in the references section") sits mid-clause;
+      * the tail must not continue as a lowercase noun phrase ("references
+        section", "references to prior work"). End-of-string, a separator, a
+        capital, a digit or CJK content all read as real back-matter body.
+    """
+    tail = text[m.end():].lstrip(" \t:：.-")
+    # A References heading followed by a citation-list entry ("References 1. Smith",
+    # "References [1] ...") is unambiguous even without preceding sentence punctuation
+    # — a common noun ("the references section below") is never followed by such a
+    # pattern. This recovers exported refs glued onto a prefix that ends in a digit or
+    # bracket ("...Table 3 References 1. Smith") without loosening the noun guard below.
+    if m.group(1).lower() in ("references", "参考文献") and re.match(r"(?:\[\d+\]|\d+\.\s+[A-Z])", tail):
+        return True
+    prefix = text[:m.start()].rstrip()
+    if not prefix or prefix[-1] not in _HEADING_PREFIX_END:
+        return False
+    return not tail or not tail[0].islower()
+
+
 def split_row_by_inline_back_matter_headings(row: dict[str, Any]) -> list[dict[str, Any]]:
     """
     Split one paragraph row when back-matter headings appear inline in the middle
@@ -414,11 +445,12 @@ def split_row_by_inline_back_matter_headings(row: dict[str, Any]) -> list[dict[s
         r"(?=\s|[:：.\-]|$)",
         flags=re.IGNORECASE,
     )
-    starts = [m.start() for m in pat.finditer(text)]
-    if not starts:
-        return [row]
-    # Only split when heading marker appears after non-empty prefix text.
-    starts = sorted(set(i for i in starts if i > 0))
+    # Only split when the keyword appears after non-empty prefix text AND actually
+    # constitutes a heading — not a plain noun mid-sentence ("... the references
+    # section ...") which would otherwise be torn off and mis-read as a section.
+    starts = sorted(
+        {m.start() for m in pat.finditer(text) if m.start() > 0 and _is_inline_back_matter_heading(text, m)}
+    )
     if not starts:
         return [row]
 

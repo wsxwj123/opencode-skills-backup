@@ -210,7 +210,11 @@ def merge_docx_files(file_list, output_path, require_high_fidelity=False):
             'success': False,
             'error': f'无法打开第一个文件：{str(e)}'
         }
-    
+
+    # 逐章统计真实写入结果：master 即第一个成功写入的章
+    merged_basenames = [os.path.basename(file_list_sorted[0])]
+    failed_files = []
+
     # 添加后续文件
     for file_path in file_list_sorted[1:]:
         try:
@@ -271,31 +275,41 @@ def merge_docx_files(file_list, output_path, require_high_fidelity=False):
                     for j, cell in enumerate(row.cells):
                         new_table.rows[i].cells[j].text = cell.text
             
+            merged_basenames.append(os.path.basename(file_path))
             print(f"✅ 已合并：{os.path.basename(file_path)}")
-            
+
         except Exception as e:
+            failed_files.append(os.path.basename(file_path))
             print(f"⚠️  合并失败：{os.path.basename(file_path)} - {str(e)}")
             continue
-    
+
     # 保存合并后的文档
     try:
         output_dir = os.path.dirname(output_path)
         if output_dir and not os.path.exists(output_dir):
             os.makedirs(output_dir, exist_ok=True)
-        
+
         master_doc.save(output_path)
-        return {
-            'success': True,
-            'output_path': output_path,
-            'merged_files': len(file_list_sorted),
-            'file_list': [os.path.basename(f) for f in file_list_sorted],
-            'merge_engine': 'fallback'
-        }
     except Exception as e:
         return {
             'success': False,
             'error': f'保存文件失败：{str(e)}'
         }
+
+    # 任一章写入失败 → 如实上报 success:False + 真实写入数 + failed 清单，
+    # 绝不"丢章还报成功"。仍保留已写入的好章到 output_path（避免连带丢失），
+    # 但由 success 明确告知调用方结果不完整。
+    result = {
+        'success': not failed_files,
+        'output_path': output_path,
+        'merged_files': len(merged_basenames),
+        'file_list': merged_basenames,
+        'merge_engine': 'fallback',
+    }
+    if failed_files:
+        result['failed_files'] = failed_files
+        result['error'] = f"{len(failed_files)} 章合并失败并被跳过：{', '.join(failed_files)}"
+    return result
 
 
 def generate_toc(doc):
