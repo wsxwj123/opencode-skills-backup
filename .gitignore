@@ -21,9 +21,5 @@ social-clip/OPTIMIZATION_PLAN.md
 .review_pkg_*.json
 .review_return_*.json
 
-# 运行产物,勿入库
-**/data/
-**/style_check_report.json
-**/hook_heartbeat.json
-__pycache__/
-*.pyc
+# 各技能开发期回归测试：只留本机(scripts/ 原地可跑)，不随技能分发给用户
+*/scripts/test_*.py
