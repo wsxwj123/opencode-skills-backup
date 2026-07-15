@@ -1,6 +1,6 @@
 ---
 name: review-writing
-version: 2.23.2
+version: 2.23.3
 description: "Universal assistant for writing high-impact academic literature reviews (Nature/Cell/Lancet level). Supports real-time Zotero integration, outline persistence, and multi-mode reference management. Use when writing a comprehensive review article requiring systematic search, synthesis, and citation management. 触发词：写综述、文献综述、综述写作、literature review、review article、改综述、完善综述、继续写综述、improve review。"
 triggers:
   - "写综述"
@@ -954,6 +954,7 @@ Write Mode has no `pending_sections` field so this gate is a no-op (no key → e
 
 **📖 进入本阶段必读：**
 1. `references/submission_checklist.md`（综述版投稿清单 + 强制/询问分级 + 红线 + 产出路径）
+1b. **`references/cover-letter-guide.md`（综述版 cover letter 写法必读）**：四段结构 / Innovation≠Contribution（综述落在框架层）/ **期刊 scope 契合强制**。写 `exports/cover_letter.md` 前必读。
 2. general-sci-writing 的 `references/submission-guide.md` 与 `references/compliance-gate.md` 的逐项标准，**只读，不改 gsw**。读取以对齐 Cover Letter 询问明细、CRediT 11 类分配、Acknowledgements 类别、合规门禁判定。
 3. `references/presubmission_checklist.md`（投稿前作者自检清单，**soft 提醒不阻断**）：终稿交付前对照逐项自查，重点是机器无法可靠裁决、需作者掌握原始数据/图像/外部工具的项（图像不当处理、Source Data、查重、注册号、报告规范附件、投稿材料齐全等）。已被本技能 hard 门禁覆盖的维度不重复，仅提醒，不阻断交付。
 
@@ -970,7 +971,7 @@ Write Mode has no `pending_sections` field so this gate is a no-op (no key → e
 1. **逐项询问**（不要静默用空白）：通讯作者信息 + ORCID、各作者 CRediT role、COI、Funding（funder + grant number）、致谢对象、目标刊是否要 Highlights / Suggested Reviewers。明细见 submission_checklist.md 第 1 节 + gsw submission-guide.md 第 1 节。
 
 2. **生成投稿包**（写入 `exports/`，路径以 submission_checklist.md 第 6 节为准）：
-   - `exports/cover_letter.md` — 综述卖点是 synthesis/framing/gap→展望；引用 Phase 1.5 gap + Phase 1.6 framing 作为"为何此刻需要这篇综述"。
+   - `exports/cover_letter.md` — 写法见 `references/cover-letter-guide.md`。综述卖点是 synthesis/framing/gap→展望；引用 Phase 1.5 gap + Phase 1.6 framing 作为"为何此刻需要这篇综述"。**🔴 scope 契合段强制**：向用户索取目标刊 **Aims & Scope 原文**（技能不自动抓取），据此写具体契合论证，禁 "will interest the broad readership" 类通用套话；用户未给 scope 原文则停下索取，不编造。
    - `exports/title_page.md` — 题名（禁缩写）/ 作者 / 单位 / 通讯(含邮箱) / ORCID。
    - `exports/author_contributions.md` — CRediT（综述常用 role；未覆盖的 11 类标 N/A，分配细则见 gsw 第 5 节）。
    - `exports/coi_statement.md` — 无则 "The authors declare no competing interests."
