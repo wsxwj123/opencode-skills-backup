@@ -52,6 +52,14 @@ HEADING_STYLES = {
     "Heading 3": (12, True),
 }
 
+# 图注/表注/摘要:比正文小一号(10pt),从正文尺寸里独立出来。
+# Image/Table Caption 的斜体由 pandoc 的 Caption 基样式继承,无需显式设。
+CAPTION_STYLES = {
+    "Image Caption": 10,
+    "Table Caption": 10,
+    "Abstract": 10,
+}
+
 TEMPLATE_PATH = Path(__file__).resolve().parent.parent / "templates" / "reference.docx"
 
 
@@ -119,6 +127,11 @@ def main():
         if name in styles:
             set_style_font(styles[name], size, bold=bold)
             applied.append(f"{name} -> {FONT_NAME} {size}pt bold={bold}")
+
+    for name, size in CAPTION_STYLES.items():
+        if name in styles:
+            set_style_font(styles[name], size)
+            applied.append(f"{name} -> {FONT_NAME} {size}pt (caption/abstract layer)")
 
     # 正文段前段后清零（字体已在上面设好，这里只动间距）。
     for name in ZERO_SPACING_STYLES:
