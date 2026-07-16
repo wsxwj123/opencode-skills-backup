@@ -1,6 +1,6 @@
 ---
 name: review-writing
-version: 2.23.4
+version: 2.23.5
 description: "Universal assistant for writing high-impact academic literature reviews (Nature/Cell/Lancet level). Supports real-time Zotero integration, outline persistence, and multi-mode reference management. Use when writing a comprehensive review article requiring systematic search, synthesis, and citation management. 触发词：写综述、文献综述、综述写作、literature review、review article、改综述、完善综述、继续写综述、improve review。"
 triggers:
   - "写综述"
@@ -894,7 +894,7 @@ Write Mode has no `pending_sections` field so this gate is a no-op (no key → e
    # If any file uses non-padded name, rename first:
    #   mv drafts/section_1_1.md drafts/section_01_01.md
    ```
-   > **导出范围注记：** Markdown（`exports/Final_Review.md`）是中间产物；最终 docx 由本技能 Step 5d 的 `scripts/export_docx.py` 产出。字符级排版契约里的上下标 `^...^`/`~...~` 通过 pandoc 的 `+superscript+subscript` 扩展转换，正文/标题字体（Times New Roman、标题加粗）由 `templates/reference.docx` 锁定（该模板由 `scripts/make_reference_docx.py` 烘焙）。
+   > **导出范围注记：** Markdown（`exports/Final_Review.md`）是中间产物；最终 docx 由本技能 Step 5d 的 `scripts/export_docx.py` 产出。字符级排版契约里的上下标 `^...^`/`~...~` 通过 pandoc 的 `+superscript+subscript` 扩展转换，正文/标题字体（Times New Roman、标题加粗）由 `templates/reference.docx` 锁定（该模板由 `scripts/make_reference_docx.py` 烘焙）。图注和表注比正文小一号锁 10pt，摘要走独立样式层同样 10pt。
    4a. **Consolidate references into ONE global list** (run immediately after the `cat` merge):
    ```bash
    python3 scripts/consolidate_references.py \

@@ -50,6 +50,10 @@ HEADING_STYLES = [
     ("Title", TITLE_PT, False),
 ]
 
+# 图注/表注/摘要：比正文小一号（10pt），中文仍走宋体防回退。
+CAPTION_PT = 10
+CAPTION_STYLES = ["Image Caption", "Table Caption", "Abstract"]
+
 REFERENCE_DOCX = Path(__file__).resolve().parent.parent / "templates" / "reference.docx"
 
 
@@ -91,6 +95,14 @@ def apply_styles(doc) -> None:
         _apply_western_and_size(style, size_pt)
         _set_east_asia(style, HEADING_EAST_ASIA)
         style.font.bold = bold
+
+    # 图注/表注/摘要小一号 + 中文宋体（防个别精简模板缺样式，加存在性判断）。
+    existing = {s.name for s in doc.styles}
+    for name in CAPTION_STYLES:
+        if name in existing:
+            style = doc.styles[name]
+            _apply_western_and_size(style, CAPTION_PT)
+            _set_east_asia(style, BODY_EAST_ASIA)
 
 
 def main() -> int:
