@@ -16,6 +16,8 @@ from common import read_json, write_text
 
 # 默认字体:西文 Times New Roman(行内 run 的中文字体由 md_runs 处理)
 LATIN_FONT = "Times New Roman"
+# 中文字体:显式设 w:eastAsia,否则 Word 用默认 CJK 字体回退(非宋体)。对齐 sci2doc/revise-sci 用宋体。
+CJK_FONT = "宋体"
 
 # 行内标记:**bold** / *italic* / <sup>…</sup> / <sub>…</sub>
 # 注意 **bold** 必须在 *italic* 之前匹配,否则 ** 会被当成两个 *
@@ -100,20 +102,20 @@ def export_docx(md_text: str, docx_path: Path) -> bool:
                 level = clamp_heading_level(len(m.group(1)), 6)
                 heading = doc.add_heading("", level=level)
                 inline_md_to_runs(heading, m.group(2).strip(),
-                                  latin=LATIN_FONT, black=True)
+                                  latin=LATIN_FONT, east_asia=CJK_FONT, black=True)
                 continue
             mb = _BULLET_LINE.match(line)
             if mb:
                 p = doc.add_paragraph(style="List Bullet")
-                inline_md_to_runs(p, mb.group(1).strip(), latin=LATIN_FONT, black=True)
+                inline_md_to_runs(p, mb.group(1).strip(), latin=LATIN_FONT, east_asia=CJK_FONT, black=True)
                 continue
             mn = _NUMBER_LINE.match(line)
             if mn:
                 p = doc.add_paragraph(style="List Number")
-                inline_md_to_runs(p, mn.group(1).strip(), latin=LATIN_FONT, black=True)
+                inline_md_to_runs(p, mn.group(1).strip(), latin=LATIN_FONT, east_asia=CJK_FONT, black=True)
                 continue
             p = doc.add_paragraph()
-            inline_md_to_runs(p, line.strip(), latin=LATIN_FONT, black=True)
+            inline_md_to_runs(p, line.strip(), latin=LATIN_FONT, east_asia=CJK_FONT, black=True)
     doc.save(str(docx_path))
     return True
 
