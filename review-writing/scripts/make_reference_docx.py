@@ -44,6 +44,9 @@ HEADING_SIZES = {
     "Heading 3": 12,
 }
 
+# 图注/表注/摘要:比正文小一号(10pt),从正文尺寸里独立出来。
+CAPTION_SIZES = {"Image Caption": 10, "Table Caption": 10, "Abstract": 10}
+
 TEMPLATE = Path(__file__).resolve().parent.parent / "templates" / "reference.docx"
 
 
@@ -116,6 +119,10 @@ def main():
     for name, size in HEADING_SIZES.items():
         if name in style_names:
             _set_font(doc.styles[name], size_pt=size, bold=True)
+
+    for name, size in CAPTION_SIZES.items():
+        if name in style_names:
+            _set_font(doc.styles[name], size_pt=size)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     doc.save(str(output_path))
