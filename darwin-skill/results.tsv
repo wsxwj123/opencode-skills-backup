@@ -87,3 +87,17 @@ timestamp	commit	skill	old_score	new_score	status	dimension	note	eval_mode
 2026-06-11T17:57	cef1a4a	teacher-paper	88.0	83.9	keep	架构重构	v3.9.0: 移植v3.13门禁+科目原子化+字数硬门禁+Phase1总表; judge另发现5问题已修; 路由抽查9/10物理卷不读语文文档; 回归40/40	dry_run
 2026-06-11T22:43	0a33bb7	review-writing	81.4	84.5	keep	dim2/dim7/dim8	修问题A(Quick Ref加Mode Gate前置门)+问题C(commit块标注git init前置依赖)；消除Phase 0两个入口断点，dim2/7漏读风险下降	dry_run
 2026-06-11T22:51	0a33bb7	review-writing	84.5	77.9	reeval	dim8根因	独立子agent复评(不知修复史):确认A/C修复有效但dim8降到5/10——戳穿真正根因=Phase0拆docs的摘要陷阱,主文件摘要太完整诱导AI跳过读docs致环境检测/脚本复制/gitinit静默降级;我的+3.1预估是同context乐观偏差(反例黑名单#1)	full_test
+2026-06-25T14:59	baseline	polish-sci	-	86.5	baseline	-	dim4检查点/dim9反例黑名单/常识门禁为短板;dim8已full_test实测	full_test
+2026-06-25T15:05	67f1c67	polish-sci	86.5	88.9	keep	dim4+dim9	Intake/交互🛑🔴显性标记+❌禁止动作黑名单+PL-G11常识软门禁;opus子代理改+主会话复检	full_test
+2026-06-25T15:19	-	batch-5skills	-	-	planned	常识门禁推广	推广PL-G11常识合理性软门禁到 revise-sci/gsw/sci2doc/review-writing/nsfc;opus并行改各SKILL.md,修复后darwin评分	planned
+2026-06-25T15:24	75ef48c	batch-5skills	-	-	keep	常识门禁推广	revise-sci RV-G8/gsw ⑱/sci2doc G7/review-writing R16/nsfc Phase2⑩;5文件各+1软门禁,结构完整无AI痕迹,opus并行+主会话复检	structural
+2026-06-25T15:37	-	batch-soft-gate	-	-	planned	软项门禁支持	delegate_review.py加severity:soft(主会话统一改+测试+分发6份);6技能json登记常识项为软项;子代理逐个改json+自查;完成后darwin各自评估	planned
+2026-06-25T15:50	390ea13	batch-soft-gate	-	-	keep	软项门禁支持	delegate_review.py软项逻辑(4场景smoke test通过:硬项仍fail-closed/软项fail及缺裁决不阻断)+6技能json登记软项(pack验证带🟡标注)+SKILL/json编号对齐修历史drift;向后兼容	full_test
+2026-06-25T16:23	390ea13	polish-sci	-	83.7	blind-eval	全维	独立子代理盲评(不知优化史);dim8=dry_run	dry_run
+2026-06-25T16:23	390ea13	revise-sci	-	87.2	blind-eval	全维	独立子代理盲评(不知优化史);dim8=dry_run	dry_run
+2026-06-25T16:23	390ea13	general-sci-writing	-	86.0	blind-eval	全维	独立子代理盲评(不知优化史);dim8=dry_run	dry_run
+2026-06-25T16:23	390ea13	sci2doc	-	86.7	blind-eval	全维	独立子代理盲评(不知优化史);dim8=dry_run	dry_run
+2026-06-25T16:23	390ea13	review-writing	-	86.0	blind-eval	全维	独立子代理盲评(不知优化史);dim8=dry_run	dry_run
+2026-06-25T16:23	390ea13	nsfc-proposal	-	86.5	blind-eval	全维	独立子代理盲评(不知优化史);dim8=dry_run	dry_run
+2026-06-25T17:49	-	batch-dim7	-	-	planned	dim7精简	逐技能只删真冗余(纯重复整表/整段),保留安全冗余(关键门禁多处重申);子代理核实+删,主会话复检git diff	planned
+2026-06-25T17:55	-	batch-dim7	-	-	keep	dim7精简	gsw删2处真冗余(P0底线复述→指针);其余5技能核实后无真冗余(安全冗余/主子/不同用途保留),只修改必要的	structural

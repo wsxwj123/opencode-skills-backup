@@ -1032,3 +1032,6 @@ proofread.py 现 6 技能字节一致(`7e8775c`)：gsw/polish/revise/review + re
 - intake_router 只问 project_root、无"默认复用写作根"规则（约定确缺，此点主会话判对）；common.py:830 autodiscover_reference_source 确存在，但喂 references_source 当种子、锚 comments 目录，非复用机制。
 **修正结论**：方向可行但**是中改（改代码）非小改（加约定）**——必改 build_literature_index（覆盖→增量续号去重合并追加）+ reference_sync 去重键 + gsw 根级/`data/` 路径对齐。
 **教训**：看了一半脚本（reference_sync 增量对的那半）就下"闭环成立"结论，漏看 build_literature_index 的覆盖写。闭环类结论必须端到端真跑，不能只验链条中的一环。
+
+### 八、拉丁短语斜体软提醒（2026-07-06, commit b612fd4）
+proofread.py 加 `check_latin_italic()`：14 个封闭词表(in vitro/in vivo/ex vivo/in situ/in silico/in utero/de novo/a priori/a posteriori/post hoc/ad libitum/per se/in toto/in vacuo)未加斜体标记 `*..*` 时报 `latin_italic_missing`。**软项**：severity soft、权重0、绝不进 --fail-on 硬集(即使调用方传 misspelling,chinese_punct,subsup_bare 也不硬拦)。先剥 `*..*`/`**..**` 已斜体段再扫，已斜体不报；不收 et al./e.g./vs.(现代多正体，避误报)。DoD 软项:gsw G25 / review R22 / revise RV-R12 / polish PL-G14。6 份 proofread.py 同步 md5 `7ed317f3`一致(含 reviewer-response/simulator 防漂移，虽未加DoD但脚本统一)。独立验证:脏样 in vitro/in vivo 报2但 ok=True、已斜体0命中、et al./invitrogen 防误伤、6技能契约回归全过。学名/基因斜体仍靠人工(需词典误报高)。

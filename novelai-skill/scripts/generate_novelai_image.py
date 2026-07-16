@@ -112,6 +112,107 @@ def build_browser_headers(token: str) -> dict[str, str]:
     }
 
 
+def apply_active_style(config: dict[str, Any], agent_name: str | None = None) -> dict[str, Any]:
+    """把激活的画风预设叠加到 config 上（可靠性优先，不依赖 LLM）。
+
+    - 选哪个预设：env NOVELAI_ACTIVE_STYLE_ID（styles 页"生成示例图"预览用）> 该 bot 的
+      active_by_bot[agent_name]（每个 bot 各自画风）> 全局 active（兜底/兼容）
+    - positive_prefix：**整体替换** config 原有 positive_prefix（预设本身就是完整画风串，
+      像 SillyTavern 那样选哪个用哪个；若叠加到默认画师串上，默认串会盖过预设画风）
+      空 positive_prefix（如"default"预设）不替换，保留 default_config 原有画师串
+    - negative_prefix：非空才整体覆盖，避免空值把原有负面提示词清空
+    - params 里的 steps/cfg_scale/sampler：非空才覆盖
+    - active 找不到对应 style 时，原样返回 config，不报错
+    """
+    styles_path = skill_root() / "assets" / "styles.json"
+    if not styles_path.exists():
+        return config
+    try:
+        styles_data = load_json(styles_path)
+    except Exception:
+        return config
+
+    explicit = os.getenv("NOVELAI_ACTIVE_STYLE_ID", "").strip()
+    if explicit:
+        active_id = explicit
+    elif agent_name:
+        active_id = (styles_data.get("active_by_bot", {}).get(agent_name)
+                     or styles_data.get("active", ""))
+    else:
+        active_id = styles_data.get("active", "")
+    style = next(
+        (s for s in styles_data.get("styles", []) if s.get("id") == active_id), None
+    )
+    if style is None:
+        return config
+
+    positive_prefix = str(style.get("positive_prefix", "")).strip()
+    if positive_prefix:
+        config["positive_prefix"] = positive_prefix  # 整体替换，不叠加默认画师串
+
+    negative_prefix = str(style.get("negative_prefix", "")).strip()
+    if negative_prefix:
+        config["negative_prefix"] = negative_prefix
+
+    params = style.get("params") or {}
+    if params.get("steps"):
+        config["steps"] = params["steps"]
+    if params.get("cfg_scale"):
+        config["cfg_scale"] = params["cfg_scale"]
+    if params.get("sampler"):
+        config["sampler"] = params["sampler"]
+
+    return config
+
+
+# 镜头角度强制:worker 常漏写具体镜头(只写景别如 closer shot），导致构图雷同。
+# 这里兜底——最终 prompt 里若一个具体角度词都没有，随机补一个（增加多样、避免单调）。
+# 尊重 worker 已写的角度（含 POV/first-person，POV 图专用），有就不动。
+_CAMERA_WORDS = (
+    "pov", "first-person", "first person", "high angle", "low angle",
+    "from above", "from below", "from side", "over-the-shoulder", "over the shoulder",
+    "dutch angle", "bird's-eye", "birds-eye", "worm's-eye", "eye-level", "eye level",
+    "profile view", "top-down", "overhead", "from behind", "rear view", "back view",
+)
+_CAMERA_POOL = [
+    "from above, high angle shot", "from below, low angle shot",
+    "from side, profile view", "over-the-shoulder shot",
+    "dutch angle, tilted frame", "eye-level shot, straight-on view",
+    "bird's-eye view, top-down",
+]
+
+
+def ensure_camera_angle(prompts: dict[str, str]) -> dict[str, str]:
+    fp = prompts.get("final_positive_prompt", "")
+    if any(w in fp.lower() for w in _CAMERA_WORDS):
+        return prompts  # worker 已指定镜头（含 POV），尊重不动
+    angle = random.SystemRandom().choice(_CAMERA_POOL)
+    prompts["final_positive_prompt"] = f"{angle}, {fp}"
+    return prompts
+
+
+# 动态感：避免"人杵在那里"的僵硬静态图，给每张注入动感词（漏写才补，已带则尊重）。
+_DYNAMIC_WORDS = (
+    "dynamic", "motion", "movement", "action", "mid-",
+    "bouncing", "swaying", "flowing", "windswept", "jiggle",
+)
+_DYNAMIC_POOL = [
+    "dynamic pose, sense of motion",
+    "dynamic angle, motion blur",
+    "dynamic composition, motion lines",
+    "mid-motion, hair and clothes in motion",
+]
+
+
+def ensure_dynamic_feel(prompts: dict[str, str]) -> dict[str, str]:
+    fp = prompts.get("final_positive_prompt", "")
+    if any(w in fp.lower() for w in _DYNAMIC_WORDS):
+        return prompts  # worker 已带动感词，尊重不动
+    tag = random.SystemRandom().choice(_DYNAMIC_POOL)
+    prompts["final_positive_prompt"] = f"{tag}, {fp}"
+    return prompts
+
+
 def resolve_seed(config: dict[str, Any]) -> int:
     seed = int(config.get("seed", -1))
     if seed < 0:
@@ -340,10 +441,14 @@ def generate_image(
     source_request_path: str = "",
     output_image_path: Path | None = None,
     state_dir: Path | None = None,
+    agent_name: str | None = None,
 ) -> dict[str, Any]:
     actual_state_dir = state_dir or output_dir
     previous_state = load_previous_state(actual_state_dir)
+    config = apply_active_style(config, agent_name)
     prompts = build_prompts(config, intermediate, previous_state=previous_state)
+    prompts = ensure_camera_angle(prompts)  # 强制每张有具体镜头角度（漏写才补，尊重 POV）
+    prompts = ensure_dynamic_feel(prompts)  # 强制每张有动态感（漏写才补，治僵硬静态图）
     token = read_token()
     endpoint = os.getenv(
         "NOVELAI_IMAGE_ENDPOINT", "https://image.novelai.net/ai/generate-image"
@@ -487,6 +592,15 @@ def main() -> None:
 
     load_local_env()
     intermediate_path = Path(args.intermediate)
+    # 防御：父目录可能不存在（worker 用 Bash 重定向写 intermediate 时不会自动建目录），
+    # 先建好，让上游下一次写入不再 ENOENT；本次仍缺失则给一行清晰报错而非红栈。
+    intermediate_path.parent.mkdir(parents=True, exist_ok=True)
+    if intermediate_path.suffix.lower() == ".json" and not intermediate_path.exists():
+        sys.stderr.write(
+            f"[novelai] intermediate 不存在: {intermediate_path}\n"
+            f"[novelai] 上游未成功写入（常见：worker LLM 调用 connection refused / 被打断）。"
+            f"已建好父目录，重试本轮生图即可。\n")
+        sys.exit(2)
     if intermediate_path.suffix.lower() == ".json":
         intermediate: dict[str, Any] | str = load_json(intermediate_path)
     else:
@@ -552,6 +666,7 @@ def main() -> None:
         if args.output_image_path
         else None,
         state_dir=Path(args.state_dir).expanduser() if args.state_dir else None,
+        agent_name=agent_name,
     )
 
     serialized = json.dumps(result, ensure_ascii=False, indent=2)

@@ -188,7 +188,9 @@ compatibility:
 完整示例：
 - `POV close-up shot, girl riding boy in bedroom on bed with moonlight`
 
-必需质量标签示例：
+画风前缀由激活预设自动注入，worker 无需读取或拼接任何画风/画师标签。
+
+必需质量标签示例（STYLE.txt 里已含时不必重复）：
 - `masterpiece`
 - `best quality`
 - `ultra-detailed`
