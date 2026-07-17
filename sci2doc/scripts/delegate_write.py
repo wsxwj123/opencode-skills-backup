@@ -21,8 +21,13 @@ CONFIG = {
     "family": "sci2doc",
     "section_regex": r"^\d+(\.\d+)*$",
     "outline_files": ["project_state.json", "storyline.json"],
+    "outline_id_field": "section_id",           # project_state.sections[].section_id
+    "index_path": "literature_index.json",       # 项目根 list
+    "index_shape": "root_list",
+    "index_id_field": "id",
     # 本节文献切片：新建 chapter_matrix.json 富行式，按 section_id==X.Y 切（§2.6/§7 决策14）
-    "lit_section": {"mode": "matrix_rows", "file": "chapter_matrix.json"},
+    "lit_section": {"mode": "matrix_rows", "file": "chapter_matrix.json",
+                    "id_field": "id", "section_field": "section_id"},
 }
 
 
