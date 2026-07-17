@@ -1,6 +1,6 @@
 ---
 name: general-sci-writing
-version: 2.23.4
+version: 2.24.0
 description: 用于从零撰写或润色符合Nature/Science/Cell标准的SCI研究论文（Article类型），适用于多学科。触发词：写论文、SCI论文、学术写作、科研写作、论文润色、研究论文、学术投稿、投稿、润色论文、polish paper、write SCI paper、academic writing、draft paper、manuscript writing。路由说明：退稿/返修改主稿→用revise-sci；只写审稿意见回复→用reviewer-response-sci；独立成稿的纯语言润色（拿到别人写好的整稿只改语言、不进本管道）→用polish-sci，本技能的润色仅指管道内 Phase 10 对自写稿的润色；综述/文献综述→用review-writing。本技能侧重写新稿与自写稿润色，Phase 13B含内部初步退稿自查但不出回复包也不出修订稿docx。
 license: Proprietary
 ---
@@ -369,16 +369,23 @@ python scripts/state_manager.py add-abbreviation <one.json>
 0a. **🔴 开写前置闸门 (Mandatory，脚本硬拦截)**：开写任何 section 前必须先跑 `python3 scripts/prewrite_gate.py --section [section_id] --root .`，exit≠0 禁止开写。它统一硬检查：上一节完成（`writing_progress.json` 该节最新 status=done）、故事线就位（`storyline.json` 含本节）、素材就位（subprocess 调 `figure_analysis_gate.py`）、上一节占位符清零（无 `CITE_PENDING`/`DATA_PENDING`/`【待`）、缩略词一致（subprocess 调 `abbreviation_consistency.py`）；上一节盲检结果（`.review_pass/<上一节>.json`）缺失即 prewrite_gate 硬拦 exit 1，禁止开写；必须先跑 delegate_review verify --section <上一节> 落盘通过标记。还含一条按 section 角色的软文献门（读该 section 的 role、统计矩阵里归属它的文献条数），Intro 硬地板 6 篇软目标 10 篇、Discussion 硬 8 软 12，Methods/Results/其它一律不设篇数门（0 篇也放行）；硬地板不达算 failures 拦截，软目标不达只进 warnings。过此闸门后再走下面 0b。
 0b. **🔴 figure_analysis 加载门禁 (Mandatory，脚本兜底)**：跑 `python scripts/figure_analysis_gate.py --section [section_id] --root .`。该 gate 比对 `figures_database.json` 中该节涉及的 figure，确认每张 `figure_analysis/figure_{N}.md` 存在、非空、无 `❓待确认` 残留；任一未就绪 → 脚本 exit 1，**禁止开写**，先回 `/figure` 补齐再回来。Introduction/Methods 等无 figure 的小节脚本自然放行（exit 0）。过 gate 后**必须显式 `Read` 本节对应的 `figure_analysis/figure_{N}.md`**（write-cycle 不自动加载，见 §13 白名单第 7 项），作为 Results/Discussion 的事实依据。
 0c. **🟢 引文核证脚手架 (Citation-Claim Matrix，写对的脚手架，非事后墙)**：开写本节前，先把"本节承重论点 ↔ 拟引文献"建成矩阵，用**真 abstract** 判每条引用是否真支撑它挂的论点，再下笔，避免写完才发现引文对不上、又得返工重写。
+   - **🟢 备料子代理起草（一律派，把"读摘要判 verdict"的重活从主会话吸走）**：本节（非白名单节）核证矩阵**先派备料子代理起草**——`python3 scripts/delegate_write.py pack-prep --section [section_id] --root .` 生成 `.prep_task_[section_id].json`，把 `references/prep_subagent_prompt.md`（角色 + 数据/指令隔离）+ 任务包路径交给一个独立子代理，它只产草案 `.claim_evidence_draft_[section_id].json`（`evidence_quote` 必须是账本 abstract 原文子串、`user_confirmed` 一律 false、提议 `claim_kind`），**绝不碰账本**。空草案 `{"claims":[]}` 合法（本节无承重配对）→ 跳过核证直接进撰写打包。白名单琐节不派备料。
    - **哪些算承重论点（is_load_bearing=true）**：支撑本节结论方向的机制句、因果句、定量对比结论句。段首背景句、常识铺垫句算背景（is_load_bearing=false，批量核对即可，不逐条阻断）。
    - **证据只用检索原样落盘的真摘要**：从 `literature_index.json` 里取该 ref 当初 MCP **检索原样落盘的 `abstract`**（不看可编的 key_finding、不脑补），逐条判 `verdict ∈ support/weak/contradict/unknown` 并摘一句 `evidence_quote`。取不到摘要的承重引用先走 §12 摘要补全或换引文，别硬写。
-   - **落盘 `claim_evidence.json`**（list，每条）：`{section, claim_sentence, is_load_bearing, ref_id, retrieved_abstract, verdict, evidence_quote, user_confirmed}`。
+   - **落盘 `claim_evidence.json`**（list，每条）：`{section, claim_sentence, is_load_bearing, claim_kind, ref_id, retrieved_abstract, verdict, evidence_quote, user_confirmed}`。主会话把备料子代理草案核证 + 用户确认后并入本文件（备料草案不是账本，绝不直接当账本用）。
    - **🟢 跨节复用（修"AI 漏写字段导致重复验证"的关键）**：核证脚本会**自动读写项目根 `ref_evidence_cache.json`**，已验状态由脚本落盘，**AI 不必手动记忆或回写任何字段**。因此建矩阵时：① 对**已在别节验过的同一 `ref_id`**，`retrieved_abstract` 可留空，脚本核证前会按 ref_id 从 cache 回填摘要，无需重抓；② 对**同一 `ref_id` + 完全同一论点句**且此前已确认的，脚本自动复用已确认的 verdict/`user_confirmed`，不再 AskUserQuestion 打扰用户；③ **只对新出现的 (ref_id, 论点句) 组合**做反向验证与逐条确认。门禁强度不变：新 (ref, claim) 无 verdict 仍 fail-closed。
-   - **跑核证**：运行 Phase 0 `env_preflight.py` 打印的 `CITATION_CHECK_CMD`，即 `python "<本技能>/scripts/citation_claim_check.py" --root <project_root>`。它渲染"观点↔引文↔是否真支持"矩阵表；**承重句 verdict=contradict/unknown、或缺摘要、或未逐条人工确认 → exit 2 fail-closed 硬拦**，据表改引文/改论点/补确认后重跑。
+   - **跑核证**：运行 Phase 0 `env_preflight.py` 打印的 `CITATION_CHECK_CMD`，即 `python "<本技能>/scripts/citation_claim_check.py" --root <project_root>`（草案来自备料子代理时**加 `--check-quote-substring`**，机械查每条 `evidence_quote` 确是账本 abstract 子串，编证据的 fail-closed 打回）。它渲染"观点↔引文↔是否真支持"矩阵表；**承重句 verdict=contradict/unknown、或缺摘要、或未逐条人工确认 → exit 2 fail-closed 硬拦**；另有 `claim_kind × article_type` 机械纪律（承重机制/疗效声明挂综述 → exit 2），据表改引文/改论点/补确认后重跑。
    - **承重句逐条确认 (AskUserQuestion)**：**只对新出现的承重 (ref_id, 论点句)** 把"论点句 + 判定 + 摘要证据句"用 AskUserQuestion 逐条给用户确认（确认后脚本把该行 `user_confirmed=true` 落盘）；此前已确认过的同一组合由脚本自动复用、不再打扰；背景句在矩阵表里**批量**呈现让用户扫一眼，不逐条阻断。
    - **定位**：这是"帮你写对的脚手架"：先核对引文再落笔，不是卡死后续的墙；核证过了才进 step 1 起草。（承重句 contradict 硬拦是防止照着不支持的引文下笔，属科学正确性底线。）
 1. **Pre-Write Check**: 检查数据完整性。
-2. **Drafting (Main)**: 撰写包含 Main Figures 和 References 的初稿。
-   - **Citation Format**: 严格使用 `[n]`。
+2. **🟢 本节正文由撰写子代理盲写（主会话调度，堵上下文爆 + 焊死编号权）**：本节正文**不再由主会话直接手写**，改走下面这条流水线（前后所有门禁一个字不改，照跑；`resolve-keys` 之后 `[n]` 与现有 sync/DoD 全兼容）：
+   1. **组任务包**：`python3 scripts/delegate_write.py pack-write --section [section_id] --root .` → 生成 `.write_task_[section_id].json`（本节故事线/承重方向 + 已核证观点-证据对 `certified_claims` + `literature_matrix` 切给本节的文献全条 + 缩写表 + 风格禁项**嵌入**，全篇故事线/全库文献只给 `refs` 路径）。承重句未完成人工核证 / 本节有承重论点却缺 `claim_evidence` → 脚本 exit 2 拒绝出包（先回 0c 补核证）。
+   2. **派撰写子代理**：把 `references/section_writer_prompt.md`（角色 prompt + 数据/指令隔离声明）+ 任务包路径交给一个**全新一次性上下文**子代理盲写本节。它只写 `.write_return_[section_id].json`，**正文引用只写 `[@key]`（绝不写裸数字 `[5]`）**，承重句只准挂任务包内嵌 `certified_claims` 里的 `ref_key`，禁写任何账本。
+   3. **机械校验返回**：`python3 scripts/delegate_write.py verify-write --section [section_id] --root .`（V1-V9：无裸数字引用 / `[@key]` 可解析 / `new_refs` 带 DOI 或 PMID / `section_id` 一致）。exit≠0 打回子代理重写，不落盘。
+   4. **new_refs 先核验再并表**（账本零污染）：对返回的 `new_refs` **先** `citation_guard.py --require-mcp` 核真伪，**通过的才**并入 `literature_index.json`（走现有去重 `dedup_literature_index`），并把每条 `new:slug → 已并表条目 id` 写进项目根 `.newref_map.json`（供认键与 prewrite 并表核验读）。核验失败的直接丢弃、打回子代理改写该处引用。
+   5. **落盘本节初稿**到 `manuscripts/{Chapter}_{Subsection}_{Keyword}.md`，随后跑**认键**：`python3 scripts/state_manager.py resolve-keys --file <本节文件> --root . --in-place` 把 `[@key]`/`[@new:slug]` 翻成当前 `[n]`（未知键 exit 1，先补并表）。之后本节正文即回到 gsw 标准 `[n]` 形态，进 step 3。
+   - **白名单琐节**（front/back-matter、`storyline` 里无承重论点清单的节）：主会话就地写、不派子代理、不派备料，天然无 `.write_return`（prewrite 并表核验对其合法放行）。
+   - **Citation Format**：子代理阶段写 `[@key]`；`resolve-keys` 后与全稿统一为 `[n]`。step 8 全局 sync 再做跨节连续重编号。
 3. **Reference List Generation**: 在文末生成本节引用的文献列表 (Vancouver style)。
 4. **Figure Caption Generation**: 在参考文献列表后，必须生成 "Figure Legends" 版块。
    - **Content**: 包含整体描述和分图说明 (e.g., "Figure 1. Characterization... (A) TEM image...").
@@ -404,7 +411,7 @@ python scripts/state_manager.py add-abbreviation <one.json>
    🔴 **进入下一节前置闸口**：上一节 `delegate_review verify` 必须 exit 0（含 G13 结构完整性），否则不得开始下一节撰写。写完即检，不过不进。
    🔴 **修复 3 次仍不过 → 回滚兜底**：同一节据盲检证据修复重跑 3 次仍 fail，停止盲目重写，提示用户回滚到上一检查点（git 可用：`git checkout <sha> -- <文件>`；否则 `/rollback` 到上一 snapshot）后重写。
 
-   **本节完整 DoD 判据（全部核查项 + 脚本命令）以 `references/dod_checklist.json` gate=`section-dod` 为唯一真源（25 项）**：盲检subagent据此逐项核、能脚本核的先跑脚本，退出码非 0 即 fail-closed。该 gate 含引文对应/citation_guard/主线对齐/占位清零/去AI(style_checker，含必禁三项 scare_quotes/explanatory_colon/em-dash 硬门)/字数上限/figure data_status 非 pending/无像素定量/实验逻辑批判/节末 Vancouver/只改原子源/figure_analysis 加载/缩略词一致/检查点/字符级排版(proofread subsup_bare 硬门)/拉丁斜体软提醒等脚本项，及 G13 结构完整性、G23 常识合理性(软)，与 **G17-G22 六项盲检质量核（科学事实正确、统计方法学、论证逻辑闭环、文献完整性与引用偏倚、图表质量与疑似造假、学术合规披露）**。此处不再内联清单，避免与真源 drift。
+   **本节完整 DoD 判据（全部核查项 + 脚本命令）以 `references/dod_checklist.json` gate=`section-dod` 为唯一真源（26 项）**：盲检subagent据此逐项核、能脚本核的先跑脚本，退出码非 0 即 fail-closed。该 gate 含引文对应/citation_guard/主线对齐/占位清零/去AI(style_checker，含必禁三项 scare_quotes/explanatory_colon/em-dash 硬门)/字数上限/figure data_status 非 pending/无像素定量/实验逻辑批判/节末 Vancouver/只改原子源/figure_analysis 加载/缩略词一致/检查点/字符级排版(proofread subsup_bare 硬门)/拉丁斜体软提醒/承重声明引文类型(G26)等脚本项，及 G13 结构完整性、G23 常识合理性(软)，与 **G17-G22 六项盲检质量核（科学事实正确、统计方法学、论证逻辑闭环、文献完整性与引用偏倚、图表质量与疑似造假、学术合规披露）**。此处不再内联清单，避免与真源 drift。
 10. **Safety Write**: 用户 OK 后写入文件 → 智能快照 → **Git Checkpoint**：`python scripts/git_checkpoint.py commit [Project_Root] "[gsw] section <section_id> done"`（git 不可用时自动 no-op，snapshot 仍是回退兜底）。回退手段：若落盘后用户反悔，`/rollback` 到上一个 snapshot、`git checkout <sha> -- <file>` 回退单节，或直接 Edit 改原子化文件（参见 §3 润色 workflow）。
 
 **Discussion 段落结构 / Online Methods vs STAR Methods**：写 Discussion 或 Methods 章节前 `Read references/writing-templates.md` 对应小节。要点：Discussion 走"主要发现总结→文献对比+机制→**Limitations（强制，缺即退稿高频）**→Outlook"四段式；Methods 按 target_journal 选 Online Methods（Nature 精简版+完整版后置）或 STAR Methods（Cell 五段结构）。

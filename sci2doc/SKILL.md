@@ -1,6 +1,6 @@
 ---
 name: sci2doc
-version: 2.23.3
+version: 2.24.0
 description: 用于将SCI论文材料转化为中文博士或硕士学位论文草稿，执行严格的章节结构、原子化Markdown工作流、门禁检查和版本回滚。当用户提到博士论文、硕士论文、学位论文、毕业论文、SCI转论文、doctoral thesis、master thesis、dissertation 时优先调用。
 ---
 
@@ -359,6 +359,15 @@ python3 scripts/extract_docx_images.py --manuscript /path/to/source.docx --proje
 
 - **🔴 开写前置闸门 (Mandatory，脚本硬拦截)**：每节开写前必须先跑 `python3 scripts/prewrite_gate.py --section X.Y --root .`（X.Y 为章.节，如 2.1），exit≠0 禁止开写。它统一硬检查：上一节完成（同章编号紧邻上一节 `atomic_md/第N章/{X.Y-1}_*.md` 存在非空）、大纲就位（`project_state.json.outline` 含本章 + `chapter_index.json`）、素材就位（`figures_index.json` 本章有图表/实验映射条目，无则降级 warning）、上一节占位符清零（无 `CITE_PENDING`/`DATA_PENDING`/`【待`）；上一节盲检结果（`.review_pass/<上一节>.json`）缺失即 prewrite_gate 硬拦 exit 1，禁止开写；必须先跑 delegate_review verify --section <上一节> 落盘通过标记。**⑥ 数据溯源硬门**：prewrite_gate 还会对上一节跑 `data_trace_gate`：上一节含实验数值却无有效 `[数据来源] materials/<档>#<字段>` 标记（或标记指向不存在的素材档/字段）即硬拦 exit 1（堵编数据）。
 - **盲检逃生口（仅盲检子代理不可用时）**：本环境派不出独立盲检子代理（平台无 academic-blind-reviewer 或子代理反复失败）才可加 `--allow-manual-review "<非空理由>"`，对上一节或上一章章级盲检做显式人工放行。它只放行这两处盲检项，上一节文件/大纲/占位符/data_trace 等其余硬门照常拦。放行会写 `.review_pass/<sec>.json`（`manual:true`+理由+时间戳）并追加 `.review_pass/MANUAL_REVIEW_AUDIT.log` 留痕，绝非静默跳过；理由为空即拒绝放行。用了此逃生口等于承认盲检未做，须请用户亲自复核数据溯源与章节逻辑。
+- **🟢 本节正文由撰写子代理盲写（主会话调度，堵上下文爆 + 焊死编号权）**：prewrite_gate 通过后，本节正文**不再由主会话直接手写**，改走下面这条流水线（前后所有门禁一个字不改，照跑）：
+  1. **组任务包**：`python3 scripts/delegate_write.py pack-write --section X.Y --root .` → 生成 `.write_task_X.Y.json`（本节大纲/承重方向 + 已核证观点-证据对 `certified_claims` + `chapter_matrix` 切给本节的文献全条 + 缩写表 + 风格禁项**嵌入**，全篇大纲/全库文献只给 `refs` 路径）。承重句未完成人工核证 / 本节有承重论点却缺 `claim_evidence` → 脚本 exit 2 拒绝出包（先补核证）。
+  2. **派撰写子代理**：把 `references/section_writer_prompt.md`（角色 prompt + 数据/指令隔离声明）+ 任务包路径交给一个**全新一次性上下文**子代理，让它盲写本节。它只写 `.write_return_X.Y.json`，**正文引用只写 `[@key]`（绝不写裸数字 `[5]`）**，承重句只准挂任务包内嵌 `certified_claims` 里的 `ref_key`，禁写任何账本。
+  3. **机械校验返回**：`python3 scripts/delegate_write.py verify-write --section X.Y --root .`（V1-V9：无裸数字引用 / `[@key]` 可解析 / `new_refs` 带 DOI 或 PMID / `section_id` 一致）。exit≠0 打回子代理重写，不落盘。
+  4. **new_refs 先核验再并表**（账本零污染）：对返回的 `new_refs` **先** `citation_guard.py --require-mcp` 核真伪，**通过的才** `python3 scripts/citation_renumber.py merge-refs --root . --return .write_return_X.Y.json` 去重并表（DOI→PMID→归一标题）+ 分配稳定 id + 同步 upsert `chapter_matrix`。核验失败的直接丢弃、打回子代理改写该处引用。
+  5. **落盘正文**（主会话已结构签字，hook 放行）到 `atomic_md/第N章/`，随后照跑机械审（`citation_claim_check` 复核承重句、`data_trace_gate`、缩写、索引更新）。
+  - **白名单琐节**（front/back-matter、无承重论点清单的节）：主会话就地写、不派子代理。
+  - **试点期说明**：备料子代理与 `article_type` 落库属推广批未上；本期承重核证走主会话就地建 `claim_evidence.json`、引用类型纪律走本 prompt + 盲检兜底。
+- **正文 `[@key]` 是长期真源，`[N]` 是章末派生**：原子 md 一直保持 `[@key]`；章末合并前跑 `python3 scripts/citation_renumber.py renumber --root . --chapter N --check`（exit≠0 若有未并表 `new:` 键 / id 冲突 / 未知键）通过后再 `--in-place` 把 `[@key]` 统一翻成连续 `[N]`（按 `reference_renderer.citation_sort_key` 同一排序，保证正文 `[N]` 与参考文献列表逐一对应）。
 - 文件存于 `${save_path}/atomic_md/第{chapter}章/`，命名 `{section_number}_{section_title}.md`（如 `2.1_研究对象.md`）。
 - **Table reminder**：呈现结构化数据（试剂/仪器/分组/统计）的小节 **必须** 用 Markdown 管道表，见 [Table Contract](#table-contract)，不得用散文描述。
 - 校验：`atomic_md_workflow.py validate --chapter N`（加 `--enforce-research-structure`）+ `validate-experiment-map --chapter N`。**门禁：** 编号断裂 → 修复后才能继续。

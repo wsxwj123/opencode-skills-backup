@@ -450,6 +450,15 @@ def load_index(index_path: str) -> list[dict]:
     return data
 
 
+def citation_sort_key(entry: dict):
+    """参考文献/正文编号的唯一排序键：按 id 字段中数字升序（无数字则排末尾）。
+
+    模块级函数，供 citation_renumber.py import 复用，保证正文 [N] 与参考文献列表次序同源。
+    """
+    m = re.search(r'\d+', str(entry.get("id", "")))
+    return int(m.group()) if m else float("inf")
+
+
 def render_all(
     entries: list[dict],
     chapter: int | None = None,
@@ -462,11 +471,7 @@ def render_all(
     if chapter is not None:
         entries = [e for e in entries if e.get("chapter") == chapter]
 
-    def sort_key(e):
-        m = re.search(r'\d+', str(e.get("id", "")))
-        return int(m.group()) if m else float("inf")
-
-    entries = sorted(entries, key=sort_key)
+    entries = sorted(entries, key=citation_sort_key)
 
     lines = []
     for i, entry in enumerate(entries, start=1):

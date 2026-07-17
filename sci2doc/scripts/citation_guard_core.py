@@ -178,7 +178,38 @@ def _fetch_pubmed_by_pmid(pmid: str) -> dict[str, Any] | None:
             break
     pubtypes = result.get("pubtype") or []
     is_retracted = any("retract" in str(x).lower() for x in pubtypes)
-    return {"source": "pubmed", "title": title, "doi": doi, "pmid": str(pmid), "retracted": is_retracted}
+    return {"source": "pubmed", "title": title, "doi": doi, "pmid": str(pmid),
+            "retracted": is_retracted, "pubtype": [str(x) for x in pubtypes]}
+
+
+# ── PubMed pubtype list → single article_type enum (deterministic, G0c) ──────
+# INTERFACE §2B R5-3: first matching rule wins. "Journal Article" is the generic
+# fallback and must never outrank a more specific type (e.g. Review). Pure
+# function (unit-testable); empty/unrecognized -> "unknown".
+def classify_article_type(pubtypes, source: str = "") -> str:
+    pts = [str(x).lower() for x in (pubtypes or [])]
+    src = str(source or "").lower()
+
+    def has(*needles: str) -> bool:
+        return any(any(n in pt for n in needles) for pt in pts)
+
+    if has("systematic review"):
+        return "systematic_review"
+    if has("meta-analysis", "meta analysis"):
+        return "meta_analysis"
+    if has("review"):
+        return "review"
+    if has("randomized controlled trial", "controlled clinical trial", "clinical trial"):
+        return "clinical_trial"
+    if has("practice guideline", "guideline"):
+        return "guideline"
+    if has("book"):  # "Book" / "Book Chapter"
+        return "book_chapter"
+    if "biorxiv" in src or "medrxiv" in src or has("preprint"):
+        return "preprint"
+    if has("journal article"):
+        return "original_research"
+    return "unknown"
 
 
 def _verify_title_exists(title: str) -> dict[str, Any] | None:
@@ -602,6 +633,11 @@ def validate_core(
 
     has_identifier = bool(doi or pmid)
 
+    # G0c: derive article_type from the PubMed pubtype list (PMID path only);
+    # non-PubMed / no pubtype -> "unknown". Back-compat: purely additive, never
+    # affects verification outcome.
+    article_type = classify_article_type((pubmed or {}).get("pubtype"), source=provider_family)
+
     # By-title verification: only when the entry carries NO DOI and NO PMID.
     # Confirms the title corresponds to a real publication (Crossref/Semantic
     # Scholar). Gray zone (no match / unreachable / offline) stays FAIL.
@@ -805,5 +841,6 @@ def validate_core(
         "failure_reasons": failure_reasons,
         "confidence": confidence,
         "needs_manual_review": needs_manual_review,
+        "article_type": article_type,
         "details": details,
     }
