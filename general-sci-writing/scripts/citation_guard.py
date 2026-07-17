@@ -267,6 +267,9 @@ def validate_entry(
         "needs_manual_review": result["needs_manual_review"],
         "verification_confidence": result["confidence"],
         "verification_details": details,
+        # G0c: PMID pubtype 分类落库；无分类保留条目原值（缺 → unknown），不 clobber
+        "article_type": (result.get("article_type") if result.get("article_type", "unknown") != "unknown"
+                         else str(entry.get("article_type") or "unknown")),
     }
 
 
