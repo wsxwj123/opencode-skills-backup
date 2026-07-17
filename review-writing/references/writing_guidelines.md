@@ -28,6 +28,17 @@ High-impact reviews are not summaries; they are arguments.
 - "Ultimately, translating these findings into clinical practice will require..."
 - "We propose a revised model where..."
 
+### Evidence Type Discipline（`article_type`，决策15）
+每条 `data/literature_index.json` 条目带 `article_type` 字段（枚举 `original_research | review |
+meta_analysis | systematic_review | clinical_trial | preprint | book_chapter | guideline | other | unknown`）。
+入表时默认 `unknown`，真值由 `citation_guard.py --write-back` 从 PubMed pubtype 优先级解析回填（缺=unknown）。
+纪律（DoD R9 已覆盖，机械联动在共享 `citation_claim_check.py`）：
+- **承重的机制断言 / 疗效因果结论**（`claim_kind∈{mechanism,efficacy}`）**不得以综述（review /
+  systematic_review）代替原著撑腰**——引 `original_research`，或疗效可引 `meta_analysis` / `clinical_trial`。
+- 综述里"承重**背景**引用综述"是合法的（`claim_kind=background` 引 review 放行）——靠 `claim_kind` 精确区分，
+  不一刀切。`article_type`/`claim_kind` 任一缺失/`unknown` → 机械纪律只 warning 不拦（向后兼容存量项目）。
+- `preprint` 在正文该处须标 `[Preprint]`。
+
 ## 3. Structural Templates
 
 ### The Funnel Introduction

@@ -1499,6 +1499,9 @@ def append_literature(section, papers_path, index_path="data/literature_index.js
         p.setdefault("source_provider", source_provider)
         p.setdefault("source_id", p.get("pmid") or p.get("doi") or "")
         p.setdefault("verified", False)
+        # 文章类型（决策15）：入表即带字段，默认 unknown；真值由 citation_guard --write-back
+        # 从 PubMed pubtype 优先级解析回填（G0c）。缺字段=unknown，下游机械纪律只 warning 不拦。
+        p.setdefault("article_type", "unknown")
         exist.append(p)
         if doi:
             known_dois.add(doi)
