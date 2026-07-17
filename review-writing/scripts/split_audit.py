@@ -27,6 +27,8 @@ import os
 import re
 import sys
 
+from split_headings import cut_offsets  # 切点单一真源（INTERFACE §7 F1，与拆分器同口径）
+
 FULLWIDTH_SPACE = "　"
 DEFAULT_CAPTION_RE = re.compile(r"(?:图|表|Fig(?:ure)?|Table)\s*\d+[-–—]\d+", re.IGNORECASE)
 
@@ -58,6 +60,8 @@ def _load_json(path, what):
             return json.load(f)
     except ValueError as e:
         _die2("malformed %s json: %s" % (what, e))
+    except (OSError, UnicodeDecodeError) as e:  # S2：畸形/不可读输入归 exit2，不抛未捕获
+        _die2("cannot read %s: %s" % (what, e))
 
 
 def main(argv=None):
@@ -69,30 +73,48 @@ def main(argv=None):
     ap.add_argument("--root", required=False, default=".")
     ap.add_argument("--report", required=False)
     ap.add_argument("--caption-pattern", action="append", default=None)
+    # 切点层级上限：默认 None=切所有非图注标题（旧行为）；传 N 则与 split_headings --split-to-level 同口径
+    ap.add_argument("--split-to-level", type=int, default=None)
     args = ap.parse_args(argv)
 
     # --- 载入（畸形/缺失 → exit 2）---
     if not os.path.isfile(args.text):
         _die2("text not found: %s" % args.text)
-    with open(args.text, encoding="utf-8") as f:
-        text = f.read()
+    try:
+        with open(args.text, encoding="utf-8") as f:
+            text = f.read()
+    except (OSError, UnicodeDecodeError) as e:  # S2：不可读/非 UTF-8 文本归 exit2
+        _die2("cannot read text: %s" % e)
 
     hd = _load_json(args.headings, "headings")
     headings = hd.get("headings") if isinstance(hd, dict) else None
     if not isinstance(headings, list) or len(headings) == 0:
         _die2("headings empty or missing (空 headings 应走无标题路，不该来审计)")
 
+    # S1：char_offset 越界/畸形 → exit2（与 split_headings 一致，拒绝在坏真值上假绿）
+    for h in headings:
+        off = h.get("char_offset")
+        if not isinstance(off, int) or off < 0 or off > len(text):
+            _die2("char_offset out of range: %r" % off)
+
     mf = _load_json(args.manifest, "manifest")
     if not isinstance(mf, dict) or not isinstance(mf.get("atoms"), list):
         _die2("manifest missing 'atoms'")
 
-    atom_files = sorted(glob.glob(args.atoms_glob))
-    if not atom_files:
+    if not glob.glob(args.atoms_glob):
         _die2("atoms-glob matched 0 files: %s" % args.atoms_glob)
 
-    # --- 区间序列（切点 = 非图注标题偏移，升序）---
-    cuts = sorted(h["char_offset"] for h in headings
-                  if not h.get("is_caption") and isinstance(h.get("char_offset"), int))
+    # --- atom↔slice 配对按 manifest atoms 文档顺序（I1，不按文件名字典序）---
+    manifest_atoms = mf.get("atoms", [])
+    atom_files = []
+    for a in manifest_atoms:
+        fp = a.get("file")
+        if not isinstance(fp, str) or not fp:
+            _die2("manifest atom missing 'file'")
+        atom_files.append(fp if os.path.isabs(fp) else os.path.join(args.root, fp))
+
+    # --- 区间序列（切点 = cut_offsets 共享真源，与 split_headings 同口径；F1）---
+    cuts = [h["char_offset"] for h in cut_offsets(headings, args.split_to_level)]
     bounds = cuts + [len(text)]
     slices = [text[bounds[i]:bounds[i + 1]] for i in range(len(cuts))]
 
@@ -109,7 +131,6 @@ def main(argv=None):
             "detail": "atom 文件数 %d ≠ 区间数 %d" % (len(atom_files), len(slices))})
 
     # --- 逐区比对 ---
-    manifest_atoms = mf.get("atoms", [])
     n = min(len(atom_files), len(slices))
     for i in range(n):
         try:
@@ -135,9 +156,13 @@ def main(argv=None):
                 "char_range": [bounds[i], bounds[i + 1]],
                 "detail": "atom 内容与 slice 不符（漏/造/串/漂移/字符或标点改动）"})
 
-    # --- 图注 parity（advisory，不改退出码）---
+    # --- 图注 parity（advisory，不改退出码；I2：两侧同跑 caption 正则取片段集合比对，
+    #     不拿 manifest 存的整条图注文字跟正则片段比）---
     for i, a in enumerate(manifest_atoms):
-        claimed = set(a.get("figure_ids") or [])
+        claimed = set()
+        for fid in (a.get("figure_ids") or []):
+            for rx in caption_res:
+                claimed.update(rx.findall(fid))  # 同一正则归一到片段形态
         actual = set()
         if i < len(atom_files):
             try:
