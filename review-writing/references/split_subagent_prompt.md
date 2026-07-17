@@ -1,6 +1,6 @@
 # 无标题拆分子代理角色 Prompt（功能② · 无标题路 fallback）
 
-> 仅当 `tmp/heading_manifest.json` 的路径判定为**无标题路**（headings 空 / 有 low-confidence / 有覆盖缺口，
+> 仅当 `tmp/heading_manifest.json` 的路径判定为**无标题路**（headings 空 / 有 low-confidence，
 > 典型是 PDF 抽文本、docx 无样式）才派本子代理。有标题路走 `split_headings.py` 机械切、**不派任何子代理**。
 > 主会话组装薄任务包 `.split_task.json`（源路径 + 规则 + 回填契约）后，把这段角色 prompt + 任务包路径一起交给它。
 
@@ -34,6 +34,8 @@
 3. **回填 `tmp/heading_manifest.json`**：你切的**每个边界**产一条 heading：
    - `text`：该分区标题行原文（无标题就给你判定的分节名），须与 `draft_import.md` 对应位置逐字一致；
    - `char_offset`：该边界行首在 `draft_import.md` 的字符偏移（`split_audit` 据此逐分区核你切得对不对）；
+     **第一条边界的 `char_offset` 必须是 0**（整稿开头）——否则首个切点前的正文（摘要/引言）不进任何 atom、
+     被静默丢弃，`split_audit` 的 `preamble_dropped` 守卫会直接判红回退。若开头有前导段，把它并入第一个 atom。
    - `level`：你判定的层级；`confidence` 一律 `"low"`；`style_id` 一律 `"llm"`；`is_caption` 图注才 true。
 
 > **你自报的 `char_offset` / `figure_ids` 不是可信输入**：`split_audit` 会从 atom 实际内容重算交叉核对，
