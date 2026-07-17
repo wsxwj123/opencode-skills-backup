@@ -175,7 +175,7 @@ trusted := headings 非空  AND  无任何 confidence=="low" 的 heading
 有标题路 ⇐ trusted == true      # 2.2 确定性脚本切
 无标题路 ⇐ trusted == false     # 2.3 LLM 拆分子代理（含 headings:[] / low-confidence）
 ```
-路径判据只判"有无可信标题"（heading_manifest 非空且无 low-confidence 项）——这是 manifest 里真实存在、可机械判定的字段。**覆盖缺口不在此判**（manifest 无"缺口"字段，无法在此机械判定），而是下游 split_audit 负责：首标题前正文由其 `preamble_dropped` 守卫硬拦、区间内漏/串/漂移由逐区比对兜。PDF imports and docx-without-styles land here as headless → no-heading path.
+路径判据只判"有无可信标题"（heading_manifest 非空且无 low-confidence 项）——这是 manifest 里真实存在、可机械判定的字段。**覆盖缺口不在此判**（manifest 无"缺口"字段，无法在此机械判定），而是下游处理：首标题前非空正文由 split_headings 自动纳入为前导 frontmatter atom（`section_00_frontmatter.md`，§9，不报错不丢），split_audit 仅在它被丢弃（无前导 atom 覆盖）时以 `preamble_dropped` 判红；区间内漏/串/漂移由逐区比对兜。PDF imports and docx-without-styles land here as headless → no-heading path.
 
 **2.2 Has-heading path — mechanical slice (main-session Bash, zero context):**
 ```

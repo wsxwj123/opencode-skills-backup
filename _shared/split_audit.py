@@ -27,7 +27,7 @@ import os
 import re
 import sys
 
-from split_headings import cut_offsets  # 切点单一真源（INTERFACE §7 F1，与拆分器同口径）
+from split_headings import cut_offsets, has_preamble  # 切点/前导区间单一真源（§7 F1 / §9）
 
 FULLWIDTH_SPACE = "　"
 DEFAULT_CAPTION_RE = re.compile(r"(?:图|表|Fig(?:ure)?|Table)\s*\d+[-–—]\d+", re.IGNORECASE)
@@ -120,9 +120,11 @@ def main(argv=None):
         atom_files.append(full)
 
     # --- 区间序列（切点 = cut_offsets 共享真源，与 split_headings 同口径；F1）---
+    # §9：首标题前有非空正文时，前插前导区间 [0:cuts[0]]（与 split_headings 同用 has_preamble）。
     cuts = [h["char_offset"] for h in cut_offsets(headings, args.split_to_level)]
-    bounds = cuts + [len(text)]
-    slices = [text[bounds[i]:bounds[i + 1]] for i in range(len(cuts))]
+    pre = has_preamble(text, cuts)
+    bounds = ([0] if pre else []) + cuts + [len(text)]
+    slices = [text[bounds[i]:bounds[i + 1]] for i in range(len(bounds) - 1)]
 
     caption_res = ([re.compile(p) for p in args.caption_pattern]
                    if args.caption_pattern else [DEFAULT_CAPTION_RE])
@@ -130,20 +132,21 @@ def main(argv=None):
     hard_fails = []
     advisory = []
 
-    # --- F-1 守卫（对抗流程审查·致命）：首个切点之前的正文（摘要/关键词/无编号引言）
-    #     不落入任何区间、逐区比对查不到 → 静默丢失还假绿。两路（机械切/LLM 回填偏移>0）
-    #     都从 cuts[0] 起 tile，故守卫落此处即堵两路。fail-closed，放在逐区比对之前。
-    preamble = text[:cuts[0]] if cuts else ""
-    if preamble.strip():
+    # --- §9 前导段守卫：首标题前非空正文应被前导 atom 覆盖（区间序列已含前导区间）。
+    #     若前导存在却无对应 atom（atom 数比区间数少一 = 前导被丢）→ preamble_dropped exit1。
+    #     前导已被前导 atom 覆盖时不报错，逐区比对照常，全对则 exit0（§9 纳入语义）。
+    preamble_dropped = pre and len(atom_files) == len(slices) - 1
+    if preamble_dropped:
+        preamble = text[:cuts[0]]
         hard_fails.append({
             "kind": "preamble_dropped",
             "char_range": [0, cuts[0]],
             "lost_chars": len(preamble),
-            "detail": "首标题前有 %d 字正文未进任何 atom（丢失）：%s"
+            "detail": "首标题前有 %d 字正文未纳入任何 atom（丢失，应做前导 frontmatter atom）：%s"
                       % (len(preamble.strip()), preamble.strip()[:80])})
 
-    # --- atom 数 vs 区间数 ---
-    if len(atom_files) != len(slices):
+    # --- atom 数 vs 区间数（前导被丢已由 preamble_dropped 精确报出，不重复报）---
+    if len(atom_files) != len(slices) and not preamble_dropped:
         hard_fails.append({
             "kind": "atom_count_mismatch",
             "detail": "atom 文件数 %d ≠ 区间数 %d" % (len(atom_files), len(slices))})
