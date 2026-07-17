@@ -35,6 +35,12 @@ def cut_offsets(headings, split_to_level=None):
     return sorted(cut, key=lambda h: h.get("char_offset", 0))
 
 
+def has_preamble(text, cuts):
+    """前导区间的单一真源（INTERFACE §9）——split_headings 产前导 atom、split_audit 加前导区间都调它，
+    物理杜绝两脚本判据分叉。首标题前 text[0:cuts[0]] 有非空正文 → True（该区间纳入为前导 atom）。"""
+    return bool(cuts) and cuts[0] > 0 and bool(text[:cuts[0]].strip())
+
+
 def _die(code, msg):
     sys.stderr.write(msg.rstrip() + "\n")
     sys.exit(code)
@@ -102,13 +108,12 @@ def main(argv=None):
         _die(2, "no cut points at split-to-level=%d" % args.split_to_level)
 
     cuts = [h["char_offset"] for h in cut_headings]
-    # F-1：首个切点之前的正文（摘要/关键词/无编号引言）不落入任何 atom。机械切从 cuts[0]
-    # 起 tile 会静默丢弃它。以不丢内容为准 → 硬报错交主会话处理（split_audit 同守卫也会拦
-    # 假绿）；不静默纳入前导段做 atom，因 split_audit 按标题切点比对会把它判为多余区间。
-    if cuts and cuts[0] > 0 and text[:cuts[0]].strip():
-        _die(2, "preamble_dropped: 首标题前有 %d 字正文，机械切会丢弃；主会话须先处理前导段: %s"
-             % (len(text[:cuts[0]].strip()), text[:cuts[0]].strip()[:80]))
-    bounds = cuts + [tlen]
+    # §9：首个切点之前的非空正文（摘要/关键词/无编号引言）纳入为前导 atom（frontmatter），
+    # 不再报错、不丢。前导区间 [0:cuts[0]] 前插为 region 0，其余各标题 atom 顺延。
+    pre = has_preamble(text, cuts)
+    bounds = ([0] if pre else []) + cuts + [tlen]
+    # region_headings[i] is None → 前导 frontmatter atom；否则为对应切点标题
+    region_headings = ([None] if pre else []) + cut_headings
     captions = [h for h in headings if h.get("is_caption")]
 
     try:
@@ -120,10 +125,16 @@ def main(argv=None):
     seen = set()
     atoms = []
     try:
-        for i, h in enumerate(cut_headings):
+        for i, h in enumerate(region_headings):
             start, end = bounds[i], bounds[i + 1]
             chunk = text[start:end]
-            name = _name_for(args.naming, i, h["text"], seen)
+            if h is None:  # §9 前导 frontmatter atom（title 标 frontmatter、level 0）
+                name = "section_00_frontmatter.md"
+                seen.add(name)
+                title, level = "frontmatter", 0
+            else:
+                name = _name_for(args.naming, i, h["text"], seen)
+                title, level = h["text"], h.get("level", 1)
             fpath = os.path.join(args.atoms_dir, name)
             with open(fpath, "w", encoding="utf-8") as f:
                 f.write(chunk)
@@ -133,8 +144,8 @@ def main(argv=None):
             atoms.append({
                 "id": os.path.splitext(name)[0],
                 "file": os.path.join(args.atoms_dir, name),
-                "title": h["text"],
-                "heading_level": h.get("level", 1),
+                "title": title,
+                "heading_level": level,
                 "char_start": start,
                 "char_end": end,
                 "figure_ids": fig_ids,
