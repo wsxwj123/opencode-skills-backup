@@ -132,6 +132,14 @@ def main(argv=None):
                 name = "section_00_frontmatter.md"
                 seen.add(name)
                 title, level = "frontmatter", 0
+            elif h.get("kind") == "front_abstract":  # §10 前置块2 摘要+关键词+图形摘要
+                name = "section_00b_abstract.md"
+                seen.add(name)
+                title, level = h["text"], h.get("level", 0)
+            elif h.get("kind") == "back_matter":  # §10 后置块 致谢/基金/CoI/贡献（合成一个 atom）
+                name = "section_zz_backmatter.md"
+                seen.add(name)
+                title, level = h["text"], h.get("level", 0)
             else:
                 name = _name_for(args.naming, i, h["text"], seen)
                 title, level = h["text"], h.get("level", 1)
