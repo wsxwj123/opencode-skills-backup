@@ -171,11 +171,11 @@ Execute in this exact order:
 
 **2.1 Path judgment (deterministic, no AI discretion) —** read `tmp/heading_manifest.json`:
 ```
-trusted := headings 非空  AND  无任何 confidence=="low" 的 heading  AND  无覆盖缺口
+trusted := headings 非空  AND  无任何 confidence=="low" 的 heading
 有标题路 ⇐ trusted == true      # 2.2 确定性脚本切
-无标题路 ⇐ trusted == false     # 2.3 LLM 拆分子代理（含 headings:[] / low-confidence / 缺口）
+无标题路 ⇐ trusted == false     # 2.3 LLM 拆分子代理（含 headings:[] / low-confidence）
 ```
-PDF imports and docx-without-styles land here as headless → no-heading path.
+路径判据只判"有无可信标题"（heading_manifest 非空且无 low-confidence 项）——这是 manifest 里真实存在、可机械判定的字段。**覆盖缺口不在此判**（manifest 无"缺口"字段，无法在此机械判定），而是下游 split_audit 负责：首标题前正文由其 `preamble_dropped` 守卫硬拦、区间内漏/串/漂移由逐区比对兜。PDF imports and docx-without-styles land here as headless → no-heading path.
 
 **2.2 Has-heading path — mechanical slice (main-session Bash, zero context):**
 ```
