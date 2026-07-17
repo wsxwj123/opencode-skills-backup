@@ -39,6 +39,24 @@ from datetime import datetime, timezone
 
 PLACEHOLDER_TOKENS = ("CITE_PENDING", "DATA_PENDING", "【待")
 
+# 撰写子代理认键：[@key]（key=gid 或 new:slug）。翻号（state_manager resolve-keys）后草稿里
+# 不应再有任何 [@key]——残留即"忘翻号/忘并表"。§4.1-A 节边界机械兜底。
+ATKEY_RE = re.compile(r"\[@([A-Za-z0-9:_\-]+)\]")
+
+
+def _paper_identity(item):
+    """与 state_manager._paper_identity 同口径：doi→pmid→title 归一，供 new_refs 并表核验。"""
+    doi = str(item.get("doi", "")).strip().lower()
+    pmid = str(item.get("pmid", "")).strip()
+    title = str(item.get("title", "")).strip().lower()
+    if doi:
+        return f"doi:{doi}"
+    if pmid:
+        return f"pmid:{pmid}"
+    if title:
+        return f"title:{title}"
+    return None
+
 
 def record_manual_review(root, section, reason):
     """逃生口留痕：盲检子代理不可用时对上一节盲检做显式人工放行。
@@ -254,6 +272,56 @@ def main():
             checks.append({"name": "blind_review", "ok": False, "prev": prev})
     else:
         checks.append({"name": "blind_review", "ok": True, "note": "first section, N/A"})
+
+    # ---- check（§4.1-A 新增）：上一节 new_refs 已并表核验 + 全草稿无残留 [@key] ----
+    # 忘并表/忘核验/忘翻号 → exit≠0。硬要求10 的节边界机械兜底，独立于其它检查照跑。
+    #  A1：上一节 .write_return 的 new_refs 每条身份都能命中 verified 文献条目（0 未并表/未核验）；
+    #      文件缺失+草稿无残留 [@ = 合法（白名单节主会话就地写、天然无 return）；坏 JSON=账本损坏一律 FAIL。
+    #  A2：任意草稿残留 [@key] = 忘跑 resolve-keys → FAIL。
+    if order and section in order and order.index(section) > 0:
+        prev = order[order.index(section) - 1]
+        lit = _load_json(os.path.join(root, "data", "literature_index.json"))
+        verified_idents = ({_paper_identity(e) for e in lit
+                            if isinstance(e, dict) and e.get("verified", True)}
+                           if isinstance(lit, list) else set())
+        verified_idents.discard(None)
+        # A2：残留 [@key]（全草稿）
+        residual = []
+        for fp in draft_files(root):
+            try:
+                with open(fp, "r", encoding="utf-8") as f:
+                    residual += [(os.path.basename(fp), k) for k in ATKEY_RE.findall(f.read())]
+            except OSError:
+                continue
+        if residual:
+            for fn, k in residual:
+                failures.append(f"上一节残留未翻号新键: [@{k}] in {fn}（先跑 state_manager resolve-keys）")
+            checks.append({"name": "prev_residual_new_key", "ok": False})
+        else:
+            checks.append({"name": "prev_residual_new_key", "ok": True})
+        # A1：上一节 new_refs 并表核验
+        ret_path = os.path.join(root, f".write_return_{prev}.json")
+        if os.path.exists(ret_path):
+            ret = _load_json(ret_path)
+            if ret is None:
+                failures.append(
+                    f"上一节 new_refs 未并表/未核验: {prev} 的 .write_return 损坏，无法核验并表")
+                checks.append({"name": "prev_new_refs_merged", "ok": False, "prev": prev})
+            else:
+                unmerged = [nr.get("key", "") for nr in (ret.get("new_refs") or [])
+                            if _paper_identity(nr) not in verified_idents]
+                if unmerged:
+                    for k in unmerged:
+                        failures.append(f"上一节 new_refs 未并表/未核验: {k}")
+                    checks.append({"name": "prev_new_refs_merged", "ok": False, "prev": prev})
+                else:
+                    checks.append({"name": "prev_new_refs_merged", "ok": True, "prev": prev})
+        else:
+            # 缺 return + 无残留 [@ → 合法（白名单主会话就地写）；有残留已在 A2 拦。
+            checks.append({"name": "prev_new_refs_merged", "ok": True, "prev": prev,
+                           "note": "no .write_return (main-session-wrote); N/A"})
+    else:
+        checks.append({"name": "prev_new_refs_merged", "ok": True, "note": "first section; N/A"})
 
     # ---- check 3: 素材就位（本 section 文献矩阵按层级硬地板，只卡叶子） ----
     # 层级：level = section_id.count('.')+2（`2.1`=三级=3、`2.1.1`=四级=4）。
