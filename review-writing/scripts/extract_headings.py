@@ -30,6 +30,98 @@ ATX_RE = re.compile(r"^(#{1,6})[ \t]+(.+?)[ \t]*#*$")
 # 保守的内容启发式：仅在 docx 无任何样式标题时，作 low-confidence 兜底（编号+短行）。
 NUMBERED_RE = re.compile(r"^\s*\d+(?:[.\-]\d+){0,4}[.、\s]")
 CAPTION_STYLE_RE = re.compile(r"caption|题注|图注|表注", re.IGNORECASE)
+# §10 附带修复：Word 目录条目样式（toc 1/toc2…）挂 outlineLvl，会被反查误当 L1 标题，排除。
+TOC_STYLE_RE = re.compile(r"^toc\s*\d", re.IGNORECASE)
+
+# --- §10 前后置标签识别（标签只是 level:0 + kind 的额外切点，cut_offsets 零改动）---
+LABEL_MAXLEN = 40  # 归一后长度上限（§10 短行约束；exact-match 已隐含更严边界，这是兜底）
+_LABEL_WS_RE = re.compile(r"[\s　]+")
+# 允许前置编号（如"一、致谢"、"5. Acknowledgements"、"(1)"）
+_LEAD_NUM_RE = re.compile(r"^[（(]?[一二三四五六七八九十0-9IVXivx]{0,3}[、.．)）]?")
+
+
+def _norm_label(s):
+    """§10-C0 归一：去首尾空白 → 折叠去全半角空白 → 去尾冒号 → 小写（英文大小写不敏感）。"""
+    s = _LABEL_WS_RE.sub("", s.strip()).rstrip(":：")
+    return s.lower()
+
+
+def _mk_labels(labels):
+    return {_norm_label(x) for x in labels}
+
+
+# B1 摘要类 → front_abstract（切点，取首个）
+FRONT_ABSTRACT_LABELS = _mk_labels([
+    "摘要", "中文摘要", "内容摘要", "Abstract", "Summary"])
+# B3 后置类 → back_matter（切点，位置门后取最早一个）。关键词/分类号类不成切点，不识别。
+BACK_MATTER_LABELS = _mk_labels([
+    "致谢", "致  谢", "谢辞",
+    "Acknowledgement", "Acknowledgements", "Acknowledgment", "Acknowledgments",
+    "基金资助", "资助", "项目资助", "基金", "Funding", "Funding Statement", "Financial Support",
+    "利益冲突", "利益冲突声明", "Conflict of Interest", "Conflicts of Interest",
+    "Competing Interests", "Competing Interest", "Declaration of Interests",
+    "作者贡献", "作者贡献声明", "Author Contributions", "Author Contribution", "CRediT",
+    "数据可用性", "数据可用性声明", "Data Availability", "Data Availability Statement",
+    "补充材料", "支持信息", "Supplementary Material", "Supplementary Materials",
+    "Supporting Information", "Supplementary",
+    "攻读学位期间主要的研究成果", "攻读学位期间发表的论文"])
+
+
+def _match_label(norm, labelset):
+    """整行归一后 == 标签，或去掉前置编号后 == 标签（§10-C1 行首锚定 + 整行≈标签）。"""
+    if norm in labelset:
+        return True
+    stripped = _LEAD_NUM_RE.sub("", norm, count=1)
+    return stripped != norm and stripped in labelset
+
+
+def detect_labels(text, headings):
+    """§10 标签识别 pass —— 把独立成短行的前后置标签识别成 level:0 + kind 特殊 heading。
+
+    防误判三关：① 行首锚定+整行≈标签+短行（_match_label + LABEL_MAXLEN，挡句内含"基金/致谢"词）；
+    ② 后置位置门（back_matter 只在最后一个正文标题之后才算，挡正文"受XX基金资助"）；
+    ③ 不确定不切（不满足→不进切点，交现有行为/LLM/用户）。
+    front_abstract 只取首个（须在首个正文标题前）；back_matter 位置门后只取最早一个。
+    返回新增 heading 列表（含 kind），调用方合并进 headings 并按 char_offset 重排。
+    """
+    real_offsets = {h["char_offset"] for h in headings}
+    body_offs = [h["char_offset"] for h in headings
+                 if not h.get("is_caption") and h.get("level", 0) >= 1 and not h.get("kind")]
+    first_body_off = min(body_offs) if body_offs else None
+    last_body_off = max(body_offs) if body_offs else None
+
+    front = None
+    back_candidates = []
+    pos = 0
+    for line in text.splitlines(keepends=True):
+        off = pos
+        pos += len(line)
+        if off in real_offsets:  # 已是样式/编号真标题，不重复识别
+            continue
+        body = line.rstrip("\n")
+        norm = _norm_label(body)
+        if not norm or len(norm) > LABEL_MAXLEN:
+            continue
+        if _match_label(norm, FRONT_ABSTRACT_LABELS):
+            # 前置门：须在首个正文标题之前（或全文无正文标题）
+            if front is None and (first_body_off is None or off < first_body_off):
+                front = {"text": body, "level": 0, "char_offset": off,
+                         "style_id": "label:front_abstract", "is_caption": False,
+                         "confidence": "high", "kind": "front_abstract"}
+        elif _match_label(norm, BACK_MATTER_LABELS):
+            # 后置位置门：须在最后一个正文标题之后（挡正文中部"受XX基金资助"）
+            if last_body_off is not None and off > last_body_off:
+                back_candidates.append((off, body))
+
+    result = []
+    if front is not None:
+        result.append(front)
+    if back_candidates:
+        off, body = min(back_candidates)  # 只取最早一个作切点，其余不切（已在后置块内）
+        result.append({"text": body, "level": 0, "char_offset": off,
+                       "style_id": "label:back_matter", "is_caption": False,
+                       "confidence": "high", "kind": "back_matter"})
+    return result
 
 
 def _die(code, msg):
@@ -71,7 +163,10 @@ def extract_markdown(src_path):
             pos += len(body)
         out.append(nl)
         pos += len(nl)
-    return "".join(out), headings
+    text = "".join(out)
+    headings = sorted(headings + detect_labels(text, headings),
+                      key=lambda h: h["char_offset"])
+    return text, headings
 
 
 # ---------------------------------------------------------------------------
@@ -138,10 +233,14 @@ def extract_docx(src_path):
         style = p.style
         sname = (getattr(style, "name", None) or "")
         sid = getattr(style, "style_id", None)
-        level = _level_from_style_chain(style)
-        if level is None:
-            level = outline_map.get(sid) or outline_map.get(sname)
-        is_caption = bool(CAPTION_STYLE_RE.search(sname))
+        if TOC_STYLE_RE.match(sid or "") or TOC_STYLE_RE.match(sname or ""):
+            # §10 附带修复：目录条目样式带 outlineLvl / basedOn Heading，不当标题
+            level, is_caption = None, False
+        else:
+            level = _level_from_style_chain(style)
+            if level is None:
+                level = outline_map.get(sid) or outline_map.get(sname)
+            is_caption = bool(CAPTION_STYLE_RE.search(sname))
         stripped = text.strip()
         if stripped:
             if is_caption:
@@ -156,7 +255,10 @@ def extract_docx(src_path):
         pos += len(text)
         out.append("\n")
         pos += 1
-    return "".join(out), headings
+    full = "".join(out)
+    headings = sorted(headings + detect_labels(full, headings),
+                      key=lambda h: h["char_offset"])
+    return full, headings
 
 
 # ---------------------------------------------------------------------------
