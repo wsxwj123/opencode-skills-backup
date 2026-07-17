@@ -185,6 +185,8 @@ python3 scripts/split_headings.py --text tmp/draft_import.md --headings tmp/head
 ```
 Slices `text[o_i:o_{i+1}]` byte-for-byte; captions (`is_caption`) ride inside their region, not split out. Exit 0 success / 1 IO / 2 usage·headings-empty·offset-out-of-range. Main session only sees "exit 0, wrote N files" — no draft content enters context.
 
+**§10 前后置标签块（extract_headings 自动附加，此处零改动）:** extract_headings 会把独立成短行的前置摘要标签（`摘要`/`Abstract`…）和后置标签（`致谢`/`基金`/`Author Contributions`…）识别成 `level:0 + kind` 的特殊 heading，成为额外切点。于是 split_headings 自然多产两块 atom：前置摘要块 `section_00b_abstract.md`（摘要+关键词+图形摘要，`kind=front_abstract`）、后置块 `section_zz_backmatter.md`（致谢起至文末合成一块，`kind=back_matter`）；标题+作者+机构仍走 §9 前导 `section_00_frontmatter.md`。防误判三关（行首锚定+整行≈标签+短行、后置位置门仅参考文献之后、不确定不切）与 `^toc\d` 目录条目排除都在 extract_headings 内做，cut_offsets/has_preamble/split_audit 均不感知 kind。无摘要/无后置标签时退化为现有行为。
+
 **2.3 No-heading path — LLM split subagent** (only when `trusted==false`): dispatch a subagent per `references/split_subagent_prompt.md` (role = pure partition by semantic boundary, byte-for-byte copy, NO rewrite/citation-conversion). It returns atom files + `tmp/split_manifest.json` + a back-filled `tmp/heading_manifest.json` (its own cut offsets, `confidence:"low"`, `style_id:"llm"`). Source is given as a path (it self-Reads); the subagent prompt MUST embed the《数据与指令隔离声明》.
 
 **2.4 Layer 1 — deterministic `split_audit.py` (always run after either path):**
