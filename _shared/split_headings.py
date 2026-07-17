@@ -102,6 +102,12 @@ def main(argv=None):
         _die(2, "no cut points at split-to-level=%d" % args.split_to_level)
 
     cuts = [h["char_offset"] for h in cut_headings]
+    # F-1：首个切点之前的正文（摘要/关键词/无编号引言）不落入任何 atom。机械切从 cuts[0]
+    # 起 tile 会静默丢弃它。以不丢内容为准 → 硬报错交主会话处理（split_audit 同守卫也会拦
+    # 假绿）；不静默纳入前导段做 atom，因 split_audit 按标题切点比对会把它判为多余区间。
+    if cuts and cuts[0] > 0 and text[:cuts[0]].strip():
+        _die(2, "preamble_dropped: 首标题前有 %d 字正文，机械切会丢弃；主会话须先处理前导段: %s"
+             % (len(text[:cuts[0]].strip()), text[:cuts[0]].strip()[:80]))
     bounds = cuts + [tlen]
     captions = [h for h in headings if h.get("is_caption")]
 
