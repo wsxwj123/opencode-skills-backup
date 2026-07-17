@@ -18,6 +18,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from reference_renderer import citation_sort_key  # 单一排序真源，禁止复制逻辑
+from state_manager import safe_json_dump, safe_text_dump  # 原子写(tempfile+fsync+os.replace)，禁止裸 open+dump
 
 KEY_RE = re.compile(r"\[@([A-Za-z0-9:_\-]+)\]")          # 合法引用键
 ANY_AT_RE = re.compile(r"\[@([^\]]*)\]")                 # 任意 [@...]（含畸形），用于查畸形键
@@ -75,7 +76,12 @@ def next_ref_id(entries):
 
 
 def find_existing(entry_new, entries):
-    """按 DOI 精确 → PMID 精确 → 归一标题 与现有条目比对，命中返回其 id，否则 None。"""
+    """按 DOI 精确 → PMID 精确 → 归一标题 与现有条目比对，命中返回其 id，否则 None。
+
+    标题兜底只在"标识符不冲突"时才认命中：新条目与候选条目**都带 DOI 但不同**（或都带
+    PMID 但不同）→ 是两篇不同文献（预印本 vs 正式版、原文 vs 勘误常见此形），禁止用同标题
+    错并成一个编号。到达标题环时 DOI/PMID 精确均已落空，故双方都有的标识符必然是"冲突"值。
+    """
     nd = norm_doi(entry_new.get("doi"))
     np_ = norm_pmid(entry_new.get("pmid"))
     nt = norm_title(entry_new.get("title"))
@@ -86,8 +92,15 @@ def find_existing(entry_new, entries):
         if np_ and norm_pmid(e.get("pmid")) == np_:
             return e.get("id")
     for e in entries:
-        if nt and norm_title(e.get("title")) == nt:
-            return e.get("id")
+        if not (nt and norm_title(e.get("title")) == nt):
+            continue
+        ed = norm_doi(e.get("doi"))
+        ep = norm_pmid(e.get("pmid"))
+        if nd and ed and nd != ed:      # DOI 冲突 → 不同文献
+            continue
+        if np_ and ep and np_ != ep:    # PMID 冲突 → 不同文献
+            continue
+        return e.get("id")
     return None
 
 
@@ -151,25 +164,31 @@ def cmd_merge_refs(args):
             merged += 1
             resolved_ids.append(new_id)
 
-    # 落库 literature_index（主会话单写）
+    # 冲突拦在任何落盘之前：同一 new:slug 跨节指向不同真 id 属歧义（会串号），
+    # 必须拒绝而非静默覆盖映射。先读旧映射比对，通过后才原子写，避免脏账本。
+    map_path = os.path.join(root, ".newref_map.json")
+    keymap = {}
+    if os.path.isfile(map_path):
+        try:
+            keymap = load_json(map_path)
+        except Exception:
+            keymap = {}
+    if not isinstance(keymap, dict):
+        keymap = {}
+    for k, v in mapping.items():
+        if k in keymap and keymap[k] != v:
+            die("id 冲突: %s（slug 已映射到 %s，本次却指向 %s）" % (k, keymap[k], v))
+
+    # 落库 literature_index（主会话单写，原子）
     try:
-        with open(index_path, "w", encoding="utf-8") as f:
-            json.dump(entries, f, ensure_ascii=False, indent=2)
+        safe_json_dump(index_path, entries)
     except Exception as e:
         die("literature_index 写入失败: %s" % e)
 
-    # 持久化 new:slug→真id 映射，供 renumber 解析
+    # 持久化 new:slug→真id 映射，供 renumber 解析（原子写）
     if mapping:
-        map_path = os.path.join(root, ".newref_map.json")
-        keymap = {}
-        if os.path.isfile(map_path):
-            try:
-                keymap = load_json(map_path)
-            except Exception:
-                keymap = {}
         keymap.update(mapping)
-        with open(map_path, "w", encoding="utf-8") as f:
-            json.dump(keymap, f, ensure_ascii=False, indent=2)
+        safe_json_dump(map_path, keymap)
 
     # upsert chapter_matrix（行键 (id, section_id)，幂等）
     if resolved_ids and section_id:
@@ -205,8 +224,7 @@ def _upsert_chapter_matrix(root, ids, section_id, entries):
             "verified": e.get("verified", True),
         })
         existing.add((rid, section_id))
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(rows, f, ensure_ascii=False, indent=2)
+    safe_json_dump(path, rows)
 
 
 # ---------------------------------------------------------------------------
@@ -249,7 +267,8 @@ def cmd_renumber(args):
     file_texts = {}
     cited_keys = []
     for path in md_files:
-        text = open(path, encoding="utf-8").read()
+        with open(path, encoding="utf-8") as f:
+            text = f.read()
         file_texts[path] = text
         for m in ANY_AT_RE.finditer(text):
             raw = m.group(0)
@@ -267,6 +286,10 @@ def cmd_renumber(args):
             rid = keymap.get(key)
             if not rid:
                 fail("未知引用键: %s（先 merge-refs 再翻号）" % key)
+            # stale 映射：new:slug 指向 literature_index 里不存在的 id（条目被删/账本回退），
+            # 若不拦，下游 id_to_num[rid] 会 KeyError 崩栈而非按契约 exit 2。
+            if rid not in id_count:
+                fail("未知引用键: %s（先 merge-refs 再翻号）" % key)
         else:
             if key not in id_count:
                 fail("未知引用键: %s（先 merge-refs 再翻号）" % key)
@@ -275,7 +298,11 @@ def cmd_renumber(args):
             fail("id 冲突: %s" % rid)
         key_to_id[key] = rid
 
-    # 编号：按 citation_sort_key 对全部 index 条目排序，第 N 条→[N]
+    # 编号：按 citation_sort_key 对**全部** index 条目全局排序，第 N 条→[N]。
+    # 【问题5判定：全局，非分章】sci2doc 最终参考文献表统一在全文末尾（SKILL.md:673
+    # "参考文献统一在全文末尾"、:442 全文总量 references_min_count≥80 为全文硬门），因此正文
+    # [N] 必须是全局位次。--chapter 仅用来定位待改写的 atomic_md 章目录，**绝不**参与编号过滤；
+    # 严禁在此按 --chapter 过滤 entries（那会得到章内位次，与全局参考文献表错位）。
     ordered = sorted(entries, key=citation_sort_key)
     id_to_num = {}
     for i, e in enumerate(ordered, start=1):
@@ -299,12 +326,10 @@ def cmd_renumber(args):
         new_text, n = KEY_RE.subn(repl, text)
         renumbered += n
         if args.in_place:
-            with open(path, "w", encoding="utf-8") as f:
-                f.write(new_text)
+            safe_text_dump(path, new_text)          # 原子写，写一半崩溃不毁原子 md 源
         else:
             os.makedirs(out_dir, exist_ok=True)
-            with open(os.path.join(out_dir, os.path.basename(path)), "w", encoding="utf-8") as f:
-                f.write(new_text)
+            safe_text_dump(os.path.join(out_dir, os.path.basename(path)), new_text)
 
     print(json.dumps({"ok": True, "chapter": chapter, "renumbered": renumbered,
                       "mapping": mapping}, ensure_ascii=False))
