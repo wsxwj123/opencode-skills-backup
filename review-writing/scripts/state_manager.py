@@ -975,6 +975,128 @@ def reindex_literature_by_section(
     )
 
 
+# [@key] 认键正则：撰写子代理正文只写 [@key]（key=gid 数字 或 new:<slug>），绝不写裸数字。
+# 主会话在 reindex 前跑一趟 resolve-keys，把 [@key] 翻回 [N]（N=gid），再交给现有 reindex/
+# check_global_citation_sequence（它们认数字 [N]）。不新建翻号器——只做 [@key]→[gid] 这一层解析。
+_ATKEY_RE = re.compile(r"\[@([A-Za-z0-9:_\-]+)\]")
+
+
+def _build_slug_gid_map(returns_dir, index_rows):
+    """从 .write_return_*.json 的 new_refs + 已并表的 literature_index 建 new:slug → gid 映射。
+
+    撰写子代理返回的 new_ref = {key:"new:slug", doi/pmid/title}。主会话核验后经 append-literature
+    并表进 index（按 DOI 去重、分配 global_id）。这里按 _paper_identity（doi→pmid→title）把 slug
+    的身份匹配回 index 条目的 global_id。找不到=该新引用尚未并表/未核验 → 调用方按 unresolved 处理。
+    """
+    ident_to_gid = {}
+    for e in index_rows:
+        if not isinstance(e, dict):
+            continue
+        gid = e.get("global_id")
+        ident = _paper_identity(e)
+        if isinstance(gid, int) and gid > 0 and ident:
+            ident_to_gid.setdefault(ident, gid)
+    slug_to_gid = {}
+    d = Path(returns_dir)
+    if not d.exists():
+        return slug_to_gid
+    for rp in sorted(d.glob(".write_return_*.json")):
+        ret = _read_json_file(str(rp))
+        if not isinstance(ret, dict):
+            continue
+        for nr in ret.get("new_refs") or []:
+            if not isinstance(nr, dict):
+                continue
+            key = nr.get("key", "")
+            if not (isinstance(key, str) and key.startswith("new:")):
+                continue
+            ident = _paper_identity(nr)
+            gid = ident_to_gid.get(ident) if ident else None
+            if gid is not None:
+                slug_to_gid[key] = gid
+    return slug_to_gid
+
+
+def resolve_keys(drafts_dir="drafts", index_path="data/literature_index.json",
+                 returns_dir=".", check_only=False):
+    """把 drafts 里撰写子代理写的 [@key] 翻成 [gid]，供后续 reindex/序列门禁认数字。
+
+    - [@<int>]  → 该 gid 必须存在于 literature_index（已 verified 优先，缺 verified 字段视为 True）；
+    - [@new:slug] → 必须已由 _build_slug_gid_map 解析到并表后的 gid；
+    - 任一 [@key] 无法解析 → 打印 + exit 2（不写半截草稿），无论是否 --check。
+    - --check：只校验不改文件（章末合并前的机械终检口，配合 check_global_citation_sequence）。
+
+    退出码：0=全部解析（已写回/或 --check 通过）；2=有未解析键 / index 缺失或畸形。
+    """
+    if not os.path.exists(index_path):
+        print(f"RESOLVE_KEYS: FAIL literature_index 缺失: {index_path}")
+        raise SystemExit(2)
+    index_rows = _read_json_file(index_path)
+    if not isinstance(index_rows, list):
+        print("RESOLVE_KEYS: FAIL literature_index 缺失或非数组")
+        raise SystemExit(2)
+
+    valid_gids = {e.get("global_id") for e in index_rows
+                  if isinstance(e, dict) and isinstance(e.get("global_id"), int)
+                  and e.get("verified", True)}
+    slug_to_gid = _build_slug_gid_map(returns_dir, index_rows)
+
+    ddir = Path(drafts_dir)
+    if not ddir.exists():
+        print(f"RESOLVE_KEYS: OK no drafts dir ({drafts_dir}); nothing to resolve")
+        return 0
+
+    unresolved = []
+    updates = {}
+    total_keys = 0
+
+    def _repl_factory(md_path):
+        def repl(m):
+            nonlocal total_keys
+            key = m.group(1)
+            total_keys += 1
+            if key.startswith("new:"):
+                gid = slug_to_gid.get(key)
+                if gid is None:
+                    unresolved.append((md_path.name, key, "未并表/未核验 new: 键"))
+                    return m.group(0)
+                return f"[{gid}]"
+            # 数字键
+            if re.fullmatch(r"\d+", key):
+                gid = int(key)
+                if gid in valid_gids:
+                    return f"[{gid}]"
+                unresolved.append((md_path.name, key, "gid 不在 literature_index（或未 verified）"))
+                return m.group(0)
+            unresolved.append((md_path.name, key, "畸形引用键"))
+            return m.group(0)
+        return repl
+
+    for md in sorted(ddir.glob("**/*.md")):
+        try:
+            text = md.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        new_text = _ATKEY_RE.sub(_repl_factory(md), text)
+        if new_text != text:
+            updates[md] = new_text
+
+    if unresolved:
+        for fn, key, why in unresolved:
+            print(f"RESOLVE_KEYS: FAIL 未知引用键: [@{key}] in {fn}（{why}；先核验+append-literature 并表再翻号）")
+        raise SystemExit(2)
+
+    if check_only:
+        print(f"RESOLVE_KEYS: PASS --check（{total_keys} 个 [@key] 全部可解析，未写文件）")
+        return 0
+
+    with _state_lock():
+        for md, content in updates.items():
+            _atomic_write_text(md, content)
+    print(f"RESOLVE_KEYS: OK resolved {total_keys} [@key] → [gid] in {len(updates)} draft file(s)")
+    return 0
+
+
 @contextmanager
 def _state_lock(timeout=20):
     lock_path = Path("logs") / ".state_manager.lock"
@@ -1377,6 +1499,9 @@ def append_literature(section, papers_path, index_path="data/literature_index.js
         p.setdefault("source_provider", source_provider)
         p.setdefault("source_id", p.get("pmid") or p.get("doi") or "")
         p.setdefault("verified", False)
+        # 文章类型（决策15）：入表即带字段，默认 unknown；真值由 citation_guard --write-back
+        # 从 PubMed pubtype 优先级解析回填（G0c）。缺字段=unknown，下游机械纪律只 warning 不拦。
+        p.setdefault("article_type", "unknown")
         exist.append(p)
         if doi:
             known_dois.add(doi)
@@ -1552,6 +1677,19 @@ def main():
         help="Allow apply even when dedup conflicts are detected",
     )
 
+    resolvekeys_parser = subparsers.add_parser(
+        "resolve-keys",
+        help="撰写子代理写的 [@key] → [gid]（reindex 前跑一趟；不新建翻号器，只解析认键层）",
+    )
+    resolvekeys_parser.add_argument("--drafts-dir", default="drafts", help="Draft directory")
+    resolvekeys_parser.add_argument("--index", default="data/literature_index.json", help="Literature index path")
+    resolvekeys_parser.add_argument(
+        "--returns-dir", default=".",
+        help="撰写子代理返回 .write_return_*.json 所在目录（解析 new:slug→gid），默认项目根")
+    resolvekeys_parser.add_argument(
+        "--check", action="store_true",
+        help="只校验不改文件（章末合并前机械终检；有未解析键 exit 2）")
+
     args = parser.parse_args()
 
     if args.command == "load":
@@ -1593,6 +1731,13 @@ def main():
             conflict_threshold=args.conflict_threshold,
             allow_conflicts=args.allow_conflicts,
         )
+    elif args.command == "resolve-keys":
+        sys.exit(resolve_keys(
+            drafts_dir=args.drafts_dir,
+            index_path=args.index,
+            returns_dir=args.returns_dir,
+            check_only=args.check,
+        ))
     elif args.command == "check-pending":
         check_pending(state_path=args.state)
     elif args.command == "count-citations":

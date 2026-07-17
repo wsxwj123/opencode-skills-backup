@@ -1837,6 +1837,108 @@ def rewrite_citations_in_text(text, old_to_new):
     new_text = pattern.sub(repl, text)
     return new_text, changed
 
+
+# ── 認键翻号：撰写子代理写的 [@key] → gsw 数字 [n]（编排推广批 §2 认键） ──────────
+# 撰写子代理只写稳定键 [@key]（key=literature_index 的 id/等价稳定 id，或 [@new:slug]）。
+# 主会话在 postwrite --sync-literature 前跑一趟 resolve-keys 把 [@key]→[n]（用文献条目
+# 当前编号），随后现有 dedup+sync 做全局去重重编号。new:slug 经 .newref_map.json（主会话
+# 并表时落，slug→已并表条目 id）二跳解析。未知键 → exit 1（翻号失败，fail-closed）。
+AT_KEY_RE = re.compile(r"\[@([A-Za-z0-9:_\-]+)\]")
+
+
+def build_key_to_number_map(entries):
+    """把每个条目的所有稳定标识（id/ref_id/source_id/citation_key/数字号）→ 当前编号。"""
+    keymap = {}
+    for idx, e in enumerate(entries, start=1):
+        if not isinstance(e, dict):
+            continue
+        num = e.get("citation_number") or e.get("current_number") or e.get("number") or idx
+        try:
+            num = int(num)
+        except (TypeError, ValueError):
+            num = idx
+        for field in ("id", "ref_id", "source_id", "citation_key"):
+            val = e.get(field)
+            if val:
+                keymap.setdefault(str(val), num)
+        keymap.setdefault(str(num), num)  # 允许 [@1] 直解
+    return keymap
+
+
+def resolve_citation_keys(text, entries, newref_map):
+    """[@key]→[n]。返回 (new_text, unresolved_keys)。newref_map: slug→已并表条目 id。"""
+    keymap = build_key_to_number_map(entries)
+    unresolved = []
+
+    def repl(match):
+        key = match.group(1)
+        num = keymap.get(key)
+        if num is None and key in newref_map:
+            num = keymap.get(str(newref_map[key]))
+        if num is None:
+            unresolved.append(key)
+            return match.group(0)
+        return f"[{num}]"
+
+    return AT_KEY_RE.sub(repl, text), unresolved
+
+
+def cmd_resolve_keys(file_path, root, in_place=False, check=False, newref_map_path=None):
+    """CLI 入口：exit 0=OK；1=翻号失败（未知键）；2=用法/文件/JSON 畸形。"""
+    if not os.path.isfile(file_path):
+        sys.stderr.write(f"RESOLVE_KEYS: FAIL 文件不存在: {file_path}\n")
+        return 2
+    lit_path = os.path.join(root, "literature_index.json")
+    try:
+        with open(lit_path, "r", encoding="utf-8") as f:
+            entries = json.load(f)
+    except FileNotFoundError:
+        sys.stderr.write("RESOLVE_KEYS: FAIL literature_index 缺失或非数组\n")
+        return 2
+    except (json.JSONDecodeError, OSError):
+        sys.stderr.write("RESOLVE_KEYS: FAIL literature_index JSON 畸形\n")
+        return 2
+    if not isinstance(entries, list):
+        sys.stderr.write("RESOLVE_KEYS: FAIL literature_index 缺失或非数组\n")
+        return 2
+
+    nm_path = newref_map_path or os.path.join(root, ".newref_map.json")
+    newref_map = {}
+    if os.path.isfile(nm_path):
+        try:
+            with open(nm_path, "r", encoding="utf-8") as f:
+                loaded = json.load(f)
+            if isinstance(loaded, dict):
+                newref_map = loaded
+        except (json.JSONDecodeError, OSError):
+            sys.stderr.write("RESOLVE_KEYS: FAIL .newref_map.json JSON 畸形\n")
+            return 2
+
+    with open(file_path, "r", encoding="utf-8") as f:
+        text = f.read()
+    new_text, unresolved = resolve_citation_keys(text, entries, newref_map)
+
+    if unresolved:
+        for k in unresolved:
+            sys.stderr.write(f"RESOLVE_KEYS: FAIL 未知引用键（先 merge-refs/并表再翻号）: {k}\n")
+        print(json.dumps({"ok": False, "unresolved": sorted(set(unresolved))}, ensure_ascii=False))
+        return 1
+
+    resolved = len(AT_KEY_RE.findall(text))
+    if check:
+        print(json.dumps({"ok": True, "file": file_path, "resolved": resolved, "wrote": False},
+                         ensure_ascii=False))
+        return 0
+    if in_place:
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write(new_text)
+        print(json.dumps({"ok": True, "file": file_path, "resolved": resolved, "wrote": True},
+                         ensure_ascii=False))
+    else:
+        sys.stdout.write(new_text)
+    return 0
+
+
 def rewrite_reference_sections(
     text,
     old_to_new,
@@ -3582,6 +3684,14 @@ def main():
     sync_lit_parser.add_argument("--rewrite-docx", action="store_true", help="Also rewrite docx citation markers (md-only by default)")
     sync_lit_parser.add_argument("--no-backup", action="store_true", help="Skip pre-sync backup (not recommended)")
 
+    # Resolve [@key] → [n]（撰写编排认键：sync-literature 前跑一趟）
+    resolve_parser = subparsers.add_parser("resolve-keys", help="Rewrite subagent [@key] citations to gsw [n] before sync")
+    resolve_parser.add_argument("--file", required=True, help="Manuscript markdown file to rewrite")
+    resolve_parser.add_argument("--root", default=".", help="Project root (holds literature_index.json / .newref_map.json)")
+    resolve_parser.add_argument("--in-place", action="store_true", help="Overwrite the file (default: print to stdout)")
+    resolve_parser.add_argument("--check", action="store_true", help="Only validate keys resolve, do not write")
+    resolve_parser.add_argument("--newref-map", default=None, help="slug→id map path (default <root>/.newref_map.json)")
+
     # Gate check command
     gate_parser = subparsers.add_parser("gate-check", help="Hard gate check before writing/completing")
     gate_parser.add_argument("--section", required=True, help="Section id")
@@ -3758,6 +3868,14 @@ def main():
             require_matrix_reindex=(not args.no_require_matrix_reindex),
             confirm_refs=args.refs_confirmed
         )
+    elif args.command == "resolve-keys":
+        sys.exit(cmd_resolve_keys(
+            file_path=args.file,
+            root=args.root,
+            in_place=args.in_place,
+            check=args.check,
+            newref_map_path=args.newref_map,
+        ))
     elif args.command == "snapshot":
         backup_project_state()
     elif args.command == "rollback":

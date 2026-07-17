@@ -28,10 +28,13 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 
 PLACEHOLDER_TOKENS = ("CITE_PENDING", "DATA_PENDING", "【待")
+# 残留未映射新引用键：[@new:slug]（主会话并表后进 .newref_map.json；未在其中 = 未映射）
+NEW_KEY_RE = re.compile(r"\[@(new:[A-Za-z0-9:_\-]+)\]")
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # 按 section 角色的软文献门：只有 Intro / Discussion 设低地板，其余（Methods /
@@ -157,6 +160,11 @@ def manuscript_files_for_section(root, section):
              if f.endswith(".md") and f != "Full_Manuscript.md"
              and not f.startswith("Draft_Round")]
     return sorted(files)
+
+
+def _load_newref_map(root):
+    m = _load_json(os.path.join(root, ".newref_map.json"))
+    return m if isinstance(m, dict) else {}
 
 
 def scan_placeholders(files):
@@ -304,6 +312,64 @@ def main():
                 checks.append({"name": "literature_role", "ok": True, "role": role, "count": n, "hard": hard})
                 if n < soft:
                     warnings.append(f"{role} literature count {n} < soft target {soft} (info only)")
+
+    # ---- check（§4.1-A 新增）：上一节 new_refs 已并表核验 + 全稿无残留未映射新键 ----
+    # 撰写子代理写 [@new:slug]，主会话并表后把 slug→已并表 id 落 .newref_map.json。忘并表/
+    # 忘核验 → exit≠0（硬要求10 节边界机械兜底）。prev 按 storyline 顺序取（gsw 无 chapter.sub
+    # 算术）；gsw manuscript 文件名不绑 section_id，故 A2 残留扫描对全部 manuscripts/*.md 做
+    # （"任何残留未映射新键 = 有节忘并表"，保守 fail-closed，不漏）。
+    if order and section in order and order.index(section) > 0:
+        prev = order[order.index(section) - 1]
+        keymap = _load_newref_map(root)
+        lit = _load_json(os.path.join(root, "literature_index.json"))
+        verified_ids = ({str(e.get("id")) for e in lit
+                         if isinstance(e, dict) and e.get("id") and e.get("verified", True)}
+                        if isinstance(lit, list) else set())
+        all_md = manuscript_files_for_section(root, section)
+        # A2 先扫全稿残留未映射 [@new: 键（用于判定 A1 缺失是否致命）。
+        residual = []
+        for fp in all_md:
+            try:
+                with open(fp, "r", encoding="utf-8") as f:
+                    residual += [k for k in NEW_KEY_RE.findall(f.read()) if k not in keymap]
+            except OSError:
+                continue
+        # A1：上一节 .write_return 的 new_refs 每条都并表到 verified 文献。
+        #  - 坏 JSON → 账本损坏，一律 FAIL。
+        #  - 文件缺失 + 全稿确有未映射新键 → 无从审计 → FAIL；否则（白名单节主会话就地写、
+        #    天然无 return）合法缺失，放行。
+        ret_path = os.path.join(root, f".write_return_{prev}.json")
+        unmerged, ret_broken = [], False
+        if os.path.exists(ret_path):
+            ret = _load_json(ret_path)
+            if ret is None:
+                ret_broken = True
+            elif isinstance(ret, dict):
+                for nr in (ret.get("new_refs") or []):
+                    key = nr.get("key", "")
+                    resolved = keymap.get(key)
+                    if not resolved or str(resolved) not in verified_ids:
+                        unmerged.append(key)
+        elif residual:
+            ret_broken = True
+        if ret_broken:
+            failures.append(
+                f"上一节 new_refs 未并表/未核验: {prev} 的 .write_return 缺失或损坏，无法核验并表")
+            checks.append({"name": "prev_new_refs_merged", "ok": False, "prev": prev})
+        elif unmerged:
+            for k in unmerged:
+                failures.append(f"上一节 new_refs 未并表/未核验: {k}")
+            checks.append({"name": "prev_new_refs_merged", "ok": False, "prev": prev})
+        else:
+            checks.append({"name": "prev_new_refs_merged", "ok": True, "prev": prev})
+        if residual:
+            for k in sorted(set(residual)):
+                failures.append(f"上一节残留未并表新键: {k}")
+            checks.append({"name": "prev_residual_new_key", "ok": False})
+        else:
+            checks.append({"name": "prev_residual_new_key", "ok": True})
+    else:
+        checks.append({"name": "prev_new_refs_merged", "ok": True, "note": "first section; N/A"})
 
     ok = not failures
     print(json.dumps({"ok": ok, "section": section, "checks": checks,
