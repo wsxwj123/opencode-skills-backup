@@ -65,6 +65,10 @@ BACK_MATTER_LABELS = _mk_labels([
     "补充材料", "支持信息", "Supplementary Material", "Supplementary Materials",
     "Supporting Information", "Supplementary",
     "攻读学位期间主要的研究成果", "攻读学位期间发表的论文"])
+# §11 R1 参考文献锚点：back_matter 本是参考文献之后的块，无此锚点则后置标签不自动成切点。
+REFERENCES_LABELS = _mk_labels([
+    "参考文献", "参考书目", "引用文献",
+    "References", "Reference", "Bibliography", "Works Cited", "Literature Cited"])
 
 
 def _match_label(norm, labelset):
@@ -82,6 +86,11 @@ def detect_labels(text, headings):
     ② 后置位置门（back_matter 只在最后一个正文标题之后才算，挡正文"受XX基金资助"）；
     ③ 不确定不切（不满足→不进切点，交现有行为/LLM/用户）。
     front_abstract 只取首个（须在首个正文标题前）；back_matter 位置门后只取最早一个。
+    §11 后置门加硬（confidence 决定是否成切点，消费方 cut_points 判据=非图注且 confidence!='low'）：
+      R1 back_matter 成 high 切点须其前存在参考文献锚点（REFERENCES_LABELS 标题/标签），
+         否则标 confidence='low'（保留 heading 供 §2 路由/LLM 核验，但不进 cut_points）。
+      R2 front_abstract 成 high 切点须其后存在正文标题（body_offs 非空——含编号标题/参考文献），
+         否则 'low'——避免"仅一行摘要"把 headless 稿翻成有标题路。
     返回新增 heading 列表（含 kind），调用方合并进 headings 并按 char_offset 重排。
     """
     real_offsets = {h["char_offset"] for h in headings}
@@ -89,6 +98,12 @@ def detect_labels(text, headings):
                  if not h.get("is_caption") and h.get("level", 0) >= 1 and not h.get("kind")]
     first_body_off = min(body_offs) if body_offs else None
     last_body_off = max(body_offs) if body_offs else None
+
+    def _ref_anchor_before(target_off):
+        # R1：target 之前是否存在参考文献类真标题（非图注、非 kind 标签）
+        return any(not h.get("is_caption") and h.get("char_offset", 0) < target_off
+                   and _match_label(_norm_label(h.get("text", "")), REFERENCES_LABELS)
+                   for h in headings)
 
     front = None
     back_candidates = []
@@ -98,16 +113,18 @@ def detect_labels(text, headings):
         pos += len(line)
         if off in real_offsets:  # 已是样式/编号真标题，不重复识别
             continue
-        body = line.rstrip("\n")
+        body = line.rstrip("\r\n")
         norm = _norm_label(body)
         if not norm or len(norm) > LABEL_MAXLEN:
             continue
         if _match_label(norm, FRONT_ABSTRACT_LABELS):
             # 前置门：须在首个正文标题之前（或全文无正文标题）
             if front is None and (first_body_off is None or off < first_body_off):
+                # R2：其后须存在正文标题才成 high 切点；否则 low（不翻路由）。front 恒在首个 body 之前，故 body_offs 非空即等价"其后有正文标题"。
+                conf = "high" if body_offs else "low"
                 front = {"text": body, "level": 0, "char_offset": off,
                          "style_id": "label:front_abstract", "is_caption": False,
-                         "confidence": "high", "kind": "front_abstract"}
+                         "confidence": conf, "kind": "front_abstract"}
         elif _match_label(norm, BACK_MATTER_LABELS):
             # 后置位置门：须在最后一个正文标题之后（挡正文中部"受XX基金资助"）
             if last_body_off is not None and off > last_body_off:
@@ -118,9 +135,11 @@ def detect_labels(text, headings):
         result.append(front)
     if back_candidates:
         off, body = min(back_candidates)  # 只取最早一个作切点，其余不切（已在后置块内）
+        # R1：其前须存在参考文献锚点才成 high 切点；否则 low（不静默切正文尾段，交 LLM/用户）。
+        conf = "high" if _ref_anchor_before(off) else "low"
         result.append({"text": body, "level": 0, "char_offset": off,
                        "style_id": "label:back_matter", "is_caption": False,
-                       "confidence": "high", "kind": "back_matter"})
+                       "confidence": conf, "kind": "back_matter"})
     return result
 
 
@@ -143,7 +162,7 @@ def extract_markdown(src_path):
     headings = []
     pos = 0
     for line in raw.splitlines(keepends=True):
-        body = line.rstrip("\n")
+        body = line.rstrip("\r\n")  # S3：CRLF 源标题残留 \r 一并剥除
         nl = line[len(body):]
         m = ATX_RE.match(body)
         if m:

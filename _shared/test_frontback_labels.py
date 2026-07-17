@@ -38,6 +38,15 @@ def kinds(text):
             for l in detect_labels(t, hd)]
 
 
+def conf_of(text, kind):
+    """返回该 kind 标签的 confidence（无则 None）。R1/R2 契约判据用。"""
+    t, hd = _mk(text)
+    for l in detect_labels(t, hd):
+        if l["kind"] == kind:
+            return l["confidence"]
+    return None
+
+
 class TestNorm(unittest.TestCase):
     def test_fullwidth_and_colon_stripped(self):
         self.assertEqual(_norm_label("摘 要"), "摘要")       # 半角空格去掉
@@ -81,6 +90,40 @@ class TestGates(unittest.TestCase):
 
     def test_no_labels_no_cuts(self):
         self.assertEqual(kinds("# 1 引言\n正文\n# 2 方法\n方法"), [])
+
+
+class TestR1R2Confidence(unittest.TestCase):
+    """§11 后置门加硬：confidence 决定是否成切点（消费方判据=非图注且 confidence!='low'）。"""
+
+    def test_r1_back_matter_with_references_is_high(self):
+        # 有参考文献锚点在前 → back_matter high（进 cut_points）
+        self.assertEqual(
+            conf_of("# 1 引言\n正文\n# 参考文献\nrefs\n致谢\n谢词", "back_matter"), "high")
+
+    def test_r1_back_matter_without_references_is_low(self):
+        # 末标题后独立短行"资助"、但全篇无参考文献锚点 → low（不进 cut_points）
+        self.assertEqual(
+            conf_of("# 1 引言\n正文\n# 2 结论\n结论\n资助\n资助说明", "back_matter"), "low")
+
+    def test_r2_front_abstract_with_following_body_heading_is_high(self):
+        # 摘要之后有正文标题 → front_abstract high
+        self.assertEqual(
+            conf_of("摘要\n摘要正文\n# 1 引言\n正文", "front_abstract"), "high")
+
+    def test_r2_front_abstract_references_counts_as_body_heading(self):
+        # 摘要之后只有"参考文献"这一真标题也算"其后有正文标题" → high
+        self.assertEqual(
+            conf_of("摘要\n摘要正文\n# 参考文献\nrefs", "front_abstract"), "high")
+
+    def test_r2_lonely_front_abstract_without_following_heading_is_low(self):
+        # 仅摘要标签 + 纯散文、其后无任何正文标题 → low（不翻路由为有标题路）
+        self.assertEqual(
+            conf_of("摘要\n本文纯散文无任何编号标题\n后续仍是散文", "front_abstract"), "low")
+
+    def test_r2_headless_trailing_backmatter_not_emitted(self):
+        # 无编号标题的纯散文 + 末尾"致谢"：无末正文标题（body_offs 空）→ 位置门挡掉，
+        # 根本不产 back_matter（保守不切）。
+        self.assertEqual(kinds("纯散文一段\n又一段散文\n致谢\n谢词"), [])
 
 
 if __name__ == "__main__":
