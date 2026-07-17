@@ -105,13 +105,19 @@ def main(argv=None):
         _die2("atoms-glob matched 0 files: %s" % args.atoms_glob)
 
     # --- atom↔slice 配对按 manifest atoms 文档顺序（I1，不按文件名字典序）---
+    # S1：manifest.file 限死在 --root 内（realpath 前缀校验），防 ../ 或绝对路径越界读。
+    root_real = os.path.realpath(args.root)
     manifest_atoms = mf.get("atoms", [])
     atom_files = []
     for a in manifest_atoms:
         fp = a.get("file")
         if not isinstance(fp, str) or not fp:
             _die2("manifest atom missing 'file'")
-        atom_files.append(fp if os.path.isabs(fp) else os.path.join(args.root, fp))
+        full = fp if os.path.isabs(fp) else os.path.join(args.root, fp)
+        real = os.path.realpath(full)
+        if real != root_real and not real.startswith(root_real + os.sep):
+            _die2("manifest atom 'file' escapes --root: %s" % fp)
+        atom_files.append(full)
 
     # --- 区间序列（切点 = cut_offsets 共享真源，与 split_headings 同口径；F1）---
     cuts = [h["char_offset"] for h in cut_offsets(headings, args.split_to_level)]
@@ -123,6 +129,18 @@ def main(argv=None):
 
     hard_fails = []
     advisory = []
+
+    # --- F-1 守卫（对抗流程审查·致命）：首个切点之前的正文（摘要/关键词/无编号引言）
+    #     不落入任何区间、逐区比对查不到 → 静默丢失还假绿。两路（机械切/LLM 回填偏移>0）
+    #     都从 cuts[0] 起 tile，故守卫落此处即堵两路。fail-closed，放在逐区比对之前。
+    preamble = text[:cuts[0]] if cuts else ""
+    if preamble.strip():
+        hard_fails.append({
+            "kind": "preamble_dropped",
+            "char_range": [0, cuts[0]],
+            "lost_chars": len(preamble),
+            "detail": "首标题前有 %d 字正文未进任何 atom（丢失）：%s"
+                      % (len(preamble.strip()), preamble.strip()[:80])})
 
     # --- atom 数 vs 区间数 ---
     if len(atom_files) != len(slices):
