@@ -102,6 +102,52 @@ def experimental_design_nonempty(root):
     return isinstance(entries, list) and bool(entries)
 
 
+NEWKEY_RE = __import__("re").compile(r"\[@new:")
+
+
+def _load_verified_ids(root):
+    """data/literature_index.json 的 verified 条目 id 集合（缺/畸形→空集，不炸）。"""
+    idx = _load_json(os.path.join(root, "data", "literature_index.json"))
+    if not isinstance(idx, dict):
+        return set()
+    return {e.get("id") for e in idx.get("entries", [])
+            if isinstance(e, dict) and e.get("verified", True)}
+
+
+def check_new_refs_merged(root, prev_section, prev_fp):
+    """节边界并表核验（INTERFACE §4.1，硬要求4-A）。返回 failures 列表（空=通过）。
+
+    只在上一节走过撰写编排（存在 .write_return_<prev>.json）时校验：
+      1. 上一节 new_refs 每条都经 merge-refs 并表且解析到 verified 文献条目（忘并表/忘核验→FAIL）
+      2. 上一节正文无残留未映射的 [@new: 键（已并表成真 id 后不应残留）
+    未走编排（无 .write_return）→ 两项均 vacuously pass（不是每节都派子代理）。
+    """
+    failures = []
+    ret_path = os.path.join(root, f".write_return_{prev_section}.json")
+    ret = _load_json(ret_path)
+    if isinstance(ret, dict):
+        new_refs = ret.get("new_refs") or []
+        keymap = _load_json(os.path.join(root, ".newref_map.json"))
+        keymap = keymap if isinstance(keymap, dict) else {}
+        verified_ids = _load_verified_ids(root)
+        for nr in new_refs if isinstance(new_refs, list) else []:
+            key = nr.get("key") if isinstance(nr, dict) else None
+            rid = keymap.get(key)
+            if not rid or rid not in verified_ids:
+                failures.append(
+                    f"上一节 new_refs 未并表/未核验: {key} "
+                    f"(run: citation_renumber.py merge-refs)")
+    # 残留 [@new: 扫描（编排与否都查；真源正文里不该有未翻号的新键）
+    if prev_fp and os.path.isfile(prev_fp):
+        try:
+            with open(prev_fp, "r", encoding="utf-8") as f:
+                if NEWKEY_RE.search(f.read()):
+                    failures.append(f"上一节残留未并表新键 [@new: in {os.path.basename(prev_fp)}")
+        except OSError:
+            pass
+    return failures
+
+
 def scan_placeholders(files):
     hits = []
     for fp in files:
@@ -224,6 +270,19 @@ def main():
         checks.append({"name": "placeholders", "ok": False, "detail": detail})
     else:
         checks.append({"name": "placeholders", "ok": True})
+
+    # ---- check: new_refs 并表核验 + 残留新键（节边界，硬要求4-A，INTERFACE §4.1） ----
+    if known_section and SECTION_ORDER.index(section) > 0:
+        prev = SECTION_ORDER[SECTION_ORDER.index(section) - 1]
+        prev_fp = section_file(root, prev)
+        nr_failures = check_new_refs_merged(root, prev, prev_fp)
+        if nr_failures:
+            failures.extend(nr_failures)
+            checks.append({"name": "new_refs_merged", "ok": False, "detail": nr_failures})
+        else:
+            checks.append({"name": "new_refs_merged", "ok": True})
+    else:
+        checks.append({"name": "new_refs_merged", "ok": True, "note": "first section, N/A"})
 
     # ---- 缩略词：nsfc 无独立 abbreviation 脚本 → skip ----
     checks.append({"name": "abbreviation", "ok": None, "note": "no standalone abbreviation script in nsfc-proposal; skip"})

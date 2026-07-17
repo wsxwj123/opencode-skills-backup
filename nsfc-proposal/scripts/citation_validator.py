@@ -670,6 +670,14 @@ def run_integrity_gates(
     recency = core.check_recency(entries, current_year, window=recency_window,
                                  min_recent_ratio=recency_min_ratio)
 
+    # used_in_sections 升为检索登记必填（决策14/§2.6）：缺/空 → 归"未分配"、只 WARN 不改退出码，
+    # 渐进回填（存量项目兼容）。切片按 used_in_sections 过滤，未分配条目不会被派进任何节。
+    unassigned = []
+    for i, e in enumerate(entries):
+        if not (e.get("used_in_sections") or []):
+            num = _entry_ref_number(e)
+            unassigned.append(num if num is not None else f"idx:{i}")
+
     exit_code = 2 if incomplete else 0
 
     return {
@@ -683,6 +691,12 @@ def run_integrity_gates(
         },
         "j5_self_citation": {**self_cite, "strength": "warn"},
         "j7_recency": {**recency, "strength": "warn"},
+        "used_in_sections_registry": {
+            "unassigned": unassigned,
+            "unassigned_count": len(unassigned),
+            "note": "used_in_sections 为检索登记必填；缺者归未分配、须回填，切片不含它们",
+            "strength": "warn",
+        },
     }
 
 
