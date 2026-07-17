@@ -165,7 +165,9 @@ http_proxy=http://127.0.0.1:PORT esearch -db pubmed -query "QUERY" < /dev/null |
 
 > 📖 可委托任务清单及规则详见 `references/subagent_guide.md`
 
-**NOT delegatable:** Outline design, synthesis writing, 逐节质量自检的修订/HALT decisions, user interaction, HALT decisions.
+**Delegatable（含立场反转）:** Batch search / metadata / anti-AI scan / BibTeX / word-count — 见 `references/subagent_guide.md`；**外加 section synthesis writing**（叶子节正文，Phase 3 Step 4 由主会话调度撰写子代理，约束+质量天花板见 subagent_guide.md 与 Step 4）。
+
+**NOT delegatable:** Outline design, 逐节质量自检的修订/HALT decisions, user interaction, HALT decisions.（synthesis writing 已从此列移入 Delegatable。）
 
 ---
 
