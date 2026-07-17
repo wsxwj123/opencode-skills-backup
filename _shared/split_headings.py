@@ -13,15 +13,26 @@
 from __future__ import annotations
 
 import argparse
-import glob as _glob  # noqa: F401  (保持与同族脚本导入形态一致，可选)
 import json
 import os
 import re
 import sys
 
-CAPTION_RE = re.compile(r"(?:图|表|Fig(?:ure)?|Table)\s*\d+[-–—]\d+", re.IGNORECASE)
 CITATION_RE = re.compile(r"\[(\d+(?:\s*[-,]\s*\d+)*)\]")
 NUM_PREFIX_RE = re.compile(r"^\s*(\d+(?:[.\-]\d+)*)")
+
+
+def cut_offsets(headings, split_to_level=None):
+    """切点选择的单一真源（INTERFACE §7 F1）——split_headings 与 split_audit 都调它，物理杜绝切点漂移。
+
+    切点 = not is_caption 且 (split_to_level is None 或 level<=split_to_level) 的标题，
+    按 char_offset 升序返回这些切点标题对象（各自 char_offset 即区间边界）。
+    split_to_level=None → 不设层级上限（切所有非图注标题，等价旧 split_audit 行为）。
+    """
+    cut = [h for h in headings
+           if not h.get("is_caption")
+           and (split_to_level is None or h.get("level", 1) <= split_to_level)]
+    return sorted(cut, key=lambda h: h.get("char_offset", 0))
 
 
 def _die(code, msg):
@@ -85,11 +96,8 @@ def main(argv=None):
         if not isinstance(off, int) or off < 0 or off > tlen:
             _die(2, "char_offset out of range: %r" % off)
 
-    # 切点 = 非图注 且 level<=split-to-level 的标题偏移（升序）
-    cut_headings = sorted(
-        [h for h in headings
-         if not h.get("is_caption") and h.get("level", 1) <= args.split_to_level],
-        key=lambda h: h["char_offset"])
+    # 切点 = 非图注 且 level<=split-to-level 的标题（共享真源 cut_offsets，与 split_audit 同口径）
+    cut_headings = cut_offsets(headings, args.split_to_level)
     if not cut_headings:
         _die(2, "no cut points at split-to-level=%d" % args.split_to_level)
 

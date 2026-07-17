@@ -191,7 +191,7 @@ Slices `text[o_i:o_{i+1}]` byte-for-byte; captions (`is_caption`) ride inside th
 ```
 python3 scripts/split_audit.py --text tmp/draft_import.md --headings tmp/heading_manifest.json \
       --manifest tmp/split_manifest.json --atoms-glob 'drafts/section_*.md' \
-      --root . --report tmp/split_audit_report.json
+      --split-to-level 2 --root . --report tmp/split_audit_report.json
 ```
 Per-region offset比对 (slice_i vs atom_i) catches 漏/造/串/边界漂移/乱序 all five, no false-green. **exit 0** → go to Layer 2. **exit 1** (region mismatch, fail-closed) → 回退重拆 (§回退), do NOT hand-edit files to sneak past. **exit 2** (headings空/畸形/glob命中0) → 回 2.1 路径判定. **exit 1/2 = 不得声明拆分完成.**
 
