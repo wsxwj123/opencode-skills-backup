@@ -15,6 +15,7 @@ import json
 import os
 import re
 import sys
+from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from reference_renderer import citation_sort_key  # 单一排序真源，禁止复制逻辑
@@ -77,32 +78,38 @@ def next_ref_id(entries):
 
 
 def find_existing(entry_new, entries):
-    """按 DOI 精确 → PMID 精确 → 归一标题 与现有条目比对，命中返回其 id，否则 None。
+    """三档去重判定，返回 (verdict, id)：
 
-    标题兜底只在"标识符不冲突"时才认命中：新条目与候选条目**都带 DOI 但不同**（或都带
-    PMID 但不同）→ 是两篇不同文献（预印本 vs 正式版、原文 vs 勘误常见此形），禁止用同标题
-    错并成一个编号。到达标题环时 DOI/PMID 精确均已落空，故双方都有的标识符必然是"冲突"值。
+      ("merge", id)      DOI 精确相同 或 PMID 精确相同 → 有把握同一篇 → 自动合并。
+      ("suspected", id)  仅标题命中、无共享强标识符确认（一方只DOI一方只PMID、或候选无
+                         标识符等）→ AI 判断不了 → 不自动合并、标疑似交人工。
+      (None, None)       真没命中；或标题命中但标识符明确冲突（都带 DOI 但不同 / 都带 PMID
+                         但不同）→ 有把握不同篇（预印本 vs 正式版、原文 vs 勘误常见此形）→
+                         作新条目、不标疑似。
+
+    到达标题环时 DOI/PMID 精确均已落空，故双方都有的强标识符必然是"冲突"值（→ 不同篇）；
+    否则即"无共享强标识符确认"（→ 灰区）。
     """
     nd = norm_doi(entry_new.get("doi"))
     np_ = norm_pmid(entry_new.get("pmid"))
     nt = norm_title(entry_new.get("title"))
     for e in entries:
         if nd and norm_doi(e.get("doi")) == nd:
-            return e.get("id")
+            return ("merge", e.get("id"))
     for e in entries:
         if np_ and norm_pmid(e.get("pmid")) == np_:
-            return e.get("id")
+            return ("merge", e.get("id"))
     for e in entries:
         if not (nt and norm_title(e.get("title")) == nt):
             continue
         ed = norm_doi(e.get("doi"))
         ep = norm_pmid(e.get("pmid"))
-        if nd and ed and nd != ed:      # DOI 冲突 → 不同文献
+        if nd and ed and nd != ed:      # DOI 冲突 → 不同文献，不标疑似
             continue
-        if np_ and ep and np_ != ep:    # PMID 冲突 → 不同文献
+        if np_ and ep and np_ != ep:    # PMID 冲突 → 不同文献，不标疑似
             continue
-        return e.get("id")
-    return None
+        return ("suspected", e.get("id"))   # 标题命中、无强标识符确认 → 灰区交人工
+    return (None, None)
 
 
 # ---------------------------------------------------------------------------
@@ -144,14 +151,17 @@ def cmd_merge_refs(args):
     merged = 0
     deduped = 0
     resolved_ids = []
+    suspected = []      # 灰区疑似重复：{key, suspected_same_as, reason}
     for nr in new_refs:
         key = nr["key"]
-        hit = find_existing(nr, entries)
-        if hit is not None:
+        verdict, hit = find_existing(nr, entries)
+        if verdict == "merge":
             mapping[key] = hit
             deduped += 1
             resolved_ids.append(hit)
         else:
+            # verdict in (None, "suspected"): 都作新条目落库（不丢文献）。
+            # 灰区（"suspected"）额外记疑似交人工，绝不自动合并。
             new_id = next_ref_id(entries)
             entry = {
                 "id": new_id,
@@ -164,6 +174,12 @@ def cmd_merge_refs(args):
             mapping[key] = new_id
             merged += 1
             resolved_ids.append(new_id)
+            if verdict == "suspected":
+                suspected.append({
+                    "key": key,
+                    "suspected_same_as": hit,
+                    "reason": "标题命中但无共享强标识符确认，AI 判断不了，交人工裁决",
+                })
 
     # 冲突拦在任何落盘之前：同一 new:slug 跨节指向不同真 id 属歧义（会串号），
     # 必须拒绝而非静默覆盖映射。先读旧映射比对，通过后才原子写，避免脏账本。
@@ -198,9 +214,45 @@ def cmd_merge_refs(args):
         except Exception:
             die("chapter_matrix upsert 失败")
 
+    # 灰区疑似落独立复查队列（避免被 citation_guard 的 manual_review_queue 整体覆盖），
+    # 写失败按账本写入失败处理：exit 2、safe_json_dump 原子写不留半截。
+    if suspected:
+        try:
+            _append_dedup_review_queue(root, suspected)
+        except Exception as e:
+            die("dedup_review_queue 写入失败: %s" % e)
+
     print(json.dumps({"ok": True, "merged": merged, "deduped": deduped,
-                      "mapping": mapping}, ensure_ascii=False))
+                      "mapping": mapping, "suspected_duplicates": suspected},
+                     ensure_ascii=False))
     sys.exit(0)
+
+
+def _append_dedup_review_queue(root, suspected):
+    """幂等追加疑似重复到 data/dedup_review_queue.json（结构 {generated_at,count,entries}）。
+
+    幂等键 (key, suspected_same_as)：同一疑似对重跑不重复堆积。原子写。
+    """
+    path = os.path.join(root, "data", "dedup_review_queue.json")
+    entries = []
+    if os.path.isfile(path):
+        try:
+            data = load_json(path)
+            entries = data.get("entries", []) if isinstance(data, dict) else []
+        except Exception:
+            entries = []
+    seen = {(e.get("key"), e.get("suspected_same_as")) for e in entries}
+    for s in suspected:
+        k = (s.get("key"), s.get("suspected_same_as"))
+        if k in seen:
+            continue
+        entries.append(s)
+        seen.add(k)
+    safe_json_dump(path, {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "count": len(entries),
+        "entries": entries,
+    })
 
 
 def _upsert_chapter_matrix(root, ids, section_id, entries):
