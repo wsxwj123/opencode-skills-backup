@@ -63,6 +63,17 @@
 
 ---
 
+## 承重声明的引文类型纪律（article_type，Mandatory）
+
+入库条目带 `article_type` 字段（`citation_guard.py --write-back` 从 PubMed pubtype 优先级解析落值：`original_research`/`review`/`meta_analysis`/`systematic_review`/`clinical_trial`/`preprint`/`guideline`/`other`/`unknown`；非 PubMed/人工导入 → `unknown`）。承重引用选型纪律：
+
+1. **承重机制/实验声明的 ref 应为 `original_research`，不得以 `review`/`systematic_review` 代替**：机制句、因果句、"我们/该研究测得/证明"这类承重实验声明，必须挂做出该原始观测的原始研究，不能只挂一篇综述转述。综述可作背景铺垫引用（`claim_kind=background`），但不能作机制/实验证据的唯一支撑。
+2. **疗效声明**（`claim_kind=efficacy`）可挂 `meta_analysis`/`clinical_trial`（荟萃/临床试验是疗效的合法上位证据），但不得只挂 `review`。
+3. **preprint 承重需标注**：以 `preprint` 作承重证据时正文该处须显式标 `[Preprint]`，提示未经同行评审。
+4. **机械联动**：以上由共享 `citation_claim_check.py` 的 `claim_kind × article_type` 纪律机械核（承重机制/疗效声明挂综述 → exit 2；任一字段 `unknown`/缺 → 只 warning 不硬拦，不误杀存量项目）；DoD 盲检 gate 另有对应盲检项。字段缺失一律 fail-safe，不炸。
+
+---
+
 ## 中文文献支线（Chinese Literature Manual Track，按需触发）
 
 SCI 论文通常只在少数场景需引中文文献（中药/中医、临床路径、地方流行病学、政策文献等）。中文期刊普遍**无 DOI、无 PMID**，`citation_guard` 双向核验跑不通，故走"AI 发现 → 用户人工取证 → 责任标记"的合规通道，绝不绕过护栏自动入库。
