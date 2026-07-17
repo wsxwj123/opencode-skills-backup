@@ -28,6 +28,7 @@ import argparse
 import glob
 import json
 import os
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -84,9 +85,18 @@ def _load_ledger(root_dir: Path) -> dict:
     return out
 
 
+# section 来自 claim_evidence（主会话写、非子代理可控），含 `/`、`..`、glob 通配符
+# 时会让下面的 glob 跳出 atomic_md 或误配全部节。仅做防路径穿越/glob 逃逸校验：
+# 合法 section 形态各家不同（2.1 / results_3.1 / P1_立项依据），故用黑名单而非
+# 字符白名单（后者会误伤 CJK section）。命中 → 当"无正文"处理（返回 None）。
+_SECTION_UNSAFE = re.compile(r"[/\\*?\[\]]|\.\.")
+
+
 def _section_body(root_dir: Path, section) -> str | None:
-    """取本节 atomic_md 正文（供 preprint 标注检查）。找不到 → None。"""
+    """取本节 atomic_md 正文（供 preprint 标注检查）。找不到/非法 section → None。"""
     if not root_dir or not section:
+        return None
+    if _SECTION_UNSAFE.search(str(section)):
         return None
     for p in glob.glob(os.path.join(str(root_dir), "atomic_md", "*", f"{section}.md")):
         try:
