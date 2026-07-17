@@ -21,6 +21,22 @@ class TestNormalizers(unittest.TestCase):
         self.assertEqual(cr.norm_doi("HTTPS://dx.doi.org/10.1/x/"), "10.1/x")
         self.assertEqual(cr.norm_doi(None), "")
 
+    def test_doi_strips_bare_doi_prefix(self):  # E2
+        canon = cr.norm_doi("10.1/x")
+        self.assertEqual(cr.norm_doi("doi:10.1/X"), canon)
+        self.assertEqual(cr.norm_doi("DOI: 10.1/x"), canon)
+        self.assertEqual(cr.norm_doi("doi:10.1/x/."), canon)  # 前缀+尾部同时去
+        self.assertEqual(cr.norm_doi("10.1234/doi.abc"), "10.1234/doi.abc")  # 中段 doi. 不误删
+
+    def test_pmid_keeps_only_digits(self):  # E1
+        self.assertEqual(cr.norm_pmid("PMID: 12345678"), "12345678")
+        self.assertEqual(cr.norm_pmid("12345678 "), "12345678")
+        self.assertEqual(cr.norm_pmid("12345678"), "12345678")
+        self.assertEqual(cr.norm_pmid(12345678), "12345678")  # int 入参
+        self.assertEqual(cr.norm_pmid("120345"), "120345")    # 中间的 0 不丢
+        self.assertEqual(cr.norm_pmid(None), "")
+        self.assertEqual(cr.norm_pmid("pmid:  "), "")         # 无数字→空
+
     def test_title_removes_punct_and_case(self):
         self.assertEqual(cr.norm_title("A Novel, Method!"), cr.norm_title("a novel method"))
 

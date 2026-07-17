@@ -40,11 +40,12 @@ def norm_doi(doi):
         return ""
     d = str(doi).strip().lower()
     d = re.sub(r"^https?://(dx\.)?doi\.org/", "", d)
+    d = re.sub(r"^doi:\s*", "", d)          # 裸 doi: 前缀（已 lower，只需匹配小写）
     return d.rstrip("/.")
 
 
 def norm_pmid(pmid):
-    return str(pmid).strip() if pmid else ""
+    return re.sub(r"\D", "", str(pmid)) if pmid else ""      # 只留数字：去 PMID:/空格等前后缀
 
 
 def norm_title(title):
