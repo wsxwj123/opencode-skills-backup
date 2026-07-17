@@ -332,16 +332,39 @@ def main():
         verified_ids = ({e.get("id") for e in lit
                          if isinstance(e, dict) and e.get("verified", True)}
                         if isinstance(lit, list) else set())
-        # A1：上一节 .write_return 的 new_refs 每条都并表到 verified 文献
-        ret = _load_json(os.path.join(root, f".write_return_{prev}.json"))
+        # A1：上一节 .write_return 的 new_refs 每条都并表到 verified 文献。
+        # fail-closed 修复：坏 JSON 与"上一节引入了新键却无 return 审计"都不得静默放行。
+        #  - 坏 JSON → 账本损坏，一律 FAIL（无合法情形）。
+        #  - 文件缺失：白名单琐节主会话就地写、天然无 return（SKILL.md:368），属合法缺失；
+        #    但若上一节 atomic md 里出现 [@new: 新键，则它必经派发流程、必须有 return 可核验，
+        #    缺失即跳步 → FAIL。以下先扫上一节新键，再据此决定缺失是否致命。
+        ret_path = os.path.join(root, f".write_return_{prev}.json")
+        prev_md_new_keys = []
+        for fp in prev_section_md_files(root, chapter, sub - 1):
+            try:
+                with open(fp, "r", encoding="utf-8") as f:
+                    prev_md_new_keys += NEW_KEY_RE.findall(f.read())
+            except OSError:
+                continue
         unmerged = []
-        if isinstance(ret, dict):
-            for nr in (ret.get("new_refs") or []):
-                key = nr.get("key", "")
-                resolved = keymap.get(key)
-                if not resolved or resolved not in verified_ids:
-                    unmerged.append(key)
-        if unmerged:
+        ret_broken = False
+        if os.path.exists(ret_path):
+            ret = _load_json(ret_path)
+            if ret is None:                       # 存在但坏 JSON / 读失败
+                ret_broken = True
+            elif isinstance(ret, dict):
+                for nr in (ret.get("new_refs") or []):
+                    key = nr.get("key", "")
+                    resolved = keymap.get(key)
+                    if not resolved or resolved not in verified_ids:
+                        unmerged.append(key)
+        elif prev_md_new_keys:                    # 缺失 + 上一节确有新键 → 无从审计
+            ret_broken = True
+        if ret_broken:
+            failures.append(
+                f"上一节 new_refs 未并表/未核验: {prev} 的 .write_return 缺失或损坏，无法核验并表")
+            checks.append({"name": "prev_new_refs_merged", "ok": False, "prev": prev})
+        elif unmerged:
             for k in unmerged:
                 failures.append(f"上一节 new_refs 未并表/未核验: {k}")
             checks.append({"name": "prev_new_refs_merged", "ok": False, "prev": prev})
