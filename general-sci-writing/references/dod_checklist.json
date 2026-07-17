@@ -140,6 +140,12 @@
           "name": "拉丁短语斜体软提醒",
           "check": "proofread.py 的 latin_italic_missing 软提醒:in vitro/in vivo/ex vivo/in situ/de novo/post hoc/per se 等公认须斜体的拉丁短语,若正文裸写(未被 *...* 斜体标记包裹)则报告。仅提示,不阻断、不进 --fail-on、不扣分,由人工确认是否补斜体",
           "severity": "soft"
+        },
+        {
+          "id": "G26",
+          "name": "承重声明引文类型",
+          "check": "承重机制/实验声明(claim_kind=mechanism/efficacy)的支撑 ref 应为 original_research,不得以 review/systematic_review 代替(见 references/citation-policy.md「承重声明的引文类型纪律」);疗效声明可挂 meta_analysis/clinical_trial;preprint 作承重须正文标 [Preprint]。字段 unknown/缺 → 软提醒不硬拦",
+          "script": "python scripts/citation_claim_check.py --root <项目根>"
         }
       ]
     },
