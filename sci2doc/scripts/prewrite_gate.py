@@ -51,6 +51,27 @@ except Exception:  # pragma: no cover - 缺失不应反过来卡住 prewrite
 
 PLACEHOLDER_TOKENS = ("CITE_PENDING", "DATA_PENDING", "【待")
 
+# 残留未映射新引用键：[@new:slug]（并表后进 .newref_map；未在其中 = 未映射）
+NEW_KEY_RE = re.compile(r"\[@(new:[A-Za-z0-9:_\-]+)\]")
+
+
+def _load_newref_map(root):
+    m = _load_json(os.path.join(root, ".newref_map.json"))
+    return m if isinstance(m, dict) else {}
+
+
+def prev_section_md_files(root, chapter, prev_sub):
+    """上一节 atomic md 文件（兼容 '2.1.md' 与 '2.1_标题.md' 两种命名）。"""
+    cdir = chapter_dir(root, chapter)
+    if not os.path.isdir(cdir):
+        return []
+    out = []
+    for fp in glob.glob(os.path.join(cdir, "*.md")):
+        base = os.path.basename(fp)
+        if base == f"{chapter}.{prev_sub}.md" or base.startswith(f"{chapter}.{prev_sub}_"):
+            out.append(fp)
+    return out
+
 
 def record_manual_review(root, section, reason):
     """逃生口留痕：盲检子代理不可用时对某盲检项做显式人工放行。
@@ -301,6 +322,72 @@ def main():
     else:
         checks.append({"name": "prev_chapter_blind_review", "ok": True,
                        "note": "first chapter or non-first subsection; N/A"})
+
+    # ---- check（§4.1-A 新增）：上一节 new_refs 已并表核验 + 无残留未映射新键 ----
+    # 忘并表/忘核验 → exit≠0。硬要求10 的节边界机械兜底。独立于其它检查照跑。
+    if sub is not None and sub > 1:
+        prev = f"{chapter}.{sub - 1}"
+        keymap = _load_newref_map(root)
+        lit = _load_json(os.path.join(root, "literature_index.json"))
+        verified_ids = ({e.get("id") for e in lit
+                         if isinstance(e, dict) and e.get("verified", True)}
+                        if isinstance(lit, list) else set())
+        # A1：上一节 .write_return 的 new_refs 每条都并表到 verified 文献。
+        # fail-closed 修复：坏 JSON 与"上一节引入了新键却无 return 审计"都不得静默放行。
+        #  - 坏 JSON → 账本损坏，一律 FAIL（无合法情形）。
+        #  - 文件缺失：白名单琐节主会话就地写、天然无 return（SKILL.md:368），属合法缺失；
+        #    但若上一节 atomic md 里出现 [@new: 新键，则它必经派发流程、必须有 return 可核验，
+        #    缺失即跳步 → FAIL。以下先扫上一节新键，再据此决定缺失是否致命。
+        ret_path = os.path.join(root, f".write_return_{prev}.json")
+        prev_md_new_keys = []
+        for fp in prev_section_md_files(root, chapter, sub - 1):
+            try:
+                with open(fp, "r", encoding="utf-8") as f:
+                    prev_md_new_keys += NEW_KEY_RE.findall(f.read())
+            except OSError:
+                continue
+        unmerged = []
+        ret_broken = False
+        if os.path.exists(ret_path):
+            ret = _load_json(ret_path)
+            if ret is None:                       # 存在但坏 JSON / 读失败
+                ret_broken = True
+            elif isinstance(ret, dict):
+                for nr in (ret.get("new_refs") or []):
+                    key = nr.get("key", "")
+                    resolved = keymap.get(key)
+                    if not resolved or resolved not in verified_ids:
+                        unmerged.append(key)
+        elif prev_md_new_keys:                    # 缺失 + 上一节确有新键 → 无从审计
+            ret_broken = True
+        if ret_broken:
+            failures.append(
+                f"上一节 new_refs 未并表/未核验: {prev} 的 .write_return 缺失或损坏，无法核验并表")
+            checks.append({"name": "prev_new_refs_merged", "ok": False, "prev": prev})
+        elif unmerged:
+            for k in unmerged:
+                failures.append(f"上一节 new_refs 未并表/未核验: {k}")
+            checks.append({"name": "prev_new_refs_merged", "ok": False, "prev": prev})
+        else:
+            checks.append({"name": "prev_new_refs_merged", "ok": True, "prev": prev})
+        # A2：上一节 atomic md 无残留未映射 [@new: 键
+        residual = []
+        for fp in prev_section_md_files(root, chapter, sub - 1):
+            try:
+                with open(fp, "r", encoding="utf-8") as f:
+                    content = f.read()
+            except OSError:
+                continue
+            residual += [k for k in NEW_KEY_RE.findall(content) if k not in keymap]
+        if residual:
+            for k in residual:
+                failures.append(f"上一节残留未并表新键: {k}")
+            checks.append({"name": "prev_residual_new_key", "ok": False, "prev": prev})
+        else:
+            checks.append({"name": "prev_residual_new_key", "ok": True, "prev": prev})
+    else:
+        checks.append({"name": "prev_new_refs_merged", "ok": True,
+                       "note": "first subsection/chapter-level; N/A"})
 
     # ---- check 3: 素材就位（本章 figure/实验映射） ----
     n_fig = figures_for_chapter(root, chapter)

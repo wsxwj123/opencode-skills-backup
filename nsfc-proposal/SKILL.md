@@ -1,6 +1,6 @@
 ---
 name: nsfc-proposal
-version: 2.23.3
+version: 2.24.0
 description: Use when drafting, restructuring, or polishing Chinese NSFC proposals (2026 template), especially when strict section-by-section gating, hypothesis-objective-content-problem consistency, literature verification via paper-search MCP, and anti-AI Chinese academic writing constraints are required. 触发词：国自然、国家自然科学基金、基金申请书、科研申请、NSFC、标书、本子、面上项目、青年基金。
 ---
 
@@ -169,6 +169,17 @@ Follow phased gates in order:
 3. Phase 1: write P1 with full citation pipeline and verification.
    - **🔴 开写前置闸门 (Mandatory，脚本硬拦截)**：开写前先跑 `python3 scripts/prewrite_gate.py --section P1 --root .`，exit≠0 禁止开写（硬检查上一节完成/`consistency_map` 就位/占位符清零；上一节盲检结果（`.review_pass/<上一节>.json`）缺失即 prewrite_gate 硬拦 exit 1，禁止开写；必须先跑 delegate_review verify --section <上一节> 落盘通过标记，此校验仅跨 Phase 边界生效，同 Phase 子节 N/A）。P1 为首节，上一节检查自动放行。
    - 每节先跑 `python scripts/state_manager.py --root . write-cycle --section P1`（逐节预算/上下文注入的预写门控，完整参数见 references/08）；不得跳过直接硬写。
+
+   - **🟢 P1 正文由撰写子代理盲写（主会话调度，堵上下文爆 + 焊死编号权）**：prewrite_gate 通过后，P1 正文**不再由主会话直接手写**，改走下面这条流水线（前后所有门禁一个字不改，照跑；结构签字 hook 逻辑不动——子代理只产返回文件，主会话在签字后才落盘 `sections/*.md`）：
+     1. **先派备料子代理（P1 承载引文，一律派）**：`python scripts/delegate_write.py pack-prep --section P1 --root .` → `.prep_task_P1.json`；把 `references/prep_subagent_prompt.md` + 任务包交给全新一次性子代理，让它对承重论点起草「观点↔证据」草案 `.claim_evidence_draft_P1.json`（`user_confirmed` 全 false，`evidence_quote` 只能引账本 abstract 子串，提议 `claim_kind`）。**P2–P7 一般无编号引文（规则4）→ 走白名单、主会话就地写、不派备料**（见下条）。
+     2. **主会话核证 + 确认**：`CITATION_CHECK_CMD`（含 `--check-quote-substring` 防伪）读草案 + 逐条 `AskUserQuestion` 确认承重句（含 claim_kind），确认行由**主会话**并入 `claim_evidence.json`（承重核证细则仍见下方「承重论点引文核证」，此处只是把起草那半交给备料子代理）。
+     3. **组撰写任务包**：`python scripts/delegate_write.py pack-write --section P1 --root .` → `.write_task_P1.json`（本节 H/O/RC/KSQ + 承重方向 + 已核证 `certified_claims` + `used_in_sections 含 P1` 切给本节的文献全条 + 缩写表 + 风格禁项**嵌入**；全篇大纲/全库文献只给 `refs` 路径）。承重句未完成人工核证 → 脚本 exit 2 拒绝出包。
+     4. **派撰写子代理**：`references/section_writer_prompt.md`（角色 prompt + 数据/指令隔离声明）+ 任务包路径交给全新一次性子代理盲写。它只写 `.write_return_P1.json`，**P1 正文引用只写 `[@key]`（绝不写裸数字 `[5]`）**，承重句只准挂内嵌 `certified_claims` 里的 `ref_key`，禁写任何账本。
+     5. **机械校验返回**：`python scripts/delegate_write.py verify-write --section P1 --root .`（无裸数字引用 / `[@key]` 可解析 / `new_refs` 带 DOI 或 PMID / `section_id` 一致），exit≠0 打回子代理重写、不落盘。
+     6. **new_refs 先核验再并表**（账本零污染）：对返回 `new_refs` **先** `citation_validator.py verify-entry`/`citation_guard --require-mcp` 核真伪，**通过的才** `python scripts/citation_renumber.py merge-refs --root . --return .write_return_P1.json` 去重并表（DOI→PMID→归一标题三档，灰区标疑似交人工），新条目挂 `used_in_sections=["P1_立项依据"]`，记 `new:slug→真id` 映射。核验失败的直接丢弃、打回子代理改写该处引用。
+     7. **落盘 P1 + 认键翻号**：主会话（已签字）把返回 `markdown` 落盘 `sections/P1_立项依据.md`；正文 `[@key]` 是长期真源，`[N]` 是合并派生——merge 前跑 `python scripts/citation_renumber.py renumber --root . --check`（exit≠0 若未并表 `new:` 键 / id 冲突 / 未知键）通过后再 `--in-place` 把 `[@key]` 统一翻成连续 `[N]`（**按 P1 正文首现序**分配，对齐 04 §4.4 矩阵「REF 顺序=P1 首次引用顺序」），随后 `citation_validator.py matrix-check` 校验三向一致。
+     > **nsfc 适配说明（读前必看）**：`delegate_write.py`（薄封装 import 共享 `delegate_write_core.py`）的 pack/verify 假设项目根有 `literature_index.json`（list）+ `project_state.json` 含 `sections[].section_id` 大纲。nsfc 账本是 `data/literature_index.json`（dict）+ 无 `sections` 大纲，故运行 pack-write/verify-write 前主会话须先把二者投影到共享核心期望的形态（只读投影，不改共享核心）。**认键翻号 `citation_renumber.py`（本家 local）与 prewrite 并表核验直接读 nsfc 原生 `data/` 布局，无需投影。**
+
    - Input: confirmed project profile (title, discipline, H/O/RC/KSQ mapping counts).
    - Output: `sections/P1_立项依据.md` + `data/literature_index.json` (all P1 citations verified) + updated `context_memory.md`.
    **Citation Type by Context for P1 (立项依据，MANDATORY):** specific mechanistic/experimental claims (具体科学论点) must cite Original Articles as primary evidence; clinical evidence cites Clinical Trials at the same priority; preprints are last-resort, labeled `[Preprint]`, used only when no peer-reviewed equivalent exists. Full context-to-type mapping and the `role` taxonomy (gap_evidence / method_support / prior_work / comparison / background) live in `references/04_文献管理.md`.
@@ -196,6 +207,7 @@ Follow phased gates in order:
 4. Phase 2: write P2 研究内容（contains all sub-content: H/O/RC/KSQ, methods, innovations, annual plan）.
    - **🔴 开写前置闸门 (Mandatory，脚本硬拦截)**：开写前先跑 `python3 scripts/prewrite_gate.py --section P2 --root .`，exit≠0 禁止开写（硬检查 P1 完成、`consistency_map` 就位、`data/experimental_design.json` entries 非空、占位符清零；P2←P1 跨 Phase，缺 `.review_pass/P1.json` 盲检标记即硬拦 exit 1，须先跑 `delegate_review verify --section P1` 落盘；P2 正是产出 M 的阶段，M 尚空只降级 warning）。
    - 每节先跑 `python scripts/state_manager.py --root . write-cycle --section P2`（逐节预算/上下文注入的预写门控，完整参数见 references/08）；不得跳过直接硬写。
+   - **🟢 P2–P7 走白名单：主会话就地写、不派备料**：规则4 下这些节 `used_in_sections` 过滤后本节零编号引文（P2 明令无文献编号），派备料只得空草案——故 P2–P7 由主会话直接写正文、不派备料子代理；仅当某 P 节确经 `used_in_sections` 分到编号引文时才按 P1 那条流水线派（罕见）。撰写编排的引文/承重机制只对 P1 生效。
    - **撰写 M（研究方案与技术路线）前必须 `Read data/experimental_design.json` 作为事实依据**，禁止脑补；每个 M 的 alternative_plan（V-12 字段）直接来自该 JSON 对应 RC 的 `alternative_plan`。
    - Input: verified P1; H/O/RC/KSQ mapping counts from Phase 0; consistency_map.json with SQ entries; `data/experimental_design.json` 全量 RC 设计。
    - consistency_map 条目结构（mapped_from_sq / mapped_to_objective / supports_method 等字段名）见 `references/02_核心机制.md` §2.2，按其字段名产出避免 validate 报错。
@@ -419,6 +431,8 @@ Load only what is needed:
 - `references/08_脚本清单与合并规则.md`
 - `references/09_交互规范与回复模板.md`
 - `references/10_Figure_Prompt规范.md`
+- `references/section_writer_prompt.md`（P1 撰写子代理角色 prompt + 数据/指令隔离声明）
+- `references/prep_subagent_prompt.md`（P1 承重核证备料子代理角色 prompt）
 
 ## Output Contract
 Deliverables should include:

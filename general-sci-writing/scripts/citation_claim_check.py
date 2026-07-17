@@ -25,12 +25,21 @@ CLI:
 from __future__ import annotations
 
 import argparse
+import glob
 import json
+import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
 VALID_VERDICTS = {"support", "weak", "contradict", "unknown"}
+REVIEW_TYPES = {"review", "systematic_review"}
+EFFICACY_OK_TYPES = {"meta_analysis", "clinical_trial"}
+
+
+def _norm(s) -> str:
+    """折叠空白做子串比对的归一化。"""
+    return " ".join(str(s or "").split())
 
 
 def _load_evidence(path: Path) -> list[dict]:
@@ -40,6 +49,51 @@ def _load_evidence(path: Path) -> list[dict]:
     if isinstance(data, list):
         return data
     raise ValueError("claim_evidence 必须是 list 或 {rows:[...]}")
+
+
+def _load_ledger(root_dir: Path) -> dict:
+    """从 literature_index.json（+ ref_evidence_cache.json abstract 兜底）建
+    ref_id → {abstract, article_type} 索引。缺失/损坏一律当空（fail-safe，不炸）。"""
+    out: dict[str, dict] = {}
+    if not root_dir:
+        return out
+    try:
+        data = json.loads((root_dir / "literature_index.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, ValueError):
+        data = None
+    entries: list = []
+    if isinstance(data, list):
+        entries = data
+    elif isinstance(data, dict):
+        for k in ("entries", "papers", "items", "references", "data"):
+            if isinstance(data.get(k), list):
+                entries = data[k]
+                break
+    for e in entries:
+        if isinstance(e, dict) and e.get("id"):
+            out[str(e["id"])] = {
+                "abstract": str(e.get("abstract") or ""),
+                "article_type": str(e.get("article_type") or "unknown"),  # 缺字段 → unknown
+            }
+    # ref_evidence_cache abstract 作子串比对的兜底来源（不覆盖已有条目）
+    cache = _load_cache(root_dir / "ref_evidence_cache.json")
+    for ref, rec in (cache.get("abstracts") or {}).items():
+        if isinstance(rec, dict) and str(ref) not in out:
+            out[str(ref)] = {"abstract": str(rec.get("retrieved_abstract") or ""),
+                             "article_type": "unknown"}
+    return out
+
+
+def _section_body(root_dir: Path, section) -> str | None:
+    """取本节 atomic_md 正文（供 preprint 标注检查）。找不到 → None。"""
+    if not root_dir or not section:
+        return None
+    for p in glob.glob(os.path.join(str(root_dir), "atomic_md", "*", f"{section}.md")):
+        try:
+            return Path(p).read_text(encoding="utf-8")
+        except OSError:
+            continue
+    return None
 
 
 # ── 跨批 ref 级证据缓存（ref_evidence_cache.json）──────────────────────────
@@ -186,6 +240,8 @@ def main() -> int:
                     help="ref 级证据缓存路径（默认 <root>/ref_evidence_cache.json）；跨批复用已验 abstract / 已确认 verdict")
     ap.add_argument("--no-cache", action="store_true",
                     help="禁用缓存 backfill/回写（仅校验当前 claim_evidence，不跨批复用）")
+    ap.add_argument("--check-quote-substring", action="store_true",
+                    help="防伪：承重行 evidence_quote 必须是账本 abstract 子串，否则 fail-closed(exit2)")
     args = ap.parse_args()
 
     if args.evidence:
@@ -220,9 +276,42 @@ def main() -> int:
     print(_render_table(rows))
     print("")
 
-    blockers: list[str] = []
+    # 账本索引（article_type + abstract）：缺 → 空，机械纪律只 warning 不炸
+    root_dir = Path(args.root) if args.root else ev_path.parent
+    ledger = _load_ledger(root_dir)
+
+    blockers: list[str] = []       # exit 2（沿用原承重核证 + G0b 防伪/纪律硬拦）
+    soft_blockers: list[str] = []  # exit 1（preprint 未标注）
+    warnings: list[str] = []       # exit 0，仅提示
     for r in rows:
         blockers.extend(_row_blockers(r))
+        if not r.get("is_load_bearing"):
+            continue
+        ref = str(r.get("ref_id") or "?").strip() or "?"
+        led = ledger.get(ref, {})
+        atype = (str(led.get("article_type") or "unknown").strip().lower() or "unknown")
+        ckind = (str(r.get("claim_kind") or "unknown").strip().lower() or "unknown")
+
+        # G0b 防伪：evidence_quote 必须是账本 abstract 子串（仅 --check-quote-substring）
+        if args.check_quote_substring:
+            quote = str(r.get("evidence_quote") or "").strip()
+            if quote:
+                ledger_ab = led.get("abstract") or r.get("retrieved_abstract") or ""
+                if _norm(quote) not in _norm(ledger_ab):
+                    blockers.append(f"evidence_quote 非账本 abstract 子串: {ref}")
+
+        # G0b 机械纪律（claim_kind × article_type，任一字段未就绪 → 只 warning）
+        if ckind in ("", "unknown") or atype in ("", "unknown"):
+            warnings.append(f"claim_kind/article_type 未就绪, 跳过机械纪律: {ref}")
+        elif ckind in ("mechanism", "efficacy") and atype in REVIEW_TYPES:
+            blockers.append(f"承重机制/疗效声明不得挂综述: {ref}")
+        # efficacy 挂 meta_analysis/clinical_trial → 合法上位证据，放行（no-op）
+
+        # preprint 标注：正文引了该 ref 但缺 [Preprint] 标记 → soft fail(exit1)
+        if atype == "preprint":
+            body = _section_body(root_dir, r.get("section"))
+            if body is not None and f"[@{ref}]" in body and "[Preprint]" not in body:
+                soft_blockers.append(f"preprint 未标注: {ref}")
 
     # 脚本强制回写（不靠 AI 记得）：即使本批仍有 blocker，也把已确立/已确认部分落盘
     if cache is not None:
@@ -232,8 +321,10 @@ def main() -> int:
     load_bearing = sum(1 for r in rows if r.get("is_load_bearing"))
     contradict = sum(1 for r in rows if r.get("verdict") == "contradict")
     summary = {
-        "ok": not blockers,
+        "ok": not blockers and not soft_blockers,
         "blockers": blockers,
+        "soft_blockers": soft_blockers,
+        "warnings": warnings,
         "counts": {"total": len(rows), "load_bearing": load_bearing, "contradict": contradict},
         "cache_reuse": reuse,
     }
@@ -244,8 +335,18 @@ def main() -> int:
         print("")
     else:
         print("✅ 引文核证通过：承重论点均有真摘要支撑且已人工确认（背景句请在上表批量核对）。")
+    if soft_blockers:
+        print("🟠 预印本标注缺失（需在正文引用处补 [Preprint] 标记）：")
+        for s in soft_blockers:
+            print(f"  - {s}")
+    for w in warnings:
+        print(f"⚠️ {w}")
     print(json.dumps(summary, ensure_ascii=False))
-    return 0 if not blockers else 2
+    if blockers:
+        return 2
+    if soft_blockers:
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
