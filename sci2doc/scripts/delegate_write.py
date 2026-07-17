@@ -216,8 +216,17 @@ def cmd_verify_write(args):
     new_refs = ret.get("new_refs") or []
     new_claims = ret.get("new_claims") or []
 
+    # 结构非法（子代理把 new_refs/new_claims 返成 dict/str 等）→ V8 类结构错 exit 2，
+    # 而非放任后续 for/推导式对非 list 迭代崩 AttributeError（对齐 merge 侧 new_refs 数组守卫）。
+    if not isinstance(new_refs, list):
+        die("new_refs 非数组")
+    if not isinstance(new_claims, list):
+        die("new_claims 非数组")
+
     task_section_id = task.get("section_id") or task.get("embed", {}).get("section_id")
     lit_section = task.get("embed", {}).get("lit_section") or task.get("lit_section") or []
+    if not isinstance(lit_section, list):
+        die("lit_section 非数组")
 
     try:
         lit = load_json(os.path.join(root, "literature_index.json"))
