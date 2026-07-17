@@ -11,10 +11,22 @@
 #
 # 退出码：0=OK；1=verify 校验不过（fail-closed）；2=用法错/文件不存在/JSON 畸形。
 #
-# 薄封装用法（各家 scripts/delegate_write.py）：
+# 薄封装用法（各家 scripts/delegate_write.py）——数据布局全由 config 声明，核心不写死某家：
 #   from delegate_write_core import main
-#   main({"family": "...", "section_regex": ..., "outline_files": [...],
-#         "lit_section": {"mode": "matrix_rows"|"matrix_map"|"matrix_related"|"index_used_in", "file": "..."}})
+#   main({
+#     "family": "...", "section_regex": ...,
+#     "outline_files": [...],            # 大纲候选文件；取第一个存在且含 sections 列表的
+#     "outline_id_field": "section_id",  # 大纲里节标识字段（gsw storyline 用 "id"）
+#     "index_path": "literature_index.json",  # 相对根；rw/nsfc 在 "data/..."
+#     "index_shape": "root_list",        # 或 "data_dict"（dict {metadata, entries:[...]}）
+#     "index_entries_key": "entries",    # index_shape=data_dict 时取哪个键
+#     "index_id_field": "id",            # index 条目主键（rw=global_id / gsw=citation_number）
+#     "lit_section": {"mode": "matrix_rows"|"matrix_map"|"matrix_related"|"index_used_in",
+#                     "file": "...",            # 矩阵文件相对路径（index_used_in 为 None）
+#                     "id_field": "id",         # 矩阵行 ref 主键（rw=global_id）
+#                     "section_field": "section_id",       # matrix_rows 行的节字段
+#                     "related_field": "related_sections"} # matrix_related 行的多节字段
+#   })
 
 import argparse
 import hashlib
@@ -49,6 +61,20 @@ def _outline_files(config):
     return (config or {}).get("outline_files") or ["project_state.json", "storyline.json"]
 
 
+def _outline_id_field(config):
+    """各家大纲里节标识字段名：sci2doc/rw/nsfc=section_id；gsw storyline=id。"""
+    return (config or {}).get("outline_id_field", "section_id")
+
+
+def _index_path(config):
+    return (config or {}).get("index_path", "literature_index.json")
+
+
+def _index_id_field(config):
+    """literature_index 条目主键字段：sci2doc/nsfc=id；rw=global_id；gsw=citation_number。"""
+    return (config or {}).get("index_id_field", "id")
+
+
 def load_outline(root, config=None):
     """从 config 指定的大纲文件（默认 project_state.json / storyline.json）读 sections 列表。"""
     for fn in _outline_files(config):
@@ -64,36 +90,57 @@ def load_outline(root, config=None):
     return []
 
 
-def _load_lit(root):
-    """literature_index.json：缺→[]；畸形→exit2（承重账本不容 JSON 坏）。"""
+def _find_section(sections, section, config):
+    """按 config 指定的 outline_id_field 在大纲里找本节（gsw 用 id，其余用 section_id）。"""
+    oid = _outline_id_field(config)
+    return next((s for s in sections if s.get(oid) == section), None)
+
+
+def _load_lit(root, config=None):
+    """按 config 读 literature_index：缺→[]；畸形→exit2（承重账本不容 JSON 坏）。
+
+    index_path 相对根路径（rw/nsfc 在 data/ 下）；index_shape:
+      root_list  条目就是顶层 list（sci2doc/gsw/rw）
+      data_dict  dict {metadata, entries:[...]}，取 entries（nsfc）
+    """
+    cfg = config or {}
     try:
-        lit = load_json(os.path.join(root, "literature_index.json"))
+        data = load_json(os.path.join(root, _index_path(cfg)))
     except FileNotFoundError:
-        lit = []
+        return []
     except Exception:
         die("literature_index JSON 畸形")
-    return lit if isinstance(lit, list) else []
+    if cfg.get("index_shape") == "data_dict":
+        entries = data.get(cfg.get("index_entries_key", "entries")) if isinstance(data, dict) else None
+        return entries if isinstance(entries, list) else []
+    return data if isinstance(data, list) else []
 
 
 def resolve_section_refs(root, section, config, lit):
     """按各家 config 解析"分给本节的文献"，返回 [(ref_id, matrix_row, lit_entry)]。
 
-    四种 mode（§2.6/§7 四家切片来源）：
-      matrix_rows   sci2doc：chapter_matrix.json 富行，按 row.section_id==section 切
-      matrix_map    gsw：literature_matrix.json，section→refs 映射表
-      matrix_related rw：synthesis_matrix.json，按 row.related_sections 含 section 切（行键 gid）
-      index_used_in nsfc：无独立矩阵，literature_index.entries[].used_in_sections 含 section 过滤
+    行/条目字段名全经 config 取（index_id_field / lit_section.id_field / section_field /
+    related_field），核心不写死某家字段。四种 mode（§2.6/§7 四家切片来源）：
+      matrix_rows   矩阵行按 row[section_field]==section 切（sci2doc chapter_matrix；
+                    rw data/synthesis_matrix，行 {global_id, section_id} 单值，故也走本 mode）
+      matrix_map    gsw：literature_matrix.json，section→refs 映射表（ref 可为 int）
+      matrix_related 矩阵行按 row[related_field] 含 section 切（当前无家使用，保留通用）
+      index_used_in nsfc：无独立矩阵，literature_index entries[].used_in_sections 含 section 过滤
     矩阵文件缺/畸形 → 当空处理（不炸；承重防线在承重核证侧，不在切片侧）。matrix_row 无则为 {}。
     """
     cfg = (config or {}).get("lit_section") or {}
     mode = cfg.get("mode", "matrix_rows")
-    lit_by_id = {e.get("id"): e for e in lit}
+    id_field = _index_id_field(config)              # index 条目主键（join 用）
+    row_id = cfg.get("id_field", "id")              # 矩阵行的 ref 主键：rw=global_id
+    section_field = cfg.get("section_field", "section_id")   # 矩阵行的节字段
+    related_field = cfg.get("related_field", "related_sections")
+    lit_by_id = {e.get(id_field): e for e in lit}
 
     if mode == "index_used_in":
         out = []
         for e in lit:
             if section in (e.get("used_in_sections") or []):
-                out.append((e.get("id"), {}, e))
+                out.append((e.get(id_field), {}, e))
         return out
 
     # 其余三种 mode 读矩阵文件
@@ -107,6 +154,7 @@ def resolve_section_refs(root, section, config, lit):
 
     if mode == "matrix_map":
         # {section: [ids]} 或 {section: [{id:..}]} 或 {"sections": {section: [...]}}
+        # ref 可为标量（gsw citation_number 是 int）或 dict。
         m = matrix if isinstance(matrix, dict) else {}
         refs = m.get(section)
         if refs is None:
@@ -114,7 +162,7 @@ def resolve_section_refs(root, section, config, lit):
         refs = refs or []
         out = []
         for r in refs:
-            rid = r if isinstance(r, str) else (r.get("id") if isinstance(r, dict) else None)
+            rid = r if isinstance(r, (str, int)) else (r.get(row_id) if isinstance(r, dict) else None)
             if rid is not None:
                 out.append((rid, r if isinstance(r, dict) else {}, lit_by_id.get(rid, {})))
         return out
@@ -124,16 +172,16 @@ def resolve_section_refs(root, section, config, lit):
     if mode == "matrix_related":
         out = []
         for mr in rows:
-            if section in (mr.get("related_sections") or []):
-                rid = mr.get("gid") or mr.get("id")
+            if section in (mr.get(related_field) or []):
+                rid = mr.get(row_id)
                 out.append((rid, mr, lit_by_id.get(rid, {})))
         return out
 
-    # 默认 matrix_rows（sci2doc）
+    # 默认 matrix_rows（sci2doc 单值 section_field / row_id；rw 同形态但 global_id + data/ 矩阵）
     out = []
     for mr in rows:
-        if mr.get("section_id") == section:
-            rid = mr.get("id")
+        if mr.get(section_field) == section:
+            rid = mr.get(row_id)
             out.append((rid, mr, lit_by_id.get(rid, {})))
     return out
 
@@ -181,11 +229,11 @@ def cmd_pack_write(args, config):
         die("root not a directory: %s" % root)
 
     sections = load_outline(root, config)
-    sec = next((s for s in sections if s.get("section_id") == section), None)
+    sec = _find_section(sections, section, config)
     if sec is None:
         die("outline has no section: %s" % section)
 
-    lit = _load_lit(root)
+    lit = _load_lit(root, config)
     try:
         claim_rows = load_json(os.path.join(root, "claim_evidence.json"))
     except FileNotFoundError:
@@ -248,7 +296,7 @@ def cmd_pack_write(args, config):
     }
     refs = {
         "outline_path": outline_path,
-        "lit_index_path": os.path.join(root, "literature_index.json"),
+        "lit_index_path": os.path.join(root, _index_path(config)),
         "matrix_path": os.path.join(root, matrix_file) if matrix_file else None,
         "progress_path": outline_path,
     }
@@ -285,11 +333,11 @@ def cmd_pack_prep(args, config):
         die("root not a directory: %s" % root)
 
     sections = load_outline(root, config)
-    sec = next((s for s in sections if s.get("section_id") == section), None)
+    sec = _find_section(sections, section, config)
     if sec is None:
         die("outline has no section: %s" % section)
 
-    lit = _load_lit(root)
+    lit = _load_lit(root, config)
     load_bearing_outline = sec.get("load_bearing_claims") or []
     pairs = resolve_section_refs(root, section, config, lit)
 
@@ -384,7 +432,8 @@ def cmd_verify_write(args, config):
     if not isinstance(lit_section, list):
         die("lit_section 非数组")
 
-    lit = _load_lit(root)
+    lit = _load_lit(root, config)
+    id_field = _index_id_field(config)
 
     # V1：markdown 非空
     if not (isinstance(markdown, str) and markdown.strip()):
@@ -406,7 +455,7 @@ def cmd_verify_write(args, config):
         if not (nr.get("doi") or nr.get("pmid")):
             _fail1("new_refs 条目缺 DOI 和 PMID")
 
-    verified_ids = {e.get("id") for e in lit if e.get("verified", True)}
+    verified_ids = {e.get(id_field) for e in lit if e.get("verified", True)}
     lit_section_keys = {item.get("key") for item in lit_section}
     valid_cite = verified_ids | lit_section_keys
     new_key_set = {nr.get("key") for nr in new_refs}
@@ -424,7 +473,7 @@ def cmd_verify_write(args, config):
         _fail1("section_id 不匹配")
 
     # V7：new_claims 的 ref_key 可解析（纯结构，非承重语义门）
-    all_ids = {e.get("id") for e in lit} | new_key_set
+    all_ids = {e.get(id_field) for e in lit} | new_key_set
     for nc in new_claims:
         rk = nc.get("ref_key")
         if rk not in all_ids:
