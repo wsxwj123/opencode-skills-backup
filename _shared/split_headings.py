@@ -20,6 +20,7 @@ import sys
 
 CITATION_RE = re.compile(r"\[(\d+(?:\s*[-,]\s*\d+)*)\]")
 NUM_PREFIX_RE = re.compile(r"^\s*(\d+(?:[.\-]\d+)*)")
+CH_PREFIX_RE = re.compile(r"^\s*第\s*(\d+)\s*章")  # 中文"第X章"命名兜底：只认"章"，不含 节/篇/部
 
 
 def cut_offsets(headings, split_to_level=None):
@@ -48,12 +49,16 @@ def _die(code, msg):
 
 def _name_for(tmpl, i, htext, seen):
     m = NUM_PREFIX_RE.match(htext or "")
-    comps = re.split(r"[.\-]", m.group(1)) if m else []
+    cm = CH_PREFIX_RE.match(htext or "") if not m else None
+    if m:
+        comps = re.split(r"[.\-]", m.group(1))
+    else:
+        comps = [cm.group(1)] if cm else []
     major = comps[0] if comps else str(i + 1)
     minor = "_".join(comps[1:]) if len(comps) > 1 else "0"
     short = re.sub(r"[\\/:*?\"<>|\s]+", "", (htext or ""))[:20] or ("s%02d" % i)
     keys = {"major": major, "minor": minor, "index": i, "i": i, "n": i + 1,
-            "group": major, "原编号": (m.group(1) if m else str(i + 1)),
+            "group": major, "原编号": (m.group(1) if m else (cm.group(1) if cm else str(i + 1))),
             "标题简称": short, "title": short}
     try:
         name = tmpl.format(**keys)
