@@ -29,7 +29,7 @@ MIN_BODY_CHARS = 200  # <此长度的 docx/pdf 抽取视为扫描件，HALT（ma
 ATX_RE = re.compile(r"^(#{1,6})[ \t]+(.+?)[ \t]*#*$")
 # 保守的内容启发式：仅在 docx 无任何样式标题时，作 low-confidence 兜底（编号+短行）。
 NUMBERED_RE = re.compile(r"^\s*\d+(?:[.\-]\d+){0,4}[.、\s]")
-CAPTION_STYLE_RE = re.compile(r"caption|题注|图注|表注", re.IGNORECASE)
+CAPTION_STYLE_RE = re.compile(r"caption|题注|图注|表注|表名|表头", re.IGNORECASE)
 # §10 附带修复：Word 目录条目样式（toc 1/toc2…）挂 outlineLvl，会被反查误当 L1 标题，排除。
 TOC_STYLE_RE = re.compile(r"^toc\s*\d", re.IGNORECASE)
 
