@@ -126,40 +126,21 @@ Then run Phase 0.5 initialization (create folder structure + copy scripts), same
 > AI MUST substitute it before executing. Path quoting must handle spaces — wrap with
 > single quotes in bash/zsh, double quotes in PowerShell, or escape per shell rules.
 
-```
-Accepted formats (Step 0 has already validated the required tool is available):
-  .md / .txt  → read directly into tmp/draft_import.md (UTF-8)
-  .docx       → python3 -c "import docx; d=docx.Document('[FILE]'); open('tmp/draft_import.md','w',encoding='utf-8').write('\n'.join(p.text for p in d.paragraphs))"
-  .pdf        → use the tool Step 0 confirmed available (preference: pdfplumber > pypdf > pdftotext):
-               (a) pdfplumber:
-python3 -c "
-import pdfplumber
-with pdfplumber.open('[FILE]') as pdf:
-    txt = '\n\n'.join((p.extract_text() or '') for p in pdf.pages)
-open('tmp/draft_import.md','w',encoding='utf-8').write(txt)
-"
-               (b) pypdf:
-python3 -c "
-from pypdf import PdfReader
-txt = '\n\n'.join((p.extract_text() or '') for p in PdfReader('[FILE]').pages)
-open('tmp/draft_import.md','w',encoding='utf-8').write(txt)
-"
-               (c) pdftotext:
-                   pdftotext -layout -enc UTF-8 '[FILE]' tmp/draft_import.md
-               ⚠️  PDF extraction usually LOSES heading hierarchy (markdown `#` markers
-                   are not present in the source). Step 2 must use the fallback path
-                   "no clear heading hierarchy → ask user to manually assign section IDs".
-               ⚠️  Scanned PDFs (image-only) yield empty text — the post-extraction sanity
-                   check below detects this (n < 200 chars → hard HALT with OCR guidance).
-  pasted text → write to tmp/draft_import.md (UTF-8)
-```
+**One command for ALL formats — `extract_headings.py` produces the text AND the heading truth-source in one pass** (`tmp/draft_import.md` + `tmp/heading_manifest.json`, offsets natively aligned). This replaces the old per-format inline python; the script owns the only judgment call ("what is a heading") so Step 2 can split/audit deterministically.
 
-> **Why explicit `encoding='utf-8'`:** Python's default text mode encoding is platform-dependent
-> (Mac/Linux: utf-8; Windows: cp1252). Without an explicit encoding, Chinese/Japanese reviews and
-> Unicode-rich academic PDFs will either raise `UnicodeEncodeError` mid-write or produce mojibake
-> in `tmp/draft_import.md`. Always pass `encoding='utf-8'` on every read/write touching the draft.
+```
+# .md / .txt / .docx / .pdf / pasted-text-saved-to-a-file — same call:
+python3 scripts/extract_headings.py --source '[FILE]' \
+        --text-out tmp/draft_import.md --out tmp/heading_manifest.json
+```
+- `.md/.txt` → `#`-based headings (high confidence).
+- `.docx` → Word heading styles + **styles.xml reverse lookup** (basedOn chain / outlineLvl) so non-standard custom styles (e.g. "论文三级标题" basedOn Heading3) are NOT missed.
+- `.pdf` → text extracted, `headings: []` + `warning:"no_heading_detected"` (exit 0) → triggers the no-heading path in Step 2.
+- Exit contract: **0** success (incl. headless) / **1** source corrupt or <200 chars (scanned — same HALT semantics as the sanity check below) / **2** usage error / `--source` missing / missing python-docx / no PDF extractor. Non-zero → resolve with user before Step 2 (装依赖走 Step 0 流程).
 
-Save raw text as `tmp/draft_import.md`.
+> **Why explicit UTF-8 everywhere:** the script always writes `tmp/draft_import.md` as UTF-8; never re-open it with a platform-default encoding (Windows cp1252) or Chinese/Unicode drafts will mojibake.
+
+Both files are now on disk: `tmp/draft_import.md` (byte-stream基准) and `tmp/heading_manifest.json` (标题真值).
 
 **Post-extraction sanity check (MANDATORY after .docx / .pdf extraction — fail-safe on missing file, hard HALT on suspicious length):**
 ```python
@@ -180,47 +161,58 @@ print('✅ Text length looks reasonable for a review draft — safe to proceed t
 ```
 > **Hard HALT semantics:** non-zero exit from this check **blocks Step 2 entirely**. Do NOT proceed to atomic split if any branch above triggers — first resolve the underlying extraction problem with the user.
 
-## Step 2: Atomic Split by Heading Hierarchy
+## Step 2: Atomic Split by Heading Hierarchy (two paths + two-layer reverse verification)
 
-> **⚠️ MANDATORY — do NOT write any file to `drafts/` until user explicitly confirms the proposed structure. This gate cannot be skipped.**
+> **⚠️ MANDATORY — do NOT write any file to `drafts/` until the two machine-verification layers are green AND the user explicitly confirms the proposed structure. The user-confirmation gate cannot be skipped.**
 
-> **PDF-imported drafts:** PDF text extraction strips markdown markers, so the heading
-> detection in Step 1 below will almost always come up empty for `.pdf` sources. **Skip
-> directly to the fallback flow at the end of this section** (semantic boundary detection +
-> user confirmation) rather than reporting "no sections found" and stalling. `.docx`
-> imports preserve headings via paragraph styles ONLY if the original document used
-> Word's heading-level styles — many do not, so the same fallback may also apply.
+The old "AI manually detects headings and hand-splits" is replaced. The only judgment call ("what is a heading") is now owned by `extract_headings.py` (Step 1). Given a trusted heading truth-source, splitting is a pure mechanical byte-slice — no subagent, zero main-context. Only when the truth-source is untrustworthy do we fall back to an LLM. **Both reverse-verification layers always run** afterwards.
 
 Execute in this exact order:
 
-1. Detect heading structure in `tmp/draft_import.md`: `#` (H1) / `##` (H2) / `###` (H3).
-   For PDF-extracted text where `#` markers are absent, treat ALL-CAPS lines, lines
-   matching `^\d+(\.\d+)?\s+[A-Z]` (e.g. "2.1 Delivery Systems"), and short isolated
-   lines followed by paragraph blocks as candidate section boundaries.
-2. Build the proposed split map: heading text → zero-padded section filename (e.g., `## 2.1 Delivery Systems` → `section_02_01.md`)
-3. **STOP. Show the user a confirmation table:**
+**2.1 Path judgment (deterministic, no AI discretion) —** read `tmp/heading_manifest.json`:
+```
+trusted := headings 非空  AND  无任何 confidence=="low" 的 heading
+有标题路 ⇐ trusted == true      # 2.2 确定性脚本切
+无标题路 ⇐ trusted == false     # 2.3 LLM 拆分子代理（含 headings:[] / low-confidence）
+```
+路径判据只判"有无可信标题"（heading_manifest 非空且无 low-confidence 项）——这是 manifest 里真实存在、可机械判定的字段。**覆盖缺口不在此判**（manifest 无"缺口"字段，无法在此机械判定），而是下游处理：首标题前非空正文由 split_headings 自动纳入为前导 frontmatter atom（`section_00_frontmatter.md`，§9，不报错不丢），split_audit 仅在它被丢弃（无前导 atom 覆盖）时以 `preamble_dropped` 判红；区间内漏/串/漂移由逐区比对兜。PDF imports and docx-without-styles land here as headless → no-heading path.
+
+**2.2 Has-heading path — mechanical slice (main-session Bash, zero context):**
+```
+python3 scripts/split_headings.py --text tmp/draft_import.md --headings tmp/heading_manifest.json \
+      --atoms-dir drafts --naming 'section_{major}_{minor}.md' --split-to-level 2 \
+      --manifest-out tmp/split_manifest.json
+```
+Slices `text[o_i:o_{i+1}]` byte-for-byte; captions (`is_caption`) ride inside their region, not split out. Exit 0 success / 1 IO / 2 usage·headings-empty·offset-out-of-range. Main session only sees "exit 0, wrote N files" — no draft content enters context.
+
+**§10 前后置标签块（extract_headings 自动附加，此处零改动）:** extract_headings 会把独立成短行的前置摘要标签（`摘要`/`Abstract`…）和后置标签（`致谢`/`基金`/`Author Contributions`…）识别成 `level:0 + kind` 的特殊 heading，成为额外切点。于是 split_headings 自然多产两块 atom：前置摘要块 `section_00b_abstract.md`（摘要+关键词+图形摘要，`kind=front_abstract`）、后置块 `section_zz_backmatter.md`（致谢起至文末合成一块，`kind=back_matter`）；标题+作者+机构仍走 §9 前导 `section_00_frontmatter.md`。防误判三关（行首锚定+整行≈标签+短行、后置位置门仅参考文献之后、不确定不切）与 `^toc\d` 目录条目排除都在 extract_headings 内做，cut_offsets/has_preamble/split_audit 均不感知 kind。无摘要/无后置标签时退化为现有行为。
+
+**2.3 No-heading path — LLM split subagent** (only when `trusted==false`): dispatch a subagent per `references/split_subagent_prompt.md` (role = pure partition by semantic boundary, byte-for-byte copy, NO rewrite/citation-conversion). It returns atom files + `tmp/split_manifest.json` + a back-filled `tmp/heading_manifest.json` (its own cut offsets, `confidence:"low"`, `style_id:"llm"`). Source is given as a path (it self-Reads); the subagent prompt MUST embed the《数据与指令隔离声明》.
+
+**2.4 Layer 1 — deterministic `split_audit.py` (always run after either path):**
+```
+python3 scripts/split_audit.py --text tmp/draft_import.md --headings tmp/heading_manifest.json \
+      --manifest tmp/split_manifest.json --atoms-glob 'drafts/section_*.md' \
+      --split-to-level 2 --root . --report tmp/split_audit_report.json
+```
+Per-region offset比对 (slice_i vs atom_i) catches 漏/造/串/边界漂移/乱序 all five, no false-green. **exit 0** → go to Layer 2. **exit 1** (region mismatch, fail-closed) → 回退重拆 (§回退), do NOT hand-edit files to sneak past. **exit 2** (headings空/畸形/glob命中0) → 回 2.1 路径判定. **exit 1/2 = 不得声明拆分完成.**
+
+**2.5 Layer 2 — LLM boundary verification subagent (ALWAYS run after audit exit 0):** this is NOT redundant with Layer 1. split_audit *trusts* the heading truth-source; if the extract layer mis-identified a heading (called body text a heading, or missed a real one), split_audit compares against a wrong truth and still reports green. Layer 2 *reads content* down to the finest heading level and catches "the truth-source itself is wrong". Run the `split_boundary` DoD gate (`references/dod_checklist.json`) via `delegate_review.py`:
+- Assemble `tmp/split_verify_ctx.md` = heading tree (no body) + per-atom anchor (its heading line + first/last 2–3 lines). **Never dump full body** — this keeps context bounded even for a 100-section doc.
+- `pack` → subagent → `verify`. Verdict mapping (evidence MUST start with a tag): `[OK]`→pass→前进；`[WRONG]`→fail→回退重切（有标题路先修 extract_headings 真值）；`[UNCERTAIN]`→fail→**交用户裁决**（不自动动，展示上下文）. `uncertain` maps to **fail not na** — na would be waved through.
+
+**2.6 User confirmation table (only after both layers green):** show the split map + audit result, wait for explicit "yes"/adjust. Then rebuild `outline.md` Outline section.
    ```
-   section_01_01.md  ←  ## 1.1 Introduction (820 words)
-   section_02_01.md  ←  ## 2.1 Delivery Systems (310 words)
-   section_03_01.md  ←  ## 3.1 Clinical Outcomes (0 words — missing)
-   ...
+   section_01_01.md  ←  1.1 Introduction (820 words)
+   section_02_01.md  ←  2.1 Delivery Systems (310 words)
+   [machine-verified: split_audit exit 0, boundary gate pass]
    Confirm this split? (yes / adjust)
    ```
-4. **Wait for explicit "yes" or adjustment instructions. Do not proceed until received.**
-5. Only after confirmation: write each section to `drafts/section_XX_XX.md` (zero-padded, identical naming to Write Mode)
-6. Rebuild `outline.md` Outline section from detected headings.
-   > **Section ID is what matters, not heading depth.** `zotero_manager.py --init` parses
-   > by ID pattern (`N.` → level 1; `N.M` → level 2) and accepts any `##` or deeper heading.
-   > Either of these is acceptable:
-   > ```markdown
-   > ## 1. Introduction          ### 1. Introduction
-   > ### 1.1 Background      OR  #### 1.1 Background
-   > ```
-   > **Do NOT** drop the numeric prefix (`## Introduction` is ignored — no ID = invisible to --init).
+   > **Section ID is what matters, not heading depth.** `zotero_manager.py --init` parses by ID pattern (`N.` → level 1; `N.M` → level 2). **Do NOT** drop the numeric prefix (`Introduction` with no ID = invisible to --init).
 
-**Fallback (no clear heading hierarchy):** Display detected paragraph blocks with estimated boundaries → ask user to manually assign section IDs → write files only after user confirmation.
+**回退契约 (§7):** audit exit 1 → 有标题路查 extract_headings/split_headings bug 修后重跑；无标题路把 hard_fails 回喂 LLM 重拆。audit exit 2 → 回 2.1。LLM 核验 WRONG → 重切（有标题路先修真值）；UNCERTAIN → 交用户。**禁主会话手改文件蒙混。** 重切 N=2 仍红 → 停 + 交用户 + 附手动命令。
 
-**Completion gate:** Step 2 is complete ONLY when `drafts/section_XX_XX.md` files physically exist on disk. If no files were written, do NOT advance to Step 3.
+**Completion gate:** Step 2 is complete ONLY when `drafts/section_XX_XX.md` files exist on disk AND split_audit exit 0 AND the `split_boundary` gate passed AND the user confirmed. If any layer is red, do NOT advance to Step 3.
 
 ## Step 3: Diagnosis Report (per section — no external script needed)
 
