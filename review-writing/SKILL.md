@@ -1,6 +1,6 @@
 ---
 name: review-writing
-version: 2.24.0
+version: 2.25.0
 description: "Universal assistant for writing high-impact academic literature reviews (Nature/Cell/Lancet level). Supports real-time Zotero integration, outline persistence, and multi-mode reference management. Use when writing a comprehensive review article requiring systematic search, synthesis, and citation management. 触发词：写综述、文献综述、综述写作、literature review、review article、改综述、完善综述、继续写综述、improve review。"
 triggers:
   - "写综述"
@@ -369,8 +369,8 @@ The script writes `[TITLE]/state.json`:
 
 **步骤概要：**
 1. **Step 0:** 验证参数（不重复收集）+ 格式依赖检测（.docx / .pdf）
-2. **Step 1:** 接收草稿（.md / .docx / .pdf / 粘贴文本）→ `tmp/draft_import.md`
-3. **Step 2:** 按标题层级原子拆分 → `drafts/section_XX_XX.md`（**必须用户确认后才写文件**）
+2. **Step 1:** 接收草稿 → `extract_headings.py` 一趟同产 `tmp/draft_import.md` + `tmp/heading_manifest.json`（标题真值）
+3. **Step 2:** 原子拆分（两路 + 两层反向核验必跑）：路径判定 → 有标题路 `split_headings.py` 机械切 / 无标题路 LLM 拆分子代理 → **Layer1** `split_audit.py` 逐分区比对(exit0 才进) → **Layer2** `split_boundary` gate（LLM 核验，`delegate_review.py` pack/verify，恒跑）→ **两层皆绿 + 用户确认后才写** `drafts/section_XX_XX.md`
 4. **Step 3:** 诊断报告（字数 / 引用密度 / AI 特征）→ keep / polish / rewrite / missing
 5. **Step 4:** 用户分配优先级（**Hard Block，每节必须有明确标签**）
 6. **Step 5:** 引文导入 → `data/literature_index.json`（保留原始 [N] 编号）
