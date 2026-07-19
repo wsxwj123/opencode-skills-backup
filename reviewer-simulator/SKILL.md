@@ -288,7 +288,7 @@ python -c "import os,json; r=os.getcwd(); d=os.path.join(r,'data'); os.makedirs(
 硬门禁:
 1. 若存在未替换占位符(如`{{...}}`),必须终止交付并返工。
 2. 头部`VERDICT_TEXT`与第十部分`FINAL_RECOMMENDATION`必须一致且只能为"拒稿/大修/小修/接收"之一。
-3. `scan_report_humanize.py` 硬阻断项（severity=ERROR，exit 1）：**禁套话主干**（humanizer BANNED 模板句/套话/修辞，如"综上所述""革命性的""值得注意的是"）+ **去AI必禁三项 装饰破折号（—/——）/ scare quotes / 解释性冒号（均禁止使用，硬门禁）**。命中即 `HUMANIZE_FAILED`，须改写正文后重跑，未过不得交付。**超50字中文长句仍为软提示（WARNING，不阻断）**，脚本会列出但不影响退出码，供人工酌情修润。脚本无法判定的"从句≤2层"由 B7 盲检人工酌情核。
+3. `scan_report_humanize.py` 硬阻断项（severity=ERROR，exit 1）：**禁套话主干**（humanizer BANNED 模板句/套话/修辞，如"综上所述""革命性的""值得注意的是"）+ **去AI必禁三项 装饰破折号（—/——）/ scare quotes / 解释性冒号（均禁止使用，硬门禁）**。命中即 `HUMANIZE_FAILED`，须改写正文后重跑，未过不得交付。**HTML 结构引号豁免（scare quotes 只管正文散文）**：本报告以 HTML 输出，其中 HTML 标签/属性/内联样式/代码里的结构性双引号（如 `id="sec-1"`、`class="panel panel-audit"`、`<a href="...">`）是**代码语法、不是 scare quotes**，一律不得删除、改写、转全角或转弯引号——动了破坏 HTML 渲染；去 scare quotes 只针对散文里包裹词/短语的引号，绝不触碰 markup 与代码。**超50字中文长句仍为软提示（WARNING，不阻断）**，脚本会列出但不影响退出码，供人工酌情修润。脚本无法判定的"从句≤2层"由 B7 盲检人工酌情核。
 4. 仅当上述校验全部通过才允许提交最终报告。
 5. 若 `$SKILL_DIR/scripts/validate_report_html.py` 或 `scan_report_humanize.py` 路径不存在或执行报错，必须在报告头部注明"[自动校验不可用，已人工核查占位符与VERDICT一致性及去AI三禁]"，并逐项人工确认上述门禁，不得静默跳过。
 6. 若校验未通过：不得自行静默修改报告后重新提交，必须向用户说明具体失败原因和位置，列出需要人工确认的条目，等待用户指令后再决定返工或带注释交付。
@@ -514,7 +514,7 @@ AIGC率过高或涉嫌造假
 - ❌ 给非原创稿件（综述／Meta／病例报告／协议）套用对照组、样本量、随机化、盲法等原创专属批评，且不声明所用报告规范。
 - ❌ 用 tavily、websearch、openalex 检索文献，或并行调用检索工具、间隔小于 1 秒。
 - ❌ 文献未写入 literature_index.json 过 citation_guard 就当证据写入正文，或把空 index（status=empty）当核验失败而阻断交付。
-- ❌ 审稿意见正文出现"禁套话主干"（BANNED 模板句/套话/修辞，如"综上所述""革命性的""值得注意的是"）或**去AI必禁三项 装饰破折号（—/——）/ scare quotes / 解释性冒号（均禁止使用）**却仍交付（均硬阻断 ERROR；仅超长句为软提示，列出即可不阻断）。
+- ❌ 审稿意见正文出现"禁套话主干"（BANNED 模板句/套话/修辞，如"综上所述""革命性的""值得注意的是"）或**去AI必禁三项 装饰破折号（—/——）/ scare quotes / 解释性冒号（均禁止使用）**却仍交付（均硬阻断 ERROR；仅超长句为软提示，列出即可不阻断）。**注**：scare quotes 只管正文散文——HTML 标签/属性/代码里的结构性双引号（如 `id="sec-1"`、`class="panel"`、`<a href="...">`）是代码语法、非 scare quotes，一律不得删除/改写/转全角或弯引号，动了破坏渲染。
 - ❌ 三项输入（稿件全文／目标期刊／研究领域）缺失仍基于猜测推进，或 DoD subagent盲检未 exit 0 就声明“审稿报告完成”。
 
 
