@@ -64,7 +64,10 @@ def check_requests() -> Dict[str, Any]:
 
 
 def check_scrapling() -> Dict[str, Any]:
-    path = shutil.which("scrapling")
+    # 与 fetch_everything 一致：优先当前解释器同目录的 scrapling（重入后即 venv 那套），
+    # 保证自检报告里的 scrapling 就是真正被调用的那个。
+    sibling = Path(sys.executable).with_name("scrapling")
+    path = str(sibling) if sibling.exists() else shutil.which("scrapling")
     if not path:
         return {"ok": False, "detail": "scrapling not found in PATH", "subcmds": {}}
     proc = run_cmd([path, "--help"])
@@ -121,6 +124,12 @@ def check_browsers() -> Dict[str, Any]:
 
 
 def main() -> None:
+    # 入口先解析到"playwright 就绪"的解释器（可能 os.execv 重入）；重入后 sys.executable
+    # 即最终解释器，自检报告里的 python.executable 就显示实际用的那套。对无 venv 机器透明。
+    sys.path.insert(0, str(SCRIPT_DIR))
+    from _pyresolve import ensure_resolved
+    ensure_resolved()
+
     parser = argparse.ArgumentParser(description="检查 fetch-everything 的本地执行环境")
     parser.add_argument("--json", action="store_true", help="输出 JSON")
     args = parser.parse_args()

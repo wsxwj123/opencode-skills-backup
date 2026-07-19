@@ -189,13 +189,22 @@ def fetch_via_online_services(url: str) -> List[Dict]:
     return results
 
 
+def _scrapling_bin() -> str:
+    """优先用当前解释器同目录的 scrapling：重入后即解析到的那套 venv，playwright/patchright
+    与浏览器都齐；没有就退回 PATH 上的 scrapling。保证 scrapling 与 playwright 同解释器，
+    不再出现"playwright 用新版、scrapling 却用另一套旧 chromium"的漂移。"""
+    sibling = Path(sys.executable).with_name("scrapling")
+    return str(sibling) if sibling.exists() else "scrapling"
+
+
 def fetch_via_scrapling(url: str) -> List[Dict]:
     results: List[Dict] = []
     proxy = _env_proxy()
+    scrapling_bin = _scrapling_bin()
     for base_cmd in SCRAPLING_COMMANDS:
         with tempfile.NamedTemporaryFile(suffix=".md", delete=False) as tmp:
             tmp_path = Path(tmp.name)
-        cmd = list(base_cmd) + [url, str(tmp_path)]
+        cmd = [scrapling_bin] + list(base_cmd)[1:] + [url, str(tmp_path)]
         if proxy:
             cmd += ["--proxy", proxy]
         proc = run_cmd(cmd, timeout=SCRAPLING_WALL_TIMEOUT)
@@ -277,6 +286,12 @@ def choose_best(candidates: List[Dict]) -> Optional[Dict]:
 
 
 def main() -> None:
+    # 入口先把裸 python3 解析到"playwright 就绪"的解释器（可能 os.execv 重入）；
+    # 重入后 sys.executable 即正确解释器，下方所有子进程自动继承。对无 venv 的机器透明。
+    sys.path.insert(0, str(SCRIPT_DIR))
+    from _pyresolve import ensure_resolved
+    ensure_resolved()
+
     parser = argparse.ArgumentParser(description="统一抓取执行器")
     parser.add_argument("url", help="目标 URL")
     parser.add_argument("--output", "-o", help="输出文件路径")
