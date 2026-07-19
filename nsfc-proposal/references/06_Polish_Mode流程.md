@@ -24,7 +24,7 @@
 ## 一、流程总览
 
 ```
-Step 0  导入草稿 → 结构解析 → 原子化拆分
+Step 0  导入草稿 → extract 抽标题真值 → 机械原子化拆分（两路+两层反向核验+用户确认+签字）
 Step 1  严格评审报告生成（以评审专家视角，写入本地文件）
 Step 2  与用户协商修改优先级与字数
 Step 3  根据评审报告逐条修改（按优先级逐节处理）
@@ -40,56 +40,66 @@ Step 5  全文自审 → 终稿
 
 支持格式：`.md` / `.docx` / `.txt` / 直接粘贴文本
 
-### 0.2 结构解析
+### 0.2 抽取标题真值（extract_headings）
 
-自动识别草稿中的章节标题层级，建立结构树：
+**唯一判断项"什么是标题"由脚本一次性拥有**，后续拆分/审计纯机械，不再靠主会话肉眼认标题。所有格式同一条命令：
 
-```
-示例输入草稿结构：
-  一、立项依据
-  二、研究内容
-    2.1 研究目标
-    2.2 研究内容
-      2.2.1 纳米药物的构建与表征
-      2.2.2 纳米药物的体外抗肿瘤活性研究
-      2.2.3 纳米药物的体内药效学评价
-    2.3 拟解决的关键科学问题
-    2.4 研究方案与技术路线
-    2.5 特色与创新之处
-    2.6 年度研究计划
-  三、研究基础与工作条件
-    3.1 研究基础与可行性分析
-    3.2 工作条件
-    3.3 正在承担的相关项目
-    3.4 完成基金项目情况
-  四、其他需要说明的情况
+```bash
+python3 scripts/extract_headings.py --source '<整稿路径>' \
+        --text-out tmp/draft_import.md --out tmp/heading_manifest.json
 ```
 
-### 0.3 原子化拆分规则
+- `.md/.txt` → 认 `#` 标题（high confidence）；`.docx` → Word 标题样式 + styles.xml 反查（basedOn 链/outlineLvl，自定义样式不漏）；`.pdf`/无样式 docx → `headings:[]` + `warning:"no_heading_detected"`（exit 0，触发无标题路）。
+- 退出码：0 成功（含 headless）/ 1 源损坏或 <200 字（疑扫描件）/ 2 用法错·缺依赖。非 0 先与用户解决再往下。
+- **抽后 sanity check（.docx/.pdf 抽取后必做）**：`tmp/draft_import.md` 不存在或 `<200 字` → 硬 HALT（疑扫描件/漏页/抽取失败），先解决再进 0.3。
 
-**按章节标题拆分为独立原子文件，拆分到用户草稿中的最小标题层级。**
+### 0.3 原子化拆分（两路 + 两层反向核验 + 用户确认 + 签字）
 
-命名规范：`{大节编号}_{原始编号}_{标题简称}.md`
+> **⚠️ 两层机器核验皆绿 且 用户明确确认结构前，不得声明拆分完成、不得进入 Step 1。**
+
+**0.3.1 路径判定**（读 `tmp/heading_manifest.json`，纯机械无 AI 裁量）：`trusted = headings 非空 且 无任何 low-confidence 项`。
+
+**0.3.2 有标题路（trusted）——机械字节切**（主会话 Bash，零上下文，草稿内容不进上下文）：
+
+```bash
+python3 scripts/split_headings.py --text tmp/draft_import.md --headings tmp/heading_manifest.json \
+        --atoms-dir sections --naming 'section_{major}_{标题简称}.md' \
+        --split-to-level <草稿最小标题层级> --manifest-out tmp/split_manifest.json
+```
+
+- **原子落 `sections/`**（gate_registry 已登记 `sections/*.md`）；切 `text[o_i:o_{i+1}]` 逐字节，图注（is_caption）随区间内不外切。
+- **原子名反映该节实际标题文本**（如 "2 研究内容" → `section_2_研究内容.md`），适配任意基金模板/待润色材料，**不硬套国自然固定 P1-P4**；认不出编号的裸中文序号节由 index 兜底命名，仍产唯一名不崩不丢。国自然 P1-P4 语义名的桥接留"模板驱动第1期"由结构真源统一处理，本轮不做。
+
+**0.3.3 无标题路（headless：.pdf / 无 Word 标题样式的 .docx / 纯 .txt）——HALT 兜底**：`trusted==false` 时**不派拆分、不派 LLM、不写任何 atom 到 `sections/`**，向用户输出明确停止信号 + 提示"未检出可靠标题层级，请将草稿转成带 `#`/Word 标题样式的 .md/.docx 重传，或补标题后再拆"。**绝不静默乱拆。**（headless 是国自然常见交付形态——.txt 粘贴 / 手打"一、立项依据"不套样式的 docx；后续若需打通 headless LLM 拆分路，再 vendored `split_subagent_prompt.md`。）
+
+**0.3.4 Layer 1（确定性 split_audit，两路后恒跑）**：
+
+```bash
+python3 scripts/split_audit.py --text tmp/draft_import.md --headings tmp/heading_manifest.json \
+        --manifest tmp/split_manifest.json --atoms-glob 'sections/*.md' \
+        --split-to-level <N> --root . --report tmp/split_audit_report.json
+```
+
+逐区 offset 比对（slice_i vs atom_i）抓漏/造/串/边界漂移/乱序五类，无假绿。**exit 0** → 进 Layer 2；**exit 1**（region mismatch / preamble_dropped，fail-closed）→ 回退重拆，**禁手改文件蒙混**；**exit 2**（headings 空/畸形/glob 命中 0）→ 回 0.3.1。exit 1/2 = 不得声明拆分完成。
+
+**0.3.5 Layer 2（LLM 边界反向核验，split_audit exit 0 后恒跑）**：跑 `split_boundary` gate（`references/dod_checklist.json`）via `delegate_review.py`——组 `tmp/split_verify_ctx.md`（标题树 + 各 atom 锚定行，**不含全文正文**）→ pack → 独立子代理 → verify。此层与 Layer 1 不冗余：split_audit *信任*标题真值，若 extract 层把正文误当标题/漏认真标题，Layer 1 比错真值仍报绿；Layer 2 读内容到最细标题级，抓"真值本身错"。verdict 映射（evidence 须以标签开头）：`[OK]`→pass 前进 / `[WRONG]`→fail 回退重切（有标题路先修 extract_headings 真值）/ `[UNCERTAIN]`→**fail 交用户裁决**（不自动动，展示上下文）。uncertain 映射 fail 非 na（na 会被放过）。
+
+**0.3.6 用户确认拆分表**（两层皆绿后）：展示 split map + audit 结果，等用户明确 "yes"/adjust。
 
 ```
-拆分结果示例：
-  sections/
-  ├── P1_立项依据.md
-  ├── P2_2.1_研究目标.md
-  ├── P2_2.2.1_纳米药物的构建与表征.md
-  ├── P2_2.2.2_纳米药物的体外抗肿瘤活性研究.md
-  ├── P2_2.2.3_纳米药物的体内药效学评价.md
-  ├── P2_2.3_关键科学问题.md
-  ├── P2_2.4_研究方案与技术路线.md
-  ├── P2_2.5_特色与创新之处.md
-  ├── P2_2.6_年度研究计划.md
-  ├── P3_1_研究基础与可行性分析.md
-  ├── P3_2_工作条件.md
-  ├── P3_3_正在承担的相关项目.md
-  ├── P3_4_完成基金项目情况.md
-  ├── P4_其他需要说明的情况.md
-  └── REF_参考文献.md（如草稿中有）
+section_2_研究内容.md   ←  2 研究内容 (1200 字)
+section_3_研究方案.md   ←  3 研究方案 (900 字)
+[machine-verified: split_audit exit 0, split_boundary gate pass]
+确认此拆分？(yes / adjust)
 ```
+
+**0.3.7 结构签字解锁 Step 3**：用户确认后落签字，解锁后续逐节 Write/Edit：
+
+```bash
+python3 scripts/structure_signoff_gate.py confirm --root . --note "<用户确认拆分表的要点/原话>"
+```
+
+**铁律**：confirm 只能在"两层核验皆绿 + 用户在对话中明确对拆分表说 yes"之后跑，**AI 不得代替用户自行 confirm**。拆分脚本经 Bash 写 `sections/*.md` **不经 Write/Edit 工具**，故未签也能落盘拆分产物（与 Write Mode 同机理，hook 只 PreToolUse 拦 Write/Edit）；真正被 signoff 门控的是 Step 3 逐节改写——未签时对 `sections/*.md` 的每次 Write/Edit 被 hook deny。
 
 ### 0.4 拆分后初始化
 
