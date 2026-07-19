@@ -461,6 +461,17 @@
           "script": "python3 scripts/git_checkpoint.py status ."
         }
       ]
+    },
+    "split_boundary": {
+      "title": "拆分分节结构核验（功能② Layer 2 · LLM 反向核验）",
+      "applies_when": "每次拆分后必跑（split_audit exit 0 之后），不论有标题/无标题路。输入 = tmp/split_verify_ctx.md（标题树 + 各 atom 锚定行，不含全文正文）。",
+      "items": [
+        {
+          "id": "SB1",
+          "name": "每个原子文件对应正确的最细一级标题、边界无越界",
+          "check": "据标题树+各 atom 锚定行逐个核：该 atom 是否正好对应它标称的那一节？边界是否切在对的最细标题上（无把正文误当标题、无漏标题、无跨节串入）？逐条给判定+证据，evidence 必须用 verdict 标签开头：[OK]→verdict pass（前进）；[WRONG]→verdict fail（回退重切，有标题路先修 extract_headings 真值）；[UNCERTAIN]→verdict fail（交用户裁决，勿自动动）。uncertain 映射 fail 而非 na（na 会被放过）。不逐字读全文正文（正文逐字级由 split_audit 兜）。"
+        }
+      ]
     }
   }
 }
