@@ -1,6 +1,6 @@
 ---
 name: reviewer-response-sci
-version: 2.23.3
+version: 2.24.0
 description: 用于SCI审稿意见逐条回复的全流程技能，适用于期刊大修/小修阶段，只出回复包（HTML），不改主稿。触发词：审稿意见回复、回复审稿人、回复reviewer、response letter、回复信、rebuttal、逐条回复、Response to Reviewer、revise and resubmit、R&R、reviewer comments。路由说明：与revise-sci区分，本技能只出回复包不改主稿，需同时改主稿并出修订稿docx请用revise-sci；与reviewer-simulator区分，本技能针对已收到的意见写回复，后者是模拟生成审稿意见。
 ---
 
@@ -111,6 +111,7 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
 - Gate fix loop must not exceed **3 iterations**; if gate still fails after 3 direct JSON edits, halt and report remaining failures to the user with a list of unresolved unit IDs.
 - **AI Style Control:** English responses must avoid AI-typical phrasing patterns.
   - **强度说明（先读）：** 分三类。**AI 套话主干（硬）**，即空致谢/对冲词/填充语/模板化重复，是真的 AI 味，必须清。**去AI必禁三项（硬门禁，禁止使用）**，即破折号（`—/——/em-dash`）/ scare quotes / 解释性冒号，`risk_check.py` 命中即 FAIL（hard risk、pipeline-blocking，exit 1），必须清零。**句式偏好（软提示，别机械削平）**，即单句长度、-ing 分词，是**倾向性提醒不是硬门禁**：真人写的 rebuttal 里长句、分词从句本就是常态，为了压指标把自然句子剁碎反而写出更假的"防 AI 腔"。这几项按语感判断，明显堆砌才改；`risk_check.py` 对它们只报 WARN、不阻断。
+  - **HTML/代码结构引号豁免（去 scare quotes 只管正文散文）：** 本回复包以 HTML 输出，其中 HTML 标签、属性、内联样式与代码里的**结构性双引号**（如 `id="sec-1"`、`class="panel"`、`<a href="...">`）是**代码语法，不是 scare quotes**，**一律不得删除、改写、转全角或转弯引号**——动了会破坏 HTML 渲染。"禁 scare quotes / 禁双引号"仅针对散文里包裹词/短语的引号，绝不触碰 markup 与代码。
   - Hedging overuse: "it is important to note that", "it should be noted that", "notably", "importantly"
   - Empty appreciation: "we greatly appreciate your insightful comments", "this is an excellent suggestion"
     - **外交缓冲豁免（仅 Push back / Partial 基调）**：rebuttal 里适度致谢与缓冲是不激怒审稿人的润滑剂，不算"空致谢"。反驳/部分接受的 unit **允许一句**克制的开场缓冲，`decision-rules.md` B 段推荐句式如 "We thank the reviewer for this valuable comment." / "We appreciate this suggestion; however, ..." 是**允许**的。禁的仍是：副词叠加的浮夸致谢（"we greatly/sincerely/deeply appreciate"）、`this is an excellent suggestion`、以及 ≥3 条回复用同一句致谢开头。缓冲句之外仍须紧跟实质回应，不得只致谢不作答。`risk_check.py` 的 `ai_appreciation` 正则已按此放行无副词的单句致谢，两文件口径一致。

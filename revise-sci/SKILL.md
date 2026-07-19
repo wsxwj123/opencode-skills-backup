@@ -1,6 +1,6 @@
 ---
 name: revise-sci
-version: 2.23.2
+version: 2.24.0
 description: 退稿/返修全管道，同时出逐条回复信+修改后正文docx+Patch修订。触发词：改稿、修改稿子、修订正文、退稿改进、返修、revise manuscript、major revision、minor revision、revise and resubmit、point-by-point response、revised manuscript。路由说明：与reviewer-response-sci区分，本技能同时改主稿+出回复包，后者只出回复不改稿；与gsw区分，gsw写新稿，本技能专处理已有稿子的审稿意见驱动修改。
 ---
 
@@ -352,7 +352,7 @@ Each comment must contain:
 - The polishing prompt must be layered, not flat. It must include: role definition, non-negotiable edit/evidence/citation/length constraints, deep anti-AI rewriting protocol, and a JSON-only output contract.
 - **Polish anti-AI 去AI五项（适用于中英文改稿正文）。硬/软分层：写作时五项都要守；门禁对「主干」硬失败，套话禁词、scare quotes、解释性冒号、-ing 假分析从句、**装饰性破折号**这类真正的 AI 味硬拦（fail-close）；只把「句长 >30 词」降为软提示（`strict_gate.py` 响亮上报、不 fail-close）。装饰性破折号禁止使用，命中即 FAIL。**
   1. **禁装饰性破折号（🔴 硬门禁，禁止使用，命中即 FAIL）**：禁用 —/——/em-dash 充当停顿、补充或强调（如"该结果——尽管样本量小——表明…"）；改用逗号、句号或拆为两句。连字符（"dose-response"）与数值范围不受限。中英文均适用。`strict_gate.py`/`polish_guard` 对破折号 fail-close，不放行。
-  2. **禁 scare quotes**：禁用双引号包裹自造词或普通短语以暗示"新概念/反讽"；保留：术语首次定义、原始审稿人评论直接引用、已固化的术语隐喻。
+  2. **禁 scare quotes**：禁用双引号包裹自造词或普通短语以暗示"新概念/反讽"；保留：术语首次定义、原始审稿人评论直接引用、已固化的术语隐喻。**HTML/代码结构引号豁免**：本条只管正文散文；HTML 标签、属性、内联样式与代码里的结构性双引号（如 `id="sec-1"`、`class="panel"`、`<a href="...">`）是代码语法、不是 scare quotes，**一律不得删除、改写、转全角或转弯引号**——动了会破坏 HTML 渲染，去 scare quotes 绝不触碰 markup 与代码。
   3. **禁解释性冒号**：禁用"概念: 解释"或"Concept: explanation"格式的装饰句式；合法冒号包括比例、时间、列表引导、标题、图表标签。
   4. **英文单句 ≤30 词（🟡 软提示，不阻断）**：polished 片段中任何独立英文句子（以 `.!/? ` 分界）词数应 ≤30 词；超限建议拆句、不要用分号逃避拆句。**句长超限只在 `strict_gate.py` 软提示 banner 上报，不 fail-close**（`sentence >30 words` 已归入 `SOFT_STYLE_MARKERS`）。**禁止 -ing 分词从句作假分析**：形如 `, reflecting …` / `, ensuring …` / `, highlighting …` / `, suggesting …` 的尾置 -ing 从句禁止用于添加未经数据支撑的推断；已有明确证据锚点的 participial phrase 不受此限。`find_ai_style_markers` 中 "trailing -ing clause" 检测已覆盖以 `,\s*(thus|thereby|therefore)\s+[a-z-]+ing` 模式；追加覆盖 `, (reflecting|ensuring|highlighting|suggesting|demonstrating|indicating|revealing)\b` 模式。
   5. **中文单句 ≤50 字、从句 ≤2 层**（如正文含中文）：任何中文句子（句号/问号/感叹号分界）字数不得超过 50 字；嵌套从句层数不超过 2 层（如"A（B（C））"为第 3 层，须拆分）。连续 3 句字数差异 <5 字时应主动变换句长。

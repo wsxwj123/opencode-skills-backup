@@ -51,7 +51,7 @@
         {
           "id": "B7",
           "name": "审稿意见本身去AI",
-          "check": "硬核'禁套话主干'+去AI必禁三项：报告正文（含各 *_HTML 填充内容）无 rubric 第七节 BANNED 模板句/套话/修辞残留、无破折号/scare quotes/解释性冒号——先跑脚本硬核（exit 0=HUMANIZE_OK 即通过；四类命中即 ERROR、HUMANIZE_FAILED）。中文句长≤50字/从句≤2层为软提示，脚本列出但不阻断，人工酌情修润即可",
+          "check": "硬核'禁套话主干'+去AI必禁三项：报告正文（含各 *_HTML 填充内容）无 rubric 第七节 BANNED 模板句/套话/修辞残留、无破折号/scare quotes/解释性冒号（HTML 结构引号豁免：报告以 HTML 输出，标签/属性/内联样式/代码里 id=、class=、href= 等后的结构性双引号是代码语法、非 scare quotes，一律不得删除/改写/转全角或转弯引号；去 scare quotes 只针对散文里包裹词短语的引号）——先跑脚本硬核（exit 0=HUMANIZE_OK 即通过；四类命中即 ERROR、HUMANIZE_FAILED）。中文句长≤50字/从句≤2层为软提示，脚本列出但不阻断，人工酌情修润即可",
           "script": "python ~/.claude/skills/reviewer-simulator/scripts/scan_report_humanize.py <报告HTML路径>"
         },
         {
