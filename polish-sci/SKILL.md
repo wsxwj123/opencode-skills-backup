@@ -1,6 +1,6 @@
 ---
 name: polish-sci
-version: 2.23.3
+version: 2.24.1
 description: 纯论文润色全管道。输入一份已写完的稿子(无审稿意见),逐段提升语言表达,绝不改内容/数据/结论。触发词：润色、polish、语言润色、润色论文、polish paper、language polish、proofread manuscript、母语化、润色稿子。路由说明：与revise-sci区分,revise-sci由审稿意见驱动、只改被点名片段;polish-sci无意见、全文逐段润色覆盖每一段。与general-sci-writing区分,gsw从零写新稿,polish-sci只润色现成稿。
 ---
 
@@ -188,6 +188,7 @@ unit=段落是**红线核验的边界**,不是"每段只能就地改、不准动
 - 英文单句>30词 / 中文单句>50字(科学方法学段落常含数据列表的合法长句)。
 - `-ing` 拖尾从句(`, thereby ...ing` / `, reflecting ...`)。
 - `not only...but also`、修辞问句。
+- **比喻与排比（软提示，交作者定夺）**：原稿已有的比喻（"如同/犹如/像…一样"及"…的桥梁/基石"类）与连续≥3句同式排比不自动删改，记入 `polish_risk_flags` 列给作者；但**润色改写时禁止新增**比喻或排比（模型新写句子的硬性纪律，AI 的比喻多浮夸失当）。
 
 > 降软不等于放任:软提示仍逐段列给用户看,该收敛就收敛;只是它不再 fail-closed 卡交付,把"这处长句要不要改"的判断权交回作者,而不是脚本替作者一律铲平。去AI必禁三项(破折号/scare quotes/解释性冒号)例外:硬拦、禁止使用,不交作者取舍。`from A to B` 检测已从 common.py 移除(科学文本高频合法,信噪比差)。
 

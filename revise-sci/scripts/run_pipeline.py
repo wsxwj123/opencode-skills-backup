@@ -30,7 +30,7 @@ REFERENCE_SEARCH_DECISIONS = ("ask", "approved", "declined")
 
 
 def run_step(cmd: list[str]) -> None:
-    completed = subprocess.run(cmd, text=True, capture_output=True)
+    completed = subprocess.run(cmd, text=True, capture_output=True, encoding="utf-8", errors="replace")
     if completed.stdout:
         print(completed.stdout.strip())
     if completed.stderr:
@@ -203,7 +203,7 @@ def compute_affected_units(project_root: Path, args: argparse.Namespace, py: str
             atomize_doc = [py, str(script_dir / "atomize_manuscript.py"), "--manuscript", args.manuscript, "--project-root", str(scratch_root)]
             if args.si:
                 atomize_doc.extend(["--si", args.si])
-            subprocess.run(atomize_doc, text=True, capture_output=True, check=True, timeout=300)
+            subprocess.run(atomize_doc, text=True, capture_output=True, encoding="utf-8", errors="replace", check=True, timeout=300)
         except Exception:
             return None
 

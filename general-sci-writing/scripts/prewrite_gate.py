@@ -188,7 +188,7 @@ def run_subprocess_gate(script_name, extra_args, root):
         return None, f"{script_name} not found (skip)"
     cmd = [sys.executable, script_path] + extra_args + ["--root", root]
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120)
     except (subprocess.SubprocessError, OSError) as exc:
         return False, f"{script_name} run error: {exc}"
     out = (proc.stdout or "").strip() + (("\n" + proc.stderr.strip()) if proc.stderr.strip() else "")

@@ -87,6 +87,7 @@ def build_manifest(project_root: Path, candidates: list[dict[str, Any]]) -> dict
                 "trailing -ing clause (', reflecting/ensuring/highlighting/suggesting/demonstrating/indicating/revealing ...')",
                 "decorative contrast",
                 "em dash",
+                "parallel structure repeated across 3+ consecutive sentences (same opening words or same syntactic frame)",
                 "slogan-like closing line",
                 "English sentence exceeding 30 words (split into two shorter sentences instead)",
                 "Chinese sentence exceeding 50 characters (split or restructure)",
@@ -164,6 +165,7 @@ def build_polish_prompt(project_root: Path, output_path: Path, candidates: list[
         "decorative contrast structures",
         "trailing -ing clauses used as unsupported inference (', reflecting/ensuring/highlighting/suggesting/demonstrating/indicating/revealing ...')",
         "em dash",
+        "parallel structure repeated across 3+ consecutive sentences (same opening words or same syntactic frame)",
         "grand significance claims not already supported",
         "slogan-like concluding lines",
         "English sentences longer than 30 words (split instead)",
@@ -258,7 +260,7 @@ def run_polish_driver(
 
     if runner:
         command = shlex.split(runner) + ["--input-json", str(project_root / "revision_polish_manifest.json"), "--output", str(output_path), "--project-root", str(project_root)]
-        completed = subprocess.run(command, text=True, capture_output=True)
+        completed = subprocess.run(command, text=True, capture_output=True, encoding="utf-8", errors="replace")
         if completed.returncode == 0 and output_path.exists():
             payload = read_json(output_path, None)
             errors = validate_output_payload(payload, candidates)
@@ -276,7 +278,7 @@ def run_polish_driver(
 
     if opencode_driver:
         command = shlex.split(opencode_driver) + ["--dir", str(project_root), prompt]
-        completed = subprocess.run(command, text=True, capture_output=True)
+        completed = subprocess.run(command, text=True, capture_output=True, encoding="utf-8", errors="replace")
         if completed.returncode == 0 and output_path.exists():
             payload = read_json(output_path, None)
             errors = validate_output_payload(payload, candidates)
