@@ -321,34 +321,40 @@ def _extract_from_sentence(sent: str) -> list[dict[str, Any]]:
 
 def _read_docx_tables(path: Path) -> list[tuple[str, Optional[str]]]:
     """遍历 docx 表格单元格，返回 [(cell_text, table_ref)]。table_ref 由文档顺序里就近题注推断，
-    推不出为 None。合并单元格按底层 w:tc 去重防重复候选。**只在本脚本补，不改 manuscript_index。**"""
+    推不出为 None。**只在本脚本补，不改 manuscript_index。**
+
+    确定性纪律：直接按文档序遍历底层 w:tr/w:tc XML 元素、逐 cell 拼 w:t 文本，**不碰
+    python-docx 的 row.cells / cell._tc**——后者对合并单元格会重复返回同一 tc，若用
+    `id(cell._tc)` 去重则依赖 lxml 瞬时代理对象的内存地址，地址被 GC 复用会让不同 cell 的
+    id() 偶发相撞、把真单元格误当"已见"漏抽（与 PYTHONHASHSEED 无关的按次随机 flaky）。
+    直接遍历 w:tc 每个物理单元格只出现一次（横向合并=单 tc+gridSpan，纵向合并续格 vMerge
+    内容为空自然跳过），无需去重，输出对文档序恒定。
+    """
     from docx import Document
-    from docx.text.paragraph import Paragraph
-    from docx.table import Table
     from docx.oxml.ns import qn
+
+    w_p, w_tbl, w_tr, w_tc, w_t = (qn("w:p"), qn("w:tbl"), qn("w:tr"),
+                                   qn("w:tc"), qn("w:t"))
+
+    def _el_text(el) -> str:
+        return normalize_ws("".join(t.text or "" for t in el.iter(w_t)))
 
     doc = Document(str(path))
     out: list[tuple[str, Optional[str]]] = []
     last_caption: Optional[str] = None
     for child in doc.element.body.iterchildren():
-        if child.tag == qn("w:p"):
-            text = normalize_ws(Paragraph(child, doc.element.body).text)
+        if child.tag == w_p:
+            text = _el_text(child)
             if not text:
                 continue
             cm = TABLE_CAPTION_RE.match(text) or TABLE_BARE_RE.match(text)
             if cm:
                 no = next((g for g in cm.groups() if g and g.isdigit()), None)
                 last_caption = f"Table {no}" if no else None
-        elif child.tag == qn("w:tbl"):
-            tbl = Table(child, doc.element.body)
-            seen: set[int] = set()
-            for row in tbl.rows:
-                for cell in row.cells:
-                    key = id(cell._tc)
-                    if key in seen:
-                        continue
-                    seen.add(key)
-                    ct = normalize_ws(cell.text)
+        elif child.tag == w_tbl:
+            for tr in child.findall(w_tr):  # 直接子 w:tr，不下钻嵌套表
+                for tc in tr.findall(w_tc):
+                    ct = _el_text(tc)
                     if ct:
                         out.append((ct, last_caption))
             last_caption = None
