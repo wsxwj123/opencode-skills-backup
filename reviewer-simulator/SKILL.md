@@ -1,6 +1,6 @@
 ---
 name: reviewer-simulator
-version: 2.25.0
+version: 2.26.0
 description: 用于模拟高标准学术同行评审，对医学、生物、药学等领域稿件进行法医式检查、目标期刊契合度评估和证据锚定批评，输出结构化中文审稿报告。当用户提到模拟审稿、帮我审稿、预审、审稿报告、做reviewer、审一下这篇文章、投稿前自查、审稿人会怎么挑刺、这篇能不能中、peer review、simulate reviewer、review manuscript 时优先调用。注意与 reviewer-response-sci（用于回复审稿意见）区分：本技能是模拟审稿人写审稿意见，后者是针对已收到的审稿意见撰写回复。
 ---
 
@@ -221,6 +221,10 @@ python -c "import os,json; r=os.getcwd(); d=os.path.join(r,'data'); os.makedirs(
 `python "$SKILL_DIR/scripts/structure_outline.py" --manuscript <稿件 docx 或 md> --project-root "$WORKROOT"`
 产出 `$WORKROOT/outline.json`（`sections`/`figures`/`tables`/`items` 四类清单 + `summary`）。脚本护栏取向"宁抽勿拒"，只列结构不判引用；图/表编号统一记作 `Figure N`/`Table N`（正文"图3"＝`Figure 3` 的跨语言对应由视角⑤ LLM 兜）。此文件在第四步半仅喂给视角⑤。
 
+**数值一致性的数值候选锚（再紧接着跑一条）：** 抽取稿件里**真实出现的带上下文数值候选**（数字+单位+所在句+指标名线索+分组/时间点线索+位置），作为第四步半视角⑥"数值一致性审稿人"的**确定性锚**——LLM 只在这份机器真值上判数值矛盾，不凭记忆。同样用安装目录绝对路径，输出锚定 `$WORKROOT`：
+`python "$SKILL_DIR/scripts/numeric_candidates.py" --manuscript <稿件 docx 或 md> --project-root "$WORKROOT"`
+产出 `$WORKROOT/numeric_candidates.json`（`candidates` 清单，每条含 `id`/`raw`/`value`/`value_secondary`/`norm`/`unit`/`form`/`sentence`/`metric_clue`/`group_clue`/`location` + `summary`）。脚本护栏"宁抽勿拒"，**只列数值不判矛盾、不判同一测量、不判容差**（判断全留视角⑥ + 反向验证）；百分比 `norm` 归一为分数、docx 表格单元格值也抽（`location.source=="table"`）。此文件在第四步半仅喂给视角⑥。
+
 
 **🔴 第四步半：并发多视角subagent盲评（禁止主 agent 自评）**
 
@@ -234,11 +238,14 @@ python -c "import os,json; r=os.getcwd(); d=os.path.join(r,'data'); os.makedirs(
    - 视角③：领域专家（新颖性、与领域文献的关系、领域特定技术规范，细胞系/伦理/药学剂型等）
    - 视角④：魔鬼代言人（核心论点漏洞、cherry-picking、确认偏误、过度解读、与文献矛盾，rubric 第八节）
    - 视角⑤：交叉引用一致性审稿人（正文的 `见 3.1`/`如前文 4.1.2 所述`/`见图3`/`见表2`/`见(2)` 等指向型表述，逐条对着 `outline.json` 判**存在性**（目标编号在不在 → `missing_target`）与**语义对应**（编号在但指错内容 → `semantic_mismatch`），rubric 第三节"交叉引用一致性"项）
+   - 视角⑥：数值一致性审稿人（对着 `numeric_candidates.json` 判哪些候选指**同一指标/同一测量对象/同一分组/同一时间点/同一单位**（跨措辞语义归一：抑瘤率/inhibition rate 视为同一指标；跨单位如 μM vs nM 由 LLM 换算判），仅对同一测量的一组值判是否**完全相等**；**零容差**——同一测量且非完全相等即报 `conflict`，不同剂量组/时间点/亚组/单位的正常差异不报，rubric"数值一致性"项）
 
 2. **并发派出（fan-out）**：为每个视角各派一个独立subagent，互不共享上下文、互不告知彼此结论（盲）。每个subagent的输入仅包含：
    - 稿件路径（或全文文本）
    - 该视角的 rubric 条目（仅本视角相关条目，不给其他视角的 rubric）
    - **视角⑤额外输入 `$WORKROOT/outline.json`**（确定性锚，稿子里真实存在的全部小节/图/表/条目）；视角⑤按 rubric 第三节"交叉引用一致性"项的格式返回 `[{"ref_id","citing_location","cited_target","issue_type":"missing_target|semantic_mismatch|uncertain","evidence_quote","outline_says","finding","severity"}]`，**outline.json 是唯一权威真值**，不得凭记忆假设稿子有某小节，拿不准标 `uncertain` 不硬判。**补充材料引用（`S` 前缀编号，如 `Figure S1`/`Table S3`/`见图 S22`/`Supplementary Fig. 5`）不在 outline 范围内**——正文稿抽不到补充文件的定义，此类一律标 `uncertain` 或直接跳过，**绝不报 `missing_target`**（否则整份补充材料 S1–Sn 会被批量假报为悬空）。
+   - **视角⑥额外输入 `$WORKROOT/numeric_candidates.json`**（确定性数值真值锚，稿子里真实出现的全部带上下文数值候选）；视角⑥按**零容差二元 schema** 返回 `[{"metric","same_measurement":bool,"values":[{"id","raw","location":{"region","para_index"}}],"conflict":bool,"evidence_quote","finding"}]`（**无 `tolerance_state`、无 `severity`**）。判据：`same_measurement==true && 非完全相等 → conflict=true`（完全相等含 `58%==58.0%` 比 `norm`、`1.2==1.20` 比去尾零 `value`、换算后 `1.2μM==1200nM`）；`same_measurement==false`（不同组/时间点/单位的正常差异）→ 不报、不进下游。范围(`form=range`) vs 点值不套"完全相等"，点值是否落区间由视角⑥显式判。**numeric_candidates.json 是唯一权威真值，不凭记忆。**
+     - **样本量 n 的跨位置核对**：额外核对同一实验/同一组的样本重复数 n（`metric_clue=="样本量"` 的候选，第 1 层能从方法学/图注/结果正文各处抽到）是否跨**方法学 / 图注 / 结果与讨论**三处一致（例：方法学写每组 n=6，Figure 2 图注标 n=8，结果正文又说 n=6）。**防假阳判据（与"剂量组正常差异"同理）**：不同图/不同实验的 n 本就可能合理不同，**只有当多处 n 明确指向同一个实验、同一组样本时**其 n 不一致才报 `conflict`；无法确认是否同一实验/同组的，按 `same_measurement=false` 处理、不报（拿不准交人工，别硬判）。此核对并入上面"先判是否同一测量再按零容差比对"的同一逻辑，不新增独立机制。
    - 要求：按 rubric 条目逐项返回结构化 JSON，格式为 `[{"dimension": "条目名", "severity": "CRITICAL|MAJOR|MINOR|INFO", "finding": "具体证据与位置", "recommendation": "改进建议"}]`
    - **禁止**：不得告知其他视角的已有发现，不得给出总体 verdict（这是主 agent 的职责）
 
@@ -289,6 +296,25 @@ python -c "import os,json; r=os.getcwd(); d=os.path.join(r,'data'); os.makedirs(
 5. **降级**：若派不出真正独立的子代理，照第四步半"盲评降级告警"——不得同一 AI 自问自答冒充，交回用户人肉核，交叉引用问题标注"未经独立反向验证"。
 
 > 与下面"核心批评核对·必停"（人肉关）叠加不替换：本层机器先剔掉凭空造的，剩下的 confirmed 再摆给用户人肉核。`confirmed` 的并入第七部分"必须解决的核心问题"（`missing_target` 通常 MAJOR，`semantic_mismatch` 视致命度 MAJOR/MINOR），最致命者进第九部分法医式解剖。
+
+
+**第五步·四分之三-bis：数值 conflict 的独立反向验证（机器·出报告前·必做）**
+
+第四步半视角⑥每条 `same_measurement==true && conflict==true` 的数值发现，**必须过一道看不到判断过程的独立空白子代理核验**再进报告（`same_measurement==false` 或完全相等的一律不入本层）。**真复用 `delegate_review.py`**（不改它，只 pack/verify），gate=`numeric-verify`（checklist 内自由 key，不查 gate_registry）：
+
+1. **动态合成临时 checklist** 写 `$WORKROOT/numeric_verify_checklist.json`：`{"skill":"reviewer-simulator","gates":{"numeric-verify":{"title":"数值一致性·反向验证","items":[{"id":"num-001","name":"<metric：valA vs valB 摘要>","check":"<下方零容差极性模板逐字填>"}]}}}`。item 只放两处 `raw` 值、两处 location、`metric`、核验所需原文切片，**绝不放视角⑥的 `finding`/reasoning（防带节奏）**。item 默认硬项（不标 `"severity":"soft"`），走 delegate_review 原生 fail-closed。
+   - **≥3 值的组必须拆成两两配对的多个 item**：视角⑥ `values` 是数组，同指标出现 3+ 次进同一 `conflict` 组，但极性模板只有 A/B 两槽 → 把一个 N≥3 值的组拆成两两配对的多个 item（id 用 `num-<组>-<配对序>` 如 `num-001-a`），每 item 只放 A/B 两值及各自 id/location。**任一配对 item pass → 该组整体保留交人工；全部 fail → 该组剔除。**
+   - **🔴【零容差极性模板·必须内联，禁占位符、禁自由发挥】**：`check` 逐字用下面固定模板（`{metric}`/`{valA}`/`{locA}`/`{valB}`/`{locB}` 处填值）——
+     > "到给你的原稿全文里独立核实：`{locA}` 处的值『{valA}』与 `{locB}` 处的值『{valB}』，两者据称都是指标『{metric}』的测量结果。请逐字回源确认两点——**(1) 两处是否确指同一指标、同一测量对象、同一分组、同一时间点、同一单位**（即本就应当相等；跨单位如 μM vs nM，请换算到同一单位后再判是否本应相等）？请到原文找出各自邻近的分组/剂量/时间点/亚组/单位线索比对。**(2) 若确为同一测量，两值是否非完全相等**（**零容差：只要不是完全相同的数值即算不等，含末位舍入差异如 58% vs 58.3%**）？**只有『同一测量且非完全相等』才判 pass（矛盾属实，保留交人工裁决）；只要发现两者其实是不同分组/不同时间点/不同亚组/不同单位（正常差异），或换算后完全相等，一律判 fail（非矛盾，剔除）。** evidence 必填：逐字引出 A、B 两处原文句及各自的分组/时间点/单位线索。"
+
+     即 **同一测量且非完全相等 → pass（=confirmed，保留交人工裁决）；不同分组/时间点/亚组/单位（正常差异）或换算后完全相等 → fail（=refuted，剔除）**。⚠️ 极性关键：check 必须显式要核验人**独立回源确认"同一测量"**（比对分组/时间点/单位），不能只问"两个数等不等"——"是否同一测量"判错是数值维度假阳主因。
+2. **喂料**：`--files` 给**原稿全文**（让核验人独立回源确认 A/B 两处的分组/时间点/单位上下文，非只看结论切片）。
+3. **pack → 派独立空白子代理裁决 → verify**：
+   `python "$SKILL_DIR/scripts/delegate_review.py" pack --checklist "$WORKROOT/numeric_verify_checklist.json" --gate numeric-verify --files <稿件路径> --workdir "$WORKROOT"`
+   独立子代理逐条只依据原文裁 `pass|fail|na` 并附逐字证据，写回约定路径；再：
+   `python "$SKILL_DIR/scripts/delegate_review.py" verify --checklist "$WORKROOT/numeric_verify_checklist.json" --gate numeric-verify --workdir "$WORKROOT"`
+4. **verdict 映射 + 剔除**：`pass`→**confirmed**（矛盾属实，并入第七部分 `{{CRITICAL_ISSUES_HTML}}`，无新占位符）；`fail`/`na`→**refuted**（剔除，内部留一条备查）。verify 的 `problems`（空证据/未裁决/verdict 非法）照 fail-closed 视为未核验，一律不进报告（宁漏报）。**零容差下所有 confirmed conflict 一律报出交人工，不做 severity 降级路由。**
+5. **降级**：派不出真正独立的子代理时，照第四步半"盲评降级告警"——不得同一 AI 自问自答冒充，交回用户人肉核，数值一致性标注"未经独立反向验证"。
 
 
 **第五步七分之一：核心批评核对关卡（出报告前·必停）**
