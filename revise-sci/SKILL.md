@@ -1,6 +1,6 @@
 ---
 name: revise-sci
-version: 2.25.1
+version: 2.26.0
 description: 退稿/返修全管道，同时出逐条回复信+修改后正文docx+Patch修订。触发词：改稿、修改稿子、修订正文、退稿改进、返修、revise manuscript、major revision、minor revision、revise and resubmit、point-by-point response、revised manuscript。路由说明：与reviewer-response-sci区分，本技能同时改主稿+出回复包，后者只出回复不改稿；与gsw区分，gsw写新稿，本技能专处理已有稿子的审稿意见驱动修改。
 ---
 
@@ -152,8 +152,19 @@ python scripts/export_docx.py --project-root <project_root> --output-md <output_
 # 传 --manuscript-docx <原始稿.docx> 时改后稿默认 in-place 保原稿格式（仅替换被改段落）。定位/身份失败时**硬停退出码 3 并打印两个选项**，不再默认静默降级；显式加 --allow-rebuild-fallback 才回退 md 全量重建。--no-inplace 强制走 legacy 全量重建。run_pipeline 会在原稿为 .docx 时自动传入 --manuscript-docx（并透传 --allow-rebuild-fallback）。
 # --track-changes（默认关闭）：in-place 导出时，改动段落不再整段重建成 clean 文本，而是对 original vs current 做**词级 diff**（英文按空白/标点切词、中文按单字切），生成带 Word 修订痕迹的 docx，删除词用 <w:del><w:delText>、新增词用 <w:ins><w:t>、替换=先删旧后插新；未变的词保持普通 run 不进痕迹。每处 ins/del 带唯一递增 w:id + w:author（--author，默认 revise-sci）+ w:date（--date，默认 datetime.now().isoformat()）。行内格式（*斜体*/**粗**/<sup>/<sub>）随词级 diff 完整保留在痕迹两侧。含内嵌图片的段落仍跳过（保图）。开关关闭时 clean in-place 行为**完全不变**。Word 里“接受全部修订”后正文==current，“拒绝全部修订”后==original。注意：python-docx 的 `.text` 不读 w:ins/w:del 内文，属正常现象（能正常打开），校验请用接受/拒绝后的文本或 docx 技能的 accept_changes.py。
 python scripts/final_consistency_report.py ...
+python scripts/numeric_candidates.py --manuscript <output_docx 或 output_md> --project-root <project_root>   # 数值一致性核查第1层确定性锚；三层(独立检测子代理+delegate_review反向验证+HALT)见下方"数值一致性核查"节。挂在 final_consistency 与 strict_gate 之间
 python scripts/strict_gate.py ...
 ```
+
+**数值一致性核查（三层·final_consistency 与 strict_gate 之间·HALT 交用户裁决）**：数值矛盾天然跨摘要/结果/表，必须返修后全文成形后跑。读**返修后的 `output_docx`**（in-place 保格式，docx 表格 walk 头号用例，`numeric_candidates.py` 已额外遍历 `doc.tables` 抽单元格值 `location.source=="table"`）或 `output_md`。
+
+- **① 第 1 层确定性锚**：上面 `numeric_candidates.py` 已产 `<project_root>/numeric_candidates.json`。
+- **② 第 2 层独立检测子代理（非作者自检·I2）**：派一个 fresh context、**没参与返修**的独立检测子代理（`TaskCreate`/spawn_task），**只喂** `numeric_candidates.json` + 返修全文，**不给返修过程上下文/作者意图**（防继承确认偏误，否则漏看的真矛盾第 3 层永远看不到→系统性假阴）。子代理产出**零容差二元 schema** `[{"metric","same_measurement":bool,"values":[{"id","raw","location":{"region","para_index"}}],"conflict":bool,"evidence_quote","finding"}]`（**无 `tolerance_state`、无 `severity`**）：先判是否**同一指标/对象/分组/时间点/单位**（跨措辞语义归一、跨单位如 μM vs nM 由 LLM 换算判），仅对同一测量判是否**完全相等**，`same_measurement==true && 非完全相等 → conflict=true`；不同剂量组/时间点/亚组/单位的正常差异不报。**样本量 n 跨位置核对**：核对同一实验/同一组的样本重复数 n（`metric_clue=="样本量"`）是否跨**方法学 / 图注 / 结果与讨论**三处一致；**防假阳**：不同图/不同实验的 n 本可合理不同，**只有多处 n 明确指向同一实验、同一组样本时**其不一致才报 conflict，无法确认的按 `same_measurement=false` 不报（拿不准交人工）。**降级**：派不出真正独立子代理时不得自问自答冒充，标注"数值一致性未经独立检测"交用户人肉核。
+- **③ 第 3 层反向验证**：每条 `conflict==true` 过 `delegate_review.py`（**不改它，只 pack/verify**，gate=`numeric-verify`，checklist 内自由 key，不查 gate_registry）。⚠️ **revise 的 `delegate_review.py` 是 fork（md5 ≠ base）——pack/verify 与 fail-closed 行为须对 fork 实测，不假设 base 行为。** 动态合成 `<project_root>/numeric_verify_checklist.json`：item 只放两处 `raw`/location/`metric` + 核验所需原文切片（**绝不放子代理 finding/reasoning**），默认硬项（不标 `"severity":"soft"`）；**≥3 值的组拆成两两配对的多个 item**（id `num-<组>-<配对序>`，任一配对 pass → 该组整体保留、全部 fail → 剔除）。**🔴 check 逐字用零容差极性模板（禁占位符、禁自由发挥）**：
+  > "到给你的原稿全文里独立核实：`{locA}` 处的值『{valA}』与 `{locB}` 处的值『{valB}』，两者据称都是指标『{metric}』的测量结果。请逐字回源确认两点——**(1) 两处是否确指同一指标、同一测量对象、同一分组、同一时间点、同一单位**（即本就应当相等；跨单位如 μM vs nM，请换算到同一单位后再判是否本应相等）？请到原文找出各自邻近的分组/剂量/时间点/亚组/单位线索比对。**(2) 若确为同一测量，两值是否非完全相等**（**零容差：只要不是完全相同的数值即算不等，含末位舍入差异如 58% vs 58.3%**）？**只有『同一测量且非完全相等』才判 pass（矛盾属实，保留交人工裁决）；只要发现两者其实是不同分组/不同时间点/不同亚组/不同单位（正常差异），或换算后完全相等，一律判 fail（非矛盾，剔除）。** evidence 必填：逐字引出 A、B 两处原文句及各自的分组/时间点/单位线索。"
+
+  `--files` 给返修全文；`pack` → 独立空白子代理逐条裁 `pass|fail|na` 附逐字证据 → `verify`。**verdict 映射**：`pass`→confirmed（矛盾属实）；`fail`/`na`→refuted（剔除）；verify 的 `problems`（空证据/未裁决/verdict 非法）照 fail-closed 视为未核验、不进清单（宁漏报）。极性写反 = 假批评全放行，务必对准 pass=矛盾属实。
+- **④ HALT**：命中 confirmed conflict → **HALT 交用户裁决**（列 `metric` + 两处 `raw`/location + evidence_quote），暂停 pipeline、用户逐条裁决是否需统一，处置后重跑本步至无 confirmed conflict 再进 `strict_gate.py`。**不 auto-block 硬拦、不静默判等放过**（零容差 + 灰区交人工）。
 
 Or use the single entrypoint:
 
