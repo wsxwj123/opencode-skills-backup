@@ -1,6 +1,6 @@
 ---
 name: reviewer-simulator
-version: 2.24.1
+version: 2.25.0
 description: 用于模拟高标准学术同行评审，对医学、生物、药学等领域稿件进行法医式检查、目标期刊契合度评估和证据锚定批评，输出结构化中文审稿报告。当用户提到模拟审稿、帮我审稿、预审、审稿报告、做reviewer、审一下这篇文章、投稿前自查、审稿人会怎么挑刺、这篇能不能中、peer review、simulate reviewer、review manuscript 时优先调用。注意与 reviewer-response-sci（用于回复审稿意见）区分：本技能是模拟审稿人写审稿意见，后者是针对已收到的审稿意见撰写回复。
 ---
 
@@ -217,6 +217,10 @@ python -c "import os,json; r=os.getcwd(); d=os.path.join(r,'data'); os.makedirs(
 `python "$SKILL_DIR/scripts/manuscript_index.py" --manuscript <稿件 docx 或 md> --project-root "$WORKROOT"`
 产出 `$WORKROOT/figure_index.json`、`$WORKROOT/reference_index.json`、`$WORKROOT/manuscript_index.md`。结果为启发式抽取，作审计辅助而非红线核验：图表完整性审计据 `figure_index.json` 核对每图是否有图注、是否被正文引用（`orphan_type`）；参考文献审计据 `reference_index.json` 核对孤儿引用（列而未引 `entry_not_cited`、引而无条目 `cited_no_entry`）。
 
+**交叉引用一致性的结构目录锚（紧接着再跑一条）：** 抽取稿件里**真实存在的结构目录**（小标题 `3.1`/`4.1.2`、图/表编号、条目 `(1)(2)(3)`），作为第四步半视角⑤"交叉引用一致性审稿人"的**确定性锚**——LLM 只在这份机器真值上判交叉引用对不对，不凭记忆假设稿子有哪些小节。同样用安装目录绝对路径，输出锚定 `$WORKROOT`：
+`python "$SKILL_DIR/scripts/structure_outline.py" --manuscript <稿件 docx 或 md> --project-root "$WORKROOT"`
+产出 `$WORKROOT/outline.json`（`sections`/`figures`/`tables`/`items` 四类清单 + `summary`）。脚本护栏取向"宁抽勿拒"，只列结构不判引用；图/表编号统一记作 `Figure N`/`Table N`（正文"图3"＝`Figure 3` 的跨语言对应由视角⑤ LLM 兜）。此文件在第四步半仅喂给视角⑤。
+
 
 **🔴 第四步半：并发多视角subagent盲评（禁止主 agent 自评）**
 
@@ -229,10 +233,12 @@ python -c "import os,json; r=os.getcwd(); d=os.path.join(r,'data'); os.makedirs(
    - 视角②：统计审稿人（统计方法选择合规性、效能、多重比较、结果报告规范，参照 rubric 第六节统计子清单）
    - 视角③：领域专家（新颖性、与领域文献的关系、领域特定技术规范，细胞系/伦理/药学剂型等）
    - 视角④：魔鬼代言人（核心论点漏洞、cherry-picking、确认偏误、过度解读、与文献矛盾，rubric 第八节）
+   - 视角⑤：交叉引用一致性审稿人（正文的 `见 3.1`/`如前文 4.1.2 所述`/`见图3`/`见表2`/`见(2)` 等指向型表述，逐条对着 `outline.json` 判**存在性**（目标编号在不在 → `missing_target`）与**语义对应**（编号在但指错内容 → `semantic_mismatch`），rubric 第三节"交叉引用一致性"项）
 
 2. **并发派出（fan-out）**：为每个视角各派一个独立subagent，互不共享上下文、互不告知彼此结论（盲）。每个subagent的输入仅包含：
    - 稿件路径（或全文文本）
    - 该视角的 rubric 条目（仅本视角相关条目，不给其他视角的 rubric）
+   - **视角⑤额外输入 `$WORKROOT/outline.json`**（确定性锚，稿子里真实存在的全部小节/图/表/条目）；视角⑤按 rubric 第三节"交叉引用一致性"项的格式返回 `[{"ref_id","citing_location","cited_target","issue_type":"missing_target|semantic_mismatch|uncertain","evidence_quote","outline_says","finding","severity"}]`，**outline.json 是唯一权威真值**，不得凭记忆假设稿子有某小节，拿不准标 `uncertain` 不硬判。**补充材料引用（`S` 前缀编号，如 `Figure S1`/`Table S3`/`见图 S22`/`Supplementary Fig. 5`）不在 outline 范围内**——正文稿抽不到补充文件的定义，此类一律标 `uncertain` 或直接跳过，**绝不报 `missing_target`**（否则整份补充材料 S1–Sn 会被批量假报为悬空）。
    - 要求：按 rubric 条目逐项返回结构化 JSON，格式为 `[{"dimension": "条目名", "severity": "CRITICAL|MAJOR|MINOR|INFO", "finding": "具体证据与位置", "recommendation": "改进建议"}]`
    - **禁止**：不得告知其他视角的已有发现，不得给出总体 verdict（这是主 agent 的职责）
 
@@ -263,6 +269,26 @@ python -c "import os,json; r=os.getcwd(); d=os.path.join(r,'data'); os.makedirs(
 
 - 本步发现的问题**不新增报告章节**：可证据锚定的具体漏洞并入第七部分"必须解决的核心问题"（`{{CRITICAL_ISSUES_HTML}}`），最致命者在第九部分"具体问题详细解剖"（`{{FORENSIC_ANALYSIS_HTML}}`）法医式展开。
 - **CRITICAL 级阻断（硬约束）**：若本步发现任一足以动摇核心结论的 CRITICAL 级问题，审稿总体结论**不得为"接收"，最高只能"大修"**（不可修复时为"拒稿"）。此约束直接作用于第十部分的 `{{FINAL_RECOMMENDATION}}`/`{{VERDICT_TEXT}}`，判定逻辑见第六部分第二节。
+
+
+**第五步·四分之三：交叉引用发现的独立反向验证（机器·出报告前·必做）**
+
+第四步半视角⑤的每条交叉引用发现（`missing_target`/`semantic_mismatch`/`uncertain`）**必须过一道看不到判断过程的独立空白子代理核验**再进报告——reviewer-simulator 最会编批评（说某引用不存在/指错，但稿里其实有），这层专治它。**真复用 `delegate_review.py`**（不手搓，白拿它已测过的空证据拦截 + 逐项必裁 + fail-closed）：
+
+1. **动态合成临时 checklist**：把视角⑤每条发现映射成一个 checklist item，写到 `$WORKROOT/xref_verify_checklist.json`，结构：`{"skill":"reviewer-simulator","gates":{"xref-verify":{"title":"交叉引用一致性·反向验证","items":[{"id":"xref-001","name":"<cited_target 摘要>","check":"<按下方【极性约定】的固定模板填，禁留占位符、禁自由发挥>"}, ...]}}}`。`--gate` 是 checklist 内的自由 key，**不查 gate_registry**（已实测：delegate_review 只按 `checklist["gates"][gate]` 取，无静态注册表耦合）。item 只放 `cited_target`+`evidence_quote`+`issue_type`+核验所需原文切片，**绝不放视角⑤的 `finding` 措辞/理由、也不放 outline**（防带节奏）。
+   - **🔴【极性约定·必须内联，禁占位符】**：`check` 问题的措辞方向决定 `pass` 被映射成 confirmed 还是 refuted，**写反极性 = 假批评被放行**，这层就白做了。因此每类 `issue_type` 的 `check` 必须逐字用下面固定模板（`{编号}` 处填 `cited_target`，如 `3.2 节`/`Figure 3`）：
+     - **`missing_target`/`uncertain`**：`check` 固定写 —— **"到给你的原稿全文里，找得到编号「{编号}」的**定义处**吗？定义处专指：图/表的图注行（以『Figure {N}』『图{N}』『Table {N}』『表{N}』开头、后接说明文字的 caption 行），或该编号的小节标题行（如独占一行的『3.2 方法』）；**把它当引用来提及的句子不算定义处**（如『见 Figure 3』『as shown in Figure 3』『详见 3.2 节』这类指向句，即便含该编号也一律不算）。只有连定义处都找不到（该编号只被引用、从未被定义）才判 pass；只要找到定义处就判 fail，并逐字引出该定义/caption 行。"** 即 **找到定义处 → fail（=refuted，剔除，说明第 1 层可能漏抽真小节/图表，引用其实有效）；连定义处都找不到（悬空引用）→ pass（=confirmed，保留为真问题）**。⚠️ 极性关键：核验人**必须区分"定义处"与"引用处"**——引用句自身含该编号不构成"找得到"，否则每条 missing_target 都会命中引用句自己被错误 refuted，这层就白做。
+     - **`semantic_mismatch`**：`check` 固定写 —— **"正文该引用处的具体断言，与目标「{编号}」的标题/caption 是否明确无关？只有'正文明确断言见 X 讨论了 Y、而 X 根本不涉及 Y'这种明确错位才判 pass；若只是笼统指向或目标标题能合理概括该引用，一律判 fail。"** 即 **明确无关 → pass（=confirmed，保留）；只是笼统指向/合理概括 → fail（=refuted，剔除）**。
+     - 两类模板都要求核验人 **evidence 必填、逐字引出全文中找到/找不到（或相关/无关）的证据**；空证据由 delegate_review 原生 fail-closed 拦截并按未核验剔除。
+2. **按 issue_type 分流喂料**：`missing_target`/`uncertain` 的 item 的待检文件给**原稿全文**（`--files <稿件路径>`），让核验人独立到源文检索这个编号/标题到底存不存在——**这样才能反查出第 1 层脚本漏抽真小节造成的假 `missing_target`**（只喂可能漏抽的 outline 则永远核不出）；`semantic_mismatch` 的 item 给引用处上下文切片 + outline 里该编号的标题/caption 即可。
+3. **pack → 派独立空白子代理裁决 → verify**：
+   `python "$SKILL_DIR/scripts/delegate_review.py" pack --checklist "$WORKROOT/xref_verify_checklist.json" --gate xref-verify --files <稿件路径> --workdir "$WORKROOT"`
+   独立子代理（无审稿上下文、不给 outline、不给视角⑤ reasoning）逐条只依据原文裁 `pass|fail|na` 并附逐字证据，写回约定路径；再：
+   `python "$SKILL_DIR/scripts/delegate_review.py" verify --checklist "$WORKROOT/xref_verify_checklist.json" --gate xref-verify --workdir "$WORKROOT"`
+4. **verdict 映射 + 剔除**：读子代理返回的逐条 verdict——`pass`→**confirmed**（问题属实，保留进报告）；`fail`/`na`→**refuted**（不属实/无法独立证实，**从报告剔除**，不写进 `{{CRITICAL_ISSUES_HTML}}`，主 agent 内部留一条"第 N 条被反向验证驳回"备查）。**此映射恒定，靠上面【极性约定】把 `check` 措辞写对来保证语义正确**——即 `missing_target` **找到定义处（caption/小节标题行，非引用句自身）→ fail=refuted 剔除**、**连定义处都找不到（悬空引用）→ pass=confirmed 保留**；`semantic_mismatch` **明确无关 → pass=confirmed 保留**、**笼统指向/合理概括 → fail=refuted 剔除**。verify 的 `problems`（空证据/未裁决/verdict 非法）照 delegate_review fail-closed 视为未核验，该条**一律不进报告**（宁漏报不放行未核验批评）。
+5. **降级**：若派不出真正独立的子代理，照第四步半"盲评降级告警"——不得同一 AI 自问自答冒充，交回用户人肉核，交叉引用问题标注"未经独立反向验证"。
+
+> 与下面"核心批评核对·必停"（人肉关）叠加不替换：本层机器先剔掉凭空造的，剩下的 confirmed 再摆给用户人肉核。`confirmed` 的并入第七部分"必须解决的核心问题"（`missing_target` 通常 MAJOR，`semantic_mismatch` 视致命度 MAJOR/MINOR），最致命者进第九部分法医式解剖。
 
 
 **第五步七分之一：核心批评核对关卡（出报告前·必停）**
