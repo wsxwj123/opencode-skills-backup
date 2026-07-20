@@ -275,13 +275,17 @@ python -c "import os,json; r=os.getcwd(); d=os.path.join(r,'data'); os.makedirs(
 
 第四步半视角⑤的每条交叉引用发现（`missing_target`/`semantic_mismatch`/`uncertain`）**必须过一道看不到判断过程的独立空白子代理核验**再进报告——reviewer-simulator 最会编批评（说某引用不存在/指错，但稿里其实有），这层专治它。**真复用 `delegate_review.py`**（不手搓，白拿它已测过的空证据拦截 + 逐项必裁 + fail-closed）：
 
-1. **动态合成临时 checklist**：把视角⑤每条发现映射成一个 checklist item，写到 `$WORKROOT/xref_verify_checklist.json`，结构：`{"skill":"reviewer-simulator","gates":{"xref-verify":{"title":"交叉引用一致性·反向验证","items":[{"id":"xref-001","name":"<cited_target 摘要>","check":"<按 issue_type 出的独立核验问题>"}, ...]}}}`。`--gate` 是 checklist 内的自由 key，**不查 gate_registry**（已实测：delegate_review 只按 `checklist["gates"][gate]` 取，无静态注册表耦合）。item 只放 `cited_target`+`evidence_quote`+`issue_type`+核验所需原文切片，**绝不放视角⑤的 `finding` 措辞/理由、也不放 outline**（防带节奏）。
+1. **动态合成临时 checklist**：把视角⑤每条发现映射成一个 checklist item，写到 `$WORKROOT/xref_verify_checklist.json`，结构：`{"skill":"reviewer-simulator","gates":{"xref-verify":{"title":"交叉引用一致性·反向验证","items":[{"id":"xref-001","name":"<cited_target 摘要>","check":"<按下方【极性约定】的固定模板填，禁留占位符、禁自由发挥>"}, ...]}}}`。`--gate` 是 checklist 内的自由 key，**不查 gate_registry**（已实测：delegate_review 只按 `checklist["gates"][gate]` 取，无静态注册表耦合）。item 只放 `cited_target`+`evidence_quote`+`issue_type`+核验所需原文切片，**绝不放视角⑤的 `finding` 措辞/理由、也不放 outline**（防带节奏）。
+   - **🔴【极性约定·必须内联，禁占位符】**：`check` 问题的措辞方向决定 `pass` 被映射成 confirmed 还是 refuted，**写反极性 = 假批评被放行**，这层就白做了。因此每类 `issue_type` 的 `check` 必须逐字用下面固定模板（`{编号}` 处填 `cited_target`，如 `3.2 节`/`Figure 3`）：
+     - **`missing_target`/`uncertain`**：`check` 固定写 —— **"到给你的原稿全文里检索编号「{编号}」，确实找不到吗？只有确实找不到才判 pass；只要在全文任意处找到该编号（含跨语言同号，如正文'图3'＝'Figure 3'），一律判 fail 并逐字引出找到的原句。"** 即 **找得到 → fail（=refuted，剔除，说明第 1 层可能漏抽或引用其实有效）；确实找不到 → pass（=confirmed，保留为真问题）**。
+     - **`semantic_mismatch`**：`check` 固定写 —— **"正文该引用处的具体断言，与目标「{编号}」的标题/caption 是否明确无关？只有'正文明确断言见 X 讨论了 Y、而 X 根本不涉及 Y'这种明确错位才判 pass；若只是笼统指向或目标标题能合理概括该引用，一律判 fail。"** 即 **明确无关 → pass（=confirmed，保留）；只是笼统指向/合理概括 → fail（=refuted，剔除）**。
+     - 两类模板都要求核验人 **evidence 必填、逐字引出全文中找到/找不到（或相关/无关）的证据**；空证据由 delegate_review 原生 fail-closed 拦截并按未核验剔除。
 2. **按 issue_type 分流喂料**：`missing_target`/`uncertain` 的 item 的待检文件给**原稿全文**（`--files <稿件路径>`），让核验人独立到源文检索这个编号/标题到底存不存在——**这样才能反查出第 1 层脚本漏抽真小节造成的假 `missing_target`**（只喂可能漏抽的 outline 则永远核不出）；`semantic_mismatch` 的 item 给引用处上下文切片 + outline 里该编号的标题/caption 即可。
 3. **pack → 派独立空白子代理裁决 → verify**：
    `python "$SKILL_DIR/scripts/delegate_review.py" pack --checklist "$WORKROOT/xref_verify_checklist.json" --gate xref-verify --files <稿件路径> --workdir "$WORKROOT"`
    独立子代理（无审稿上下文、不给 outline、不给视角⑤ reasoning）逐条只依据原文裁 `pass|fail|na` 并附逐字证据，写回约定路径；再：
    `python "$SKILL_DIR/scripts/delegate_review.py" verify --checklist "$WORKROOT/xref_verify_checklist.json" --gate xref-verify --workdir "$WORKROOT"`
-4. **verdict 映射 + 剔除**：读子代理返回的逐条 verdict——`pass`→**confirmed**（问题属实，保留进报告）；`fail`/`na`→**refuted**（不属实/无法独立证实，**从报告剔除**，不写进 `{{CRITICAL_ISSUES_HTML}}`，主 agent 内部留一条"第 N 条被反向验证驳回"备查）。verify 的 `problems`（空证据/未裁决/verdict 非法）照 delegate_review fail-closed 视为未核验，该条**一律不进报告**（宁漏报不放行未核验批评）。
+4. **verdict 映射 + 剔除**：读子代理返回的逐条 verdict——`pass`→**confirmed**（问题属实，保留进报告）；`fail`/`na`→**refuted**（不属实/无法独立证实，**从报告剔除**，不写进 `{{CRITICAL_ISSUES_HTML}}`，主 agent 内部留一条"第 N 条被反向验证驳回"备查）。**此映射恒定，靠上面【极性约定】把 `check` 措辞写对来保证语义正确**——即 `missing_target` 全文**找得到 → fail=refuted 剔除**、**确实找不到 → pass=confirmed 保留**；`semantic_mismatch` **明确无关 → pass=confirmed 保留**、**笼统指向/合理概括 → fail=refuted 剔除**。verify 的 `problems`（空证据/未裁决/verdict 非法）照 delegate_review fail-closed 视为未核验，该条**一律不进报告**（宁漏报不放行未核验批评）。
 5. **降级**：若派不出真正独立的子代理，照第四步半"盲评降级告警"——不得同一 AI 自问自答冒充，交回用户人肉核，交叉引用问题标注"未经独立反向验证"。
 
 > 与下面"核心批评核对·必停"（人肉关）叠加不替换：本层机器先剔掉凭空造的，剩下的 confirmed 再摆给用户人肉核。`confirmed` 的并入第七部分"必须解决的核心问题"（`missing_target` 通常 MAJOR，`semantic_mismatch` 视致命度 MAJOR/MINOR），最致命者进第九部分法医式解剖。
