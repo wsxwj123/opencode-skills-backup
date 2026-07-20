@@ -66,6 +66,16 @@ _UNITS = {
 # 编号后紧邻的 ASCII/单位符号串（遇空格/数字/CJK 即止），用于取"第一个 token"判单位。
 _LEAD_UNIT_RE = re.compile(r"^([A-Za-zμµ%℃°/·]+)")
 
+# 作者单位地址行拦截（护栏 4）：机构关键词 + 逗号地址串同现＝确定性伪 section 信号。
+# 真小节标题(Introduction/材料与方法)不含机构词；含机构词的真标题(如 "University 数据集")
+# 极少带逗号分隔地址串。两条件同时命中才拒，避免误杀。
+_AFFIL_RE = re.compile(
+    r"\b(?:Department|Hospital|University|Universit[ée]|Laborator|Institute|College|"
+    r"School|Centre|Center|Faculty|Division|Clinic|Academy)\b"
+    r"|(?:系|学院|医院|大学|研究所|研究院|实验室|中心)",
+    re.IGNORECASE,
+)
+
 # 条目：段内列表编号 (N)/（N）/①..⑳，须紧跟实质内容字符（区分定义 `(2)确诊` 与引用 `见(2)`）。
 _ITEM_RE = re.compile(r"([(（]\s*\d+\s*[)）])|([①-⑳])")
 _CONTENT_CHAR_RE = re.compile(r"[A-Za-z一-鿿]")
@@ -95,6 +105,10 @@ def _passes_section_guardrails(text: str) -> bool:
             return False
     # 护栏 3：编号后无实质标题文本（纯数字/符号，如 `3.2 5.0`）。
     if not _CONTENT_CHAR_RE.search(remainder):
+        return False
+    # 护栏 4：作者单位地址行（`1 Department of X, University of Y, 410011, China`）——
+    # 机构关键词 + 逗号地址串同现才拒；只命中其一（无逗号的机构词标题 / 有逗号的普通标题）放行。
+    if ("," in remainder or "，" in remainder) and _AFFIL_RE.search(remainder):
         return False
     return True
 
