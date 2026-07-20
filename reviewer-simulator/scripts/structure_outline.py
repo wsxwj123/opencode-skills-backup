@@ -99,9 +99,38 @@ def _passes_section_guardrails(text: str) -> bool:
     return True
 
 
+def read_md_lines(path: Path) -> list[dict[str, Any]]:
+    """md/txt 逐行成行（一非空行=一 row），不按空行粗切块。
+
+    manuscript_index.read_md_paragraphs 按空行把多行粘成一个 block —— 多个裸编号
+    小标题之间无空行时(Word 导出的 .txt 常无空行)会被粘成一段，extract_sections
+    每行只认一个标题 → 只抽到首个、其余 number 全丢，且 title 会吞进后续正文。
+    这里逐行发 row(与 docx 每段独立同粒度)，让小标题/条目抽取按行正确拆分；
+    section 与 item 共用同一 paragraph_index 编号，归属linkage一致。
+    `#`/`##` 前缀标题去号并标 Heading 样式(供 is_heading 认章节/终止参考区)。
+    参考条目本就一行一条，逐行发天然一条一 row，无需 read_md_paragraphs 的特判。
+    """
+    raw = path.read_text(encoding="utf-8", errors="ignore")
+    rows: list[dict[str, Any]] = []
+    para_index = 0
+    for line in raw.splitlines():
+        if not line.strip():
+            continue
+        is_md_heading = line.lstrip().startswith("#")
+        cleaned = normalize_ws(re.sub(r"^#{1,6}\s*", "", line))
+        if not cleaned:
+            continue
+        rows.append({
+            "paragraph_index": para_index,
+            "text": cleaned,
+            "style_name": "Heading" if is_md_heading else "Normal",
+        })
+        para_index += 1
+    return rows
+
+
 def extract_sections(rows: list[dict[str, Any]], body_indices: list[int]) -> list[dict[str, Any]]:
     """正文区小标题：docx/md 标题样式直接认；裸编号过护栏。图表题注不进 section。"""
-    body = set(body_indices)
     sections: list[dict[str, Any]] = []
     for i in body_indices:
         row = rows[i]
@@ -196,7 +225,12 @@ def extract_items(rows: list[dict[str, Any]], body_indices: list[int],
 
 
 def build_outline(manuscript_path: Path) -> dict[str, Any]:
-    rows = read_manuscript_paragraphs(manuscript_path)
+    # docx 每段独立、本就正确；md/txt 走逐行读，避免 read_md_paragraphs 空行粗切块
+    # 把无空行的多个小标题粘成一段丢 number（见 read_md_lines）。
+    if manuscript_path.suffix.lower() in {".md", ".markdown", ".txt"}:
+        rows = read_md_lines(manuscript_path)
+    else:
+        rows = read_manuscript_paragraphs(manuscript_path)
     ref_spans = reference_section_spans(rows)
     body_indices = body_row_indices(rows, ref_spans)
 
