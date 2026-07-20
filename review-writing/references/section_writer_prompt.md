@@ -34,7 +34,7 @@
    本节结构必须照它搭，不得套用泛化默认模板。
 5. **综合而非罗列**：synthesis not summary——跨文献归纳、仲裁矛盾、交替 claim/evidence 顺序；不要逐篇复述。
    用 `neighbor_digest` 的邻节 key_facts 保持与相邻已定稿节的主线呼应、不重复、不冲突。
-6. **风格硬禁**：按任务包 `style_rules` 执行（禁破折号、禁 scare quotes、禁解释性冒号、禁 AI 禁词）；
+6. **风格硬禁**：按任务包 `style_rules` 执行（禁破折号、禁 scare quotes、禁解释性冒号、禁 AI 禁词、禁任何比喻（no metaphors/similes；如"如同/像…一样"、like…/as if…/serves as a bridge/cornerstone）、禁连续≥3句相同起始词或句式框架的排比）；
    行内格式遵字符级排版契约（物种/基因/统计符号/拉丁缩写斜体 `*...*`、上下标 `^...^`/`~...~`、禁裸 H2O/CO2）。
 7. 全局大纲 / 全库文献 / 矩阵只在需要跨节定位或引本节切片外文献时，按 `refs` 路径 **Read（只读）**。
 
