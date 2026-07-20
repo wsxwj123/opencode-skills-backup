@@ -12,6 +12,12 @@
   python3 env_preflight.py [root] --cli esearch,blastn # 额外检 CLI（shutil.which）
   python3 env_preflight.py [root] --py pyzotero,docx   # 额外检 Python 模块（可导入）
 """
+import sys as _sys
+try:  # Windows GBK 控制台/管道捕获下 emoji print 防 UnicodeEncodeError
+    _sys.stdout.reconfigure(encoding="utf-8")
+    _sys.stderr.reconfigure(encoding="utf-8")
+except Exception:
+    pass
 import sys
 import json
 import shutil
