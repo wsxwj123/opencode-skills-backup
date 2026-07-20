@@ -1,6 +1,6 @@
 ---
 name: revise-sci
-version: 2.24.0
+version: 2.25.0
 description: 退稿/返修全管道，同时出逐条回复信+修改后正文docx+Patch修订。触发词：改稿、修改稿子、修订正文、退稿改进、返修、revise manuscript、major revision、minor revision、revise and resubmit、point-by-point response、revised manuscript。路由说明：与reviewer-response-sci区分，本技能同时改主稿+出回复包，后者只出回复不改稿；与gsw区分，gsw写新稿，本技能专处理已有稿子的审稿意见驱动修改。
 ---
 
@@ -356,6 +356,7 @@ Each comment must contain:
   3. **禁解释性冒号**：禁用"概念: 解释"或"Concept: explanation"格式的装饰句式；合法冒号包括比例、时间、列表引导、标题、图表标签。
   4. **英文单句 ≤30 词（🟡 软提示，不阻断）**：polished 片段中任何独立英文句子（以 `.!/? ` 分界）词数应 ≤30 词；超限建议拆句、不要用分号逃避拆句。**句长超限只在 `strict_gate.py` 软提示 banner 上报，不 fail-close**（`sentence >30 words` 已归入 `SOFT_STYLE_MARKERS`）。**禁止 -ing 分词从句作假分析**：形如 `, reflecting …` / `, ensuring …` / `, highlighting …` / `, suggesting …` 的尾置 -ing 从句禁止用于添加未经数据支撑的推断；已有明确证据锚点的 participial phrase 不受此限。`find_ai_style_markers` 中 "trailing -ing clause" 检测已覆盖以 `,\s*(thus|thereby|therefore)\s+[a-z-]+ing` 模式；追加覆盖 `, (reflecting|ensuring|highlighting|suggesting|demonstrating|indicating|revealing)\b` 模式。
   5. **中文单句 ≤50 字、从句 ≤2 层**（如正文含中文）：任何中文句子（句号/问号/感叹号分界）字数不得超过 50 字；嵌套从句层数不超过 2 层（如"A（B（C））"为第 3 层，须拆分）。连续 3 句字数差异 <5 字时应主动变换句长。
+  6. **禁比喻与连续同式排比（比喻软/新写禁，排比硬）**：原稿作者已有的比喻（"如同/犹如/像…一样"及"…的桥梁/基石"类、like…/as if…/serves as a bridge/cornerstone）标为软提示交作者定夺、不自动删改；但改写时**模型自己新写的句子禁止新增比喻**。**禁连续≥3句相同起始词或句式框架的排比**（parallel structure repeated across 3+ consecutive sentences）——合并或改写变换句式。
   - **硬/软实现**：`common.hard_ai_style_markers()` 返回会 fail-close 的主干标志（套话/scare quotes/解释性冒号/-ing 假分析/not only…but also/反问/**em dash 破折号**等）；`common.soft_ai_style_markers()` 只返回软项（`sentence >30 words`，即 `SOFT_STYLE_MARKERS`）。`polish_revisions.py` 的 `polish_guard_ok` 与 `strict_gate.py` 的 polished-fragment 校验都对 hard 子集 fail（破折号在内）；soft 项由 `strict_gate.py` 汇总为「去AI软提示」banner 逐条列出、并写入 unit 的 `polish_soft_style_flags`，不阻断。中文句长/从句层数为软警告，记录于 `notes`。
 - `revision_plan` should carry `locked_prefix`, `locked_suffix`, `evidence_boundary_note`, and `citation_strings` so the polishing step can preserve untouched context explicitly rather than infer it.
 - The polishing output schema should include `edit_decision`, `meaning_changed`, `scope_respected`, `ai_style_flags_removed`, and `notes`.
