@@ -48,6 +48,12 @@ from manuscript_index import (
 
 SUPPORTED_SUFFIXES = {".docx", ".md", ".markdown", ".txt"}
 
+# 每候选存的 `sentence` 上限（I-1 性能修复的根因所在）：无断句符的超长"句"（现实=
+# markdown 宽表整行 / 对抗输入）里可有成千上万个数值候选，若每个都存整句，输出体积
+# = O(候选数 × 句长) = O(n²)（JSON 编码 + 落盘随之 O(n²)）。真实句远短于此上限，≤上限
+# 时整句原样存（与修前逐字节一致）；仅超上限时按各数值取窗口，把输出/耗时压回线性。
+SENTENCE_CAP = 2000
+
 # 表内文引用 / 题注（本地新增，manuscript_index 只认图不认表）。
 TABLE_INTEXT_RE = re.compile(r"\b(?:Table|Tab\.?)\s*(\d+)|表\s*(\d+)", re.IGNORECASE)
 TABLE_CAPTION_RE = re.compile(
@@ -402,8 +408,13 @@ def build_candidates(manuscript_path: Path) -> dict[str, Any]:
             continue
         para_index = row.get("paragraph_index")
         for sent in _split_sentences(text):
+            sentence_norm = normalize_ws(sent)  # 每句一次，句内各候选复用（I-1：勿每候选重跑整句 sub）
+            short = len(sentence_norm) <= SENTENCE_CAP
             for cand in _extract_from_sentence(sent):
-                cand["sentence"] = normalize_ws(sent)
+                cand["sentence"] = (
+                    sentence_norm if short
+                    else normalize_ws(sent[max(0, cand["_start"] - 1000):cand["_start"] + 1000])
+                )
                 cand["location"] = {
                     "region": current_region, "para_index": para_index,
                     "source": "body", "table_ref": None,
@@ -413,9 +424,12 @@ def build_candidates(manuscript_path: Path) -> dict[str, Any]:
     from_tables = 0
     if suffix == ".docx":
         for cell_text, table_ref in _read_docx_tables(manuscript_path):
+            cell_norm = normalize_ws(cell_text)  # 每单元格一次，复用（I-1）
+            if len(cell_norm) > SENTENCE_CAP:  # 超长单元格同样封顶，防 O(n²)
+                cell_norm = cell_norm[:SENTENCE_CAP]
             for sent in _split_sentences(cell_text):
                 for cand in _extract_from_sentence(sent):
-                    cand["sentence"] = normalize_ws(cell_text)
+                    cand["sentence"] = cell_norm
                     cand["location"] = {
                         "region": "Table", "para_index": None,
                         "source": "table", "table_ref": table_ref,
