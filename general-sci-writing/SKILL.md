@@ -1,6 +1,6 @@
 ---
 name: general-sci-writing
-version: 2.25.1
+version: 2.26.0
 description: 用于从零撰写或润色符合Nature/Science/Cell标准的SCI研究论文（Article类型），适用于多学科。触发词：写论文、SCI论文、学术写作、科研写作、论文润色、研究论文、学术投稿、投稿、润色论文、polish paper、write SCI paper、academic writing、draft paper、manuscript writing。路由说明：退稿/返修改主稿→用revise-sci；只写审稿意见回复→用reviewer-response-sci；独立成稿的纯语言润色（拿到别人写好的整稿只改语言、不进本管道）→用polish-sci，本技能的润色仅指管道内 Phase 10 对自写稿的润色；综述/文献综述→用review-writing。本技能侧重写新稿与自写稿润色，Phase 13B含内部初步退稿自查但不出回复包也不出修订稿docx。
 license: Proprietary
 ---
@@ -464,6 +464,15 @@ python scripts/state_manager.py add-abbreviation <one.json>
 > **Windows**：步骤 5 的 `grep ... 2>/dev/null` 与步骤 6 的 `[ ... ] || grep -q ...` 是 POSIX shell 写法，PowerShell/cmd 不可用。AI 在 Windows 上改用 `Select-String` 或直接用 Python 等价逻辑，完成同样的占位符扫描与 AUTO-GENERATED banner 校验。
 7. `python scripts/abbreviation_consistency.py --root .`：缩略词一致性扫描（脚本化，不再纯靠 AI 自评）。检测：① **重复定义** 同一缩写在多个 manuscript 文件首次定义；② **未定义就用** 直接用 ABBR 但 `abbreviations.json` 缺、且不在 `UNIVERSAL_ABBREVIATIONS` 白名单；③ **Title 出现缩写**（Title 严禁缩写）。**阻断**：脚本 exit 非 0 → 必修后重跑。通用缩写（DNA/RNA/PCR 等）自动跳过。脚本未覆盖的"已定义但全文未使用"等冗余项可人工补查。
 8. `python scripts/cross_section_consistency.py --root . --reconcile-sections`（section 双向对账，🟡 报告式软门，非硬拦、无签字门禁）。同时报：① **漏建**（storyline 有该 section_id、manuscripts 无对应文件）；② **孤儿**（manuscripts 有文件、不属于任何 storyline section）。exit 1 = 有差异：把 `missing_in_manuscripts` / `orphan_manuscripts` 列给用户，漏建的补写、孤儿的确认是否并入某节或从 storyline 补登，处置后重跑至 exit 0 再合并。exit 0 直接放行。
+9. **数值一致性核查（三层·报告式软门·HALT 交用户裁决）**：数值矛盾天然跨摘要/结果/表，必须全文成形后跑。与步骤 8 cross_section（正则 WARN"同标签词跨段数值漂移"，零成本保留）分工——本步是其更强后继（LLM 判同测量 + 反向验证），共存不拆。
+   - **① 合并临时全文（不污染源）**：`python scripts/merge_manuscript.py --manuscript-dir manuscripts --output-md "$WORKROOT/_numeric_fulltext.md" --skip-docx` —— 合并到 `$WORKROOT` 临时路径，**绝不落 `manuscripts/Full_Manuscript.md`**（避开步骤 6 AUTO-GENERATED banner 门禁与派生稿红线）。
+   - **② 第 1 层确定性锚**：`python scripts/numeric_candidates.py --manuscript "$WORKROOT/_numeric_fulltext.md" --project-root "$WORKROOT"` → 产 `$WORKROOT/numeric_candidates.json`（英文 SCI，markdown pipe 表走普通行读，不触发 docx 表格 walk）。
+   - **③ 第 2 层独立检测子代理（非作者自检·I2）**：派一个 fresh context、**没参与撰写**的独立检测子代理（`TaskCreate`/spawn_task），**只喂** `$WORKROOT/numeric_candidates.json` + 临时全文，**不给撰写过程上下文/作者意图**（防继承作者确认偏误——作者自评漏看的真矛盾第 3 层反向验证永远看不到，会系统性假阴）。子代理产出**零容差二元 schema** `[{"metric","same_measurement":bool,"values":[{"id","raw","location":{"region","para_index"}}],"conflict":bool,"evidence_quote","finding"}]`（**无 `tolerance_state`、无 `severity`**）：先判是否**同一指标/对象/分组/时间点/单位**（跨措辞语义归一、跨单位如 μM vs nM 由 LLM 换算判），仅对同一测量判是否**完全相等**，`same_measurement==true && 非完全相等 → conflict=true`；不同剂量组/时间点/亚组/单位的正常差异不报。**样本量 n 跨位置核对**：核对同一实验/同一组的样本重复数 n（`metric_clue=="样本量"` 的候选）是否跨**方法学 / 图注 / 结果与讨论**三处一致（例：方法 n=6、Figure 2 图注 n=8、结果又 n=6）；**防假阳**：不同图/不同实验的 n 本可合理不同，**只有多处 n 明确指向同一实验、同一组样本时**其不一致才报 conflict，无法确认是否同一实验/同组的按 `same_measurement=false` 不报（拿不准交人工）。**降级**：派不出真正独立子代理时不得自问自答冒充，标注"数值一致性未经独立检测"交用户人肉核。
+   - **④ 第 3 层反向验证**：每条 `conflict==true` 过 `delegate_review.py`（**不改它，只 pack/verify**，gate=`numeric-verify`，checklist 内自由 key，不查 gate_registry）。动态合成 `$WORKROOT/numeric_verify_checklist.json`：item 只放两处 `raw`/location/`metric` + 核验所需原文切片（**绝不放子代理的 finding/reasoning，防带节奏**），默认硬项（不标 `"severity":"soft"`）；**≥3 值的组拆成两两配对的多个 item**（id `num-<组>-<配对序>`，任一配对 pass → 该组整体保留交人工、全部 fail → 该组剔除）。**🔴 check 逐字用零容差极性模板（禁占位符、禁自由发挥）**：
+     > "到给你的原稿全文里独立核实：`{locA}` 处的值『{valA}』与 `{locB}` 处的值『{valB}』，两者据称都是指标『{metric}』的测量结果。请逐字回源确认两点——**(1) 两处是否确指同一指标、同一测量对象、同一分组、同一时间点、同一单位**（即本就应当相等；跨单位如 μM vs nM，请换算到同一单位后再判是否本应相等）？请到原文找出各自邻近的分组/剂量/时间点/亚组/单位线索比对。**(2) 若确为同一测量，两值是否非完全相等**（**零容差：只要不是完全相同的数值即算不等，含末位舍入差异如 58% vs 58.3%**）？**只有『同一测量且非完全相等』才判 pass（矛盾属实，保留交人工裁决）；只要发现两者其实是不同分组/不同时间点/不同亚组/不同单位（正常差异），或换算后完全相等，一律判 fail（非矛盾，剔除）。** evidence 必填：逐字引出 A、B 两处原文句及各自的分组/时间点/单位线索。"
+
+     `--files` 给临时全文；`pack` → 独立空白子代理逐条裁 `pass|fail|na` 附逐字证据 → `verify`。**verdict 映射**：`pass`→confirmed（矛盾属实）；`fail`/`na`→refuted（剔除）；verify 的 `problems`（空证据/未裁决/verdict 非法）照 fail-closed 视为未核验、不进清单（宁漏报）。极性写反 = 假批评全放行，务必对准 pass=矛盾属实。
+   - **⑤ HALT**：命中 confirmed conflict → **HALT 交用户裁决**：打印全部 confirmed（`metric` + 两处 `raw`/location + evidence_quote），暂停 `/check`、要求用户逐条裁决是否需统一，处置后重跑本步至无 confirmed conflict 再进 Phase 10.5。**不 auto-block 硬拦、不静默判等放过**（零容差 + 灰区交人工）。
 
 **期刊语言调性对齐（改到末尾 polish-sci）**：本阶段只做 `/check` 的去 AI/校对；**期刊语言风格深度对齐不在此做**，留到全文定稿后用 `polish-sci` 技能统一处理（不改科学内容，仅调语言风格/结构呈现）。`/journal-study` 已停用，不再产 `journal_study/target_journal_study.json`。
 
