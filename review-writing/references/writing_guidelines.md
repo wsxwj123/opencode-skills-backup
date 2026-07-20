@@ -58,7 +58,7 @@ meta_analysis | systematic_review | clinical_trial | preprint | book_chapter | g
 ### English Mode
 - **Ban List:** Moreover, Crucial, Landscape, Tapestry, Realm, Pivot, Foster, Underscore, Delve into, Spearhead
 - **Phrases to Avoid:** It is worth noting, In conclusion, As mentioned above, Serves as, Acts as
-- **Structure Ban:** No "Not only...but also"; No "From A to B"; No trailing "-ing" clauses (e.g., ban ", reflecting a shift toward…"; ban ", ensuring that…"; ban ", highlighting the importance of…" — recast as a new finite clause or sentence).
+- **Structure Ban:** No "Not only...but also"; No "From A to B"; No metaphors/similes (e.g. "like…", "as if…", "serves as a bridge/cornerstone/springboard" — state facts directly); No trailing "-ing" clauses (e.g., ban ", reflecting a shift toward…"; ban ", ensuring that…"; ban ", highlighting the importance of…" — recast as a new finite clause or sentence).
 - **Sentence length — soft guide (not a hard gate):** Aim for single sentences ≤30 words; a sentence running longer is a rhythm prompt to consider splitting, not a blocker. style_checker flags this as `info` (advisory) — do not fail a section on length alone.
 - **Rhythm:** Mix short sentences (≤12 words) with mid-range (25–30 words). Avoid long runs of 3+ consecutive similar-length sentences.
 - **Voice (review-specific) — soft guide:** For literature reviews, active voice is primary; passive around ≤30% per paragraph is a target, not a hard limit. Excess passive reads stiff, so trim where natural; style_checker reports it as `info` (advisory), not a gate failure. Reviews still avoid the 50–70% passive norm of original research articles.
@@ -67,7 +67,7 @@ meta_analysis | systematic_review | clinical_trial | preprint | book_chapter | g
 
 ### Chinese Mode
 - **Ban List:** 值得注意的是、不仅如此、此外、综上所述、总而言之、深入探讨、至关重要、在此背景下、显而易见
-- **Structure Ban:** 一方面……另一方面……; 随着……的不断发展; 日益受到关注
+- **Structure Ban:** 一方面……另一方面……; 随着……的不断发展; 日益受到关注; 禁任何比喻（明喻/暗喻/借喻，如"如同/犹如/像…一样"及"…的桥梁/基石/催化剂"类比喻名词——直接陈述事实）
 - **Rhythm:** Short sentences ≤15 characters, long sentences 30–60 characters. Avoid 3+ consecutive same-pattern sentences.
 
 ### Deep Rewriting (Anti-Similarity Protocol)

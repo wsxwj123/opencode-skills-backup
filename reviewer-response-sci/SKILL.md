@@ -1,6 +1,6 @@
 ---
 name: reviewer-response-sci
-version: 2.24.0
+version: 2.25.0
 description: 用于SCI审稿意见逐条回复的全流程技能，适用于期刊大修/小修阶段，只出回复包（HTML），不改主稿。触发词：审稿意见回复、回复审稿人、回复reviewer、response letter、回复信、rebuttal、逐条回复、Response to Reviewer、revise and resubmit、R&R、reviewer comments。路由说明：与revise-sci区分，本技能只出回复包不改主稿，需同时改主稿并出修订稿docx请用revise-sci；与reviewer-simulator区分，本技能针对已收到的意见写回复，后者是模拟生成审稿意见。
 ---
 
@@ -121,6 +121,7 @@ Source atomic units (`manuscript_units` / `si_units`) must include:
   - **（软）-ing participial clause — 少用逗号挂 -ing 分词收尾**（如 ", reflecting our commitment to…", ", ensuring that…"）：这是常见 AI 尾巴，堆多了显假；但真人也用分词从句，**偶尔一句自然的分词不必强拆**，明显成串堆砌才改。
   - **（🔴 硬门禁）Decorative em-dash — 破折号禁止使用**（如 "This result—while preliminary—suggests…"）：`—/——/em-dash` 一律禁用，改用逗号、句号或拆句。`risk_check.py` 命中即 FAIL（hard risk、pipeline-blocking，exit 1），必须清零。复合词连字符（"dose-response"）与数值区间（en-dash）不受影响。
   - **（🔴 硬门禁）Scare-quote — 禁给普通词/自造词加引号暗示新颖或反讽**（如 "robust" findings、"novel" approach）：`risk_check.py` 命中即 FAIL（hard risk、pipeline-blocking，exit 1），必须清零。豁免：首次定义术语、逐字引用审稿人原话、约定俗成的固定表达。
+  - **禁比喻与连续排比（写作纪律，硬性遵守；脚本暂不检测）：** 回复正文禁任何比喻（no metaphors/similes；如"如同/像…一样"、like…/as if…/serves as a bridge/cornerstone）；禁连续≥3句相同起始词或句式框架的排比（parallel structure repeated across 3+ consecutive sentences；≥3 responses 同模板开头已另有禁令，此条管句子级）。此为模型写作纪律，`risk_check.py` 暂不检测、不 FAIL。
   - **Explanatory-colon ban:** do not use the pattern "concept: explanation" as a decorative sentence structure (e.g., "Main revision: we added a new control group"). Legitimate colons include ratios (2:1), clock times, list lead-ins, section headings, and figure labels ("Figure 3A:").
   - `risk_check.py` scans for these patterns automatically (including sentence length and -ing clause detection); WARN-level issues should be fixed before delivery
 - **Chinese response style (中文回复规则，软提示同上)：**
