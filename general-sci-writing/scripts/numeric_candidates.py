@@ -27,6 +27,7 @@ except Exception:
     pass
 
 import argparse
+import bisect
 import json
 import re
 import sys
@@ -169,17 +170,31 @@ def _overlaps(span: tuple[int, int], forbidden: list[tuple[int, int]]) -> bool:
     return any(s < fe and fs < e for fs, fe in forbidden)
 
 
-def _group_clue(sent: str, num_start: int) -> str:
-    """分组/时间点线索：取数字前最近的一处，无前置取全句最近的一处，抽不到为空。"""
-    hits = [(m.start(), m.group()) for m in _GROUP_RE.finditer(sent)]
-    hits += [(m.start(), m.group()) for m in _TIMEPOINT_RE.finditer(sent)]
-    if not hits:
-        return ""
-    before = [h for h in hits if h[0] < num_start]
-    if before:
-        return before[-1][1]
-    hits.sort()
-    return hits[0][1]
+def _build_clue_index(sent: str) -> dict[str, Any]:
+    """句级预计算一次分组/时间点线索索引（I-1 性能修复：避免每候选重扫整句 O(n²)）。
+
+    保持旧 _group_clue 的语义：命中集按"组线索(升序) ++ 时间点线索(升序)"拼接，取
+    start<num_start 中的最后一个 → 即时间点里最靠近的（若有），否则组里最靠近的；
+    整句无前置命中时取全局最早的一处。分开存两份升序 start 列表供 bisect O(log n) 查。
+    """
+    group_hits = sorted((m.start(), m.group()) for m in _GROUP_RE.finditer(sent))
+    tp_hits = sorted((m.start(), m.group()) for m in _TIMEPOINT_RE.finditer(sent))
+    earliest = min(group_hits + tp_hits)[1] if (group_hits or tp_hits) else ""
+    return {
+        "group_hits": group_hits, "group_starts": [s for s, _ in group_hits],
+        "tp_hits": tp_hits, "tp_starts": [s for s, _ in tp_hits],
+        "earliest": earliest,
+    }
+
+
+def _group_clue(idx: dict[str, Any], num_start: int) -> str:
+    i = bisect.bisect_left(idx["tp_starts"], num_start)
+    if i > 0:  # 最靠近的时间点线索（时间点在拼接串尾，优先）
+        return idx["tp_hits"][i - 1][1]
+    j = bisect.bisect_left(idx["group_starts"], num_start)
+    if j > 0:  # 否则最靠近的组线索
+        return idx["group_hits"][j - 1][1]
+    return idx["earliest"]  # 无前置命中 → 全局最早
 
 
 def _strip_connectors(s: str) -> str:
@@ -198,7 +213,9 @@ def _metric_clue(sent: str, num_start: int, group_clue: str, is_sample: bool) ->
     """指标名线索：样本量优先；否则剥掉分组/连接词后取数字前紧邻的指标名 token。不强行聚类。"""
     if is_sample:
         return "样本量"
-    before = sent[:num_start]
+    # 只看数字前有界窗口（I-1 性能修复：避免每候选切整段前缀 O(n²)）。指标 token 至多 8 个
+    # CJK / 一段标识符，紧贴数字；窗口 96 远超之，对真实文本与旧全前缀切片结果一致。
+    before = sent[max(0, num_start - 96):num_start]
     if group_clue and group_clue in before:
         before = before.replace(group_clue, "")
     before = _strip_connectors(before)
@@ -275,6 +292,7 @@ def _extract_from_sentence(sent: str) -> list[dict[str, Any]]:
         for mm in rx.finditer(sent):
             forbidden.append((mm.start(), mm.end()))
 
+    clue_idx = _build_clue_index(sent)  # 句级一次预计算，句内各候选复用（I-1）
     out: list[dict[str, Any]] = []
     i = 0
     n = len(sent)
@@ -303,14 +321,16 @@ def _extract_from_sentence(sent: str) -> list[dict[str, Any]]:
             i = m.end()
             continue
 
-        is_sample = bool(_SAMPLE_RE.search(sent[: cand["_start"]]))
+        # 样本量线索只看数字前有界窗口（I-1：避免切整段前缀）。归一化文本无长空白串，
+        # "n = " 至多几字符，窗口 16 足够且与旧全前缀 `$` 锚定结果一致。
+        is_sample = bool(_SAMPLE_RE.search(sent[max(0, cand["_start"] - 16):cand["_start"]]))
         # 年份（四位、无单位、非样本量）排除。
         if (cand["form"] == "plain" and not cand["unit"] and not is_sample
                 and _YEAR_RE.match(m.group(1).replace(",", ""))):
             i = m.end()
             continue
 
-        group_clue = _group_clue(sent, cand["_start"])
+        group_clue = _group_clue(clue_idx, cand["_start"])
         metric_clue = _metric_clue(sent, cand["_start"], group_clue, is_sample)
         cand["group_clue"] = group_clue
         cand["metric_clue"] = metric_clue
