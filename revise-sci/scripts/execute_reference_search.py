@@ -143,7 +143,7 @@ def run_opencode_driver(project_root: Path, rounds_path: Path, output_path: Path
     prompt = build_opencode_prompt(project_root, rounds_path, output_path)
     write_text(project_root / "reference_search_opencode_prompt.md", prompt)
     command = shlex.split(driver_command) + ["--dir", str(project_root), prompt]
-    return subprocess.run(command, text=True, capture_output=True)
+    return subprocess.run(command, text=True, capture_output=True, encoding="utf-8", errors="replace")
 
 
 def main() -> int:
@@ -253,7 +253,7 @@ def main() -> int:
         return 2
 
     command = shlex.split(runner) + ["--rounds-json", str(rounds_path), "--output", str(output_path), "--project-root", str(project_root)]
-    completed = subprocess.run(command, text=True, capture_output=True)
+    completed = subprocess.run(command, text=True, capture_output=True, encoding="utf-8", errors="replace")
     if completed.returncode != 0:
         write_json(
             project_root / "reference_search_execution.json",

@@ -260,7 +260,7 @@ def run_polish_driver(
 
     if runner:
         command = shlex.split(runner) + ["--input-json", str(project_root / "revision_polish_manifest.json"), "--output", str(output_path), "--project-root", str(project_root)]
-        completed = subprocess.run(command, text=True, capture_output=True)
+        completed = subprocess.run(command, text=True, capture_output=True, encoding="utf-8", errors="replace")
         if completed.returncode == 0 and output_path.exists():
             payload = read_json(output_path, None)
             errors = validate_output_payload(payload, candidates)
@@ -278,7 +278,7 @@ def run_polish_driver(
 
     if opencode_driver:
         command = shlex.split(opencode_driver) + ["--dir", str(project_root), prompt]
-        completed = subprocess.run(command, text=True, capture_output=True)
+        completed = subprocess.run(command, text=True, capture_output=True, encoding="utf-8", errors="replace")
         if completed.returncode == 0 and output_path.exists():
             payload = read_json(output_path, None)
             errors = validate_output_payload(payload, candidates)

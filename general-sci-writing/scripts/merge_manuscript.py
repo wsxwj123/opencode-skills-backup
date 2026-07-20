@@ -241,7 +241,7 @@ def convert_docx(output_md, output_docx, reference_doc=None):
     if reference_doc:
         cmd.extend(["--reference-doc", reference_doc])
     try:
-        subprocess.run(cmd, check=True, capture_output=True, text=True)
+        subprocess.run(cmd, check=True, capture_output=True, text=True, encoding="utf-8", errors="replace")
         return {"attempted": True, "ok": True, "output_docx": output_docx}
     except subprocess.CalledProcessError as e:
         return {

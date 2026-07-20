@@ -224,7 +224,7 @@ def merge_docx(md_path: Path, docx_path: Path) -> dict:
         }
     cmd += ["--reference-doc", str(reference_docx)]
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", check=False)
     except FileNotFoundError:
         return {"ok": False, "error": "pandoc not found"}
 
