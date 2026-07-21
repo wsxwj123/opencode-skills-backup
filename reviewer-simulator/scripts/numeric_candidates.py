@@ -71,8 +71,13 @@ _UNITS = {
 _TIME_UNITS = {"h", "hr", "min", "s", "ms", "sec", "d"}
 # 摩尔浓度 M / mM / μM / nM / pM / uM（区分大小写：mM≠mm 毫米）。
 _MOLAR_RE = re.compile(r"^[munpμµ]?M$")
-# 数字后紧邻的 ASCII/单位符号串（遇空格/数字/CJK 即止）。
-_UNIT_AFTER_RE = re.compile(r"\s*([A-Za-zμµ%℃°/·]+)")
+# 上标字符（D1，仅 docx 上标 run 重建时出现）：把上标 run 里的数字/正负号还原成 Unicode
+# 上标字符，让 _SCI_RE 认出 1×10⁶、单位识别认出 mm³。md/txt 无上标概念，对其无影响。
+_SUP_ALL = "⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻"
+_SUP_TO_ASCII = str.maketrans(_SUP_ALL, "0123456789+-")
+_ASCII_TO_SUP = str.maketrans("0123456789+-", _SUP_ALL)
+# 数字后紧邻的 ASCII/单位符号串（遇空格/数字/CJK 即止）；含上标字符以吃下 mm³ 的体积指数。
+_UNIT_AFTER_RE = re.compile(rf"\s*([A-Za-zμµ%℃°/·{_SUP_ALL}]+)")
 
 _YEAR_RE = re.compile(r"^(?:19|20)\d{2}$")
 # 样本量线索：数字前紧邻 n= / N=（保守只认 n/N，避免误吞 p=/α= 等统计惯用）。
@@ -88,9 +93,12 @@ _FORBIDDEN_RES = (_PVAL_RE, _ALPHA_RE, _R2_RE, _CI_RE,
 
 # 数值形态词法（按优先级从"最具体的复合形态"到"裸数字"，逐位置 match，先中者胜）。
 _NUM = r"\d+(?:\.\d+)?"
-_SCI_RE = re.compile(rf"({_NUM})\s*(?:[×xX*]\s*10\s*\^\s*([+-]?\d+)|[eE]([+-]?\d+))")
+_SCI_RE = re.compile(
+    rf"({_NUM})\s*(?:[×xX*]\s*10\s*(?:\^\s*([+-]?\d+)|([{_SUP_ALL}]+))|[eE]([+-]?\d+))"
+)
 _MEANSD_RE = re.compile(rf"({_NUM})\s*±\s*({_NUM})")
-_RANGE_RE = re.compile(rf"({_NUM})\s*[–—~～]\s*({_NUM})\s*(%)?")
+# 含 ASCII `-`（D2）：仅"数字-数字"两侧纯数值才当范围；负号/日期年份区间另有护栏（见 _classify）。
+_RANGE_RE = re.compile(rf"({_NUM})\s*[–—~～-]\s*({_NUM})\s*(%)?")
 _RATIO_RE = re.compile(rf"({_NUM})\s*:\s*({_NUM})")
 _PCT_RE = re.compile(rf"({_NUM})\s*(%)")
 _THOUSANDS_RE = re.compile(r"(\d{1,3}(?:,\d{3})+(?:\.\d+)?)")
@@ -102,6 +110,8 @@ _TIMEPOINT_RE = re.compile(r"\d+\s*(?:h|hr|min|d|小时|分钟|天|周)")
 
 # metric_clue 提取时可从数字前缀剥掉的连接词（剥完取尾部指标名 token）。
 _CONNECTORS = ("约为", "达到", "等于", "为", "是", "的", "达", "约", "均", "：", ":", "=", "，", ",")
+# 英文停用词（D4）：介词/冠词/连词不是指标线索，取到就跳过、继续往前找真实指标词。
+_STOPWORDS = {"at", "and", "for", "in", "of", "to", "by", "with", "a", "the"}
 
 # 粗区段关键词（location.region 启发式，供人核，非确定性）。
 _REGION_KEYS = [
@@ -144,7 +154,20 @@ def _match_region(text: str) -> Optional[str]:
     for keys, region in _REGION_KEYS:
         if t in keys:
             return region
-    return None
+    # 合并标题（Results and Discussion / 结果与讨论）：整行**仅由区段词 + 连接词**组成才算标题
+    # （有其它实词则是正文句，不当区段，防误判）；命中的第一个区段词定 region（_REGION_KEYS
+    # 顺序：results 先于 discussion，故合并标题归 results）。(D5)
+    tokens = [w for w in re.split(r"[\s/&，,]+|\band\b|\bor\b|与|和|及", t) if w]
+    if not tokens or len(tokens) > 5:
+        return None
+    key_of = {k: region for keys, region in _REGION_KEYS for k in keys}
+    hit = None
+    for tok in tokens:
+        if tok not in key_of:
+            return None
+        if hit is None:
+            hit = key_of[tok]
+    return hit
 
 
 def _split_sentences(text: str) -> list[str]:
@@ -159,13 +182,16 @@ def _clean_unit(tok: str) -> str:
         return ""
     if tok == "%":
         return "%"
-    if "μ" in tok or "µ" in tok:  # micro 前缀单位（μM/μg/μmol...）
+    base = tok.rstrip(_SUP_ALL)  # 剥尾部上标指数(mm³→mm)做单位判定，返回时保留上标(D1)
+    if not base:
+        return ""
+    if "μ" in base or "µ" in base:  # micro 前缀单位（μM/μg/μmol...）
         return tok
-    if _MOLAR_RE.match(tok):  # 摩尔浓度 M/mM/nM/pM
+    if _MOLAR_RE.match(base):  # 摩尔浓度 M/mM/nM/pM
         return tok
-    if tok.lower() in _TIME_UNITS:
+    if base.lower() in _TIME_UNITS:
         return tok
-    parts = [p for p in tok.split("/") if p]
+    parts = [p for p in base.split("/") if p]
     if parts and all(p.lower() in _UNITS for p in parts):
         return tok
     return ""
@@ -225,8 +251,16 @@ def _metric_clue(sent: str, num_start: int, group_clue: str, is_sample: bool) ->
     if group_clue and group_clue in before:
         before = before.replace(group_clue, "")
     before = _strip_connectors(before)
-    m = re.search(r"([A-Za-z][A-Za-z0-9]*|[一-鿿]{1,8})$", before)
-    return m.group(1) if m else ""
+    # 取尾部指标 token；命中英文停用词(at/of/for...)则跳过它继续往前找真实指标词，抽不到为空(D4)。
+    while True:
+        m = re.search(r"([A-Za-z][A-Za-z0-9]*|[一-鿿]{1,8})$", before)
+        if not m:
+            return ""
+        tok = m.group(1)
+        if tok.lower() in _STOPWORDS:
+            before = _strip_connectors(before[:m.start()])
+            continue
+        return tok
 
 
 def _classify(form: str, m: "re.Match", sent: str) -> Optional[dict[str, Any]]:
@@ -239,12 +273,21 @@ def _classify(form: str, m: "re.Match", sent: str) -> Optional[dict[str, Any]]:
 
     if form == "scientific":
         base = float(m.group(1))
-        exp = int(m.group(2) if m.group(2) is not None else m.group(3))
+        if m.group(2) is not None:      # ^N 尖角指数
+            exp = int(m.group(2))
+        elif m.group(3) is not None:    # 上标指数 ¹⁰⁶（D1，docx 上标 run 重建）
+            exp = int(m.group(3).translate(_SUP_TO_ASCII))
+        else:                           # eN 科学计数
+            exp = int(m.group(4))
         value = base * (10 ** exp)
     elif form == "mean_sd":
         value = float(m.group(1))
         value_secondary = float(m.group(2))
     elif form == "range":
+        # 日期年份区间（ASCII `-` 连两个四位年，如 2019-2021）不当数值范围抽（D2 防误伤日期）。
+        # en/em dash/~（–—~～）区间不受此限——它们本就不用于写年份区间。
+        if "-" in m.group(0) and _YEAR_RE.match(m.group(1)) and _YEAR_RE.match(m.group(2)):
+            return None
         value = float(m.group(1))
         value_secondary = float(m.group(2))
         if m.group(3):
@@ -387,10 +430,42 @@ def _read_docx_tables(path: Path) -> list[tuple[str, Optional[str]]]:
     return out
 
 
+def _para_text_with_sup(para) -> str:
+    """段落文本，但**上标 run** 的数字/正负号还原成 Unicode 上标字符（D1）。
+
+    只重建上标（`1×10`+上标`6`→`1×10⁶`、`200mm`+上标`3`→`200mm³`）；**下标及普通 run 原样
+    拼接、绝不插分隔**——化学式/指标名下标(`IC`+下标`50`)须仍拼成 `IC50` 紧贴前导字母，
+    才继续被"数字贴前导字母=标识符跳过"规则挡住，不误抽成量值（下标回归锁）。
+    """
+    parts = []
+    for run in para.runs:
+        t = run.text or ""
+        if t and getattr(getattr(run, "font", None), "superscript", None):
+            t = t.translate(_ASCII_TO_SUP)
+        parts.append(t)
+    return "".join(parts)
+
+
+def _read_docx_body_rows(manuscript_path: Path) -> list[dict[str, Any]]:
+    """自读 docx 正文段落，行结构与 manuscript_index.read_docx_paragraphs 一致（paragraph_index
+    = enumerate 序、同 style_name），差别只在上标 run 重建（D1）。不改 manuscript_index，只在本
+    脚本补；非上标内容逐字节等价于原读稿层，故 ref/heading/表格等下游行为不变。"""
+    from docx import Document
+    doc = Document(str(manuscript_path))
+    rows: list[dict[str, Any]] = []
+    for i, para in enumerate(doc.paragraphs):
+        text = normalize_ws(_para_text_with_sup(para))
+        if not text:
+            continue
+        style_name = normalize_ws(getattr(getattr(para, "style", None), "name", "") or "")
+        rows.append({"paragraph_index": i, "text": text, "style_name": style_name})
+    return rows
+
+
 def build_candidates(manuscript_path: Path) -> dict[str, Any]:
     suffix = manuscript_path.suffix.lower()
     if suffix == ".docx":
-        rows = read_manuscript_paragraphs(manuscript_path)
+        rows = _read_docx_body_rows(manuscript_path)
     else:
         rows = read_md_lines(manuscript_path)
 
