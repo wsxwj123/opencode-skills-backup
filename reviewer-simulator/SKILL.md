@@ -215,7 +215,7 @@ python -c "import os,json; r=os.getcwd(); d=os.path.join(r,'data'); os.makedirs(
 
 **图表完整性与参考文献审计的辅助索引（执行前先跑）：** 用脚本反向抽取稿件的图、参考交叉索引，为图文一致性与引用完整性核查提供逐项依据（孤儿图、孤儿引用、列而未引）。脚本用安装目录绝对路径，输出锚定 `$WORKROOT`（本技能无原子化步骤，故不带 `--units-dir`，cited_by 退化为正文段号 pN）：
 `python "$SKILL_DIR/scripts/manuscript_index.py" --manuscript <稿件 docx 或 md> --project-root "$WORKROOT"`
-产出 `$WORKROOT/figure_index.json`、`$WORKROOT/reference_index.json`、`$WORKROOT/manuscript_index.md`。结果为启发式抽取，作审计辅助而非红线核验：图表完整性审计据 `figure_index.json` 核对每图是否有图注、是否被正文引用（`orphan_type`）；参考文献审计据 `reference_index.json` 核对孤儿引用（列而未引 `entry_not_cited`、引而无条目 `cited_no_entry`）。**同时产出 `$WORKROOT/abbreviation_index.json`**（缩写定义/裸使用点/首现位置 + `undefined_use`/`duplicate_definition` 等 orphan 的交叉索引，bare JSON 数组）——其**确定性两类** orphan（`undefined_use`/`duplicate_definition`）供**确定性直报**（软报告，见第五部分七『术语一致性核查产物的报告归位』小节），其 `defined_count>=1` 缩写清单供**视角⑧术语一致性审稿人**当焦点。合法空数组 `[]`（通篇无缩写）是有效结果、不是失败。
+产出 `$WORKROOT/figure_index.json`、`$WORKROOT/reference_index.json`、`$WORKROOT/manuscript_index.md`。结果为启发式抽取，作审计辅助而非红线核验：图表完整性审计据 `figure_index.json` 核对每图是否有图注、是否被正文引用（`orphan_type`）；参考文献审计据 `reference_index.json` 核对孤儿引用（列而未引 `entry_not_cited`、引而无条目 `cited_no_entry`）。**同时产出 `$WORKROOT/abbreviation_index.json`**（缩写定义/裸使用点/首现位置 + orphan 的交叉索引，bare JSON 数组）——其 `duplicate_definition` orphan 供**确定性直报**（软报告，见第五部分七『术语一致性核查产物的报告归位』小节），其 `defined_count>=1` 缩写清单供**视角⑧术语一致性审稿人**当焦点。**`undefined_use` orphan 本轮不消费**（卡点5 决策：审稿端真价值实测 0——学界惯例裸用 + 末尾缩写表被脚本打穿导致全是假阳，见 PLAN §6）。合法空数组 `[]`（通篇无缩写）是有效结果、不是失败。
 
 **交叉引用一致性的结构目录锚（紧接着再跑一条）：** 抽取稿件里**真实存在的结构目录**（小标题 `3.1`/`4.1.2`、图/表编号、条目 `(1)(2)(3)`），作为第四步半视角⑤"交叉引用一致性审稿人"的**确定性锚**——LLM 只在这份机器真值上判交叉引用对不对，不凭记忆假设稿子有哪些小节。同样用安装目录绝对路径，输出锚定 `$WORKROOT`：
 `python "$SKILL_DIR/scripts/structure_outline.py" --manuscript <稿件 docx 或 md> --project-root "$WORKROOT"`
@@ -250,7 +250,7 @@ python -c "import os,json; r=os.getcwd(); d=os.path.join(r,'data'); os.makedirs(
      4. **指向补充材料视作已交代（系统性假阳防线）**：主文里指向补充材料的表述——"见补充材料/详见附录/see Supplementary Methods/described in the Supplementary/Supporting Information"——**一律视作已交代（`methods_section_covers=true`）、不报漏写**（现役读稿层不读补充材料文件，取从宽口径避免假阳，宁漏报不假报）。
      5. **方法学引用文献描述该方法视作已交代**：方法学章节写"方法参照文献[X]/按照[X]的方法进行/as previously described [12]"这类**带文献引用的方法指向**，**一律视作已交代（`methods_section_covers=true`）、不报漏写**。⚠️ 与约束 3 区分两类引文：本条是**方法学**引用文献描述本研究用的方法（"我们按[X]做了流式"）→ 已交代、不报；约束 3 排除的是**结果/讨论**里引用他人研究结果的方法（非本研究做的）→ `used_in_study=false`、本就不该核查。都靠引文信号但落点不同，别混。
 
-   - 视角⑧：术语一致性审稿人（**独立视角、不并入视角①③；只判 `inconsistent_variant` 一类**）——以 `$WORKROOT/abbreviation_index.json` 的 `defined_count>=1` 缩写清单当焦点 + 通读全文，判**同一个精确定义的实体前后是否换了会引起歧义的异名**（缩写别名混用 + category③ 基因/质粒/细胞系/构建体的纯排版级实体混写），报 `inconsistent_variant`。**只审一致性轴、从不评术语正确性**（术语用得对不对/规范不规范归视角①③）。`undefined_use`/`duplicate_definition` 走确定性直报（第五部分七『术语一致性核查产物的报告归位』小节）、**不进本视角**。逐条约束：
+   - 视角⑧：术语一致性审稿人（**独立视角、不并入视角①③；只判 `inconsistent_variant` 一类**）——以 `$WORKROOT/abbreviation_index.json` 的 `defined_count>=1` 缩写清单当焦点 + 通读全文，判**同一个精确定义的实体前后是否换了会引起歧义的异名**（缩写别名混用 + category③ 基因/质粒/细胞系/构建体的纯排版级实体混写），报 `inconsistent_variant`。**只审一致性轴、从不评术语正确性**（术语用得对不对/规范不规范归视角①③）。`duplicate_definition` 走确定性直报（第五部分七『术语一致性核查产物的报告归位』小节）、**不进本视角**（`undefined_use` 本轮不消费，卡点5 决策：真价值 0）。逐条约束：
      1. **锚只给焦点、别名混用/实体混写须自行语义识别**：`abbreviation_index.json` 的 defined 缩写清单只告诉你"哪些是被作者定义过的精确实体"，**不检测别名混用、够不着 category③（p53/pBV220 小写起头 token）**。必须自行通读全文语义识别：换别名指同一实体、基因·蛋白·细胞系·构建体的纯排版级混写。
      2. **头号假阳两层防线（成败点）**：只报**确指同一精确实体**且**非合规同义交替**的异名。三问判定链：① 两写法是否指同一个精确定义的实体（缩写定义过 / 基因·质粒·细胞系精确名）？② 差异是否超出"缩写↔其全称""中↔英对照""gene↔protein 命名约定"三类合规交替？③ 是否普通名词同义或不同实体（是→立即放过）？**三问全过才报。硬负面清单一律不报：肿瘤/癌、显著/significant、中英并用、缩写↔全称交替、gene↔protein 命名约定（`TP53`基因/`p53`蛋白、`MYC`/`c-Myc`）、一字之差的不同基因/分子（`p53`/`p63`、`IL-6`/`IL-8`、`CD4`/`CD8`）。**
      3. **category③ 只报纯排版级差异指同一实体**（假阳风险最高，正例严格收窄）：**只报同一字符串的排版变体**——大小写（`p53`/`P53`）、连字符（`pBV220`/`pBV-220`）、空格（`IL-6`/`IL6`）、下标级差异。**硬排除三类、绝不报**：(a) **gene↔protein 命名约定**（`TP53`基因 vs `p53`蛋白、`MYC`/`c-Myc` 是 HGNC/期刊强制的正确区分、本该并存、不是混写，判它要正确性语境→归①③、⑧ 不报）；(b) **近似名≠同一实体**（`p53`/`p63`/`p73`、`IL-6`/`IL-8`、`CD4`/`CD8` 是语义不同的分子，报了即造假批评）；(c) **加前缀/换词根/改语义**（超出纯排版，交 `same_entity` 语义判、拿不准不报）。
@@ -357,7 +357,7 @@ python -c "import os,json; r=os.getcwd(); d=os.path.join(r,'data'); os.makedirs(
 
 **第五步·四分之三-quater：异名混用的独立反向验证（机器·出报告前·必做）**
 
-第四步半视角⑧每条 `report==true`（`inconsistent_variant`）的异名混用发现，**必须过一道看不到判断过程的独立空白子代理核验**再进报告（`report==false`——不同实体/合规交替/gene↔protein 约定/普通同义词——的一律不入本层）。**只服务 `inconsistent_variant`**；`undefined_use`/`duplicate_definition` 是脚本确定性结果、走第五部分七『术语一致性核查产物的报告归位』软报告直报、**不上反向验证**。**真复用 base 版 `delegate_review.py`**（reviewer-simulator 是 base 版、零改动复用，不改它，只 pack/verify），gate=`term-verify`（checklist 内自由 key，不查 gate_registry）：
+第四步半视角⑧每条 `report==true`（`inconsistent_variant`）的异名混用发现，**必须过一道看不到判断过程的独立空白子代理核验**再进报告（`report==false`——不同实体/合规交替/gene↔protein 约定/普通同义词——的一律不入本层）。**只服务 `inconsistent_variant`**；`duplicate_definition` 是脚本确定性结果、走第五部分七『术语一致性核查产物的报告归位』软报告直报、**不上反向验证**（`undefined_use` 本轮不消费，卡点5 决策）。**真复用 base 版 `delegate_review.py`**（reviewer-simulator 是 base 版、零改动复用，不改它，只 pack/verify），gate=`term-verify`（checklist 内自由 key，不查 gate_registry）：
 
 1. **动态合成临时 checklist** 写 `$WORKROOT/term_verify_checklist.json`：`{"skill":"reviewer-simulator","gates":{"term-verify":{"title":"异名混用·反向验证","items":[{"id":"term-001","name":"<entity：写法A vs 写法B 摘要>","check":"<下方 inconsistent_variant 双条件极性模板逐字填>"}]}}}`。item 只放两处写法 + 各自 location + 核验所需原文切片，**绝不放视角⑧的 `finding`/reasoning、也不放 `same_entity`/`is_compliant_alternation` 判据字段（防带节奏）**。item 默认硬项（不标 `"severity":"soft"`），走 delegate_review 原生 fail-closed。
    - **🔴【inconsistent_variant 双条件极性模板·必须内联，禁占位符、禁自由发挥】**：T1 与 methods 同构——**两条件同时成立才 pass**。`check` 逐字用下面固定模板（`{写法A}`/`{写法B}` 处填值）——
@@ -485,21 +485,18 @@ python -c "import os,json; r=os.getcwd(); d=os.path.join(r,'data'); os.makedirs(
 根源质询: (分析问题产生的深层原因,提出尖锐质疑)
 作者应对方案: (给出具体的、可执行的改进方向或回复策略)
 
-**术语一致性核查产物的报告归位（视角⑧ + 确定性两类直报）：**
+**术语一致性核查产物的报告归位（视角⑧ + `duplicate_definition` 确定性直报）：**
 
 1. **视角⑧ confirmed 异名混用（`inconsistent_variant`，已过第五步·四分之三-quater 反向验证）**：作为**确认的硬批评**并入本节 `{{CRITICAL_ISSUES_HTML}}`（异名引歧义视致命度，通常 MAJOR/MINOR），按上面统一格式呈现；最致命者进第九部分法医式解剖。与视角①③ 对同一术语的**正确性** finding **不同轴、各报一条、不去重**（⑧ 只报一致性、①③ 只报正确性）。
 
-2. **确定性两类直报（`undefined_use` / `duplicate_definition`，脚本已确定性算出、不走 LLM、不走反向验证）**：主 agent 直接读 `$WORKROOT/abbreviation_index.json`，对 `orphan_type in {undefined_use, duplicate_definition}` 的条目按下表映射成**软报告条目**——口径照 polish-sci PL-G10：**列出 + 证据 + 供人工取舍、不阻断交付、不是 confirmed 硬批评**，与上面 confirmed 异名混用**分栏列**（列入第八部分『其他改进建议』或本节独立子栏『缩写规范软提示（供参考）』，措辞中性、不下"缺陷"定性）：
+2. **确定性直报（`duplicate_definition` 一类，脚本已确定性算出、不走 LLM、不走反向验证）**：主 agent 直接读 `$WORKROOT/abbreviation_index.json`，对 `orphan_type=="duplicate_definition"` 的条目按下表映射成**软报告条目**——口径照 polish-sci PL-G10：**列出 + 证据 + 供人工取舍、不阻断交付、不是 confirmed 硬批评**，与上面 confirmed 异名混用**分栏列**（列入第八部分『其他改进建议』或本节独立子栏『缩写规范软提示（供参考）』，措辞中性、不下"缺陷"定性）：
 
    | 锚条件 | 报告条目（软，中性口径） | 严重度 | 证据字段 |
    |---|---|---|---|
-   | `orphan_type=="undefined_use"` 且 `universal==false` | "缩写『{abbr}』通篇未见首现定义，请核对是否需补全称（如已在别处以反序/中文形式定义可忽略）" | MINOR | `{abbr}` + `first_used`（首现使用位置 pN） |
    | `orphan_type=="duplicate_definition"`（`defined_count>=2`） | "缩写『{abbr}』重复定义 {defined_count} 次（首个全称『{full_name}』@{first_defined}），若两处全称指不同概念请统一" | MINOR（两全称明显异义→MAJOR，人工判） | `{abbr}` + `defined_count` + `full_name` + `first_defined` |
 
-   - **`universal==true` 不列 undefined**：PCR/DNA/ELISA 等通用缩写即使未定义也不报，锚 `orphan_type` 已按 `not is_universal` 排除，无需二次过滤。
-   - **`title_abbreviation` / `defined_unused` 不单列**：前者是 `undefined_use` 子情形（可并入 undefined 或忽略），后者是软冗余、不属"歧义异名"三类，不报。
-   - **三态处置（与视角⑧约束 5 一致）**：`abbreviation_index.json` 为合法空数组 `[]`（通篇无缩写）→ **无 undefined/duplicate 条目、绝不告警**（无缩写＝无未定义/无重复，正常有效结果）；文件缺失/JSON 损坏 → 跳过直报 + 告警"缩写锚缺失、缩写规范未核"；非空 → 读 orphan 出软报告条目。
-   - **已知局限（明写交代用户）**：走现役索引，`ABC(全称)` 缩写在前的反序定义、中文"简称/称为/即"式定义会被漏抽 → 误标 `undefined_use`。故 `undefined_use` 一律取"疑未定义，请核对"中性口径（软报告供人工取舍、不阻断，与 polish PL-G10 同标准），人工回稿一看是反序/中文定义划掉即可，**不算"造假批评"**（软报告建议项 vs `inconsistent_variant` 的 confirmed 硬批评，两者危害不同故分层处理）。
+   - **`undefined_use` 本轮不消费、不列任何条目**（卡点5 决策：审稿端真价值实测 0/98——学界惯例裸用 + 稿末缩写表被脚本打穿导致全是假阳；`ABC(全称)` 反序 / 中文"简称/称为/即"定义又被现役 `ABBR_DEF_RE` 漏抽误标，落进报告净是噪声，故整类摘出，见 PLAN §6）。`title_abbreviation`（undefined 子情形）、`defined_unused`（软冗余）同样不列。
+   - **三态处置（与视角⑧约束 5 一致）**：`abbreviation_index.json` 为合法空数组 `[]`（通篇无缩写）→ **无 duplicate 条目、绝不告警**（无缩写＝无重复定义，正常有效结果）；文件缺失/JSON 损坏 → 跳过直报 + 告警"缩写锚缺失、缩写规范未核"；非空 → 读 `duplicate_definition` orphan 出软报告条目。
 
 
 八、其他改进建议 → `{{OTHER_SUGGESTIONS_HTML}}`
