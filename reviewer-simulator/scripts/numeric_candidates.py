@@ -97,7 +97,8 @@ _SCI_RE = re.compile(
     rf"({_NUM})\s*(?:[×xX*]\s*10\s*(?:\^\s*([+-]?\d+)|([{_SUP_ALL}]+))|[eE]([+-]?\d+))"
 )
 _MEANSD_RE = re.compile(rf"({_NUM})\s*±\s*({_NUM})")
-_RANGE_RE = re.compile(rf"({_NUM})\s*[–—~～]\s*({_NUM})\s*(%)?")
+# 含 ASCII `-`（D2）：仅"数字-数字"两侧纯数值才当范围；负号/日期年份区间另有护栏（见 _classify）。
+_RANGE_RE = re.compile(rf"({_NUM})\s*[–—~～-]\s*({_NUM})\s*(%)?")
 _RATIO_RE = re.compile(rf"({_NUM})\s*:\s*({_NUM})")
 _PCT_RE = re.compile(rf"({_NUM})\s*(%)")
 _THOUSANDS_RE = re.compile(r"(\d{1,3}(?:,\d{3})+(?:\.\d+)?)")
@@ -260,6 +261,10 @@ def _classify(form: str, m: "re.Match", sent: str) -> Optional[dict[str, Any]]:
         value = float(m.group(1))
         value_secondary = float(m.group(2))
     elif form == "range":
+        # 日期年份区间（ASCII `-` 连两个四位年，如 2019-2021）不当数值范围抽（D2 防误伤日期）。
+        # en/em dash/~（–—~～）区间不受此限——它们本就不用于写年份区间。
+        if "-" in m.group(0) and _YEAR_RE.match(m.group(1)) and _YEAR_RE.match(m.group(2)):
+            return None
         value = float(m.group(1))
         value_secondary = float(m.group(2))
         if m.group(3):
