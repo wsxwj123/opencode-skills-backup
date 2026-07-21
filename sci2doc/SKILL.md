@@ -1,6 +1,6 @@
 ---
 name: sci2doc
-version: 2.26.0
+version: 2.26.1
 description: 用于将SCI论文材料转化为中文博士或硕士学位论文草稿，执行严格的章节结构、原子化Markdown工作流、门禁检查和版本回滚。当用户提到博士论文、硕士论文、学位论文、毕业论文、SCI转论文、doctoral thesis、master thesis、dissertation 时优先调用。
 ---
 
@@ -446,7 +446,7 @@ python3 scripts/extract_docx_images.py --manuscript /path/to/source.docx --proje
   - **③ 第 3 层反向验证**：每条 `conflict==true` 过 `delegate_review.py`（**不改它，只 pack/verify**，gate=`numeric-verify`，checklist 内自由 key，不查 gate_registry）。动态合成 `$WORKROOT/numeric_verify_checklist.json`：item 只放两处 `raw`/location/`metric` + 核验所需原文切片（**绝不放子代理 finding/reasoning**），默认硬项（不标 `"severity":"soft"`）；**≥3 值的组拆成两两配对的多个 item**（id `num-<组>-<配对序>`，任一配对 pass → 该组整体保留、全部 fail → 剔除）。**🔴 check 逐字用零容差极性模板（禁占位符、禁自由发挥）**：
     > "到给你的原稿全文里独立核实：`{locA}` 处的值『{valA}』与 `{locB}` 处的值『{valB}』，两者据称都是指标『{metric}』的测量结果。请逐字回源确认两点——**(1) 两处是否确指同一指标、同一测量对象、同一分组、同一时间点、同一单位**（即本就应当相等；跨单位如 μM vs nM，请换算到同一单位后再判是否本应相等）？请到原文找出各自邻近的分组/剂量/时间点/亚组/单位线索比对。**(2) 若确为同一测量，两值是否非完全相等**（**零容差：只要不是完全相同的数值即算不等，含末位舍入差异如 58% vs 58.3%**）？**只有『同一测量且非完全相等』才判 pass（矛盾属实，保留交人工裁决）；只要发现两者其实是不同分组/不同时间点/不同亚组/不同单位（正常差异），或换算后完全相等，一律判 fail（非矛盾，剔除）。** evidence 必填：逐字引出 A、B 两处原文句及各自的分组/时间点/单位线索。"
 
-    `--files` 给全文 docx；`pack` → 独立空白子代理逐条裁 `pass|fail|na` 附逐字证据 → `verify`。**verdict 映射**：`pass`→confirmed（矛盾属实）；`fail`/`na`→refuted（剔除）；verify 的 `problems`（空证据/未裁决/verdict 非法）照 fail-closed 视为未核验、不进清单（宁漏报）。极性写反 = 假批评全放行，务必对准 pass=矛盾属实。
+    `--files` 给全文 docx；`pack` → 独立空白子代理逐条裁 `pass|fail|na` 附逐字证据 → `verify`。**verdict 映射**：`pass`→confirmed（矛盾属实）；`fail`/`na`→refuted（剔除）；verify 的 `problems`（空证据/未裁决/verdict 非法）照 fail-closed 视为未核验、不进清单（宁漏报）。极性写反 = 假批评全放行，务必对准 pass=矛盾属实。 ⚠️ **退出码陷阱（务必理解）**：本 numeric-verify 复用通用门禁 `delegate_review`，任一 item fail 会让 verify 报 `ok=false` / **exit 1** / stderr『盲检未通过』——但在数值反向验证里 **fail = 成功剔除假矛盾 = 正常好结果**。主 agent 必须**忽略退出码**，只读返回 JSON 的逐条 verdict + problems：verdict=pass→confirmed 保留、fail/na→refuted 剔除、problems 内→fail-closed 不进报告。切勿把 exit 1 误读成核查失败 / 报告不能完成。
   - **④ HALT**：命中 confirmed conflict → **HALT 交用户裁决**（列 `metric` + 两处 `raw`/location + evidence_quote），暂停本步、用户逐条裁决是否需统一，处置后重跑至无 confirmed conflict 再放行导出。数值门为 HALT 交人工，与参考文献硬门并列，**不 auto-block 硬拦、不静默判等放过**。
 
 ### 10) Rollback if Needed
