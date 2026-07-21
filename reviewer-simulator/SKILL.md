@@ -1,6 +1,6 @@
 ---
 name: reviewer-simulator
-version: 2.26.1
+version: 2.27.0
 description: 用于模拟高标准学术同行评审，对医学、生物、药学等领域稿件进行法医式检查、目标期刊契合度评估和证据锚定批评，输出结构化中文审稿报告。当用户提到模拟审稿、帮我审稿、预审、审稿报告、做reviewer、审一下这篇文章、投稿前自查、审稿人会怎么挑刺、这篇能不能中、peer review、simulate reviewer、review manuscript 时优先调用。注意与 reviewer-response-sci（用于回复审稿意见）区分：本技能是模拟审稿人写审稿意见，后者是针对已收到的审稿意见撰写回复。
 ---
 
@@ -225,6 +225,10 @@ python -c "import os,json; r=os.getcwd(); d=os.path.join(r,'data'); os.makedirs(
 `python "$SKILL_DIR/scripts/numeric_candidates.py" --manuscript <稿件 docx 或 md> --project-root "$WORKROOT"`
 产出 `$WORKROOT/numeric_candidates.json`（`candidates` 清单，每条含 `id`/`raw`/`value`/`value_secondary`/`norm`/`unit`/`form`/`sentence`/`metric_clue`/`group_clue`/`location` + `summary`）。脚本护栏"宁抽勿拒"，**只列数值不判矛盾、不判同一测量、不判容差**（判断全留视角⑥ + 反向验证）；百分比 `norm` 归一为分数、docx 表格单元格值也抽（`location.source=="table"`）。此文件在第四步半仅喂给视角⑥。
 
+**方法学一致性的方法术语弱锚（再紧接着跑一条）：** 拿内置实验方法术语词典**扫全稿命中**，输出稿子里哪些方法术语字面出现在哪些句/哪个 region/是否邻接图，外加方法学章节的小节标题清单，作为第四步半视角⑦"方法学交代完整性审稿人"的**聚焦焦点图**。同样用安装目录绝对路径，输出锚定 `$WORKROOT`：
+`python "$SKILL_DIR/scripts/methods_terms.py" --manuscript <稿件 docx 或 md> --project-root "$WORKROOT"`
+产出 `$WORKROOT/methods_terms.json`（顶层 `authority:"weak_focus_map"` + `method_hits` 清单，每条含 `id`/`term`/`canonical`/`region`/`sentence`/`location`/`has_figure_adjacent` + `methods_sections` 小节清单 + `summary`）。**⚠️ 与 outline.json / numeric_candidates.json 的根本差异：这是弱锚焦点图、不是权威真值**——结果侧"用了什么方法"一般无字面 token（是语义），脚本**只报字面命中、只标注（region + 是否邻接图），从不判任何方法是否漏写、是否本研究做的、是否穷尽**（判断 100% 留视角⑦ + 反向验证）。此文件在第四步半仅喂给视角⑦。**降级编排：`methods_terms.py` 若 exit 2 或 `methods_terms.json` 缺失/损坏，视角⑦ 照常派出、降级为纯全文语义跑（它本就被要求不依赖弱锚、须自行语义识别），不得静默跳过。**
+
 
 **🔴 第四步半：并发多视角subagent盲评（禁止主 agent 自评）**
 
@@ -239,6 +243,12 @@ python -c "import os,json; r=os.getcwd(); d=os.path.join(r,'data'); os.makedirs(
    - 视角④：魔鬼代言人（核心论点漏洞、cherry-picking、确认偏误、过度解读、与文献矛盾，rubric 第八节）
    - 视角⑤：交叉引用一致性审稿人（正文的 `见 3.1`/`如前文 4.1.2 所述`/`见图3`/`见表2`/`见(2)` 等指向型表述，逐条对着 `outline.json` 判**存在性**（目标编号在不在 → `missing_target`）与**语义对应**（编号在但指错内容 → `semantic_mismatch`），rubric 第三节"交叉引用一致性"项）
    - 视角⑥：数值一致性审稿人（对着 `numeric_candidates.json` 判哪些候选指**同一指标/同一测量对象/同一分组/同一时间点/同一单位**（跨措辞语义归一：抑瘤率/inhibition rate 视为同一指标；跨单位如 μM vs nM 由 LLM 换算判），仅对同一测量的一组值判是否**完全相等**；**零容差**——同一测量且非完全相等即报 `conflict`，不同剂量组/时间点/亚组/单位的正常差异不报，rubric"数值一致性"项）
+   - 视角⑦：方法学交代完整性审稿人（**独立视角、不并入视角①**）——读结果/讨论 + 方法学章节 + `methods_terms.json` 弱锚，判**每个本研究实际做的实验方法，方法学章节有没有交代**，报 `methods_missing`。逐条约束：
+     1. **只报漏写、从不评方法质量**：方法学"写了但不够详细/无对照/无金标准"是视角①的质量问题，不在本视角；本视角只判"根本没写"。同一方法既被①判"写得差"又被⑦判"没写"→ 以⑦"没写"为准。
+     2. **弱锚非穷尽、须自行语义补充**：`methods_terms.json` 的 `method_hits` 只是"字面命中"参考焦点图（`authority:"weak_focus_map"`），**不是稿子用到方法的完整清单**。必须自行通读结果/讨论、语义识别词典外方法（含隐含方法，如"散点图门控"→流式），一并核查，不得只盯 `method_hits`。
+     3. **只判本研究做的（头号假阳防线）**：只对**本研究实际做的**方法判漏写。背景/引言/讨论里**引用他人研究**提及的方法（"previous studies used…"/"既往研究采用…"）**一律不报**。判据：人称（"we performed/本研究采用" vs "既往研究/has been reported"）+ 区段（Results 区 + 邻近本研究图/数据/门控几乎必是本研究做的，可看 `has_figure_adjacent`）+ 上下文语义；拿不准 → 不硬报，交第 3 层反向验证兜。
+     4. **指向补充材料视作已交代（系统性假阳防线）**：主文里指向补充材料的表述——"见补充材料/详见附录/see Supplementary Methods/described in the Supplementary/Supporting Information"——**一律视作已交代（`methods_section_covers=true`）、不报漏写**（现役读稿层不读补充材料文件，取从宽口径避免假阳，宁漏报不假报）。
+     5. **方法学引用文献描述该方法视作已交代**：方法学章节写"方法参照文献[X]/按照[X]的方法进行/as previously described [12]"这类**带文献引用的方法指向**，**一律视作已交代（`methods_section_covers=true`）、不报漏写**。⚠️ 与约束 3 区分两类引文：本条是**方法学**引用文献描述本研究用的方法（"我们按[X]做了流式"）→ 已交代、不报；约束 3 排除的是**结果/讨论**里引用他人研究结果的方法（非本研究做的）→ `used_in_study=false`、本就不该核查。都靠引文信号但落点不同，别混。
 
 2. **并发派出（fan-out）**：为每个视角各派一个独立subagent，互不共享上下文、互不告知彼此结论（盲）。每个subagent的输入仅包含：
    - 稿件路径（或全文文本）
@@ -246,6 +256,8 @@ python -c "import os,json; r=os.getcwd(); d=os.path.join(r,'data'); os.makedirs(
    - **视角⑤额外输入 `$WORKROOT/outline.json`**（确定性锚，稿子里真实存在的全部小节/图/表/条目）；视角⑤按 rubric 第三节"交叉引用一致性"项的格式返回 `[{"ref_id","citing_location","cited_target","issue_type":"missing_target|semantic_mismatch|uncertain","evidence_quote","outline_says","finding","severity"}]`，**outline.json 是唯一权威真值**，不得凭记忆假设稿子有某小节，拿不准标 `uncertain` 不硬判。**补充材料引用（`S` 前缀编号，如 `Figure S1`/`Table S3`/`见图 S22`/`Supplementary Fig. 5`）不在 outline 范围内**——正文稿抽不到补充文件的定义，此类一律标 `uncertain` 或直接跳过，**绝不报 `missing_target`**（否则整份补充材料 S1–Sn 会被批量假报为悬空）。
    - **视角⑥额外输入 `$WORKROOT/numeric_candidates.json`**（确定性数值真值锚，稿子里真实出现的全部带上下文数值候选）；视角⑥按**零容差二元 schema** 返回 `[{"metric","same_measurement":bool,"values":[{"id","raw","location":{"region","para_index"}}],"conflict":bool,"evidence_quote","finding"}]`（**无 `tolerance_state`、无 `severity`**）。判据：`same_measurement==true && 非完全相等 → conflict=true`（完全相等含 `58%==58.0%` 比 `norm`、`1.2==1.20` 比去尾零 `value`、换算后 `1.2μM==1200nM`）；`same_measurement==false`（不同组/时间点/单位的正常差异）→ 不报、不进下游。范围(`form=range`) vs 点值不套"完全相等"，点值是否落区间由视角⑥显式判。**numeric_candidates.json 是唯一权威真值，不凭记忆。**
      - **样本量 n 的跨位置核对**：额外核对同一实验/同一组的样本重复数 n（`metric_clue=="样本量"` 的候选，第 1 层能从方法学/图注/结果正文各处抽到）是否跨**方法学 / 图注 / 结果与讨论**三处一致（例：方法学写每组 n=6，Figure 2 图注标 n=8，结果正文又说 n=6）。**防假阳判据（与"剂量组正常差异"同理）**：不同图/不同实验的 n 本就可能合理不同，**只有当多处 n 明确指向同一个实验、同一组样本时**其 n 不一致才报 `conflict`；无法确认是否同一实验/同组的，按 `same_measurement=false` 处理、不报（拿不准交人工，别硬判）。此核对并入上面"先判是否同一测量再按零容差比对"的同一逻辑，不新增独立机制。
+   - **视角⑦额外输入 `$WORKROOT/methods_terms.json`**（**弱锚焦点图、非权威真值**，`authority:"weak_focus_map"`）+ 稿件全文；视角⑦返回 `[{"method","used_in_study":bool,"methods_section_covers":bool,"methods_missing":bool,"evidence_quote","finding"}]`。判据：`used_in_study==true && methods_section_covers==false → methods_missing=true`，否则 `false`。`methods_section_covers=true` **从宽三选一、任一即算已交代**：① 方法学出现方法名（小节标题或描述其如何做的句子，不要求写到可复现）；② 主文指向补充材料的表述（上款约束 4）；③ 方法学引用文献描述该方法（上款约束 5）。**弱锚缺失/损坏则降级为纯全文语义跑，不得静默跳过。**`methods_terms.json` 是聚焦参考不是真值——命中在方法学≠交代充分、命中在结果≠本研究做的，一切以全文语义为准。**下游路由**：`methods_missing==true` → 进第 3 层反向验证（第五步·四分之三-ter）；`used_in_study==false` 或 `methods_section_covers==true` → 丢弃不进下游。
+     - **已知局限（明写交代用户）**：本轮**仅核主文、不读补充材料文件**。取从宽口径（主文有"见补充材料"指向即认已交代）挡住了"方法下沉补充材料 + 主文有指向"的假阳；但**方法完全下沉补充材料、且主文连"见补充材料"都只字未提**的漏报核不出（现役读稿层局限）——此为已知局限，应在交付说明里向用户交代，别让它静默变成假批评或假阴。
    - 要求：按 rubric 条目逐项返回结构化 JSON，格式为 `[{"dimension": "条目名", "severity": "CRITICAL|MAJOR|MINOR|INFO", "finding": "具体证据与位置", "recommendation": "改进建议"}]`
    - **禁止**：不得告知其他视角的已有发现，不得给出总体 verdict（这是主 agent 的职责）
 
@@ -315,6 +327,24 @@ python -c "import os,json; r=os.getcwd(); d=os.path.join(r,'data'); os.makedirs(
    `python "$SKILL_DIR/scripts/delegate_review.py" verify --checklist "$WORKROOT/numeric_verify_checklist.json" --gate numeric-verify --workdir "$WORKROOT"`
 4. **verdict 映射 + 剔除**：`pass`→**confirmed**（矛盾属实，并入第七部分 `{{CRITICAL_ISSUES_HTML}}`，无新占位符）；`fail`/`na`→**refuted**（剔除，内部留一条备查）。verify 的 `problems`（空证据/未裁决/verdict 非法）照 fail-closed 视为未核验，一律不进报告（宁漏报）。**零容差下所有 confirmed conflict 一律报出交人工，不做 severity 降级路由。** ⚠️ **退出码陷阱（务必理解）**：本 numeric-verify 复用通用门禁 `delegate_review`，任一 item fail 会让 verify 报 `ok=false` / **exit 1** / stderr『盲检未通过』——但在数值反向验证里 **fail = 成功剔除假矛盾 = 正常好结果**。主 agent 必须**忽略退出码**，只读返回 JSON 的逐条 verdict + problems：verdict=pass→confirmed 保留、fail/na→refuted 剔除、problems 内→fail-closed 不进报告。切勿把 exit 1 误读成核查失败 / 报告不能完成。
 5. **降级**：派不出真正独立的子代理时，照第四步半"盲评降级告警"——不得同一 AI 自问自答冒充，交回用户人肉核，数值一致性标注"未经独立反向验证"。
+
+
+**第五步·四分之三-ter：方法学漏写的独立反向验证（机器·出报告前·必做）**
+
+第四步半视角⑦每条 `methods_missing==true` 的漏写发现，**必须过一道看不到判断过程的独立空白子代理核验**再进报告（`used_in_study==false` 或 `methods_section_covers==true` 的一律不入本层）。**真复用 base 版 `delegate_review.py`**（reviewer-simulator 是 base 版、零改动复用，不改它，只 pack/verify），gate=`methods-verify`（checklist 内自由 key，不查 gate_registry）：
+
+1. **动态合成临时 checklist** 写 `$WORKROOT/methods_verify_checklist.json`：`{"skill":"reviewer-simulator","gates":{"methods-verify":{"title":"方法学交代完整性·反向验证","items":[{"id":"mth-001","name":"<method：结果用了、方法学疑似未写 摘要>","check":"<下方两条件极性模板逐字填>"}]}}}`。item 只放 `{method}`、结果处用到该方法的**原文命中句**（来自弱锚 `sentence` 或视角⑦ evidence）、核验所需切片，**绝不放视角⑦的 `finding`/reasoning（防带节奏）**。item 默认硬项（不标 `"severity":"soft"`），走 delegate_review 原生 fail-closed。
+   - **🔴【两条件极性模板·必须内联，禁占位符、禁自由发挥】**：M 维度比 numeric 多一层——**两条件同时成立才 pass**。`check` 逐字用下面固定模板（`{method}` 处填方法名）——
+     > "到给你的原稿全文里独立核实两点——**(1) 结果/讨论是否确实报告了本研究做的『{method}』**（有对应实验数据/图/门控/条带等本研究结果，而非仅在背景/引言/讨论里引用他人研究提及该方法）？请回源找邻近的数据/图引用与人称/引文线索比对。**(2) 方法学章节是否确实【完全没有】交代『{method}』**——须同时满足三个『没有』才算完全没交代：**(2a)** 既无该方法的小节标题、也无任何描述其如何做的句子；**(2b)** 也没有任何指向补充材料/附录的表述（如『见补充材料』『详见附录』『see Supplementary Methods』『described in the Supplementary/Supporting Information』）；**(2c)** 也没有【引用文献描述该方法】的表述（如『方法参照文献[X]』『按照[X]的方法进行』『as previously described [12]』这类带文献引用标记的方法指向）。只要出现 (2b) 指向补充材料 或 (2c) 引用文献描述该方法，即算已交代、不算漏写。**只有『结果确实用了本研究的该方法』且『方法学确实没写、没指向补充材料、也没引用文献描述该方法』两条同时成立才判 pass（漏写属实，保留交人工裁决）；只要发现方法学其实写了该方法（哪怕只一句）、或主文有指向补充材料的交代、或方法学有引用文献描述该方法（带引文标记）、或结果里的该方法其实是引用他人研究/背景讨论（非本研究做的），一律判 fail（非漏写，剔除）。** evidence 必填：逐字引出结果处用到该方法的句 + 方法学处（有则引出该句证明写了/引出指向补充材料或引用文献的句，无则说明通读方法学未见）。"
+
+     即 **两条件同时成立（本研究确用 AND 方法学确未写、未指向补充材料、未引用文献描述）→ pass（=confirmed，保留交人工裁决）；方法学其实写了 / 主文指向补充材料 / 方法学引用文献描述该方法 / 结果只是引用他人 → fail（=refuted，剔除）**。⚠️ 极性关键（写反＝假批评全放行）：check 必须逼核验人独立确认**两件事**——条件 (1)"本研究做的 vs 引用他人"（M 维度头号假阳源）与条件 (2) 里两类"从宽交代"（(2b) 指向补充材料、(2c) 方法学引用文献描述该方法）；不能只问"方法学有没有直接写该方法"，漏了这些会把引用他人/下沉补充材料/引用文献描述的方法误当漏写放行。**注意区分 (2c) 与条件 (1)**：(2c) 是**方法学**引用文献描述本研究做的方法（已交代、不报）；条件 (1) 排除的是**结果/讨论**里引用他人研究结果的方法（非本研究做的、不该核查）——都靠引文信号但落点不同。
+2. **喂料**：`--files` 给**原稿全文**（让核验人独立回源判"本研究 vs 引用他人"、判方法学到底写没写），不给视角⑦的判断过程。
+3. **pack → 派独立空白子代理裁决 → verify**：
+   `python "$SKILL_DIR/scripts/delegate_review.py" pack --checklist "$WORKROOT/methods_verify_checklist.json" --gate methods-verify --files <稿件路径> --workdir "$WORKROOT"`
+   独立子代理逐条只依据原文裁 `pass|fail|na` 并附逐字证据，写回约定路径 `$WORKROOT/.review_return_methods-verify.json`；再：
+   `python "$SKILL_DIR/scripts/delegate_review.py" verify --checklist "$WORKROOT/methods_verify_checklist.json" --gate methods-verify --workdir "$WORKROOT"`
+4. **verdict 映射 + 剔除**：`pass`→**confirmed**（漏写属实，并入第七部分 `{{CRITICAL_ISSUES_HTML}}`，漏写方法学是审稿硬伤，通常 MAJOR/CRITICAL，无新占位符）；`fail`/`na`→**refuted**（剔除，内部留一条备查）。verify 的 `problems`（空证据/未裁决/verdict 非法）照 fail-closed 视为未核验，一律不进报告（宁漏报）。⚠️ **退出码陷阱（务必理解，照 -bis 原样搬）**：本 methods-verify 复用通用门禁 `delegate_review`，任一 item fail 会让 verify 报 `ok=false` / **exit 1** / stderr『盲检未通过』——但在方法学反向验证里 **fail = 成功剔除假漏写 = 正常好结果**。主 agent 必须**忽略退出码**，只读返回 JSON 的逐条 verdict + problems：verdict=pass→confirmed 保留、fail/na→refuted 剔除、problems 内→fail-closed 不进报告。切勿把 exit 1 误读成核查失败 / 报告不能完成。
+5. **降级**：派不出真正独立的子代理时，照第四步半"盲评降级告警"——不得同一 AI 自问自答冒充，交回用户人肉核，方法学一致性标注"未经独立反向验证"。
 
 
 **第五步七分之一：核心批评核对关卡（出报告前·必停）**
