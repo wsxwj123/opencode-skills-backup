@@ -1,6 +1,6 @@
 ---
 name: reviewer-simulator
-version: 2.27.1
+version: 2.28.0
 description: 用于模拟高标准学术同行评审，对医学、生物、药学等领域稿件进行法医式检查、目标期刊契合度评估和证据锚定批评，输出结构化中文审稿报告。当用户提到模拟审稿、帮我审稿、预审、审稿报告、做reviewer、审一下这篇文章、投稿前自查、审稿人会怎么挑刺、这篇能不能中、peer review、simulate reviewer、review manuscript 时优先调用。注意与 reviewer-response-sci（用于回复审稿意见）区分：本技能是模拟审稿人写审稿意见，后者是针对已收到的审稿意见撰写回复。
 ---
 
@@ -215,7 +215,7 @@ python -c "import os,json; r=os.getcwd(); d=os.path.join(r,'data'); os.makedirs(
 
 **图表完整性与参考文献审计的辅助索引（执行前先跑）：** 用脚本反向抽取稿件的图、参考交叉索引，为图文一致性与引用完整性核查提供逐项依据（孤儿图、孤儿引用、列而未引）。脚本用安装目录绝对路径，输出锚定 `$WORKROOT`（本技能无原子化步骤，故不带 `--units-dir`，cited_by 退化为正文段号 pN）：
 `python "$SKILL_DIR/scripts/manuscript_index.py" --manuscript <稿件 docx 或 md> --project-root "$WORKROOT"`
-产出 `$WORKROOT/figure_index.json`、`$WORKROOT/reference_index.json`、`$WORKROOT/manuscript_index.md`。结果为启发式抽取，作审计辅助而非红线核验：图表完整性审计据 `figure_index.json` 核对每图是否有图注、是否被正文引用（`orphan_type`）；参考文献审计据 `reference_index.json` 核对孤儿引用（列而未引 `entry_not_cited`、引而无条目 `cited_no_entry`）。
+产出 `$WORKROOT/figure_index.json`、`$WORKROOT/reference_index.json`、`$WORKROOT/manuscript_index.md`。结果为启发式抽取，作审计辅助而非红线核验：图表完整性审计据 `figure_index.json` 核对每图是否有图注、是否被正文引用（`orphan_type`）；参考文献审计据 `reference_index.json` 核对孤儿引用（列而未引 `entry_not_cited`、引而无条目 `cited_no_entry`）。**同时产出 `$WORKROOT/abbreviation_index.json`**（缩写定义/裸使用点/首现位置 + orphan 的交叉索引，bare JSON 数组）——其 `duplicate_definition` orphan 供**确定性直报**（软报告，见第五部分七『术语一致性核查产物的报告归位』小节），其 `defined_count>=1` 缩写清单供**视角⑧术语一致性审稿人**当焦点。**`undefined_use` orphan 本轮不消费**（卡点5 决策：审稿端真价值实测 0——学界惯例裸用 + 末尾缩写表被脚本打穿导致全是假阳，见 PLAN §6）。合法空数组 `[]`（通篇无缩写）是有效结果、不是失败。
 
 **交叉引用一致性的结构目录锚（紧接着再跑一条）：** 抽取稿件里**真实存在的结构目录**（小标题 `3.1`/`4.1.2`、图/表编号、条目 `(1)(2)(3)`），作为第四步半视角⑤"交叉引用一致性审稿人"的**确定性锚**——LLM 只在这份机器真值上判交叉引用对不对，不凭记忆假设稿子有哪些小节。同样用安装目录绝对路径，输出锚定 `$WORKROOT`：
 `python "$SKILL_DIR/scripts/structure_outline.py" --manuscript <稿件 docx 或 md> --project-root "$WORKROOT"`
@@ -250,6 +250,13 @@ python -c "import os,json; r=os.getcwd(); d=os.path.join(r,'data'); os.makedirs(
      4. **指向补充材料视作已交代（系统性假阳防线）**：主文里指向补充材料的表述——"见补充材料/详见附录/see Supplementary Methods/described in the Supplementary/Supporting Information"——**一律视作已交代（`methods_section_covers=true`）、不报漏写**（现役读稿层不读补充材料文件，取从宽口径避免假阳，宁漏报不假报）。
      5. **方法学引用文献描述该方法视作已交代**：方法学章节写"方法参照文献[X]/按照[X]的方法进行/as previously described [12]"这类**带文献引用的方法指向**，**一律视作已交代（`methods_section_covers=true`）、不报漏写**。⚠️ 与约束 3 区分两类引文：本条是**方法学**引用文献描述本研究用的方法（"我们按[X]做了流式"）→ 已交代、不报；约束 3 排除的是**结果/讨论**里引用他人研究结果的方法（非本研究做的）→ `used_in_study=false`、本就不该核查。都靠引文信号但落点不同，别混。
 
+   - 视角⑧：术语一致性审稿人（**独立视角、不并入视角①③；只判 `inconsistent_variant` 一类**）——以 `$WORKROOT/abbreviation_index.json` 的 `defined_count>=1` 缩写清单当焦点 + 通读全文，判**同一个精确定义的实体前后是否换了会引起歧义的异名**（缩写别名混用 + category③ 基因/质粒/细胞系/构建体的纯排版级实体混写），报 `inconsistent_variant`。**只审一致性轴、从不评术语正确性**（术语用得对不对/规范不规范归视角①③）。`duplicate_definition` 走确定性直报（第五部分七『术语一致性核查产物的报告归位』小节）、**不进本视角**（`undefined_use` 本轮不消费，卡点5 决策：真价值 0）。逐条约束：
+     1. **锚只给焦点、别名混用/实体混写须自行语义识别**：`abbreviation_index.json` 的 defined 缩写清单只告诉你"哪些是被作者定义过的精确实体"，**不检测别名混用、够不着 category③（p53/pBV220 小写起头 token）**。必须自行通读全文语义识别：换别名指同一实体、基因·蛋白·细胞系·构建体的纯排版级混写。
+     2. **头号假阳两层防线（成败点）**：只报**确指同一精确实体**且**非合规同义交替**的异名。三问判定链：① 两写法是否指同一个精确定义的实体（缩写定义过 / 基因·质粒·细胞系精确名）？② 差异是否超出"缩写↔其全称""中↔英对照""gene↔protein 命名约定"三类合规交替？③ 是否普通名词同义或不同实体（是→立即放过）？**三问全过才报。硬负面清单一律不报：肿瘤/癌、显著/significant、中英并用、缩写↔全称交替、gene↔protein 命名约定（`TP53`基因/`p53`蛋白、`MYC`/`c-Myc`）、一字之差的不同基因/分子（`p53`/`p63`、`IL-6`/`IL-8`、`CD4`/`CD8`）。**
+     3. **category③ 只报纯排版级差异指同一实体**（假阳风险最高，正例严格收窄）：**只报同一字符串的排版变体**——大小写（`p53`/`P53`）、连字符（`pBV220`/`pBV-220`）、空格（`IL-6`/`IL6`）、下标级差异。**硬排除三类、绝不报**：(a) **gene↔protein 命名约定**（`TP53`基因 vs `p53`蛋白、`MYC`/`c-Myc` 是 HGNC/期刊强制的正确区分、本该并存、不是混写，判它要正确性语境→归①③、⑧ 不报）；(b) **近似名≠同一实体**（`p53`/`p63`/`p73`、`IL-6`/`IL-8`、`CD4`/`CD8` 是语义不同的分子，报了即造假批评）；(c) **加前缀/换词根/改语义**（超出纯排版，交 `same_entity` 语义判、拿不准不报）。
+     4. **只判一致性不判正确性、与①③ 不去重**：不评术语用得对不对（归①③）；同一术语被①③判"用错"与被⑧判"不一致"是**不同轴、各报一条、不去重**（区别于⑦"没写"vs①"写得差"的同轴去重——⑧ 与①③ 无覆盖关系）。
+     5. **降级 / 空锚 / 下游路由**：锚缺失/损坏 → 视角⑧ **降级为纯全文语义跑 + 告警**"术语一致性降级跑（缩写锚缺失）"（照视角⑦ 弱锚缺失降级先例）；锚为合法空数组 `[]`（通篇无缩写的稿）→ **正常纯语义跑（category①③ 本就 100% 靠语义、与锚空不空无关）、绝不告警**（`[]` 是合法有效结果、不是失败，不得静默失效）。**下游路由**：`report==true` → 进第 3 层反向验证（第五步·四分之三-quater）；`report==false`（不同实体/合规交替/gene↔protein 约定/普通同义词）→ 丢弃不进下游。
+
 2. **并发派出（fan-out）**：为每个视角各派一个独立subagent，互不共享上下文、互不告知彼此结论（盲）。每个subagent的输入仅包含：
    - 稿件路径（或全文文本）
    - 该视角的 rubric 条目（仅本视角相关条目，不给其他视角的 rubric）
@@ -258,6 +265,7 @@ python -c "import os,json; r=os.getcwd(); d=os.path.join(r,'data'); os.makedirs(
      - **样本量 n 的跨位置核对**：额外核对同一实验/同一组的样本重复数 n（`metric_clue=="样本量"` 的候选，第 1 层能从方法学/图注/结果正文各处抽到）是否跨**方法学 / 图注 / 结果与讨论**三处一致（例：方法学写每组 n=6，Figure 2 图注标 n=8，结果正文又说 n=6）。**防假阳判据（与"剂量组正常差异"同理）**：不同图/不同实验的 n 本就可能合理不同，**只有当多处 n 明确指向同一个实验、同一组样本时**其 n 不一致才报 `conflict`；无法确认是否同一实验/同组的，按 `same_measurement=false` 处理、不报（拿不准交人工，别硬判）。此核对并入上面"先判是否同一测量再按零容差比对"的同一逻辑，不新增独立机制。
    - **视角⑦额外输入 `$WORKROOT/methods_terms.json`**（**弱锚焦点图、非权威真值**，`authority:"weak_focus_map"`）+ 稿件全文；视角⑦返回 `[{"method","used_in_study":bool,"methods_section_covers":bool,"methods_missing":bool,"evidence_quote","finding"}]`。判据：`used_in_study==true && methods_section_covers==false → methods_missing=true`，否则 `false`。`methods_section_covers=true` **从宽三选一、任一即算已交代**：① 方法学出现方法名（小节标题或描述其如何做的句子，不要求写到可复现）；② 主文指向补充材料的表述（上款约束 4）；③ 方法学引用文献描述该方法（上款约束 5）。**弱锚缺失/损坏则降级为纯全文语义跑，不得静默跳过。**`methods_terms.json` 是聚焦参考不是真值——命中在方法学≠交代充分、命中在结果≠本研究做的，一切以全文语义为准。**下游路由**：`methods_missing==true` → 进第 3 层反向验证（第五步·四分之三-ter）；`used_in_study==false` 或 `methods_section_covers==true` → 丢弃不进下游。
      - **已知局限（明写交代用户）**：本轮**仅核主文、不读补充材料文件**。取从宽口径（主文有"见补充材料"指向即认已交代）挡住了"方法下沉补充材料 + 主文有指向"的假阳；但**方法完全下沉补充材料、且主文连"见补充材料"都只字未提**的漏报核不出（现役读稿层局限）——此为已知局限，应在交付说明里向用户交代，别让它静默变成假批评或假阴。
+   - **视角⑧额外输入 `$WORKROOT/abbreviation_index.json` 的 `defined_count>=1` 缩写清单当焦点 + 稿件全文**（**非权威真值、只是焦点图**——只告诉视角⑧哪些是被作者定义过的精确实体；别名混用/实体混写须自行通读全文语义补，见视角⑧约束 1）；视角⑧按**只判 `inconsistent_variant` 一类**返回 `[{"issue_type":"inconsistent_variant","entity":"归一后实体名/缩写","variants":[两处逐字原文写法],"same_entity":bool,"is_compliant_alternation":bool,"report":bool,"evidence_quote":"逐字引出两写法各自出处及各自指代","finding":"结论措辞"}]`。判据：`same_entity==true && is_compliant_alternation==false → report=true`，否则 `false`。`same_entity`/`is_compliant_alternation` 是**强制拆开判据链的思维脚手架 + 决策留痕**（逼 LLM 显式回答"是否同一实体""是否合规交替"两问、而非直接给 `report`），**下游只按 `report` 路由**（第 3 层反向验证独立回源、不信任视角⑧判据字段）。**三态处置（照视角⑧约束 5，不得静默失效）**：`abbreviation_index.json` 为合法空数组 `[]`（通篇无缩写）→ 正常纯语义跑、**绝不告警**；文件缺失/JSON 损坏 → 降级为纯全文语义跑 + 告警；非空 → 消费 defined 缩写清单当焦点。
    - 要求：按 rubric 条目逐项返回结构化 JSON，格式为 `[{"dimension": "条目名", "severity": "CRITICAL|MAJOR|MINOR|INFO", "finding": "具体证据与位置", "recommendation": "改进建议"}]`
    - **禁止**：不得告知其他视角的已有发现，不得给出总体 verdict（这是主 agent 的职责）
 
@@ -345,6 +353,24 @@ python -c "import os,json; r=os.getcwd(); d=os.path.join(r,'data'); os.makedirs(
    `python "$SKILL_DIR/scripts/delegate_review.py" verify --checklist "$WORKROOT/methods_verify_checklist.json" --gate methods-verify --workdir "$WORKROOT"`
 4. **verdict 映射 + 剔除**：`pass`→**confirmed**（漏写属实，并入第七部分 `{{CRITICAL_ISSUES_HTML}}`，漏写方法学是审稿硬伤，通常 MAJOR/CRITICAL，无新占位符）；`fail`/`na`→**refuted**（剔除，内部留一条备查）。verify 的 `problems`（空证据/未裁决/verdict 非法）照 fail-closed 视为未核验，一律不进报告（宁漏报）。⚠️ **退出码陷阱（务必理解，照 -bis 原样搬）**：本 methods-verify 复用通用门禁 `delegate_review`，任一 item fail 会让 verify 报 `ok=false` / **exit 1** / stderr『盲检未通过』——但在方法学反向验证里 **fail = 成功剔除假漏写 = 正常好结果**。主 agent 必须**忽略退出码**，只读返回 JSON 的逐条 verdict + problems：verdict=pass→confirmed 保留、fail/na→refuted 剔除、problems 内→fail-closed 不进报告。切勿把 exit 1 误读成核查失败 / 报告不能完成。
 5. **降级**：派不出真正独立的子代理时，照第四步半"盲评降级告警"——不得同一 AI 自问自答冒充，交回用户人肉核，方法学一致性标注"未经独立反向验证"。
+
+
+**第五步·四分之三-quater：异名混用的独立反向验证（机器·出报告前·必做）**
+
+第四步半视角⑧每条 `report==true`（`inconsistent_variant`）的异名混用发现，**必须过一道看不到判断过程的独立空白子代理核验**再进报告（`report==false`——不同实体/合规交替/gene↔protein 约定/普通同义词——的一律不入本层）。**只服务 `inconsistent_variant`**；`duplicate_definition` 是脚本确定性结果、走第五部分七『术语一致性核查产物的报告归位』软报告直报、**不上反向验证**（`undefined_use` 本轮不消费，卡点5 决策）。**真复用 base 版 `delegate_review.py`**（reviewer-simulator 是 base 版、零改动复用，不改它，只 pack/verify），gate=`term-verify`（checklist 内自由 key，不查 gate_registry）：
+
+1. **动态合成临时 checklist** 写 `$WORKROOT/term_verify_checklist.json`：`{"skill":"reviewer-simulator","gates":{"term-verify":{"title":"异名混用·反向验证","items":[{"id":"term-001","name":"<entity：写法A vs 写法B 摘要>","check":"<下方 inconsistent_variant 双条件极性模板逐字填>"}]}}}`。item 只放两处写法 + 各自 location + 核验所需原文切片，**绝不放视角⑧的 `finding`/reasoning、也不放 `same_entity`/`is_compliant_alternation` 判据字段（防带节奏）**。item 默认硬项（不标 `"severity":"soft"`），走 delegate_review 原生 fail-closed。
+   - **🔴【inconsistent_variant 双条件极性模板·必须内联，禁占位符、禁自由发挥】**：T1 与 methods 同构——**两条件同时成立才 pass**。`check` 逐字用下面固定模板（`{写法A}`/`{写法B}` 处填值）——
+     > "到给你的原稿全文里独立核实两点——**(1)** 原文里『{写法A}』与『{写法B}』是否**确指同一个精确定义的实体**（有一处是『全称(缩写)』/『缩写(全称)』式定义、或两者是同一基因/质粒/细胞系的**纯排版级变体**如 p53/P53 大小写、pBV220/pBV-220 连字符、IL-6/IL6 空格）？**(2)** 这个差异是否**超出合规写作**——即**不是**『缩写↔其对应全称』的正常交替、**不是**『中文名↔英文名』的对照并用、**不是**『gene↔protein 命名约定』（如 `TP53` 指基因、`p53` 指蛋白，HGNC 强制的正确区分、本该并存）、**也不是**两个通用同义词（如肿瘤/癌）？**只有『确指同一精确实体』且『差异不属上述任一合规交替』两条同时成立才判 pass（歧义异名属实，保留交人工）；只要发现两者其实是缩写与其全称的正常交替、或中英对照、或 gene↔protein 命名约定、或普通同义词、或根本是两个语义不同的实体（如 p53 vs p63、CD4 vs CD8），一律判 fail（剔除）。** evidence 必填：逐字引出 A、B 两处原文及各自指代。"
+
+     即 **『确指同一精确实体』且『非合规交替』两条同时成立 → pass（=confirmed，保留交人工裁决）；缩写↔全称交替 / 中英对照 / gene↔protein 命名约定 / 普通同义词 / 根本是不同实体（p53 vs p63、CD4 vs CD8）→ fail（=refuted，剔除）**。⚠️ 极性关键（写反＝假批评全放行）：check 必须逼核验人独立回源确认**两件事**——"是否同一精确实体"与"是否合规交替（含 gene↔protein 约定）"，**不能只问"两个写法一样吗"**（判错是 T1 假阳主因，对应 numeric 的"是否同一测量"、methods 的"本研究 vs 引用他人"）。**gene↔protein 命名约定（TP53/p53）是穿透性陷阱——务必在条件 (2) 显式列为合规交替，否则会被当同实体混写 pass 成假批评。**
+2. **喂料**：`--files` 给**原稿全文**（让核验人独立回源查指代、查是否合规交替），不给视角⑧的判断过程。
+3. **pack → 派独立空白子代理裁决 → verify**：
+   `python "$SKILL_DIR/scripts/delegate_review.py" pack --checklist "$WORKROOT/term_verify_checklist.json" --gate term-verify --files <稿件路径> --workdir "$WORKROOT"`
+   独立子代理逐条只依据原文裁 `pass|fail|na` 并附逐字证据，写回约定路径 `$WORKROOT/.review_return_term-verify.json`；再：
+   `python "$SKILL_DIR/scripts/delegate_review.py" verify --checklist "$WORKROOT/term_verify_checklist.json" --gate term-verify --workdir "$WORKROOT"`
+4. **verdict 映射 + 剔除**：`pass`→**confirmed**（异名混用属实，并入第七部分 `{{CRITICAL_ISSUES_HTML}}`，异名引歧义视致命度，无新占位符）；`fail`/`na`→**refuted**（剔除，内部留一条备查）。verify 的 `problems`（空证据/未裁决/verdict 非法）照 fail-closed 视为未核验，一律不进报告（宁漏报）。⚠️ **退出码陷阱（务必理解，照 -ter 原样搬）**：本 term-verify 复用通用门禁 `delegate_review`，任一 item fail 会让 verify 报 `ok=false` / **exit 1** / stderr『盲检未通过』——但在异名反向验证里 **fail = 成功剔除假批评 = 正常好结果**。主 agent 必须**忽略退出码**，只读返回 JSON 的逐条 verdict + problems：verdict=pass→confirmed 保留、fail/na→refuted 剔除、problems 内→fail-closed 不进报告。切勿把 exit 1 误读成核查失败 / 报告不能完成。
+5. **降级**：派不出真正独立的子代理时，照第四步半"盲评降级告警"——不得同一 AI 自问自答冒充，交回用户人肉核，术语一致性标注"未经独立反向验证"。
 
 
 **第五步七分之一：核心批评核对关卡（出报告前·必停）**
@@ -458,6 +484,19 @@ python -c "import os,json; r=os.getcwd(); d=os.path.join(r,'data'); os.makedirs(
 证据锚点: (明确标注证据来源)
 根源质询: (分析问题产生的深层原因,提出尖锐质疑)
 作者应对方案: (给出具体的、可执行的改进方向或回复策略)
+
+**术语一致性核查产物的报告归位（视角⑧ + `duplicate_definition` 确定性直报）：**
+
+1. **视角⑧ confirmed 异名混用（`inconsistent_variant`，已过第五步·四分之三-quater 反向验证）**：作为**确认的硬批评**并入本节 `{{CRITICAL_ISSUES_HTML}}`（异名引歧义视致命度，通常 MAJOR/MINOR），按上面统一格式呈现；最致命者进第九部分法医式解剖。与视角①③ 对同一术语的**正确性** finding **不同轴、各报一条、不去重**（⑧ 只报一致性、①③ 只报正确性）。
+
+2. **确定性直报（`duplicate_definition` 一类，脚本已确定性算出、不走 LLM、不走反向验证）**：主 agent 直接读 `$WORKROOT/abbreviation_index.json`，对 `orphan_type=="duplicate_definition"` 的条目按下表映射成**软报告条目**——口径照 polish-sci PL-G10：**列出 + 证据 + 供人工取舍、不阻断交付、不是 confirmed 硬批评**，与上面 confirmed 异名混用**分栏列**（列入第八部分『其他改进建议』或本节独立子栏『缩写规范软提示（供参考）』，措辞中性、不下"缺陷"定性）：
+
+   | 锚条件 | 报告条目（软，中性口径） | 严重度 | 证据字段 |
+   |---|---|---|---|
+   | `orphan_type=="duplicate_definition"`（`defined_count>=2`） | "缩写『{abbr}』重复定义 {defined_count} 次（首个全称『{full_name}』@{first_defined}），若两处全称指不同概念请统一" | MINOR（两全称明显异义→MAJOR，人工判） | `{abbr}` + `defined_count` + `full_name` + `first_defined` |
+
+   - **`undefined_use` 本轮不消费、不列任何条目**（卡点5 决策：审稿端真价值实测 0/98——学界惯例裸用 + 稿末缩写表被脚本打穿导致全是假阳；`ABC(全称)` 反序 / 中文"简称/称为/即"定义又被现役 `ABBR_DEF_RE` 漏抽误标，落进报告净是噪声，故整类摘出，见 PLAN §6）。`title_abbreviation`（undefined 子情形）、`defined_unused`（软冗余）同样不列。
+   - **三态处置（与视角⑧约束 5 一致）**：`abbreviation_index.json` 为合法空数组 `[]`（通篇无缩写）→ **无 duplicate 条目、绝不告警**（无缩写＝无重复定义，正常有效结果）；文件缺失/JSON 损坏 → 跳过直报 + 告警"缩写锚缺失、缩写规范未核"；非空 → 读 `duplicate_definition` orphan 出软报告条目。
 
 
 八、其他改进建议 → `{{OTHER_SUGGESTIONS_HTML}}`
