@@ -1,6 +1,6 @@
 ---
 name: reviewer-simulator
-version: 2.26.0
+version: 2.26.1
 description: 用于模拟高标准学术同行评审，对医学、生物、药学等领域稿件进行法医式检查、目标期刊契合度评估和证据锚定批评，输出结构化中文审稿报告。当用户提到模拟审稿、帮我审稿、预审、审稿报告、做reviewer、审一下这篇文章、投稿前自查、审稿人会怎么挑刺、这篇能不能中、peer review、simulate reviewer、review manuscript 时优先调用。注意与 reviewer-response-sci（用于回复审稿意见）区分：本技能是模拟审稿人写审稿意见，后者是针对已收到的审稿意见撰写回复。
 ---
 
@@ -313,7 +313,7 @@ python -c "import os,json; r=os.getcwd(); d=os.path.join(r,'data'); os.makedirs(
    `python "$SKILL_DIR/scripts/delegate_review.py" pack --checklist "$WORKROOT/numeric_verify_checklist.json" --gate numeric-verify --files <稿件路径> --workdir "$WORKROOT"`
    独立子代理逐条只依据原文裁 `pass|fail|na` 并附逐字证据，写回约定路径；再：
    `python "$SKILL_DIR/scripts/delegate_review.py" verify --checklist "$WORKROOT/numeric_verify_checklist.json" --gate numeric-verify --workdir "$WORKROOT"`
-4. **verdict 映射 + 剔除**：`pass`→**confirmed**（矛盾属实，并入第七部分 `{{CRITICAL_ISSUES_HTML}}`，无新占位符）；`fail`/`na`→**refuted**（剔除，内部留一条备查）。verify 的 `problems`（空证据/未裁决/verdict 非法）照 fail-closed 视为未核验，一律不进报告（宁漏报）。**零容差下所有 confirmed conflict 一律报出交人工，不做 severity 降级路由。**
+4. **verdict 映射 + 剔除**：`pass`→**confirmed**（矛盾属实，并入第七部分 `{{CRITICAL_ISSUES_HTML}}`，无新占位符）；`fail`/`na`→**refuted**（剔除，内部留一条备查）。verify 的 `problems`（空证据/未裁决/verdict 非法）照 fail-closed 视为未核验，一律不进报告（宁漏报）。**零容差下所有 confirmed conflict 一律报出交人工，不做 severity 降级路由。** ⚠️ **退出码陷阱（务必理解）**：本 numeric-verify 复用通用门禁 `delegate_review`，任一 item fail 会让 verify 报 `ok=false` / **exit 1** / stderr『盲检未通过』——但在数值反向验证里 **fail = 成功剔除假矛盾 = 正常好结果**。主 agent 必须**忽略退出码**，只读返回 JSON 的逐条 verdict + problems：verdict=pass→confirmed 保留、fail/na→refuted 剔除、problems 内→fail-closed 不进报告。切勿把 exit 1 误读成核查失败 / 报告不能完成。
 5. **降级**：派不出真正独立的子代理时，照第四步半"盲评降级告警"——不得同一 AI 自问自答冒充，交回用户人肉核，数值一致性标注"未经独立反向验证"。
 
 
