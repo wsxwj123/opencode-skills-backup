@@ -1,6 +1,6 @@
 ---
 name: reviewer-simulator
-version: 2.29.0
+version: 2.29.1
 description: 用于模拟高标准学术同行评审，对医学、生物、药学等领域稿件进行法医式检查、目标期刊契合度评估和证据锚定批评，输出结构化中文审稿报告。当用户提到模拟审稿、帮我审稿、预审、审稿报告、做reviewer、审一下这篇文章、投稿前自查、审稿人会怎么挑刺、这篇能不能中、peer review、simulate reviewer、review manuscript 时优先调用。注意与 reviewer-response-sci（用于回复审稿意见）区分：本技能是模拟审稿人写审稿意见，后者是针对已收到的审稿意见撰写回复。
 ---
 
@@ -260,7 +260,7 @@ python -c "import os,json; r=os.getcwd(); d=os.path.join(r,'data'); os.makedirs(
 2. **并发派出（fan-out）**：为每个视角各派一个独立subagent，互不共享上下文、互不告知彼此结论（盲）。每个subagent的输入仅包含：
    - 稿件路径（或全文文本）
    - 该视角的 rubric 条目（仅本视角相关条目，不给其他视角的 rubric）
-   - **视角⑤额外输入 `$WORKROOT/outline.json`**（确定性锚，稿子里真实存在的全部小节/图/表/条目）；视角⑤按 rubric 第三节"交叉引用一致性"项的格式返回 `[{"ref_id","citing_location","cited_target","issue_type":"missing_target|semantic_mismatch|uncertain","evidence_quote","outline_says","finding","severity"}]`，**outline.json 是唯一权威真值**，不得凭记忆假设稿子有某小节，拿不准标 `uncertain` 不硬判。**补充材料引用（`S` 前缀编号，如 `Figure S1`/`Table S3`/`见图 S22`/`Supplementary Fig. 5`）不在 outline 范围内**——正文稿抽不到补充文件的定义，此类一律标 `uncertain` 或直接跳过，**绝不报 `missing_target`**（否则整份补充材料 S1–Sn 会被批量假报为悬空）。
+   - **视角⑤额外输入 `$WORKROOT/outline.json`**（确定性锚，稿子里真实存在的全部小节/图/表/条目）；视角⑤按 rubric 第三节"交叉引用一致性"项的格式返回 `[{"ref_id","citing_location","cited_target","issue_type":"missing_target|semantic_mismatch|uncertain","evidence_quote","outline_says","finding","severity"}]`，**outline.json 是唯一权威真值**，不得凭记忆假设稿子有某小节，拿不准标 `uncertain` 不硬判。**补充材料引用（`S` 前缀编号，如 `Figure S1`/`Table S3`/`见图 S22`/`Supplementary Fig. 5`）不在 outline 范围内**——正文稿抽不到补充文件的定义，此类**一律强制 skip 丢弃（不产 finding、绝不标 `uncertain`、绝不报 `missing_target`、绝不送第 3 层反向验证）**（否则走 `uncertain` 支会连同 `missing_target` 一起被送第 3 层，而补充材料图注天然不在主文 → 第 3 层"连定义处都找不到→pass=confirmed"把整份补充材料 S1–Sn 批量假报为悬空、假阳 HALT）。
    - **视角⑥额外输入 `$WORKROOT/numeric_candidates.json`**（确定性数值真值锚，稿子里真实出现的全部带上下文数值候选）；视角⑥按**零容差二元 schema** 返回 `[{"metric","same_measurement":bool,"values":[{"id","raw","location":{"region","para_index"}}],"conflict":bool,"evidence_quote","finding"}]`（**无 `tolerance_state`、无 `severity`**）。判据：`same_measurement==true && 非完全相等 → conflict=true`（完全相等含 `58%==58.0%` 比 `norm`、`1.2==1.20` 比去尾零 `value`、换算后 `1.2μM==1200nM`）；`same_measurement==false`（不同组/时间点/单位的正常差异）→ 不报、不进下游。范围(`form=range`) vs 点值不套"完全相等"，点值是否落区间由视角⑥显式判。**numeric_candidates.json 是唯一权威真值，不凭记忆。**
      - **样本量 n 的跨位置核对**：额外核对同一实验/同一组的样本重复数 n（`metric_clue=="样本量"` 的候选，第 1 层能从方法学/图注/结果正文各处抽到）是否跨**方法学 / 图注 / 结果与讨论**三处一致（例：方法学写每组 n=6，Figure 2 图注标 n=8，结果正文又说 n=6）。**防假阳判据（与"剂量组正常差异"同理）**：不同图/不同实验的 n 本就可能合理不同，**只有当多处 n 明确指向同一个实验、同一组样本时**其 n 不一致才报 `conflict`；无法确认是否同一实验/同组的，按 `same_measurement=false` 处理、不报（拿不准交人工，别硬判）。此核对并入上面"先判是否同一测量再按零容差比对"的同一逻辑，不新增独立机制。
    - **视角⑦额外输入 `$WORKROOT/methods_terms.json`**（**弱锚焦点图、非权威真值**，`authority:"weak_focus_map"`）+ 稿件全文；视角⑦返回 `[{"method","used_in_study":bool,"methods_section_covers":bool,"methods_missing":bool,"evidence_quote","finding"}]`。判据：`used_in_study==true && methods_section_covers==false → methods_missing=true`，否则 `false`。`methods_section_covers=true` **从宽三选一、任一即算已交代**：① 方法学出现方法名（小节标题或描述其如何做的句子，不要求写到可复现）；② 主文指向补充材料的表述（上款约束 4）；③ 方法学引用文献描述该方法（上款约束 5）。**弱锚缺失/损坏则降级为纯全文语义跑，不得静默跳过。**`methods_terms.json` 是聚焦参考不是真值——命中在方法学≠交代充分、命中在结果≠本研究做的，一切以全文语义为准。**下游路由**：`methods_missing==true` → 进第 3 层反向验证（第五步·四分之三-ter）；`used_in_study==false` 或 `methods_section_covers==true` → 丢弃不进下游。
