@@ -110,6 +110,8 @@ _TIMEPOINT_RE = re.compile(r"\d+\s*(?:h|hr|min|d|小时|分钟|天|周)")
 
 # metric_clue 提取时可从数字前缀剥掉的连接词（剥完取尾部指标名 token）。
 _CONNECTORS = ("约为", "达到", "等于", "为", "是", "的", "达", "约", "均", "：", ":", "=", "，", ",")
+# 英文停用词（D4）：介词/冠词/连词不是指标线索，取到就跳过、继续往前找真实指标词。
+_STOPWORDS = {"at", "and", "for", "in", "of", "to", "by", "with", "a", "the"}
 
 # 粗区段关键词（location.region 启发式，供人核，非确定性）。
 _REGION_KEYS = [
@@ -236,8 +238,16 @@ def _metric_clue(sent: str, num_start: int, group_clue: str, is_sample: bool) ->
     if group_clue and group_clue in before:
         before = before.replace(group_clue, "")
     before = _strip_connectors(before)
-    m = re.search(r"([A-Za-z][A-Za-z0-9]*|[一-鿿]{1,8})$", before)
-    return m.group(1) if m else ""
+    # 取尾部指标 token；命中英文停用词(at/of/for...)则跳过它继续往前找真实指标词，抽不到为空(D4)。
+    while True:
+        m = re.search(r"([A-Za-z][A-Za-z0-9]*|[一-鿿]{1,8})$", before)
+        if not m:
+            return ""
+        tok = m.group(1)
+        if tok.lower() in _STOPWORDS:
+            before = _strip_connectors(before[:m.start()])
+            continue
+        return tok
 
 
 def _classify(form: str, m: "re.Match", sent: str) -> Optional[dict[str, Any]]:
