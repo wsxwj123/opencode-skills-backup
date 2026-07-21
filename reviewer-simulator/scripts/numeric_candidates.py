@@ -154,7 +154,20 @@ def _match_region(text: str) -> Optional[str]:
     for keys, region in _REGION_KEYS:
         if t in keys:
             return region
-    return None
+    # 合并标题（Results and Discussion / 结果与讨论）：整行**仅由区段词 + 连接词**组成才算标题
+    # （有其它实词则是正文句，不当区段，防误判）；命中的第一个区段词定 region（_REGION_KEYS
+    # 顺序：results 先于 discussion，故合并标题归 results）。(D5)
+    tokens = [w for w in re.split(r"[\s/&，,]+|\band\b|\bor\b|与|和|及", t) if w]
+    if not tokens or len(tokens) > 5:
+        return None
+    key_of = {k: region for keys, region in _REGION_KEYS for k in keys}
+    hit = None
+    for tok in tokens:
+        if tok not in key_of:
+            return None
+        if hit is None:
+            hit = key_of[tok]
+    return hit
 
 
 def _split_sentences(text: str) -> list[str]:
