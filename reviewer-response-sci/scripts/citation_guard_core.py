@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import re
 import time
+import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -541,33 +542,69 @@ def check_completeness(entry: dict[str, Any]) -> dict[str, Any]:
             "has_identifier": has_identifier, "raw_only": False}
 
 
+_NAME_SUFFIXES = frozenset({"jr", "sr", "ii", "iii", "iv", "phd", "md", "msc",
+                            "mph", "dphil", "facp", "frcp", "esq", "dds"})
+
+
+def _is_initials_blob(tok: str) -> bool:
+    """True for an initials run ("J", "JA", "DL") — never a surname.
+
+    A lone letter is always initials; a 2-3 letter run counts only when it is
+    all-caps, so real short surnames ("Lu", "Xu", "Li") stay surnames.
+    ponytail: a wholly upper-cased index ("JANE DOE") defeats the caps signal;
+    0 of 4037 real names are all-caps, so no extra code for it.
+    """
+    return len(tok) == 1 or (len(tok) <= 3 and tok.isupper())
+
+
+def _name_tokens(text: str) -> list[str]:
+    """Word tokens of a name: accents folded, hyphens/apostrophes joined, suffixes dropped.
+
+    A suffix is only dropped when it is not an initials blob: "Carson MD" and
+    "Marchesi JR" are initials M.D. / J.R., not a degree — dropping them would
+    leave a bare surname key that matches every namesake.
+    """
+    text = re.sub(r"['‘’‐-―-]", "", text)   # Pan-Pan -> PanPan
+    text = "".join(ch for ch in unicodedata.normalize("NFKD", text)
+                   if not unicodedata.combining(ch))            # Chavarría -> Chavarria
+    return [t for t in re.findall(r"[^\W_]+", text)
+            if t.lower() not in _NAME_SUFFIXES or _is_initials_blob(t)]
+
+
 def _name_key(name: str) -> tuple[str, frozenset[str]] | None:
     """Reduce a person name to a (surname, given-initials) key for matching.
 
-    Handles the two formats that collide in practice:
-      - "Smith J" / "Smith, J" (Vancouver, surname first)
-      - "John Smith" / "J. Smith" (natural order, surname last)
-    The longest alphabetic token is taken as the surname; every other token
-    contributes its first letter to the initials set. "Smith J" and "John Smith"
-    both map to ("smith", {"j"}) -> match. CJK names map to (joined, ∅).
+    Surname position is decided by format, not by token length:
+      1. comma present -> the surname sits before it ("Doe, Jane", "van der Pol, E.");
+      2. otherwise the surname is the **last non-initials token**. Vancouver puts
+         its initials last ("Doe J", "Smith JA", "De Vos M") and natural order puts
+         the surname last ("Jane Doe", "Pan-Pan Lu"), so one rule covers both.
+    Multi-token surnames key on their last word ("van der Pol" -> "pol") so that
+    both orderings agree. Every remaining token contributes its first letter to the
+    initials set, so "Doe J" and "Jane Doe" both map to ("doe", {"j"}) -> match.
+    CJK names map to (joined, ∅).
 
     Returns None for empty/unusable names.
     """
-    s = str(name or "").strip().lower()
-    s = re.sub(r"[^a-z0-9一-鿿]+", " ", s).strip()
-    if not s:
+    raw = str(name or "")
+    low = re.sub(r"[^a-z0-9一-鿿]+", " ", raw.lower()).strip()
+    if not low:
         return None
-    if re.search(r"[一-鿿]", s):
-        return (re.sub(r"\s+", "", s), frozenset())
-    toks = [t for t in s.split() if t]
+    if re.search(r"[一-鿿]", low):
+        return (re.sub(r"\s+", "", low), frozenset())
+    toks = _name_tokens(raw)
     if not toks:
         return None
     if len(toks) == 1:
-        return (toks[0], frozenset())
-    # Surname = longest token (initials are length-1; full surnames are longer).
-    surname = max(toks, key=len)
-    initials = frozenset(t[0] for t in toks if t != surname and t)
-    return (surname, initials)
+        return (toks[0].lower(), frozenset())
+    head = _name_tokens(raw.split(",", 1)[0]) if "," in raw else []
+    if head:
+        surname, given = head[-1], head[:-1] + _name_tokens(raw.split(",", 1)[1])
+    else:
+        words = [i for i, t in enumerate(toks) if not _is_initials_blob(t)]
+        i = words[-1] if words else len(toks) - 1
+        surname, given = toks[i], toks[:i] + toks[i + 1:]
+    return (surname.lower(), frozenset(t[0].lower() for t in given))
 
 
 def _names_match(a: tuple[str, frozenset[str]], b: tuple[str, frozenset[str]]) -> bool:
@@ -575,10 +612,6 @@ def _names_match(a: tuple[str, frozenset[str]], b: tuple[str, frozenset[str]]) -
         return False
     # Same surname: match if either side has no given initials, or they overlap.
     return (not a[1]) or (not b[1]) or bool(a[1] & b[1])
-
-
-_NAME_SUFFIXES = frozenset({"jr", "sr", "ii", "iii", "iv", "phd", "md", "msc",
-                            "mph", "dphil", "facp", "frcp", "esq", "dds"})
 
 
 def _is_name_continuation(seg: str, prev: str) -> bool:
