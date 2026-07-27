@@ -30,9 +30,25 @@ def test_title_variant() -> None:
     assert detect_title_variant(T, "Retraction correction: " + T, "crossref")["code"] \
         == "retraction_notice_suspect"
 
+    # 回归：单 token 前缀 + 正常长度标题。_title_similarity 末尾的 min(1.0,...) 钳位
+    # 会把这类算成恰好 1.0，靠分数判"无差异"会静默漏掉——而这是期刊最常用的撤稿标题
+    # 形式（真实语料 81 条撤稿里 45 条栽在这），故"无差异"必须用归一化标题相等判定。
+    LONG = ("Efficacy and safety of dapagliflozin in patients with chronic kidney disease "
+            "and type 2 diabetes mellitus: a randomized double blind placebo controlled trial")
+    for prefix, code in (("RETRACTED: ", "retraction_notice_suspect"),
+                         ("Retraction: ", "retraction_notice_suspect"),
+                         ("WITHDRAWN: ", "retraction_notice_suspect"),
+                         ("Erratum: ", "erratum_notice_suspect"),
+                         ("Correction: ", "erratum_notice_suspect")):
+        adv = detect_title_variant(LONG, prefix + LONG, "crossref")
+        assert adv is not None and adv["code"] == code, (prefix, adv)
+
     # 假阳红线：完全相同 / 仅标点差 / 两侧都是撤稿通告 / 差异词无标记词 / 已 blocking。
     for a, b in (
         (T, T),
+        (LONG, LONG),
+        (LONG, LONG.upper()),
+        ("RETRACTED: " + LONG, "RETRACTED - " + LONG),
         ("TGF-beta signaling in hepatic fibrosis", "TGF beta signaling in hepatic fibrosis"),
         ("Retraction notice to: " + T, "Retraction notice to: " + T),
         ("Cardiac risk in postmenopausal women", "Cardiac risk in premenopausal women"),

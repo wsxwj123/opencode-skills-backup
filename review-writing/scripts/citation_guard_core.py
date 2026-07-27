@@ -348,12 +348,19 @@ _VARIANT_MIN_SIM = 0.72
 def detect_title_variant(entry_title: str, other_title: str, source: str) -> dict[str, Any] | None:
     """① 撤稿/勘误/系列篇探测（纯函数：不联网、不读写文件、不看时钟）。
 
-    只在 [0.72, 1.0) 这条"像但不完全一样"的带内工作：低于 0.72 的条目已被
-    title_mismatch 判失败（不重复报），等于 1.0 的两个标题没有差异。
+    只在"像但不完全一样"的带内工作：低于 0.72 的条目已被 title_mismatch 判失败
+    （不重复报），归一化后完全相同的两个标题没有差异可报。
     差集里找不到标记词就返回 None。
+
+    "无差异"必须用归一化标题相等判定，不能用 sim >= 1.0：_title_similarity 末尾
+    有 min(1.0, ...) 钳位，"RETRACTED: <T>" / "Retraction: <T>" 这类单 token 前缀
+    加在正常长度的标题上会算出 >1 被钳到恰好 1.0——而这正是 Hindawi/IEEE/Elsevier
+    最常用的撤稿标题形式。真实语料实测：靠分数判定会漏掉 81 条撤稿里的 45 条。
     """
+    if _normalize_title(entry_title) == _normalize_title(other_title):
+        return None
     sim = _title_similarity(entry_title, other_title)
-    if sim < _VARIANT_MIN_SIM or sim >= 1.0:
+    if sim < _VARIANT_MIN_SIM:
         return None
     diff = _title_tokens(entry_title) ^ _title_tokens(other_title)
     for code, keywords in _VARIANT_BUCKETS:
