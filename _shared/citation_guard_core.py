@@ -212,25 +212,39 @@ def classify_article_type(pubtypes, source: str = "") -> str:
     return "unknown"
 
 
-def _verify_title_exists(title: str) -> dict[str, Any] | None:
-    """Confirm an entry with no DOI/PMID corresponds to a real publication.
+def _crossref_year(item: dict[str, Any]) -> int | None:
+    """Crossref issued.date-parts[0][0] -> year int, or None when absent/odd."""
+    parts = (item.get("issued") or {}).get("date-parts") if isinstance(item.get("issued"), dict) else None
+    if isinstance(parts, list) and parts and isinstance(parts[0], list) and parts[0]:
+        try:
+            return int(parts[0][0])
+        except (ValueError, TypeError):
+            return None
+    return None
 
-    Strategy: query Crossref by-title first; if it fails (None) or returns no
-    sufficiently-similar match, fall back to Semantic Scholar by-title.
-    Returns a match record {source, matched_title, similarity, doi, pmid} when a
-    candidate title clears TITLE_VERIFY_THRESHOLD, else None.
 
-    Network failures from _http_get_json are returned as None (fail-closed): the
-    caller treats "no match" identically to "not verified". Semantic Scholar is
-    rate-limit prone; on its failure we have already tried Crossref, so we simply
-    return None rather than crashing.
+def _lookup_by_title(title: str) -> tuple[dict[str, Any] | None, bool]:
+    """By-title lookup returning (match, reachable).
+
+    ``match`` is the best candidate clearing TITLE_VERIFY_THRESHOLD (record shape
+    {source, matched_title, similarity, doi, pmid, journal, year}), else None.
+    ``reachable`` is True iff at least one of the two providers returned a
+    parseable payload; both None (network / rate-limit / HTTP error / bad JSON)
+    -> False. Callers must not read "no match" as "title is fabricated" when
+    reachable is False.
+
+    Strategy unchanged: Crossref by-title first, Semantic Scholar as fallback.
     """
     if not title.strip():
-        return None
+        return None, False
 
-    def _best_match(candidates: list[tuple[str, str | None, str | None]], source: str) -> dict[str, Any] | None:
+    # candidate tuple = (title, doi, pmid, journal, year)
+    def _best_match(
+        candidates: list[tuple[str, str | None, str | None, str | None, int | None]],
+        source: str,
+    ) -> dict[str, Any] | None:
         best: dict[str, Any] | None = None
-        for cand_title, cand_doi, cand_pmid in candidates:
+        for cand_title, cand_doi, cand_pmid, cand_journal, cand_year in candidates:
             if not cand_title:
                 continue
             sim = _title_similarity(title, cand_title)
@@ -241,6 +255,8 @@ def _verify_title_exists(title: str) -> dict[str, Any] | None:
                     "similarity": sim,
                     "doi": cand_doi,
                     "pmid": cand_pmid,
+                    "journal": cand_journal,
+                    "year": cand_year,
                 }
         if best and best["similarity"] >= TITLE_VERIFY_THRESHOLD:
             return best
@@ -254,20 +270,25 @@ def _verify_title_exists(title: str) -> dict[str, Any] | None:
     cr = _http_get_json(cr_url)
     if cr and isinstance(cr.get("message"), dict):
         items = cr["message"].get("items") or []
-        cands: list[tuple[str, str | None, str | None]] = []
+        cands: list[tuple[str, str | None, str | None, str | None, int | None]] = []
         for it in items:
             if not isinstance(it, dict):
                 continue
             t = (it.get("title") or [""])[0] if isinstance(it.get("title"), list) else ""
-            cands.append((str(t or ""), str(it.get("DOI") or "") or None, None))
+            ct = it.get("container-title")
+            journal = str(ct[0]) if isinstance(ct, list) and ct else None
+            cands.append((str(t or ""), str(it.get("DOI") or "") or None, None,
+                          journal, _crossref_year(it)))
         match = _best_match(cands, "crossref-bytitle")
         if match:
-            return match
+            return match, True
 
     # 2) Semantic Scholar by-title (fallback; rate-limit prone)
     ss_url = (
         "https://api.semanticscholar.org/graph/v1/paper/search?"
-        + urllib.parse.urlencode({"query": title, "limit": 5, "fields": "title,externalIds"})
+        + urllib.parse.urlencode(
+            {"query": title, "limit": 5, "fields": "title,externalIds,venue,year"}
+        )
     )
     ss = _http_get_json(ss_url)
     if ss and isinstance(ss.get("data"), list):
@@ -278,12 +299,23 @@ def _verify_title_exists(title: str) -> dict[str, Any] | None:
             ext = it.get("externalIds") or {}
             doi = str(ext.get("DOI") or "") or None if isinstance(ext, dict) else None
             pmid = str(ext.get("PubMed") or "") or None if isinstance(ext, dict) else None
-            cands.append((str(it.get("title") or ""), doi, pmid))
+            year = it.get("year") if isinstance(it.get("year"), int) else None
+            cands.append((str(it.get("title") or ""), doi, pmid,
+                          str(it.get("venue") or "") or None, year))
         match = _best_match(cands, "semanticscholar-bytitle")
         if match:
-            return match
+            return match, True
 
-    return None
+    return None, (cr is not None or ss is not None)
+
+
+def _verify_title_exists(title: str) -> dict[str, Any] | None:
+    """Confirm an entry with no DOI/PMID corresponds to a real publication.
+
+    Thin wrapper over _lookup_by_title: drops the reachability bit, so the gray
+    zone (no match / unreachable / offline) stays FAIL exactly as before.
+    """
+    return _lookup_by_title(title)[0]
 
 
 # ---------------------------------------------------------------------------
@@ -340,6 +372,84 @@ def detect_title_variant(entry_title: str, other_title: str, source: str) -> dic
                 "diff_tokens": tokens,
             }
     return None
+
+
+# ② 标识符回查诊断
+_IDENTIFIER_UNAVAILABLE_DETAIL = {
+    "offline": "离线模式未发起标题回查，本次无法判断标识符是否正确（不代表标识符有问题）",
+    "network": "标题回查未取到可解析响应（网络/限流/服务异常），本次无法判断标识符是否正确",
+}
+
+
+def _identifier_unavailable(reason: str) -> dict[str, Any]:
+    return {
+        "code": "identifier_lookup_unavailable",
+        "detail": _IDENTIFIER_UNAVAILABLE_DETAIL[reason],
+        "reason": reason,
+    }
+
+
+def classify_identifier_suggestion(
+    entry_doi: str,
+    entry_pmid: str,
+    match: dict[str, Any] | None,
+    reachable: bool,
+) -> dict[str, Any] | None:
+    """② 标识符回查五态（纯函数：不联网、不读写文件、不看时钟）。
+
+    优先级：不可达 > 无命中 > 有命中后的同类型比对。不可达排第一，是为了不把
+    限流/网络故障退化成"你的标题可能是编的"。
+
+    同类型是硬前提：Crossref 分支的 pmid 恒为 None，若不看类型，PMID-only 的条目
+    会全部掉进 identifier_differs，被告知"你打错了，正确的是（空）"。线上没有与
+    条目同类型的标识符时一律落 identifier_type_mismatch，只列参考值、不给建议。
+    """
+    if not reachable:
+        return _identifier_unavailable("network")
+    if match is None:
+        return {
+            "code": "identifier_not_found",
+            "detail": "按标题回查未找到相似度达标的线上记录，无法给出标识符建议",
+        }
+
+    e_doi = str(entry_doi or "").strip()
+    e_pmid = str(entry_pmid or "").strip()
+    m_doi = str(match.get("doi") or "").strip()
+    m_pmid = str(match.get("pmid") or "").strip()
+    sim = match.get("similarity")
+    common = {
+        "matched_title": match.get("matched_title") or match.get("title"),
+        "similarity": round(sim, 4) if isinstance(sim, (int, float)) else None,
+        "source": match.get("source"),
+    }
+    extra = {"journal": match.get("journal"), "year": match.get("year")}
+
+    # DOI 优先：两侧都带 DOI 时由 DOI 定论；条目没有 DOI 时才轮到 PMID。
+    if e_doi and m_doi:
+        if e_doi.lower() == m_doi.lower():
+            return {"code": "identifier_confirmed",
+                    "detail": "按标题回查命中的线上记录，其 DOI 与条目所填一致", **common}
+        return {"code": "identifier_differs",
+                "detail": "同名线上记录的 DOI 为 %s，与条目所填不同，请人工确认是哪一条"
+                          "（仅建议，脚本不会改写标识符）" % m_doi,
+                "suggested_doi": m_doi, **common, **extra}
+    if e_pmid and m_pmid:
+        if e_pmid == m_pmid:
+            return {"code": "identifier_confirmed",
+                    "detail": "按标题回查命中的线上记录，其 PMID 与条目所填一致", **common}
+        return {"code": "identifier_differs",
+                "detail": "同名线上记录的 PMID 为 %s，与条目所填不同，请人工确认是哪一条"
+                          "（仅建议，脚本不会改写标识符）" % m_pmid,
+                "suggested_pmid": m_pmid, **common, **extra}
+    return {
+        "code": "identifier_type_mismatch",
+        "detail": "按标题回查命中了线上记录，但该记录不带与条目同类型的标识符，"
+                  "无从比对；下列线上标识符仅供人工参考，不构成"
+                  "\"条目填错了\"的判断",
+        **common,
+        "match_doi": m_doi or None,
+        "match_pmid": m_pmid or None,
+    }
 
 
 # ---------------------------------------------------------------------------
