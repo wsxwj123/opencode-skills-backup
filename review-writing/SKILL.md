@@ -1,6 +1,6 @@
 ---
 name: review-writing
-version: 2.26.3
+version: 2.27.0
 description: "Universal assistant for writing high-impact academic literature reviews (Nature/Cell/Lancet level). Supports real-time Zotero integration, outline persistence, and multi-mode reference management. Use when writing a comprehensive review article requiring systematic search, synthesis, and citation management. 触发词：写综述、文献综述、综述写作、literature review、review article、改综述、完善综述、继续写综述、improve review。"
 triggers:
   - "写综述"
@@ -63,7 +63,7 @@ why_how_what_note: |
 - **Phase 1.7:** 据调研（selected gap + 对标框架）建提纲 → 用户确认 → **结构签字落锁** → Zotero 集合树 → **HALT**
 - **Phase 2:** 逐节搜索（**串行，≥1s 间隔**）→ 写入 Zotero/index → **HALT** dedup
 - **Phase 3:** Read framing_guide 搭框架 → 备料子代理起草承重核证 → 主会话调度撰写子代理盲写本节（pack-write→verify-write→落盘→认键翻号）→ citation spot-check → 逐节质量自检（内部 checklist，禁 HTML/禁调 reviewer-simulator）→ **HALT**
-- **Phase 4:** 引用总量校验 → citation guard → 编译 → 连贯性扫描 → 缩写扫描 → 导出
+- **Phase 4:** 引用总量校验 → citation guard → 编译 → 连贯性扫描 → 缩写扫描 → **交叉引用核查（xref，三层·HALT）** → 导出
 - **Phase 5:** 对齐 gsw submission-guide/compliance-gate → 生成投稿包（Cover Letter/Title Page/CRediT/COI/Funding/DAS/Keywords...）→ 委托盲检
 
 ### 绝对禁止
@@ -940,6 +940,51 @@ Write Mode has no `pending_sections` field so this gate is a no-op (no key → e
    - Generate `exports/abbreviation_list.md` table (see format in `references/writing_guidelines.md` §4 Abbreviation Management).
    - Title and abstract must not contain unexpanded abbreviations (except universally known: DNA, RNA, PCR, HIV, WHO, FDA).
    - If violations found → list them; AI fixes inline in `exports/Final_Review.md` and propagates back to the source `drafts/section_XX_XX.md`.
+
+   4d. **交叉引用核查（xref，三层 · 报告式软门 · HALT 交用户裁决）** (on compiled `exports/Final_Review.md`)：
+   查正文里"见图 5 / 见 3.3 节 / 见表 2 / as discussed in Section 2.1 / as shown in Figure 1"这类**显式指向**的目标存不存在、指得对不对。综述是交叉引用密度最高的稿型（Figure 0 要求每节都引，4b 还会**新写**指向句），而现役对此零覆盖：`validate_citations.py` 管文献 `[N]`、4a 管参考表合并、4b 管"隐式回指缺指针"、R11 只问"引没引框架图"——四者与本步零重叠，都不改判据、不合并。**本步必须排在 4b/4c 之后**（4b 新写的指向句正是最该抓的那批）。
+   - **① 合成语料（本步开头无条件覆盖重建，幂等）**：综述的图题注登记在 `figures/figure_index.md`、按设计**不在成稿里**（Phase 4 Step 4 的 `cat` 编译一个字不改，题注不塞进成稿），直接把成稿喂第 1 层 = 每张注册过的图都被判悬空 = **100% 系统性假阳**（再被第 3 层"找不到定义处→confirmed"全部坐实）。故先把注册题注行拼到成稿前面：
+     ```bash
+     mkdir -p tmp
+     { grep -E '^##[[:space:]]*Figure[[:space:]]*[0-9]+[[:space:]]*[.:]' figures/figure_index.md; \
+       cat exports/Final_Review.md; } > tmp/xref_corpus.md
+     ```
+     **只取匹配 `^## Figure N:` 的注册标题行、绝不 `cat` 整份登记表**（整份会多出一条假 section「Figure Index」，且 `- Type:`/`- Section:`/`- Key Message:`/`- Caption:`/`- Node mapping:` 五类登记字段行会被当成正文里的图/节引用）。**表题注就写在正文里、不需要合并，别把表也塞进本流程。** 落点固定 `tmp/xref_corpus.md`、`outline.json` 落项目根，**两者绝不落 `drafts/`**（`drafts/section_*.md` 是 managed_globs，写进去会被 signoff hook 物理拦截）；本步只读 `exports/`，**不写 `exports/` 下任何文件**（正文修改只发生在 HALT 后的用户裁决环节）。
+     - **错误契约**：`figures/figure_index.md` 缺失 → `grep` 空匹配 exit 1 属正常，语料退化为纯正文、**不得因这个非零退出码中断本步**（图类会因锚不可用自动整类 skip）；`exports/Final_Review.md` 缺失 → 报错并停（Step 4 还没跑，属流程错序），不得产出空语料静默通过。登记表有 N 条注册项而只有 M 条进锚（典型是用了全角冒号 `## Figure 0：…`）→ 在本步 advisory 里列出"注册 N 条、进锚 M 条"，提示用户按 `## Figure N: Title` 模板修正。
+   - **② 第 1 层 确定性结构锚**：
+     ```bash
+     python3 scripts/structure_outline.py --manuscript tmp/xref_corpus.md --project-root .
+     ```
+     产 `./outline.json`（`sections`/`figures`/`tables`/`items` 四类真实存在的结构锚 + `summary`）。退出码 **0 = 正常（含空稿；四类为空数组是合法结果，不是失败，本步照常继续）**、**2 = 用法/输入错**（文件不存在、后缀不支持）。该脚本与 `_shared/` byte-identical、5 家共享，**一个字节不许改**（中文 `如图 1 所示` 已被现役正则正常捕获，不需要为它改）。
+   - **③ 锚可用性门（第 2 层开跑前的确定性前置判定，主 agent 算好写进 prompt）**：
+     ```
+     sections_anchor_available = any(s["number"] for s in outline["sections"])
+     figures_anchor_available  = any(f["caption_found"] for f in outline["figures"])
+     tables_anchor_available   = any(t["caption_found"] for t in outline["tables"])
+     items_anchor_available    = False   # 🔴 写死的常量：条目类整类不做，与第 1 层抽到什么无关
+     ```
+     某类 `*_anchor_available == false` → **该类交叉引用一律强制 skip：不产 finding、绝不标 `uncertain`、绝不报 `missing_target`、绝不送第 3 层反向验证**；并在本步末尾产一条 advisory「X 类锚不可用，X 交叉引用未核，需人工过目」（强制 skip 不等于静默放过，用户必须知道哪一类没核）。
+     **为什么禁 `uncertain` 而不是"标 uncertain 走人工"**：`uncertain` 与 `missing_target` 共用第 3 层同一条极性模板（"连定义处都找不到 → pass=confirmed"），锚不可用时目标本来就没有定义处 → 每条 uncertain 都会被自动坐实成 confirmed → 假阳 HALT。这与补充材料 S 前缀是同一个形状的坑，处置必须一致。
+     - **三类的实情**：**图**——题注在成稿外，靠 ① 合并语料才查得了；Polish 模式登记表为空 → 整类 skip。**表**——**一等公民**，题注就写在正文里、直接抽（systematic 档强制四类表：exclusions-with-reasons / RoB / effect / SoF，量大且核心）；作者一张表题注都没写才 skip。**节**——本技能未强制 drafts 标题带节号，无编号标题稿的 `number` 全空 → 整类 skip（否则 `如前文 2.1 节所述` 会被坐实成假悬空）；标题带 `2.1` 编号则正常核（命中即无问题、未命中报 `missing_target`）。
+     - **🔴 条目类恒 skip**：`items_anchor_available = False` 是常量，`outline["items"]` **不读、不喂给第 2 层**。条目编号（`(1)`/`（1）`/`①` 这类）的交叉引用本轮**一律不核**——第 1 层的判据是"编号后是否紧邻实词"，而门要的是"这是定义还是引用"，两者正交（`(1)中枢神经系统`是定义、`(2)中已说明`是引用，同为行首、同一个"中"字），字符级规则区分不了；换判据得改 5 家 byte-identical 的脚本 → 本轮不可通。属**已知限制**，在交付说明里明写告诉用户。
+   - **④ 第 2 层 独立检测子代理（fresh context、非作者自评）**：派一个**没参与撰写**的独立子代理（`TaskCreate`/spawn_task），**只喂** `./outline.json`（去掉 `items` 字段）+ `tmp/xref_corpus.md`，**不给撰写过程上下文、不给 `outline.md` 提纲、不给作者意图**（防继承作者确认偏误 → 系统性假阴）。逐条指向型表述对着 `outline.json`（**唯一权威真值**，不得凭记忆假设稿子有某小节）判**存在性**（目标编号在不在 → `missing_target`）与**语义对应**（编号在但指错内容 → `semantic_mismatch`），拿不准标 `uncertain` 不硬判。产出 schema `[{"ref_id","citing_location","cited_target","issue_type":"missing_target|semantic_mismatch|uncertain","evidence_quote","outline_says","finding","severity"}]`（`severity` 仅信息字段，**HALT 不按它路由**，所有 confirmed 一律交作者裁决）。三道护栏逐条写进 prompt：
+     - **护栏 1 · 锚可用性门**：③ 算出的四个布尔量原样写进 prompt，取 `false` 的类别**一条都不许报**（含**绝不标 `uncertain`**）。`items_anchor_available` 恒 `false`，prompt 里同时写死：「条目编号（`(1)`/`（1）`/`①` 这类）的交叉引用本轮一律不核：不产 finding、不标 uncertain、不报 missing_target、不送反向验证。outline.json 的 items 字段不作为真值，忽略它。」
+     - **护栏 2 · 补充材料 S 前缀**：**补充材料引用（`S` 前缀编号，如 `Figure S1`/`Table S3`/`见图 S22`/`Supplementary Fig. 5`）不在 outline 范围内**——正文稿抽不到补充文件的定义，此类**一律强制 skip 丢弃（不产 finding、绝不标 `uncertain`、绝不报 `missing_target`、绝不送第 3 层反向验证）**（否则走 `uncertain` 支会连同 `missing_target` 一起被送第 3 层，而补充材料图注天然不在主文 → 第 3 层"连定义处都找不到→pass=confirmed"把整份补充材料 S1–Sn 批量假报为悬空、假阳 HALT）。⚠️ 实测落实说明：`Figure S1`/`Table S3` 因 `S` 挡住数字捕获，第 1 层天然抽不到、无害；但 **`Supplementary Fig. 5` 里的 `Fig. 5` 会被第 1 层正常捕获成 `Figure 5` 假锚**，只能靠本条款 skip 掉。
+     - **🔴 护栏 3 · 题注形态回查（防第 1 层漏抽造成的假悬空）**：判任何图/表 `missing_target` 前，**必须先到 `tmp/xref_corpus.md` 里回查该编号的任何题注形态，命中任一即不报**（改判无问题）；只有连一处题注形态都找不到，才可判该编号悬空。**判据要泛化、不是逐例枚举**：该行**去掉行首的任意组合修饰**后，以 `Figure N` / `Table N` 开头且后接冒号或句点，即算题注。行首修饰含（但不限于）`#` 标题标记、`>` 引用块、`-`/`*`/`+` 列表符、`**`/`*`/`***` 强调标记、任意空白；分隔符含半角 `:` `.` 与全角 `：` `。`；题注可位于图/表的**上方或下方**（题注扫描逐行、位置无关）。已实测第 1 层认不出、必须靠本护栏兜住的形态：**粗体** `**Table N: …**`、**斜体/粗斜体** `*Table N: …*` / `***Table N: …***`（Word 转 md 常见）、**前缀式** `**Table N.** 说明`（编号后跟句点、强调只包编号，投稿模板高频）、**全角冒号** `Table N：…`。**别把回查写成只匹配这四例**——枚举必漏，按上面的泛化判据实现。advisory 里顺带提示用户"表题注别加粗，写成 `Table N: 说明` 或 `#### Table N: 说明`"。
+     - **降级**：派不出真正独立的子代理 → 照盲评降级告警，**不得自问自答冒充**，标注"交叉引用未经独立检测"交用户人肉核。
+   - **⑤ 第 3 层 反向验证（gate=`xref-verify`，fail-closed）**：每条 `missing_target`/`semantic_mismatch`/`uncertain` 过 `delegate_review.py`（**不改它一个字节，只调用其打包/校验两步**；`--gate` 是 checklist 内的自由 key，**不查 gate_registry**）。动态合成 `./xref_verify_checklist.json`：`{"skill":"review-writing","gates":{"xref-verify":{"title":"交叉引用一致性·反向验证","items":[{"id":"xref-001","name":"<cited_target 摘要>","check":"<按下方极性模板逐字填>"}]}}}`；item 只放 `cited_target` + `evidence_quote` + `issue_type` + 核验所需原文切片（**绝不放第 2 层的 finding 措辞/理由、也不放 `outline.json`**，防带节奏），默认硬项。**按 issue_type 分流喂料**：`missing_target`/`uncertain` 的 item 待检文件给**合成语料**（含题注的完整语料，让核验人独立回源检索该编号到底有没有定义处）——给成稿的话每条图引用都会因"成稿里本来就没有题注"被错误确认为悬空、这层等于失效；`semantic_mismatch` 的 item 给引用处上下文切片 + outline 里该编号的标题/caption 即可。
+     **🔴 `check` 逐字用极性模板（禁占位符、禁自由发挥，`{编号}` 处填 `cited_target`）**：
+     > `missing_target`/`uncertain`："到给你的原稿全文里，找得到编号「{编号}」的**定义处**吗？定义处专指：图/表的图注行（以『Figure {N}』『图{N}』『Table {N}』『表{N}』开头、后接说明文字的 caption 行），或该编号的小节标题行（如独占一行的『3.2 方法』）；**把它当引用来提及的句子不算定义处**（如『见 Figure 3』『as shown in Figure 3』『详见 3.2 节』这类指向句，即便含该编号也一律不算）。只有连定义处都找不到（该编号只被引用、从未被定义）才判 pass；只要找到定义处就判 fail，并逐字引出该定义/caption 行。"
+
+     > `semantic_mismatch`："正文该引用处的具体断言，与目标「{编号}」的标题/caption 是否明确无关？只有'正文明确断言见 X 讨论了 Y、而 X 根本不涉及 Y'这种明确错位才判 pass；若只是笼统指向或目标标题能合理概括该引用，一律判 fail。"
+
+     ```bash
+     python3 scripts/delegate_review.py pack --checklist xref_verify_checklist.json --gate xref-verify --files tmp/xref_corpus.md --workdir .
+     python3 scripts/delegate_review.py verify --checklist xref_verify_checklist.json --gate xref-verify --workdir .
+     ```
+     **🔴 禁传 `--section` / `--root`（跨阶段污染）**：校验全过且提供了 `--section` 时，会往 `<root>/.review_pass/<section>.json` 落"该节盲检通过"标记，而那正是 Phase 3 `prewrite_gate` 的硬校验依据——等于用 Phase 4 的 xref 核查**伪造 Step 10 `manuscript-dod` 的逐节盲检通过**。跑完本步 `.review_pass/` 必须零新增文件。
+     独立空白子代理（无撰写上下文、不给 outline、不给第 2 层 reasoning）逐条只依据原文裁 `pass|fail|na` 并附逐字证据，写回 `./.review_return_xref-verify.json`。**verdict 映射（恒定）**：`missing_target`/`uncertain` **找到定义处（caption/小节标题行，非引用句自身）→ fail = refuted 剔除**、**连定义处都找不到（悬空引用）→ pass = confirmed 保留**；`semantic_mismatch` **明确无关 → pass = confirmed 保留**、**笼统指向/合理概括 → fail = refuted 剔除**；`problems`（空证据/未裁决/verdict 非法）照 fail-closed 视为未核验、**一律不进报告**（宁漏报）。极性写反 = 假批评全放行，务必让核验人区分"定义处 vs 引用处"。⚠️ **退出码陷阱**：任一 item fail 会让校验报 `ok=false` / **exit 1** / stderr『盲检未通过』——但在 xref-verify 里 **fail = 成功剔除假问题 = 正常好结果**。主 agent **必须忽略退出码**，只读返回 JSON 的逐条 verdict + problems，切勿把 exit 1 误读成核查失败。
+   - **⑥ HALT 与清理**：命中 confirmed → **HALT 交用户裁决**：打印全部 confirmed（`cited_target` + 引用处原文切片 + evidence），暂停 Phase 4、交用户逐条裁决，就地改 `exports/Final_Review.md` **并反向同步回** `drafts/section_XX_XX.md`（与 4b/4c 同节拍），重跑 4d 至无 confirmed 再进 Step 5。**不 auto-block 硬拦、不静默放过。** 清理两态：**本步无 confirmed、放行下一步时 `rm -f tmp/xref_corpus.md`**（`tmp/` 未进项目 `.gitignore`，不删会被 Step 7 的 git checkpoint 收进去）；**命中 HALT 时保留语料**（用户要照着它核对），处置后重跑本步会重建再删。`outline.json` 保留供诊断。
 5. **Final word count:** Verify total ≥ target in `outline.md`.
 
 5b. **结构化"未来方向/开放问题"段（强制，Phase 4 交付前）：**
