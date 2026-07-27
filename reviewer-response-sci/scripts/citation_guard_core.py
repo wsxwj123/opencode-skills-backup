@@ -287,6 +287,62 @@ def _verify_title_exists(title: str) -> dict[str, Any] | None:
 
 
 # ---------------------------------------------------------------------------
+# advisories —— 不阻断的诊断通道
+#
+# 禁令（改这段代码前必读）：
+#   advisories 是不阻断的诊断通道。把任何 advisory code 接进 failure_reasons、
+#   verified、needs_manual_review 或退出码之前必须另立方案——它们是启发式，
+#   假阳会让正确文献在 new_refs 自动丢弃路径上被静默丢掉。
+#
+# 两档就够（拦 / 不拦），不引入第三档：advisory 元素里不得出现 severity/level。
+# ---------------------------------------------------------------------------
+
+# ① 标题变体探测：三桶关键词，表序即优先级（首个命中的桶定 code）。
+_VARIANT_BUCKETS: tuple[tuple[str, frozenset[str]], ...] = (
+    ("retraction_notice_suspect",
+     frozenset({"retraction", "retracted", "withdrawn", "withdrawal"})),
+    ("erratum_notice_suspect",
+     frozenset({"erratum", "errata", "corrigendum", "corrigenda", "correction",
+                "corrected", "addendum", "comment", "reply", "editorial"})),
+    ("series_variant_suspect",
+     frozenset({"part", "parts", "i", "ii", "iii", "iv", "supplement",
+                "supplementary"})),
+)
+# 已知限制：无标记词的语义差异（ovariectomized/aged、post-/premenopausal、加副标题）
+# 落在带内但差集里没有可枚举的词，探测不到。宁漏勿误，不做模糊猜测。
+_VARIANT_MIN_SIM = 0.72
+
+
+def detect_title_variant(entry_title: str, other_title: str, source: str) -> dict[str, Any] | None:
+    """① 撤稿/勘误/系列篇探测（纯函数：不联网、不读写文件、不看时钟）。
+
+    只在 [0.72, 1.0) 这条"像但不完全一样"的带内工作：低于 0.72 的条目已被
+    title_mismatch 判失败（不重复报），等于 1.0 的两个标题没有差异。
+    差集里找不到标记词就返回 None。
+    """
+    sim = _title_similarity(entry_title, other_title)
+    if sim < _VARIANT_MIN_SIM or sim >= 1.0:
+        return None
+    diff = _title_tokens(entry_title) ^ _title_tokens(other_title)
+    for code, keywords in _VARIANT_BUCKETS:
+        hits = diff & keywords
+        if code == "series_variant_suspect":
+            hits = hits | {t for t in diff if t.isdigit()}
+        if hits:
+            tokens = sorted(hits)
+            return {
+                "code": code,
+                "detail": "标题与来源记录高度相似，差异词含 %s，可能引的不是同一篇；对照标题：%s"
+                          % ("/".join(tokens), other_title),
+                "matched_title": other_title,
+                "similarity": round(sim, 4),
+                "source": source,
+                "diff_tokens": tokens,
+            }
+    return None
+
+
+# ---------------------------------------------------------------------------
 # Citation-integrity gates (J4 completeness / J5 self-citation / J7 recency).
 # Pure functions, no IO. Added independently of validate_core; its signature and
 # return contract are untouched. Adapters (citation_guard.py) wire these to CLI.
