@@ -1003,7 +1003,11 @@ def filter_for_chapter(data, chapter):
     return data
 
 
-_INTRO_TITLE_KEYS = ("绪论", "引言")
+# 「前言」是中文学位论文第 1 章最常见章名之一（与 numeric_candidates._REGION_KEYS 口径一致）；
+# 少了它 → 绪论章判成 research → 该章综述他人方法被当成本研究漏写，整章假阳。
+# 「概述」「背景」不加：它们更常出现在研究章标题里（如「机制概述」），误判成 intro 会让该章
+# 跳过方法学核查 = 静默假阴，比假阳更危险。
+_INTRO_TITLE_KEYS = ("绪论", "引言", "前言")
 _CONCL_TITLE_KEYS = ("结论", "总结", "小结", "展望")
 
 

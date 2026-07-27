@@ -388,6 +388,12 @@ def build_methods_terms(manuscript_path: Path) -> dict[str, Any]:
             "method_hits": len(method_hits),
             "distinct_canonical": distinct,
             "methods_sections": len(methods_sections),
+            # 弱锚失效信号（纯提示、退出码不变）：有方法词命中却一个方法学小节都没认出，
+            # 多半是该稿方法学小节名不在 _REGION_KEYS 词表内 → region 全程停 Body、下游
+            # 章范围门的兜底判据把每章都判"无方法学结构→跳过"、方法学核查静默空转。
+            # 判据下沉到脚本（确定性），主 agent 读这个布尔量告警、不再自己算。
+            # method_hits==0（通篇无方法词）是正常空结果，恒为 false。
+            "weak_anchor_suspect": bool(method_hits) and not methods_sections,
         },
     }
 
@@ -424,6 +430,7 @@ def main() -> int:
         "method_hits": result["summary"]["method_hits"],
         "distinct_canonical": result["summary"]["distinct_canonical"],
         "methods_sections": result["summary"]["methods_sections"],
+        "weak_anchor_suspect": result["summary"]["weak_anchor_suspect"],
     }, ensure_ascii=False))
     return 0
 
