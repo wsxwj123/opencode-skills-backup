@@ -57,8 +57,9 @@ def test_single_author_with_comma_stays_one_person():
 
 
 def test_suffixes_do_not_split_a_name():
-    # "Smith, John Jr., PhD" 是一个人，且 key 与修复前逐字相同。
-    assert _keys(["Smith, John Jr., PhD"]) == [("smith", frozenset({"j", "p"}))]
+    # "Smith, John Jr., PhD" 是一个人。后缀不再贡献缩写（旧实现把 PhD 的 p 当
+    # 名字缩写混进 key），姓氏由逗号定为 smith。
+    assert _keys(["Smith, John Jr., PhD"]) == [("smith", frozenset({"j"}))]
 
 
 def test_normal_multi_element_list_unchanged():
@@ -70,9 +71,9 @@ def test_normal_multi_element_list_unchanged():
 
 
 def test_last_first_alternating_pairs():
-    # 只断言切分；姓氏归属由 _name_key 的"最长 token"策略决定（本轮不动它，
-    # 'Doe, Jane' 会被判成姓 jane），那是另一个已知限制。
+    # 切分产出 Last, First 对；姓氏归属见 test_name_key.py（逗号前是姓）。
     assert C._split_names("Smith, John, Doe, Jane") == ["Smith, John", "Doe, Jane"]
+    assert _surnames("Smith, John, Doe, Jane") == ["smith", "doe"]
 
 
 def test_cjk_and_degenerate_inputs():
