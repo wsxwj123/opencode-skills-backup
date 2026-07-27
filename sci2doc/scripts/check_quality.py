@@ -2011,10 +2011,16 @@ def check_word_format_compliance(doc, format_context=None):
 # Markdown 文件质量检测
 # ---------------------------------------------------------------------------
 
-def check_markdown_quality(md_path):
+def check_markdown_quality(md_path, md_checks='all'):
     """
     对单个 Markdown 文件进行质量检测。
     返回 (issues_list, stats_dict)。
+
+    md_checks='all'（默认，语义与历史一致）返回全部 13 类检查的 issue；
+    md_checks='xref' 只返回 `交叉引用` 类 —— 全文总检要的是窄口：其余 12 类在生产
+    从未跑过，`占位标记` 会逐条命中 sci2doc 自己强制的 [图]/[表]/[实验] 标记
+    （30 图博论 −30 分），会把总分压穿 80 线、让退出码因与交叉引用无关的理由翻 1。
+    stats 不受影响（统计照常全量）。
     """
     issues = []
     stats = {
@@ -2055,12 +2061,32 @@ def check_markdown_quality(md_path):
     appendix_targets = set()  # 附录字母，如 "A"
     crossrefs = []  # (line_no, kind, target_str, raw_snippet)
 
-    _A5_SEC_REF_RE = re.compile(r'见第?\s*([0-9]+(?:\.[0-9]+)*)\s*节')
-    _A5_FIG_REF_RE = re.compile(r'见图\s*([0-9]+[-–][0-9]+)')
-    _A5_TBL_REF_RE = re.compile(r'见表\s*([0-9]+[-–][0-9]+)')
+    # 引导词表：中文博论高频五个（"参见/详见/另见"含"见"子串，长者在前保证 snippet 完整；
+    # "参阅"不含"见"，是真正新增的引导词）
+    _A5_LEAD = r'(?:参见|详见|另见|参阅|见)'
+    _A5_FT_NUM = r'[0-9]+[-–][0-9]+'
+    _A5_FT_ITEM = r'(?:图|表)\s*' + _A5_FT_NUM
+    # 并列第二项及以后："见图2-1和图2-2" —— 必须整体纳入同一次匹配，
+    # 否则减法构造的目标集合会把残留的"图2-2"当成定义（扩了等于没扩）。
+    _A5_FT_TAIL = r'(?:\s*[和与、]\s*' + _A5_FT_ITEM + r')*'
+    # 图/表引用统一扫描：引导词式 + "如…所示/所列/可见"式，两式都带并列尾巴。
+    _A5_FT_REF_RE = re.compile(
+        r'(?:' + _A5_LEAD + r'\s*' + _A5_FT_ITEM + _A5_FT_TAIL + r')'
+        r'|(?:如\s*' + _A5_FT_ITEM + _A5_FT_TAIL + r'\s*(?:所示|所列|可见))'
+    )
+    # 从一段引用里逐项拆出 (图|表, 编号)，供并列项各自登记
+    _A5_FT_ITEM_RE = re.compile(r'(图|表)\s*(' + _A5_FT_NUM + r')')
+    _A5_SEC_REF_RE = re.compile(_A5_LEAD + r'\s*第?\s*([0-9]+(?:\.[0-9]+)*)\s*节')
+    _A5_CHAP_REF_RE = re.compile(_A5_LEAD + r'\s*第\s*([0-9]+)\s*章')
     _A5_APP_REF_RE = re.compile(r'见?附录\s*([A-Z])')
     _A5_EN_SEC_RE = re.compile(r'Section\s+([0-9]+(?:\.[0-9]+)*)')
     _A5_EN_FIG_RE = re.compile(r'Figure\s+([0-9]+[-–][0-9]+)')
+    _A5_EN_TBL_RE = re.compile(r'Table\s+([0-9]+[-–][0-9]+)')
+    # 正向题注识别：行首题注（含 sci2doc 的 `[图]`/`[表]` 标记前缀）无条件算定义，
+    # 不受任何引用正则剥离影响。缺了它，扩引用正则会把假阴翻成假阳。
+    _A5_CAPTION_DEF_RE = re.compile(
+        r'^\s*(?:\[图\]|\[表\])?\s*(图|表)\s*([0-9]+[-–][0-9]+)\s*[：:．.、]?'
+    )
     # 章节标题号：行首 # 标题里的 "第N章" 或前导 "N.M" 数字串
     _A5_HEAD_CN_CHAP_RE = re.compile(r'^#{1,3}\s*第\s*([0-9]+)\s*章')
     _A5_HEAD_NUM_RE = re.compile(r'^#{1,3}\s*([0-9]+(?:\.[0-9]+)*)\s')
@@ -2163,9 +2189,15 @@ def check_markdown_quality(md_path):
         for m in tbl_re.finditer(line):
             tbl_refs.append((int(m.group(1)), int(m.group(2))))
 
-        # A5 目标集合：图/表编号的"定义性出现"——剥离 "见图/见表 N-M"
-        # （引用语境），剩下的 图N-M / 表N-M 视为定义点（题注、正文首述等）。
-        line_defs = _A5_FIG_REF_RE.sub('', _A5_TBL_REF_RE.sub('', line))
+        # A5 目标集合（正向）：行首题注无条件算定义
+        m_cap = _A5_CAPTION_DEF_RE.match(line)
+        if m_cap:
+            num = m_cap.group(2).replace('–', '-')
+            (fig_targets if m_cap.group(1) == '图' else tbl_targets).add(num)
+
+        # A5 目标集合（减法）：剥离引用语境（含并列项）后，
+        # 剩下的 图N-M / 表N-M 视为定义点（正文首述等）。
+        line_defs = _A5_FT_REF_RE.sub('', line)
         for m in fig_re.finditer(line_defs):
             fig_targets.add(f"{m.group(1)}-{m.group(2)}")
         for m in tbl_re.finditer(line_defs):
@@ -2174,13 +2206,18 @@ def check_markdown_quality(md_path):
         # ---- 5b) A5 交叉引用收集（正文行）----
         for m in _A5_SEC_REF_RE.finditer(line):
             crossrefs.append((line_no, 'section', m.group(1), m.group(0)))
+        for m in _A5_CHAP_REF_RE.finditer(line):
+            crossrefs.append((line_no, 'section', m.group(1), m.group(0)))
         for m in _A5_EN_SEC_RE.finditer(line):
             crossrefs.append((line_no, 'section', m.group(1), m.group(0)))
-        for m in _A5_FIG_REF_RE.finditer(line):
-            crossrefs.append((line_no, 'figure', m.group(1).replace('–', '-'), m.group(0)))
+        for m in _A5_FT_REF_RE.finditer(line):
+            snippet = m.group(0)
+            for im in _A5_FT_ITEM_RE.finditer(snippet):
+                kind = 'figure' if im.group(1) == '图' else 'table'
+                crossrefs.append((line_no, kind, im.group(2).replace('–', '-'), snippet))
         for m in _A5_EN_FIG_RE.finditer(line):
             crossrefs.append((line_no, 'figure', m.group(1).replace('–', '-'), m.group(0)))
-        for m in _A5_TBL_REF_RE.finditer(line):
+        for m in _A5_EN_TBL_RE.finditer(line):
             crossrefs.append((line_no, 'table', m.group(1).replace('–', '-'), m.group(0)))
         for m in _A5_APP_REF_RE.finditer(line):
             crossrefs.append((line_no, 'appendix', m.group(1), m.group(0)))
@@ -2286,6 +2323,9 @@ def check_markdown_quality(md_path):
             issues.append({
                 'level': 'warning',
                 'category': '交叉引用',
+                # code 供 Step 9 以 issue_summary.xref_broken 做 HALT 判据。
+                # level 恒为 warning、不进硬阻断 code 集合：退出码语义零变化。
+                'code': 'xref_broken',
                 'message': f'第 {ref_line} 行：交叉引用 "{snippet}" 指向的{label} {target} 在全文中找不到定义',
                 'suggestion': f'核对该{label}是否存在；断链请修正编号或补全被引用的{label}',
             })
@@ -2331,6 +2371,9 @@ def check_markdown_quality(md_path):
                     'message': f'第 {line_no} 行：英文关键词应使用半角分号（;）分隔',
                     'suggestion': '英文关键词之间用半角分号";"分隔，如"machine learning; deep learning"',
                 })
+
+    if md_checks == 'xref':
+        issues = [i for i in issues if i.get('category') == '交叉引用']
 
     return issues, stats
 
@@ -2746,6 +2789,7 @@ def generate_quality_report(
     enforce_full_structure=False,
     md_path=None,
     per_chapter_ref_floor=None,
+    md_checks='all',
 ):
     """生成完整质量报告"""
     gate_payload = _pending_template_payload(docx_path)
@@ -2944,7 +2988,7 @@ def generate_quality_report(
     if md_path:
         if verbose:
             print("🔍 检查 Markdown 质量...")
-        md_issues, md_stats = check_markdown_quality(md_path)
+        md_issues, md_stats = check_markdown_quality(md_path, md_checks=md_checks)
         all_issues.extend(md_issues)
     
     # 计算总分（简化评分）
@@ -2966,6 +3010,9 @@ def generate_quality_report(
                              if i.get('category') == '引号规范' and i.get('message', '').startswith('疑似 scare quotes')])
     explanatory_colon_count = len([i for i in all_issues
                                    if i.get('category') == '标点规范' and i.get('message', '').startswith('疑似解释性冒号')])
+    # A5 交叉引用断链：单列计数供 Step 9 HALT 判据用。**不是硬阻断项**——不进退出码判定，
+    # 一条断链只按 warning 扣 3 分（A5 是启发式提取，硬拦一次假阳就卡死全文总检）。
+    xref_broken_count = len([i for i in all_issues if i.get('code') == 'xref_broken'])
 
     total_score = 100 - error_count * 10 - warning_count * 3 - info_count * 1
     total_score = max(0, min(100, total_score))
@@ -2994,7 +3041,8 @@ def generate_quality_report(
             'english_misspelling': english_misspelling_count,
             'decorative_em_dash': em_dash_count,
             'scare_quotes': scare_quote_count,
-            'explanatory_colon': explanatory_colon_count
+            'explanatory_colon': explanatory_colon_count,
+            'xref_broken': xref_broken_count
         },
         'issues': all_issues,
         'targets': {
@@ -3148,6 +3196,9 @@ def main():
     parser.add_argument("--min-chapters", type=int, help="覆盖最少章节数（全文结构门禁）")
     parser.add_argument("--enforce-full-structure", action="store_true", help="启用全文结构门禁（章数/首章绪论/末章总结）")
     parser.add_argument("--md", dest="md_path", help="同时检查对应的 Markdown 源文件")
+    parser.add_argument("--md-checks", choices=["all", "xref"], default="all",
+                        help="Markdown 侧检查范围：all=全部 13 类（默认，语义同历史）；"
+                             "xref=只报交叉引用断链（全文总检用的窄口）")
     args = parser.parse_args()
     docx_path = args.docx_path
     output_format = args.output
@@ -3209,6 +3260,7 @@ def main():
         enforce_full_structure=enforce_full_structure,
         md_path=args.md_path,
         per_chapter_ref_floor=per_chapter_ref_floor,
+        md_checks=args.md_checks,
     )
     
     if not report.get('success'):
