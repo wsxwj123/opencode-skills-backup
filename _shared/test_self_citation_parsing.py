@@ -57,8 +57,9 @@ def test_single_author_with_comma_stays_one_person():
 
 
 def test_suffixes_do_not_split_a_name():
-    # "Smith, John Jr., PhD" 是一个人，且 key 与修复前逐字相同。
-    assert _keys(["Smith, John Jr., PhD"]) == [("smith", frozenset({"j", "p"}))]
+    # "Smith, John Jr., PhD" 是一个人。后缀不再贡献缩写（旧实现把 PhD 的 p 当
+    # 名字缩写混进 key），姓氏由逗号定为 smith。
+    assert _keys(["Smith, John Jr., PhD"]) == [("smith", frozenset({"j"}))]
 
 
 def test_normal_multi_element_list_unchanged():
@@ -70,9 +71,57 @@ def test_normal_multi_element_list_unchanged():
 
 
 def test_last_first_alternating_pairs():
-    # 只断言切分；姓氏归属由 _name_key 的"最长 token"策略决定（本轮不动它，
-    # 'Doe, Jane' 会被判成姓 jane），那是另一个已知限制。
+    # 切分产出 Last, First 对；姓氏归属见 test_name_key.py（逗号前是姓）。
     assert C._split_names("Smith, John, Doe, Jane") == ["Smith, John", "Doe, Jane"]
+    assert _surnames("Smith, John, Doe, Jane") == ["smith", "doe"]
+
+
+# --- 名的成分不得被当成新作者 -------------------------------------------------
+
+def test_hyphenated_given_name_is_one_person():
+    # "Wang, Xue-Meng" = 姓 Wang + 名 Xue-Meng。旧实现按 [a-z]+ 取词，"Xue-Meng"
+    # 出两个 token 被判成新作者，真实数据里 BibTeX 的 "Last, First-First and ..."
+    # 整串几乎每个作者都被切碎。
+    assert C._split_names("Wang, Xue-Meng") == ["Wang, Xue-Meng"]
+    assert _surnames(["Wang, Xue-Meng"]) == ["wang"]
+    s = "Fu, Zhuang-Jiong and Chen, Qi-Wen and Han, Zi-Yi"
+    assert C._split_names(s) == ["Fu, Zhuang-Jiong", "Chen, Qi-Wen", "Han, Zi-Yi"]
+    assert _surnames(s) == ["fu", "chen", "han"]
+    assert C._split_names("Wang, Xue-Meng, Li, Ming-Hua") == \
+        ["Wang, Xue-Meng", "Li, Ming-Hua"]
+
+
+def test_given_name_with_middle_initials_is_one_person():
+    # "Silva, Caio C G" 同理：一个名 + 自带的中间名缩写，不是两个人。
+    assert C._split_names("Silva, Caio C G") == ["Silva, Caio C G"]
+    assert _keys(["Silva, Caio C G"]) == [("silva", frozenset({"c", "g"}))]
+    assert C._split_names("Smith, John A") == ["Smith, John A"]
+
+
+# --- 🔴 防过并：该拆的必须还拆得开 --------------------------------------------
+
+def test_must_still_split_distinct_authors():
+    # 缩写在前 = 自然序的新作者（"B.F. Sabath"），绝不能并进上一个人
+    assert C._split_names("Nasim, B.F. Sabath") == ["Nasim", "B.F. Sabath"]
+    assert C._split_names("Nasim, F., B.F. Sabath, and G.A. Eapen") == \
+        ["Nasim, F.", "B.F. Sabath", "G.A. Eapen"]
+    # 上一个人已带名/缩写 → 后面的整名是新作者
+    assert C._split_names("Zhang WX, Li Y") == ["Zhang WX", "Li Y"]
+    assert C._split_names("Smith J, Doe A") == ["Smith J", "Doe A"]
+    assert C._split_names("Chen, Ying-Chi and Li, Yi-Ting") == \
+        ["Chen, Ying-Chi", "Li, Yi-Ting"]
+    # 连字符姓氏打头也照拆
+    assert C._split_names("Laberty-Robert, Christel and Sanchez, J") == \
+        ["Laberty-Robert, Christel", "Sanchez, J"]
+
+
+def test_over_merge_would_show_up_as_a_missing_author():
+    # 过并的直接后果：第二个人查不到自引。这里逐个人都必须命中。
+    entries = [{"authors": ["Fu, Zhuang-Jiong and Chen, Qi-Wen and Han, Zi-Yi"]}]
+    for who in ("Fu ZJ", "Chen QW", "Han ZY"):
+        assert C.check_self_citation(entries, [who])["count"] == 1, who
+    # 不相干的人仍不命中
+    assert C.check_self_citation(entries, ["Zhuang J"])["count"] == 0
 
 
 def test_cjk_and_degenerate_inputs():
