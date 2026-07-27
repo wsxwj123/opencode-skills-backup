@@ -156,8 +156,11 @@ python3 scripts/state_manager.py --project-root "${save_path}" word-count
 python3 scripts/count_words.py "${save_path}/atomic_md"
 
 python3 scripts/check_quality.py "${save_path}/03_合并文档/完整博士论文.docx" \
-  --output json --enforce-full-structure
+  --output json --enforce-full-structure \
+  --md "${save_path}/03_合并文档_md/完整博士论文.md" --md-checks xref
 ```
+
+> `--md-checks xref` 是必带窄口：md 侧只放行 `交叉引用` 类断链（`issue_summary.xref_broken > 0` → Step 9 HALT 交用户逐条裁决），其余 12 类未验证的 md 检查会因 sci2doc 自己强制的 `[图]`/`[表]`/`[实验]` 标记把总分压穿 80 线、让退出码因与交叉引用无关的理由翻 1。
 
 ## 硬规则提醒
 
