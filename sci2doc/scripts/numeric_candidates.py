@@ -114,10 +114,16 @@ _CONNECTORS = ("约为", "达到", "等于", "为", "是", "的", "达", "约", 
 _STOPWORDS = {"at", "and", "for", "in", "of", "to", "by", "with", "a", "the"}
 
 # 粗区段关键词（location.region 启发式，供人核，非确定性）。
+# 中文小节名以 sci2doc atomic_md_workflow 自家门禁认可的写法为准（_METHOD_KEYWORDS_FULL 方法学名
+# ＋ _METHODS_TABLE_KEYWORDS 材料表小节名），否则同一份稿"门禁认它是材料与方法、region 却判 Body"，
+# 方法学小节一个都认不出（methods_sections==0）→ 下游方法学核查整条线静默空转。只加不删。
+# 含"与"的整名靠精确匹配命中；单词条另作合并标题的 token（"实验材料与仪器" → 实验材料 + 仪器）。
 _REGION_KEYS = [
     (("abstract", "摘要"), "Abstract"),
-    (("results", "结果"), "Results"),
-    (("methods", "materials and methods", "material and methods", "材料与方法", "方法"), "Methods"),
+    (("results", "结果", "实验结果", "研究结果", "分析"), "Results"),
+    (("methods", "materials and methods", "material and methods", "材料与方法", "方法",
+      "实验方法", "研究方法", "方法学", "研究对象",
+      "材料", "实验材料", "试剂", "耗材", "仪器", "设备", "分组"), "Methods"),
     (("discussion", "讨论"), "Discussion"),
     (("introduction", "background", "引言", "前言", "背景"), "Body"),
 ]
