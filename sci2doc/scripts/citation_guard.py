@@ -351,11 +351,21 @@ def main() -> int:
         )
 
     failure_counter: Counter[str] = Counter()
+    advisory_counter: Counter[str] = Counter()
+    advisory_ref_ids: dict[str, list[str]] = {}
     manual = []
     for i, e in enumerate(checked, 1):
         vd = e.get("verification_details", {})
         for r in vd.get("failure_reasons", []):
             failure_counter[str(r)] += 1
+        # advisories 是不阻断的诊断通道：只做计数与定位（逐条 details 不带
+        # --write-back 就会被丢掉），绝不参与 ok/status/退出码。
+        for a in vd.get("advisories", []):
+            code = str(a.get("code"))
+            advisory_counter[code] += 1
+            refs = advisory_ref_ids.setdefault(code, [])
+            if len(refs) < 50:
+                refs.append(_entry_ref_id(e, i))
         if e.get("needs_manual_review"):
             manual.append(
                 {
@@ -384,6 +394,8 @@ def main() -> int:
         if checked
         else 0.0,
         "failure_type_counts": dict(sorted(failure_counter.items())),
+        "advisory_counts": dict(sorted(advisory_counter.items())),
+        "advisory_refs": dict(sorted(advisory_ref_ids.items())),
         "duration_ms": duration_ms,
         "checked_at": now_utc.isoformat(),
         "online_check": not args.offline,

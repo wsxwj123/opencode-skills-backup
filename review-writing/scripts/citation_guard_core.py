@@ -858,10 +858,12 @@ def validate_core(
             title_verify = _verify_title_exists(title)
     title_verified = title_verify is not None
 
-    source_titles = []
-    for rec in (mcp_record, pubmed, crossref):
-        if rec and rec.get("title"):
-            source_titles.append(str(rec["title"]))
+    source_title_pairs = [
+        (name, str(rec["title"]))
+        for name, rec in (("mcp_record", mcp_record), ("pubmed", pubmed), ("crossref", crossref))
+        if rec and rec.get("title")
+    ]
+    source_titles = [t for _, t in source_title_pairs]
 
     title_similarity = max((_title_similarity(title, st) for st in source_titles), default=0.0)
     title_match = bool(source_titles) and title_similarity >= 0.72
@@ -970,6 +972,28 @@ def validate_core(
     if bidirectional_verification_failed:
         failure_reasons.append("manual_confirmation_required_bidirectional_failure")
 
+    # ── advisories（不阻断）：以下三段只写 advisories，绝不碰 failure_reasons /
+    # verified / needs_manual_review / confidence。见本文件 advisories 段的禁令。
+    advisories: list[dict[str, Any]] = []
+    if title:
+        # ① 同一 code 只留相似度最高的一条；元素顺序固定为桶序（§1.3）。
+        best_by_code: dict[str, dict[str, Any]] = {}
+        for src_name, src_title in source_title_pairs:
+            adv = detect_title_variant(title, src_title, src_name)
+            if adv and adv["similarity"] > best_by_code.get(adv["code"], {}).get("similarity", -1.0):
+                best_by_code[adv["code"]] = adv
+        advisories.extend(best_by_code[c] for c, _kw in _VARIANT_BUCKETS if c in best_by_code)
+
+    # ② 只在条目已判失败时回查标识符；token<3 的标题不查（防垃圾 query）。
+    if (bidirectional_verification_failed or "source_unreachable" in failure_reasons) \
+            and has_identifier and len(_title_tokens(title)) >= 3:
+        if not online:
+            advisories.append(_identifier_unavailable("offline"))
+        else:
+            ident_adv = classify_identifier_suggestion(doi, pmid, *_lookup_by_title(title))
+            if ident_adv:
+                advisories.append(ident_adv)
+
     needs_manual_review = any(
         r in {"title_mismatch", "id_mismatch", "mcp_stale", "mcp_timestamp_missing",
               "source_unreachable", "identifier_missing", "title_not_found_online"}
@@ -1034,6 +1058,7 @@ def validate_core(
         "failure_reasons": failure_reasons,
         "confidence_score": confidence,
         "needs_manual_review": needs_manual_review,
+        "advisories": advisories,
         "sources": {
             "mcp": bool(mcp_record),
             "pubmed": bool(pubmed),
