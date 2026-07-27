@@ -406,11 +406,54 @@ def _names_match(a: tuple[str, frozenset[str]], b: tuple[str, frozenset[str]]) -
     return (not a[1]) or (not b[1]) or bool(a[1] & b[1])
 
 
+_NAME_SUFFIXES = frozenset({"jr", "sr", "ii", "iii", "iv", "phd", "md", "msc",
+                            "mph", "dphil", "facp", "frcp", "esq", "dds"})
+
+
+def _is_name_continuation(seg: str, prev: str) -> bool:
+    """True when a comma-part continues ``prev`` instead of starting a new author.
+
+    Commas serve double duty in author strings ("Zhang, W." is one person;
+    "Nasim, F., B.F. Sabath" is two), so a bare comma split is wrong. A part
+    continues the previous name when it carries no surname of its own.
+    """
+    toks = [t for t in re.findall(r"[a-z一-鿿]+", seg.lower())
+            if t not in _NAME_SUFFIXES]
+    if not toks:
+        return True                       # "Jr." / "PhD" / punctuation only
+    if all(len(t) == 1 for t in toks):
+        return True                       # "F." / "B.F." -> initials of prev surname
+    # "Smith, John": a lone given name right after a bare single-token surname.
+    # ponytail: this misreads bare-surname lists ("Sabath, Eapen, Nasim") as one
+    # person; real bibliographies always carry initials, so not worth more code.
+    return len(toks) == 1 and len(prev.split()) == 1
+
+
+def _split_names(text: str) -> list[str]:
+    """Split one raw author string into individual person names."""
+    names: list[str] = []
+    for chunk in re.split(r"\s*(?:;|\band\b|&|\bet\s*al\.?)\s*", text):
+        prev: str | None = None           # None = chunk start, always a new name
+        for seg in chunk.split(","):
+            seg = seg.strip()
+            if not seg:
+                continue
+            if prev is not None and _is_name_continuation(seg, prev):
+                names[-1] = f"{names[-1]}, {seg}"
+            else:
+                names.append(seg)
+            prev = names[-1]
+    return names
+
+
 def _split_author_field(value: Any) -> list[str]:
+    # Every element is re-split: real indexes often stash a whole author list in
+    # a single list slot (['Nasim, F., B.F. Sabath, and G.A. Eapen']), which used
+    # to collapse to one name key and silently under-count self-citations.
     if isinstance(value, list):
-        return [str(x) for x in value]
-    if isinstance(value, str) and value.strip():
-        return re.split(r"\s*(?:;|\band\b|&|\bet al\.?)\s*", value)
+        return [n for x in value for n in _split_names(str(x))]
+    if isinstance(value, str):
+        return _split_names(value)
     return []
 
 
