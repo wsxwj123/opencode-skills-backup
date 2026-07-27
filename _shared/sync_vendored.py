@@ -68,15 +68,18 @@ MANIFEST: dict[str, list[str]] = {
     "numeric_candidates.py": [
         "general-sci-writing", "sci2doc", "revise-sci", "reviewer-simulator",
     ],
+    # structure_outline 多一家 review-writing(xref 推广第四家,只挂 xref、不挂 M,
+    # 故 methods_terms 不铺);manuscript_index 是它的 import 依赖,跟着扩。
     "structure_outline.py": [
         "general-sci-writing", "sci2doc", "revise-sci", "reviewer-simulator",
+        "review-writing",
     ],
     "methods_terms.py": [
         "general-sci-writing", "sci2doc", "revise-sci", "reviewer-simulator",
     ],
     "manuscript_index.py": [
         "general-sci-writing", "sci2doc", "revise-sci", "reviewer-simulator",
-        "polish-sci",
+        "polish-sci", "review-writing",
     ],
 }
 
