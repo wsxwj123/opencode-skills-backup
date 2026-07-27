@@ -54,6 +54,30 @@ MANIFEST: dict[str, list[str]] = {
         "general-sci-writing", "nsfc-proposal", "review-writing", "sci2doc",
         "revise-sci", "reviewer-response-sci", "reviewer-simulator",
     ],
+    # 撰写编排核心:撰写四家
+    "delegate_write_core.py": [
+        "general-sci-writing", "review-writing", "nsfc-proposal", "sci2doc",
+    ],
+    # 原子化拆分三件:review + nsfc 两家
+    "extract_headings.py": ["review-writing", "nsfc-proposal"],
+    "split_headings.py": ["review-writing", "nsfc-proposal"],
+    "split_audit.py": ["review-writing", "nsfc-proposal"],
+    # 审稿一致性(数值 / xref+M):reviewer-sim + 撰写三家;
+    # manuscript_index 多一家 polish-sci,且是 structure_outline/methods_terms 的
+    # import 依赖,必须同版本,否则另三家跟着错。
+    "numeric_candidates.py": [
+        "general-sci-writing", "sci2doc", "revise-sci", "reviewer-simulator",
+    ],
+    "structure_outline.py": [
+        "general-sci-writing", "sci2doc", "revise-sci", "reviewer-simulator",
+    ],
+    "methods_terms.py": [
+        "general-sci-writing", "sci2doc", "revise-sci", "reviewer-simulator",
+    ],
+    "manuscript_index.py": [
+        "general-sci-writing", "sci2doc", "revise-sci", "reviewer-simulator",
+        "polish-sci",
+    ],
 }
 
 
@@ -82,11 +106,18 @@ def do_check() -> int:
             problems.append(f"缺失: {skill}/scripts/{src.name}")
         elif _md5(src) != _md5(dst):
             problems.append(f"漂移: {skill}/scripts/{src.name} (md5 != _shared)")
+    # 漏登记:文件已 vendored 进某技能、_shared 里也有真源,却不在 MANIFEST。
+    # 这类副本无人守漂——本检查存在的意义就是不让清单落后于现实。
+    for skill in ALL8:
+        for dst in sorted((SKILLS_ROOT / skill / "scripts").glob("*.py")):
+            if (SHARED / dst.name).is_file() and skill not in MANIFEST.get(dst.name, []):
+                problems.append(f"漏登记: {skill}/scripts/{dst.name} 未列入 MANIFEST")
     if problems:
         print(f"vendored 一致性检查 FAIL,{len(problems)} 项:")
         for p in problems:
             print(f"  - {p}")
-        print("修复: python3 _shared/sync_vendored.py --sync")
+        print("修复: 漂移/缺失 → python3 _shared/sync_vendored.py --sync;"
+              "漏登记 → 把该技能补进本文件 MANIFEST")
         return 1
     n = sum(len(v) for v in MANIFEST.values())
     print(f"vendored 一致性检查 OK({len(MANIFEST)} 库 × 共 {n} 份副本,全部与 _shared 真源一致)")
