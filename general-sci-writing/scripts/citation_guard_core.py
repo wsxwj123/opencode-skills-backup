@@ -382,17 +382,15 @@ def detect_title_variant(entry_title: str, other_title: str, source: str) -> dic
 
 
 # ② 标识符回查诊断
-_IDENTIFIER_UNAVAILABLE_DETAIL = {
-    "offline": "离线模式未发起标题回查，本次无法判断标识符是否正确（不代表标识符有问题）",
-    "network": "标题回查未取到可解析响应（网络/限流/服务异常），本次无法判断标识符是否正确",
-}
-
-
-def _identifier_unavailable(reason: str) -> dict[str, Any]:
+#
+# 只有"发起了查询但没查成"才报 unavailable。离线态不报：--offline 下它会挂在每条
+# 失败条目上，是零信息量常量（report 的 online_check: false 已经说明了一切），只会
+# 淹没同批次里真正有价值的撤稿探测提醒——后者离线照常工作。
+def _identifier_unavailable() -> dict[str, Any]:
     return {
         "code": "identifier_lookup_unavailable",
-        "detail": _IDENTIFIER_UNAVAILABLE_DETAIL[reason],
-        "reason": reason,
+        "detail": "标题回查未取到可解析响应（网络/限流/服务异常），本次无法判断标识符是否正确",
+        "reason": "network",
     }
 
 
@@ -412,7 +410,7 @@ def classify_identifier_suggestion(
     条目同类型的标识符时一律落 identifier_type_mismatch，只列参考值、不给建议。
     """
     if not reachable:
-        return _identifier_unavailable("network")
+        return _identifier_unavailable()
     if match is None:
         return {
             "code": "identifier_not_found",
@@ -991,15 +989,13 @@ def validate_core(
                 best_by_code[adv["code"]] = adv
         advisories.extend(best_by_code[c] for c, _kw in _VARIANT_BUCKETS if c in best_by_code)
 
-    # ② 只在条目已判失败时回查标识符；token<3 的标题不查（防垃圾 query）。
-    if (bidirectional_verification_failed or "source_unreachable" in failure_reasons) \
+    # ② 只在条目已判失败时回查标识符；token<3 的标题不查（防垃圾 query）；
+    # 离线不查也不报（见 _identifier_unavailable 上方注释：离线态是零信息量常量）。
+    if online and (bidirectional_verification_failed or "source_unreachable" in failure_reasons) \
             and has_identifier and len(_title_tokens(title)) >= 3:
-        if not online:
-            advisories.append(_identifier_unavailable("offline"))
-        else:
-            ident_adv = classify_identifier_suggestion(doi, pmid, *_lookup_by_title(title))
-            if ident_adv:
-                advisories.append(ident_adv)
+        ident_adv = classify_identifier_suggestion(doi, pmid, *_lookup_by_title(title))
+        if ident_adv:
+            advisories.append(ident_adv)
 
     needs_manual_review = any(
         r in {"title_mismatch", "id_mismatch", "mcp_stale", "mcp_timestamp_missing",
