@@ -620,17 +620,24 @@ def _is_name_continuation(seg: str, prev: str) -> bool:
     Commas serve double duty in author strings ("Zhang, W." is one person;
     "Nasim, F., B.F. Sabath" is two), so a bare comma split is wrong. A part
     continues the previous name when it carries no surname of its own.
+
+    Tokenized by _name_tokens so a hyphenated given name stays one token:
+    "Wang, Xue-Meng" is one person, not a Wang plus a Xue plus a Meng.
     """
-    toks = [t for t in re.findall(r"[a-z一-鿿]+", seg.lower())
-            if t not in _NAME_SUFFIXES]
+    toks = _name_tokens(seg)
     if not toks:
         return True                       # "Jr." / "PhD" / punctuation only
-    if all(len(t) == 1 for t in toks):
-        return True                       # "F." / "B.F." -> initials of prev surname
-    # "Smith, John": a lone given name right after a bare single-token surname.
+    if all(_is_initials_blob(t) for t in toks):
+        return True                       # "F." / "B.F." / "WX" -> initials of prev surname
+    # "Smith, John" / "Silva, Caio C G": one given name (plus its own middle
+    # initials) right after a bare single-token surname. Initials *leading* the
+    # segment mark a new author in natural order ("B.F. Sabath"), never a
+    # continuation.
     # ponytail: this misreads bare-surname lists ("Sabath, Eapen, Nasim") as one
     # person; real bibliographies always carry initials, so not worth more code.
-    return len(toks) == 1 and len(prev.split()) == 1
+    words = [t for t in toks if not _is_initials_blob(t)]
+    return (len(words) == 1 and not _is_initials_blob(toks[0])
+            and len(prev.split()) == 1)
 
 
 def _split_names(text: str) -> list[str]:
