@@ -91,11 +91,47 @@ def _names_match(a, b):
     return (not a[1]) or (not b[1]) or bool(a[1] & b[1])
 
 
+_NAME_SUFFIXES = frozenset({"jr", "sr", "ii", "iii", "iv", "phd", "md", "msc",
+                            "mph", "dphil", "facp", "frcp", "esq", "dds"})
+
+
+def _is_name_continuation(seg, prev):
+    """逗号在作者串里一词两用（"Zhang, W." 是一个人，"Nasim, F., B.F. Sabath"
+    是两个），裸切逗号必错：只有本身不带姓氏的片段才并回上一个名字。"""
+    toks = [t for t in re.findall(r"[a-z一-鿿]+", seg.lower())
+            if t not in _NAME_SUFFIXES]
+    if not toks:
+        return True                       # "Jr." / "PhD" / 只有标点
+    if all(len(t) == 1 for t in toks):
+        return True                       # "F." / "B.F." —— 上一个姓的缩写名
+    # "Smith, John"：紧跟在单 token 裸姓后面的孤立名。
+    return len(toks) == 1 and len(prev.split()) == 1
+
+
+def _split_names(text):
+    names = []
+    for chunk in re.split(r"\s*(?:;|\band\b|&|\bet\s*al\.?)\s*", text):
+        prev = None                       # None = chunk 开头，必起新名字
+        for seg in chunk.split(","):
+            seg = seg.strip()
+            if not seg:
+                continue
+            if prev is not None and _is_name_continuation(seg, prev):
+                names[-1] = f"{names[-1]}, {seg}"
+            else:
+                names.append(seg)
+            prev = names[-1]
+    return names
+
+
 def _split_author_field(value):
+    # 每个元素都再切一遍：真实索引常把整串作者塞进单个 list 槽
+    # （['Nasim, F., B.F. Sabath, and G.A. Eapen']），旧实现只出一个 name key，
+    # 第一作者匹配不上 → 自引率被系统性低估。
     if isinstance(value, list):
-        return [str(x) for x in value]
-    if isinstance(value, str) and value.strip():
-        return re.split(r"\s*(?:;|\band\b|&|\bet al\.?)\s*", value)
+        return [n for x in value for n in _split_names(str(x))]
+    if isinstance(value, str):
+        return _split_names(value)
     return []
 
 
