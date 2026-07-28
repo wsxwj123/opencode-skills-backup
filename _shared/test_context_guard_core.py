@@ -426,11 +426,19 @@ def test_bash_segment_and_protected_write_position():
             " tee structure_signoff.json"]
     for cmd in deny:
         assert bg._hits_protected_write(cmd), cmd
+    deny += ["cp x .review_pass/3.3.json",          # 受保护目标在目的位
+             "mv .review_pass/3.3.json /tmp/x",      # mv 源被移走 == 凭证被删，仍要拦
+             "cp a b > .review_pass/x.json"]         # 段内还有别的动作词 → 不放宽
+    for cmd in deny[-3:]:
+        assert bg._hits_protected_write(cmd), cmd
     allow = ["cat .review_pass/3.3.json",
              "python3 check.py < structure_signoff.json",
              # R5 点名的误伤：提到文件名但写的是别处
              "grep -rn structure_signoff.json . > out.txt",
-             "python3 gen.py > out.txt"]
+             "python3 gen.py > out.txt",
+             # cp 的源位只读：备份受保护文件不是绕写
+             "cp .review_pass/3.3.json /tmp/backup.json",
+             "cp -r .review_pass /tmp/bak"]
     for cmd in allow:
         assert not bg._hits_protected_write(cmd), cmd
 

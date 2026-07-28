@@ -210,8 +210,9 @@ def _judge(path: Path, registry: dict):
         reason = REASON_F8_ASK.format(
             marker=core.sanitize_field(ev.matched_state_file, "text", 120),
             missing="、".join(missing))
+        # 审计 detail 里用空格分隔：全角冒号不在清洗白名单里，会被剔成"…文件state.json"
         return ("ask", reason, root, "F8-weak-ask", "", rel,
-                "撞名 state 文件：%s" % ev.matched_state_file)
+                "撞名 state 文件 %s" % ev.matched_state_file)
 
     # ---- strong
     if protected == "signoff":
