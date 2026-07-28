@@ -52,6 +52,11 @@ LIST_MAX = 12                # 列表类字段最多列 12 项（INTERFACE §0.1
 PLACEHOLDER = "<非常规名称已省略>"
 AUDIT_NAME = ".academic_gate_audit.jsonl"
 AUDIT_MAX_BYTES = 1024 * 1024
+# 允许在"算不出项目根"时落 CLAUDE_PLUGIN_DATA 的规则白名单。这几条记的正是
+# "这一次没检查成"，落不下就等于没发生过——而它们恰恰全都发生在没有项目根的时刻。
+# 其余规则一律要求有项目根（宁可少一条记录，也不在陌生目录里造文件）。
+NO_ROOT_RULES = {"path-parse-failed", "F9B-skipped-no-cwd", "internal-error",
+                 "stdin-truncated"}
 DONE_STATUS = {"done", "completed", "finalized"}
 
 # nsfc 的节级白名单：**硬编码**，不得复用 prewrite_gate.SECTION_ORDER。
@@ -783,15 +788,15 @@ def audit_append(root, event="", tool="", rule="", decision="", skill="",
                  target="", detail="") -> None:
     """追加一行审计。写失败一律吞异常，**决策绝不改变**——审计是记录，不是许可。
 
-    落点 <项目根>/.academic_gate_audit.jsonl；项目根算不出来时只有一个例外
-    （rule="path-parse-failed"，那一刻根本没有项目根）落 CLAUDE_PLUGIN_DATA，
-    连该变量也没有就不写。除此之外一律不写——宁可少一条记录，也不在陌生目录造文件。
+    落点 <项目根>/.academic_gate_audit.jsonl；只有 NO_ROOT_RULES 里那几条"那一刻
+    根本没有项目根"的规则允许落 CLAUDE_PLUGIN_DATA，连该变量也没有就不写。
+    除此之外一律不写——宁可少一条记录，也不在陌生目录造文件。
     """
     try:
         if root is not None:
             path = Path(root) / AUDIT_NAME
             first = not path.exists()
-        elif rule == "path-parse-failed":
+        elif rule in NO_ROOT_RULES:
             data = plugin_data_dir()
             if data is None:
                 return
