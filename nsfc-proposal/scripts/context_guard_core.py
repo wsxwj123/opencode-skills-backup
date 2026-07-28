@@ -828,16 +828,26 @@ def _audit_line(event, tool, rule, decision, skill, target, detail) -> str:
 
 def _ensure_gitignored(root: Path) -> None:
     """首写时若同目录**已存在** .gitignore 且没有该行，追加一行。
-    不存在就不创建——不在用户项目里凭空造文件。"""
+    不存在就不创建——不在用户项目里凭空造文件。
+
+    🔴 全程二进制，**绝不解码用户的文件**：上一版是"文本读回 + 整份重写"，
+    errors="replace" 会把 GBK/Latin-1 编码的 .gitignore（中文 Windows 上很常见）
+    里的中文注释永久变成 U+FFFD —— 我们把用户的文件改坏了，这是本项目最不能犯的
+    一类错。追加模式只往末尾加字节，原有内容一个字节都不碰。
+    """
     try:
         gi = root / ".gitignore"
         if not gi.is_file():
             return
-        text = gi.read_text(encoding="utf-8", errors="replace")
-        if AUDIT_NAME in text:
+        line = AUDIT_NAME.encode("utf-8")
+        with open(str(gi), "rb") as fh:
+            data = fh.read()
+        if line in data:
             return
-        sep = "" if text.endswith("\n") or not text else "\n"
-        gi.write_text(text + sep + AUDIT_NAME + "\n", encoding="utf-8")
+        with open(str(gi), "ab") as fh:
+            if data and not data.endswith(b"\n"):
+                fh.write(b"\n")     # 末尾没换行时先补一个，别把新行粘到旧行上
+            fh.write(line + b"\n")
     except Exception:
         pass
 

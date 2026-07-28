@@ -394,6 +394,19 @@ def test_audit_gitignore_only_when_present():
         assert text.count(core.AUDIT_NAME) == 1 and "*.pyc" in text
 
 
+def test_gitignore_append_is_byte_exact_on_non_utf8_files():
+    # GBK 的 .gitignore（中文 Windows 常见）：解码重写会把中文注释毁成 U+FFFD
+    with _tmp() as d:
+        root = Path(d)
+        original = "# 我的忽略\n*.tmp".encode("gbk")     # 故意不以换行结尾
+        (root / ".gitignore").write_bytes(original)
+        core.audit_append(root, rule="F10-subset-lock", decision="deny")
+        data = (root / ".gitignore").read_bytes()
+        assert data.startswith(original), data[:40]
+        assert b"\xef\xbf\xbd" not in data, "出现 U+FFFD = 用户文件被解码重写了"
+        assert data == original + b"\n" + core.AUDIT_NAME.encode() + b"\n", data
+
+
 def test_audit_without_root_writes_nothing_unless_parse_failed():
     old = os.environ.pop("CLAUDE_PLUGIN_DATA", None)
     try:
