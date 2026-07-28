@@ -190,7 +190,7 @@ def _emit_context(text: str) -> None:
         pass
 
 
-def _judge(path: Path, payload: dict, registry: dict, tool_name: str):
+def _judge(path: Path, registry: dict):
     """对一个目标路径做一次判定。返回 None=放行，否则 (decision, reason, 审计字段)。"""
     ev = core.detect_for_path(path, registry)
     if ev.tier == "none" or ev.root is None:
@@ -292,7 +292,7 @@ def main() -> None:
 
     for path in paths:                    # 一次 apply_patch 可改多个文件，任一命中即拦
         try:
-            verdict = _judge(path, payload, registry, tool_name)
+            verdict = _judge(path, registry)
         except Exception:
             verdict = None                # 判定过程自身出错 → 放行（未判定成功不算命中）
         if verdict is None:
