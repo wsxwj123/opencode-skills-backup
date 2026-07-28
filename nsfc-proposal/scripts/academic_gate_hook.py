@@ -225,8 +225,15 @@ def _judge(path: Path, registry: dict):
         reason = REASON_F8_ASK.format(
             marker=core.sanitize_field(ev.matched_state_file, "text", 120),
             missing="、".join(missing))
+        # 🔴 审计落点按目标分两种（weak 就是"我不确定这是不是学术项目"）：
+        #  · 目标是受保护凭证（structure_signoff.json / .review_pass/*.json）——文件名
+        #    指名道姓就是我们的凭证，不是"路过的陌生人"，证据留在项目内；
+        #  · 目标只是撞了 managed_globs（drafts/section_*.md 这类通用名）——那才是
+        #    真正的误伤面，**一个字节都不许落在人家目录里**，留痕改落 CLAUDE_PLUGIN_DATA
+        #    （root=None + rule 在 NO_ROOT_RULES 里）。
         # 审计 detail 里用空格分隔：全角冒号不在清洗白名单里，会被剔成"…文件state.json"
-        return ("ask", reason, root, "F8-weak-ask", "", rel,
+        audit_root = root if protected else None
+        return ("ask", reason, audit_root, "F8-weak-ask", "", rel,
                 "撞名 state 文件 %s" % ev.matched_state_file)
 
     # ---- strong
