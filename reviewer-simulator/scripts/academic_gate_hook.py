@@ -304,8 +304,13 @@ def main() -> None:
     for path in paths:                    # 一次 apply_patch 可改多个文件，任一命中即拦
         try:
             verdict = _judge(path, registry)
-        except Exception:
-            verdict = None                # 判定过程自身出错 → 放行（未判定成功不算命中）
+        except Exception as exc:
+            # 判定过程自身出错 → 放行（未判定成功不算命中），但必须留痕：
+            # 这一条与"认不出项目"的静默放行长得一样，日志里不能也长得一样。
+            core.audit_append(None, event="PreToolUse", tool=tool_name or "Write",
+                              rule="internal-error", decision="unchecked",
+                              detail="judge %s" % type(exc).__name__)
+            verdict = None
         if verdict is None:
             continue
         decision, reason, root, rule, skill, target, detail = verdict
