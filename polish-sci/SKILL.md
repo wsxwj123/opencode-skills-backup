@@ -1,6 +1,6 @@
 ---
 name: polish-sci
-version: 2.24.1
+version: 2.25.0
 description: 纯论文润色全管道。输入一份已写完的稿子(无审稿意见),逐段提升语言表达,绝不改内容/数据/结论。触发词：润色、polish、语言润色、润色论文、polish paper、language polish、proofread manuscript、母语化、润色稿子。路由说明：与revise-sci区分,revise-sci由审稿意见驱动、只改被点名片段;polish-sci无意见、全文逐段润色覆盖每一段。与general-sci-writing区分,gsw从零写新稿,polish-sci只润色现成稿。
 ---
 
@@ -19,6 +19,16 @@ not_for(以下情况不要用本技能):
 - 写综述,用 review-writing。
 
 工作流是脚本闸门式的。脚本只负责拆分、生成润色任务包、校验红线,真正的语言改写由主 agent 按本文 prompt 逐段执行。不要跳步,不要让脚本假装自己会改写。
+
+## 📁 references/ 参考文件地图(按需 Read,不要靠记忆复述其内容)
+
+| 必须 Read 的时机 | 文件 |
+|---|---|
+| 每段改写前 | `references/anti-ai-protocol.md` |
+| 第 3 步逐段润色前 | `references/interaction-protocol.md` |
+| 第 5 步委托盲检前 | `references/dod-protocol.md` |
+| 第 7 步 merge/导出前 | `references/output-contract.md` |
+| 用户问"AI 改坏了怎么办"时 | `references/user-selfhelp.md` |
 
 ## 🔴 Intake Gate(开工前必须确认)
 🛑 STOP：拿到稿子后,先与用户确认四件事,再动工:
@@ -71,7 +81,7 @@ not_for(以下情况不要用本技能):
 - AI 套话禁词表(delve into、pivotal role、underscore、testament、It is worth noting that、值得注意的是、综上所述、至关重要 等,中英双语,见 common.py 的 `AI_STYLE_BANNED_PATTERNS` 与 `AI_CLICHE_TERMS_EN/ZH`)。这些是 AI 腔的硬指纹,润色后一律清零。
 - **去AI必禁三项——修辞性破折号(`—` / `——` / em-dash)、scare quotes(普通短语裹双引号)、解释性冒号(概念冒号后接句子片段)——三者禁止使用,硬拦阻断交付**。strict_gate 对这三项 fail-close,命中即 exit 1,不放行、不交作者取舍。
 
-📖 **软提示项(长句 / -ing 拖尾 / not only…but also / 修辞问句 / 比喻排比)与非散文豁免的完整分级,见 [references/anti-ai-protocol.md](references/anti-ai-protocol.md)——每段改写前先 Read 再动手**。自查:我这轮真的读过这个文件吗?没有就先读。软提示不阻断交付、由人工取舍,别当硬拦一刀切削平文风;硬拦只有上面两项。
+📖 软提示分级与非散文豁免 → 每段改写前先 Read [references/anti-ai-protocol.md](references/anti-ai-protocol.md)。
 
 本 SKILL.md 文本自身也遵守上述去AI规则。
 
@@ -90,9 +100,7 @@ not_for(以下情况不要用本技能):
 ## DoD 自检清单(润色收口)
 机器可读真源,`references/dod_checklist.json` 的 `polish-dod` gate。strict_gate 运行前,必须委托独立subagent盲检。
 
-📖 **委托盲检前(Pipeline 第 5 步)先完整 Read [references/dod-protocol.md](references/dod-protocol.md) 再动手**:PL-G1~PL-G14 逐项判据、委托盲检四步细则、派不出独立subagent时的【P4·降级告警】口径(绝不能同一 AI 自评自过)。自查:我这轮真的读过这个文件吗?没有就先读。
-
-🔴 **委托盲检(强制)**,主 agent 不得自评 DoD。两条命令见 Pipeline 第 5 步,四步细则见上述文件。
+📖 **主 agent 不得自评 DoD**;PL-G1~PL-G14 判据、委托四步细则、【P4·降级告警】(派不出独立subagent时绝不自评自过) → **第 5 步盲检前先 Read [references/dod-protocol.md](references/dod-protocol.md)**。
 
 **PL-G11 科学内容零改动 = 语义等价的唯一权威**:改写方在 polished/<idx>.json 里自填 `meaning_changed=false` 只是自证、不足信;strict_gate 交付前会读独立subagent写回的 `<root>/.review_return_polish-dod.json`,要求 PL-G11 verdict==pass 且证据非空,缺独立裁决/非 pass/空证据一律 fail-closed。即"没有独立盲检 = meaning 未核 = 拦",自填 false 不能替代。
 
@@ -124,14 +132,14 @@ python scripts/extract_docx_images.py --manuscript <input> --project-root <root>
 python scripts/polish_units.py pack --project-root <root> --intensity standard
 
 # 3. 主 agent 逐段润色:读 polish_manifest.json 的每个 task,按下方 Polish Prompt 改写。
-#    默认走「交互式逐段润色协议」(见下方专节):每段润完先贴原文/润色/逐处改动给用户,
-#    用户确认或要求调整后才写回 polished/<idx>.json;不是闷头全润完再 merge。
+#    📖 动手前必须 Read references/interaction-protocol.md + references/anti-ai-protocol.md,
+#       不许凭记忆跑。自查:我这轮真的读过这两个文件吗?没有就先读。
 
 # 4. 校验红线(逐段写回 polish_risk_flags)
 python scripts/polish_units.py verify --project-root <root>
 
-# 5. 委托独立subagent盲检 DoD(见下方 DoD 自检清单)
-# Windows 注意:PowerShell/cmd 不展开 *.json 通配符,需把 polished/ 下的 json 文件显式逐个列在 --files 后,或在 WSL/bash 里运行
+# 5. 委托独立subagent盲检 DoD(见上方 DoD 自检清单)
+#    📖 动手前必须 Read references/dod-protocol.md(含 Windows 通配符注意事项),不许凭记忆跑。
 python scripts/delegate_review.py pack --checklist references/dod_checklist.json \
     --gate polish-dod --files <polished/*.json polished_manuscript.md> --workdir <root>
 # subagent返回后:
@@ -147,6 +155,7 @@ python scripts/proofread_polished.py --project-root <root>
 python scripts/strict_gate.py --project-root <root>
 
 # 7. 合并 + 报告
+#    📖 动手前必须 Read references/output-contract.md(选哪条 docx 导出路径),不许凭记忆跑。
 python scripts/merge_manuscript.py --project-root <root> [--docx out.docx] [--in-place-src <原始docx>]
 python scripts/polish_report.py --project-root <root>
 ```
@@ -163,18 +172,4 @@ python scripts/polish_report.py --project-root <root>
 8. 改完写回该 unit,`polished_by` 填非 PLACEHOLDER 值,`meaning_changed` 必须为 false,`polish_note` 简述改了什么或为何不改。
 
 ## 交互式逐段润色协议(默认开启)
-目的:让你边润边看、能随时干预,方便对照着改自己的原稿;不是闷头全润完再 merge。**散文段一段一停,未经用户确认绝不写回 `polished/<idx>.json`。**
-
-📖 **进入 Pipeline 第 3 步逐段润色前,先完整 Read [references/interaction-protocol.md](references/interaction-protocol.md) 再动手**:五步协议与固定对照格式、跨段编辑两条硬约束、非散文段处理、节奏开关。自查:我这轮真的读过这个文件吗?没有就先读,不许凭记忆跑。
-
-## Output Contract
-📖 **merge/导出前(Pipeline 第 7 步)先完整 Read [references/output-contract.md](references/output-contract.md) 再动手**:全部产物文件清单、docx 两条导出路径(in-place 保格式 / md 重建)的选择条件与 run 级颜色下划线已知局限。自查:我这轮真的读过这个文件吗?没有就先读。
-
-## 发现 AI 改坏/偷懒了怎么办(用户自救)
-
-【P4·自救指引】润色最怕两件事:改动点写得含糊、糊弄过去;悄悄把语气或科学内容改了。你无需读代码,直接复制下面话术怼回去,把 AI 拉回"只准动语言"的铁律:
-
-- 「你改动点只写了'优化表达'太笼统,逐词列出你改了哪些词、为什么」
-- 「第 X 段你把'可能提示'润成了'表明',这是升级语气,改回去」
-- 「恢复逐段停,我要每段都看」
-- 「你把某处数值/结论/专名改了,立刻改回,你只准动语言」
+📖 **散文段一段一停,未经用户确认绝不写回 `polished/<idx>.json`**;五步协议/对照格式/跨段编辑两条硬约束/非散文段/节奏开关 → 第 3 步动手前先 Read [references/interaction-protocol.md](references/interaction-protocol.md)。
