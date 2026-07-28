@@ -51,9 +51,14 @@ COMMAND_SCAN_LIMIT = 64 * 1024   # 只扫前 64 KB（如实登载为不完备点
 STDIN_LIMIT = 4 * 1024 * 1024
 
 _SEGMENT_RE = re.compile(r"\|\||&&|[;|\n\r]")
-_SIGNOFF_SCRIPT_RE = re.compile(r"structure_signoff_gate(\.py)?")
+# 🔴 文件名一律大小写不敏感匹配：macOS/Windows 上 `STRUCTURE_SIGNOFF.JSON`、
+# `.Review_Pass/2.1.json`、`Structure_Signoff_Gate.py` 跟小写名是同一个文件，
+# 逐字比 = 写文件那条路堵了、命令行这条路换个大小写就进来（与 is_protected_file
+# 同口径，宁严勿漏）。`confirm` 保持大小写敏感——它是 argparse 的子命令值，
+# 打成 CONFIRM 本来就跑不起来，放宽只会平白误拦。
+_SIGNOFF_SCRIPT_RE = re.compile(r"structure_signoff_gate(\.py)?", re.I)
 _CONFIRM_RE = re.compile(r"\bconfirm\b")
-_PROTECTED_RE = re.compile(r"structure_signoff\.json|\.review_pass")
+_PROTECTED_RE = re.compile(r"structure_signoff\.json|\.review_pass", re.I)
 _WRITE_ACTION_RE = re.compile(
     r">"                                  # > 与 >>（含 awk ... > 形态）
     r"|\btee\b"
