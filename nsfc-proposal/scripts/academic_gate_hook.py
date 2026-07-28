@@ -97,9 +97,10 @@ def _write_heartbeat(reason: str, extra: dict | None = None) -> None:
         hb = {"last_fire_epoch": int(time.time()), "reason": reason}
         if extra:
             hb.update(extra)
-        (_shared_dir() / HEARTBEAT_NAME).write_text(
-            json.dumps(hb, ensure_ascii=False), encoding="utf-8"
-        )
+        # 原子写：并发的钩子进程同时写心跳，直接 write_text 被打断会留半截 JSON，
+        # preflight 读到就报"心跳损坏"（本该是"在岗"）。
+        core._atomic_write(_shared_dir() / HEARTBEAT_NAME,
+                           json.dumps(hb, ensure_ascii=False))
     except Exception:
         pass
 
