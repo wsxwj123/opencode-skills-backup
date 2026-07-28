@@ -36,6 +36,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import sys
 import time
 from pathlib import Path
@@ -83,7 +84,10 @@ _INVISIBLE_RE = re.compile(
 _IDENT_RE = re.compile(r"^[A-Za-z0-9._\-]{1,64}$")
 _CJK_CHAPTER_RE = re.compile(r"^第\d{1,3}章$")
 # B 类白名单：ASCII 常规路径字符 + CJK + 空格；其余一律剔除。
-_TEXT_DENY_RE = re.compile(r"[^A-Za-z0-9._/\- 一-鿿]")
+# 含 `\` 与 `:`：Windows 路径（C:\Users\...）少了它们会被清成面目全非的残串，
+# 再触发"垃圾占比过半"整字段替换 —— 状态卡上全是 <非常规名称已省略>。
+# 这两个字符不构成新风险：仍然剥换行，插值内容无法另起一行冒充系统消息。
+_TEXT_DENY_RE = re.compile(r"[^A-Za-z0-9._/\\:\- 一-鿿]")
 
 
 def sanitize_field(value, kind: str = "text", maxlen: int | None = None) -> str:
@@ -755,14 +759,20 @@ def skill_scripts_dir(skill: str) -> str | None:
 
 
 def verify_command(skill: str, root=None, with_root: bool = True) -> str:
-    """本项目的盲检命令（真实路径，禁止吐 <技能安装目录> 这种占位符字面量）。"""
+    """本项目的盲检命令（真实路径，禁止吐 <技能安装目录> 这种占位符字面量）。
+
+    路径先清洗、再 shlex.quote：用户目录里带空格是常态（`~/Desktop/claude/custom
+    skills`），不加引号的话 AI 照抄这条命令就是断的 —— 给了个跑不起来的命令，
+    比不给还糟。
+    """
     d = skill_scripts_dir(skill)
     if d:
-        cmd = "python3 %s/delegate_review.py verify --section <节号>" % d
+        cmd = "python3 %s verify --section <节号>" % shlex.quote(
+            "%s/delegate_review.py" % d)
     else:
         cmd = "本技能 scripts/ 下的 delegate_review.py verify --section <节号>"
     if with_root and root is not None:
-        cmd += " --root %s" % sanitize_field(str(root), "text", 200)
+        cmd += " --root %s" % shlex.quote(sanitize_field(str(root), "text", 200))
     return cmd
 
 
