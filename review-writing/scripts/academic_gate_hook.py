@@ -326,7 +326,13 @@ def _forward_to_deployed() -> bool:
     且稳定部署副本 ~/.claude/academic-gate/ 已存在,则转发执行部署副本(单一运行时,
     心跳/registry 都落部署位)。_shared 里本文件因此永远不裸删:旧 entry 指过来时
     有文件可执行,不会 python 找不到路径 exit 2 拦死一切写入。
-    测试可用环境变量 ACADEMIC_GATE_NO_FORWARD=1 关闭转发(直接测本文件逻辑)。"""
+    测试可用环境变量 ACADEMIC_GATE_NO_FORWARD=1 关闭转发(直接测本文件逻辑)。
+
+    🔴 转发前先把已 import 的 context_guard_core 从 sys.modules 里摘掉：本文件在
+    import 阶段就加载了 _shared 那份 core,而 core 的 shared_dir() 是按**模块文件
+    位置**算 registry/插件版本的。不摘,部署副本会复用 _shared 那份模块对象 → 读的
+    是 _shared 的 registry,"心跳/registry 都落部署位"这句就成了假话(两份 registry
+    版本不同时,判定用的是开发版而不是部署版)。"""
     if os.environ.get("ACADEMIC_GATE_NO_FORWARD"):
         return False
     here = Path(__file__).resolve()
@@ -337,6 +343,7 @@ def _forward_to_deployed() -> bool:
         return False
     try:
         import runpy
+        sys.modules.pop("context_guard_core", None)
         runpy.run_path(str(deployed), run_name="__main__")
         return True
     except SystemExit:
