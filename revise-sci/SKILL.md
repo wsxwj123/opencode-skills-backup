@@ -404,7 +404,7 @@ Each comment must contain:
   - **A 数值守卫**：`common.numeric_tokens_preserved(raw, polished)` 抽取数字 token（整数/小数/百分比/p 值如 `p=0.03`/`CI`/`n=N`）并比对集合。polished 引入原片段没有的新数值，或丢失原有数值，视为 numeric drift。`polish_revisions.py` 写入 `polish_numbers_ok`，`strict_gate.py` 不通过则 fail。
   - **B 不确定性动词校准**：`common.detect_certainty_upgrade(raw, polished)` 只拦截证据强度被升高的方向。谨慎动词（may/might/could/suggests/indicates/is associated with/appears/is consistent with）被升级为强断言（demonstrates/proves/establishes/confirms/shows definitively）即判越权加强，符合保守哲学。写入 `polish_certainty_ok`，`strict_gate.py` 不通过则 fail。
   - **C Risk Flags**：上述拦截在 fail 之外额外输出结构化清单 `polish_risk_flags: [{type: numeric_drift|certainty_upgrade|overstatement|invented_claim, fragment_id, detail}]`，写入每个 unit、`revision_polish_execution.json` 与对应 `comment_records/<id>.md`。**fail 行为保留，不放行。**
-  - **MID 禁词表**：`common.AI_CLICHE_TERMS_EN`（与 `general-sci-writing/scripts/style_checker.py` 的 `FORBIDDEN_EXACT` 对齐：moreover/delve into/it is worth noting 等）+ `AI_CLICHE_TERMS_ZH`（值得注意的是/综上所述等），由 `find_ai_style_markers` 在 polished 片段上检测套话词，命中归入 overstatement 风险并阻断门禁。
+  - **MID 禁词表**：`common.AI_CLICHE_TERMS_EN`（本家 `scripts/common.py` 自带，口径与其他撰写类技能的禁词表一致：moreover/delve into/it is worth noting 等）+ `AI_CLICHE_TERMS_ZH`（值得注意的是/综上所述等），由 `find_ai_style_markers` 在 polished 片段上检测套话词，命中归入 overstatement 风险并阻断门禁。
 - `strict_gate.py` must also fail if `comments_input_mode` is unsupported, `expected_comments_mode` and detected mode diverge, or the required state-window artifacts are missing.
 
 ## Character-level typography contract（字符级排版契约）
