@@ -1,6 +1,6 @@
 ---
 name: nsfc-proposal
-version: 2.26.3
+version: 2.27.0
 description: Use when drafting, restructuring, or polishing Chinese NSFC proposals (2026 template), especially when strict section-by-section gating, hypothesis-objective-content-problem consistency, literature verification via paper-search MCP, and anti-AI Chinese academic writing constraints are required. 触发词：国自然、国家自然科学基金、基金申请书、科研申请、NSFC、标书、本子、面上项目、青年基金。
 ---
 
@@ -262,6 +262,11 @@ Follow phased gates in order:
      - `sections/B2_预算说明_合作外拨.md` (co-institution allocation, or "无")
      - `sections/B3_预算说明_其他来源.md` (other funding sources)
    - Budget total must equal profile `budget_total`; each major budget item traces to an M entry.
+   - **🔴 预算求和硬核对（Mandatory，脚本硬拦截）**：B1-B3 写完后，把各分项金额按「元」录进 `data/budget_table.json`（`{"budget_total": <总额>, "items": [{"name": "设备费", "amount": 200000}, ...]}`，金额一律纯数字、不写 "20万元" 这类带单位字符串），然后跑：
+     ```bash
+     python3 scripts/budget_check.py --root .
+     ```
+     exit 0 = 分项和与总额相符（容差 1 分钱）；**exit 1 = 对不上，禁止声明预算完成**，按输出的 `diff`（= 分项和 − 总额，带符号）定位是漏填分项还是总额写错，改完重跑；**exit 2 = 预算表缺失/畸形/金额非法**（错误行含 `BUDGET_CHECK_ERROR` 并点名是哪条分项），先补齐再跑。该脚本只读，不会替你改平预算表。V-09 只查条目可追溯，不做求和，两者不重叠。
 
    **Phase 5 DoD（收口自检）：未逐项确认通过，不得向用户声明 P5/预算完成**
 
