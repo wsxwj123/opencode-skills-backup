@@ -145,7 +145,7 @@ def _judge_b_level(segment: str, cwd: Path, registry: dict):
         except Exception:
             continue
         try:
-            verdict = gate._judge(p, {"cwd": str(cwd)}, registry, "Bash")
+            verdict = gate._judge(p, registry)
         except Exception:
             continue
         # 只认 deny：weak 档的 ask 不在 Bash 层做（陌生目录不许误伤）
