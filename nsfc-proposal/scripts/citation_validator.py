@@ -27,7 +27,6 @@ import citation_guard_core as core
 DOI_RE = re.compile(r"^10\.\d{4,9}/[-._;()/:A-Z0-9]+$", re.IGNORECASE)
 PMID_RE = re.compile(r"^\d{4,10}$")
 CIT_RE = re.compile(r"\[\d+(?:[-,，]\d+)*\]")
-TITLE_TOKEN_RE = re.compile(r"[a-z0-9\u4e00-\u9fff]+")
 
 CACHE_SCHEMA_VERSION = "1.0"
 ALLOWED_PROVIDER_FAMILIES = {"paper-search", "pubmed-cli"}
@@ -78,16 +77,6 @@ def extract_citation_numbers(text: str) -> list[int]:
     return numbers
 
 
-def _normalize_title(title: str) -> str:
-    t = title.lower().strip()
-    t = re.sub(r"[^a-z0-9\u4e00-\u9fff]+", " ", t)
-    return re.sub(r"\s+", " ", t).strip()
-
-
-def _title_tokens(title: str) -> set[str]:
-    return set(TITLE_TOKEN_RE.findall(_normalize_title(title)))
-
-
 def _provider_family(entry: dict[str, Any]) -> str | None:
     """Map an entry's recorded retrieval source to a provider family.
 
@@ -114,29 +103,6 @@ def _provider_family(entry: dict[str, Any]) -> str | None:
     if "websearch" in raw or "web-search" in raw or "web_search" in raw:
         return "websearch"
     return raw
-
-
-def _title_similarity(a: str, b: str) -> float:
-    na = _normalize_title(a)
-    nb = _normalize_title(b)
-    if not na or not nb:
-        return 0.0
-    if na == nb:
-        return 1.0
-
-    ta = _title_tokens(a)
-    tb = _title_tokens(b)
-    jacc = (len(ta & tb) / len(ta | tb)) if ta and tb else 0.0
-
-    # fallback char overlap ratio for small token sets
-    short = min(len(na), len(nb)) / max(len(na), len(nb))
-    contain_bonus = 0.1 if (na in nb or nb in na) else 0.0
-    return min(1.0, 0.75 * jacc + 0.25 * short + contain_bonus)
-
-
-def _titles_match(a: str, b: str, threshold: float = 0.72) -> tuple[bool, float]:
-    score = _title_similarity(a, b)
-    return score >= threshold, score
 
 
 def _is_mcp_fresh(record: dict[str, Any], ttl_days: int, now_utc: datetime) -> tuple[bool, str | None]:
