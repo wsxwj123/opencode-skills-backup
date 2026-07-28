@@ -719,16 +719,23 @@ def verify_command(skill: str, root=None, with_root: bool = True) -> str:
 
 # ------------------------------------------------------------------ §5.2 审计
 
+def _clean_or_empty(value, maxlen: int) -> str:
+    """缺值写空串（§5.2），不要走清洗——空串进 sanitize_field 会得到
+    <非常规名称已省略>，既违反"缺值写空串"，又把这个注入哨兵稀释成日常噪音
+    （每条 weak ask 的 skill 槽都会命中它，grep 出来全是假线索）。"""
+    return sanitize_field(value, "text", maxlen) if value else ""
+
+
 def _audit_line(event, tool, rule, decision, skill, target, detail) -> str:
     rec = {
         "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "event": sanitize_field(event or "", "text", 40),
-        "tool": sanitize_field(tool or "", "text", 40),
+        "event": _clean_or_empty(event, 40),
+        "tool": _clean_or_empty(tool, 40),
         "rule": rule or "",
         "decision": decision or "",
-        "skill": sanitize_field(skill or "", "text", 60),
-        "target": sanitize_field(target or "", "text", 200),
-        "detail": sanitize_field(detail or "", "text", 200),
+        "skill": _clean_or_empty(skill, 60),
+        "target": _clean_or_empty(target, 200),
+        "detail": _clean_or_empty(detail, 200),
         "pid": os.getpid(),
     }
     return json.dumps(rec, ensure_ascii=False)
