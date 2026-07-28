@@ -53,6 +53,19 @@ def _gate_dir() -> Path:
     return Path.home() / ".claude" / "academic-gate"
 
 
+def _plugin_dir() -> Path:
+    """academic-gate @skills-dir 插件目录:Claude Code 启动时自动加载其 hooks,
+    不经过本安装器。它在场时本安装器让位(不写 settings、摘掉自己写过的 entry),
+    否则同一次写入会被两条钩子各拦一次(不误放行,但噪音)。"""
+    return Path.home() / ".claude" / "skills" / "academic-gate"
+
+
+def _plugin_present() -> bool:
+    d = _plugin_dir()
+    return ((d / ".claude-plugin" / "plugin.json").is_file()
+            and (d / "scripts" / "academic_gate_hook.py").is_file())
+
+
 def _settings_path() -> Path:
     return Path.home() / ".claude" / "settings.json"
 
@@ -124,10 +137,10 @@ def _deploy(force: bool) -> tuple[bool, str]:
     return True, f"deployed-v{sv}"
 
 
-def _heartbeat_status() -> str:
-    """心跳读部署位(hook 运行在 academic-gate/,心跳写在那边),不是本脚本目录——
-    vendored 副本的同目录永远不会有心跳,读错位置会恒报 degraded。"""
-    hb = _gate_dir() / HEARTBEAT_NAME
+def _heartbeat_status(hb_dir: Path | None = None) -> str:
+    """心跳读钩子运行目录(缺省=部署位 academic-gate/;插件模式传插件 scripts/),
+    不是本脚本目录——vendored 副本的同目录永远不会有心跳,读错位置会恒报 degraded。"""
+    hb = (hb_dir or _gate_dir()) / HEARTBEAT_NAME
     if not hb.is_file():
         return "none"
     try:
@@ -138,10 +151,11 @@ def _heartbeat_status() -> str:
         return "none"
 
 
-def _reconcile_entries(settings: dict) -> tuple[bool, bool]:
+def _reconcile_entries(settings: dict, remove: bool = False) -> tuple[bool, bool]:
     """把 settings 里我们的 hook entry 收敛为恰好一条、指向 academic-gate。
     返回 (changed, migrated)。migrated=True 表示删过旧路径/重复 entry。
-    只动含 HOOK_TAG 的 hook 项;同 entry 里用户自己的其它 hook 原样保留。"""
+    只动含 HOOK_TAG 的 hook 项;同 entry 里用户自己的其它 hook 原样保留。
+    remove=True(插件在场):所有我们的 entry 一律摘除、不再补写——门禁由插件钩子承担。"""
     target_cmd = _target_command()
     # hooks/PreToolUse 可能被其它工具写成显式 null:coerce 成空容器,别抛异常退化成含糊 error
     hooks = settings.get("hooks")
@@ -164,31 +178,32 @@ def _reconcile_entries(settings: dict) -> tuple[bool, bool]:
         for h in hlist:
             cmd = str(h.get("command", ""))
             if HOOK_TAG in cmd:
-                if cmd == target_cmd and not kept_target:
+                if not remove and cmd == target_cmd and not kept_target:
                     kept_target = True
                     new_hlist.append(h)
                 else:
-                    migrated = True  # 旧路径(如 _shared)或重复条目,删
+                    migrated = True  # 旧路径(如 _shared)/重复条目/插件在场,删
             else:
                 new_hlist.append(h)
         if new_hlist:
             if len(new_hlist) != len(hlist):
                 entry = {**entry, "hooks": new_hlist}
             new_pretool.append(entry)
-    if not kept_target:
+    if not remove and not kept_target:
         new_pretool.append({
             "matcher": "Write|Edit",
             "hooks": [{"type": "command", "command": target_cmd, "timeout": 60}],
         })
-    changed = migrated or not kept_target
+    changed = migrated or (not remove and not kept_target)
     if changed:
         hooks["PreToolUse"] = new_pretool
     return changed, migrated
 
 
-def _install(settings_path: Path) -> tuple[bool, str]:
+def _install(settings_path: Path, remove: bool = False) -> tuple[bool, str]:
     """确保 settings.json 里恰有一条指向 academic-gate 的门禁 entry。
-    返回 (ok, action):already-present | installed | migrated | 失败原因。"""
+    返回 (ok, action):already-present | installed | migrated | 失败原因。
+    remove=True:反向——摘光我们的 entry(returns removed | already-present)。"""
     settings_path.parent.mkdir(parents=True, exist_ok=True)
     original = settings_path.read_text(encoding="utf-8") if settings_path.is_file() else None
     backup = None
@@ -204,7 +219,7 @@ def _install(settings_path: Path) -> tuple[bool, str]:
     else:
         settings = {}
 
-    changed, migrated = _reconcile_entries(settings)
+    changed, migrated = _reconcile_entries(settings, remove)
     if not changed:
         return True, "already-present"
 
@@ -222,6 +237,8 @@ def _install(settings_path: Path) -> tuple[bool, str]:
         if backup and backup.is_file():
             shutil.copyfile(backup, settings_path)
         return False, "写入后校验失败，已从备份回滚，settings.json 未被破坏"
+    if remove:
+        return True, "removed"
     return True, ("migrated" if migrated else "installed")
 
 
@@ -229,6 +246,29 @@ def main() -> None:
     result = {"status": "error", "action": "none", "message": ""}
     force = "--force" in sys.argv[1:]
     try:
+        if _plugin_present():
+            # 插件模式:钩子由 Claude Code 启动时自动加载,本安装器只负责"别再重复装一条"。
+            # 不部署 ~/.claude/academic-gate/(插件自带三件套),并摘掉本安装器曾写过的 entry。
+            ok, action = _install(_settings_path(), remove=True)
+            hb = _heartbeat_status(_plugin_dir() / "scripts")
+            if hb == "fresh":
+                result.update(status="active", action="plugin", message=(
+                    "门禁由 academic-gate 插件承担，已在岗（近期触发过）。跳步会被物理拦截。"
+                    + ("已摘掉旧的自装 hook 条目（避免重复拦截）。" if action == "removed" else "")))
+            else:
+                result.update(status="degraded", action="plugin", message=(
+                    "已装 academic-gate 插件，但未探测到它触发过——可能是刚放进 skills/ "
+                    "还没重启（钩子在启动时加载，无法热生效），或当前运行端不透传 hook"
+                    "（opencode / codex 从不读 Claude Code 钩子配置）。重启一次再看；"
+                    "在此之前当作【未受保护】，按开场监工卡人工盯防。"
+                    + ("已摘掉旧的自装 hook 条目。" if action == "removed" else "")))
+            if not ok:
+                result.update(status="degraded", action="plugin", message=(
+                    "已装 academic-gate 插件；但清理旧的自装 hook 条目失败：" + action +
+                    "。功能不受影响（可能被拦两次，噪音而已）。"))
+            print(json.dumps(result, ensure_ascii=False))
+            sys.exit(0)
+
         dok, daction = _deploy(force)
         if not _gate_complete():
             # 部署失败且目标也不完整:不写 entry(写了就是悬空路径,会拦死一切写入)
