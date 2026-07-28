@@ -177,17 +177,40 @@ def test_codex_multifile_patch_checks_every_file():
             "多文件 patch 里任一命中即应拦"
 
 
-def test_codex_folds_ask_into_deny():
-    """Codex 不支持 ask（官方：parsed but not supported → 标记失败并继续执行工具），
-    在那端 ask == 静默放行 → 必须折成 deny。"""
+def test_codex_folds_ask_into_allow_with_audit():
+    """Codex 不支持 ask（官方：parsed but not supported → 标记失败并继续执行工具）。
+    弱档 = "只是撞了通用目录名的陌生项目"，真项目走强档、在 Codex 上照拦；硬拦弱档
+    保护力不增而误伤巨大（那端没有"允许一次"）→ 折成放行，但必须留审计（不静默）。"""
     with tempfile.TemporaryDirectory() as d:
         root = _weak_project(Path(d))
-        out, _ = _run_hook({"tool_name": "apply_patch", "cwd": str(root),
-                            "tool_input": {"command": _patch("sections/P1.md")}})
-        assert out, "弱证据 + 受管产物应有决策输出"
-        obj = json.loads(out)["hookSpecificOutput"]
-        assert obj["permissionDecision"] == "deny", "Codex 上 ask 必须折成 deny"
-        assert "Codex" in obj["permissionDecisionReason"], "理由要讲清为什么不是问一句"
+        data = Path(d) / "plugindata"      # 弱档 + 非受保护目标 → 审计落 PLUGIN_DATA
+        data.mkdir()
+        out, rc = _run_hook({"tool_name": "apply_patch", "cwd": str(root),
+                             "tool_input": {"command": _patch("sections/P1.md")}},
+                            env=_hook_env({"CLAUDE_PLUGIN_DATA": str(data)}))
+        assert rc == 0 and out == "", "Codex 弱档必须放行（无决策输出）"
+        assert not (root / ".academic_gate_audit.jsonl").exists(), \
+            "陌生项目目录里一个字节都不许落"
+        lines = (data / "academic_gate_audit.jsonl").read_text(encoding="utf-8").strip().split("\n")
+        rec = json.loads(lines[-1])
+        assert rec["rule"] == "F8-weak-ask" and rec["decision"] == "allow", \
+            f"放行必须留痕且 rule 不改名（NO_ROOT_RULES 白名单），实际 {rec}"
+
+
+def test_codex_weak_and_strong_in_one_patch():
+    """同一段 patch 里弱档放行的文件不得吃掉后面强档该拦的文件（折 allow 用的是
+    continue 不是 return）。"""
+    with tempfile.TemporaryDirectory() as d:
+        weak = _weak_project(Path(d))
+        strong = _fake_project(Path(d), signed=False)
+        cmd = ("*** Begin Patch\n"
+               "*** Add File: %s\n+x\n" % (weak / "sections" / "P1.md") +
+               "*** Add File: %s\n+x\n" % (strong / "manuscripts" / "03_3.2_T.md") +
+               "*** End Patch\n")
+        out, _ = _run_hook({"tool_name": "apply_patch", "cwd": str(d),
+                            "tool_input": {"command": cmd}})
+        assert out and json.loads(out)["hookSpecificOutput"]["permissionDecision"] == "deny", \
+            "弱档放行后必须继续判后面的文件"
 
 
 def test_claude_code_ask_unchanged():
