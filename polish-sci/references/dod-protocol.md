@@ -26,3 +26,7 @@
 2. subagent只依据文件实际内容逐项裁决,返回 JSON 写到约定路径。
 3. `python scripts/delegate_review.py verify ... --gate polish-dod --workdir <root>`,fail-closed 校验。任一缺项/fail/证据为空 -> exit 1,不得声明完成。
 4. **① DoD 停**:盲检(尤其 PL-G11 语义等价)通过后,**不要直接 merge 交付**。先把每一项(PL-G1~PL-G14)的裁决结论逐条摆给用户看(通过/软提示/需人工确认的都列清),然后 **🛑 HALT 等用户确认**,用户点头才进 strict_gate + merge + report。这是交付前最后一道人肉闸,用户此刻仍可喊停或补要求(补要求即 LOG_CMD 记入决定日志)。
+
+## Windows 注意（原 SKILL.md Pipeline 第 5 步 bash 注释，逐字搬运）
+
+# Windows 注意:PowerShell/cmd 不展开 *.json 通配符,需把 polished/ 下的 json 文件显式逐个列在 --files 后,或在 WSL/bash 里运行
