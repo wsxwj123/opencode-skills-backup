@@ -149,9 +149,18 @@ def plugin_version() -> str:
 
 
 def load_registry() -> dict:
+    """读不到 → 空表 → 所有钩子放行（既有 fail-open 行为，不改）。
+
+    但"文件不在"和"文件坏了"要分开：前者是正常形态（单技能分发时可能就没有），
+    后者是**门禁整体静默失效**——registry 一坏，8 家全部不设防且一声不吭。
+    """
     try:
         return json.loads((shared_dir() / "gate_registry.json").read_text(encoding="utf-8"))
-    except Exception:
+    except FileNotFoundError:
+        return {}
+    except Exception as exc:
+        audit_append(None, rule="internal-error", decision="unchecked",
+                     detail="gate_registry %s" % type(exc).__name__)
         return {}
 
 
@@ -398,7 +407,11 @@ def evaluate_dir(d: Path, registry: dict) -> Evidence:
             continue
         try:
             res = fn(reader)
-        except Exception:
+        except Exception as exc:
+            # 签名函数自己炸了 ≠ 这不是学术项目。判定仍按"认不出"走（放行），
+            # 但不许零痕迹——否则一个 bug 能让整家技能悄悄失去保护。
+            audit_append(None, rule="internal-error", decision="unchecked",
+                         detail="signature %s" % type(exc).__name__)
             res = None
         if res is None:
             continue

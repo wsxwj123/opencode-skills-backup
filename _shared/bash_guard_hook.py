@@ -173,7 +173,10 @@ def _judge_b_level(segment: str, cwd: Path, registry: dict):
             continue
         try:
             verdict = gate._judge(p, registry)
-        except Exception:
+        except Exception as exc:
+            core.audit_append(None, event="PreToolUse", tool="Bash",
+                              rule="internal-error", decision="unchecked",
+                              detail="judge %s" % type(exc).__name__)
             continue
         # 只认 deny：weak 档的 ask 不在 Bash 层做（陌生目录不许误伤）
         if verdict and verdict[0] == "deny":
