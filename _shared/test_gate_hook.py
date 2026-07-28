@@ -129,6 +129,74 @@ def test_shared_state_file_disambiguation():
         assert out_r == "", "units/ 不是 nsfc 的受管产物 → 放行"
 
 
+# ---------------------------------------------------------------- Codex 形态
+# Codex 的 tool_input 里没有 file_path，改文件的信息全在 apply_patch 补丁文本里；
+# tool_name 恒为 "apply_patch"。历史上直读 file_path 的版本在这里恒取 None →
+# 静默放行（门禁形同虚设却不报错），下面几条把这个失效形态钉住。
+
+def _patch(*paths: str, verb: str = "Add") -> str:
+    body = "".join("*** %s File: %s\n+x\n" % (verb, p) for p in paths)
+    return "*** Begin Patch\n" + body + "*** End Patch\n"
+
+
+def test_codex_apply_patch_blocks_unsigned():
+    with tempfile.TemporaryDirectory() as d:
+        root = _fake_project(Path(d), signed=False)
+        out, rc = _run_hook({"tool_name": "apply_patch", "cwd": str(root),
+                             "tool_input": {"command": _patch("manuscripts/03_3.2_T.md")}})
+        assert rc == 0 and out, "Codex 形态未签字必须拦下（不能因为没有 file_path 就放行）"
+        assert json.loads(out)["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+def test_codex_apply_patch_allows_signed():
+    with tempfile.TemporaryDirectory() as d:
+        root = _fake_project(Path(d), signed=True)
+        out, _ = _run_hook({"tool_name": "apply_patch", "cwd": str(root),
+                            "tool_input": {"command": _patch("manuscripts/03_3.2_T.md")}})
+        assert out == "", "已签字应放行"
+
+
+def test_codex_multifile_patch_checks_every_file():
+    """一段 patch 同时改无辜文件和受管正文 → 不得因为第一个无辜就放行。"""
+    with tempfile.TemporaryDirectory() as d:
+        root = _fake_project(Path(d), signed=False)
+        (root / "notes").mkdir()
+        cmd = ("*** Begin Patch\n*** Update File: notes/innocent.txt\n@@\n-a\n+b\n"
+               "*** Add File: manuscripts/03_3.2_T.md\n+正文\n*** End Patch\n")
+        out, _ = _run_hook({"tool_name": "apply_patch", "cwd": str(root),
+                            "tool_input": {"command": cmd}})
+        assert out and json.loads(out)["hookSpecificOutput"]["permissionDecision"] == "deny", \
+            "多文件 patch 里任一命中即应拦"
+
+
+def test_codex_malformed_payloads_are_clean():
+    """畸形输入：截断补丁 / 空 command / 非字符串 command / 越界 `..` 路径。
+    一律 exit 0、不崩栈；越界路径按它 realpath 后真正所在位置判（落在项目外→放行）。"""
+    with tempfile.TemporaryDirectory() as d:
+        root = _fake_project(Path(d), signed=False)
+        sub = root / "manuscripts"
+        for name, payload in [
+            ("截断", {"tool_name": "apply_patch", "cwd": str(root),
+                      "tool_input": {"command": "*** Begin Patch\n*** Update File: manuscr"}}),
+            ("空", {"tool_name": "apply_patch", "cwd": str(root),
+                    "tool_input": {"command": ""}}),
+            ("非串", {"tool_name": "apply_patch", "cwd": str(root),
+                      "tool_input": {"command": 123}}),
+            ("越界", {"tool_name": "apply_patch", "cwd": str(sub),
+                      "tool_input": {"command": _patch("../../../outside.md")}}),
+            ("无cwd相对路径", {"tool_name": "apply_patch",
+                               "tool_input": {"command": _patch("manuscripts/03_3.2_T.md")}}),
+        ]:
+            out, rc = _run_hook(payload)
+            assert rc == 0, f"{name}：hook 恒 exit 0"
+            assert out == "", f"{name}：判不出目标不得输出决策"
+        # `..` 绕回项目内仍要拦：realpath 之后它就是受管正文，别被绕过去
+        out, _ = _run_hook({"tool_name": "apply_patch", "cwd": str(sub),
+                            "tool_input": {"command": _patch("../manuscripts/03_3.2_T.md")}})
+        assert out and json.loads(out)["hookSpecificOutput"]["permissionDecision"] == "deny", \
+            "`..` 绕回受管目录必须照拦"
+
+
 def test_signoff_gate_check_lifecycle():
     with tempfile.TemporaryDirectory() as d:
         root = Path(d)
