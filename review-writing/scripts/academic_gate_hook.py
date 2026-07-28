@@ -158,10 +158,14 @@ def _run_gates(gates: list, root: Path, file_path: Path) -> tuple:
                               decision="unchecked", detail=type(exc).__name__)
             return False, ""
         if proc.returncode != 0:
-            detail = (proc.stdout or "").strip() or (proc.stderr or "").strip()
+            # 🔴 门禁脚本的输出要过清洗再进 deny 理由：registry 的 command 可以指向
+            # 任意脚本，它的 stdout 就是外部文本，而 deny 理由是官方明说给 Claude 看的。
+            # 这是 8 个注入出口里最后一个没设防的。
+            raw = (proc.stdout or "").strip() or (proc.stderr or "").strip()
+            detail = core.sanitize_field(raw, "text", 800) if raw else ""
             return True, (
                 f"[学术门禁] 「{gate.get('name','gate')}」未通过，本次写入被拦下。\n"
-                f"原因：{detail[:800]}\n"
+                f"原因：{detail}\n"
                 f"这不是 bug——是流程门禁在阻止跳步。请先补上门禁要求的步骤"
                 f"（跑对应脚本、过上一节盲检等），过了再写。"
             )
