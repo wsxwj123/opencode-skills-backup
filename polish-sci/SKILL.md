@@ -64,6 +64,69 @@ not_for(以下情况不要用本技能):
 - 禁止裸写需要排版的字符,如 `H2O` 必须写 `H<sub>2</sub>O`、`10^6` 必须写 `10<sup>6</sup>`、基因斜体不可退化为正体。
 - 标记内的字符属红线,不可改动其中的数值/专名;只可改标记**外**的散文。
 
+## Anti-AI 规则(检测见 common.py,分级见 strict_gate.py)
+去AI检测由 `find_ai_style_markers`(scripts/common.py)统一执行,润色后残留即记 flag。**但阻断与否分两级**(分级在 `strict_gate.is_soft_ai_marker`),学术散文里长句、-ing 分词、修辞铺陈本是正当修辞手段,一刀切硬禁会把作者文风削平,故这些降为软提示;但 AI 套话主干与**破折号**硬拦。
+
+**硬拦项(strict_gate 阻断交付,exit 1)**:
+- AI 套话禁词表(delve into、pivotal role、underscore、testament、It is worth noting that、值得注意的是、综上所述、至关重要 等,中英双语,见 common.py 的 `AI_STYLE_BANNED_PATTERNS` 与 `AI_CLICHE_TERMS_EN/ZH`)。这些是 AI 腔的硬指纹,润色后一律清零。
+- **去AI必禁三项——修辞性破折号(`—` / `——` / em-dash)、scare quotes(普通短语裹双引号)、解释性冒号(概念冒号后接句子片段)——三者禁止使用,硬拦阻断交付**。strict_gate 对这三项 fail-close,命中即 exit 1,不放行、不交作者取舍。
+
+**软提示项(记入 `polish_risk_flags` / `polish_change_report.md`,**不阻断交付**,由人工取舍),学术散文正当修辞,别硬削平**:
+- 英文单句>30词 / 中文单句>50字(科学方法学段落常含数据列表的合法长句)。
+- `-ing` 拖尾从句(`, thereby ...ing` / `, reflecting ...`)。
+- `not only...but also`、修辞问句。
+- **比喻与排比（软提示，交作者定夺）**：原稿已有的比喻（"如同/犹如/像…一样"及"…的桥梁/基石"类）与连续≥3句同式排比不自动删改，记入 `polish_risk_flags` 列给作者；但**润色改写时禁止新增**比喻或排比（模型新写句子的硬性纪律，AI 的比喻多浮夸失当）。
+
+> 降软不等于放任:软提示仍逐段列给用户看,该收敛就收敛;只是它不再 fail-closed 卡交付,把"这处长句要不要改"的判断权交回作者,而不是脚本替作者一律铲平。去AI必禁三项(破折号/scare quotes/解释性冒号)例外:硬拦、禁止使用,不交作者取舍。`from A to B` 检测已从 common.py 移除(科学文本高频合法,信噪比差)。
+
+**非散文豁免**:参考文献、作者名单、单位、资助、关键词、致谢、图表标题、纯数据清单等(atomize 标 `prose=false` 或润色器标 `polished_by=unchanged-nonprose`)保留原文不润色,**去AI/句长检测对它们不适用**(否则参考文献标题里的冒号/范围/问句会被误判);红线(数值/引用/语气/meaning)仍对全部单元核验。
+
+> atomize 能识别**非 Word 样式的标题**(`1. Introduction` / `2.1 Foo` / 已知章节名等普通段落),据此推断 section_type 与 prose 标志。子小节按名无法归类时退回 other(只影响软性被动目标)。
+
+本 SKILL.md 文本自身也遵守上述去AI规则。
+
+## ❌ 禁止动作清单(润色时绝不做)
+对现有规则的集中索引,逐条对应正文已有约束,违反任一即 strict_gate 或盲检拦截:
+- ❌ 改动数值/统计量/p值/n=N/百分比/单位/引用标记[n]/DOI/专名(基因蛋白细胞系物种),见 Red Lines
+- ❌ 升级不确定性动词(may/suggest/可能 改成 prove/demonstrate/证实),见 Polish Prompt #5
+- ❌ 凭空增加原文没有的程度词(significantly/extensively/显著 等),等同升级语气,meaning_changed 必为 false
+- ❌ 为求变化做同义替换、破坏全文术语一致,见 Polish Prompt #4
+- ❌ 裸写需排版字符(H2O 不写成 H<sub>2</sub>O、10^6 不写成 10<sup>6</sup>、基因斜体退化为正体),见 字符级排版契约
+- ❌ 润色后残留 AI 套话禁词(delve into / 值得注意的是 等)或**去AI必禁三项(装饰性破折号 —/—— 、scare quotes、解释性冒号)**,均 Anti-AI **硬拦**、命中即 exit 1;长句/-ing 拖尾为软提示(记报告不阻断),别硬删削平文风
+- ❌ 只改被点名片段而非全文逐段覆盖,本技能是纯润色,覆盖每一段
+- ❌ 未经用户确认就把该段写回 polished/,见 交互式逐段润色协议
+- ❌ 主 agent 自评 DoD 不委托独立盲检subagent,见 DoD 委托盲检(强制)
+
+## DoD 自检清单(润色收口)
+机器可读真源,`references/dod_checklist.json` 的 `polish-dod` gate。strict_gate 运行前,必须委托独立subagent盲检。
+
+通用 14 项(id: PL-G1 ~ PL-G14,其中 PL-G11 为科学内容零改动硬项、PL-G12 为软报告、PL-G13 为字符级自检硬项、PL-G14 为拉丁斜体软提醒):
+- **PL-G1 数值保留**,每段数值/统计量集合与原文一字不差。
+- **PL-G2 无语气升级**,不确定性动词未被升级。
+- **PL-G3 引用保留**,引用标记与 DOI 集合前后一致。
+- **PL-G4 去AI**,散文单元 find_ai_style_markers 的**硬拦**项(AI 套话禁词表 + 去AI必禁三项 破折号/scare quotes/解释性冒号)无残留;长句/-ing 拖尾/not only...but also/修辞问句为软提示,记报告不阻断(见 Anti-AI 规则的分级);非散文单元豁免。
+- **PL-G5 meaning 未变**,每段 meaning_changed=false,专名未动,语义层人工逐段对照。
+- **PL-G6 逐段全覆盖**,无 PLACEHOLDER 残留,无遗漏段落。
+- **PL-G7 被动语态合区间(软报告)**,各段被动比例落在 section_type 目标区间附近;区间为软目标,只报告不阻断交付。
+- **PL-G8 术语一致**,全文术语用词前后一致(人工核)。
+- **PL-G9 结构完整性**,合并稿段落顺序与小节结构与原稿一致,引用编号连续。
+- **PL-G10 缩略语首展一致(软报告)**,`abbreviation_index.json` 的 undefined_use / duplicate_definition / title_abbreviation 已列出供人工取舍;润色未破坏既有首展、未新增缩略语问题。纯润色不主动改缩略语定义,原稿固有问题只报告不阻断交付(与 revise-sci 的硬门禁 RV-G7 区分)。
+- **PL-G11 科学内容零改动(语义等价的唯一权威)**,盲检补脚本红线之外的语义盲区:润色是否仅改语言、未改科学实质(事实/机制陈述、方法描述、因果方向、限定条件与适用范围、结论确切含义均与原文等价)。任一处科学内容被实质改写或含义偏移即 fail,列出原文与润色后对应句为证。**⑥ 这是判定 meaning 未变的唯一权威**:改写方在 polished/<idx>.json 里自填 `meaning_changed=false` 只是自证、不足信;strict_gate 交付前会读独立subagent写回的 `<root>/.review_return_polish-dod.json`,要求 PL-G11 verdict==pass 且证据非空,缺独立裁决/非 pass/空证据一律 fail-closed。即"没有独立盲检 = meaning 未核 = 拦",自填 false 不能替代。
+  - ⚠️ **【P4·盲检降级告警】** 若环境派不出真正独立的subagent来做本项语义等价盲检,**绝不能同一 AI 自评自过**(自己润的自己判"意思没改坏"= 没有盲检)。必须告诉用户「本环境语义盲检不可靠,请你逐段亲自核对:改后有没有改变原意/数据/专名」,把这一核验交回用户,不得伪造盲检通过。好在 polish-sci 逐段一停让你每段都看得到改动点,本就有人肉兜底。
+- **PL-G12 常识合理性(🟡软报告,不阻断)**,盲检subagent顺带扫一遍是否有明显常识/事实硬伤(单位量级离谱、生理/机制常识错误、前后数值逻辑矛盾等)被原文带入或润色引入。**仅提示不阻断**,纯润色默认原文内容正确,本项只在发现明显硬伤时记入报告供人工判断,绝不自动改内容(与 PL-G1~G11 的核验/硬拦区分,也与 reviewer-simulator 的完整科学性审查区分)。
+- **PL-G13 润色后语法拼写与字符级格式自检(硬项)**,`python scripts/proofread_polished.py --project-root <root>` 对润色输出(polished/<idx>.json 的 polished_text)扫 misspelling / chinese_punct / subsup_bare,命中任一则 ok=false、阻断交付并列出问题供用户处理。**只报告不自动改**,脚本纯读 polished/ 并输出 proofread_report.json,绝不写回任何 json/docx/原稿(改与不改由用户决断,守"科学内容零改动"铁律)。
+- **PL-G14 拉丁短语斜体软提醒(🟡软/人工确认,不阻断)**,PL-G13 同一次 `proofread_polished.py` 运行产出的 `proofread_report.json` 里 `latin_italic_missing` 类别:润色输出中 `in vitro`/`in vivo`/`ex vivo`/`in situ`/`de novo`/`post hoc`/`per se` 等公认须斜体的拉丁短语若裸写(未被 `*...*` 斜体标记包裹)则报告。**仅提示,不阻断、不进 `--fail-on`、不扣分**,由人工确认是否补斜体(`et al.`/`e.g.`/`vs.` 等正体惯例不在词表内)。
+
+🔴 **委托盲检(强制)**,主 agent 不得自评 DoD。必须:
+1. `python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate polish-dod --files <...> --workdir <root>`,把打印的任务包交给独立subagent(默认继承主 agent 模型/用户指定)。
+2. subagent只依据文件实际内容逐项裁决,返回 JSON 写到约定路径。
+3. `python scripts/delegate_review.py verify ... --gate polish-dod --workdir <root>`,fail-closed 校验。任一缺项/fail/证据为空 -> exit 1,不得声明完成。
+4. **① DoD 停**:盲检(尤其 PL-G11 语义等价)通过后,**不要直接 merge 交付**。先把每一项(PL-G1~PL-G14)的裁决结论逐条摆给用户看(通过/软提示/需人工确认的都列清),然后 **🛑 HALT 等用户确认**,用户点头才进 strict_gate + merge + report。这是交付前最后一道人肉闸,用户此刻仍可喊停或补要求(补要求即 LOG_CMD 记入决定日志)。
+
+🔴 **结构完整性闸口(前置)**,合并后立即核对段落数与原稿一致、无错位、引用编号连续,再进交付。
+
+通过条件,delegate_review verify 通过 + strict_gate.py exit 0 输出 `STRICT_GATE: PASS`。
+
 ## Pipeline(脚本顺序)
 **第 0 步(拆段前必做,无脚本):通读全稿一遍。** atomize 一拆段,你就只能逐段看局部,靠临场记忆润色,极易术语前后不一、指代判错。所以拆段前先把整稿从头读一遍,建立三样全局依据,写进 `decisions_log.md`(用 LOG_CMD)供逐段润色时对照:
 - **术语一致表**:同一概念/缩写/基因蛋白名在全文的既定写法(哪个词、什么大小写、缩写首展在哪),逐段润色时照此表统一,不临场另起同义词。
@@ -176,69 +239,6 @@ unit=段落是**红线核验的边界**,不是"每段只能就地改、不准动
   - **md 重建导出(无原始 docx 时,如 md 输入)**:`--docx out.docx`(不带 `--in-place-src`)。从 polished md 重建裸 docx,解析行内标记渲染为 run 级格式并对每个 run 设含 `w:eastAsia` 的字体(中文默认宋体)。能渲染显式标注的字符级格式,但**不携带原稿的段落排版/表格/图片**,适合 md 输入或预览。
   > ℹ️ 读取层(`read_docx_paragraphs`)已把原稿 run 级格式(斜体/上下标/加粗)序列化进 `marked_text`,atomize 用它作 prose 段落 `raw_text`,润色全程带标记(见"字符级排版契约"),因此 in-place 写回能还原原稿语义行内格式,纯润色不再把 `H₂O→H2O` 或丢斜体。
 - `polish_change_report.md`,逐段改动 + 风险 flag + 未改原因。
-
-## Anti-AI 规则(检测见 common.py,分级见 strict_gate.py)
-去AI检测由 `find_ai_style_markers`(scripts/common.py)统一执行,润色后残留即记 flag。**但阻断与否分两级**(分级在 `strict_gate.is_soft_ai_marker`),学术散文里长句、-ing 分词、修辞铺陈本是正当修辞手段,一刀切硬禁会把作者文风削平,故这些降为软提示;但 AI 套话主干与**破折号**硬拦。
-
-**硬拦项(strict_gate 阻断交付,exit 1)**:
-- AI 套话禁词表(delve into、pivotal role、underscore、testament、It is worth noting that、值得注意的是、综上所述、至关重要 等,中英双语,见 common.py 的 `AI_STYLE_BANNED_PATTERNS` 与 `AI_CLICHE_TERMS_EN/ZH`)。这些是 AI 腔的硬指纹,润色后一律清零。
-- **去AI必禁三项——修辞性破折号(`—` / `——` / em-dash)、scare quotes(普通短语裹双引号)、解释性冒号(概念冒号后接句子片段)——三者禁止使用,硬拦阻断交付**。strict_gate 对这三项 fail-close,命中即 exit 1,不放行、不交作者取舍。
-
-**软提示项(记入 `polish_risk_flags` / `polish_change_report.md`,**不阻断交付**,由人工取舍),学术散文正当修辞,别硬削平**:
-- 英文单句>30词 / 中文单句>50字(科学方法学段落常含数据列表的合法长句)。
-- `-ing` 拖尾从句(`, thereby ...ing` / `, reflecting ...`)。
-- `not only...but also`、修辞问句。
-- **比喻与排比（软提示，交作者定夺）**：原稿已有的比喻（"如同/犹如/像…一样"及"…的桥梁/基石"类）与连续≥3句同式排比不自动删改，记入 `polish_risk_flags` 列给作者；但**润色改写时禁止新增**比喻或排比（模型新写句子的硬性纪律，AI 的比喻多浮夸失当）。
-
-> 降软不等于放任:软提示仍逐段列给用户看,该收敛就收敛;只是它不再 fail-closed 卡交付,把"这处长句要不要改"的判断权交回作者,而不是脚本替作者一律铲平。去AI必禁三项(破折号/scare quotes/解释性冒号)例外:硬拦、禁止使用,不交作者取舍。`from A to B` 检测已从 common.py 移除(科学文本高频合法,信噪比差)。
-
-**非散文豁免**:参考文献、作者名单、单位、资助、关键词、致谢、图表标题、纯数据清单等(atomize 标 `prose=false` 或润色器标 `polished_by=unchanged-nonprose`)保留原文不润色,**去AI/句长检测对它们不适用**(否则参考文献标题里的冒号/范围/问句会被误判);红线(数值/引用/语气/meaning)仍对全部单元核验。
-
-> atomize 能识别**非 Word 样式的标题**(`1. Introduction` / `2.1 Foo` / 已知章节名等普通段落),据此推断 section_type 与 prose 标志。子小节按名无法归类时退回 other(只影响软性被动目标)。
-
-本 SKILL.md 文本自身也遵守上述去AI规则。
-
-## ❌ 禁止动作清单(润色时绝不做)
-对现有规则的集中索引,逐条对应正文已有约束,违反任一即 strict_gate 或盲检拦截:
-- ❌ 改动数值/统计量/p值/n=N/百分比/单位/引用标记[n]/DOI/专名(基因蛋白细胞系物种),见 Red Lines
-- ❌ 升级不确定性动词(may/suggest/可能 改成 prove/demonstrate/证实),见 Polish Prompt #5
-- ❌ 凭空增加原文没有的程度词(significantly/extensively/显著 等),等同升级语气,meaning_changed 必为 false
-- ❌ 为求变化做同义替换、破坏全文术语一致,见 Polish Prompt #4
-- ❌ 裸写需排版字符(H2O 不写成 H<sub>2</sub>O、10^6 不写成 10<sup>6</sup>、基因斜体退化为正体),见 字符级排版契约
-- ❌ 润色后残留 AI 套话禁词(delve into / 值得注意的是 等)或**去AI必禁三项(装饰性破折号 —/—— 、scare quotes、解释性冒号)**,均 Anti-AI **硬拦**、命中即 exit 1;长句/-ing 拖尾为软提示(记报告不阻断),别硬删削平文风
-- ❌ 只改被点名片段而非全文逐段覆盖,本技能是纯润色,覆盖每一段
-- ❌ 未经用户确认就把该段写回 polished/,见 交互式逐段润色协议
-- ❌ 主 agent 自评 DoD 不委托独立盲检subagent,见 DoD 委托盲检(强制)
-
-## DoD 自检清单(润色收口)
-机器可读真源,`references/dod_checklist.json` 的 `polish-dod` gate。strict_gate 运行前,必须委托独立subagent盲检。
-
-通用 14 项(id: PL-G1 ~ PL-G14,其中 PL-G11 为科学内容零改动硬项、PL-G12 为软报告、PL-G13 为字符级自检硬项、PL-G14 为拉丁斜体软提醒):
-- **PL-G1 数值保留**,每段数值/统计量集合与原文一字不差。
-- **PL-G2 无语气升级**,不确定性动词未被升级。
-- **PL-G3 引用保留**,引用标记与 DOI 集合前后一致。
-- **PL-G4 去AI**,散文单元 find_ai_style_markers 的**硬拦**项(AI 套话禁词表 + 去AI必禁三项 破折号/scare quotes/解释性冒号)无残留;长句/-ing 拖尾/not only...but also/修辞问句为软提示,记报告不阻断(见 Anti-AI 规则的分级);非散文单元豁免。
-- **PL-G5 meaning 未变**,每段 meaning_changed=false,专名未动,语义层人工逐段对照。
-- **PL-G6 逐段全覆盖**,无 PLACEHOLDER 残留,无遗漏段落。
-- **PL-G7 被动语态合区间(软报告)**,各段被动比例落在 section_type 目标区间附近;区间为软目标,只报告不阻断交付。
-- **PL-G8 术语一致**,全文术语用词前后一致(人工核)。
-- **PL-G9 结构完整性**,合并稿段落顺序与小节结构与原稿一致,引用编号连续。
-- **PL-G10 缩略语首展一致(软报告)**,`abbreviation_index.json` 的 undefined_use / duplicate_definition / title_abbreviation 已列出供人工取舍;润色未破坏既有首展、未新增缩略语问题。纯润色不主动改缩略语定义,原稿固有问题只报告不阻断交付(与 revise-sci 的硬门禁 RV-G7 区分)。
-- **PL-G11 科学内容零改动(语义等价的唯一权威)**,盲检补脚本红线之外的语义盲区:润色是否仅改语言、未改科学实质(事实/机制陈述、方法描述、因果方向、限定条件与适用范围、结论确切含义均与原文等价)。任一处科学内容被实质改写或含义偏移即 fail,列出原文与润色后对应句为证。**⑥ 这是判定 meaning 未变的唯一权威**:改写方在 polished/<idx>.json 里自填 `meaning_changed=false` 只是自证、不足信;strict_gate 交付前会读独立subagent写回的 `<root>/.review_return_polish-dod.json`,要求 PL-G11 verdict==pass 且证据非空,缺独立裁决/非 pass/空证据一律 fail-closed。即"没有独立盲检 = meaning 未核 = 拦",自填 false 不能替代。
-  - ⚠️ **【P4·盲检降级告警】** 若环境派不出真正独立的subagent来做本项语义等价盲检,**绝不能同一 AI 自评自过**(自己润的自己判"意思没改坏"= 没有盲检)。必须告诉用户「本环境语义盲检不可靠,请你逐段亲自核对:改后有没有改变原意/数据/专名」,把这一核验交回用户,不得伪造盲检通过。好在 polish-sci 逐段一停让你每段都看得到改动点,本就有人肉兜底。
-- **PL-G12 常识合理性(🟡软报告,不阻断)**,盲检subagent顺带扫一遍是否有明显常识/事实硬伤(单位量级离谱、生理/机制常识错误、前后数值逻辑矛盾等)被原文带入或润色引入。**仅提示不阻断**,纯润色默认原文内容正确,本项只在发现明显硬伤时记入报告供人工判断,绝不自动改内容(与 PL-G1~G11 的核验/硬拦区分,也与 reviewer-simulator 的完整科学性审查区分)。
-- **PL-G13 润色后语法拼写与字符级格式自检(硬项)**,`python scripts/proofread_polished.py --project-root <root>` 对润色输出(polished/<idx>.json 的 polished_text)扫 misspelling / chinese_punct / subsup_bare,命中任一则 ok=false、阻断交付并列出问题供用户处理。**只报告不自动改**,脚本纯读 polished/ 并输出 proofread_report.json,绝不写回任何 json/docx/原稿(改与不改由用户决断,守"科学内容零改动"铁律)。
-- **PL-G14 拉丁短语斜体软提醒(🟡软/人工确认,不阻断)**,PL-G13 同一次 `proofread_polished.py` 运行产出的 `proofread_report.json` 里 `latin_italic_missing` 类别:润色输出中 `in vitro`/`in vivo`/`ex vivo`/`in situ`/`de novo`/`post hoc`/`per se` 等公认须斜体的拉丁短语若裸写(未被 `*...*` 斜体标记包裹)则报告。**仅提示,不阻断、不进 `--fail-on`、不扣分**,由人工确认是否补斜体(`et al.`/`e.g.`/`vs.` 等正体惯例不在词表内)。
-
-🔴 **委托盲检(强制)**,主 agent 不得自评 DoD。必须:
-1. `python scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate polish-dod --files <...> --workdir <root>`,把打印的任务包交给独立subagent(默认继承主 agent 模型/用户指定)。
-2. subagent只依据文件实际内容逐项裁决,返回 JSON 写到约定路径。
-3. `python scripts/delegate_review.py verify ... --gate polish-dod --workdir <root>`,fail-closed 校验。任一缺项/fail/证据为空 -> exit 1,不得声明完成。
-4. **① DoD 停**:盲检(尤其 PL-G11 语义等价)通过后,**不要直接 merge 交付**。先把每一项(PL-G1~PL-G14)的裁决结论逐条摆给用户看(通过/软提示/需人工确认的都列清),然后 **🛑 HALT 等用户确认**,用户点头才进 strict_gate + merge + report。这是交付前最后一道人肉闸,用户此刻仍可喊停或补要求(补要求即 LOG_CMD 记入决定日志)。
-
-🔴 **结构完整性闸口(前置)**,合并后立即核对段落数与原稿一致、无错位、引用编号连续,再进交付。
-
-通过条件,delegate_review verify 通过 + strict_gate.py exit 0 输出 `STRICT_GATE: PASS`。
 
 ## 发现 AI 改坏/偷懒了怎么办(用户自救)
 
