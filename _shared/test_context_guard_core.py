@@ -283,6 +283,27 @@ def test_nsfc_whitelist_is_exactly_three():
         assert got == ["P1", "P2", "P3_1"], got
 
 
+def test_nsfc_prefix_match_is_case_folded():
+    # listdir 前缀匹配是"自己拿名字比"，不像 is_file() 那样由 FS 解析 → 必须折叠，
+    # 否则 p1_正文.md 不进左集，该节的差集凭空消失
+    with _tmp() as d:
+        root = Path(d) / "p"
+        _wj(root / "project_state.json", {"skill": "nsfc-proposal"})
+        _w(root / "sections" / "p1_正文.MD", "正文")
+        assert core.pending_review(root, "nsfc-proposal", REG) == ["P1"]
+
+
+def test_state_file_lookup_relies_on_fs_resolution():
+    # 契约方补充项的实测闭环：大小写不敏感 FS 上 State.json 能被 state.json 查到，
+    # 项目不会对门禁隐身；敏感平台上本就没有这个问题（两种大小写是两个文件）
+    with _tmp() as d:
+        root = Path(os.path.realpath(d)) / "p"
+        _wj(root / "State.json", {"completed_sections": [], "zotero_root_key": "K"})
+        ev = core.detect(root, REG)
+        expected = "strong" if core.CASE_INSENSITIVE_FS else "none"
+        assert ev.tier == expected, (ev.tier, expected)
+
+
 def test_sci2doc_section_ids_and_manual_pass():
     with _tmp() as d:
         root = Path(d) / "p"

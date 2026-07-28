@@ -539,11 +539,15 @@ def _nsfc_left(root: Path) -> list:
     except Exception:
         return []
     out = []
+    # 前缀/后缀比对折叠大小写：这是少数几个"自己拿文件名比"的地方（不是 FS 解析），
+    # 逐字比的话 `p1_正文.md` 不进左集 → 该节的差集凭空消失 → F10 少拦一次。
+    lowered = sorted((n.lower(), n) for n in names)
     for prefix in NSFC_REVIEWED_SECTIONS:
-        for name in sorted(names):
-            if name.startswith(prefix) and name.endswith(".md") and nonempty(
+        low_prefix = prefix.lower()
+        for low, name in lowered:
+            if low.startswith(low_prefix) and low.endswith(".md") and nonempty(
                     root / "sections" / name):
-                out.append(prefix)
+                out.append(prefix)      # 记规范写法，不记文件里那个大小写
                 break
     return out
 
@@ -697,6 +701,11 @@ def is_protected_file(rel: str) -> str:
     逐字节比等于留了个"改个大小写就伪造凭证"的口子（实测可复现）。
     全平台统一小写比：Linux 上顶多多拦一个真的叫 `Structure_Signoff.json`
     的无关文件，方向安全。
+
+    附：**state 文件的存在性判定不需要同款处理**（已实测）——`(root/"state.json").is_file()`
+    是由文件系统解析的，大小写不敏感 FS 上 `State.json` 天然能被找到，项目不会
+    "对门禁隐身"。真正需要手动折叠的是**自己拿名字比对**的地方：本函数、is_managed，
+    以及 _nsfc_left 的 listdir 前缀匹配。
     """
     low = str(rel).lower()
     if low == "structure_signoff.json":
