@@ -185,7 +185,14 @@ def _judge_b_level(segment: str, cwd: Path, registry: dict):
 
 
 def run() -> None:
-    data = sys.stdin.buffer.read(STDIN_LIMIT)
+    data = sys.stdin.buffer.read(STDIN_LIMIT + 1)
+    if len(data) > STDIN_LIMIT:
+        # 超大 stdin：截断后 JSON 必然解析失败 → 这条命令**根本没被检查过**。
+        # 静默 return 与"这条命令没问题"长得一样，至少留一笔。
+        core.audit_append(None, event="PreToolUse", tool="Bash",
+                          rule="stdin-truncated", decision="unchecked",
+                          detail="stdin 超过 %d 字节" % STDIN_LIMIT)
+        return
     try:
         payload = json.loads(data.decode("utf-8", "replace"))
     except Exception:
