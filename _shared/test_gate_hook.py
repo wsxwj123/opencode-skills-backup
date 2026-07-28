@@ -129,6 +129,142 @@ def test_shared_state_file_disambiguation():
         assert out_r == "", "units/ 不是 nsfc 的受管产物 → 放行"
 
 
+# ---------------------------------------------------------------- Codex 形态
+# Codex 的 tool_input 里没有 file_path，改文件的信息全在 apply_patch 补丁文本里；
+# tool_name 恒为 "apply_patch"。历史上直读 file_path 的版本在这里恒取 None →
+# 静默放行（门禁形同虚设却不报错），下面几条把这个失效形态钉住。
+
+def _patch(*paths: str, verb: str = "Add") -> str:
+    body = "".join("*** %s File: %s\n+x\n" % (verb, p) for p in paths)
+    return "*** Begin Patch\n" + body + "*** End Patch\n"
+
+
+def _weak_project(tmp: Path) -> Path:
+    """撞名 state 文件、内容不像学术项目 → F8 weak 档（Claude Code 上是 ask）。"""
+    root = tmp / "weak"
+    (root / "sections").mkdir(parents=True)
+    (root / "project_state.json").write_text("{}", encoding="utf-8")
+    return root
+
+
+def test_codex_apply_patch_blocks_unsigned():
+    with tempfile.TemporaryDirectory() as d:
+        root = _fake_project(Path(d), signed=False)
+        out, rc = _run_hook({"tool_name": "apply_patch", "cwd": str(root),
+                             "tool_input": {"command": _patch("manuscripts/03_3.2_T.md")}})
+        assert rc == 0 and out, "Codex 形态未签字必须拦下（不能因为没有 file_path 就放行）"
+        assert json.loads(out)["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+def test_codex_apply_patch_allows_signed():
+    with tempfile.TemporaryDirectory() as d:
+        root = _fake_project(Path(d), signed=True)
+        out, _ = _run_hook({"tool_name": "apply_patch", "cwd": str(root),
+                            "tool_input": {"command": _patch("manuscripts/03_3.2_T.md")}})
+        assert out == "", "已签字应放行"
+
+
+def test_codex_multifile_patch_checks_every_file():
+    """一段 patch 同时改无辜文件和受管正文 → 不得因为第一个无辜就放行。"""
+    with tempfile.TemporaryDirectory() as d:
+        root = _fake_project(Path(d), signed=False)
+        (root / "notes").mkdir()
+        cmd = ("*** Begin Patch\n*** Update File: notes/innocent.txt\n@@\n-a\n+b\n"
+               "*** Add File: manuscripts/03_3.2_T.md\n+正文\n*** End Patch\n")
+        out, _ = _run_hook({"tool_name": "apply_patch", "cwd": str(root),
+                            "tool_input": {"command": cmd}})
+        assert out and json.loads(out)["hookSpecificOutput"]["permissionDecision"] == "deny", \
+            "多文件 patch 里任一命中即应拦"
+
+
+def test_codex_folds_ask_into_allow_with_audit():
+    """Codex 不支持 ask（官方：parsed but not supported → 标记失败并继续执行工具）。
+    弱档 = "只是撞了通用目录名的陌生项目"，真项目走强档、在 Codex 上照拦；硬拦弱档
+    保护力不增而误伤巨大（那端没有"允许一次"）→ 折成放行，但必须留审计（不静默）。"""
+    with tempfile.TemporaryDirectory() as d:
+        root = _weak_project(Path(d))
+        data = Path(d) / "plugindata"      # 弱档 + 非受保护目标 → 审计落 PLUGIN_DATA
+        data.mkdir()
+        out, rc = _run_hook({"tool_name": "apply_patch", "cwd": str(root),
+                             "tool_input": {"command": _patch("sections/P1.md")}},
+                            env=_hook_env({"CLAUDE_PLUGIN_DATA": str(data)}))
+        assert rc == 0 and out == "", "Codex 弱档必须放行（无决策输出）"
+        assert not (root / ".academic_gate_audit.jsonl").exists(), \
+            "陌生项目目录里一个字节都不许落"
+        lines = (data / "academic_gate_audit.jsonl").read_text(encoding="utf-8").strip().split("\n")
+        rec = json.loads(lines[-1])
+        assert rec["rule"] == "F8-weak-ask" and rec["decision"] == "allow", \
+            f"放行必须留痕且 rule 不改名（NO_ROOT_RULES 白名单），实际 {rec}"
+
+
+def test_codex_weak_and_strong_in_one_patch():
+    """同一段 patch 里弱档放行的文件不得吃掉后面强档该拦的文件（折 allow 用的是
+    continue 不是 return）。"""
+    with tempfile.TemporaryDirectory() as d:
+        weak = _weak_project(Path(d))
+        strong = _fake_project(Path(d), signed=False)
+        cmd = ("*** Begin Patch\n"
+               "*** Add File: %s\n+x\n" % (weak / "sections" / "P1.md") +
+               "*** Add File: %s\n+x\n" % (strong / "manuscripts" / "03_3.2_T.md") +
+               "*** End Patch\n")
+        out, _ = _run_hook({"tool_name": "apply_patch", "cwd": str(d),
+                            "tool_input": {"command": cmd}})
+        assert out and json.loads(out)["hookSpecificOutput"]["permissionDecision"] == "deny", \
+            "弱档放行后必须继续判后面的文件"
+
+
+def test_claude_code_ask_unchanged():
+    """现役 Claude Code 行为零回归的守卫：同一个弱证据项目，Write+file_path 仍是 ask。"""
+    with tempfile.TemporaryDirectory() as d:
+        root = _weak_project(Path(d))
+        out, _ = _run_hook({"tool_name": "Write",
+                            "tool_input": {"file_path": str(root / "sections" / "P1.md")}})
+        obj = json.loads(out)["hookSpecificOutput"]
+        assert obj["permissionDecision"] == "ask", "Claude Code 侧必须仍是 ask"
+        assert "Codex" not in obj["permissionDecisionReason"]
+
+
+def test_codex_malformed_payloads_are_clean():
+    """畸形输入：截断补丁 / 空 command / 非字符串 command / 越界 `..` 路径。
+    一律 exit 0、不崩栈；越界路径按它 realpath 后真正所在位置判（落在项目外→放行）。"""
+    with tempfile.TemporaryDirectory() as d:
+        root = _fake_project(Path(d), signed=False)
+        sub = root / "manuscripts"
+        for name, payload in [
+            ("截断", {"tool_name": "apply_patch", "cwd": str(root),
+                      "tool_input": {"command": "*** Begin Patch\n*** Update File: manuscr"}}),
+            ("空", {"tool_name": "apply_patch", "cwd": str(root),
+                    "tool_input": {"command": ""}}),
+            ("非串", {"tool_name": "apply_patch", "cwd": str(root),
+                      "tool_input": {"command": 123}}),
+            ("越界", {"tool_name": "apply_patch", "cwd": str(sub),
+                      "tool_input": {"command": _patch("../../../outside.md")}}),
+            ("无cwd相对路径", {"tool_name": "apply_patch",
+                               "tool_input": {"command": _patch("manuscripts/03_3.2_T.md")}}),
+        ]:
+            out, rc = _run_hook(payload)
+            assert rc == 0, f"{name}：hook 恒 exit 0"
+            assert out == "", f"{name}：判不出目标不得输出决策"
+        # `..` 绕回项目内仍要拦：realpath 之后它就是受管正文，别被绕过去
+        out, _ = _run_hook({"tool_name": "apply_patch", "cwd": str(sub),
+                            "tool_input": {"command": _patch("../manuscripts/03_3.2_T.md")}})
+        assert out and json.loads(out)["hookSpecificOutput"]["permissionDecision"] == "deny", \
+            "`..` 绕回受管目录必须照拦"
+
+
+def test_codex_plugin_manifest_matches_claude():
+    """Codex 读 .codex-plugin/plugin.json（.claude-plugin 只对市场目录 legacy 兼容）。
+    两份逐字节一致，避免版本号漂移。"""
+    gate = SHARED.parent / "academic-gate"
+    a = gate / ".claude-plugin" / "plugin.json"
+    b = gate / ".codex-plugin" / "plugin.json"
+    if not a.is_file():
+        return                       # 单技能分发场景没有插件目录，跳过
+    assert b.is_file(), "缺 .codex-plugin/plugin.json，Codex 装不上插件钩子"
+    assert a.read_bytes() == b.read_bytes(), "两份插件清单必须逐字节一致"
+    assert json.loads(b.read_text(encoding="utf-8"))["hooks"] == "./hooks/hooks.json"
+
+
 def test_signoff_gate_check_lifecycle():
     with tempfile.TemporaryDirectory() as d:
         root = Path(d)
