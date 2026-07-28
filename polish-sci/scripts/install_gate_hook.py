@@ -11,6 +11,11 @@ scripts/(与 _shared/ 真源同一份代码),运行时做两件事:
 这样 settings.json 永远只指稳定位置,删任何技能目录都不会产生悬空 entry;
 钩子文件若丢失,下次任一技能 preflight 会从自带副本重新部署(自愈)。
 
+动手前先确认这台机器真在用 Claude Code(见 _claude_code_evidence):这些技能同时被镜像到
+~/.codex/skills 与 ~/.config/opencode/skills,而那两个运行端从不读 ~/.claude/settings.json。
+探测不到任何 Claude Code 痕迹就干净跳过,不去凭空创建 ~/.claude/ 塞一堆没人读的文件。
+判据只认"我们造不出来的证据",且宁可误判成"装了"——多写一次垃圾可以,关掉真用户的门禁不行。
+
 安全三重保险不变:改 settings.json 前备份(.bak-gatehook)、写前写后 JSON 校验、
 失败即从备份回滚。部署四件套按 signoff→hook→installer→registry 顺序复制,
 registry(hook 的开关+版本提交点)最后落盘:中途被杀只造成暂时 fail-open 放行,
@@ -72,6 +77,53 @@ def _plugin_present() -> bool:
 
 def _settings_path() -> Path:
     return Path.home() / ".claude" / "settings.json"
+
+
+# Claude Code 自己注入的运行时变量(本安装器/技能从不设置它们)
+CLAUDE_ENV_VARS = ("CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_PROJECT_DIR",
+                   "CLAUDE_PLUGIN_ROOT", "CLAUDE_CODE_SSE_PORT")
+# ~/.claude/ 下由本安装器亲手造的东西 —— 它们绝不能当证据,否则跑过一次判据就永远为真
+OUR_ARTIFACTS = {"academic-gate", "settings.json", "settings.json.bak-gatehook"}
+
+
+def _settings_is_foreign(p: Path) -> bool:
+    """settings.json 里存在不是本安装器写的内容 → 有人真配过 Claude Code。
+    先按 remove 语义摘掉我们自己的 hook entry 再看还剩什么:只剩空壳 = 全是我们造的,不算证据。"""
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        return p.is_file()  # 存在却读不出/非 JSON:肯定不是我们写的(我们写前写后都校验)
+    if not isinstance(data, dict):
+        return True
+    _reconcile_entries(data, remove=True)
+    hooks = data.get("hooks")
+    if isinstance(hooks, dict) and not any(hooks.values()):
+        data.pop("hooks", None)
+    return bool(data)
+
+
+def _claude_code_evidence() -> str | None:
+    """这台机器在用 Claude Code 的证据(人话字符串),一条都找不到才返回 None。
+    刻意宽松:任一条成立就照常安装。误判成"没装"会把真用户的门禁关掉,是最坏的失败方向;
+    误判成"装了"只是多写一次没人读的文件。所有判据都不认本安装器自己的产物(见 OUR_ARTIFACTS)。"""
+    for name in CLAUDE_ENV_VARS:
+        if os.environ.get(name):
+            return f"环境变量 {name}"
+    if shutil.which("claude"):
+        return "PATH 上有 claude 命令"
+    home = Path.home()
+    if (home / ".claude.json").is_file():
+        return "~/.claude.json(Claude Code 主配置)"
+    root = home / ".claude"
+    try:
+        for child in root.iterdir():
+            if child.name not in OUR_ARTIFACTS:
+                return f"~/.claude/{child.name}"
+    except OSError:
+        return None  # 目录不存在/读不了 = 没痕迹
+    if _settings_is_foreign(root / "settings.json"):
+        return "~/.claude/settings.json 里有用户自己的配置"
+    return None
 
 
 def _interpreter() -> str:
@@ -270,6 +322,21 @@ def main() -> None:
                 result.update(status="degraded", action="plugin", message=(
                     "已装 academic-gate 插件；但清理旧的自装 hook 条目失败：" + action +
                     "。功能不受影响（可能被拦两次，噪音而已）。"))
+            print(json.dumps(result, ensure_ascii=False))
+            sys.exit(0)
+
+        # 插件分支之后、_deploy 之前:_deploy 是第一个会凭空 mkdir ~/.claude/ 的动作,
+        # 必须赶在它前面;又不能抢在插件分支前——插件在场时让位的逻辑优先级不变
+        # (且插件目录本身就在 ~/.claude/skills/ 下,必然是 Claude Code 在用,不会互相打架)。
+        if _claude_code_evidence() is None:
+            result.update(status="degraded", action="skipped-no-claude-code", message=(
+                "没在这台机器上找到任何 Claude Code 的痕迹（没有 CLAUDECODE 等运行时变量、"
+                "PATH 上没有 claude 命令、~/.claude/ 下也没有非本安装器生成的文件），"
+                "已跳过门禁安装——hook 配置只有 Claude Code 会读，硬装只会在你不用的目录里"
+                "留一堆垃圾。⚠️ 这意味着在本机（如 codex / opencode 运行端）物理拦截【不生效】："
+                "请当作未受保护，按开场监工卡逐项人工盯防，别指望门禁会自动拦。"
+                "若你其实在用 Claude Code 却看到这条，说明本次没探测到它——"
+                "在 Claude Code 里跑一次本技能即可自动安装。"))
             print(json.dumps(result, ensure_ascii=False))
             sys.exit(0)
 
