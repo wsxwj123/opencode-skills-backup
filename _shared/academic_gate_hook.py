@@ -25,6 +25,8 @@ apply_patch）时，按下面的顺序决策：
 - 三端共用：路径归一化在 core 的 extract_file_paths()（Codex 的 tool_input 里
   没有 file_path，改文件的信息全在 apply_patch 补丁文本里）；解析不出路径时
   **不走静默路径**，留审计 rule="path-parse-failed"。
+- Codex 上 ask 折成 deny（见 _is_codex）：那端"parsed but not supported yet"，
+  ask 会被判为钩子失败并**继续执行工具** = 静默放行。Claude Code 侧 ask 不变。
 
 stdin: PreToolUse 事件 JSON。stdout: 命中时一个决策 JSON，放行时完全为空。
 """
@@ -67,15 +69,25 @@ REASON_F6_CERT = (
     "产生。直接写这个文件等于自己给自己发合格证，已拦下。正确做法：跑 delegate_review.py "
     "pack → 派独立子代理盲检 → delegate_review.py verify --return <返回json>。"
 )
+# 提问那半句单列：Codex 上 ask 会被折成 deny，那时"选否则本次照常写入"是句假话，
+# 折的时候按这个常量原样剪掉（剪的是我们自己的字符串，不做模糊匹配）。
+REASON_F8_ASK_TAIL = (
+    "是否按学术写作项目对这次写入执行流程门禁？选\"否\"则本次照常写入。"
+)
 REASON_F8_ASK = (
     "[academic-gate 插件] 这个目录里有 {marker}，名字与学术写作技能的项目标记相同，"
-    "但文件内容不像学术写作项目（缺 {missing}）。是否按学术写作项目对这次写入执行流程门禁？"
-    "选\"否\"则本次照常写入。"
+    "但文件内容不像学术写作项目（缺 {missing}）。" + REASON_F8_ASK_TAIL
 )
 REASON_F10 = (
     "[学术门禁] 本项目有已声明完成但没有盲检标记的节：{sections}。新正文文件的写入已拦下。"
     "本项目的盲检命令形态是 {cmd}。补齐这些节的盲检标记后即可继续。"
     "（已存在文件的修改不受此拦截影响。）"
+)
+REASON_CODEX_ASK_FOLD = (
+    "（当前运行端是 Codex：它把 permissionDecision:\"ask\" 当作不支持的字段——"
+    "标记这次钩子失败、报错、然后照常执行工具，即\"问一句\"在这里等于静默放行。"
+    "宁可误拦也不静默放行，故本次按拦截处理。确属误伤：让用户在 Codex 里 /hooks "
+    "临时停用 academic-gate，或把项目标记补成真正的学术写作项目状态文件。）"
 )
 NOTICE_PARSE_FAILED = (
     "[academic-gate v{ver}] 本次工具调用的目标文件路径未能解析（tool_name={tool}），"
@@ -295,6 +307,22 @@ def _handle_parse_failure(payload: dict, tool_name: str) -> None:
             core.push_notice(key, NOTICE_PARSE_FAILED_LATER.format(tool=tool_name))
 
 
+def _is_codex(payload: dict) -> bool:
+    """这一次调用是不是 Codex 发来的。**只认一个信号**：tool_name == "apply_patch"。
+
+    依据（Codex 官方 hooks 文档）：matcher 可以写 apply_patch/Edit/Write 三种别名，
+    但**钩子输入里的 tool_name 恒为 "apply_patch"**。Claude Code 侧不存在这个工具名，
+    且我们 hooks.json 的 matcher 是 Write|Edit|MultiEdit|NotebookEdit，Claude Code 上
+    根本不会有 tool_name="apply_patch" 的调用抵达本脚本 → 这个信号不会误伤现役行为。
+
+    没用"file_path 缺失"当信号：那和"字段恰好为空"分不清。也没用环境变量——Codex 给
+    插件钩子设 PLUGIN_ROOT/PLUGIN_DATA（Claude Code 只设 CLAUDE_PLUGIN_ROOT），可以当
+    备用信号，但它只在"以插件形式安装"时存在，而那时 tool_name 已经够用了，白加一条
+    误判面。若哪天 Codex 改了 tool_name，PLUGIN_ROOT 是现成的补充信号。
+    """
+    return payload.get("tool_name") == "apply_patch"
+
+
 def main() -> None:
     try:
         payload = json.load(sys.stdin)
@@ -326,6 +354,12 @@ def main() -> None:
         if verdict is None:
             continue
         decision, reason, root, rule, skill, target, detail = verdict
+        if decision == "ask" and _is_codex(payload):
+            # Codex 不支持 ask → 在那端 ask 会退化成放行，只能折成 deny。
+            # rule 保持 "F8-weak-ask" 不变：它在 core.NO_ROOT_RULES 白名单里，改名会让
+            # "撞名陌生项目"这一档的审计（root=None，只能落 CLAUDE_PLUGIN_DATA）被静默丢弃。
+            reason = reason.replace(REASON_F8_ASK_TAIL, "") + REASON_CODEX_ASK_FOLD
+            decision = "deny"
         _emit(decision, reason)           # 先出决策，再写审计：审计失败不得影响决策
         core.audit_append(root, event="PreToolUse", tool=tool_name or "Write",
                           rule=rule, decision=decision, skill=skill,
