@@ -36,14 +36,20 @@ SIGNOFF = SHARED / "structure_signoff_gate.py"
 
 
 def _fake_project(tmp: Path, signed: bool) -> Path:
-    """造一个 general-sci-writing 假项目：state 文件声明 skill；signed 决定是否
-    已落结构签字。registry 现在跑共享的 structure_signoff check(粗粒度)，
-    签字缺失→拦，存在→放行。managed_globs 命中 manuscripts/*.md。"""
+    """造一个 general-sci-writing 假项目；signed 决定是否已落结构签字。
+    registry 跑共享的 structure_signoff check(粗粒度)，签字缺失→拦，存在→放行。
+    managed_globs 命中 manuscripts/*.md。
+
+    2026-07-28：hook 改成先做 F8 证据分档，**光有同名 state 文件不再算学术项目**
+    （否则陌生人目录里一个 writing_progress.json 就被当学术项目拦）。gsw 的强证据
+    签名是 update_history 为 list（或 storyline.json 的 sections 每项含 id），
+    故夹具补上 update_history —— 这是真实 gsw 项目本来就有的字段，原来的
+    {"skill":...} 反倒是真实 gsw 状态文件里不存在的写法。"""
     root = tmp / "proj"
     (root / "scripts").mkdir(parents=True)
     (root / "manuscripts").mkdir()
     (root / "writing_progress.json").write_text(
-        json.dumps({"skill": "general-sci-writing", "phase": 8}), encoding="utf-8")
+        json.dumps({"phase": 8, "update_history": []}), encoding="utf-8")
     if signed:
         subprocess.run([PY, str(SIGNOFF), "confirm", "--root", str(root),
                         "--note", "test"], capture_output=True, text=True)
@@ -99,14 +105,19 @@ def test_dispatcher_failopen_on_bad_stdin():
 
 
 def test_shared_state_file_disambiguation():
-    """project_state.json 被 nsfc/sci2doc/revise/response 共用 → 靠被写文件命中谁的
-    managed_globs 定技能。sections/*.md→nsfc(signoff→未签拦)；units/*.json→
-    reviewer-response(无signoff→放行)。同一个项目根、同一个 state 文件，两种产物走两个技能。"""
+    """project_state.json 被 nsfc/sci2doc/revise/response 共用 → `skill` 字段定这是
+    哪一家（F8 证据分档），managed_globs 再定"这次写的是不是它的受管产物"。
+    sections/*.md→nsfc 的产物(signoff→未签拦)；units/*.json→不是 nsfc 的产物→放行。
+
+    2026-07-28：原夹具写的是空 `{}`，在新的三档判定下只到 weak（"撞了名字但内容
+    不像"），最多 ask 不 deny——那正是"不误伤陌生人"要的行为。要测拦截就得给一个
+    真的 nsfc 项目。"""
     with tempfile.TemporaryDirectory() as d:
         root = Path(d) / "proj"
         (root / "sections").mkdir(parents=True)
         (root / "units").mkdir()
-        (root / "project_state.json").write_text("{}", encoding="utf-8")
+        (root / "project_state.json").write_text(
+            json.dumps({"skill": "nsfc-proposal"}), encoding="utf-8")
         # sections/*.md → nsfc(signoff) 未签字 → 拦
         out_n, _ = _run_hook({"tool_name": "Write",
                               "tool_input": {"file_path": str(root / "sections" / "P1.md")}})
@@ -115,7 +126,7 @@ def test_shared_state_file_disambiguation():
         # units/*.json → reviewer-response(无signoff) → 放行
         out_r, _ = _run_hook({"tool_name": "Write",
                               "tool_input": {"file_path": str(root / "units" / "001.json")}})
-        assert out_r == "", "units/ 应被判为 reviewer-response(无signoff)并放行"
+        assert out_r == "", "units/ 不是 nsfc 的受管产物 → 放行"
 
 
 def test_signoff_gate_check_lifecycle():
@@ -155,8 +166,10 @@ def test_heartbeat_written_on_evaluation():
             hb.unlink()
 
 
+# 与 install_gate_hook.BUNDLE 同步：2026-07-28 起多一件 context_guard_core.py
+# （hook 的 import 依赖，不一起部署 legacy 装法的拦层就一 import 即炸）。
 BUNDLE = ("structure_signoff_gate.py", "academic_gate_hook.py",
-          "install_gate_hook.py", "gate_registry.json")
+          "install_gate_hook.py", "context_guard_core.py", "gate_registry.json")
 
 
 def _run_installer(home: Path, installer: Path | None = None,

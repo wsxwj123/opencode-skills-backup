@@ -39,6 +39,10 @@ BUNDLE = (
     "structure_signoff_gate.py",
     "academic_gate_hook.py",
     "install_gate_hook.py",
+    # 2026-07-28 起 academic_gate_hook.py 的判定全走 context_guard_core.py(三个钩子
+    # 共用的唯一判定实现)。不一起部署的话,legacy 装法的 hook 一 import 就炸 → 拦层
+    # 静默失效。这是"legacy 装法仍保留拦层"这条设计意图的必要条件。
+    "context_guard_core.py",
     "gate_registry.json",
 )
 
