@@ -50,6 +50,13 @@ MANIFEST: dict[str, list[str]] = {
     "academic_gate_hook.py": ALL8 + ["academic-gate"],
     "install_gate_hook.py": ALL8,
     "gate_registry.json": ALL8 + ["academic-gate"],
+    # context-guard 判定库:三个钩子(喂/拦/Bash)唯一共用的判定实现,也是
+    # academic_gate_hook.py 的 import 依赖 → 后者铺到哪它就必须铺到哪(含 legacy
+    # 装法的部署源,见 install_gate_hook.BUNDLE),否则拦层一 import 就炸。
+    "context_guard_core.py": ALL8 + ["academic-gate"],
+    # 喂层与 Bash 守卫只由插件执行(legacy settings.json 装法不挂它们),故单成员分区。
+    "context_feed_hook.py": ["academic-gate"],
+    "bash_guard_hook.py": ["academic-gate"],
     # 既有 vendored,纳管防漂
     # 2026-07-28 补：这三个此前**三道守卫全无**（MANIFEST/L4/CI 都没有），
     # 改了漂了不会有人发现。实测各家 md5 全一致，登记只冻结现状、不改行为。
