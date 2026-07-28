@@ -130,10 +130,16 @@ def _hits_protected_write(segment: str) -> bool:
     `cp a .review_pass/x.json`、`tee structure_signoff.json`、`sed -i ... x.json`）
     受保护目标一律在动作词后面，不受影响。
     """
-    actions = [m.end() for m in _WRITE_ACTION_RE.finditer(segment)]
-    if not actions:
+    matches = list(_WRITE_ACTION_RE.finditer(segment))
+    if not matches:
         return False
-    first_action = min(actions)
+    # cp 的源位是只读的：`cp .review_pass/a.json /tmp/bak.json` 是备份，不是绕写。
+    # 段内唯一的动作词是 cp 时，只有受保护目标落在**最后一个参数**（目的位）才算命中。
+    # mv 不放宽：源是受保护文件时，移走 == 把凭证删掉，同样是破坏。
+    if all(m.group(0).strip() == "cp" for m in matches):
+        tail = segment.split()[-1] if segment.split() else ""
+        return bool(_PROTECTED_RE.search(tail))
+    first_action = min(m.end() for m in matches)
     return any(m.start() >= first_action for m in _PROTECTED_RE.finditer(segment))
 
 
