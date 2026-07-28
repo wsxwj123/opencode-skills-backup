@@ -121,6 +121,22 @@ def _tokens(segment: str) -> list:
     return out
 
 
+def _hits_protected_write(segment: str) -> bool:
+    """F9-A：段内既有写入动作词、又有受保护目标，**且目标出现在动作词之后**。
+
+    加"之后"这个位置条件是为了掐掉 R5 点名的误伤：
+    `grep -r structure_signoff.json . > out.txt` —— 提到了受保护文件名，但它是被
+    搜索的对象，真正被写的是 out.txt。真正的绕写形态（`> .review_pass/x.json`、
+    `cp a .review_pass/x.json`、`tee structure_signoff.json`、`sed -i ... x.json`）
+    受保护目标一律在动作词后面，不受影响。
+    """
+    actions = [m.end() for m in _WRITE_ACTION_RE.finditer(segment)]
+    if not actions:
+        return False
+    first_action = min(actions)
+    return any(m.start() >= first_action for m in _PROTECTED_RE.finditer(segment))
+
+
 def _audit_root(cwd) -> Path | None:
     """审计落点：cwd 能认出项目根才写；陌生目录一律不写（不在别人目录里造文件）。"""
     if cwd is None:
@@ -189,7 +205,7 @@ def run() -> None:
                               target="structure_signoff.json", detail="AI 代跑 confirm")
             return
     for seg in segments:
-        if _WRITE_ACTION_RE.search(seg) and _PROTECTED_RE.search(seg):
+        if _hits_protected_write(seg):
             _emit_deny(REASON_F9A)
             core.audit_append(_audit_root(cwd), event="PreToolUse", tool="Bash",
                               rule="F9A-protected-write", decision="deny",

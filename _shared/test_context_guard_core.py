@@ -399,6 +399,29 @@ def test_explain_fixed_keys_and_exit_codes():
         assert core.explain(str(f))[1]["root"] == str(root)
 
 
+# ───────────────────────────────── Bash 守卫的分段与位置判据
+
+def test_bash_segment_and_protected_write_position():
+    import bash_guard_hook as bg
+    assert bg._segments("a && b; c | d\ne") == ["a ", " b", " c ", " d", "e"]
+    deny = ["echo x > .review_pass/3.3.json",
+            "echo x >> structure_signoff.json",
+            "cp /tmp/f.json .review_pass/3.3.json",
+            "mv /tmp/x.json structure_signoff.json",
+            "sed -i '' 's/false/true/' .review_pass/3.3.json",
+            "python3 -c \"open('structure_signoff.json','w').write('{}')\"",
+            " tee structure_signoff.json"]
+    for cmd in deny:
+        assert bg._hits_protected_write(cmd), cmd
+    allow = ["cat .review_pass/3.3.json",
+             "python3 check.py < structure_signoff.json",
+             # R5 点名的误伤：提到文件名但写的是别处
+             "grep -rn structure_signoff.json . > out.txt",
+             "python3 gen.py > out.txt"]
+    for cmd in allow:
+        assert not bg._hits_protected_write(cmd), cmd
+
+
 def test_explain_cli_usage_errors_write_stderr_only():
     assert core.main(["explain"]) == 2
     assert core.main([]) == 2
