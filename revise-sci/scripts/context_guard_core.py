@@ -855,12 +855,44 @@ def audit_append(root, event="", tool="", rule="", decision="", skill="",
 
 # ------------------------------------------------------------------ 待报状态（S8 分支 B）
 
+def _atomic_write(path: Path, text: str) -> None:
+    """覆盖写一律"临时文件 + os.replace"：这三个状态文件（心跳/去重/待报）会被
+    并发的钩子进程同时写，直接 write_text 中途被打断就留下半截内容，下次读到的是
+    垃圾。os.replace 在同一文件系统上是原子的。写失败一律吞——它们都是省事用的，
+    不是正确性。"""
+    tmp = None
+    try:
+        tmp = path.with_name(path.name + ".tmp%d" % os.getpid())
+        tmp.write_text(text, encoding="utf-8")
+        os.replace(str(tmp), str(path))
+    except Exception:
+        try:
+            if tmp is not None and tmp.exists():
+                tmp.unlink()
+        except Exception:
+            pass
+
+
+def _digest(text: str) -> str:
+    """只拿来当文件名的短哈希，不是安全用途。usedforsecurity=False：FIPS 模式的
+    Python 里 md5 默认不可用、直接抛，喂层就整个哑了。"""
+    try:
+        return hashlib.md5(text.encode("utf-8", "replace"),
+                           usedforsecurity=False).hexdigest()
+    except TypeError:      # Python < 3.9 没这个关键字
+        return hashlib.md5(text.encode("utf-8", "replace")).hexdigest()
+
+
 def _notice_path(key: str):
-    data = plugin_data_dir()
-    if data is None or not key:
+    # 整个包 try：plugin_data_dir 会 mkdir、_digest 会编码，都可能抛；
+    # 待报状态存不下是可接受的降级，绝不能因此把钩子掀翻。
+    try:
+        data = plugin_data_dir()
+        if data is None or not key:
+            return None
+        return data / ("pending_notice_%s.txt" % _digest(str(key)))
+    except Exception:
         return None
-    digest = hashlib.md5(str(key).encode("utf-8", "replace")).hexdigest()
-    return data / ("pending_notice_%s.txt" % digest)
 
 
 def push_notice(key: str, text: str) -> None:
@@ -868,10 +900,7 @@ def push_notice(key: str, text: str) -> None:
     p = _notice_path(key)
     if p is None:
         return
-    try:
-        p.write_text(text, encoding="utf-8")
-    except Exception:
-        pass
+    _atomic_write(p, text)
 
 
 def pop_notice(key: str) -> str:
@@ -897,18 +926,15 @@ def card_is_duplicate(root_key: str, text: str) -> bool:
     data = plugin_data_dir()
     if data is None or not root_key:
         return False
-    digest = hashlib.md5(str(root_key).encode("utf-8", "replace")).hexdigest()
+    digest = _digest(str(root_key))
     path = data / ("last_card_%s.txt" % digest)
-    now = hashlib.md5(text.encode("utf-8", "replace")).hexdigest()
+    now = _digest(text)
     try:
         if path.is_file() and path.read_text(encoding="utf-8").strip() == now:
             return True
     except Exception:
         pass
-    try:
-        path.write_text(now, encoding="utf-8")
-    except Exception:
-        pass
+    _atomic_write(path, now)
     return False
 
 
