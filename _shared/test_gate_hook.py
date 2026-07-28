@@ -139,6 +139,14 @@ def _patch(*paths: str, verb: str = "Add") -> str:
     return "*** Begin Patch\n" + body + "*** End Patch\n"
 
 
+def _weak_project(tmp: Path) -> Path:
+    """撞名 state 文件、内容不像学术项目 → F8 weak 档（Claude Code 上是 ask）。"""
+    root = tmp / "weak"
+    (root / "sections").mkdir(parents=True)
+    (root / "project_state.json").write_text("{}", encoding="utf-8")
+    return root
+
+
 def test_codex_apply_patch_blocks_unsigned():
     with tempfile.TemporaryDirectory() as d:
         root = _fake_project(Path(d), signed=False)
@@ -169,6 +177,30 @@ def test_codex_multifile_patch_checks_every_file():
             "多文件 patch 里任一命中即应拦"
 
 
+def test_codex_folds_ask_into_deny():
+    """Codex 不支持 ask（官方：parsed but not supported → 标记失败并继续执行工具），
+    在那端 ask == 静默放行 → 必须折成 deny。"""
+    with tempfile.TemporaryDirectory() as d:
+        root = _weak_project(Path(d))
+        out, _ = _run_hook({"tool_name": "apply_patch", "cwd": str(root),
+                            "tool_input": {"command": _patch("sections/P1.md")}})
+        assert out, "弱证据 + 受管产物应有决策输出"
+        obj = json.loads(out)["hookSpecificOutput"]
+        assert obj["permissionDecision"] == "deny", "Codex 上 ask 必须折成 deny"
+        assert "Codex" in obj["permissionDecisionReason"], "理由要讲清为什么不是问一句"
+
+
+def test_claude_code_ask_unchanged():
+    """现役 Claude Code 行为零回归的守卫：同一个弱证据项目，Write+file_path 仍是 ask。"""
+    with tempfile.TemporaryDirectory() as d:
+        root = _weak_project(Path(d))
+        out, _ = _run_hook({"tool_name": "Write",
+                            "tool_input": {"file_path": str(root / "sections" / "P1.md")}})
+        obj = json.loads(out)["hookSpecificOutput"]
+        assert obj["permissionDecision"] == "ask", "Claude Code 侧必须仍是 ask"
+        assert "Codex" not in obj["permissionDecisionReason"]
+
+
 def test_codex_malformed_payloads_are_clean():
     """畸形输入：截断补丁 / 空 command / 非字符串 command / 越界 `..` 路径。
     一律 exit 0、不崩栈；越界路径按它 realpath 后真正所在位置判（落在项目外→放行）。"""
@@ -195,6 +227,19 @@ def test_codex_malformed_payloads_are_clean():
                             "tool_input": {"command": _patch("../manuscripts/03_3.2_T.md")}})
         assert out and json.loads(out)["hookSpecificOutput"]["permissionDecision"] == "deny", \
             "`..` 绕回受管目录必须照拦"
+
+
+def test_codex_plugin_manifest_matches_claude():
+    """Codex 读 .codex-plugin/plugin.json（.claude-plugin 只对市场目录 legacy 兼容）。
+    两份逐字节一致，避免版本号漂移。"""
+    gate = SHARED.parent / "academic-gate"
+    a = gate / ".claude-plugin" / "plugin.json"
+    b = gate / ".codex-plugin" / "plugin.json"
+    if not a.is_file():
+        return                       # 单技能分发场景没有插件目录，跳过
+    assert b.is_file(), "缺 .codex-plugin/plugin.json，Codex 装不上插件钩子"
+    assert a.read_bytes() == b.read_bytes(), "两份插件清单必须逐字节一致"
+    assert json.loads(b.read_text(encoding="utf-8"))["hooks"] == "./hooks/hooks.json"
 
 
 def test_signoff_gate_check_lifecycle():
