@@ -41,13 +41,15 @@ MANIFEST: dict[str, list[str]] = {
         "review-writing", "revise-sci", "reviewer-response-sci",
     ],
     # 结构签字:Phase A 时仅 4 家 confirm 侧;Phase B 起它是门禁四件套部署源成员,
-    # 8 家全铺(installer 从自身同目录取四件套部署到 ~/.claude/academic-gate/)
-    "structure_signoff_gate.py": ALL8,
+    # 8 家全铺(installer 从自身同目录取四件套部署到 ~/.claude/academic-gate/)。
+    # 2026-07-28 起 academic-gate 插件目录也是消费方(@skills-dir 插件,钩子由
+    # Claude Code 启动时自动加载,不依赖 AI 自觉);它不带 install_gate_hook.py。
+    "structure_signoff_gate.py": ALL8 + ["academic-gate"],
     # 门禁四件套其余三件(Phase B):每技能自带安装能力,装出全局唯一钩子。
     # 心跳 hook_heartbeat.json 是运行时产物,绝不入 MANIFEST。
-    "academic_gate_hook.py": ALL8,
+    "academic_gate_hook.py": ALL8 + ["academic-gate"],
     "install_gate_hook.py": ALL8,
-    "gate_registry.json": ALL8,
+    "gate_registry.json": ALL8 + ["academic-gate"],
     # 既有 vendored,纳管防漂
     # 2026-07-28 补：这三个此前**三道守卫全无**（MANIFEST/L4/CI 都没有），
     # 改了漂了不会有人发现。实测各家 md5 全一致，登记只冻结现状、不改行为。

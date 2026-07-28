@@ -14,6 +14,7 @@ on:
       - 'revise-sci/**'
       - 'polish-sci/**'
       - 'idea-bomb/**'
+      - 'academic-gate/**'
 
 jobs:
   sync:
@@ -56,7 +57,19 @@ jobs:
           fi
           echo "✅ all 3 extract_docx_images.py identical ($(md5sum "${extractors[0]}" | awk '{print $1}'))"
 
-      - name: Sync 9 custom skills to custom-skills branch
+      - name: Assert academic-gate plugin scripts match vendored gate files
+        run: |
+          # 插件目录的门禁三件套必须与 8 家 vendored 副本逐字节一致(同一份逻辑,
+          # 任一处单独改 = 插件拦的和技能文档说的对不上)。以 general-sci-writing 为基准。
+          for f in academic_gate_hook.py structure_signoff_gate.py gate_registry.json; do
+            a="academic-gate/scripts/$f"; b="general-sci-writing/scripts/$f"
+            if ! cmp -s "$a" "$b"; then
+              echo "::error::$f diverged between plugin and vendored copy"; exit 1
+            fi
+          done
+          echo "✅ academic-gate plugin scripts identical to vendored copies"
+
+      - name: Sync 9 custom skills + gate plugin to custom-skills branch
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -66,14 +79,17 @@ jobs:
 
           # 删除旧版，从 main 拉取最新
           rm -rf general-sci-writing review-writing reviewer-response-sci \
-                 nsfc-proposal reviewer-simulator sci2doc revise-sci polish-sci idea-bomb
+                 nsfc-proposal reviewer-simulator sci2doc revise-sci polish-sci idea-bomb \
+                 academic-gate
           git checkout main -- \
                  general-sci-writing review-writing reviewer-response-sci \
-                 nsfc-proposal reviewer-simulator sci2doc revise-sci polish-sci idea-bomb
+                 nsfc-proposal reviewer-simulator sci2doc revise-sci polish-sci idea-bomb \
+                 academic-gate
 
           # 有变化才提交
           git add general-sci-writing review-writing reviewer-response-sci \
-                  nsfc-proposal reviewer-simulator sci2doc revise-sci polish-sci idea-bomb
+                  nsfc-proposal reviewer-simulator sci2doc revise-sci polish-sci idea-bomb \
+                  academic-gate
           if git diff --staged --quiet; then
             echo "No changes to custom skills, skipping commit."
           else
