@@ -22,7 +22,7 @@ apply_patch）时，按下面的顺序决策：
   出错**（编码、JSON 拼装、写审计失败）绝不静默放行，必须仍输出 deny/ask。
 - 恒 exit 0（deny 通过 JSON 表达，不用 exit 2）。
 - 只碰"受管产物路径"与两类受保护文件，其余一切写入零影响。
-- 三端共用：路径归一化在 core 的 _extract_file_paths()（Codex 的 tool_input 里
+- 三端共用：路径归一化在 core 的 extract_file_paths()（Codex 的 tool_input 里
   没有 file_path，改文件的信息全在 apply_patch 补丁文本里）；解析不出路径时
   **不走静默路径**，留审计 rule="path-parse-failed"。
 
