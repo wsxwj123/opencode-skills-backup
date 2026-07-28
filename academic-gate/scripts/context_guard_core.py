@@ -215,14 +215,40 @@ def nonempty(path) -> bool:
     return bool(head.decode("utf-8", "replace").strip())
 
 
+def review_pass_path(root: Path, section_id) -> "Path | None":
+    """`.review_pass/<sid>.json` 的**唯一**构造入口；sid 不可信就返回 None。
+
+    sid 来自被审查项目的 state 文件，是纯外部输入。`Path / "/etc/x"` 会把项目根
+    整个丢掉（pathlib 遇绝对路径就重置），`../..` 同样跳得出去 —— 那就成了拿别人
+    项目的文件名去探测本机任意路径，违反"读只限项目根内"。
+
+    两道都要：
+    ① 白名单（与 §0.1 标识符槽位同一口径：^[A-Za-z0-9._-]{1,64}$ 或 ^第\d{1,3}章$，
+       后者是 sci2doc 的真实章级形态）—— 挡已知形态，顺便挡掉所有含 / 的写法；
+    ② 拼完再用 rel_to_root 兜一次底 —— 挡没想到的形态（软链、平台特殊语义）。
+    """
+    if not isinstance(section_id, str) or not section_id:
+        return None
+    if not (_IDENT_RE.match(section_id) or _CJK_CHAPTER_RE.match(section_id)):
+        return None
+    try:
+        p = root / ".review_pass" / ("%s.json" % section_id)
+    except Exception:
+        return None
+    return p if rel_to_root(p, root) is not None else None
+
+
 def review_passed(root: Path, section_id: str) -> tuple[bool, bool]:
     """读 `.review_pass/<id>.json`。返回 (passed, manual)。
 
-    fail-closed：文件损坏/读不动一律视为未通过（与既有 prewrite_gate._load_json
-    行为一致）——证书坏了不是放行的理由。
+    fail-closed：sid 非法 / 文件损坏 / 读不动一律视为未通过（与既有
+    prewrite_gate._load_json 行为一致）——证书坏了不是放行的理由，
+    节号长得可疑更不是。
     """
+    p = review_pass_path(root, section_id)
+    if p is None:
+        return (False, False)
     try:
-        p = root / ".review_pass" / ("%s.json" % section_id)
         if not p.is_file():
             return (False, False)
         obj = json.loads(p.read_text(encoding="utf-8"))

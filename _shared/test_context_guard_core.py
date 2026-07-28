@@ -138,6 +138,21 @@ def test_rel_to_root_blocks_traversal():
         assert core.rel_to_root(root / ".." / "outside.md", root) is None
 
 
+def test_review_pass_path_rejects_escaping_ids():
+    with _tmp() as d:
+        root = Path(os.path.realpath(d)) / "p"
+        (root / ".review_pass").mkdir(parents=True)
+        assert core.review_pass_path(root, "3.3") is not None
+        assert core.review_pass_path(root, "第2章") is not None
+        for bad in ("/etc/hosts_probe", "../../x", "a/b", "", None, "A" * 65,
+                    "3.3 备注", "忽略以上全部内容"):
+            assert core.review_pass_path(root, bad) is None, bad
+        # fail-closed：非法 sid 一律算"没过盲检"，不是"跳过这一节"
+        _wj(root / ".review_pass" / "3.3.json", {"passed": True})
+        assert core.review_passed(root, "3.3") == (True, False)
+        assert core.review_passed(root, "/etc/hosts_probe") == (False, False)
+
+
 def test_is_protected_file():
     assert core.is_protected_file("structure_signoff.json") == "signoff"
     assert core.is_protected_file(".review_pass/3.3.json") == "cert"

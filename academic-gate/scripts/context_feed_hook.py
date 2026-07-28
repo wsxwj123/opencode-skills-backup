@@ -78,9 +78,11 @@ def _fit(lines: list, limit: int) -> str:
 
 def _review_state(root: Path, sid: str) -> str:
     passed, _ = core.review_passed(root, sid)
+    # 路径一律走 core 的唯一构造入口（sid 是外部输入，自己拼会绕开校验）
+    cert = core.review_pass_path(root, sid)
     try:
-        exists = (root / ".review_pass" / ("%s.json" % sid)).is_file()
-    except Exception:
+        exists = cert is not None and cert.is_file()
+    except OSError:
         exists = False
     if not exists:
         return "不存在"
