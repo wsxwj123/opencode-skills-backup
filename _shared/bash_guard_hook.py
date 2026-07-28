@@ -149,7 +149,14 @@ def _hits_protected_write(segment: str) -> bool:
 
 
 def _audit_root(cwd) -> Path | None:
-    """审计落点：cwd 能认出项目根才写；陌生目录一律不写（不在别人目录里造文件）。"""
+    """A 级（F5/F9-A）的审计落点：认不出项目（tier=none）就返回 None，不落盘。
+
+    这两条规则命中的目标本来就是我们的凭证名（structure_signoff.json /
+    .review_pass/），按 PreToolUse 侧的同一口径，写到凭证名上的事件证据留在项目内
+    ——weak 档也算（"撞名不确定"不代表可以对着凭证名下手不留痕）。真正要求零残留的
+    是"只撞了通用产物名"那一类，那类只走 B 级，落点由 _judge 决定（root=None →
+    CLAUDE_PLUGIN_DATA）。tier=none 的陌生目录一律不写。
+    """
     if cwd is None:
         return None
     ev = core.detect(cwd)
