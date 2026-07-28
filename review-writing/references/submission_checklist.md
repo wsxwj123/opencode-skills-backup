@@ -31,7 +31,7 @@
 
 - **Cover Letter**（详细写法见 `references/cover-letter-guide.md`）：综述的卖点是 *synthesis / framing / gap→展望*，而非新数据。一句话卖点应突出"本综述提出的新框架/视角"。引用 Phase 1.5 的 gap 与 Phase 1.6 的 framing 作为"为什么现在需要这篇综述"的论据。**scope 契合段强制**：基于目标刊 Aims & Scope 原文（向用户索取）写具体契合，禁 "broad readership" 类通用套话，换成别的刊仍成立即须重写。
 - **Title Page**：题名禁缩写（DNA/RNA/PCR 等公知除外）；共同一作 `†`，通讯 `*`，共同通讯双 `*`。
-- **CRediT**：综述无 Investigation/Formal analysis（无实验）时，对应作者写覆盖到的 role 即可，未覆盖的 11 类标 N/A 并说明（综述常缺 Resources / Methodology-wet-lab）。通讯作者通常 ≥3 个 role（含 Supervision/Funding）。分配细则见 gsw `submission-guide.md` 第 5 节。
+- **CRediT**：综述无 Investigation/Formal analysis（无实验）时，对应作者写覆盖到的 role 即可，未覆盖的 14 类标 N/A 并说明（综述常缺 Resources / Methodology-wet-lab）。通讯作者通常 ≥3 个 role（含 Supervision/Funding）。分配细则见 gsw `submission-guide.md` 第 5 节。
 - **Keywords**：从 outline.md 的 RQ/PICO 与各节主题提炼；MeSH 术语优先（医学刊）。
 - **Highlights（按需）**：每条聚焦综述的一个核心论点或框架贡献，非罗列章节。
 

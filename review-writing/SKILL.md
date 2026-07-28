@@ -1061,7 +1061,7 @@ Write Mode has no `pending_sections` field so this gate is a no-op (no key → e
 2. **生成投稿包**（写入 `exports/`，路径以 submission_checklist.md 第 6 节为准）：
    - `exports/cover_letter.md` — 写法见 `references/cover-letter-guide.md`。综述卖点是 synthesis/framing/gap→展望；引用 Phase 1.5 gap + Phase 1.6 framing 作为"为何此刻需要这篇综述"。**🔴 scope 契合段强制**：向用户索取目标刊 **Aims & Scope 原文**（技能不自动抓取），据此写具体契合论证，禁 "will interest the broad readership" 类通用套话；用户未给 scope 原文则停下索取，不编造。
    - `exports/title_page.md` — 题名（禁缩写）/ 作者 / 单位 / 通讯(含邮箱) / ORCID。
-   - `exports/author_contributions.md` — CRediT（综述常用 role；未覆盖的 11 类标 N/A，分配细则见 gsw 第 5 节）。
+   - `exports/author_contributions.md` — CRediT（综述常用 role；未覆盖的 14 类标 N/A，分配细则见 gsw 第 5 节）。
    - `exports/coi_statement.md` — 无则 "The authors declare no competing interests."
    - `exports/funding.md`（可并入 title page）— 无则 "This work received no specific external funding."
    - `exports/data_availability.md` — 综述无原始数据 → "Data sharing not applicable — no new datasets were generated or analysed."（systematic 有提取数据则给获取方式）。
