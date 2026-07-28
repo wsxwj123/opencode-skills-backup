@@ -24,5 +24,7 @@ social-clip/OPTIMIZATION_PLAN.md
 # 各技能开发期回归测试：只留本机(scripts/ 原地可跑)，不随技能分发给用户
 */scripts/test_*.py
 
-# 插件目录的运行时心跳（hook 每次介入都会写，不入库）
+# 运行时心跳（hook 每次介入都会写，不入库）。_shared/ 那份此前被跟踪，每跑一次
+# hook 就把工作区弄脏，极易被顺手 commit 进去 —— 已 git rm --cached 摘除。
 academic-gate/scripts/hook_heartbeat.json
+_shared/hook_heartbeat.json
