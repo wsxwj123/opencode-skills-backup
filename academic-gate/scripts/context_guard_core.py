@@ -57,7 +57,7 @@ AUDIT_MAX_BYTES = 1024 * 1024
 # "这一次没检查成"，落不下就等于没发生过——而它们恰恰全都发生在没有项目根的时刻。
 # 其余规则一律要求有项目根（宁可少一条记录，也不在陌生目录里造文件）。
 NO_ROOT_RULES = {"path-parse-failed", "F9B-skipped-no-cwd", "internal-error",
-                 "stdin-truncated"}
+                 "stdin-truncated", "F8-weak-ask"}
 DONE_STATUS = {"done", "completed", "finalized"}
 
 # nsfc 的节级白名单：**硬编码**，不得复用 prewrite_gate.SECTION_ORDER。
