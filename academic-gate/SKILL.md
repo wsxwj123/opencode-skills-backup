@@ -57,7 +57,7 @@ claude plugin list        # 应出现 academic-gate@skills-dir
 | 有插件但不拦 | `gate_registry.json` 里该技能 `signoff: false` | 查 registry，这可能是有意的 |
 | opencode / codex 里不拦 | **这两端从来就不读 Claude Code 的钩子配置**——门禁在那两端从未生效过 | 已知限制，不是回归 |
 | 拦截理由显示两次 | 插件钩子 + 旧的自装钩子并存 | 无害（两条指向同一份逻辑、不会误放行）；跑一次任一技能的 `env_preflight` 会自动摘掉旧的 |
-| **Windows 上五个钩子全都不响** | 钩子命令是 POSIX shell 形态（`exec "$(command -v python3 \|\| command -v python)" …`），Windows 原生 cmd/PowerShell 跑不了 | 在 **Git Bash / WSL 等 POSIX shell 环境**里启动 Claude Code。**开局没看到学术项目状态卡 = 钩子没在岗**——这是最快的自检：卡片首行会带 `academic-gate v<版本号>`。<br>🔴 注意此时**拦层也一起哑了**（门禁等于不存在且不会报错），别把"没被拦"当成"检查通过了"。<br>TODO：命令形态改造成跨壳可跑（本轮未做，改动面涉及全部 5 条 handler，需单独验证） |
+| **Windows 上五个钩子全都不响** | 钩子命令是 POSIX shell 形态（`exec "$(command -v python3 \|\| command -v python)" …`），需要 bash 才能跑。**跟你从哪个终端启动 Claude Code 无关**——Claude Code 自己去找 bash：机器上装了 **Git for Windows** 就用它自带的 Git Bash，没装就没法跑 | 装 [Git for Windows](https://git-scm.com/downloads/win)（装完重启 Claude Code 即可，不必从 Git Bash 窗口里启动）。<br>五条 handler 都已显式声明 `"shell": "bash"`：没装 Git Bash 时 Claude Code 会明确报 `Hook "…" requires bash but Git Bash was not found`，而不是悄悄改用 PowerShell 跑一串它读不懂的命令。<br>🔴 但**报错不等于拦截**：官方只把退出码 2 当阻断，钩子起不来一律算"非阻断错误"，工具照常执行——所以此时**拦层是哑的**（门禁等于不存在），别把"没被拦"当成"检查通过了"。这条报错每个会话每条钩子只提示一次，错过就没了。<br>**开局没看到学术项目状态卡 = 钩子没在岗**——这是最快的自检：卡片首行会带 `academic-gate v<版本号>`。<br>TODO：仍未做真正的跨壳改造（命令还是 bash 形态，PowerShell 上依然跑不了）。本轮只把"静默退化"换成了"一次性明确报错"。彻底解法是改 exec 形态（`command` + `args`，不经壳），改动面涉及全部 5 条 handler，需单独验证 |
 
 ## 目录内容
 
