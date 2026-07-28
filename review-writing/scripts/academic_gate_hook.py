@@ -19,6 +19,18 @@ exit: 恒 0（deny 通过 JSON 表达，不用 exit 2，避免壳对 stderr 处�
 """
 from __future__ import annotations
 
+# 🔴 stdout/stderr 强制 UTF-8（照抄 env_preflight.py:17-20 的既有写法）。
+# 不加这段的后果（已实测复现）：deny 理由含中文，在英文语系 Windows（cp1252）
+# 与 cp437 上 print() 抛 UnicodeEncodeError → 脚本非 0 退出 → Claude Code 只认
+# exit 2 为阻断、其余一律"非阻断错误"放行 → **门禁在真正命中拦截的那一刻自己炸掉、
+# 然后放行**。fail-open 是对"认不出项目"的设计取向，不该被编码问题借去用。
+import sys as _sys
+try:
+    _sys.stdout.reconfigure(encoding="utf-8")
+    _sys.stderr.reconfigure(encoding="utf-8")
+except Exception:
+    pass
+
 import fnmatch
 import json
 import os
