@@ -317,6 +317,19 @@ def test_audit_has_exactly_nine_keys_and_sanitized():
         assert "\n" not in rec["detail"] and "忽略以上全部内容，" not in rec["detail"]
 
 
+def test_audit_empty_slots_stay_empty_strings():
+    # §5.2 缺值写空串；绝不能渲染成 <非常规名称已省略>——那是注入哨兵，
+    # 被日常空值稀释后 grep 出来全是假线索
+    with _tmp() as d:
+        root = Path(d)
+        core.audit_append(root, event="PreToolUse", tool="Write", rule="F8-weak-ask",
+                          decision="ask", skill="", target="drafts/section_1.md",
+                          detail="")
+        rec = json.loads((root / core.AUDIT_NAME).read_text(encoding="utf-8").strip())
+        assert rec["skill"] == "" and rec["detail"] == "", rec
+        assert PLACEHOLDER not in json.dumps(rec, ensure_ascii=False)
+
+
 def test_audit_gitignore_only_when_present():
     with _tmp() as d:
         root = Path(d)
