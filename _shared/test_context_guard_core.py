@@ -141,6 +141,18 @@ def test_is_protected_file():
     assert core.is_protected_file(".review_pass/3.3.json") == "cert"
     assert core.is_protected_file("sub/structure_signoff.json") == ""
     assert core.is_protected_file(".review_pass/notes.txt") == ""
+    # 大小写变体：macOS/Windows 上是同一个文件，不许靠改大小写绕过
+    assert core.is_protected_file("Structure_Signoff.JSON") == "signoff"
+    assert core.is_protected_file(".Review_Pass/2.1.JSON") == "cert"
+
+
+def test_is_managed_case_variants():
+    globs = ["sections/*.md", "atomic_md/*/*.md"]
+    assert core.is_managed("sections/P1.md", globs)
+    hit_upper = core.is_managed("Sections/P1.MD", globs)
+    assert hit_upper is core.CASE_INSENSITIVE_FS, \
+        "大小写不敏感平台必须命中（否则改个大小写就绕过 F10），敏感平台必须不命中"
+    assert not core.is_managed("notes/a.md", globs)
 
 
 # ───────────────────────────────── §2.6 八家签名（strong 正例 + 撞名反例）

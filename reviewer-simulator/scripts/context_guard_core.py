@@ -163,9 +163,23 @@ def plugin_data_dir() -> Path | None:
         return None
 
 
+# macOS / Windows 的默认文件系统大小写不敏感：`Sections/P1.MD` 与 `sections/P1.md`
+# 是同一个文件（同 inode）。逐字节比路径 = 大小写一变就绕过 F6/F10，**实测可复现**。
+# 判据用 normcase（Windows 上非恒等）+ 平台名（darwin 的 normcase 是恒等，测不出来）。
+CASE_INSENSITIVE_FS = (os.path.normcase("A") != "A") or sys.platform in (
+    "darwin", "win32", "cygwin")
+
+
 def is_managed(rel_path: str, globs) -> bool:
     rel = str(rel_path).replace(os.sep, "/")
-    return any(fnmatch.fnmatch(rel, g) for g in (globs or []))
+    patterns = list(globs or [])
+    # 用 fnmatchcase 而不是 fnmatch：后者的大小写语义跟着 os.path.normcase 走，
+    # 在 darwin 上是恒等（等于大小写敏感）、在 Windows 上又不是——同一份代码两种行为。
+    # 这里自己按平台决定，行为可预期。
+    if CASE_INSENSITIVE_FS:
+        rel = rel.lower()
+        patterns = [g.lower() for g in patterns]
+    return any(fnmatch.fnmatchcase(rel, g) for g in patterns)
 
 
 def nonempty(path) -> bool:
@@ -671,10 +685,18 @@ def skill_for_rel(ev: "Evidence", registry: dict, rel: str) -> str:
 
 
 def is_protected_file(rel: str) -> str:
-    """F6 受保护文件：'' / 'signoff' / 'cert'。"""
-    if rel == "structure_signoff.json":
+    """F6 受保护文件：'' / 'signoff' / 'cert'。
+
+    一律小写后再比：两个受保护名本就全小写，而 macOS/Windows 上
+    `Structure_Signoff.json`、`.review_pass/2.1.JSON` 指的是同一个文件——
+    逐字节比等于留了个"改个大小写就伪造凭证"的口子（实测可复现）。
+    全平台统一小写比：Linux 上顶多多拦一个真的叫 `Structure_Signoff.json`
+    的无关文件，方向安全。
+    """
+    low = str(rel).lower()
+    if low == "structure_signoff.json":
         return "signoff"
-    if rel.startswith(".review_pass/") and rel.endswith(".json"):
+    if low.startswith(".review_pass/") and low.endswith(".json"):
         return "cert"
     return ""
 
