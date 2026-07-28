@@ -49,6 +49,13 @@ MANIFEST: dict[str, list[str]] = {
     "install_gate_hook.py": ALL8,
     "gate_registry.json": ALL8,
     # 既有 vendored,纳管防漂
+    # 2026-07-28 补：这三个此前**三道守卫全无**（MANIFEST/L4/CI 都没有），
+    # 改了漂了不会有人发现。实测各家 md5 全一致，登记只冻结现状、不改行为。
+    # proofread.py 是其中最大的（30.8KB×6家），也是最该守的。
+    "proofread.py": ["general-sci-writing", "polish-sci", "review-writing",
+                     "reviewer-response-sci", "reviewer-simulator", "revise-sci"],
+    "git_checkpoint.py": ["general-sci-writing", "nsfc-proposal", "sci2doc"],
+    "extract_docx_images.py": ["polish-sci", "revise-sci", "sci2doc"],
     "md_runs.py": ["revise-sci", "polish-sci", "sci2doc"],
     "citation_guard_core.py": [
         "general-sci-writing", "nsfc-proposal", "review-writing", "sci2doc",
