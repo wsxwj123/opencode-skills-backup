@@ -1,6 +1,6 @@
 ---
 name: nsfc-proposal
-version: 2.27.0
+version: 2.28.0
 description: Use when drafting, restructuring, or polishing Chinese NSFC proposals (2026 template), especially when strict section-by-section gating, hypothesis-objective-content-problem consistency, literature verification via paper-search MCP, and anti-AI Chinese academic writing constraints are required. 触发词：国自然、国家自然科学基金、基金申请书、科研申请、NSFC、标书、本子、面上项目、青年基金。
 ---
 
@@ -290,6 +290,13 @@ Follow phased gates in order:
    - Run `diagnosis_engine.py full-review` and `consistency_mapper.py validate` (完整参数见 Script Entry Points); fix all ERROR-level issues.
    - Run `python scripts/word_counter.py summary sections` and `python scripts/state_manager.py --root . page-estimate --sections-dir sections`; if >30 pages, trim specific locations.
    - Run `humanizer_zh.py scan-all` before final output.
+   - **图表交叉引用核查（第 1 层结构锚 · 报告式软门 · 交用户裁决）**：本子里 `见[图1]` / `如[表2]所示` / `如前文 2.1 所述` 这类指向，此前零覆盖（V 规则查 H/O/RC/KSQ 链路，不查图表编号指没指到东西）。merge 前跑：
+     ```bash
+     mkdir -p tmp && cat sections/*.md > tmp/xref_corpus.md
+     python3 scripts/structure_outline.py --manuscript tmp/xref_corpus.md --project-root .
+     ```
+     产项目根 `outline.json`（`sections`/`figures`/`tables`/`items` 四类真实存在的结构锚 + `summary`）。退出码 **0 = 正常（含空稿，四类为空数组是合法结果，照常继续）**、**2 = 用法/输入错**。该脚本与 `_shared/` 逐字节共享（6 家），**一个字节不许改**；`[图1]` 的方括号形态已被现役正则正常捕获，题注认 `图 1. 标题` / `图1：标题`（`表` 同理），`图1 标题` 这种无分隔符写法认不出。产物落 `tmp/` 与项目根，**绝不落 `sections/`**（那是 managed_globs，写进去会被 signoff hook 物理拦截）。
+     - **本步只做第 1 层抽取，不自动判悬空**：把 `caption_found=false` 的图/表编号（正文引了、全稿找不到对应题注行）与 `sections` 候选清单列给用户人工过目，说明「这是候选清单不是定论——题注写法不合规也会落进来」，由用户裁决要不要补题注或改引用。**不阻断 merge**，但必须把清单打出来，不许静默跳过。
    - Output: `output/申请书_合并.md` (merge order: 00摘要 → B1-B3预算 → P1 → P2 → P3_1~P3_4 → P4 → REF).
 
    **Phase 7 DoD（收口自检）：未逐项确认通过，不得向用户声明全文终稿完成**
