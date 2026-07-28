@@ -238,7 +238,9 @@ def run() -> None:
 
     # 内容去重：同一张卡不连着注两遍（省上下文，不是正确性；存不下就照常注）。
     # SessionStart 不参与去重——它就是"重建"的时刻，重复也得给。
-    if core.card_is_duplicate(str(root), text):
+    # 🔴 带 notice 的这一张必须跳过去重：notice 是 pop 出来的（读后即删），一旦被
+    # 去重吃掉就**永久丢失**——而它记的正是"上一次没执行门禁检查"，最不该丢的一条。
+    if not notice and core.card_is_duplicate(str(root), text):
         return
     _emit(event, text)
 
