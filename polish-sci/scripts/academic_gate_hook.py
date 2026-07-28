@@ -141,10 +141,20 @@ def _run_gates(gates: list, root: Path, file_path: Path) -> tuple:
         if not cmd:
             continue
         try:
+            # 🔴 显式 encoding/errors：text=True 会按 locale 解码，非 UTF-8 locale
+            # （中文 Windows、LANG=C 的容器）下门禁的中文输出解码即抛，被下面的宽
+            # except 吞成"跑不起来"→ **真拦截被静默放行**。这正是文件头 UTF-8 那段
+            # 警告过的同一类事故，换了个地方复发。
             proc = subprocess.run(cmd, capture_output=True, text=True,
+                                  encoding="utf-8", errors="replace",
                                   timeout=GATE_SUBPROCESS_TIMEOUT, cwd=str(root))
-        except Exception:
-            # 门禁自身跑不起来（缺依赖、超时）→ fail-open 放行，不误伤用户
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            # 门禁超时/不存在 → 按既有设计 fail-open 放行，不误伤用户
+            return False, ""
+        except Exception as exc:
+            # 其余异常属"我自己出问题了"，不是"这不是学术项目"：仍放行，但必须留痕
+            core.audit_append(root, event="PreToolUse", rule="internal-error",
+                              decision="unchecked", detail=type(exc).__name__)
             return False, ""
         if proc.returncode != 0:
             detail = (proc.stdout or "").strip() or (proc.stderr or "").strip()
