@@ -362,9 +362,12 @@ def test_audit_without_root_writes_nothing_unless_parse_failed():
         with _tmp() as d:
             os.environ["CLAUDE_PLUGIN_DATA"] = d
             core.audit_append(None, rule="F5-self-signoff", decision="deny")
-            assert not list(Path(d).glob("*.jsonl")), "只有 path-parse-failed 能落项目外"
-            core.audit_append(None, rule="path-parse-failed", decision="unchecked")
-            assert (Path(d) / "academic_gate_audit.jsonl").is_file()
+            assert not list(Path(d).glob("*.jsonl")), "只有 NO_ROOT_RULES 能落项目外"
+            for rule in sorted(core.NO_ROOT_RULES):
+                core.audit_append(None, rule=rule, decision="unchecked")
+            p = Path(d) / "academic_gate_audit.jsonl"
+            got = {json.loads(l)["rule"] for l in p.read_text(encoding="utf-8").splitlines()}
+            assert got == core.NO_ROOT_RULES, got
     finally:
         os.environ.pop("CLAUDE_PLUGIN_DATA", None)
         if old is not None:
