@@ -55,7 +55,8 @@ claude plugin list        # 应出现 academic-gate@skills-dir
 |---|---|---|
 | `claude plugin list` 里没有 `academic-gate@skills-dir` | 没重启，或目录不在 `~/.claude/skills/` 下 | 重启；确认目录位置 |
 | 有插件但不拦 | `gate_registry.json` 里该技能 `signoff: false` | 查 registry，这可能是有意的 |
-| opencode / codex 里不拦 | **这两端从来就不读 Claude Code 的钩子配置**——门禁在那两端从未生效过 | 已知限制，不是回归 |
+| Codex 里不拦 | Codex 也有这套钩子（事件名、配置结构、拦截 JSON 都一样），但**要按 Codex 的方式装、并且要你亲手点信任**：它读的是本目录的 `.codex-plugin/plugin.json`；装完必须在 Codex 里跑一次 `/hooks`，把这几条钩子逐条信任，**没信任的钩子会被直接跳过**（不报错） | 装好并信任后，真的学术写作项目（有状态文件的那种）在 Codex 上照拦不误。两件必知的事：<br>① **改过 `hooks/hooks.json` 之后信任会自动作废**——Codex 按钩子定义算一个 hash 记账，定义一变就当没信任过，得再跑一次 `/hooks`（改 `scripts/` 里的 Python 不影响）。<br>② **只是撞了名字的陌生项目，在 Codex 上不拦、只记一条审计**：别人目录里恰好有个 `sections/` 或 `state.json`，但没有我们技能的状态签名，这种情况在 Claude Code 上是弹一句"要不要按学术项目管"让你选，而 **Codex 的拦截框没有"允许一次"**——硬拦会把不相干的项目卡死，唯一出路是去停掉整个插件。所以那一档按放行处理，只在审计里留一条记录。 |
+| OpenCode 里不拦 | **OpenCode 只认它自己的 JS 插件，从来不读这套钩子配置** | 已知限制，不是回归：那端只有技能能用，门禁在那边不存在 |
 | 拦截理由显示两次 | 插件钩子 + 旧的自装钩子并存 | 无害（两条指向同一份逻辑、不会误放行）；跑一次任一技能的 `env_preflight` 会自动摘掉旧的 |
 | **Windows 上五个钩子全都不响** | 钩子命令是 POSIX shell 形态（`exec "$(command -v python3 \|\| command -v python)" …`），需要 bash 才能跑。**跟你从哪个终端启动 Claude Code 无关**——Claude Code 自己去找 bash：机器上装了 **Git for Windows** 就用它自带的 Git Bash，没装就没法跑 | 装 [Git for Windows](https://git-scm.com/downloads/win)（装完重启 Claude Code 即可，不必从 Git Bash 窗口里启动）。<br>五条 handler 都已显式声明 `"shell": "bash"`：没装 Git Bash 时 Claude Code 会明确报 `Hook "…" requires bash but Git Bash was not found`，而不是悄悄改用 PowerShell 跑一串它读不懂的命令。<br>🔴 但**报错不等于拦截**：官方只把退出码 2 当阻断，钩子起不来一律算"非阻断错误"，工具照常执行——所以此时**拦层是哑的**（门禁等于不存在），别把"没被拦"当成"检查通过了"。这条报错每个会话每条钩子只提示一次，错过就没了。<br>**开局没看到学术项目状态卡 = 钩子没在岗**——这是最快的自检：卡片首行会带 `academic-gate v<版本号>`。<br>TODO：仍未做真正的跨壳改造（命令还是 bash 形态，PowerShell 上依然跑不了）。本轮只把"静默退化"换成了"一次性明确报错"。彻底解法是改 exec 形态（`command` + `args`，不经壳），改动面涉及全部 5 条 handler，需单独验证 |
 
@@ -64,6 +65,7 @@ claude plugin list        # 应出现 academic-gate@skills-dir
 ```
 academic-gate/
 ├── .claude-plugin/plugin.json   插件声明（name 写死，不靠目录名推导）
+├── .codex-plugin/plugin.json    同上，给 Codex 用（两份逐字节一致，改一份要一起改）
 ├── hooks/hooks.json             5 条 handler：喂 3 个事件 + 拦 Write 类 + 拦 Bash
 ├── scripts/
 │   ├── academic_gate_hook.py    【拦·写文件】PreToolUse(Write|Edit|MultiEdit|NotebookEdit)。
@@ -85,7 +87,7 @@ academic-gate/
 ```
 
 **这个插件会在你机器上写的东西**（只此三处）：`<项目根>/.academic_gate_audit.jsonl`（只记
-deny/ask 与"这次没检查成"，同目录已有 `.gitignore` 时追加一行忽略、没有则不创建）、
+deny/ask、Codex 上按放行处理的那一档、与"这次没检查成"，同目录已有 `.gitignore` 时追加一行忽略、没有则不创建）、
 `${CLAUDE_PLUGIN_DATA}` 下的去重/待报小文件、插件自己目录里的心跳。**不联网、不读密钥。**
 陌生目录的边界如实说：撞了通用产物名（如 `drafts/section_*.md`）的目录**零残留**；但写到
 我们的凭证名（`.review_pass/` 或 `structure_signoff.json`）时会在那个目录留一行审计。

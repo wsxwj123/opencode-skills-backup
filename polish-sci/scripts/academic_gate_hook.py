@@ -25,6 +25,9 @@ apply_patch）时，按下面的顺序决策：
 - 三端共用：路径归一化在 core 的 extract_file_paths()（Codex 的 tool_input 里
   没有 file_path，改文件的信息全在 apply_patch 补丁文本里）；解析不出路径时
   **不走静默路径**，留审计 rule="path-parse-failed"。
+- Codex 上 ask 折成 **allow + 审计**（见 _is_codex 与 main 里的分支）：那端不支持
+  ask，会判钩子失败然后照常执行工具。弱档本就是"撞名的陌生项目"，硬拦保护力不增
+  而误伤巨大（那端没有"允许一次"）；不静默由审计兑现。Claude Code 侧 ask 不变。
 
 stdin: PreToolUse 事件 JSON。stdout: 命中时一个决策 JSON，放行时完全为空。
 """
@@ -295,6 +298,22 @@ def _handle_parse_failure(payload: dict, tool_name: str) -> None:
             core.push_notice(key, NOTICE_PARSE_FAILED_LATER.format(tool=tool_name))
 
 
+def _is_codex(payload: dict) -> bool:
+    """这一次调用是不是 Codex 发来的。**只认一个信号**：tool_name == "apply_patch"。
+
+    依据（Codex 官方 hooks 文档）：matcher 可以写 apply_patch/Edit/Write 三种别名，
+    但**钩子输入里的 tool_name 恒为 "apply_patch"**。Claude Code 侧不存在这个工具名，
+    且我们 hooks.json 的 matcher 是 Write|Edit|MultiEdit|NotebookEdit，Claude Code 上
+    根本不会有 tool_name="apply_patch" 的调用抵达本脚本 → 这个信号不会误伤现役行为。
+
+    没用"file_path 缺失"当信号：那和"字段恰好为空"分不清。也没用环境变量——Codex 给
+    插件钩子设 PLUGIN_ROOT/PLUGIN_DATA（Claude Code 只设 CLAUDE_PLUGIN_ROOT），可以当
+    备用信号，但它只在"以插件形式安装"时存在，而那时 tool_name 已经够用了，白加一条
+    误判面。若哪天 Codex 改了 tool_name，PLUGIN_ROOT 是现成的补充信号。
+    """
+    return payload.get("tool_name") == "apply_patch"
+
+
 def main() -> None:
     try:
         payload = json.load(sys.stdin)
@@ -326,6 +345,18 @@ def main() -> None:
         if verdict is None:
             continue
         decision, reason, root, rule, skill, target, detail = verdict
+        if decision == "ask" and _is_codex(payload):
+            # Codex 不支持 ask（那端会判钩子失败然后照常执行工具）。折成放行而不是拦：
+            # ask 只出在弱证据档 = "只是撞了通用目录名的陌生项目"，真正在用本技能的项目
+            # 有状态签名、走强证据档、在 Codex 上照拦不误。硬拦弱档保护力一点没多，代价
+            # 却是把陌生项目卡死——Codex 的拦截框没有"允许一次"，唯一出路是去 /hooks 停
+            # 掉整个插件。放行对陌生项目本就是正确默认；原来担心的"静默"由这条审计兑现。
+            # rule 保持 "F8-weak-ask"：它在 core.NO_ROOT_RULES 白名单里，改名会让这一档
+            # （root=None，只能落 CLAUDE_PLUGIN_DATA）的留痕被静默丢弃。
+            core.audit_append(root, event="PreToolUse", tool=tool_name or "Write",
+                              rule=rule, decision="allow", skill=skill, target=target,
+                              detail=(detail + " codex 无 ask 档按放行").strip())
+            continue                      # 同一段 patch 里的其余文件照判（可能有强档命中）
         _emit(decision, reason)           # 先出决策，再写审计：审计失败不得影响决策
         core.audit_append(root, event="PreToolUse", tool=tool_name or "Write",
                           rule=rule, decision=decision, skill=skill,
