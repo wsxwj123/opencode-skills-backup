@@ -156,6 +156,28 @@ def test_check_fail_open_paths():
             assert rc == g.EX_UNSIGNED, bad
 
 
+def test_status_card_shows_outline_gone():
+    """状态卡的签字行必须能反映"绑过大纲、但这会儿读不出那份大纲"。
+
+    check 在这一档是 fail-open（exit 0，考卷 §8.7 锁着），所以这一档如果状态卡也
+    不吭声，用户和模型两侧就都以为绑定还在——签字看着还在，实际已不设防。
+    """
+    import context_feed_hook as cf
+    with tempfile.TemporaryDirectory() as td:
+        root = _gsw(Path(td) / "p", [{"id": "s1", "title": "引言"}])
+        _run(g.cmd_confirm, root, "")
+        line = cf._signoff_line(root)
+        assert "confirmed=true" in line and "读不出大纲" not in line, line
+        (root / "storyline.json").rename(root / "storyline.bak")
+        line = cf._signoff_line(root)
+        assert "读不出大纲文件" in line, line
+        # 存量签字（无指纹字段）走的是另一档，不许混成同一句
+        (root / "structure_signoff.json").write_text(
+            json.dumps({"confirmed": True}), encoding="utf-8")
+        line = cf._signoff_line(root)
+        assert "未绑定大纲" in line and "读不出大纲文件" not in line, line
+
+
 def test_usage_error_exit_64():
     """用法错必须与"还没签"的 2 分开，否则调用方分不清是谁的问题。"""
     proc = subprocess.run([sys.executable, str(GATE), "check"],
