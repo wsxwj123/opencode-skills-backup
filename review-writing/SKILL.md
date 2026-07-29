@@ -1,6 +1,6 @@
 ---
 name: review-writing
-version: 2.28.1
+version: 2.29.0
 description: "Universal assistant for writing high-impact academic literature reviews (Nature/Cell/Lancet level). Supports real-time Zotero integration, outline persistence, and multi-mode reference management. Use when writing a comprehensive review article requiring systematic search, synthesis, and citation management. 触发词：写综述、文献综述、综述写作、literature review、review article、改综述、完善综述、继续写综述、improve review。"
 triggers:
   - "写综述"
@@ -644,6 +644,8 @@ for each section in outline.md (e.g., section ID = "2.1"):
 
 **Per-subsection density（按标题层级，prewrite_gate check3 硬拦）:** level = section_id 段数+1（`2.1`=三级、`2.1.1`=四级）。硬地板：三级叶子节 ≥6 条、四级叶子节 ≥3 条，其余层级 ≥1；低于地板 prewrite_gate exit 1 禁止开写。容器父节（大纲里还有更深子节的节，如 `2.1` 下有 `2.1.1`）本身不承载文献，放宽到 ≥1。软目标：三级 ≥10、四级 ≥5，未达只进 warnings 提示补足、不阻断。
 
+**数量与"做没做"是两根轴，不重复**：条数够不够由 check3（上面这段）管；本节的系统主检索**跑没跑过**由 prewrite_gate 的 `section_search_done` 管——它只看本节有没有 `tmp/papers_X_X.json`（非空数组）或 `data/search_log.json` 里归属本节的条目，**不设任何数量阈值**。所以领域本来就小、这节只搜到两篇，只要检索跑过就照常放行；反过来，把 Phase 1.5 探索检索那批文献挨个打上节号凑够条数，`section_search_done` 照样拦。
+
 **Chinese writing mode:** Search tools identical to English mode. Read language setting from outline.md.
 
 ### Phase 2.5: Dedup + Global ID Assignment
@@ -704,7 +706,7 @@ If pending_sections is empty → all sections complete; proceed to Phase 4.
 
 ### Per-Section Cycle
 
-0. **🔴 开写前置闸门 (Mandatory，脚本硬拦截)**：开写本 section 前必须先跑 `python3 scripts/prewrite_gate.py --section X.X --root .`，exit≠0 禁止开写。它统一硬检查：上一节完成（上一节 ∈ `state.json.completed_sections`）、大纲就位（`outline.md` 含本节标题）、素材就位（`data/synthesis_matrix.json` 本节文献矩阵按标题层级达硬地板：三级叶子≥6/四级叶子≥3/容器父节≥1；软目标三级≥10、四级≥5 未达只 warn 不拦）、上一节占位符清零（`drafts/` 无 `CITE_PENDING`/`DATA_PENDING`/`【待`）；上一节盲检结果（`.review_pass/<上一节>.json`）缺失即 prewrite_gate 硬拦 exit 1，禁止开写；必须先跑 delegate_review verify --section <上一节> 落盘通过标记。**盲检subagent确实跑不起来时**，用 `--allow-manual-review "<理由>"` 显式人工放行（仅放行盲检项、留痕审计，见规则 10 的逃生口）；不加则门禁默认硬拦行为不变。PASS 时脚本会注明"仅覆盖形式层，语义正确性未自动核验"。Polish Mode `keep` 节跳过本节循环故无需跑。
+0. **🔴 开写前置闸门 (Mandatory，脚本硬拦截)**：开写本 section 前必须先跑 `python3 scripts/prewrite_gate.py --section X.X --root .`，exit≠0 禁止开写。它统一硬检查：上一节完成（上一节 ∈ `state.json.completed_sections`）、大纲就位（`outline.md` 含本节标题）、素材就位（`data/synthesis_matrix.json` 本节文献矩阵按标题层级达硬地板：三级叶子≥6/四级叶子≥3/容器父节≥1；软目标三级≥10、四级≥5 未达只 warn 不拦）、上一节占位符清零（`drafts/` 无 `CITE_PENDING`/`DATA_PENDING`/`【待`）；**本节系统主检索做过**（`section_search_done`：本节有 `tmp/papers_X_X.json` 非空数组，或 `data/search_log.json` 里有 `section` 等于本节的条目；两条取 OR，**只判做没做、不设数量阈值**；容器父节自动跳过。缺证据 exit 1，出路是补跑 Phase 2 的逐节检索，或本节确实无需检索时加 `--allow-no-search "<理由>"` 显式声明——留痕进检索台账，一次声明该节永久放行）；上一节盲检结果（`.review_pass/<上一节>.json`）缺失即 prewrite_gate 硬拦 exit 1，禁止开写；必须先跑 delegate_review verify --section <上一节> 落盘通过标记。**盲检subagent确实跑不起来时**，用 `--allow-manual-review "<理由>"` 显式人工放行（仅放行盲检项、留痕审计，见规则 10 的逃生口）；不加则门禁默认硬拦行为不变。PASS 时脚本会注明"仅覆盖形式层，语义正确性未自动核验"。Polish Mode `keep` 节跳过本节循环故无需跑。
 
 1. **Load context:**
    ```
