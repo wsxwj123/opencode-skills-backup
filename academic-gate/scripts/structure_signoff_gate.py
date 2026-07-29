@@ -44,6 +44,7 @@ EX_USAGE = 64
 
 TITLE_MAX = 80        # 单个标题截断长度（INTERFACE §8.3）
 NODES_MAX = 300       # 结构投影条数上限（同上）
+DIFF_MAX = 10         # 每类差异最多列几条（INTERFACE §8.8）
 
 RESIGN_MARK = "大纲已变更，需要重新确认"
 UNBOUND_HINT = "本签字未绑定大纲，下次 confirm 会自动绑定。"
@@ -273,6 +274,67 @@ def _valid_fingerprint(fp) -> bool:
     return all(isinstance(n, (list, tuple)) and len(n) == 3 for n in nodes)
 
 
+# ------------------------------------------------------------------ 差异
+
+def _show_id(value) -> str:
+    return _core.sanitize_field(value, "ident") if _core else str(value)
+
+
+def _show_title(value) -> str:
+    return _core.sanitize_field(value, "text", TITLE_MAX) if _core else str(value)
+
+
+def _join(items) -> str:
+    """每类最多列 DIFF_MAX 条，超出追加 `…等 N 项`（N = 没列出来的条数）。"""
+    shown = "、".join(items[:DIFF_MAX])
+    if len(items) > DIFF_MAX:
+        shown += "…等 %d 项" % (len(items) - DIFF_MAX)
+    return shown
+
+
+def diff_lines(old: list, new: list) -> list:
+    """五类差异：新增 / 删除 / 改名 / 改序 / 改层级，每类一行，有则列出、无则省略。"""
+    old_map = {str(n[0]): n for n in old}
+    new_map = {str(n[0]): n for n in new}
+    old_ids = [str(n[0]) for n in old]
+    new_ids = [str(n[0]) for n in new]
+    lines = []
+
+    added = [i for i in new_ids if i not in old_map]
+    if added:
+        lines.append("新增的节：" + _join(
+            ["%s「%s」" % (_show_id(i), _show_title(new_map[i][1])) for i in added]))
+    removed = [i for i in old_ids if i not in new_map]
+    if removed:
+        lines.append("删除的节：" + _join(
+            ["%s「%s」" % (_show_id(i), _show_title(old_map[i][1])) for i in removed]))
+
+    common = [i for i in new_ids if i in old_map]
+    renamed = [i for i in common
+               if _norm_title(old_map[i][1]) != _norm_title(new_map[i][1])]
+    if renamed:
+        lines.append("改名的节：" + _join(
+            ["%s「%s」→「%s」" % (_show_id(i), _show_title(old_map[i][1]),
+                                 _show_title(new_map[i][1])) for i in renamed]))
+
+    # 改序只看公共节之间的相对次序：插入/删除本身已由上面两行说清，不该再把
+    # "后面的节整体后移"当成一堆顺序变化刷屏。
+    old_common = [i for i in old_ids if i in new_map]
+    moved = [i for i in common if old_common.index(i) != common.index(i)]
+    if moved:
+        lines.append("顺序变化：" + _join(
+            ["%s 由第 %d 位移到第 %d 位"
+             % (_show_id(i), old_common.index(i) + 1, common.index(i) + 1)
+             for i in moved]))
+
+    relevel = [i for i in common if old_map[i][2] != new_map[i][2]]
+    if relevel:
+        lines.append("层级变化：" + _join(
+            ["%s 由 %s 级变为 %s 级" % (_show_id(i), old_map[i][2], new_map[i][2])
+             for i in relevel]))
+    return lines
+
+
 # ------------------------------------------------------------------ 子命令
 
 def cmd_confirm(root: Path, note: str) -> int:
@@ -341,7 +403,16 @@ def cmd_check(root: Path) -> int:
         return EX_OK
 
     print(RESIGN_MARK)
-    print("请对照大纲文件核对结构改动后重新确认。")
+    if old.get("nodes_truncated") or cur.get("nodes_truncated"):
+        print("大纲节点数超过可记录上限，无法逐节列出差异；请对照大纲文件自行核对后重新确认。")
+    else:
+        lines = diff_lines([list(n) for n in old["nodes"]], cur["nodes"])
+        if lines:
+            for line in lines:
+                print(line)
+        else:
+            print("结构投影与签字里记录的一致，但签字里的校验值对不上"
+                  "（可能是手工改过，或从别的项目复制而来）。")
     print(FIXIT)
     return EX_RESIGN
 
