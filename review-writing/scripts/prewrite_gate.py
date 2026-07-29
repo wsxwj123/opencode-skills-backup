@@ -138,14 +138,18 @@ def section_search_evidence(root, section, warnings):
     if rows:
         return papers_rel(section)
 
-    # 裁决 1：节号写成 JSON 数字与写成字符串同等命中。parse_float/parse_int=str 让数字
-    # 保留 JSON 原文，绝不经 float —— 否则 "2.10" 会被压成 "2.1"，串到别的节上。
-    log = _load_json_array(root, SEARCH_LOG_REL, warnings,
-                           parse_float=str, parse_int=str)
+    # 节号**只认字符串形态**。台账的唯一写入口是 state_manager.py 的 append-search-log
+    # （:1352/:1612/:1746），它的 --section 是 argparse 参数、无 type=，落盘必为字符串；
+    # 所以 JSON 数字形态只可能来自有人手改这个文件 —— 手改检索日志本身就是绕过流程，
+    # 拦掉是对的，不是误伤。
+    # ponytail: 若将来真要放宽认数字，别走 float（float("2.10") == 2.1，会把 2.10 串到
+    # 2.1 上），只能用 json.loads(..., parse_float=str, parse_int=str) 保 JSON 原文。
+    log = _load_json_array(root, SEARCH_LOG_REL, warnings)
     target = str(section).strip()
     for row in log or []:
-        # 单条坏数据不该废掉整份台账：不是对象 / 缺 section 的条目跳过即可。
-        if isinstance(row, dict) and str(row.get("section", "")).strip() == target:
+        # 单条坏数据不该废掉整份台账：不是对象 / section 不是字符串的条目跳过即可。
+        if isinstance(row, dict) and isinstance(row.get("section"), str) \
+                and row["section"].strip() == target:
             return SEARCH_LOG_REL
     return None
 
