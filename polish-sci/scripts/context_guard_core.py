@@ -37,6 +37,7 @@ import json
 import os
 import re
 import shlex
+import stat
 import sys
 import time
 from pathlib import Path
@@ -782,12 +783,22 @@ def _read_switch() -> dict:
     """读开关文件。**任何异常一律返回空字典**（= 保护开着、无豁免）。
 
     fail-safe 方向是硬要求：文件不在 / 坏 JSON / 顶层非对象 / 读不出 / 是目录 /
-    断链 / 成环 / 非 UTF-8 字节，全都必须落到"开"那一侧。坏文件绝不等于关掉保护。
+    断链 / 成环 / 非 UTF-8 字节 / 命名管道或设备文件，全都必须落到"开"那一侧。
+    坏文件绝不等于关掉保护。
     唯一的宽容是 BOM（utf-8-sig）：用户是这个文件的唯一合法写者，而不少编辑器默认写
     BOM，把它当坏文件 = 用户以为关了实际没关，是最坏的一种静默失效。
     """
     try:
-        with open(str(switch_path()), "rb") as fh:
+        p = str(switch_path())
+        # 🔴 open 之前先看清是不是普通文件。命名管道（mkfifo）在没有写者时会让
+        # open/read 一直阻塞，三个钩子每次触发都卡到 CLI 的超时上限、被判为
+        # "钩子失败"→ 一律放行 = 整套门禁被一条 mkfifo 静默下线（实测 >8s 不返回）。
+        # 用 os.stat 而不是 lstat：要判的是"最终会被 open 的那个东西"是什么类型，
+        # lstat 只看软链本身、会把"软链指向真开关文件"这种合法用法误判成非普通文件。
+        # os.stat 自身对 FIFO 不阻塞（阻塞的是 open）。
+        if not stat.S_ISREG(os.stat(p).st_mode):
+            return {}
+        with open(p, "rb") as fh:
             raw = fh.read(SWITCH_READ_LIMIT + 1)
         if len(raw) > SWITCH_READ_LIMIT:
             return {}

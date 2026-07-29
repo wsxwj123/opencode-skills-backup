@@ -13,6 +13,7 @@ import json
 import os
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -613,6 +614,31 @@ def test_switch_bom_and_symlink_and_dir():
         core._INFRA_TARGETS = None
         assert not core.enforcement_disabled()
         assert core.protected_infra(fh.c(core.SWITCH_NAME, "inner.json")) == "killswitch"
+
+
+def test_switch_fifo_does_not_block():
+    """命名管道形态的开关：必须立刻按"开"返回，绝不能卡在 open 上。
+
+    卡住的后果不是慢，是**门禁整体下线**：三个钩子每次触发都读它，读不返回 →
+    CLI 超时判钩子失败 → 一律放行。实测修前 >8s 不返回。
+    """
+    with _FakeHome() as fh:
+        os.mkfifo(fh.c(core.SWITCH_NAME))
+        core._SWITCH_CACHE = None
+        t0 = time.time()
+        assert not core.enforcement_disabled(), "FIFO 开关必须按'开'处理"
+        assert not core.gate_source_edits_allowed()
+        assert time.time() - t0 < 2, "读开关被 FIFO 阻塞了"
+        os.unlink(fh.c(core.SWITCH_NAME))       # FIFO 不是普通文件，显式删干净
+    with _FakeHome() as fh:      # 软链指向 FIFO：跟随解析后同样不许阻塞
+        real = fh.home / "pipe.json"
+        os.mkfifo(str(real))
+        os.symlink(str(real), fh.c(core.SWITCH_NAME))
+        core._SWITCH_CACHE = None
+        t0 = time.time()
+        assert not core.enforcement_disabled()
+        assert time.time() - t0 < 2, "软链到 FIFO 仍被阻塞"
+        os.unlink(str(real))
 
 
 def test_switch_note_non_string_treated_missing():
