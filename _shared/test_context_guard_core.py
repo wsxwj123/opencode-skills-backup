@@ -732,6 +732,12 @@ def test_bash_infra_hit_positions_and_tokens():
             assert not bg._infra_hit(cmd, None)[0], cmd
 
 
+def test_installer_switch_name_matches_core():
+    """安装器为了拼提示语存了一份文件名字面量；与 core 漂了就会指错路。"""
+    import install_gate_hook as ig
+    assert ig.SWITCH_FILE_NAME == core.SWITCH_NAME
+
+
 def test_explain_cli_usage_errors_write_stderr_only():
     assert core.main(["explain"]) == 2
     assert core.main([]) == 2

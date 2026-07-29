@@ -298,6 +298,9 @@ def run() -> None:
                               detail="%s bash" % cat)
             return
 
+    if core.enforcement_disabled():
+        return                      # 用户关了拦截层：F5/F9 全放行（infra 保护已在上面走过）
+
     # ---- A 级：纯文本匹配，不需要 cwd
     for seg in segments:
         if _SIGNOFF_SCRIPT_RE.search(seg) and _CONFIRM_RE.search(seg):
