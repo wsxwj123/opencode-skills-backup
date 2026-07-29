@@ -89,6 +89,20 @@ def _review_state(root: Path, sid: str) -> str:
     return "passed=true" if passed else "passed≠true"
 
 
+def _outline_readable(root: Path) -> bool:
+    """这个项目的大纲这会儿还取得出结构投影吗。
+
+    直接复用签字门禁的 build_fingerprint（同目录 vendored），不另写一套"大纲在哪"
+    的判据——两套判据迟早各说各话。取不出/import 不到一律按"读得出"处理：
+    状态卡是 fail-open 的，宁可少说一句，也不误报"大纲没了"。
+    """
+    try:
+        import structure_signoff_gate as ssg
+        return ssg.build_fingerprint(root) is not None
+    except Exception:
+        return True
+
+
 def _signoff_line(root: Path) -> str:
     try:
         obj = json.loads((root / "structure_signoff.json").read_text(encoding="utf-8"))
@@ -100,6 +114,11 @@ def _signoff_line(root: Path) -> str:
         # 不描述拦不拦（INTERFACE §8.10）。
         if ok and not isinstance(obj.get("outline_fingerprint"), dict):
             line += "（已确认，未绑定大纲；下次 confirm 会自动绑定）"
+        elif ok and not _outline_readable(root):
+            # 绑过大纲、但这次读不出那份大纲（被挪走/删了/坏了）。签字文件看着还在，
+            # 绑定关系实际已经落空；不说出来的话，用户和模型两侧都以为还绑着。
+            # 同样只描述项目事实，不描述拦不拦（INTERFACE §8.10）。
+            line += "（已绑定大纲，但本次读不出大纲文件）"
         return line
     except FileNotFoundError:
         return "结构签字：structure_signoff.json 不存在"
