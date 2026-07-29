@@ -67,6 +67,12 @@ _WRITE_ACTION_RE = re.compile(
     r"|\bpython3?\s+-c"
     r"|\bcp\b|\bmv\b|\bdd\b|\binstall\b|\btruncate\b"
     r"|\bex\s+-s"
+    # 🔴 2026-07-29 补三条现役缺口。此前这张表只守"改写"，不守"破坏"：
+    #   rm —— 删掉 gate_registry.json 或整棵插件目录，比改写它彻底得多，之前完全不拦；
+    #   ln —— 不拦的话"先建软链再写软链目标"是一条完整的绕过路；
+    #   patch / git apply —— BRIEF 明写的"经补丁写"形态。
+    # git checkout/restore/clean 有意不收：要解析 git 子命令语义，误伤面远大于收益。
+    r"|\brm\b|\bln\b|\bpatch\b|\bgit\s+apply\b"
 )
 # 路径 token：引号包裹的整段，或不含空白的一串
 _TOKEN_RE = re.compile(r"'([^']*)'|\"([^\"]*)\"|(\S+)")
