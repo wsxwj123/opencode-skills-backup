@@ -46,7 +46,7 @@ from pathlib import Path
 
 # 与 academic-gate/.claude-plugin/plugin.json 的 version 保持一致；插件目录不在
 # 身边（vendored 到 _shared/ 或单技能 scripts/）时用这个常量兜底。
-FALLBACK_PLUGIN_VERSION = "0.8.2"
+FALLBACK_PLUGIN_VERSION = "0.9.0"
 
 MAX_ROOT_DEPTH = 8           # 向上找根的层数上限（INTERFACE §2.6）
 NONEMPTY_PROBE = 1024        # _nonempty 只读首 1 KB，绝不整读正文
