@@ -208,6 +208,35 @@ def _emit_context(text: str) -> None:
         pass
 
 
+def _infra_guard(payload: dict, tool_name: str) -> bool:
+    """门禁自身文件的写保护。命中即 deny，返回 True。
+
+    🔴 位置铁律：调用点必须在 `core.load_registry()` **之前**。把它放进 _judge 或
+    放在读注册表之后，AI 只要先把 gate_registry.json 写成 `{}`，main() 就在读注册表
+    那一步返回了 —— 一票废掉包括这条保护在内的一切。本判定因此不依赖注册表、不依赖
+    项目根、不依赖分档，是整个钩子里最不依赖状态的一条。
+    """
+    if tool_name not in WRITE_TOOLS:
+        return False          # 只拦写不拦读
+    for raw in core.infra_target_strings(payload):
+        try:
+            cat = core.protected_infra(raw, payload.get("cwd"))
+        except Exception:
+            cat = "unparsable"   # 判据自己炸了也不放行（本条唯一 fail-closed）
+        if not cat:
+            continue
+        reason = (core.REASON_INFRA_SWITCH if cat == "killswitch"
+                  else core.REASON_INFRA.format(
+                      target=core.sanitize_field(raw, "text", 200)))
+        _emit("deny", reason)     # 先出决策，再写审计：审计失败不得改变决策
+        core.audit_append(None, event="PreToolUse", tool=tool_name,
+                          rule=core.INFRA_RULE, decision="deny", skill="",
+                          target=core.sanitize_field(raw, "text", 180),
+                          detail="%s tool" % cat)
+        return True
+    return False
+
+
 def _judge(path: Path, registry: dict):
     """对一个目标路径做一次判定。返回 None=放行，否则 (decision, reason, 审计字段)。"""
     ev = core.detect_for_path(path, registry)
@@ -321,11 +350,15 @@ def main() -> None:
         return                            # 读不到输入：放行
     if not isinstance(payload, dict):
         return
+    tool_name = payload.get("tool_name")
+    tool_name = tool_name if isinstance(tool_name, str) else ""
+
+    # 顺序铁律：infra 保护排第一，且必须在读注册表之前。
+    if _infra_guard(payload, tool_name):
+        return
     registry = core.load_registry()
     if not registry.get("skills"):
         return                            # 无注册表：放行（既有行为不变）
-    tool_name = payload.get("tool_name")
-    tool_name = tool_name if isinstance(tool_name, str) else ""
 
     paths = core.extract_file_paths(payload)
     if not paths:

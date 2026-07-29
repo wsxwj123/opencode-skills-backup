@@ -132,6 +132,59 @@ def _tokens(segment: str) -> list:
     return out
 
 
+def _path_tokens(segment: str) -> list:
+    """[(候选路径, token 在段内的起始位置)]。比 _tokens 宽两处，都是 infra 判定要的：
+    ① 保留 `--opt=<路径>` / `of=<路径>` 的值部分（git apply --directory=…、dd of=…）；
+    ② 保留 `~` 开头的字面路径（Bash 侧 token 里 `~` 没被 shell 展开过）。"""
+    out = []
+    for m in _TOKEN_RE.finditer(segment):
+        tok = (m.group(1) or m.group(2) or m.group(3) or "").strip("'\"")
+        if not tok:
+            continue
+        cands = []
+        if not tok.startswith("-"):
+            cands.append(tok)
+        if "=" in tok:
+            value = tok.split("=", 1)[1]
+            if value:
+                cands.append(value)
+        for cand in cands:
+            if "/" in cand or "." in cand or cand.startswith("~"):
+                out.append((cand, m.start()))
+        if len(out) >= 40:
+            break
+    return out
+
+
+def _infra_hit(segment: str, cwd) -> tuple:
+    """A 级新增：段内有写入动作词，且动作词**之后**的某个 token 解析到门禁自身文件。
+    返回 (类别名, 命中的 token)；没命中返回 ("", "")。
+
+    与 F9-A 的纯文件名子串匹配不同，这里做真实路径解析（expanduser + 按 cwd 补全 +
+    realpath）—— 目标是几条已知的绝对路径，没必要退化成文件名匹配。
+    """
+    matches = list(_WRITE_ACTION_RE.finditer(segment))
+    if not matches:
+        return "", ""
+    toks = _path_tokens(segment)
+    if all(m.group(0).strip() == "cp" for m in matches):
+        # cp 源位豁免：`cp <受保护文件> /tmp/bak` 是备份不是篡改，只认目的位。
+        # mv 不豁免——移走等于破坏。
+        toks, first_action = toks[-1:], 0
+    else:
+        first_action = min(m.end() for m in matches)
+    for tok, pos in toks:
+        if pos < first_action:
+            continue          # 动作词之前的 token 是被读的对象（grep <p> > out.txt）
+        try:
+            cat = core.protected_infra(tok, cwd)
+        except Exception:
+            cat = "unparsable"
+        if cat:
+            return cat, tok
+    return "", ""
+
+
 def _hits_protected_write(segment: str) -> bool:
     """F9-A：段内既有写入动作词、又有受保护目标，**且目标出现在动作词之后**。
 
@@ -229,6 +282,21 @@ def run() -> None:
             cwd = None
 
     segments = _segments(command)
+
+    # ---- 门禁自身文件的写保护：排在最前，且不依赖注册表、不受用户开关影响。
+    # 放到 load_registry(:249) 之后就等于可以被"先把注册表写成 {}"一票废掉。
+    for seg in segments:
+        cat, tok = _infra_hit(seg, cwd)
+        if cat:
+            reason = (core.REASON_INFRA_SWITCH if cat == "killswitch"
+                      else core.REASON_INFRA.format(
+                          target=core.sanitize_field(tok, "text", 200)))
+            _emit_deny(reason)
+            core.audit_append(None, event="PreToolUse", tool="Bash",
+                              rule=core.INFRA_RULE, decision="deny", skill="",
+                              target=core.sanitize_field(tok, "text", 180),
+                              detail="%s bash" % cat)
+            return
 
     # ---- A 级：纯文本匹配，不需要 cwd
     for seg in segments:

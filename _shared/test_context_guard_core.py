@@ -519,6 +519,219 @@ def test_bash_segment_and_protected_write_position():
         assert not bg._hits_protected_write(cmd), cmd
 
 
+# ---------------------------------------------------------------- 本机开关 + infra 写保护
+# 这几条走内部函数，与考卷（黑盒、subprocess）互补：考卷够不着"每种损坏形态各自落到
+# 哪一档"这种逐形态的判据级断言。
+
+
+class _FakeHome:
+    """临时假家目录 + 清掉两个进程级缓存（同进程里连着测多种开关内容，必须清）。"""
+
+    def __enter__(self):
+        self._td = tempfile.TemporaryDirectory()
+        self.home = Path(self._td.name)
+        (self.home / ".claude").mkdir(parents=True)
+        self._old = os.environ.get("HOME")
+        os.environ["HOME"] = str(self.home)
+        self._reset()
+        return self
+
+    def _reset(self):
+        core._SWITCH_CACHE = None
+        core._INFRA_TARGETS = None
+
+    def switch(self, raw):
+        p = self.home / ".claude" / core.SWITCH_NAME
+        if isinstance(raw, bytes):
+            p.write_bytes(raw)
+        else:
+            p.write_text(raw, encoding="utf-8")
+        self._reset()
+        return p
+
+    def c(self, *parts):
+        return str(self.home.joinpath(".claude", *parts))
+
+    def __exit__(self, *exc):
+        if self._old is None:
+            os.environ.pop("HOME", None)
+        else:
+            os.environ["HOME"] = self._old
+        core._SWITCH_CACHE = None
+        core._INFRA_TARGETS = None
+        self._td.cleanup()
+        return False
+
+
+def test_switch_only_json_false_disables():
+    """严格身份比较：只有 JSON 的 false 关得掉，其余一律"开"。"""
+    with _FakeHome() as fh:
+        assert not core.enforcement_disabled(), "无文件必须是开"
+        fh.switch('{"enforcement_enabled": false}')
+        assert core.enforcement_disabled()
+        for raw in ('{"enforcement_enabled": true}', '{"enforcement_enabled": "false"}',
+                    '{"enforcement_enabled": 0}', '{"enforcement_enabled": null}',
+                    '{"enforcement_enabled": ""}', '{"enforcement_enabled": []}',
+                    '{"Enforcement_Enabled": false}', '{"note": "随手建的"}'):
+            fh.switch(raw)
+            assert not core.enforcement_disabled(), raw
+
+
+def test_switch_every_broken_form_falls_open():
+    """fail-safe 全表：坏文件绝不等于关掉保护。"""
+    forms = ['{"enforcement_enabled": false,,,}',   # 坏 JSON
+             '{"enforcement_enabled": fal',          # 半截
+             "", "   \n\t ",                         # 空 / 只有空白
+             '[{"enforcement_enabled": false}]',     # 顶层数组
+             '"enforcement_enabled=false"', "0", "false",   # 顶层非对象
+             b"\xff\xfe\x00\x01",                    # 非 UTF-8 字节
+             "x" * (core.SWITCH_READ_LIMIT + 10)]    # 超大
+    with _FakeHome() as fh:
+        for raw in forms:
+            fh.switch(raw)
+            assert not core.enforcement_disabled(), repr(raw)[:40]
+            assert not core.gate_source_edits_allowed(), repr(raw)[:40]
+
+
+def test_switch_bom_and_symlink_and_dir():
+    with _FakeHome() as fh:
+        fh.switch(b"\xef\xbb\xbf" + b'{"enforcement_enabled": false}')
+        assert core.enforcement_disabled(), "BOM 必须容忍（utf-8-sig），否则用户以为关了实际没关"
+        fh.switch(b"\xef\xbb\xbf" + b'{"enforcement_enabled": fal')
+        assert not core.enforcement_disabled(), "容忍 BOM ≠ 放宽 JSON 校验"
+    with _FakeHome() as fh:      # 软链：跟随读
+        real = fh.home / "elsewhere.json"
+        real.write_text('{"enforcement_enabled": false}', encoding="utf-8")
+        os.symlink(str(real), fh.c(core.SWITCH_NAME))
+        core._SWITCH_CACHE = None
+        assert core.enforcement_disabled()
+        # 清单侧 realpath 后真实目标一并进保护范围 → 写 /tmp 那份也拦
+        assert core.protected_infra(str(real)) == "killswitch"
+    with _FakeHome() as fh:      # 目录形态：读侧=开，写侧连子路径一起拦
+        Path(fh.c(core.SWITCH_NAME)).mkdir()
+        core._SWITCH_CACHE = None
+        core._INFRA_TARGETS = None
+        assert not core.enforcement_disabled()
+        assert core.protected_infra(fh.c(core.SWITCH_NAME, "inner.json")) == "killswitch"
+
+
+def test_switch_note_non_string_treated_missing():
+    with _FakeHome() as fh:
+        for raw in ('{"note": 123}', '{"note": {"a": 1}}', '{"note": ["x"]}', '{"note": null}'):
+            fh.switch(raw)
+            assert core.switch_note() == "", raw
+        fh.switch('{"note": "我自己盯流程"}')
+        assert core.switch_note() == "我自己盯流程"
+
+
+def test_protected_infra_categories_and_boundaries():
+    with _FakeHome() as fh:
+        hit = {
+            fh.c("academic-gate", "academic_gate_hook.py"): "legacy-deploy-dir",
+            fh.c("academic-gate", "lib", "deep", "x.py"): "legacy-deploy-dir",
+            fh.c("skills", "academic-gate", "scripts", "x.py"): "plugin-dir",
+            fh.c("skills", "academic-gate", "hooks", "hooks.json"): "plugin-dir",
+            fh.c("settings.json"): "settings",
+            fh.c("settings.local.json"): "settings",
+            fh.c(core.SWITCH_NAME): "killswitch",
+            fh.c("skills", "sci2doc", "scripts", "gate_registry.json"): "vendored",
+            fh.c("skills", "polish-sci", "scripts", "context_guard_core.py"): "vendored",
+            # `..` 兜圈子、尚不存在的目标，一律归一化后照拦
+            fh.c("skills", "..", "settings.json"): "settings",
+            fh.c("academic-gate", "brand_new.py"): "legacy-deploy-dir",
+        }
+        for path, cat in hit.items():
+            assert core.protected_infra(path) == cat, path
+        miss = [
+            fh.c("hooks", "my_own_hook.py"),                  # 用户自己的钩子目录
+            fh.c("academic-gate-notes", "x.md"),              # 目录名前缀撞名
+            fh.c("skills", "academic-gate-old", "y.py"),      # 同上
+            fh.c("skills", "sci2doc", "scripts", "proofread.py"),   # 非门禁文件
+            fh.c("skills", "sci2doc", "SKILL.md"),
+            fh.c("skills", "sci2doc", "scripts", "sub", "gate_registry.json"),  # 层数不对
+            fh.c("projects", "p", "MEMORY.md"),
+            str(fh.home / "notes.md"),
+            str(fh.home / ".codex" / "skills" / "academic-gate" / "scripts" / "x.py"),
+            "", "   ",
+        ]
+        for path in miss:
+            assert core.protected_infra(path) == "", path
+
+
+def test_protected_infra_relative_tilde_and_unparsable():
+    with _FakeHome() as fh:
+        assert core.protected_infra("settings.json", fh.c()) == "settings"
+        assert core.protected_infra("skills/academic-gate/scripts/x.py", fh.c()) == "plugin-dir"
+        assert core.protected_infra("~/.claude/settings.json") == "settings"
+        # 解析必炸的输入：唯一 fail-closed 的一条，绝不能因异常放行
+        assert core.protected_infra("/tmp/\x00/settings.json") == "unparsable"
+        if core.CASE_INSENSITIVE_FS:
+            assert core.protected_infra(fh.c("Settings.JSON")) == "settings"
+            assert core.protected_infra(fh.c("Academic-Gate", "h.py")) == "legacy-deploy-dir"
+
+
+def test_maintainer_exemption_scope():
+    """豁免只放开源码目录与 vendored；settings / 开关 / 部署位一律不放开。"""
+    with _FakeHome() as fh:
+        fh.switch('{"allow_gate_source_edits": true}')
+        assert core.protected_infra(fh.c("skills", "academic-gate", "scripts", "x.py")) == ""
+        assert core.protected_infra(fh.c("skills", "sci2doc", "scripts",
+                                         "academic_gate_hook.py")) == ""
+        assert core.protected_infra(fh.c("settings.json")) == "settings"
+        assert core.protected_infra(fh.c("settings.local.json")) == "settings"
+        assert core.protected_infra(fh.c(core.SWITCH_NAME)) == "killswitch"
+        assert core.protected_infra(fh.c("academic-gate", "h.py")) == "legacy-deploy-dir"
+        for raw in ('{"allow_gate_source_edits": "true"}', '{"allow_gate_source_edits": 1}',
+                    '{"allow_gate_source_edits": false}', '{"enforcement_enabled": true}',
+                    "{ 坏 JSON", '[{"allow_gate_source_edits": true}]'):
+            fh.switch(raw)
+            assert core.protected_infra(
+                fh.c("skills", "academic-gate", "scripts", "x.py")) == "plugin-dir", raw
+
+
+def test_infra_target_strings_covers_patch_fields():
+    """apply_patch 的补丁文本在不同端分别落在 command / input / patch 字段。"""
+    body = "*** Begin Patch\n*** Add File: a.py\n*** Delete File: b.py\n*** End Patch"
+    for key in ("command", "input", "patch"):
+        got = core.infra_target_strings({"tool_input": {key: body}})
+        assert got == ["a.py", "b.py"], (key, got)
+    assert core.infra_target_strings(
+        {"tool_input": {"notebook_path": "/x/nb.ipynb"}}) == ["/x/nb.ipynb"]
+    assert core.infra_target_strings({"tool_input": {}}) == []
+    assert core.infra_target_strings({"tool_input": None}) == []
+
+
+def test_bash_infra_hit_positions_and_tokens():
+    import bash_guard_hook as bg
+    with _FakeHome() as fh:
+        target = fh.c("skills", "academic-gate", "scripts", "academic_gate_hook.py")
+        deny = ["echo x > %s" % target,
+                "echo x >> %s" % target,
+                "echo x | tee %s" % target,
+                "sed -i '' s/a/b/ %s" % target,
+                "rm -f %s" % target,                      # 🔴 本轮补的三条动作词
+                "rm -rf %s" % fh.c("academic-gate"),
+                "ln -sf /tmp/evil.py %s" % target,
+                "patch -p1 %s < /tmp/d.diff" % target,
+                "git apply --directory=%s /tmp/d.diff" % fh.c("skills", "academic-gate",
+                                                              "scripts"),
+                "dd if=/dev/zero of=%s bs=1" % target,    # of= 的值部分要能被抽出来
+                "truncate -s 0 %s" % target,
+                ": > %s" % target,
+                "mv %s /tmp/bak.py" % target,             # 移走 = 破坏，源位不豁免
+                "echo x > ~/.claude/settings.json"]
+        for cmd in deny:
+            assert bg._infra_hit(cmd, None)[0], cmd
+        allow = ["cat %s" % target,
+                 "grep -n hook %s" % target,
+                 "cp %s /tmp/bak.py" % target,            # cp 源位 = 备份，放行
+                 "grep -rn academic_gate_hook.py . > /tmp/out.txt",
+                 "echo x > %s" % fh.c("academic-gate-notes", "log.txt"),
+                 "echo x > %s" % str(fh.home / "notes.md")]
+        for cmd in allow:
+            assert not bg._infra_hit(cmd, None)[0], cmd
+
+
 def test_explain_cli_usage_errors_write_stderr_only():
     assert core.main(["explain"]) == 2
     assert core.main([]) == 2
