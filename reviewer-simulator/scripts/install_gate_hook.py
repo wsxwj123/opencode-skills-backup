@@ -35,6 +35,9 @@ import time
 from pathlib import Path
 
 HOOK_TAG = "academic_gate_hook.py"  # 识别我们的 hook entry(新旧路径都含此子串)
+# 与 context_guard_core.SWITCH_NAME 同值(只用来拼给用户看的提示语,判定一律走 core)。
+# 两处同值由 test_context_guard_core.py 的一条断言守着,漂了会红。
+SWITCH_FILE_NAME = "academic-gate.local.json"
 HEARTBEAT_NAME = "hook_heartbeat.json"
 HEARTBEAT_FRESH_SEC = 24 * 3600  # 24h 内 fire 过算新鲜
 
@@ -298,10 +301,62 @@ def _install(settings_path: Path, remove: bool = False) -> tuple[bool, str]:
     return True, ("migrated" if migrated else "installed")
 
 
+def _read_switch() -> tuple[bool, str, str]:
+    """(用户关了吗, 清洗过的理由, 开关文件最后修改日期)。
+
+    🔴 单独包一层 try、失败一律按"开"：main() 的宽 except 会把任何异常变成
+    status=error 且**跳过安装**。把 import 裸放进去，core 缺失/损坏就等于门禁不装了
+    —— 而现状是 core 缺失照装不误，不许把失败方向翻过来。
+    """
+    try:
+        sys.path.insert(0, str(_self_dir()))
+        import context_guard_core as core
+        if not core.enforcement_disabled():
+            return False, "", ""
+        note = core.sanitize_field(core.switch_note(), "text", 200) if core.switch_note() else ""
+        try:
+            mtime = time.strftime("%Y-%m-%d",
+                                  time.localtime(core.switch_path().stat().st_mtime))
+        except Exception:
+            mtime = ""
+        return True, note, mtime
+    except Exception:
+        return False, "", ""
+
+
+def _disabled_message(note: str, mtime: str) -> str:
+    """给**用户**看的那段话（安装器 stdout 是用户唯一真会看到的地方）。
+    只回显 note 与 mtime；settings.json 的任何内容、任何环境变量值一律不进这里。"""
+    where = "~/.claude/%s 里 enforcement_enabled=false" % SWITCH_FILE_NAME
+    if mtime:
+        where += "，最后修改 %s" % mtime
+    if note:
+        where += "；你写的理由：%s" % note
+    return ("学术门禁的拦截层已被你关闭（%s）。本次不安装、不部署任何钩子，"
+            "也不会再自动写回 settings.json。流程脚本与状态卡照常工作。"
+            "要恢复拦截：删掉该文件，或把 enforcement_enabled 改成 true。" % where)
+
+
 def main() -> None:
     result = {"status": "error", "action": "none", "message": ""}
     force = "--force" in sys.argv[1:]
     try:
+        disabled, note, mtime = _read_switch()
+        if disabled:
+            # 摘 entry 只对 legacy 装法有意义（插件的 hooks.json 跨层级合并、删不掉），
+            # 目的是让存量机器上那份不认识开关的陈旧 hook 不再被调起。
+            ok, action = _install(_settings_path(), remove=True)
+            if ok:
+                result.update(status="disabled", action="user-killswitch",
+                              message=_disabled_message(note, mtime))
+            else:
+                result.update(status="degraded", action="user-killswitch", message=(
+                    "开关已生效（钩子读到开关会放行），但 settings.json 里的旧 hook 条目"
+                    "没能摘除：" + action + "。settings.json 未被破坏。"
+                    "若那条指向的是旧版钩子，请手动删除该条目。"))
+            print(json.dumps(result, ensure_ascii=False))
+            sys.exit(0)
+
         if _plugin_present():
             # 插件模式:钩子由 Claude Code 启动时自动加载,本安装器只负责"别再重复装一条"。
             # 不部署 ~/.claude/academic-gate/(插件自带三件套),并摘掉本安装器曾写过的 entry。
