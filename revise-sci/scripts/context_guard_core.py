@@ -58,11 +58,15 @@ AUDIT_MAX_BYTES = 1024 * 1024
 # "这一次没检查成"，落不下就等于没发生过——而它们恰恰全都发生在没有项目根的时刻。
 # 其余规则一律要求有项目根（宁可少一条记录，也不在陌生目录里造文件）。
 NO_ROOT_RULES = {"path-parse-failed", "F9B-skipped-no-cwd", "internal-error",
-                 "stdin-truncated", "F8-weak-ask", "F11-infra-write"}
+                 "stdin-truncated", "F8-weak-ask", "F11-infra-write",
+                 "registry-unreadable"}
 # 连 CLAUDE_PLUGIN_DATA 都没有时还允许回落 ~/.claude/ 的规则。只给 F11 开：它的目标
 # 路径本来就全在 ~/.claude 下，往同一目录写审计不算"在陌生目录造文件"；而 legacy 装法
 # 通常没有 CLAUDE_PLUGIN_DATA，不给回落就等于"最该留痕的那条反而无痕"。
-HOME_AUDIT_RULES = {"F11-infra-write"}
+# registry-unreadable 一并给：注册表就住在 ~/.claude/skills 下，往同一棵树写审计
+# 不算"在陌生目录造文件"；而 legacy 装法通常没有 CLAUDE_PLUGIN_DATA，不给回落就等于
+# "门禁整体失效的那一刻反而一点痕迹都没有"。
+HOME_AUDIT_RULES = {"F11-infra-write", "registry-unreadable"}
 DONE_STATUS = {"done", "completed", "finalized"}
 
 # nsfc 的节级白名单：**硬编码**，不得复用 prewrite_gate.SECTION_ORDER。
@@ -157,20 +161,47 @@ def plugin_version() -> str:
     return FALLBACK_PLUGIN_VERSION
 
 
+REGISTRY_NAME = "gate_registry.json"
+_REGISTRY_UNREADABLE = False
+
+
+def registry_unreadable() -> bool:
+    """上一次 load_registry 是不是撞上了"文件在、但读不出/解析不了"。
+
+    喂层据此在状态卡上留一行，让这个状态对用户可见。**不放在拦层**：判定该
+    fail-open 就 fail-open，这里只解决"静默"。
+    """
+    return _REGISTRY_UNREADABLE
+
+
 def load_registry() -> dict:
     """读不到 → 空表 → 所有钩子放行（既有 fail-open 行为，不改）。
 
     但"文件不在"和"文件坏了"要分开：前者是正常形态（单技能分发时可能就没有），
-    后者是**门禁整体静默失效**——registry 一坏，8 家全部不设防且一声不吭。
+    后者是**门禁整体静默失效**——registry 一坏（`chmod 000` 就够了），8 家全部
+    不设防。方向仍是 fail-open（正常损坏时不该把用户卡死），但不许静默：
+    专属规则名进审计（与"签名函数自己炸了"的 internal-error 分开，事后 grep 得出来）
+    + 置位供状态卡显示。
     """
+    global _REGISTRY_UNREADABLE
+    path = shared_dir() / REGISTRY_NAME
     try:
-        return json.loads((shared_dir() / "gate_registry.json").read_text(encoding="utf-8"))
+        obj = json.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError:
         return {}
     except Exception as exc:
-        audit_append(None, rule="internal-error", decision="unchecked",
+        _REGISTRY_UNREADABLE = True
+        audit_append(None, rule="registry-unreadable", decision="unchecked",
+                     target=REGISTRY_NAME,
                      detail="gate_registry %s" % type(exc).__name__)
         return {}
+    if not isinstance(obj, dict):
+        # 合法 JSON 但顶层不是对象：同样是"文件在、内容用不了"
+        _REGISTRY_UNREADABLE = True
+        audit_append(None, rule="registry-unreadable", decision="unchecked",
+                     target=REGISTRY_NAME, detail="gate_registry not-an-object")
+        return {}
+    return obj
 
 
 def plugin_data_dir() -> Path | None:

@@ -758,6 +758,71 @@ def test_bash_infra_hit_positions_and_tokens():
             assert not bg._infra_hit(cmd, None)[0], cmd
 
 
+def test_bash_covers_non_write_disable_actions():
+    """"一个字节都不写也能让门禁下线"的五个动作词：改权限/属主/标志位、造管道设备。
+
+    典型：`chmod 000 gate_registry.json` → 注册表读不出 → 除 F11 外全部放行。
+    修前这五个一个都不在动作词表里（实测全 False）。
+    """
+    import bash_guard_hook as bg
+    with _FakeHome() as fh:
+        reg = fh.c("skills", "sci2doc", "scripts", "gate_registry.json")
+        switch = fh.c(core.SWITCH_NAME)
+        for cmd in ("chmod 000 %s" % reg, "chflags uchg %s" % reg,
+                    "chown nobody %s" % reg, "mkfifo %s" % switch,
+                    "mknod %s p" % switch):
+            assert bg._infra_hit(cmd, None)[0], cmd
+        # 反向：与门禁无关的路径上做同样的事不许误拦
+        for cmd in ("chmod +x /tmp/whatever.sh", "chown me /tmp/x",
+                    "mkfifo /tmp/mypipe", "chmod 755 %s" % str(fh.home / "notes.md")):
+            assert not bg._infra_hit(cmd, None)[0], cmd
+
+
+def test_registry_unreadable_is_distinguished_from_missing():
+    """注册表"文件在但读不出" ≠ "文件不存在"：前者必须留痕（审计 + 状态位），
+    后者是正常形态（单技能分发时可能就没有），不许刷噪音。方向仍是 fail-open。"""
+    import shutil
+    with _FakeHome() as fh:
+        real_dir = core.shared_dir()
+        stage = Path(fh.home) / "shared"
+        shutil.copytree(str(real_dir), str(stage),
+                        ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "test_*.py"))
+        reg = stage / core.REGISTRY_NAME
+        orig_shared_dir = core.shared_dir
+        core.shared_dir = lambda: stage
+        try:
+            core._REGISTRY_UNREADABLE = False
+            assert core.load_registry().get("skills"), "正常注册表应读得出"
+            assert not core.registry_unreadable()
+
+            saved = reg.read_bytes()
+            reg.unlink()                       # 不存在 → 静默 fail-open
+            core._REGISTRY_UNREADABLE = False
+            assert core.load_registry() == {}
+            assert not core.registry_unreadable(), "文件不存在是正常形态，不该报警"
+
+            reg.write_text("{ 坏掉的 JSON", encoding="utf-8")   # 在但坏 → 必须留痕
+            core._REGISTRY_UNREADABLE = False
+            assert core.load_registry() == {}
+            assert core.registry_unreadable()
+
+            reg.write_bytes(b"[1,2,3]")           # 合法 JSON 但顶层不是对象
+            core._REGISTRY_UNREADABLE = False
+            assert core.load_registry() == {}
+            assert core.registry_unreadable()
+
+            reg.write_bytes(saved)
+        finally:
+            core.shared_dir = orig_shared_dir
+            core._REGISTRY_UNREADABLE = False
+        # 审计要落得下来（这条规则允许在无项目根、无 CLAUDE_PLUGIN_DATA 时回落家目录）
+        audit = Path(fh.home) / ".claude" / "academic_gate_audit.jsonl"
+        assert audit.is_file(), "注册表读不出时没留下任何审计"
+        lines = [l for l in audit.read_text(encoding="utf-8").splitlines()
+                 if "registry-unreadable" in l]
+        assert lines, audit.read_text(encoding="utf-8")[:400]
+
+
 def test_installer_switch_name_matches_core():
     """安装器为了拼提示语存了一份文件名字面量；与 core 漂了就会指错路。"""
     import install_gate_hook as ig

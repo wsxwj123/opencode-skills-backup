@@ -73,6 +73,12 @@ _WRITE_ACTION_RE = re.compile(
     #   patch / git apply —— BRIEF 明写的"经补丁写"形态。
     # git checkout/restore/clean 有意不收：要解析 git 子命令语义，误伤面远大于收益。
     r"|\brm\b|\bln\b|\bpatch\b|\bgit\s+apply\b"
+    # 🔴 再补五个"不写一个字节也能让门禁下线"的。这不是追长尾（长尾追不完，见安全
+    # 审计结论），是补一类质变：
+    #   chmod / chflags / chown —— `chmod 000 gate_registry.json` 一条命令就让注册表
+    #     读不出 → 除 F11 外全部放行，而它此前完全不算"写入动作"；
+    #   mkfifo / mknod —— 把开关或注册表做成管道/设备文件，读它的那一侧就废了。
+    r"|\bchmod\b|\bchflags\b|\bchown\b|\bmkfifo\b|\bmknod\b"
 )
 # 路径 token：引号包裹的整段，或不含空白的一串
 _TOKEN_RE = re.compile(r"'([^']*)'|\"([^\"]*)\"|(\S+)")
