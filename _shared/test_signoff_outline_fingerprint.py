@@ -73,10 +73,33 @@ def test_rw_level_from_hash_count():
 
 def test_nsfc_links_reject_prose():
     """nsfc 只取 id 与链路：链路字段里混进正文（中文表述）必须被挡在外面。"""
+    ids = {"H1", "O1", "M1"}
     line = g._nsfc_links({"id": "H1", "text": "本课题拟阐明的机制",
                           "mapped_to_objective": ["O1", "整句中文说明"],
-                          "supports_method": "M1"})
+                          "supports_method": "M1"}, ids)
     assert line == "mapped_to_objective=O1;supports_method=M1", line
+
+
+def test_nsfc_links_reject_ascii_words_not_in_id_set():
+    """只挡"长得不像 id"是不够的：纯英文单词形态的句子片段能通过正则，
+    必须再要求"这个值在同一批账本的 id 集合里找得到"（§8.4：不取任何文字表述）。
+    实测泄漏样例就是 related: ENGLISH_PROSE_SENTINEL。"""
+    entry = {"id": "H1", "related": "ENGLISH_PROSE_SENTINEL",
+             "refs": ["REF_PROSE_SENTINEL_LONGERTHAN", "O1"]}
+    assert g._nsfc_links(entry, {"H1", "O1"}) == "refs=O1", g._nsfc_links(entry, {"H1", "O1"})
+    # 端到端：整个投影里不许出现哨兵串
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td) / "p"
+        (root / "data").mkdir(parents=True)
+        (root / "data" / "consistency_map.json").write_text(json.dumps(
+            {"H": [dict(entry, text="假说一")], "O": [{"id": "O1", "text": "目标一"}]},
+            ensure_ascii=False), encoding="utf-8")
+        (root / "project_state.json").write_text(json.dumps(
+            {"skill": "nsfc-proposal", "phase": "phase2", "gate": {}}), encoding="utf-8")
+        blob = json.dumps(g.build_fingerprint(root), ensure_ascii=False)
+        for sentinel in ("ENGLISH_PROSE_SENTINEL", "REF_PROSE_SENTINEL_LONGERTHAN",
+                         "假说一", "目标一"):
+            assert sentinel not in blob, sentinel
 
 
 def test_diff_five_classes():

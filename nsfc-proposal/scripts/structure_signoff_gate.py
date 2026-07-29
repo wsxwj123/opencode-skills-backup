@@ -167,9 +167,39 @@ _NSFC_LINK_HINTS = ("mapped", "supports", "trace", "_id", "_ids", "related", "re
 _NSFC_ID_RE = re.compile(r"^[A-Za-z0-9._\-]{1,32}$")
 
 
-def _nsfc_links(entry: dict) -> str:
-    """把"谁指向谁"压成一行。只收长得像标识符的值（中文表述天然不匹配）——
-    这层过滤是硬红线：链路字段里一旦混进正文，签字文件就成了正文副本。"""
+def _nsfc_ids(cmap, design) -> set:
+    """这一批账本里所有实体的 id。链路的值只能取自这里——见 _nsfc_links。"""
+    ids = set()
+    if isinstance(cmap, dict):
+        for short, long in _NSFC_ENTITIES:
+            items = cmap.get(short)
+            if not isinstance(items, list):
+                items = cmap.get(long)
+            if not isinstance(items, list):
+                continue
+            for idx, entry in enumerate(items):
+                if isinstance(entry, dict):
+                    ident = _first_str(entry, _ID_KEYS) or str(idx)
+                    ids.add(ident)
+                    ids.add("%s-%s" % (short, ident))
+    if isinstance(design, dict) and isinstance(design.get("entries"), list):
+        for idx, entry in enumerate(design["entries"]):
+            if isinstance(entry, dict):
+                ident = _first_str(entry, _ID_KEYS) or str(idx)
+                ids.add(ident)
+                ids.add("ED-%s" % ident)
+    return ids
+
+
+def _nsfc_links(entry: dict, ids: set) -> str:
+    """把"谁指向谁"压成一行。两道过滤，缺一不可（§8.4：只取 id 与链路关系，
+    不取任何文字表述）：
+
+    ① 长得像标识符（中文表述天然不匹配）；
+    ② **必须能在同一批账本的 id 集合里找到**。只有 ① 的话，纯英文单词形态的
+       句子片段会被当成 id 存进指纹（实测泄漏样例：related: ENGLISH_PROSE_SENTINEL）
+       —— 指向一个不存在的实体本来就不是链路，丢掉不损失任何结构信息。
+    """
     out = []
     for key in sorted(entry):
         low = key.lower()
@@ -177,7 +207,8 @@ def _nsfc_links(entry: dict) -> str:
             continue
         val = entry[key]
         vals = val if isinstance(val, list) else [val]
-        hit = [v for v in vals if isinstance(v, str) and _NSFC_ID_RE.match(v)]
+        hit = [v for v in vals
+               if isinstance(v, str) and _NSFC_ID_RE.match(v) and v in ids]
         if hit:
             out.append("%s=%s" % (key, ",".join(hit)))
     return ";".join(out)
@@ -191,6 +222,7 @@ def _proj_nsfc(root: Path):
         return None
     nodes: list = []
     sources: list = []
+    ids = _nsfc_ids(cmap, design)
     if isinstance(cmap, dict):
         sources.append("data/consistency_map.json")
         for short, long in _NSFC_ENTITIES:
@@ -203,14 +235,14 @@ def _proj_nsfc(root: Path):
                 if not isinstance(entry, dict):
                     continue
                 ident = _first_str(entry, _ID_KEYS) or str(idx)
-                nodes.append(["%s-%s" % (short, ident), _nsfc_links(entry), 2])
+                nodes.append(["%s-%s" % (short, ident), _nsfc_links(entry, ids), 2])
     if isinstance(design, dict) and isinstance(design.get("entries"), list):
         sources.append("data/experimental_design.json")
         for idx, entry in enumerate(design["entries"]):
             if not isinstance(entry, dict):
                 continue
             ident = _first_str(entry, _ID_KEYS) or str(idx)
-            nodes.append(["ED-%s" % ident, _nsfc_links(entry), 2])
+            nodes.append(["ED-%s" % ident, _nsfc_links(entry, ids), 2])
     return nodes, sources
 
 
