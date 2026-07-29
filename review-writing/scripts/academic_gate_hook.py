@@ -353,9 +353,12 @@ def main() -> None:
     tool_name = payload.get("tool_name")
     tool_name = tool_name if isinstance(tool_name, str) else ""
 
-    # 顺序铁律：infra 保护排第一，且必须在读注册表之前。
+    # 顺序铁律：infra 保护 → 用户开关 → 原有门禁。前两步都在读注册表之前。
     if _infra_guard(payload, tool_name):
         return
+    if core.enforcement_disabled():
+        return                            # 用户关了拦截层：本层全放行（infra 保护不受影响）
+
     registry = core.load_registry()
     if not registry.get("skills"):
         return                            # 无注册表：放行（既有行为不变）

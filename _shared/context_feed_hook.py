@@ -111,8 +111,15 @@ def _snapshot(root: Path, skill: str, registry: dict) -> dict:
 def _full_card(root: Path, ev, registry: dict, snap: dict, notice: str) -> str:
     ver = core.plugin_version()
     root_s = core.sanitize_field(str(root), "text", 200)
-    lines = [
-        "[学术项目状态卡 · academic-gate v%s 从项目文件读出，非会话记忆]" % ver,
+    lines = ["[学术项目状态卡 · academic-gate v%s 从项目文件读出，非会话记忆]" % ver]
+    # 🔴 这一句必须待在卡片前部的不可截断区：_fit 从末尾往回砍，排在后面的话
+    # "开态有、关态无"这条断言会因为卡片变长而在无关处失灵。
+    # 用户关掉拦截层时整行删除（那时它是假话），且**不新增任何"当前不拦"的陈述**——
+    # 状态卡的读者是模型，把"现在没人管你"喂给被约束方是反效果。
+    if not core.enforcement_disabled():
+        lines.append("本项目存在已声明完成但无盲检标记的节时，"
+                     "academic-gate 会拦下新正文文件的写入。")
+    lines += [
         "项目根：%s" % root_s,
         "技能：%s" % core.sanitize_field(ev.skill, "ident"),
         _signoff_line(root),
@@ -135,7 +142,6 @@ def _full_card(root: Path, ev, registry: dict, snap: dict, notice: str) -> str:
         lines.append("已声明完成但无盲检标记的节：%s"
                      % "、".join(core.sanitize_list(snap["pending"], "ident")))
     lines.append("本项目的盲检命令：%s" % core.verify_command(ev.skill, root))
-    lines.append("本项目存在已声明完成但无盲检标记的节时，academic-gate 会拦下新正文文件的写入。")
     if ev.unknown:
         lines.append("未知项：%s。" % "；".join(core.sanitize_list(ev.unknown, "text", 120)))
     if notice:
