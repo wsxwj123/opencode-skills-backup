@@ -93,8 +93,14 @@ def _signoff_line(root: Path) -> str:
     try:
         obj = json.loads((root / "structure_signoff.json").read_text(encoding="utf-8"))
         ok = isinstance(obj, dict) and bool(obj.get("confirmed"))
-        return ("结构签字：structure_signoff.json 存在，confirmed=%s"
+        line = ("结构签字：structure_signoff.json 存在，confirmed=%s"
                 % ("true" if ok else "false"))
+        # 存量签字没有大纲绑定信息（升级前落的）——照常放行，但要把这个事实说出来，
+        # 否则用户以为"签字绑着大纲"，实际改了纲也不会有人拦。只描述项目事实，
+        # 不描述拦不拦（INTERFACE §8.10）。
+        if ok and not isinstance(obj.get("outline_fingerprint"), dict):
+            line += "（已确认，未绑定大纲；下次 confirm 会自动绑定）"
+        return line
     except FileNotFoundError:
         return "结构签字：structure_signoff.json 不存在"
     except Exception:
