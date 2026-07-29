@@ -217,6 +217,14 @@ def run() -> None:
     notice = core.pop_notice(str(cwd_real)) if event == "UserPromptSubmit" else ""
 
     registry = core.load_registry()
+    if core.registry_unreadable() and event in ("SessionStart", "UserPromptSubmit"):
+        # 注册表读不出来 = 认不出任何项目 = 后面什么都不会说。不留这一行的话，
+        # `chmod 000 gate_registry.json` 就成了"一声不吭地让门禁整体失效"。
+        # 只陈述基础设施坏了这个事实，不说拦不拦（INTERFACE §8.10）。
+        _emit(event, "[学术门禁 v%s] 门禁读不出自己的技能清单文件 %s"
+                     "（文件在，但打不开或内容不可用，常见原因是权限被改或文件损坏）。"
+                     "请用户检查该文件。" % (core.plugin_version(), core.REGISTRY_NAME))
+        return
     ev = core.detect(cwd_real, registry)
     if ev.tier != "strong" or ev.root is None:
         # 非学术项目零打扰；唯一例外是有待报要捎话。
