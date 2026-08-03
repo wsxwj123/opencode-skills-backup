@@ -26,6 +26,7 @@ except Exception:
     pass
 import argparse
 import pathlib
+import re
 import shutil
 import subprocess
 import sys
@@ -48,6 +49,7 @@ REQUIRED_SCRIPTS = [
     "delegate_review.py",  # Phase 3 section-dod 盲检委托 pack/verify
     "style_checker.py",  # 去 AI 风格检测
     "proofread.py",  # Phase 3 R21 字符级机器硬门禁(可阻断)
+    "compile_manuscript.py",  # Phase 4 Step 4/4d 跨平台合并（替 bash 的 cat / grep）
     "consolidate_references.py",  # Phase 4 合并参考文献为单一列表
     "export_docx.py",  # Phase 5d 最终 docx 交付物(需 templates/reference.docx)
     "structure_signoff_gate.py",  # vendored: 结构签字硬门(SIGNOFF_CMD)
@@ -60,7 +62,7 @@ STATE_JSON = '{"phase": 0, "completed_sections": [], "zotero_root_key": "", "aut
 OUTLINE_TEMPLATE = """# Review Configuration (READ THIS FILE at the start of every phase)
 
 ## Parameters
-- Title: [user input]
+- Title: {title}
 - Target Journal: [user input]
 - Language: [English / Chinese]
 - Reference Manager: [Zotero / None / EndNote]
@@ -92,6 +94,25 @@ OUTLINE_TEMPLATE = """# Review Configuration (READ THIS FILE at the start of eve
 """
 
 
+_ILLEGAL_DIR_CHARS = '<>:"/\\|?*'
+
+
+def _safe_dirname(title: str) -> str:
+    """把综述标题变成各平台都合法的文件夹名。
+
+    学术标题带冒号是常态（"Deep Learning: A Review"），Windows 下 : ? * < > | " /
+    全非法、macOS 下 / 非法 —— 原样当目录名会在 Phase 0.5 当场 OSError。
+    这里只清目录名；**原始标题完整写进 outline.md 的 Title 字段**（目录名可以脏，
+    标题不能丢）。控制字符一并清掉（路径注入 + 终端转义两防）。
+    """
+    cleaned = "".join("-" if (ch in _ILLEGAL_DIR_CHARS or ord(ch) < 32) else ch
+                      for ch in (title or ""))
+    cleaned = re.sub(r"[-\s]{2,}", "-", cleaned).strip()
+    # Windows 不允许结尾是点或空格；"." / ".." 会指向父目录，必须挡掉
+    cleaned = cleaned.strip(" .")[:120].strip(" .-")
+    return cleaned or "review-project"
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Phase 0.5 project scaffolding")
     parser.add_argument("--title", required=True, help="Review title (becomes project folder name)")
@@ -101,7 +122,11 @@ def main() -> None:
 
     base = pathlib.Path(args.base).expanduser().resolve()
     skill_dir = pathlib.Path(args.skill_dir).expanduser().resolve()
-    proj = base / args.title
+    dirname = _safe_dirname(args.title)
+    proj = base / dirname
+    if dirname != args.title:
+        print(f"ℹ️  标题含文件名非法字符，目录名用清洗后的 {dirname!r}"
+              f"（原标题 {args.title!r} 已完整写进 outline.md 的 Title 字段）")
 
     for d in ["drafts", "exports", "scripts", "data", "tmp", "figures"]:
         (proj / d).mkdir(parents=True, exist_ok=True)
@@ -141,7 +166,9 @@ def main() -> None:
     # state.json + outline.md —— 已存在就保留（同 figure_index.md 的守卫）。
     # 无条件覆盖会让重跑 init 把 {"phase":3,"completed_sections":[...]} 打回 phase 0、
     # 把写好的大纲换成空模板，等于整个项目进度静默清零。
-    for name, content in (("state.json", STATE_JSON), ("outline.md", OUTLINE_TEMPLATE)):
+    # Title 用原始标题（含冒号等目录名放不下的字符），不用清洗过的目录名。
+    outline_text = OUTLINE_TEMPLATE.format(title=args.title)
+    for name, content in (("state.json", STATE_JSON), ("outline.md", outline_text)):
         path = proj / name
         if path.exists():
             print(f"⏭️ {name} 已存在，保留原文件（如需重建请手动删除）")
@@ -200,19 +227,23 @@ def _install_gate_hook(proj) -> None:
             print("   签字仅留痕、无强制拦截，需人工守住「未签字不写正文」。")
             print("   修复：重装完整技能仓库，或补回 _shared/install_gate_hook.py。")
         # 以下三条命令均指本地 vendored 副本，不依赖 _shared，故 installer 缺失时照常打印。
+        # 解释器用 sys.executable：硬写 "python" 在纯净 macOS 上 command not found
+        # （SKILL.md 开篇已注明 macOS 12.3 起系统不再自带 python），而 SIGNOFF_CMD
+        # 是解锁 Phase 3 正文写作的硬门，打不出能跑的命令等于把用户堵死。
+        py = sys.executable or "python3"
         signoff = scripts_dir / "structure_signoff_gate.py"
         if signoff.is_file():
-            print(f'SIGNOFF_CMD: python "{signoff}" confirm --root "{proj}" --note "<用户确认原话>"')
+            print(f'SIGNOFF_CMD: "{py}" "{signoff}" confirm --root "{proj}" --note "<用户确认原话>"')
         else:
             print('⚠️ 缺 scripts/structure_signoff_gate.py(vendored 副本)——跑 python3 _shared/sync_vendored.py --sync 或重装完整技能包')
         journal = scripts_dir / "session_journal.py"
         if journal.is_file():
-            print(f'RESUME_CMD: python "{journal}" resume --root "{proj}"')
+            print(f'RESUME_CMD: "{py}" "{journal}" resume --root "{proj}"')
         else:
             print('⚠️ 缺 scripts/session_journal.py(vendored 副本)——跑 python3 _shared/sync_vendored.py --sync 或重装完整技能包')
         citecheck = scripts_dir / "citation_claim_check.py"
         if citecheck.is_file():
-            print(f'CITATION_CHECK_CMD: python "{citecheck}" --root "{proj}"')
+            print(f'CITATION_CHECK_CMD: "{py}" "{citecheck}" --root "{proj}"')
         else:
             print('⚠️ 缺 scripts/citation_claim_check.py(vendored 副本)——跑 python3 _shared/sync_vendored.py --sync 或重装完整技能包')
         # references/ 不镜像进项目，四道 DoD 盲检门的 --checklist 必须用技能目录绝对路径。

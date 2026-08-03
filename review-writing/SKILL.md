@@ -1,6 +1,6 @@
 ---
 name: review-writing
-version: 2.29.6
+version: 2.30.0
 description: "Universal assistant for writing high-impact academic literature reviews (Nature/Cell/Lancet level). Supports real-time Zotero integration, outline persistence, and multi-mode reference management. Use when writing a comprehensive review article requiring systematic search, synthesis, and citation management. 触发词：写综述、文献综述、综述写作、literature review、review article、改综述、完善综述、继续写综述、improve review。"
 triggers:
   - "写综述"
@@ -924,14 +924,13 @@ Write Mode has no `pending_sections` field so this gate is a no-op (no key → e
               --output exports/references.bib \
               --clean
    ```
-4. **Compile:** Merge all section drafts in correct order:
+4. **Compile:** Merge all section drafts in correct order（**跑这条，跨平台**）:
    ```bash
-   # Zero-padded filenames (section_01_01.md, section_01_02.md, ...) sort correctly with glob
-   cat drafts/section_*.md > exports/Final_Review.md
-   # Verify: ls drafts/section_*.md should list files in outline order
-   # If any file uses non-padded name, rename first:
-   #   mv drafts/section_1_1.md drafts/section_01_01.md
+   python3 scripts/compile_manuscript.py merge --drafts-dir drafts --out exports/Final_Review.md
+   # 按文件名数字段排序合并，强制写 UTF-8 无 BOM；打印实际合并了哪些节，核对是否为大纲顺序。
+   # 非 zero-pad 文件名也能排对，但建议统一：mv drafts/section_1_1.md drafts/section_01_01.md
    ```
+   > **🔴 别用 shell 重定向合并。** POSIX 下的等价形态是 `cat drafts/section_*.md > exports/Final_Review.md`（仅供理解本步在做什么）；**PowerShell 下绝对不要跑它**——PowerShell 5.1 的 `>` 默认写 UTF-16LE，而下游 `consolidate_references.py` / `structure_outline.py` / `export_docx.py` 全是 `read_text(encoding='utf-8')`，会当场 UnicodeDecodeError，Phase 4 从 4a 起全线崩。上面的脚本没有这个问题。
    > **导出范围注记：** Markdown（`exports/Final_Review.md`）是中间产物；最终 docx 由本技能 Step 5d 的 `scripts/export_docx.py` 产出。字符级排版契约里的上下标 `^...^`/`~...~` 通过 pandoc 的 `+superscript+subscript` 扩展转换，正文/标题字体（Times New Roman、标题加粗）由 `templates/reference.docx` 锁定（该模板由 `scripts/make_reference_docx.py` 烘焙）。图注和表注比正文小一号锁 10pt，摘要走独立样式层同样 10pt。
    4a. **Consolidate references into ONE global list** (run immediately after the `cat` merge):
    ```bash
@@ -965,10 +964,13 @@ Write Mode has no `pending_sections` field so this gate is a no-op (no key → e
    查正文里"见图 5 / 见 3.3 节 / 见表 2 / as discussed in Section 2.1 / as shown in Figure 1"这类**显式指向**的目标存不存在、指得对不对。综述是交叉引用密度最高的稿型（Figure 0 要求每节都引，4b 还会**新写**指向句），而现役对此零覆盖：`validate_citations.py` 管文献 `[N]`、4a 管参考表合并、4b 管"隐式回指缺指针"、R11 只问"引没引框架图"——四者与本步零重叠，都不改判据、不合并。**本步必须排在 4b/4c 之后**（4b 新写的指向句正是最该抓的那批）。
    - **① 合成语料（本步开头无条件覆盖重建，幂等）**：综述的图题注登记在 `figures/figure_index.md`、按设计**不在成稿里**（Phase 4 Step 4 的 `cat` 编译一个字不改，题注不塞进成稿），直接把成稿喂第 1 层 = 每张注册过的图都被判悬空 = **100% 系统性假阳**（再被第 3 层"找不到定义处→confirmed"全部坐实）。故先把注册题注行拼到成稿前面：
      ```bash
-     mkdir -p tmp
-     { grep -E '^##[[:space:]]*Figure[[:space:]]*[0-9]+[[:space:]]*[.:：]' figures/figure_index.md; \
-       cat exports/Final_Review.md; } > tmp/xref_corpus.md
+     python3 scripts/compile_manuscript.py xref-corpus \
+       --figure-index figures/figure_index.md --manuscript exports/Final_Review.md --out tmp/xref_corpus.md
+     # 幂等覆盖重建；自动按下面的错误契约处理（figure_index 缺失→退化为纯正文且不报错、
+     # 成稿缺失→报错退出）并打印「注册 N 条、进锚 M 条」，N>M 时逐条列出写歪的原行。
      ```
+     > **🔴 别用 bash 那套。** POSIX 下的等价形态是
+     > `mkdir -p tmp` + `{ grep -E '^##[[:space:]]*Figure[[:space:]]*[0-9]+[[:space:]]*[.:：]' figures/figure_index.md; cat exports/Final_Review.md; } > tmp/xref_corpus.md`（仅供理解取法：行首 `##` + Figure + 编号 + 分隔符的注册标题行）；**PowerShell 下不要跑它**——无 `grep`、不认 `[[:space:]]`、不认 `{ …; }` 分组，且 `>` 写 UTF-16LE。**这不是崩、是静默产假数据**：按下面的错误契约「grep 空匹配 exit 1 属正常、不得中断本步」，grep 不存在时语料会退化成纯正文 → 每张注册图都判悬空 → 正是本步开头写的「100% 系统性假阳」。上面的脚本内置同一形态的判据，跨平台一致。
      > **分隔符类 `[.:：]` 必须含全角冒号**：`## Figure 0：概念框架图` 这种全角注册行若被筛掉就**根本进不了语料**，④ 护栏 3 的回查再怎么写也看不到它（对该形态是死代码），而 Figure 0 是要求每节都引的框架图 —— 一条写歪的注册行会稳定产一条假阳。收进语料后第 1 层**仍认不出**它（英文 `Figure N` 题注正则只认半角，中文 `图 N` 才认全角），`caption_found` 仍为 `false`，由护栏 3 逐条回查兜住。
      > **该修正的已知副作用（无害，但别当成 bug 查）**：全角注册行既然不被题注正则识别，就**不会进 `caption_rows`**，于是会被当成一条标题、多抽出一条 `number=null` 的**假 section 锚**（实测 `SEC [(None,'Figure 0：概念框架图'), ('2.1','Results')]`）。这使「喂题注前后 `sections` 逐条相同」这条不变式**只在全部注册行都用半角分隔符时成立**。假 section 无编号，且第 2 层通读时一眼能看出那是图题注不是小节标题 → **不产假阳**，只是 `outline.json` 的候选清单多一条噪声。
      **只取匹配 `^## Figure N:` 的注册标题行、绝不 `cat` 整份登记表**（整份会多出一条假 section「Figure Index」，且 `- Type:`/`- Section:`/`- Key Message:`/`- Caption:`/`- Node mapping:` 五类登记字段行会被当成正文里的图/节引用）。**表题注就写在正文里、不需要合并，别把表也塞进本流程。** 落点固定 `tmp/xref_corpus.md`、`outline.json` 落项目根，**两者绝不落 `drafts/`**（`drafts/section_*.md` 是 managed_globs，写进去会被 signoff hook 拦下）；本步只读 `exports/`，**不写 `exports/` 下任何文件**（正文修改只发生在 HALT 后的用户裁决环节）。
@@ -1131,8 +1133,8 @@ Three modes: **Zotero**（推荐，实时写入）/ **None**（纯本地 JSON + 
 
 > 📖 完整 CLI 参数和用法详见 `references/scripts_reference.md`
 
-18 个活跃脚本（`[project]/scripts/`，Phase 0 init 时全量镜像 `scripts/*.py`，除 `test_*.py` 与 `init_project.py`）：
-`zotero_manager.py` | `state_manager.py` | `matrix_manager.py` | `word_counter.py` | `validate_citations.py` | `citation_guard.py` | `check_global_citation_sequence.py` | `export_bibtex.py` | `prewrite_gate.py` | `delegate_review.py` | `style_checker.py` | `proofread.py` | `abbreviation_consistency.py` | `consolidate_references.py` | `export_docx.py` | `make_reference_docx.py` | `citation_utils.py`（import-only） | `citation_guard_core.py`（import-only）
+19 个活跃脚本（`[project]/scripts/`，Phase 0 init 时全量镜像 `scripts/*.py`，除 `test_*.py` 与 `init_project.py`）：
+`zotero_manager.py` | `state_manager.py` | `matrix_manager.py` | `word_counter.py` | `validate_citations.py` | `citation_guard.py` | `check_global_citation_sequence.py` | `export_bibtex.py` | `prewrite_gate.py` | `delegate_review.py` | `style_checker.py` | `proofread.py` | `abbreviation_consistency.py` | `compile_manuscript.py` | `consolidate_references.py` | `export_docx.py` | `make_reference_docx.py` | `citation_utils.py`（import-only） | `citation_guard_core.py`（import-only）
 
 > `scripts/init_project.py` 是 Phase 0.5 一次性脚手架（从 SKILL_DIR 运行，不复制进项目），负责创建目录/全量镜像上述脚本/写 state.json+outline.md/git init。`state_manager.py` 新增 `set-phase` / `complete-section` / `complete-search` 子命令管理 workflow `state.json`（`complete-search` 写 Phase 2 的 `searched_sections`，与写作完成的 `completed_sections` 分开）。
 
