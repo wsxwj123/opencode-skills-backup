@@ -1576,7 +1576,11 @@ def main():
         "set-phase",
         help="Set workflow phase in state.json (preserves all other keys). Replaces inline phase-update Python in Phase 1/2.5/3/4.",
     )
-    setphase_parser.add_argument("--phase", type=_parse_phase, required=True, help="Phase to set (0,1,1.5,1.6,2,3,4,5)")
+    # help 从 VALID_PHASES 生成，不手写：手写那版漏了 1.7（SKILL.md Phase 1.7 正让用户
+    # 跑 --phase 1.7），照 --help 办事的人会以为它非法。新增 phase 只改常量即可。
+    setphase_parser.add_argument(
+        "--phase", type=_parse_phase, required=True,
+        help="Phase to set (%s)" % ",".join(sorted(VALID_PHASES, key=float)))
     setphase_parser.add_argument(
         "--completed",
         choices=["true", "false"],
