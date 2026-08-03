@@ -75,7 +75,7 @@ OUTLINE_TEMPLATE = """# Review Configuration (READ THIS FILE at the start of eve
 - Language: [English / Chinese]
 - Reference Manager: [Zotero / None / EndNote]
 - Word Count Target: [EN: 7,000–10,000 words / CN: 15,000–20,000 chars]
-- Citation Requirements: ≥150 total (Original≥80, Review≥50, Preprint≥20)
+- Citation Requirements（软目标，非硬门禁，按学科填实际值）: 生物医学/临床约 120–200、工程/CS 约 60–120、人文社科按传统定；以覆盖领域主线为准，不凑数。类型按论点性质择用、非固定配额：背景/综述性论述用 Review，机制/实验结论必须引 Original（不得用 Review 顶替），临床结论引 Clinical Trial，新兴论点确无正式发表时才引 Preprint（标 [Preprint]，按需非强制）。
 - Discipline: [Medical-Biomedical / CS-AI / Interdisciplinary]
 
 ## Environment (filled after detection, read directly in later phases)
