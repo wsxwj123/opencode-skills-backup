@@ -75,9 +75,14 @@ def _validate(data):
             if not isinstance(ch, dict):
                 return "chapters[%d]" % i, "必须是对象"
             fn = ch.get("filename")
+            # 拒收字符集与生成侧 _FN_BAD_RE 同一把尺（2026-08-03 缺陷：此前只查
+            # / \ ..，放行了 NUL 等控制字符与 "C:" 盘符——NUL 会让下游 open()
+            # 抛 embedded null byte，traceback 裸奔）。主干（去掉 .md 后缀）里
+            # 出现任一剥除字符即非法；扩展名那个点不在主干里，天然合法。
             if (not isinstance(fn, str) or not fn.endswith(".md") or fn == ".md"
-                    or "/" in fn or "\\" in fn or ".." in fn):
-                return "chapters[%d].filename" % i, "必须是 .md 结尾的 basename（不含 / 与 ..）"
+                    or _FN_BAD_RE.search(fn[:-len(".md")])):
+                return ("chapters[%d].filename" % i,
+                        '必须是 .md 结尾的 basename（主干不含 /\\:*?"<>|. 、空白与控制字符）')
             if fn in seen:
                 return "chapters[%d].filename" % i, "与 chapters[%d] 重复（同一文件会被合两遍）" % seen[fn]
             seen[fn] = i
