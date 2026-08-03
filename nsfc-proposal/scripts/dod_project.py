@@ -12,10 +12,14 @@ CLI:
 成功时 stdout 单行 JSON（§9 裁决 9）:
     {"ok": true, "gate": "<g>", "out": "<路径>", "total": N, "active": N, "disabled": N}
 
-dod_selection.json 三态（§7，fail-safe 方向是收紧不是放松）:
+dod_selection.json 四态（§7，fail-safe 方向是收紧不是放松）:
     不存在        -> 全项都跑，零输出
     坏 JSON       -> stderr 打 DOD_SELECTION: CORRUPT，回落全项都跑，exit 1
     字段非法      -> stderr 打 DOD_SELECTION: INVALID，回落全项都跑，exit 1
+                     （schema_version 缺失/≠"1.0" 归此档，与 structure_profile._dod_disabled 同标签）
+    未确认        -> confirmed != true：stderr 打 DOD_SELECTION: UNCONFIRMED，
+                     关项不生效、全项都跑，exit 0（降级继续，与"不存在"同档；
+                     structure_profile cmd_show 对 unconfirmed 同样归 0）
 """
 
 from __future__ import annotations
@@ -47,6 +51,7 @@ def _load_selection(root: str) -> tuple[list[dict], bool]:
     """读 dod_selection.json，返回 (disabled 条目列表, 是否损坏)。
 
     损坏/非法一律回落空列表（= 全项都跑），错误行打 stderr（格式同 §3，统一 stderr）。
+    confirmed != true 同样回落空列表并打 UNCONFIRMED 行，但不算损坏（exit 0）。
     """
     path = os.path.join(root, "data", "dod_selection.json")
     if not os.path.isfile(path):
@@ -69,6 +74,13 @@ def _load_selection(root: str) -> tuple[list[dict], bool]:
         _fail("处置：修正该文件；或删除它，脚本会回落到「全项都跑」。")
         return [], True
 
+    # 与留痕路 structure_profile._dod_disabled 同口径：schema_version 非法 = INVALID，
+    # 先于 confirmed 检查（否则两路对同一份文件打不同标签，正是本次修的缺陷）
+    if data.get("schema_version") != "1.0":
+        _fail('DOD_SELECTION: INVALID %s: schema_version 缺失或不等于 "1.0"' % abs_path)
+        _fail("处置：修正该字段；或删除该文件，脚本会回落到「全项都跑」。")
+        return [], True
+
     disabled = data.get("disabled", [])
     if not isinstance(disabled, list):
         _fail("DOD_SELECTION: INVALID %s: disabled 必须是数组" % abs_path)
@@ -82,6 +94,15 @@ def _load_selection(root: str) -> tuple[list[dict], bool]:
             _fail("处置：修正该条目；或删除该文件，脚本会回落到「全项都跑」。")
             return [], True
         out.append(entry)
+
+    # 红线：未经用户确认的关项一律不生效（关掉检查=降低标准，必须逐条确认）。
+    # 留痕路 structure_profile._dod_disabled 对 confirmed != true 同样回落全项。
+    # 这是降级继续而非错误输入，broken=False -> exit 0，与"文件不存在"同档。
+    if data.get("confirmed") is not True:
+        _fail("DOD_SELECTION: UNCONFIRMED %s" % abs_path)
+        _fail("处置：这份自检项选择未经用户确认，本次按全项执行。"
+              "请把 disabled 清单摆给用户逐条核对后，将 confirmed 置为 true。")
+        return [], False
     return out, False
 
 

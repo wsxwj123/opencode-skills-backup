@@ -1,6 +1,6 @@
 ---
 name: nsfc-proposal
-version: 2.29.2
+version: 2.30.0
 description: Use when drafting, restructuring, or polishing Chinese NSFC proposals (2026 template), especially when strict section-by-section gating, hypothesis-objective-content-problem consistency, literature verification via paper-search MCP, and anti-AI Chinese academic writing constraints are required. 触发词：国自然、国家自然科学基金、基金申请书、科研申请、NSFC、标书、本子、面上项目、青年基金。
 ---
 
@@ -57,7 +57,7 @@ SQ vs KSQ: SQ is the broad open problem stated in P1; KSQ is the focused, answer
 ## Inputs Required
 Collect before execution:
 - Project basics: title, discipline code, project type, research attribute, duration, budget.
-- 🔴 **科学问题属性（四选一，强制）**：与"研究属性"是两个独立必填字段。研究属性=分类评审的「自由探索类/目标导向类」；科学问题属性=申请书独立必填项，四类官方标准措辞如下，Phase 0 必须选定其一并写入 profile 的 `science_problem_attribute`：
+- 🔴 **科学问题属性（四选一，仅国自然项目强制）**：与"研究属性"是两个独立必填字段。研究属性=分类评审的「自由探索类/目标导向类」；科学问题属性=申请书独立必填项，四类官方标准措辞如下，Phase 0 必须选定其一并写入 profile 的 `science_problem_attribute`。**适用范围**：没有结构真源（项目根无 `structure_profile.json`）或真源未声明非国自然时，本项必填；真源声明 `"funding_scheme": "other"`（非国自然）后本项不再必填——gate-check 不再因它阻断（SPA-REQUIRED 关闭），并记入报告的「未执行的检查」（见 references/07）：
   - 鼓励探索、突出原创
   - 聚焦前沿、独辟蹊径
   - 需求牵引、突破瓶颈
@@ -74,7 +74,7 @@ Collect before execution:
 | P4 其他需要说明的情况 | ≤500字 |
 | P3_4 完成基金项目情况总结 | ≤500字 |
 | 研究属性（分类评审） | 必选「自由探索类」或「目标导向类」二选一 |
-| 科学问题属性（独立必填，≠研究属性） | 四选一：鼓励探索·突出原创 / 聚焦前沿·独辟蹊径 / 需求牵引·突破瓶颈 / 共性导向·交叉融通；Phase 0 未选定则 gate-check 阻断（`failed_at=profile`） |
+| 科学问题属性（独立必填，≠研究属性；**仅国自然**） | 四选一：鼓励探索·突出原创 / 聚焦前沿·独辟蹊径 / 需求牵引·突破瓶颈 / 共性导向·交叉融通；Phase 0 未选定则 gate-check 阻断（`failed_at=profile`）。结构真源声明 `funding_scheme: "other"` 后不再必填、不再阻断（进「未执行的检查」） |
 | 伦理审查（涉人类受试者/实验动物/生物安全/人类遗传资源时） | 须在可行性分析中说明伦理审查批件或送审计划 |
 
 ## Tooling Rules
@@ -119,7 +119,21 @@ Follow phased gates in order:
    - **Env Precheck（软门禁，建项目文件前）**：`python3 scripts/env_preflight.py . --cli esearch`，写 `env_status.json`，末行 `PRECHECK: OK|ASK|BLOCKED`。`BLOCKED`（Python 过低）→ 停并引导升级；`ASK`（缺 git/esearch 等可选工具）→ **逐项问用户是否安装**并给指引，用户答"已装/不装"后才继续，后续再遇缺工具同此处理；`OK` → 继续。
    - **Git Init（叠加在 snapshot 之上）**：`python3 scripts/git_checkpoint.py init .`。git 可用且项目根不在他人仓库内时建 git 检查点，否则静默回退 snapshot。
    - **🔴 Git Checkpoint 约定（复用）**：此后每个 Phase 的 `delegate_review verify` 通过、落盘 `.review_pass/PX.json` 后，立即运行 `python3 scripts/git_checkpoint.py commit . "[nsfc] PX done"`（git 不可用自动 no-op，snapshot 仍兜底）。各 Phase DoD 的 **N-GIT** 项据此核查检查点是否已落。
-   - 🔴 **必须选定「科学问题属性」四选一**（四类官方措辞见 Inputs Required 节），写入 profile `science_problem_attribute`。注意与「研究属性（自由探索类/目标导向类）」区分，二者是独立字段。未选定将在 Phase 7 `gate-check` 触发 `failed_at=profile` 阻断。
+   - 🔴 **必须选定「科学问题属性」四选一**（四类官方措辞见 Inputs Required 节；**仅国自然项目**，非国自然见下条结构提取后自动豁免），写入 profile `science_problem_attribute`。注意与「研究属性（自由探索类/目标导向类）」区分，二者是独立字段。未选定将在 Phase 7 `gate-check` 触发 `failed_at=profile` 阻断。
+   - **模板结构提取（仅当用户拿的不是国自然 2026 模板——省基金/其他基金/自定义章节结构时才做；国自然项目跳过本条，什么文件都不用建）**：目标是产出项目根的 `structure_profile.json`（结构真源：声明本项目有哪些章节、什么顺序、哪些必需、各自字数上限、是不是国自然）。此后合并顺序、必需章节、写作顺序、字数上限都按它走；**没有这份文件 = 国自然默认，行为一个字不变**。不许直接手写这份文件走捷径，必须走五步链（谁干什么是定死的）：
+     1. **脚本投影**：`python3 scripts/structure_profile.py extract-text --source <用户模板文件>`（支持 .md/.markdown/.txt/.docx/.pdf；docx 按文档顺序收段落**和表格单元格**文字；只读原件，绝不写它）→ 产 `tmp/structure_source.txt`（全文投影）+ `tmp/structure_source.lines.tsv`（短行取景框，省 token 用）。
+     2. **AI 读投影提章节**：优先读短行取景框（不够再读全文投影），把认出的章节写 `tmp/structure_draft.json`（AI 唯一直接写的文件，形状与字段见 references/08 §2.8）。
+     3. **脚本逐字节核验**：`python3 scripts/structure_profile.py verify --draft tmp/structure_draft.json --text tmp/structure_source.txt`。每个章节名必须能在投影里逐字节原样找到，**任何一条对不上就整批拒收**（exit 3、不写任何文件、逐条回显对不上的串）；全过才产 `tmp/structure_candidate.json`（此时仍未生效，任何脚本都不读它）。
+     4. **用户逐条确认**：把候选章节表逐条摆给用户增删改。候选里 `filename_autogen: true` 表示文件名是脚本按规则猜的，必须明说请用户核对、改成 `sections/` 下的真实文件名。
+     5. **`confirm` 落盘**：`python3 scripts/structure_profile.py confirm --from tmp/structure_candidate.json --root . --note "<用户确认原话摘要>"` → 写 `<项目根>/structure_profile.json`（全链唯一写这份文件的地方）。
+     - **🔴 AI 侧提取纪律（第 2 步草案的硬规矩；第 3 步脚本核验兜底，但先由你自律）**：
+       1. 章节名 `title` 只许**逐字节照抄**投影里的连续子串——不许去掉"一、"、不许改标点、不许翻译、不许把两行合成一行。
+       2. 字数上限 `word_max` 只在原文**明确写了**字数限制时才给，且必须同时给 `word_max_evidence`（同样是原文逐字节子串，如 `限4000字`）；原文没写 → 两个键都不给，**绝不许填一个"看着合理"的默认值**。
+       3. **认不出结构就直说**「没认出来，请手工填」，并把最小合法结构文件样例给用户：`{"schema_version": "1.0", "confirmed": true, "source": "manual", "funding_scheme": "other"}`（存为 `<项目根>/structure_profile.json` 即生效，只声明"非国自然"、章节表不受管）。**绝不许编一个看起来合理的结构。**
+       4. 草案里不许写 `filename`（文件名由 verify 按固定规则预填，用户确认时改）。
+       5. 不许把正文写进草案（草案只有章节名/顺序/字数上限，不存内容）。
+     - 🔴 **AI 不得在用户逐条确认（第 4 步）前运行 `confirm`**——那等于伪造用户签字，与 `structure_signoff_gate.py confirm` 同一条铁律。提取是一次性的：已有结构真源时 `confirm` 会拒绝覆盖（exit 2）；重提必须是用户显式要求，加 `--replace` 才覆盖（覆盖前打新旧逐章 diff，旧版进 `history[]`）。
+     - 若用户同时要求关掉部分不适用的自检项（DoD 协商），见 references/05 Phase 0 的 Step 0.4b 与 references/08 §2.9 的 `dod_project.py`。
 
 2. **Phase 0.5: 实验设计与技术路线结构化问询**（H/O/RC/KSQ mapping count 确定后、P1 撰写前的强制问询环节）
    - **触发时机**：Phase 0 完成 mapping count（RC 数量）确定 → Phase 0.5 → Phase 1。问询主体在主 agent 与用户对话，不写脚本。
@@ -292,12 +306,13 @@ Follow phased gates in order:
    - Run `humanizer_zh.py scan-all` before final output.
    - **图表交叉引用核查（第 1 层结构锚 · 报告式软门 · 交用户裁决）**：本子里 `见[图1]` / `如[表2]所示` / `如前文 2.1 所述` 这类指向，此前零覆盖（V 规则查 H/O/RC/KSQ 链路，不查图表编号指没指到东西）。merge 前跑：
      ```bash
-     mkdir -p tmp && cat sections/*.md > tmp/xref_corpus.md
+     mkdir -p tmp && python3 scripts/section_merger.py merge --sections-dir sections --output tmp/xref_corpus.md --root .
      python3 scripts/structure_outline.py --manuscript tmp/xref_corpus.md --project-root .
      ```
+     语料必须用 merge 按正文顺序拼（有结构真源按其 `chapters[].order`，没有按内置国自然顺序），**不许用 `cat sections/*.md`**——shell 的 `*` 是字典序，实测 `section_10_*` 会排在 `section_2_*` 前面，语料顺序一错，"如前文 2.1 所述"这类前后指向的判定就会失真。该 merge 会先跑 validate-order，缺必需章节 exit 2 并列出缺哪些（Phase 7 本就要求章节齐全，缺了先补齐）。
      产项目根 `outline.json`（`sections`/`figures`/`tables`/`items` 四类真实存在的结构锚 + `summary`）。退出码 **0 = 正常（含空稿，四类为空数组是合法结果，照常继续）**、**2 = 用法/输入错**。该脚本与 `_shared/` 逐字节共享（6 家），**一个字节不许改**；`[图1]` 的方括号形态已被现役正则正常捕获，题注认 `图 1. 标题` / `图1：标题`（`表` 同理），`图1 标题` 这种无分隔符写法认不出。产物落 `tmp/` 与项目根，**绝不落 `sections/`**（那是 managed_globs，写进去会被 signoff hook 拦下）。
      - **本步只做第 1 层抽取，不自动判悬空**：把 `caption_found=false` 的图/表编号（正文引了、全稿找不到对应题注行）与 `sections` 候选清单列给用户人工过目，说明「这是候选清单不是定论——题注写法不合规也会落进来」，由用户裁决要不要补题注或改引用。**不阻断 merge**，但必须把清单打出来，不许静默跳过。
-   - Output: `output/申请书_合并.md` (merge order: 00摘要 → B1-B3预算 → P1 → P2 → P3_1~P3_4 → P4 → REF).
+   - Output: `output/申请书_合并.md`。**合并顺序来源**：无结构真源时按内置国自然顺序（00摘要 → B1-B3预算 → P1 → P2 → P3_1~P3_4 → P4 → REF）；有结构真源（`structure_profile.json` 声明了章节表）时按其 `chapters[].order` 升序，不在真源里的现场文件按文件名数字键排在末尾照样合入。被排除的文件（`figure_prompts.md`、P2 父子同在时的子文件、空文件）逐一列在 merge 输出 JSON 的 `excluded[]` 里，**不静默丢弃**；`merged_files` 只列真正进了产物的文件（空文件不算在内）。
 
    **Phase 7 DoD（收口自检）：未逐项确认通过，不得向用户声明全文终稿完成**
 
@@ -436,6 +451,8 @@ Failure handling playbook:
 - `failed_at=review`: fix D/C dimensions from review report, then `gate-check`.
 
 **Dual-Track Citation Verification:** Provide MCP retrieval cache in `data/mcp_literature_cache.json` and run online validation without `--offline` whenever network is available. Final gate must enforce `--require-mcp`.
+
+**已知限制（非国自然项目的结构指纹保护是空白，本轮不补）**：结构签字门禁（`structure_signoff_gate`）的"大纲变了要重签"保护，靠 `data/consistency_map.json` 与 `data/experimental_design.json` 里的实体表建指纹。非国自然项目（`funding_scheme: "other"`）通常不建这两份文件——两份都不是 dict 时指纹为 None，签字落成 `outline_bound: false`，此后**改结构不会触发重签要求**。这不是旧保护的丢失：改造前非国自然项目根本走不到签字（被科学问题属性卡死在 Phase 7 之前），这是新场景带来的空白。不补的原因：补它要把 `structure_profile.json` 纳入指纹投影，会让已签字的国自然项目被要求重签（红线禁止），且 `structure_signoff_gate.py` 在门禁写保护清单里。将来要补需单独授权的第 3 期工作（投影加"仅当签字时该文件已存在才计入"的条件迁移 + 用户亲手开门禁豁免），建议等真有人拿省基金本子跑完一轮再说。
 
 **已知限制（诊断提示在本技能里看不到，但请求照打）**：在线核验（不加 `--offline`，即默认）时，对每条没验过、带 DOI/PMID、标题≥3 个词的文献，底层核验会额外拿标题上网回查一次，本可给出「这条的 DOI/PMID 可能填错了，线上同名文章是这个」之类的提示；但 `citation_validator.py` 的 `verification_details` 只保留固定字段，这些提示会被直接丢掉——**请求照打、结果照扔**，白花一次网络往返和限流额度。**判定结果完全不受影响**（verified / 撤稿 / 硬失败一条都不会变），只是文献多时 `verify-all` 会慢一些。所以验不过的条目直接看 `verification_details.failure_reasons` 排查，别等诊断提示；网络紧张时可先 `--offline` 跑一遍粗筛（但终审 gate 仍须在线 + `--require-mcp`）。
 
