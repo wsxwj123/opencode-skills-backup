@@ -233,6 +233,10 @@ Before any **writing / search / import / Zotero-mutating** action, ask exactly *
 ```
 
 
+---
+
+## Phase 0: Setup（收参数 → 检测环境 → 创建项目 → git init）
+
 **Principle:** Complete ALL checks once before any other work. Prevent mid-task failures.
 
 ### 0.1 Collect Parameters
