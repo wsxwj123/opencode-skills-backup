@@ -209,6 +209,13 @@ def _install_gate_hook(proj) -> None:
             print(f'CITATION_CHECK_CMD: python "{citecheck}" --root "{proj}"')
         else:
             print('⚠️ 缺 scripts/citation_claim_check.py(vendored 副本)——跑 python3 _shared/sync_vendored.py --sync 或重装完整技能包')
+        # references/ 不镜像进项目，四道 DoD 盲检门的 --checklist 必须用技能目录绝对路径。
+        # SKILL.md 里所有 `--checklist "[DOD_CHECKLIST]"` 都用这里打印的值，全程沿用。
+        dod = scripts_dir.parent / "references" / "dod_checklist.json"
+        if dod.is_file():
+            print(f'DOD_CHECKLIST: {dod}')
+        else:
+            print('⚠️ 缺 references/dod_checklist.json——四道 DoD 盲检门无法运行，重装完整技能包')
     except Exception:
         pass
 
