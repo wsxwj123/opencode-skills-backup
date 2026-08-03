@@ -1063,9 +1063,9 @@ def _interpreter() -> str:
 def verify_command(skill: str, root=None, with_root: bool = True) -> str:
     """本项目的盲检命令（真实路径，禁止吐 <技能安装目录> 这种占位符字面量）。
 
-    路径先清洗、再 shlex.quote：用户目录里带空格是常态（`~/Desktop/claude/custom
-    skills`），不加引号的话 AI 照抄这条命令就是断的 —— 给了个跑不起来的命令，
-    比不给还糟。解释器名同理：运行时探测（_interpreter），不写死 python3。
+    路径先清洗、再 shlex.quote：用户目录里带空格是常态（如 `~/Documents/My Papers`），
+    不加引号的话 AI 照抄这条命令就是断的 —— 给了个跑不起来的命令，比不给还糟。
+    解释器名同理：运行时探测（_interpreter），不写死 python3。
     """
     d = skill_scripts_dir(skill)
     if d:
