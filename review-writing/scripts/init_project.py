@@ -58,6 +58,13 @@ REQUIRED_SCRIPTS = [
     "citation_claim_check.py",  # vendored: 承重论点↔引文核证(CITATION_CHECK_CMD)
 ]
 
+# scripts/ 下的 .json 分两类：**分发资产**（门禁清单）和**运行时产物**
+# （hook_heartbeat.json —— 门禁钩子每次触发都会写，内容是"上一个用户正在写哪份稿"）。
+# .py 侧可以全量镜像（新脚本自动跟上，漏拷会当场报错），.json 侧必须反过来走白名单：
+# 漏拷分发资产是响的失败（脚本立刻报缺文件），误拷运行时产物是哑的失败（把别人的
+# 工作痕迹静默塞进新项目）。默认不拷才是安全侧。新增要分发的 json 就往这里加一条。
+DISTRIBUTED_JSON = {"gate_registry.json"}
+
 STATE_JSON = '{"phase": 0, "completed_sections": [], "zotero_root_key": "", "authors": []}\n'
 
 OUTLINE_TEMPLATE = """# Review Configuration (READ THIS FILE at the start of every phase)
@@ -141,11 +148,17 @@ def main() -> None:
     # bootstrap itself). Root-causes whitelist drift — SKILL.md adding/renaming a
     # script (or an import dependency) can never silently miss a copy again.
     copied = 0
-    for src in sorted((skill_dir / "scripts").glob("*.py")) + sorted((skill_dir / "scripts").glob("*.json")):
+    for src in sorted((skill_dir / "scripts").glob("*.py")):
         if src.name.startswith("test_") or src.name == "init_project.py":
             continue
         shutil.copy(src, proj / "scripts" / src.name)
         copied += 1
+    # json 侧走白名单（见 DISTRIBUTED_JSON）。
+    for name in sorted(DISTRIBUTED_JSON):
+        src = skill_dir / "scripts" / name
+        if src.is_file():
+            shutil.copy(src, proj / "scripts" / name)
+            copied += 1
 
     # REQUIRED_SCRIPTS kept as a minimum-viable-set assertion: full copy should
     # already include them; if any is absent the skill install is broken.
