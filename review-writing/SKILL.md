@@ -57,7 +57,7 @@ why_how_what_note: |
 | phase=1.5 | Phase 1.5（探索检索 + 研究空白，检查是否已完成） |
 | phase=1.6 | Phase 1.6（对标综述库 + 框架指南） |
 | phase=1.7 | Phase 1.7（据调研建提纲 + 用户确认 + 结构签字落锁） |
-| phase=2 | Phase 2（跳过 completed_sections） |
+| phase=2 | Phase 2（跳过 searched_sections——检索完成标记，与写作完成的 completed_sections 独立） |
 | phase=3 或 pending_sections 非空 | Phase 3（跳过 completed_sections） |
 | phase=4, completed=true | Phase 4 导出完成 → 进 Phase 5（投稿包） |
 | phase=5, completed=true | 已完成，告知用户 |
@@ -589,7 +589,7 @@ Format: `[review] Phase X.Step: <description>`. 📖 消息表 + Rollback 命令
 
 > （探索性检索已在 Phase 1.5 完成，本阶段是系统化主检索。）
 
-**Start: Read `outline.md` + `state.json`. Skip sections already in `completed_sections`.**
+**Start: Read `outline.md` + `state.json`. Skip sections already in `searched_sections`（检索完成标记；`completed_sections` 是 Phase 3 的写作完成标记，两者独立）.**
 > **主线依据（防丢主线）：** 开写前 Read `data/research_gap.json`，取 `selected` 的 gap/选题方向作为本轮检索与写作的综述主线，确保不偏离 Phase 1.5 选定的核心 gap。
 > **Phase gate:** if `state.json` does not exist or `phase < 1.7`（提纲未据调研建立/未落结构签字）→ HALT; tell user "先完成 Phase 1.5（研究空白）→ 1.6（对标框架）→ 1.7（据调研建提纲 + 结构签字），系统主检索按提纲逐节进行"; do not proceed.
 
@@ -602,7 +602,7 @@ Format: `[review] Phase X.Step: <description>`. 📖 消息表 + Rollback 命令
 for each section in outline.md (e.g., section ID = "2.1"):
   SECTION_FILE="tmp/papers_2_1.json"   # replace dots with underscores in section ID
 
-  1. Check state.json → if section in completed_sections, SKIP
+  1. Check state.json → if section in searched_sections, SKIP (存量项目无该键 = 空列表，全部照常检索)
   2. Search ≥10 papers → collect metadata: title, authors, year, doi, abstract, source
      - Every paper must have abstract; if missing → re-fetch via efetch or paper-search
      - Still no abstract after retry → mark abstract:missing, skip for now
@@ -642,9 +642,11 @@ for each section in outline.md (e.g., section ID = "2.1"):
          --write-back
      If guard exits non-zero → do NOT continue to next section; fix flagged entries first.
      `--write-back` 把每条的 verified 与 per-entry checked_at 落盘到 literature_index.json，下一节复用已验条目、跳过重复联网核验（L1 短路，TTL 30 天）。verified 由脚本写、不靠 AI 记。
-  7. Confirm write success → update state.json (add section to completed_sections):
-     python3 scripts/state_manager.py complete-section --section X.X
-     # Adds X.X to completed_sections (idempotent), preserves all other keys.
+  7. Confirm write success → update state.json (add section to searched_sections):
+     python3 scripts/state_manager.py complete-search --section X.X
+     # Adds X.X to searched_sections (idempotent), preserves all other keys.
+     # 🔴 检索完成 ≠ 写作完成：completed_sections 只归 Phase 3 写完的节（complete-section），
+     #    这里绝不能用 complete-section，否则 Phase 3 会把全部节当已写完跳过。
   8. Git Checkpoint (见复用块, msg: [review] Phase 2: section X.X search complete)
   9. Continue to next section
 ```
@@ -682,7 +684,7 @@ Dedup rules (None/EndNote mode reindex):
 **Update `state.json`（仅更新 phase 字段，不覆盖 completed_sections / zotero_root_key）：**
 ```bash
 python3 scripts/state_manager.py set-phase --phase 2
-# Sets phase=2 only; completed_sections / zotero_root_key / mode / pending_sections preserved.
+# Sets phase=2 only; completed_sections / searched_sections / zotero_root_key / mode / pending_sections preserved.
 ```
 
 **Git Checkpoint** (见复用块, msg: `[review] Phase 2.5: dedup + global ID assigned`)
@@ -1118,7 +1120,7 @@ Three modes: **Zotero**（推荐，实时写入）/ **None**（纯本地 JSON + 
 | Issue | Handling |
 |-------|---------|
 | Zotero API key invalid / 403 error | Re-run `save-credentials` with a fresh key; do NOT proceed until `--status` returns ✅ |
-| Mid-search crash | state.json `completed_sections` tracks progress; resume skips done |
+| Mid-search crash | state.json `searched_sections` tracks search progress; resume skips done |
 | PubMed CLI + paper-search MCP both unavailable | HALT; suggest install edirect or enable paper-search MCP; do NOT fallback to websearch/tavily |
 
 ---
@@ -1130,7 +1132,7 @@ Three modes: **Zotero**（推荐，实时写入）/ **None**（纯本地 JSON + 
 18 个活跃脚本（`[project]/scripts/`，Phase 0 init 时全量镜像 `scripts/*.py`，除 `test_*.py` 与 `init_project.py`）：
 `zotero_manager.py` | `state_manager.py` | `matrix_manager.py` | `word_counter.py` | `validate_citations.py` | `citation_guard.py` | `check_global_citation_sequence.py` | `export_bibtex.py` | `prewrite_gate.py` | `delegate_review.py` | `style_checker.py` | `proofread.py` | `abbreviation_consistency.py` | `consolidate_references.py` | `export_docx.py` | `make_reference_docx.py` | `citation_utils.py`（import-only） | `citation_guard_core.py`（import-only）
 
-> `scripts/init_project.py` 是 Phase 0.5 一次性脚手架（从 SKILL_DIR 运行，不复制进项目），负责创建目录/全量镜像上述脚本/写 state.json+outline.md/git init。`state_manager.py` 新增 `set-phase` / `complete-section` 子命令管理 workflow `state.json`。
+> `scripts/init_project.py` 是 Phase 0.5 一次性脚手架（从 SKILL_DIR 运行，不复制进项目），负责创建目录/全量镜像上述脚本/写 state.json+outline.md/git init。`state_manager.py` 新增 `set-phase` / `complete-section` / `complete-search` 子命令管理 workflow `state.json`（`complete-search` 写 Phase 2 的 `searched_sections`，与写作完成的 `completed_sections` 分开）。
 
 ---
 
