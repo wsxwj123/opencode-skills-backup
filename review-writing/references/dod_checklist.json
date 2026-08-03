@@ -19,6 +19,12 @@
           "script": "python3 scripts/citation_guard.py --offline --index data/literature_index.json"
         },
         {
+          "id": "R2b",
+          "name": "联网核验已生效",
+          "check": "证明本节引文**真的被联网核验过**，而不是只跑过 R2 的离线格式核（R2 的 --offline 判不出编造文献）。三条同时成立才算过：① data/citation_guard_report.json 存在且结构可读；② 该报告是联网跑的（report.online_check 为 true，注意字段嵌在 report 键下，不在顶层；SKILL.md 用 --log 与 --report 同路径时顶层会是 report/manual_review_queue/runs 三键，取 report 或 runs 末条均可）；③ 本节 related_sections 命中的每条 literature_index 条目都带 verification_details.checked_at（联网核验时由 --write-back 逐条落盘；report 顶层的 checked_at 只是单次运行时间戳，证明不了逐条覆盖，不得拿它顶替）。任一不成立即 fail，提示「本节引文未经联网核验，请勿声明通过」——补跑 SKILL.md Phase 2 Step 6 的联网 citation_guard（不带 --offline、带 --write-back）后重核。文件缺失 / 结构对不上 / online_check 非 true 一律判 fail（fail-safe 方向是收紧，不给「查不到就当过」的口子）。",
+          "script": "python3 scripts/check_online_verified.py --section X.X"
+        },
+        {
           "id": "R3",
           "name": "符合 storyline / 主线",
           "check": "本节内容对应 outline.md 中该节 RQ/PICO（或 PCC），无跑题、无与主线矛盾段落"
