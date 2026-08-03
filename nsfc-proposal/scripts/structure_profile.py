@@ -147,6 +147,23 @@ def load(root):
 # §6.1 resolve_scope —— 唯一裁定函数（纯函数，只读两份磁盘文件）
 # =========================================================================
 
+def _valid_gates(root):
+    """合法 gate 集合 = references/dod_checklist.json 的 gates 键集。
+    checklist 定位复用 dod_project._find_checklist（不抄第二份定位规则）。
+    读不到/坏 → None（调用方按「取值域无法核对」收紧处理）。"""
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    try:
+        import dod_project
+        path = dod_project._find_checklist(os.path.abspath(str(root)))
+        if not path:
+            return None
+        with open(path, encoding="utf-8") as f:
+            gates = json.load(f).get("gates")
+        return set(gates) if isinstance(gates, dict) else None
+    except Exception:
+        return None
+
+
 def _dod_disabled(root):
     """读 <root>/data/dod_selection.json 的 disabled[]（§7）。
     不存在 → []（零输出）；损坏/非法 → 打 DOD_SELECTION 错误行后回落「全项都跑」。"""
@@ -169,12 +186,30 @@ def _dod_disabled(root):
         print("处置：修复该文件；或删除它，脚本会回落到全项都跑。", file=sys.stderr)
         return []
     disabled = data.get("disabled") if isinstance(data, dict) else None
+    # id 必须是非空字符串——与过滤路 dod_project._load_selection 同口径。此前只判
+    # not x.get("id")，truthy 的数字/布尔 id 单边放行：留痕路照记「未执行」、
+    # 过滤路判 INVALID 照查，报告说没查其实查了（2026-08-03 同类分叉第三例）。
     if (not isinstance(data, dict) or data.get("schema_version") != SCHEMA_VERSION
             or not isinstance(disabled, list)
-            or any(not isinstance(x, dict) or not x.get("id") for x in disabled)):
+            or any(not isinstance(x, dict) or not isinstance(x.get("id"), str)
+                   or not x.get("id") for x in disabled)):
         print("DOD_SELECTION: INVALID %s: disabled 字段非法" % path, file=sys.stderr)
         print("处置：修正该文件；或删除它，脚本会回落到全项都跑。", file=sys.stderr)
         return []
+    # gate 必填且必须是 checklist 里真实存在的 gate（与过滤路 dod_project 同口径）：
+    # 过滤路按 entry.gate == --gate 匹配，缺失/拼错的条目在那边永不生效；这里若照记
+    # 就成了「报告说没查、其实照样查」的两路分叉（2026-08-03 缺陷）。
+    # checklist 读不到时取值域无法核对，同样收紧为「关项不生效」（宁可多查）。
+    if disabled:
+        valid = _valid_gates(root)
+        for i, entry in enumerate(disabled):
+            g = entry.get("gate")
+            if not isinstance(g, str) or valid is None or g not in valid:
+                print("DOD_SELECTION: INVALID %s: disabled[%d].gate 缺失或不是已知 gate"
+                      % (path, i), file=sys.stderr)
+                print("处置：修正该条目；或删除该文件，脚本会回落到全项都跑。",
+                      file=sys.stderr)
+                return []
     if data.get("confirmed") is not True:
         # fail-safe 方向是收紧：未确认 = 不关任何项
         return []
@@ -367,12 +402,18 @@ def cmd_extract_text(args):
 # =========================================================================
 
 _LEADING_NUM_RE = re.compile(r"^[（(]?[一二三四五六七八九十百0-9IVXivx]+[）)、.．]\s*")
-_FN_BAD_RE = re.compile(r'[/\\:*?"<>|\s]')
+# 净化表必须与 _validate 的 filename 规则对齐（2026-08-03 缺陷）：`.` 也换掉——
+# 标题含连续点号（2..5）或以点结尾（拼上 .md 变 "..md"）都会造出 _validate 拒收
+# 的 ".."，用户没手改任何东西就被 confirm 卡死。控制字符一并换掉（\s 只盖住
+# \t\n\r 等几个，\x01 这类照样能进文件名）。对齐由 TestAutogenMatchesValidate
+# 不变量测试盯着：生成结果必须原样过 _validate。
+_FN_BAD_RE = re.compile(r'[/\\:*?"<>|\s.\x00-\x1f\x7f]')
 
 
 def _autogen_filename(title, order, used):
-    """§2.3 filename 预填规则（确定性）：剥一次前导编号 → 前 12 字 → 换非法字符 →
-    section_{order}_{简称}.md；文件名撞了 → 追加 _2、_3…（递增，防三章同名再撞）。"""
+    """§2.3 filename 预填规则（确定性）：剥一次前导编号 → 前 12 字 → 换非法字符
+    （含 `.` 与控制符，保证产物天然过 _validate）→ section_{order}_{简称}.md；
+    文件名撞了 → 追加 _2、_3…（递增，防三章同名再撞）。"""
     stem = _LEADING_NUM_RE.sub("", title, count=1)[:12]
     stem = _FN_BAD_RE.sub("_", stem)
     base = "section_%s_%s" % (order, stem)
@@ -498,19 +539,27 @@ WOBBLE_LINES = (
 
 
 def _candidate_chapters(cand):
-    """候选校验；非法抛 ValueError。"""
+    """候选校验；非法抛 ValueError（消息 = <字段路径> <原因>，写法同 §3.2）。
+
+    chapters / funding_scheme 规则不自己另写一份，而是把候选拼成「confirm 落盘后
+    形状」的最小 probe 喂给 _validate 预检——同一把尺，保证 confirm 绝不写出一份
+    show/_inspect 立刻判 INVALID 的真源（2026-08-03 缺陷：非法 filename 曾被
+    confirm 放行落盘，用户拿到一份"确认成功、其实死掉"的结构文件）。"""
     if not isinstance(cand, dict):
-        raise ValueError("候选顶层必须是对象")
+        raise ValueError("(top-level) 候选顶层必须是对象")
     chapters = cand.get("chapters")
+    # 候选与真源在此处语义不同：真源缺 chapters 键是合法缺省（§1.4），候选必须有
     if not isinstance(chapters, list) or not chapters:
-        raise ValueError("候选 chapters 必须是非空 list")
-    for ch in chapters:
-        if not isinstance(ch, dict) or not isinstance(ch.get("filename"), str):
-            raise ValueError("候选章节缺 filename")
-        if not isinstance(ch.get("order"), int) or isinstance(ch.get("order"), bool):
-            raise ValueError("候选章节 order 非整数")
-    if "funding_scheme" in cand and cand["funding_scheme"] not in SCHEMES:
-        raise ValueError("候选 funding_scheme 域外")
+        raise ValueError("chapters 候选 chapters 必须是非空 list")
+    # source 按 cmd_confirm 落盘时的同一条归一化规则拼 probe（非法值落盘为 extracted）
+    probe = {"schema_version": SCHEMA_VERSION,
+             "source": cand.get("source") if cand.get("source") in SOURCES else "extracted",
+             "chapters": chapters}
+    if "funding_scheme" in cand:
+        probe["funding_scheme"] = cand["funding_scheme"]
+    bad = _validate(probe)
+    if bad:
+        raise ValueError("%s %s" % bad)
     return chapters
 
 
