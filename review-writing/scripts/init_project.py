@@ -49,6 +49,7 @@ REQUIRED_SCRIPTS = [
     "delegate_review.py",  # Phase 3 section-dod 盲检委托 pack/verify
     "style_checker.py",  # 去 AI 风格检测
     "proofread.py",  # Phase 3 R21 字符级机器硬门禁(可阻断)
+    "check_online_verified.py",  # DoD R2b 判据(本节引文是否真过了联网核验)
     "compile_manuscript.py",  # Phase 4 Step 4/4d 跨平台合并（替 bash 的 cat / grep）
     "consolidate_references.py",  # Phase 4 合并参考文献为单一列表
     "export_docx.py",  # Phase 5d 最终 docx 交付物(需 templates/reference.docx)
