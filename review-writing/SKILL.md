@@ -62,6 +62,20 @@ why_how_what_note: |
 | phase=4, completed=true | Phase 4 导出完成 → 进 Phase 5（投稿包） |
 | phase=5, completed=true | 已完成，告知用户 |
 
+### 各阶段做法文件（定位到阶段后，📖 读对应文件再动手；SKILL.md 内各 Phase 节只是路由摘要）
+
+| 阶段 | 完整做法在 |
+|------|-----------|
+| Phase 0 | `docs/phase_0_setup.md` |
+| Phase 0-P (Polish) | `docs/phase_0p_polish_mode.md` |
+| Phase 1.5 | `docs/phase_1_5_research_gap.md` |
+| Phase 1.6 | `docs/phase_1_6_benchmark_framing.md` |
+| Phase 1.7 | `docs/phase_1_7_outline_signoff.md` |
+| Phase 2 | `docs/phase_2_search.md` |
+| Phase 3 | `docs/phase_3_writing.md` |
+| Phase 4 | 正文就在本文件 `## Phase 4`（未外移） |
+| Phase 5 | `docs/phase_5_submission_pack.md` |
+
 ### 每 Phase 关键动作
 > **核心顺序：调研先于提纲。** 提纲是"读透文献后的产物"，不是开工前置。先 Phase 1.5 探索检索/研究空白 + Phase 1.6 对标框架，再 Phase 1.7 据调研建提纲并确认、落结构签字。
 - **Phase 0:** 收参数 → 检测环境 → 创建项目 → git init
