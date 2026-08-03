@@ -58,6 +58,13 @@ REQUIRED_SCRIPTS = [
     "citation_claim_check.py",  # vendored: 承重论点↔引文核证(CITATION_CHECK_CMD)
 ]
 
+# scripts/ 下的 .json 分两类：**分发资产**（门禁清单）和**运行时产物**
+# （hook_heartbeat.json —— 门禁钩子每次触发都会写，内容是"上一个用户正在写哪份稿"）。
+# .py 侧可以全量镜像（新脚本自动跟上，漏拷会当场报错），.json 侧必须反过来走白名单：
+# 漏拷分发资产是响的失败（脚本立刻报缺文件），误拷运行时产物是哑的失败（把别人的
+# 工作痕迹静默塞进新项目）。默认不拷才是安全侧。新增要分发的 json 就往这里加一条。
+DISTRIBUTED_JSON = {"gate_registry.json"}
+
 STATE_JSON = '{"phase": 0, "completed_sections": [], "zotero_root_key": "", "authors": []}\n'
 
 OUTLINE_TEMPLATE = """# Review Configuration (READ THIS FILE at the start of every phase)
@@ -68,7 +75,7 @@ OUTLINE_TEMPLATE = """# Review Configuration (READ THIS FILE at the start of eve
 - Language: [English / Chinese]
 - Reference Manager: [Zotero / None / EndNote]
 - Word Count Target: [EN: 7,000–10,000 words / CN: 15,000–20,000 chars]
-- Citation Requirements: ≥150 total (Original≥80, Review≥50, Preprint≥20)
+- Citation Requirements（软目标，非硬门禁，按学科填实际值）: 生物医学/临床约 120–200、工程/CS 约 60–120、人文社科按传统定；以覆盖领域主线为准，不凑数。类型按论点性质择用、非固定配额：背景/综述性论述用 Review，机制/实验结论必须引 Original（不得用 Review 顶替），临床结论引 Clinical Trial，新兴论点确无正式发表时才引 Preprint（标 [Preprint]，按需非强制）。
 - Discipline: [Medical-Biomedical / CS-AI / Interdisciplinary]
 
 ## Environment (filled after detection, read directly in later phases)
@@ -141,11 +148,17 @@ def main() -> None:
     # bootstrap itself). Root-causes whitelist drift — SKILL.md adding/renaming a
     # script (or an import dependency) can never silently miss a copy again.
     copied = 0
-    for src in sorted((skill_dir / "scripts").glob("*.py")) + sorted((skill_dir / "scripts").glob("*.json")):
+    for src in sorted((skill_dir / "scripts").glob("*.py")):
         if src.name.startswith("test_") or src.name == "init_project.py":
             continue
         shutil.copy(src, proj / "scripts" / src.name)
         copied += 1
+    # json 侧走白名单（见 DISTRIBUTED_JSON）。
+    for name in sorted(DISTRIBUTED_JSON):
+        src = skill_dir / "scripts" / name
+        if src.is_file():
+            shutil.copy(src, proj / "scripts" / name)
+            copied += 1
 
     # REQUIRED_SCRIPTS kept as a minimum-viable-set assertion: full copy should
     # already include them; if any is absent the skill install is broken.
@@ -162,7 +175,8 @@ def main() -> None:
         shutil.copy(ref_docx, proj / "templates" / "reference.docx")
 
     print(f"✅ Project created at: {proj}")
-    print(f"   Copied {copied} scripts (full scripts/*.py mirror)")
+    print(f"   Copied {copied} files (all scripts/*.py + whitelisted json: "
+          f"{', '.join(sorted(DISTRIBUTED_JSON))})")
 
     # state.json + outline.md —— 已存在就保留（同 figure_index.md 的守卫）。
     # 无条件覆盖会让重跑 init 把 {"phase":3,"completed_sections":[...]} 打回 phase 0、
