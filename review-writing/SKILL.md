@@ -357,6 +357,8 @@ python3 "[SKILL_DIR]/scripts/init_project.py" \
 > **⚠️ Working directory rule:** All commands in Phase 1–4 are run from inside `[PROJECT_BASE]/[TITLE]/`.
 > After initialization: `cd "[PROJECT_BASE]/[TITLE]"` (the script prints this path).
 >
+> **⚠️ `[DOD_CHECKLIST]` 取值规则：** `references/` 不镜像进项目，四道 DoD 盲检门（research-gap / benchmark-reviews / manuscript / submission-pack，含 Polish 的 split_boundary）的 `--checklist` 必须用**技能目录绝对路径**。该值由 `init_project.py` 打印（`DOD_CHECKLIST: <绝对路径>`），全程沿用；后文所有 `--checklist "[DOD_CHECKLIST]"` 都代入这个打印值。
+>
 > **Note:** Phase 0.5 only creates folder structure + copies scripts + writes state.json/outline.md. Zotero collection tree (`--init`) is NOT run here; it runs in Phase 1.7 (Write Mode, after the outline is built from research) or Phase 0-P Step 5 (Polish Mode). Phase 0.5 完成后进入 **Phase 1.5**（调研先于提纲）。
 
 The script writes `[TITLE]/state.json`:
@@ -445,10 +447,10 @@ Format: `[review] Phase X.Step: <description>`. 📖 消息表 + Rollback 命令
 
 3. **DoD 自检（gate `research-gap-dod`，委托独立subagent盲检）：**
    ```bash
-   python3 scripts/delegate_review.py pack --checklist references/dod_checklist.json \
+   python3 scripts/delegate_review.py pack --checklist "[DOD_CHECKLIST]" \
      --gate research-gap-dod --files data/research_gap.json --workdir .
    # → 派独立subagent（Claude Code 用 academic-blind-reviewer），不给写作上下文，按任务包返回 JSON
-   python3 scripts/delegate_review.py verify --checklist references/dod_checklist.json \
+   python3 scripts/delegate_review.py verify --checklist "[DOD_CHECKLIST]" \
      --gate research-gap-dod --return .review_return_research-gap-dod.json
    # 退出码非 0 = fail-closed，据subagent证据修复后重跑，未过不得声明完成
    ```
@@ -501,9 +503,9 @@ Format: `[review] Phase X.Step: <description>`. 📖 消息表 + Rollback 命令
 
 4. **DoD 自检（gate `benchmark-reviews-dod`，委托独立subagent盲检）：**
    ```bash
-   python3 scripts/delegate_review.py pack --checklist references/dod_checklist.json \
+   python3 scripts/delegate_review.py pack --checklist "[DOD_CHECKLIST]" \
      --gate benchmark-reviews-dod --files data/benchmark_reviews.json data/framing_guide.md --workdir .
-   python3 scripts/delegate_review.py verify --checklist references/dod_checklist.json \
+   python3 scripts/delegate_review.py verify --checklist "[DOD_CHECKLIST]" \
      --gate benchmark-reviews-dod --return .review_return_benchmark-reviews-dod.json
    ```
    gate 4 项：B1 ≥5 篇 verified / B2 每篇含框架大纲 / B3 framing_guide 含可操作建议 / B4 占位符清零。真源见 `references/dod_checklist.json`。（framing_guide 是否真被用于搭框架，是 Phase 3 才发生的动作，不在此 Phase 1.6 gate 里核，改由 Phase 3 framing hook 强制落实、见 SKILL.md Phase 3 “Framing hook”。）
@@ -824,11 +826,11 @@ If pending_sections is empty → all sections complete; proceed to Phase 4.
     **🔴 进入下一节前置闸口：上一节 delegate_review verify 必须 exit 0（含 R15 结构完整性），否则不得开始下一节撰写。写完即检，不过不进。**
 
     **🔴 委托盲检（不得主 agent 自评）**：你刚写完本节，自评会失真地默认通过、且易漏项。落盘前必须把 DoD 清单**委托给独立上下文的subagent盲检**，自己不直接打勾：
-    1. 生成任务包：`python3 scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate manuscript-dod --files <本节文件> --workdir .`（会在 stderr 打印 `RETURN_PATH=...`，即subagent返回要写入的约定路径）
+    1. 生成任务包：`python3 scripts/delegate_review.py pack --checklist "[DOD_CHECKLIST]" --gate manuscript-dod --files <本节文件> --workdir .`（会在 stderr 打印 `RETURN_PATH=...`，即subagent返回要写入的约定路径）
     2. **派一个独立subagent**（不给它本节写作上下文），把任务包原样贴给它，要求把 JSON 数组写到 `RETURN_PATH`。**可直接复制执行的派发指令**：
        - Claude Code：用 `Task` 工具，`subagent_type="academic-blind-reviewer"`（无此 agent 时退回 `general-purpose`），prompt = pack 打印出的整段任务包原文（含"你的角色/待检文件/检查清单/返回格式/返回写到这个文件"），**不附加任何本节写作说明**。
        - 其他平台（Codex/OpenCode 等无此 agent）：新开一个干净上下文的subagent/子会话，同样只贴任务包原文。
-    3. 校验返回：`python3 scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate manuscript-dod --return <subagent返回.json> --section <当前section_id> --root <项目根>`；退出码非 0（任一缺项 / fail / 无证据）= **fail-closed**。**修复循环（原 Step 6 的修复委派并入此处）：** 任一项失败即派一个**修复子代理**（输入 = 盲检返回的结构化意见 + 本节 `drafts/section_XX_XX.md`，不给写作上下文）做针对性修改，改完重跑 `pack → verify` 复评；修满 2 轮仍失败 → **HALT**，输出结构化反馈（【问题】+ 证据锚点 + 根源分析 + 修复方向）交用户裁决。是否修订 / 是否 HALT 的决策由主会话把关，不可委托。**未过不得声明完成。** verify 通过会落盘 `.review_pass/<当前section_id>.json`，下一节 `prewrite_gate.py` 会**硬校验**它（缺失即拒绝开写）。
+    3. 校验返回：`python3 scripts/delegate_review.py verify --checklist "[DOD_CHECKLIST]" --gate manuscript-dod --return <subagent返回.json> --section <当前section_id> --root <项目根>`；退出码非 0（任一缺项 / fail / 无证据）= **fail-closed**。**修复循环（原 Step 6 的修复委派并入此处）：** 任一项失败即派一个**修复子代理**（输入 = 盲检返回的结构化意见 + 本节 `drafts/section_XX_XX.md`，不给写作上下文）做针对性修改，改完重跑 `pack → verify` 复评；修满 2 轮仍失败 → **HALT**，输出结构化反馈（【问题】+ 证据锚点 + 根源分析 + 修复方向）交用户裁决。是否修订 / 是否 HALT 的决策由主会话把关，不可委托。**未过不得声明完成。** verify 通过会落盘 `.review_pass/<当前section_id>.json`，下一节 `prewrite_gate.py` 会**硬校验**它（缺失即拒绝开写）。
        > **诚实边界：** verify 的 `ok:true` 只代表清单每项都被裁决且形式合规，**PASS 仅覆盖形式层，语义正确性由盲检subagent主观判断、未自动核验**。
        > **【P4·盲检降级告警】** ⚠️ 若环境派不出真正独立的subagent（非 Claude Code、无 `academic-blind-reviewer`），**绝不能同一 AI 自问自答冒充盲检**。告诉用户「本环境盲检不可靠，请你亲自复核本节」，别让自证闭环静默跑。
     4. **🚪 逃生口（盲检subagent确实跑不起来时，且仅此时）**：若平台无 `academic-blind-reviewer`、通用subagent也反复失败/取不到返回，导致 `verify` 无法落盘标记、下一节被 `prewrite_gate` 永久锁死，**不要卡死或静默跳过**。改为人工逐项盲检本节 DoD 后，用显式放行开锁并留痕：
@@ -1081,11 +1083,11 @@ Write Mode has no `pending_sections` field so this gate is a no-op (no key → e
 
 4. **DoD 自检（gate `submission-pack-dod`，委托独立subagent盲检）：**
    ```bash
-   python3 scripts/delegate_review.py pack --checklist references/dod_checklist.json \
+   python3 scripts/delegate_review.py pack --checklist "[DOD_CHECKLIST]" \
      --gate submission-pack-dod \
      --files exports/cover_letter.md exports/title_page.md exports/author_contributions.md \
              exports/coi_statement.md exports/keywords.md --workdir .
-   python3 scripts/delegate_review.py verify --checklist references/dod_checklist.json \
+   python3 scripts/delegate_review.py verify --checklist "[DOD_CHECKLIST]" \
      --gate submission-pack-dod --return .review_return_submission-pack-dod.json
    # 退出码非 0 = fail-closed，据subagent证据修复后重跑，未过不得声明完成
    ```
