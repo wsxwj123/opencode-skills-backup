@@ -175,7 +175,8 @@ def main() -> None:
         shutil.copy(ref_docx, proj / "templates" / "reference.docx")
 
     print(f"✅ Project created at: {proj}")
-    print(f"   Copied {copied} scripts (full scripts/*.py mirror)")
+    print(f"   Copied {copied} files (all scripts/*.py + whitelisted json: "
+          f"{', '.join(sorted(DISTRIBUTED_JSON))})")
 
     # state.json + outline.md —— 已存在就保留（同 figure_index.md 的守卫）。
     # 无条件覆盖会让重跑 init 把 {"phase":3,"completed_sections":[...]} 打回 phase 0、
