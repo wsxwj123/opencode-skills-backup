@@ -1,6 +1,6 @@
 ---
 name: review-writing
-version: 2.29.6
+version: 2.30.0
 description: "Universal assistant for writing high-impact academic literature reviews (Nature/Cell/Lancet level). Supports real-time Zotero integration, outline persistence, and multi-mode reference management. Use when writing a comprehensive review article requiring systematic search, synthesis, and citation management. 触发词：写综述、文献综述、综述写作、literature review、review article、改综述、完善综述、继续写综述、improve review。"
 triggers:
   - "写综述"
@@ -57,7 +57,7 @@ why_how_what_note: |
 | phase=1.5 | Phase 1.5（探索检索 + 研究空白，检查是否已完成） |
 | phase=1.6 | Phase 1.6（对标综述库 + 框架指南） |
 | phase=1.7 | Phase 1.7（据调研建提纲 + 用户确认 + 结构签字落锁） |
-| phase=2 | Phase 2（跳过 completed_sections） |
+| phase=2 | Phase 2（跳过 searched_sections——检索完成标记，与写作完成的 completed_sections 独立） |
 | phase=3 或 pending_sections 非空 | Phase 3（跳过 completed_sections） |
 | phase=4, completed=true | Phase 4 导出完成 → 进 Phase 5（投稿包） |
 | phase=5, completed=true | 已完成，告知用户 |
@@ -357,6 +357,8 @@ python3 "[SKILL_DIR]/scripts/init_project.py" \
 > **⚠️ Working directory rule:** All commands in Phase 1–4 are run from inside `[PROJECT_BASE]/[TITLE]/`.
 > After initialization: `cd "[PROJECT_BASE]/[TITLE]"` (the script prints this path).
 >
+> **⚠️ `[DOD_CHECKLIST]` 取值规则：** `references/` 不镜像进项目，四道 DoD 盲检门（research-gap / benchmark-reviews / manuscript / submission-pack，含 Polish 的 split_boundary）的 `--checklist` 必须用**技能目录绝对路径**。该值由 `init_project.py` 打印（`DOD_CHECKLIST: <绝对路径>`），全程沿用；后文所有 `--checklist "[DOD_CHECKLIST]"` 都代入这个打印值。
+>
 > **Note:** Phase 0.5 only creates folder structure + copies scripts + writes state.json/outline.md. Zotero collection tree (`--init`) is NOT run here; it runs in Phase 1.7 (Write Mode, after the outline is built from research) or Phase 0-P Step 5 (Polish Mode). Phase 0.5 完成后进入 **Phase 1.5**（调研先于提纲）。
 
 The script writes `[TITLE]/state.json`:
@@ -445,10 +447,10 @@ Format: `[review] Phase X.Step: <description>`. 📖 消息表 + Rollback 命令
 
 3. **DoD 自检（gate `research-gap-dod`，委托独立subagent盲检）：**
    ```bash
-   python3 scripts/delegate_review.py pack --checklist references/dod_checklist.json \
+   python3 scripts/delegate_review.py pack --checklist "[DOD_CHECKLIST]" \
      --gate research-gap-dod --files data/research_gap.json --workdir .
    # → 派独立subagent（Claude Code 用 academic-blind-reviewer），不给写作上下文，按任务包返回 JSON
-   python3 scripts/delegate_review.py verify --checklist references/dod_checklist.json \
+   python3 scripts/delegate_review.py verify --checklist "[DOD_CHECKLIST]" \
      --gate research-gap-dod --return .review_return_research-gap-dod.json
    # 退出码非 0 = fail-closed，据subagent证据修复后重跑，未过不得声明完成
    ```
@@ -501,9 +503,9 @@ Format: `[review] Phase X.Step: <description>`. 📖 消息表 + Rollback 命令
 
 4. **DoD 自检（gate `benchmark-reviews-dod`，委托独立subagent盲检）：**
    ```bash
-   python3 scripts/delegate_review.py pack --checklist references/dod_checklist.json \
+   python3 scripts/delegate_review.py pack --checklist "[DOD_CHECKLIST]" \
      --gate benchmark-reviews-dod --files data/benchmark_reviews.json data/framing_guide.md --workdir .
-   python3 scripts/delegate_review.py verify --checklist references/dod_checklist.json \
+   python3 scripts/delegate_review.py verify --checklist "[DOD_CHECKLIST]" \
      --gate benchmark-reviews-dod --return .review_return_benchmark-reviews-dod.json
    ```
    gate 4 项：B1 ≥5 篇 verified / B2 每篇含框架大纲 / B3 framing_guide 含可操作建议 / B4 占位符清零。真源见 `references/dod_checklist.json`。（framing_guide 是否真被用于搭框架，是 Phase 3 才发生的动作，不在此 Phase 1.6 gate 里核，改由 Phase 3 framing hook 强制落实、见 SKILL.md Phase 3 “Framing hook”。）
@@ -587,7 +589,7 @@ Format: `[review] Phase X.Step: <description>`. 📖 消息表 + Rollback 命令
 
 > （探索性检索已在 Phase 1.5 完成，本阶段是系统化主检索。）
 
-**Start: Read `outline.md` + `state.json`. Skip sections already in `completed_sections`.**
+**Start: Read `outline.md` + `state.json`. Skip sections already in `searched_sections`（检索完成标记；`completed_sections` 是 Phase 3 的写作完成标记，两者独立）.**
 > **主线依据（防丢主线）：** 开写前 Read `data/research_gap.json`，取 `selected` 的 gap/选题方向作为本轮检索与写作的综述主线，确保不偏离 Phase 1.5 选定的核心 gap。
 > **Phase gate:** if `state.json` does not exist or `phase < 1.7`（提纲未据调研建立/未落结构签字）→ HALT; tell user "先完成 Phase 1.5（研究空白）→ 1.6（对标框架）→ 1.7（据调研建提纲 + 结构签字），系统主检索按提纲逐节进行"; do not proceed.
 
@@ -600,7 +602,7 @@ Format: `[review] Phase X.Step: <description>`. 📖 消息表 + Rollback 命令
 for each section in outline.md (e.g., section ID = "2.1"):
   SECTION_FILE="tmp/papers_2_1.json"   # replace dots with underscores in section ID
 
-  1. Check state.json → if section in completed_sections, SKIP
+  1. Check state.json → if section in searched_sections, SKIP (存量项目无该键 = 空列表，全部照常检索)
   2. Search ≥10 papers → collect metadata: title, authors, year, doi, abstract, source
      - Every paper must have abstract; if missing → re-fetch via efetch or paper-search
      - Still no abstract after retry → mark abstract:missing, skip for now
@@ -640,9 +642,12 @@ for each section in outline.md (e.g., section ID = "2.1"):
          --write-back
      If guard exits non-zero → do NOT continue to next section; fix flagged entries first.
      `--write-back` 把每条的 verified 与 per-entry checked_at 落盘到 literature_index.json，下一节复用已验条目、跳过重复联网核验（L1 短路，TTL 30 天）。verified 由脚本写、不靠 AI 记。
-  7. Confirm write success → update state.json (add section to completed_sections):
-     python3 scripts/state_manager.py complete-section --section X.X
-     # Adds X.X to completed_sections (idempotent), preserves all other keys.
+     🔴 **这一步是 DoD R2b 的唯一证据来源**：绝不能图快加 `--offline`（离线判不出编造文献），也不能省 `--write-back`（逐条 checked_at 落不下）。少任一个，Phase 3 每节盲检的 R2b 都会 fail。
+  7. Confirm write success → update state.json (add section to searched_sections):
+     python3 scripts/state_manager.py complete-search --section X.X
+     # Adds X.X to searched_sections (idempotent), preserves all other keys.
+     # 🔴 检索完成 ≠ 写作完成：completed_sections 只归 Phase 3 写完的节（complete-section），
+     #    这里绝不能用 complete-section，否则 Phase 3 会把全部节当已写完跳过。
   8. Git Checkpoint (见复用块, msg: [review] Phase 2: section X.X search complete)
   9. Continue to next section
 ```
@@ -680,7 +685,7 @@ Dedup rules (None/EndNote mode reindex):
 **Update `state.json`（仅更新 phase 字段，不覆盖 completed_sections / zotero_root_key）：**
 ```bash
 python3 scripts/state_manager.py set-phase --phase 2
-# Sets phase=2 only; completed_sections / zotero_root_key / mode / pending_sections preserved.
+# Sets phase=2 only; completed_sections / searched_sections / zotero_root_key / mode / pending_sections preserved.
 ```
 
 **Git Checkpoint** (见复用块, msg: `[review] Phase 2.5: dedup + global ID assigned`)
@@ -824,11 +829,11 @@ If pending_sections is empty → all sections complete; proceed to Phase 4.
     **🔴 进入下一节前置闸口：上一节 delegate_review verify 必须 exit 0（含 R15 结构完整性），否则不得开始下一节撰写。写完即检，不过不进。**
 
     **🔴 委托盲检（不得主 agent 自评）**：你刚写完本节，自评会失真地默认通过、且易漏项。落盘前必须把 DoD 清单**委托给独立上下文的subagent盲检**，自己不直接打勾：
-    1. 生成任务包：`python3 scripts/delegate_review.py pack --checklist references/dod_checklist.json --gate manuscript-dod --files <本节文件> --workdir .`（会在 stderr 打印 `RETURN_PATH=...`，即subagent返回要写入的约定路径）
+    1. 生成任务包：`python3 scripts/delegate_review.py pack --checklist "[DOD_CHECKLIST]" --gate manuscript-dod --files <本节文件> --workdir .`（会在 stderr 打印 `RETURN_PATH=...`，即subagent返回要写入的约定路径）
     2. **派一个独立subagent**（不给它本节写作上下文），把任务包原样贴给它，要求把 JSON 数组写到 `RETURN_PATH`。**可直接复制执行的派发指令**：
        - Claude Code：用 `Task` 工具，`subagent_type="academic-blind-reviewer"`（无此 agent 时退回 `general-purpose`），prompt = pack 打印出的整段任务包原文（含"你的角色/待检文件/检查清单/返回格式/返回写到这个文件"），**不附加任何本节写作说明**。
        - 其他平台（Codex/OpenCode 等无此 agent）：新开一个干净上下文的subagent/子会话，同样只贴任务包原文。
-    3. 校验返回：`python3 scripts/delegate_review.py verify --checklist references/dod_checklist.json --gate manuscript-dod --return <subagent返回.json> --section <当前section_id> --root <项目根>`；退出码非 0（任一缺项 / fail / 无证据）= **fail-closed**。**修复循环（原 Step 6 的修复委派并入此处）：** 任一项失败即派一个**修复子代理**（输入 = 盲检返回的结构化意见 + 本节 `drafts/section_XX_XX.md`，不给写作上下文）做针对性修改，改完重跑 `pack → verify` 复评；修满 2 轮仍失败 → **HALT**，输出结构化反馈（【问题】+ 证据锚点 + 根源分析 + 修复方向）交用户裁决。是否修订 / 是否 HALT 的决策由主会话把关，不可委托。**未过不得声明完成。** verify 通过会落盘 `.review_pass/<当前section_id>.json`，下一节 `prewrite_gate.py` 会**硬校验**它（缺失即拒绝开写）。
+    3. 校验返回：`python3 scripts/delegate_review.py verify --checklist "[DOD_CHECKLIST]" --gate manuscript-dod --return <subagent返回.json> --section <当前section_id> --root <项目根>`；退出码非 0（任一缺项 / fail / 无证据）= **fail-closed**。**修复循环（原 Step 6 的修复委派并入此处）：** 任一项失败即派一个**修复子代理**（输入 = 盲检返回的结构化意见 + 本节 `drafts/section_XX_XX.md`，不给写作上下文）做针对性修改，改完重跑 `pack → verify` 复评；修满 2 轮仍失败 → **HALT**，输出结构化反馈（【问题】+ 证据锚点 + 根源分析 + 修复方向）交用户裁决。是否修订 / 是否 HALT 的决策由主会话把关，不可委托。**未过不得声明完成。** verify 通过会落盘 `.review_pass/<当前section_id>.json`，下一节 `prewrite_gate.py` 会**硬校验**它（缺失即拒绝开写）。
        > **诚实边界：** verify 的 `ok:true` 只代表清单每项都被裁决且形式合规，**PASS 仅覆盖形式层，语义正确性由盲检subagent主观判断、未自动核验**。
        > **【P4·盲检降级告警】** ⚠️ 若环境派不出真正独立的subagent（非 Claude Code、无 `academic-blind-reviewer`），**绝不能同一 AI 自问自答冒充盲检**。告诉用户「本环境盲检不可靠，请你亲自复核本节」，别让自证闭环静默跑。
     4. **🚪 逃生口（盲检subagent确实跑不起来时，且仅此时）**：若平台无 `academic-blind-reviewer`、通用subagent也反复失败/取不到返回，导致 `verify` 无法落盘标记、下一节被 `prewrite_gate` 永久锁死，**不要卡死或静默跳过**。改为人工逐项盲检本节 DoD 后，用显式放行开锁并留痕：
@@ -838,7 +843,7 @@ If pending_sections is empty → all sections complete; proceed to Phase 4.
        ```
        它只放行"上一节盲检"这一项（其余硬检查照常），并写 `.review_pass/<上一节>.json`(manual:true) + 追加 `.review_pass/MANUAL_REVIEW_AUDIT.log`；理由为空则拒绝放行。此后每次 `prewrite_gate` 都会在 warnings 里点名"人工放行、语义未经独立盲检"。**门禁默认行为不变**：不加此参数时，缺盲检标记照旧硬拦。
 
-    `manuscript-dod` gate 共 **24 项（R1–R24；22 硬门禁 + R20/R22 两软报告）**，覆盖：通用（引文一一对应 / citation_guard / 符合 storyline / 占位清零 / 去 AI / 字数）、review 特有（综合非罗列 / 矛盾仲裁 / 引用类型匹配 / 检索日志 / 框架图一致）、systematic 额外（PRISMA 自洽 / RoB / GRADE）、结构完整性、**覆盖全面性 / 关键文献遗漏与引用偏倚 / 论证 arc 连贯 / 学术合规披露（R16-R19 盲检质量核）/ 新颖性与贡献（R23 盲检质量核）**、字符级机器门禁（R21）。**本次盲检已一并承接原 Step 6 逐节自检的 D1-D5 轴：D1 新颖→R23、D2 仲裁→R8、D3 证据→R7+R9、D4 连贯→R18、D5 去 AI→R5，故每节只在此做一次独立盲检，不再于 Step 6 重复委派。** **逐项内容 / severity / 核验命令以 `references/dod_checklist.json` 为唯一真源**，上面 `pack` 步骤运行时会把该 gate 的每个 item（id / name / check / script）完整打印进盲检任务包，此处不逐条枚举以免与 JSON 漂移。systematic 3 项仅 Review type = systematic 时检查，其余全类型通用。
+    `manuscript-dod` gate 共 **25 项（R1–R24 + R2b；23 硬门禁 + R20/R22 两软报告）**，覆盖：通用（引文一一对应 / 引文来源合规与格式核验(R2 离线，**只核 provider 白名单与字段格式、不证明文献真实存在**；真实性由 Phase 2 入库时的联网 citation_guard 与 Phase 4 终检负责) / **联网核验已生效(R2b：跑 `python3 scripts/check_online_verified.py --section X.X`，要求报告 `report.online_check` 为 true **且**本节每条文献都带逐条 `verification_details.checked_at`；专堵「edirect 在 Windows 上失效、只跑过离线 R2 却报绿」这个洞)** / 符合 storyline / 占位清零 / 去 AI / 字数）、review 特有（综合非罗列 / 矛盾仲裁 / 引用类型匹配 / 检索日志 / 框架图一致）、systematic 额外（PRISMA 自洽 / RoB / GRADE）、结构完整性、**覆盖全面性 / 关键文献遗漏与引用偏倚 / 论证 arc 连贯 / 学术合规披露（R16-R19 盲检质量核）/ 新颖性与贡献（R23 盲检质量核）**、字符级机器门禁（R21）。**本次盲检已一并承接原 Step 6 逐节自检的 D1-D5 轴：D1 新颖→R23、D2 仲裁→R8、D3 证据→R7+R9、D4 连贯→R18、D5 去 AI→R5，故每节只在此做一次独立盲检，不再于 Step 6 重复委派。** **逐项内容 / severity / 核验命令以 `references/dod_checklist.json` 为唯一真源**，上面 `pack` 步骤运行时会把该 gate 的每个 item（id / name / check / script）完整打印进盲检任务包，此处不逐条枚举以免与 JSON 漂移。systematic 3 项仅 Review type = systematic 时检查，其余全类型通用。
 
     - **R21 语法拼写与字符级格式(🔴机器硬门禁,可阻断)**,跑 `python3 scripts/proofread.py --manuscript-dir drafts --report proofread_report.json --fail-on misspelling,chinese_punct,subsup_bare`。stdlib-only、自包含。高置信三类**零容忍**：misspelling(英文常见错拼)、chinese_punct(中文标点漏入英文)、subsup_bare(应上下标却裸写,如 H2O/CO2/IC50,CJK 安全边界),命中任一即 `ok=false`(脚本 exit 1),据 `proofread_report.json` 的 `fail_on_hits` 定位修复后重跑。其余类别(英美拼写混用、单位格式、术语写法不一致、数字千分位、Methods 时态、学术错拼/中文错别字等)仅在报告里提示、不阻断,由作者择一统一。与 R5 去AI(style_checker)互补:R5 管文风,R21 管字符级机器错。
 
@@ -896,7 +901,9 @@ Write Mode has no `pending_sections` field so this gate is a no-op (no key → e
 
    ```bash
    python3 scripts/check_global_citation_sequence.py
-   python3 scripts/validate_citations.py --live --live-used-only --fail-on-orphan --retries 2
+   python3 scripts/validate_citations.py --live --live-used-only --fail-on-orphan --fail-on-live --fail-on-trace --retries 2
+   # 🔴 --fail-on-live / --fail-on-trace 必带：不带时联网核验失败（编造 DOI 打 404）
+   #    只打 [LIVE-FAIL] 行而退出码仍为 0，会被误读成通过。
    # Final citation guard pass: write verification results back to index
    python3 scripts/citation_guard.py \
      --index data/literature_index.json \
@@ -918,14 +925,13 @@ Write Mode has no `pending_sections` field so this gate is a no-op (no key → e
               --output exports/references.bib \
               --clean
    ```
-4. **Compile:** Merge all section drafts in correct order:
+4. **Compile:** Merge all section drafts in correct order（**跑这条，跨平台**）:
    ```bash
-   # Zero-padded filenames (section_01_01.md, section_01_02.md, ...) sort correctly with glob
-   cat drafts/section_*.md > exports/Final_Review.md
-   # Verify: ls drafts/section_*.md should list files in outline order
-   # If any file uses non-padded name, rename first:
-   #   mv drafts/section_1_1.md drafts/section_01_01.md
+   python3 scripts/compile_manuscript.py merge --drafts-dir drafts --out exports/Final_Review.md
+   # 按文件名数字段排序合并，强制写 UTF-8 无 BOM；打印实际合并了哪些节，核对是否为大纲顺序。
+   # 非 zero-pad 文件名也能排对，但建议统一：mv drafts/section_1_1.md drafts/section_01_01.md
    ```
+   > **🔴 别用 shell 重定向合并。** POSIX 下的等价形态是 `cat drafts/section_*.md > exports/Final_Review.md`（仅供理解本步在做什么）；**PowerShell 下绝对不要跑它**——PowerShell 5.1 的 `>` 默认写 UTF-16LE，而下游 `consolidate_references.py` / `structure_outline.py` / `export_docx.py` 全是 `read_text(encoding='utf-8')`，会当场 UnicodeDecodeError，Phase 4 从 4a 起全线崩。上面的脚本没有这个问题。
    > **导出范围注记：** Markdown（`exports/Final_Review.md`）是中间产物；最终 docx 由本技能 Step 5d 的 `scripts/export_docx.py` 产出。字符级排版契约里的上下标 `^...^`/`~...~` 通过 pandoc 的 `+superscript+subscript` 扩展转换，正文/标题字体（Times New Roman、标题加粗）由 `templates/reference.docx` 锁定（该模板由 `scripts/make_reference_docx.py` 烘焙）。图注和表注比正文小一号锁 10pt，摘要走独立样式层同样 10pt。
    4a. **Consolidate references into ONE global list** (run immediately after the `cat` merge):
    ```bash
@@ -959,10 +965,15 @@ Write Mode has no `pending_sections` field so this gate is a no-op (no key → e
    查正文里"见图 5 / 见 3.3 节 / 见表 2 / as discussed in Section 2.1 / as shown in Figure 1"这类**显式指向**的目标存不存在、指得对不对。综述是交叉引用密度最高的稿型（Figure 0 要求每节都引，4b 还会**新写**指向句），而现役对此零覆盖：`validate_citations.py` 管文献 `[N]`、4a 管参考表合并、4b 管"隐式回指缺指针"、R11 只问"引没引框架图"——四者与本步零重叠，都不改判据、不合并。**本步必须排在 4b/4c 之后**（4b 新写的指向句正是最该抓的那批）。
    - **① 合成语料（本步开头无条件覆盖重建，幂等）**：综述的图题注登记在 `figures/figure_index.md`、按设计**不在成稿里**（Phase 4 Step 4 的 `cat` 编译一个字不改，题注不塞进成稿），直接把成稿喂第 1 层 = 每张注册过的图都被判悬空 = **100% 系统性假阳**（再被第 3 层"找不到定义处→confirmed"全部坐实）。故先把注册题注行拼到成稿前面：
      ```bash
-     mkdir -p tmp
-     { grep -E '^##[[:space:]]*Figure[[:space:]]*[0-9]+[[:space:]]*[.:：]' figures/figure_index.md; \
-       cat exports/Final_Review.md; } > tmp/xref_corpus.md
+     python3 scripts/compile_manuscript.py xref-corpus \
+       --figure-index figures/figure_index.md --body exports/Final_Review.md --out tmp/xref_corpus.md
+     # 🔴 这里是 --body（成稿），不是 --manuscript：下面第 1 层的 --manuscript 只准指
+     #    tmp/xref_corpus.md，两者抄混就是 100% 系统性假阳。
+     # 幂等覆盖重建；自动按下面的错误契约处理（figure_index 缺失→退化为纯正文且不报错、
+     # 成稿缺失→报错退出）并打印「注册 N 条、进锚 M 条」，N>M 时逐条列出写歪的原行。
      ```
+     > **🔴 别用 bash 那套。** POSIX 下的等价形态是
+     > `mkdir -p tmp` + `{ grep -E '^##[[:space:]]*Figure[[:space:]]*[0-9]+[[:space:]]*[.:：]' figures/figure_index.md; cat exports/Final_Review.md; } > tmp/xref_corpus.md`（仅供理解取法：行首 `##` + Figure + 编号 + 分隔符的注册标题行）；**PowerShell 下不要跑它**——无 `grep`、不认 `[[:space:]]`、不认 `{ …; }` 分组，且 `>` 写 UTF-16LE。**这不是崩、是静默产假数据**：按下面的错误契约「grep 空匹配 exit 1 属正常、不得中断本步」，grep 不存在时语料会退化成纯正文 → 每张注册图都判悬空 → 正是本步开头写的「100% 系统性假阳」。上面的脚本内置同一形态的判据，跨平台一致。
      > **分隔符类 `[.:：]` 必须含全角冒号**：`## Figure 0：概念框架图` 这种全角注册行若被筛掉就**根本进不了语料**，④ 护栏 3 的回查再怎么写也看不到它（对该形态是死代码），而 Figure 0 是要求每节都引的框架图 —— 一条写歪的注册行会稳定产一条假阳。收进语料后第 1 层**仍认不出**它（英文 `Figure N` 题注正则只认半角，中文 `图 N` 才认全角），`caption_found` 仍为 `false`，由护栏 3 逐条回查兜住。
      > **该修正的已知副作用（无害，但别当成 bug 查）**：全角注册行既然不被题注正则识别，就**不会进 `caption_rows`**，于是会被当成一条标题、多抽出一条 `number=null` 的**假 section 锚**（实测 `SEC [(None,'Figure 0：概念框架图'), ('2.1','Results')]`）。这使「喂题注前后 `sections` 逐条相同」这条不变式**只在全部注册行都用半角分隔符时成立**。假 section 无编号，且第 2 层通读时一眼能看出那是图题注不是小节标题 → **不产假阳**，只是 `outline.json` 的候选清单多一条噪声。
      **只取匹配 `^## Figure N:` 的注册标题行、绝不 `cat` 整份登记表**（整份会多出一条假 section「Figure Index」，且 `- Type:`/`- Section:`/`- Key Message:`/`- Caption:`/`- Node mapping:` 五类登记字段行会被当成正文里的图/节引用）。**表题注就写在正文里、不需要合并，别把表也塞进本流程。** 落点固定 `tmp/xref_corpus.md`、`outline.json` 落项目根，**两者绝不落 `drafts/`**（`drafts/section_*.md` 是 managed_globs，写进去会被 signoff hook 拦下）；本步只读 `exports/`，**不写 `exports/` 下任何文件**（正文修改只发生在 HALT 后的用户裁决环节）。
@@ -1081,11 +1092,11 @@ Write Mode has no `pending_sections` field so this gate is a no-op (no key → e
 
 4. **DoD 自检（gate `submission-pack-dod`，委托独立subagent盲检）：**
    ```bash
-   python3 scripts/delegate_review.py pack --checklist references/dod_checklist.json \
+   python3 scripts/delegate_review.py pack --checklist "[DOD_CHECKLIST]" \
      --gate submission-pack-dod \
      --files exports/cover_letter.md exports/title_page.md exports/author_contributions.md \
              exports/coi_statement.md exports/keywords.md --workdir .
-   python3 scripts/delegate_review.py verify --checklist references/dod_checklist.json \
+   python3 scripts/delegate_review.py verify --checklist "[DOD_CHECKLIST]" \
      --gate submission-pack-dod --return .review_return_submission-pack-dod.json
    # 退出码非 0 = fail-closed，据subagent证据修复后重跑，未过不得声明完成
    ```
@@ -1116,7 +1127,7 @@ Three modes: **Zotero**（推荐，实时写入）/ **None**（纯本地 JSON + 
 | Issue | Handling |
 |-------|---------|
 | Zotero API key invalid / 403 error | Re-run `save-credentials` with a fresh key; do NOT proceed until `--status` returns ✅ |
-| Mid-search crash | state.json `completed_sections` tracks progress; resume skips done |
+| Mid-search crash | state.json `searched_sections` tracks search progress; resume skips done |
 | PubMed CLI + paper-search MCP both unavailable | HALT; suggest install edirect or enable paper-search MCP; do NOT fallback to websearch/tavily |
 
 ---
@@ -1125,10 +1136,10 @@ Three modes: **Zotero**（推荐，实时写入）/ **None**（纯本地 JSON + 
 
 > 📖 完整 CLI 参数和用法详见 `references/scripts_reference.md`
 
-18 个活跃脚本（`[project]/scripts/`，Phase 0 init 时全量镜像 `scripts/*.py`，除 `test_*.py` 与 `init_project.py`）：
-`zotero_manager.py` | `state_manager.py` | `matrix_manager.py` | `word_counter.py` | `validate_citations.py` | `citation_guard.py` | `check_global_citation_sequence.py` | `export_bibtex.py` | `prewrite_gate.py` | `delegate_review.py` | `style_checker.py` | `proofread.py` | `abbreviation_consistency.py` | `consolidate_references.py` | `export_docx.py` | `make_reference_docx.py` | `citation_utils.py`（import-only） | `citation_guard_core.py`（import-only）
+19 个活跃脚本（`[project]/scripts/`，Phase 0 init 时全量镜像 `scripts/*.py`，除 `test_*.py` 与 `init_project.py`）：
+`zotero_manager.py` | `state_manager.py` | `matrix_manager.py` | `word_counter.py` | `validate_citations.py` | `citation_guard.py` | `check_global_citation_sequence.py` | `export_bibtex.py` | `prewrite_gate.py` | `delegate_review.py` | `style_checker.py` | `proofread.py` | `abbreviation_consistency.py` | `compile_manuscript.py` | `consolidate_references.py` | `export_docx.py` | `make_reference_docx.py` | `citation_utils.py`（import-only） | `citation_guard_core.py`（import-only）
 
-> `scripts/init_project.py` 是 Phase 0.5 一次性脚手架（从 SKILL_DIR 运行，不复制进项目），负责创建目录/全量镜像上述脚本/写 state.json+outline.md/git init。`state_manager.py` 新增 `set-phase` / `complete-section` 子命令管理 workflow `state.json`。
+> `scripts/init_project.py` 是 Phase 0.5 一次性脚手架（从 SKILL_DIR 运行，不复制进项目），负责创建目录/全量镜像上述脚本/写 state.json+outline.md/git init。`state_manager.py` 新增 `set-phase` / `complete-section` / `complete-search` 子命令管理 workflow `state.json`（`complete-search` 写 Phase 2 的 `searched_sections`，与写作完成的 `completed_sections` 分开）。
 
 ---
 
