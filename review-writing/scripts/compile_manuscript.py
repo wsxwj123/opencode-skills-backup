@@ -14,7 +14,7 @@
 CLI:
   python3 scripts/compile_manuscript.py merge       [--drafts-dir drafts] [--out exports/Final_Review.md]
   python3 scripts/compile_manuscript.py xref-corpus [--figure-index figures/figure_index.md]
-                                                    [--manuscript exports/Final_Review.md]
+                                                    [--body exports/Final_Review.md]
                                                     [--out tmp/xref_corpus.md]
 
 退出码：0 正常（含 figure_index.md 缺失的退化态）/ 1 输入缺失（Final_Review.md 不在 =
@@ -81,11 +81,11 @@ def cmd_merge(args: argparse.Namespace) -> int:
 
 
 def cmd_xref_corpus(args: argparse.Namespace) -> int:
-    manuscript = Path(args.manuscript)
-    if not manuscript.is_file():
+    body = Path(args.body)
+    if not body.is_file():
         # 成稿缺失 = Step 4 还没跑，属流程错序：报错并停，绝不产空语料静默通过。
         sys.stderr.write(
-            f"[compile_manuscript] 成稿不存在: {manuscript}（Step 4 编译还没跑？先跑 merge）\n")
+            f"[compile_manuscript] 成稿不存在: {body}（Step 4 编译还没跑？先跑 merge）\n")
         return 1
 
     fig_index = Path(args.figure_index)
@@ -100,7 +100,7 @@ def cmd_xref_corpus(args: argparse.Namespace) -> int:
     # figure_index.md 缺失 → 语料退化为纯正文，**不报错**（图类会因锚不可用整类 skip）。
 
     prefix = "".join(ln + "\n" for ln in caption_lines)
-    _write(Path(args.out), prefix + _read(manuscript))
+    _write(Path(args.out), prefix + _read(body))
 
     n, m = len(registered), len(caption_lines)
     print(f"✅ 语料 → {args.out}（注册 {n} 条、进锚 {m} 条）")
@@ -125,7 +125,11 @@ def main() -> int:
 
     p_x = sub.add_parser("xref-corpus", help="图注册标题行 + 成稿 → tmp/xref_corpus.md")
     p_x.add_argument("--figure-index", default="figures/figure_index.md")
-    p_x.add_argument("--manuscript", default="exports/Final_Review.md")
+    # 参数名刻意不叫 --manuscript：4d 的 structure_outline 也有个 --manuscript，
+    # 且它**只准指向 tmp/xref_corpus.md**（指成稿=100% 系统性假阳）。两个同名参数
+    # 挨在同一段文档里，抄错一次就是整批假阳，故这里用 --body 与之区分。
+    p_x.add_argument("--body", default="exports/Final_Review.md",
+                     help="要拼在题注之后的成稿（Step 4 merge 的产物）")
     p_x.add_argument("--out", default="tmp/xref_corpus.md")
     p_x.set_defaults(func=cmd_xref_corpus)
 
