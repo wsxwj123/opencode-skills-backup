@@ -4,7 +4,7 @@
   "gates": {
     "manuscript-dod": {
       "title": "节末 DoD 自检（落盘前委托独立子代理盲检）",
-      "applies_when": "每个正文章节落盘前；⑫⑬⑭仅 Review type = systematic 时检查，其余类型标 na 并注明",
+      "applies_when": "每个正文章节落盘前；R12/R13/R14 仅 Review type = systematic 时检查，其余类型标 na 并注明（此处刻意不用圈码字符，GBK 控制台编不出会让 pack 当场崩）",
       "items": [
         {
           "id": "R1",
