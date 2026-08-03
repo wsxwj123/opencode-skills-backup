@@ -14,8 +14,8 @@
         },
         {
           "id": "R2",
-          "name": "citation_guard 已通过",
-          "check": "本节新增引用已过 citation_guard.py（白名单 pubmed-cli / paper-search，禁 websearch / tavily），guard 返回 exit 0；可对照 data/citation_guard_report.json 确认",
+          "name": "引文来源合规与格式核验（离线）",
+          "check": "本项仅核 provider 白名单（pubmed-cli / paper-search 允许，websearch / tavily 禁止）与字段格式完整性，**不证明文献真实存在**——脚本带 --offline，此模式下不联网、任何格式完整的条目都会判 verified（编造的 DOI+PMID 照样过）。文献真实性由 Phase 2 入库时的联网 citation_guard（SKILL.md Phase 2 Step 6，不带 --offline）与 Phase 4 终检负责，本项通过不得被当成「文献已核实」。核后可对照 data/citation_guard_report.json 的 report.online_check 判断这份报告是联网跑的还是离线跑的。",
           "script": "python3 scripts/citation_guard.py --offline --index data/literature_index.json"
         },
         {
