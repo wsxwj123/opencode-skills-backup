@@ -126,10 +126,43 @@ REF_HEADING_RE = re.compile(r"^(?:References|参考文献|Bibliography)", re.IGN
 # Anchored at both ends on purpose: a prose sentence that merely starts with
 # "References were formatted per…" must NOT open the block, otherwise the
 # whole rest of the file would be swallowed.
-REF_LABEL_LINE_RE = re.compile(
-    r"^\**\s*(?:References|参考文献|Bibliography)\s*\**\s*[:：]?\s*$",
-    re.IGNORECASE,
-)
+#
+# ReDoS fix (2026-08-03) — do NOT turn this back into a regex. It used to be
+#   ^\**\s*(?:References|参考文献|Bibliography)\s*\**\s*[:：]?\s*$
+# where the adjacent optional quantifiers (\s* \** \s*) all compete for the
+# same whitespace run: cubic backtracking on near-miss lines. Measured with a
+# single .match() call:
+#   "References" + " "*400  + "x"  →  0.067 s
+#   "References" + " "*800  + "x"  →  0.512 s
+#   "References" + " "*1600 + "x"  →  4.035 s   (≈×8 per doubling)
+# The trigger shape is real: PDF/HTML-to-text TOC lines are exactly
+# "References" + <long space run> + <page number>, and a few dozen of them
+# hang the checker for minutes → users skip the check → silent failure.
+# Merging segments into character classes ([\s*]*[:：]?[\s*]*$) is NOT a fix
+# either: still O(n²), 29 s measured. Hence a plain left-to-right consumer —
+# each greedy strip below is equivalent to the regex because no later segment
+# can accept the characters an earlier segment consumes.
+_REF_LABEL_KEYWORDS = ("references", "参考文献", "bibliography")
+
+
+def _is_reference_label_line(stripped: str) -> bool:
+    """Linear-time, semantics-preserving replacement for the retired regex."""
+    s = stripped.lstrip("*")            # ^\**
+    s = s.lstrip()                      # \s*
+    for kw in _REF_LABEL_KEYWORDS:      # (?:References|参考文献|Bibliography), re.I
+        # Compare a fixed-length slice, lowercased: indices stay in the
+        # original string even for rare chars whose lower() changes length.
+        if s[: len(kw)].lower() == kw:
+            s = s[len(kw):]
+            break
+    else:
+        return False
+    s = s.lstrip()                      # \s*
+    s = s.lstrip("*")                   # \**
+    s = s.lstrip()                      # \s*
+    if s[:1] in (":", "："):            # [:：]?
+        s = s[1:]
+    return not s.lstrip()               # \s*$
 FIGURE_LEGEND_RE = re.compile(r"^(?:Figure|Fig\.?|Table)\s+\d", re.IGNORECASE | re.MULTILINE)
 CODE_BLOCK_RE = re.compile(r"```.*?```", re.DOTALL)
 CITATION_RE = re.compile(r"\[\d+(?:[,\-\s]*\d+)*\]")
@@ -158,7 +191,7 @@ def _extract_prose(text: str) -> str:
             heading_text = HEADING_RE.sub("", stripped, count=1).strip()
             in_ref_block = bool(REF_HEADING_RE.match(heading_text))
             continue
-        if REF_LABEL_LINE_RE.match(stripped):
+        if _is_reference_label_line(stripped):
             in_ref_block = True
             continue
         if in_ref_block:
