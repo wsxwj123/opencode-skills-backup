@@ -138,10 +138,16 @@ def main() -> None:
     print(f"✅ Project created at: {proj}")
     print(f"   Copied {copied} scripts (full scripts/*.py mirror)")
 
-    # state.json + outline.md
-    (proj / "state.json").write_text(STATE_JSON, encoding="utf-8")
-    (proj / "outline.md").write_text(OUTLINE_TEMPLATE, encoding="utf-8")
-    print("✅ Wrote state.json + outline.md")
+    # state.json + outline.md —— 已存在就保留（同 figure_index.md 的守卫）。
+    # 无条件覆盖会让重跑 init 把 {"phase":3,"completed_sections":[...]} 打回 phase 0、
+    # 把写好的大纲换成空模板，等于整个项目进度静默清零。
+    for name, content in (("state.json", STATE_JSON), ("outline.md", OUTLINE_TEMPLATE)):
+        path = proj / name
+        if path.exists():
+            print(f"⏭️ {name} 已存在，保留原文件（如需重建请手动删除）")
+        else:
+            path.write_text(content, encoding="utf-8")
+            print(f"✅ Wrote {name}")
 
     # Git auto-checkpoint init (skip if git not available)
     if shutil.which("git"):

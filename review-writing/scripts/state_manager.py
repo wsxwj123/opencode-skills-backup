@@ -1200,6 +1200,13 @@ def update_state(payload_path, merge=True):
             except Exception as e:
                 print(f"Error writing to {filename}: {e}")
 
+    # 🔴 只有真写成功过至少一个 key 才删 payload。此前无条件 os.remove：payload 里
+    # 一个 key 都没被认出（打了 Warning 之后）照样删，用户手写的内容当场蒸发。
+    if not updated_files:
+        print("Error: payload 中无可识别的 key，未做任何更新，输入文件已保留："
+              f"{payload_path}（合法 key: {', '.join(sorted(STATE_FILES))}）")
+        sys.exit(1)
+
     print(f"Successfully updated: {', '.join(updated_files)}")
 
     try:
