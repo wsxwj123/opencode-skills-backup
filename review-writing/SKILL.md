@@ -965,7 +965,9 @@ Write Mode has no `pending_sections` field so this gate is a no-op (no key → e
    - **① 合成语料（本步开头无条件覆盖重建，幂等）**：综述的图题注登记在 `figures/figure_index.md`、按设计**不在成稿里**（Phase 4 Step 4 的 `cat` 编译一个字不改，题注不塞进成稿），直接把成稿喂第 1 层 = 每张注册过的图都被判悬空 = **100% 系统性假阳**（再被第 3 层"找不到定义处→confirmed"全部坐实）。故先把注册题注行拼到成稿前面：
      ```bash
      python3 scripts/compile_manuscript.py xref-corpus \
-       --figure-index figures/figure_index.md --manuscript exports/Final_Review.md --out tmp/xref_corpus.md
+       --figure-index figures/figure_index.md --body exports/Final_Review.md --out tmp/xref_corpus.md
+     # 🔴 这里是 --body（成稿），不是 --manuscript：下面第 1 层的 --manuscript 只准指
+     #    tmp/xref_corpus.md，两者抄混就是 100% 系统性假阳。
      # 幂等覆盖重建；自动按下面的错误契约处理（figure_index 缺失→退化为纯正文且不报错、
      # 成稿缺失→报错退出）并打印「注册 N 条、进锚 M 条」，N>M 时逐条列出写歪的原行。
      ```
