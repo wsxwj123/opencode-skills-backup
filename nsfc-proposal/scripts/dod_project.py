@@ -16,7 +16,10 @@ dod_selection.json 四态（§7，fail-safe 方向是收紧不是放松）:
     不存在        -> 全项都跑，零输出
     坏 JSON       -> stderr 打 DOD_SELECTION: CORRUPT，回落全项都跑，exit 1
     字段非法      -> stderr 打 DOD_SELECTION: INVALID，回落全项都跑，exit 1
-                     （schema_version 缺失/≠"1.0" 归此档，与 structure_profile._dod_disabled 同标签）
+                     （schema_version 缺失/≠"1.0" 归此档；disabled[].gate 缺失或不是
+                     checklist 里真实存在的 gate 也归此档——缺 gate 的条目在 == 匹配下
+                     永不生效、留痕路却会照记，必须两路同拒；与 structure_profile.
+                     _dod_disabled 同标签）
     未确认        -> confirmed != true：stderr 打 DOD_SELECTION: UNCONFIRMED，
                      关项不生效、全项都跑，exit 0（降级继续，与"不存在"同档；
                      structure_profile cmd_show 对 unconfirmed 同样归 0）
@@ -47,11 +50,15 @@ def _find_checklist(root: str) -> str | None:
     return None
 
 
-def _load_selection(root: str) -> tuple[list[dict], bool]:
+def _load_selection(root: str, valid_gates: set[str]) -> tuple[list[dict], bool]:
     """读 dod_selection.json，返回 (disabled 条目列表, 是否损坏)。
 
     损坏/非法一律回落空列表（= 全项都跑），错误行打 stderr（格式同 §3，统一 stderr）。
     confirmed != true 同样回落空列表并打 UNCONFIRMED 行，但不算损坏（exit 0）。
+
+    valid_gates: checklist 里真实存在的 gate 集合。条目 gate 缺失/非字符串/不在
+    集合内 = 字段非法（INVALID）——缺 gate 的条目在本路的 == 匹配下永不生效，
+    留痕路却会照记「未执行」，必须在入口就拒掉，两路才同口径（2026-08-03 缺陷）。
     """
     path = os.path.join(root, "data", "dod_selection.json")
     if not os.path.isfile(path):
@@ -91,6 +98,12 @@ def _load_selection(root: str) -> tuple[list[dict], bool]:
     for i, entry in enumerate(disabled):
         if not isinstance(entry, dict) or not isinstance(entry.get("id"), str) or not entry.get("id"):
             _fail("DOD_SELECTION: INVALID %s: disabled[%d] 必须含字符串 id" % (abs_path, i))
+            _fail("处置：修正该条目；或删除该文件，脚本会回落到「全项都跑」。")
+            return [], True
+        gate = entry.get("gate")
+        if not isinstance(gate, str) or gate not in valid_gates:
+            _fail("DOD_SELECTION: INVALID %s: disabled[%d].gate 缺失或不是已知 gate（可用: %s）"
+                  % (abs_path, i, ", ".join(sorted(valid_gates)) or "(空)"))
             _fail("处置：修正该条目；或删除该文件，脚本会回落到「全项都跑」。")
             return [], True
         out.append(entry)
@@ -133,7 +146,7 @@ def cmd_project(args: argparse.Namespace) -> int:
         _fail("DOD_CHECKLIST: CORRUPT %s: gates[%s].items 必须是数组" % (checklist_path, args.gate))
         return 1
 
-    disabled_entries, selection_broken = _load_selection(root)
+    disabled_entries, selection_broken = _load_selection(root, set(gates))
     off_ids = {e["id"] for e in disabled_entries if e.get("gate") == args.gate}
 
     total = len(items)

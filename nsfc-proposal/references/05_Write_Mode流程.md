@@ -81,7 +81,11 @@ Step 0.4b: 结构确认与自检项协商（仅非国自然/自定义模板项�
   │   │    "disabled": [{"gate": "p1-dod", "id": "N8", "reason": "非国自然项目无科学问题属性"}],
   │   │    "added": []}
   │   │   （confirmed 必须为 true；未经用户确认不得落盘这份文件）
-  │   └─ 被关的每一项都会出现在评审/润色报告的「未执行的检查」里（见07），不会假装查过
+  │   ├─ 被关的每一项都会出现在评审/润色报告的「未执行的检查」里（见07），不会假装查过
+  │   └─ 盲检接线：此后每个 Phase 的盲检按 SKILL.md 三步命令模板第 0 步执行——先跑
+  │       dod_project.py project 投影出 tmp/dod_active_<gate>.json，pack 与 verify 的
+  │       --checklist 都换用这份投影产物，被关的项不进盲检任务包；
+  │       没有 dod_selection.json 的项目照旧用全量清单，行为不变
   └─ 命令细节（structure_profile.py 四个子命令 / dod_project.py 投影）见 references/08 §2.8-2.9
 
 Step 0.5: 初始化项目
