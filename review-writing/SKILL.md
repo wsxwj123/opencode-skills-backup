@@ -900,7 +900,9 @@ Write Mode has no `pending_sections` field so this gate is a no-op (no key → e
 
    ```bash
    python3 scripts/check_global_citation_sequence.py
-   python3 scripts/validate_citations.py --live --live-used-only --fail-on-orphan --retries 2
+   python3 scripts/validate_citations.py --live --live-used-only --fail-on-orphan --fail-on-live --fail-on-trace --retries 2
+   # 🔴 --fail-on-live / --fail-on-trace 必带：不带时联网核验失败（编造 DOI 打 404）
+   #    只打 [LIVE-FAIL] 行而退出码仍为 0，会被误读成通过。
    # Final citation guard pass: write verification results back to index
    python3 scripts/citation_guard.py \
      --index data/literature_index.json \
