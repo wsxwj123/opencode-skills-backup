@@ -1,5 +1,22 @@
 # Changelog - General SCI Writing Skill
 
+## [2.33.1] - 2026-08-04
+
+### 🔴 `citation_guard.py --write-back` 把"按编号做键"的索引写成两份
+
+- 索引形如 `{"1": {...}, "2": {...}}` 时，写回分支只认
+  `entries/papers/items/references/data` 五种 key，其余一律落到 `out["entries"]`
+  —— 原键原样留着、另起一份副本，同一批文献在同一个文件里存了两份。
+  而所有读取侧（`_normalize_index`、`citation_claim_check._load_ledger`）都**优先读
+  `entries`**，于是用户之后手工改原键的内容**对所有检查不可见，且没有任何提示**。
+  实测：改完原键 1 的标题再跑一次 write-back，`entries[0]` 仍是旧标题，两份已分叉。
+- 现在 dict_values 形状按原键写回原位，不再新建 `entries`。读写两侧共用
+  `_dict_entry_keys()` 挑条目，保证一一对应；`metadata`（写回自己产的账本头）
+  排除在条目之外，否则第二次跑会把它当成一条缺标题的文献判 fail。
+- 其余四种形状（裸 list / entries / papers / items）逐字节不变，已对照实测。
+  同一处缺陷在 sci2doc 2.31.1、reviewer-simulator 2.29.6 一并修掉；
+  review-writing 也有，但其 `citation_guard.py` 被验收考卷 md5 锁死，本轮未动。
+
 ## [2.33.0] - 2026-08-04
 
 ### 🔴 P0：两条让第二节开不了写的死锁 + 一道被架空的硬门禁 + 一处静默毁数据
