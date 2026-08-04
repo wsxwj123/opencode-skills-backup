@@ -122,6 +122,22 @@ PASSIVE_RE = re.compile(
 # ── Sentence splitting ────────────────────────────────────────────────────────
 SENTENCE_RE = re.compile(r"(?<=[.!?])\s+(?=[A-Z\[])")
 
+# ── 中文支持：切句与计词（口径与 review-writing/scripts/style_checker.py 一致）──
+# 中文句子以「。！？」收尾且**不带空格**，上面那条英文规则一句都切不出来；再叠加
+# 「按空格数词」的碎片过滤（中文不分词 → 整段只算 1 词 < 3），整段中文会被整体丢弃，
+# 于是所有按句子算的检查（句长方差/连续等长…）在中文稿上全部空转 → 恒满分。
+# 下面两条只在文本里真有汉字时才起作用；纯英文输入的行为与旧实现逐字节一致。
+CJK_CHAR_RE = re.compile(r"[一-鿿]")           # 汉字：用于计字数
+# 汉字 + 中文标点 + 全角符号：剥掉之后再数剩余的英文词，避免把「，」当成一个词。
+CJK_TEXT_RE = re.compile(r"[　-〿一-鿿＀-￯]")
+# 在中文句末标点之后断句；连续的句末标点（？！）和紧跟的收尾引号/括号留在本句。
+CJK_SENTENCE_SPLIT_RE = re.compile(r"(?<=[。！？])(?![。！？…”’」』）】])")
+
+# ponytail: 2 个汉字折 1 个英文词。选 2 是为了让按词计的阈值在中文上落到合理字数
+# （如「单句 >30 词」⇒ >60 字，对上中文长句 30–60 字的常规节奏）。
+# 启发式，真稿反馈说判早/判晚了就调这一个数。
+CJK_CHARS_PER_WORD = 2
+
 # ── Reference/figure/heading filters ─────────────────────────────────────────
 # NOTE: there is deliberately no per-line reference format regex any more.
 # Real drafts mix at least five entry styles ("1. Author…2020", "- [12] …",
@@ -223,14 +239,38 @@ def _extract_prose(text: str) -> str:
 
 
 def _split_sentences(text: str) -> list[str]:
-    """Split text into sentences."""
+    """Split text into sentences (English punctuation + Chinese 。！？)."""
     text = CITATION_RE.sub("", text)  # remove [n] before splitting
-    raw = SENTENCE_RE.split(text)
-    return [s.strip() for s in raw if s.strip() and len(s.split()) >= 3]
+    raw: list[str] = []
+    for chunk in SENTENCE_RE.split(text):
+        raw.extend(CJK_SENTENCE_SPLIT_RE.split(chunk))
+    return [s.strip() for s in raw if s.strip() and _word_count(s) >= 3]
 
 
 def _word_count(sentence: str) -> int:
-    return len(sentence.split())
+    """词数；中文按「CJK_CHARS_PER_WORD 个汉字 = 1 词」折算。
+
+    没有汉字时直接走旧路径（len(split())），保证纯英文文本结果一字不差。"""
+    cjk = len(CJK_CHAR_RE.findall(sentence))
+    if not cjk:
+        return len(sentence.split())
+    return len(CJK_TEXT_RE.sub(" ", sentence).split()) + cjk // CJK_CHARS_PER_WORD
+
+
+def _opener_key(first_sentence: str) -> str:
+    """段首指纹：英文取前 3 词，中文取前 6 字（= 3 个词当量，口径一致）。
+
+    中文没有空格，沿用 split()[:3] 会把整段当成一个 opener，等于不查。"""
+    if CJK_CHAR_RE.match(first_sentence[:1]):
+        return first_sentence[: 3 * CJK_CHARS_PER_WORD]
+    words = first_sentence.split()[:3]
+    return " ".join(words).lower() if len(words) >= 2 else ""
+
+
+def _is_cjk_dominant(text: str, total_words: int) -> bool:
+    """半数以上词当量来自汉字 → 当中文稿处理（英文专属检查对它没有意义）。"""
+    cjk_equiv = len(CJK_CHAR_RE.findall(text)) // CJK_CHARS_PER_WORD
+    return total_words > 0 and cjk_equiv * 2 > total_words
 
 
 def check_file(filepath: str, journal: str = "") -> dict[str, Any]:
@@ -240,7 +280,7 @@ def check_file(filepath: str, journal: str = "") -> dict[str, Any]:
 
     prose = _extract_prose(raw_text)
     sentences = _split_sentences(prose)
-    paragraphs = [p.strip() for p in prose.split("\n\n") if p.strip() and len(p.split()) >= 10]
+    paragraphs = [p.strip() for p in prose.split("\n\n") if p.strip() and _word_count(p) >= 10]
 
     total_words = sum(_word_count(s) for s in sentences)
     result: dict[str, Any] = {
@@ -304,6 +344,9 @@ def check_file(filepath: str, journal: str = "") -> dict[str, Any]:
     result["passive_ratio"] = round(passive_ratio, 3)
 
     guidance, low, high = _passive_target(journal)
+    # PASSIVE_RE 认的是 be + 过去分词，中文稿上恒为 0；对中文稿发"被动不足"是噪音。
+    if _is_cjk_dominant(prose, total_words):
+        low = high = None
     if high is not None and passive_ratio > high:
         result["warnings"].append({
             "type": "excessive_passive_voice",
@@ -337,10 +380,9 @@ def check_file(filepath: str, journal: str = "") -> dict[str, Any]:
     openers = []
     for para in paragraphs:
         first_sentence = SENTENCE_RE.split(para)[0].strip() if para else ""
-        # Extract first 3 words as structural pattern
-        words = first_sentence.split()[:3]
-        if len(words) >= 2:
-            openers.append(" ".join(words).lower())
+        opener = _opener_key(first_sentence)
+        if opener:
+            openers.append(opener)
 
     repeated_openers: list[str] = []
     for i in range(1, len(openers)):
