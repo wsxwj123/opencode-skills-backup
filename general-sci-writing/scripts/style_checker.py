@@ -44,21 +44,26 @@ FORBIDDEN_EXACT = {
     "of paramount importance", "a key player",
 }
 # ── 中文 AI 套话（与上面英文表同级：命中即 high，计入 score）──────────────────
-# 口径 = 英文表的中文镜像，一条中文对一条英文，两种语言同等待遇：
-#   值得注意的是 ← it is worth noting / notably   综上所述/总而言之 ← taken together
-#   越来越多的证据表明 ← a growing body of evidence  发挥关键作用 ← plays a crucial role
-#   至关重要 ← of paramount importance            深入探讨 ← delve into
+# 真源口径与 polish-sci / revise-sci 的 `AI_CLICHE_TERMS_ZH` 对齐（那份表是用户人工
+# curated 的）。本表 = 那份表里**能实际生效的 15 条** ∪ 本家原有 4 条（不仅如此 /
+# 在此背景下 / 越来越多的证据表明 / 发挥关键作用），共 19 条。
 #
-# 🔧 **要加/删一条套话，就改这个 set**（另一家 style_checker.py 是独立分叉副本，
-#    两边都要改）。用户可见的说明：general-sci-writing/references/anti-ai-protocol.md
+# 🚫 刻意不收 `随着……的发展` / `在……的背景下`(带省略号那条) / `为……奠定了基础`。
+#    它们在 polish-sci 里带「……」占位符、字面永远匹配不上，这是用户**有意**留着不
+#    生效的——他判定这几种表述不算 AI 感。别把它们改成能命中的形态。
+#
+# 🔧 要加/删一条套话就改这个 set。同一份口径目前散在四处、互为分叉副本：
+#    rw / gsw 各一份 style_checker.py + polish-sci / revise-sci 各一份 common.py。
+#    抽成 _shared/ 共享件是结构性改动，合并见 PROJECT.md 待办。
+#    用户可见的说明：general-sci-writing/references/anti-ai-protocol.md
 #    与 review-writing/references/writing_guidelines.md §4「Chinese Mode」。
-#
-# ponytail: 只收十条几乎没有正当用法的。刻意不收「此外/然而/近年来」这类正常连接词
-# 与时间状语——真中文稿里高频且合法，收进来就是把正常稿判死（误伤比漏报更伤用户）。
-# 真稿反馈说漏得多再加，别一次堆几百条。
 FORBIDDEN_CN = {
-    "值得注意的是", "综上所述", "总而言之", "不仅如此", "显而易见",
-    "在此背景下", "深入探讨", "至关重要", "越来越多的证据表明", "发挥关键作用",
+    # ↓ 与 polish-sci / revise-sci AI_CLICHE_TERMS_ZH 逐条对齐的 15 条
+    "值得注意的是", "值得一提的是", "众所周知", "不言而喻", "综上所述",
+    "总而言之", "总的来说", "毋庸置疑", "显而易见", "至关重要",
+    "举足轻重", "深入探讨", "近年来", "发挥着重要作用", "扮演着重要角色",
+    # ↓ 本家原有、polish-sci 没有的 4 条
+    "不仅如此", "在此背景下", "越来越多的证据表明", "发挥关键作用",
 }
 FORBIDDEN_PATTERNS = [
     re.compile(r"not only\b.*?\bbut also\b", re.IGNORECASE),
