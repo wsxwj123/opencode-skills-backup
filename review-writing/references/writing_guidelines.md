@@ -66,9 +66,13 @@ meta_analysis | systematic_review | clinical_trial | preprint | book_chapter | g
 - **Transitions:** Ban "Furthermore / In addition / Moreover" bolted-on. Embed causality into main clause.
 
 ### Chinese Mode
-- **Ban List:** 值得注意的是、不仅如此、此外、综上所述、总而言之、深入探讨、至关重要、在此背景下、显而易见
+- **Ban List（写作纪律）:** 值得注意的是、不仅如此、此外、综上所述、总而言之、深入探讨、至关重要、在此背景下、显而易见、越来越多的证据表明、发挥关键作用
+- **🔒 其中被 `style_checker.py` 机器强制的 10 条**（命中即 `severity=high`、扣 15 分，与英文禁词同级）：值得注意的是、综上所述、总而言之、不仅如此、显而易见、在此背景下、深入探讨、至关重要、越来越多的证据表明、发挥关键作用。
+  - 真源是 `scripts/style_checker.py` 的 `FORBIDDEN_CN`（`grep -n FORBIDDEN_CN scripts/style_checker.py` 可查全）。**要加/删一条套话就改那个 set，并同步本行**；general-sci-writing 的 style_checker.py 是独立分叉副本，两家都要改。
+  - **「此外」「然而」「近年来」刻意不进机器表**：它们在真中文稿里高频且合法，机器一刀切会把正常稿判死。写作时仍按上面的 Ban List 自律避免，机器只兜住几乎没有正当用法的那批。
 - **Structure Ban:** 一方面……另一方面……; 随着……的不断发展; 日益受到关注; 禁任何比喻（明喻/暗喻/借喻，如"如同/犹如/像…一样"及"…的桥梁/基石/催化剂"类比喻名词——直接陈述事实）
 - **Rhythm:** Short sentences ≤15 characters, long sentences 30–60 characters. Avoid 3+ consecutive same-pattern sentences.
+- **机器检查在中文稿上同样生效**：style_checker 按「。！？」断句、按 2 字 = 1 词折算词数，句长方差/连续等长句/长句/段首重复这些检查在中文稿上真的会算（此前中文稿恒判满分）。
 
 ### Deep Rewriting (Anti-Similarity Protocol)
 - **Lexical:** Replace non-terminological generic words. Verbatim phrase ≥4 consecutive words → decompose and reconstruct.

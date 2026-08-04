@@ -15,6 +15,18 @@
 - 首句套话："It is well known", "It is worth noting", "Interestingly", "Remarkably", "In recent years"。
 - 严禁结构：三段式排比 ("seamless, intuitive, and powerful")、虚假范围 ("from X to Y")、否定式排比 ("not only... but also...")。
 
+### 中文正文禁词表（写中文稿时生效）
+
+真源是同一个脚本里的 `FORBIDDEN_CN`（`grep -n FORBIDDEN_CN scripts/style_checker.py` 查全），命中即 `severity=high`、扣 15 分，与英文禁词同级。当前 10 条：
+
+> 值得注意的是、综上所述、总而言之、不仅如此、显而易见、在此背景下、深入探讨、至关重要、越来越多的证据表明、发挥关键作用
+
+一条中文对一条英文，两种语言同等待遇（值得注意的是 ← it is worth noting；越来越多的证据表明 ← a growing body of evidence；发挥关键作用 ← plays a crucial role；至关重要 ← of paramount importance；深入探讨 ← delve into）。
+
+- **要加/删一条就改 `FORBIDDEN_CN` 这个 set，并同步本节**；review-writing 的 `style_checker.py` 是独立分叉副本，两家都要改。
+- **「此外」「然而」「近年来」刻意不收**：真中文稿里高频且合法，机器一刀切会把正常稿判死。写作时自律避免即可。
+- 中文稿的句子级检查同样生效：脚本按「。！？」断句、按 2 字 = 1 词折算词数（此前中文稿因切不出句子恒判满分放行）。
+
 ## 🔴 禁修辞 (No Rhetorical Devices)
 
 严禁文学性修辞，即隐喻、拟人、明喻、夸张、对偶、设问、引经据典等。例外：领域内已固化的术语隐喻（如 "molecular switch"、"signaling cascade"）保留；新造的、装饰性的修辞一律删。
