@@ -2985,8 +2985,13 @@ def _update_state_locked(payload, updated_files, problems):
     if any(os.path.exists(f) for _, f, _ in plan):
         try:
             backup_project_state()
-        except OSError as e:  # 备份失败不该顶掉正常写入，但必须让用户看见
-            print(f"Warning: 覆盖前快照失败({e})，本次写入没有回退点。")
+        except Exception as e:
+            # fail-closed：这是整文件覆盖，拿不到回退点就不许动手。此前只打一句
+            # Warning 照写不误，一旦快照失败原始内容就没有任何找回路径。
+            problems.append(
+                f"覆盖前快照失败({e})，本次写入已中止——整文件覆盖必须先有回退点。"
+                f"排查 backups/ 目录权限与磁盘空间后重跑；payload 已保留。")
+            return
 
     for key, filename, content in plan:
         try:
@@ -3423,10 +3428,22 @@ def backup_project_state(backup_dir="backups"):
     """Creates a full project snapshot including all state files and manuscripts."""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     snapshot_dir = os.path.join(backup_dir, f"snapshot_{timestamp}")
-    
-    if not os.path.exists(snapshot_dir):
-        os.makedirs(snapshot_dir)
-        
+
+    # 目录名只精确到秒：同一秒内第二次调用会撞上已有快照。此前撞名就直接往里
+    # copy2，把先建那份污染成"覆盖后"的内容（原始数据现盘和快照两头都没了），
+    # 再崩在下面的 copytree 上。撞名一律另起一个，已建快照绝不被后来者改写。
+    # exist_ok=False + 捕获 FileExistsError：并发下也只有一个进程能占住这个名字。
+    seq = 1
+    while True:
+        try:
+            os.makedirs(snapshot_dir)
+            break
+        except FileExistsError:
+            seq += 1
+            snapshot_dir = os.path.join(backup_dir, f"snapshot_{timestamp}_{seq}")
+    tag = os.path.basename(snapshot_dir)
+
+
     # 1. Backup State Files (Bug ③ 配套修复:含子目录路径保留结构)
     for key, filename in STATE_FILES.items():
         if os.path.exists(filename):
@@ -3459,9 +3476,9 @@ def backup_project_state(backup_dir="backups"):
             if not isinstance(snaps, list):
                 snaps = []
             max_keep = vh.get("max_snapshots") if isinstance(vh.get("max_snapshots"), int) else 10
-            snaps.append({"version": f"v_snapshot_{timestamp}", "dir": snapshot_dir, "ts": timestamp})
+            snaps.append({"version": f"v_{tag}", "dir": snapshot_dir, "ts": timestamp})
             vh["snapshots"] = snaps[-max_keep:]
-            vh["current_version"] = f"v_snapshot_{timestamp}"
+            vh["current_version"] = f"v_{tag}"
             with open(version_file, "w", encoding="utf-8") as vf:
                 json.dump(vh, vf, indent=2, ensure_ascii=False)
         except Exception:
