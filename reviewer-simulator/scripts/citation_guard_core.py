@@ -965,6 +965,11 @@ def validate_core(
     Returns a normalized result dict:
         {verified, failure_reasons[], confidence, needs_manual_review, details}
     where ``details`` carries the full per-check breakdown.
+
+    ``verified`` requires ``online``: an offline run performs no external lookup,
+    so it can only report "not verified", never "verified". failure_reasons stays
+    empty for a well-formed entry (nothing failed — it just was not checked); the
+    reason is readable from ``details.sources.online_check``.
     """
     if now_utc is None:
         now_utc = datetime.now(timezone.utc)
@@ -1185,7 +1190,14 @@ def validate_core(
         score -= 60
     confidence = int(max(0, min(100, round(score))))
 
-    verified = (len(failure_reasons) == 0) and (not bidirectional_verification_failed)
+    # 🔴 离线绝不发"已核实"证书。online=False 时上面的 doi_valid / pmid_match 是
+    # "没查所以算它对"（http_ok 恒 True），格式完整的编造条目因此能拿满分 —— 这就是
+    # 假章的产地。"离线模式"这个状态本不存在：--offline 只可能是①测试 ②源站/代理连不上
+    # （=故障），两种都不该产出 verified。
+    # 注意不往 failure_reasons 里加码（那是冻结码表）：没有东西"失败"，只是这一轮没验；
+    # "为什么没验"从 details.sources.online_check 读得出来。调用方据此把报告状态记为
+    # unverified 而非 verified，退出码不变。
+    verified = online and (len(failure_reasons) == 0) and (not bidirectional_verification_failed)
 
     details = {
         "checked_at": now_utc.isoformat(),
