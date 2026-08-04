@@ -1,5 +1,34 @@
 # Changelog - General SCI Writing Skill
 
+## [2.33.0] - 2026-08-04
+
+### 🔴 P0：两条让第二节开不了写的死锁 + 一道被架空的硬门禁 + 一处静默毁数据
+
+- **`write-cycle --finalize` 的 `--status` 默认改 `done`**。此前默认 `updated`，而
+  `prewrite_gate` 只认 `done/completed/finalized`，且**全技能文档里 `--status` 出现 0 次**
+  —— 照文档抄的人第一节收口后，第二节 `prev_section_done` 必 FAIL、永远开不了写。
+  真没写完仍可显式 `--status draft`，下一节照样被拦。
+- **`references/` 不进项目的相对路径全部改绝对路径**。`/init` 只拷 scripts/templates/configs，
+  而盲检命令写的是 `--checklist references/dod_checklist.json` → 项目根 cwd 下必
+  `exit 2` → `.review_pass/<节>.json` 永不落盘 → 下一节被硬拦。改由 Phase 0
+  `env_preflight.py` 打印 `DOD_CHECKLIST` / `PREP_PROMPT` / `WRITER_PROMPT` 绝对路径，
+  SKILL.md 用占位符引用。
+- **`citation_guard.py --require-mcp` 不再被 30 天缓存架空**（改的是 `_shared/`
+  共享件，7 家同步）。此前 `entry_is_fresh_verified` 只看 `verified` + 时间戳，不看当初
+  那次核验的强度：一条 `--offline` 验过的编造文献（编造标题 + 编造 DOI + 编造 PMID）
+  能被 `--require-mcp` 一路短路放行 `exit 0`。现在缓存只有在**当初至少和本轮一样严**
+  （`sources.mcp` / `sources.online_check` 为真）时才准复用；无额外要求时照旧短路，
+  不联网、无性能倒退；字段缺失或结构不对一律收紧。
+- **`state_manager.py update` 三处危险修掉**：① 一个字段都没匹配上时不再打印
+  "Successfully updated:" 然后删掉输入文件，改为非 0 退出 + 保留 payload + 报清哪个字段；
+  ② 整文件覆盖会让条目数变少时直接阻断（此前传 1 条进去原有 30 条静默消失），
+  覆盖前另拍一次全量快照可 `/rollback`；③ 补上 `FileLock("state_update")`，
+  与 postwrite / add-figure / add-abbreviation / rename-figure 口径一致。
+  先全量校验再落笔，不留"写了一半"的中间态。
+- **`figure_analysis_gate.py` 补 GBK 控制台防护**。它是唯一没加 stdout reconfigure 的
+  门禁脚本，而失败原因里带 `❓待确认`（GBK 编不出）→ 中文 Windows 上用户被拦住却只
+  看到一段 Traceback，看不到真正原因。
+
 ## [2.20.0] - 2026-06-11
 
 ### 🔒 写作前"读 references"硬门禁（闭环 progressive disclosure 风险）
