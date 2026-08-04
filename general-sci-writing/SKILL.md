@@ -465,7 +465,7 @@ python scripts/state_manager.py add-abbreviation <one.json>
 **执行命令（有序，每步阻断条件明确）**：
 1. `python scripts/state_manager.py stats`：字数检查。**字数预算分类**：手动汇总 `01_Abstract*.md + 02_Introduction*.md + 04_Results*.md + 05_Discussion*.md` 为"正文字数"（`03_Methods*.md`/`07_References*.md`/Legends 多数期刊不计入），对比 `project_config.word_limits`。**阻断**：超 10% 必砍；超 5% 警告。
 2. `python scripts/state_manager.py sync-literature --dry-run --strict-references`：引用号一致性。**阻断**：dry-run 报冲突 → 跑 `--apply` 后重检。
-3. `python scripts/citation_guard.py --index literature_index.json --report citation_guard_report.json --offline`：文献完整性。**阻断**：`ok=false` → 处理 `manual_review_queue.json` 后重跑。
+3. `python scripts/citation_guard.py --index literature_index.json --report citation_guard_report.json`：文献完整性（**联网核验，绝不加 `--offline`**——离线跳过联网核验，编造的 DOI+PMID 只要字段齐全照样过，这道阻断门就成了给假文献发证）。**阻断**：`ok=false` → 处理 `manual_review_queue.json` 后重跑；报 `source_unreachable` 是「网络不通、没验成」，同样按阻断处理，别改回 `--offline` 绕过去。
 4. `python scripts/style_checker.py --manuscript-dir manuscripts --report style_check_report.json --threshold 70 --journal <target_journal>`：去 AI 风格检测（`--journal` 用 `storyline.json` 的 target_journal，切换语态软提示策略）。**阻断**：avg_score<70 → 列具体段落修改后重跑。**注意**：avg_score 不含语态项（被动比只进 `warnings`，不阻断）；PASS 只代表形式层过关，科学创新度/配不配目标刊未自动核验，须作者与通讯作者判断。
 4b. `python scripts/style_checker.py --manuscript-dir figure_analysis --report figure_analysis_style.json --threshold 70`：识图阶段写入的英文草稿也检测。**阻断**同 4。
 4c. `python scripts/proofread.py --manuscript-dir manuscripts --report proofread_report.json --threshold 70`：机械错误。**阻断**：avg_score<70 → 按 report 中 `issues` 字段逐条修后重跑。
