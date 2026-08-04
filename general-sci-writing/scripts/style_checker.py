@@ -68,7 +68,14 @@ FORBIDDEN_PATTERNS = [
 
 # ── Anti-AI: em-dash, scare quotes, explanatory colon ────────────────────────
 # Em-dash (U+2014 —) used decoratively in prose (not in code/URLs/math).
-EM_DASH_RE = re.compile(r"(?<!\d)—(?!\d)")
+# 覆盖三种实际会出现的形态，各算**一个**破折号（口径与 rw 一致）：
+#   —    单个 em dash（英文常见）
+#   ——   中文双破折号（GB/T 15834 里它是一个标点，`—+` 保证不按两个记进配额）
+#   ␣–␣  空格包夹的 en dash（英式排版的停顿破折号）
+# en dash **只在两侧有空格时**才算：复合词与数字区间里的 en dash 是合法用法
+# （Michaelis–Menten、structure–activity、1990–2005、5–50 mM），把它们算进配额
+# 会让化学/生物稿凭空超配额——那正是上一轮修掉的那类误伤。
+EM_DASH_RE = re.compile(r"(?<!\d)—+(?!\d)|(?<=\s)–+(?=\s)")
 # 破折号配额：正常学术散文每千词 0–2 个 em dash，AI 生成文本显著更高。按密度而非
 # 绝对数，否则整篇导入的长稿（8000 词）必然误伤。短文件给 2 个底线。
 # 口径与 review-writing/scripts/style_checker.py 保持一致（同一缺陷 rw 已先修）。
@@ -444,7 +451,7 @@ def check_file(filepath: str, journal: str = "") -> dict[str, Any]:
         result["issues"].append({
             "type": "decorative_em_dash",
             "severity": "high",  # 超配额 = 密集滥用，计入 score 并置 hard_fail
-            "detail": (f"{em_dash_count} em-dash(es) (—/——) in {total_words} words "
+            "detail": (f"{em_dash_count} dash(es) (—/——/ – ) in {total_words} words "
                        f"(配额 {em_dash_budget}). 破折号密集滥用是 AI 腔特征，"
                        f"删到配额内：用逗号/句号/重构替代。"),
         })
@@ -453,7 +460,7 @@ def check_file(filepath: str, journal: str = "") -> dict[str, Any]:
         result["issues"].append({
             "type": "decorative_em_dash",
             "severity": "info",  # 配额内：只提示，不扣分、不阻断
-            "detail": (f"{em_dash_count} em-dash(es) (—/——) in {total_words} words "
+            "detail": (f"{em_dash_count} dash(es) (—/——/ – ) in {total_words} words "
                        f"(配额 {em_dash_budget}，未超)。合法用法无需处理；"
                        f"若是当停顿/强调用的装饰性破折号，建议改写。"),
         })
