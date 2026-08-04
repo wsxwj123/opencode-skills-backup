@@ -52,6 +52,23 @@ FORBIDDEN_EXACT = {
     "in the context of", "shed light on", "pave the way",
     "of paramount importance", "a key player",
 }
+# ── 中文 AI 套话（与上面英文表同级：命中即 high，计入 score）──────────────────
+# 口径 = 英文表的中文镜像，一条中文对一条英文，两种语言同等待遇：
+#   值得注意的是 ← it is worth noting / notably   综上所述/总而言之 ← taken together
+#   越来越多的证据表明 ← a growing body of evidence  发挥关键作用 ← plays a crucial role
+#   至关重要 ← of paramount importance            深入探讨 ← delve into
+#
+# 🔧 **要加/删一条套话，就改这个 set**（另一家 style_checker.py 是独立分叉副本，
+#    两边都要改）。用户可见的说明：review-writing/references/writing_guidelines.md §4
+#    「Chinese Mode」与 general-sci-writing/references/anti-ai-protocol.md。
+#
+# ponytail: 只收十条几乎没有正当用法的。刻意不收「此外/然而/近年来」这类正常连接词
+# 与时间状语——真中文稿里高频且合法，收进来就是把正常稿判死（误伤比漏报更伤用户）。
+# 真稿反馈说漏得多再加，别一次堆几百条。
+FORBIDDEN_CN = {
+    "值得注意的是", "综上所述", "总而言之", "不仅如此", "显而易见",
+    "在此背景下", "深入探讨", "至关重要", "越来越多的证据表明", "发挥关键作用",
+}
 FORBIDDEN_PATTERNS = [
     re.compile(r"not only\b.*?\bbut also\b", re.IGNORECASE),
     re.compile(r"seamless[,\s]+intuitive[,\s]+and\s+powerful", re.IGNORECASE),
@@ -357,6 +374,9 @@ def check_file(filepath: str, passive_max: float = 0.30) -> dict[str, Any]:
     for phrase in FORBIDDEN_EXACT:
         if phrase in lower_prose:
             forbidden_hits.append({"phrase": phrase, "type": "forbidden_word"})
+    for phrase in FORBIDDEN_CN:  # 中文无大小写，直接在原文里找
+        if phrase in prose:
+            forbidden_hits.append({"phrase": phrase, "type": "forbidden_word_cn"})
     for pat in FORBIDDEN_PATTERNS:
         if pat.search(prose):
             forbidden_hits.append({"phrase": pat.pattern[:50], "type": "forbidden_pattern"})
