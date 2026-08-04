@@ -2871,6 +2871,37 @@ def write_cycle(
         tx_path = write_transaction_log("write_cycle", tx)
         update_gate_state(last_write_cycle_log=tx_path)
 
+def _record_count(payload):
+    """条目型状态文件的"记录条数"；不是条目型就返回 None。
+
+    literature_index 等既可能是裸 list，也可能是 {"entries": [...]} 这类包装
+    （见 SKILL.md 的 list/dict 双形支持），两种都要能数出来，否则缩表防护形同虚设。"""
+    if isinstance(payload, list):
+        return len(payload)
+    if isinstance(payload, dict):
+        for k in ("entries", "items", "references", "data"):
+            if isinstance(payload.get(k), list):
+                return len(payload[k])
+    return None
+
+
+def _shrink_warning(filename, content):
+    """整文件覆盖会把条目数改少 → 返回 (旧条数, 新条数)，否则 None。
+
+    `update` 是整文件覆盖不是合并，传 1 条进去原有 N 条就没了。旧文件读不出来
+    （本来就坏）时不拦，免得把用户困在坏文件里。"""
+    if not filename.endswith(".json") or not os.path.exists(filename):
+        return None
+    try:
+        old_n = _record_count(read_json_file(filename))
+    except (OSError, json.JSONDecodeError):
+        return None
+    new_n = _record_count(content)
+    if old_n is not None and new_n is not None and new_n < old_n:
+        return (old_n, new_n)
+    return None
+
+
 def update_state(payload_path):
     """Updates state files based on a JSON payload file."""
     if not os.path.exists(payload_path):
@@ -2883,36 +2914,81 @@ def update_state(payload_path):
     except json.JSONDecodeError as e:
         print(f"Error: Invalid JSON in payload file: {e}")
         sys.exit(1)
+    if not isinstance(payload, dict):
+        print(f"Error: Payload must be a JSON object mapping state keys to content, "
+              f"got {type(payload).__name__}.")
+        sys.exit(1)
 
     updated_files = []
+    problems = []
 
+    # 与 postwrite / add-figure / add-abbreviation / rename-figure 同一把锁，
+    # 这里此前是唯一没加锁的写入子命令。
+    with FileLock("state_update"):
+        _update_state_locked(payload, updated_files, problems)
+
+    if updated_files:
+        print(f"Successfully updated: {', '.join(updated_files)}")
+    if problems:
+        # 一个字段都没写成 / 有字段没写成 → 非 0 退出，且**保留 payload**，
+        # 用户改完能直接重跑。此前无论写没写成都 os.remove(payload)。
+        print(json.dumps({"ok": False, "error": "update_incomplete",
+                          "updated_files": updated_files, "problems": problems,
+                          "payload_kept": payload_path}, ensure_ascii=False, indent=2))
+        sys.exit(1)
+    # Auto-delete payload file to keep directory clean（仅全部成功时）
+    try:
+        os.remove(payload_path)
+    except OSError:
+        pass
+
+
+def _update_state_locked(payload, updated_files, problems):
+    # 先全量校验、再一个不落地写：任一字段有问题就一个字都不写，用户改完 payload
+    # 直接重跑即可，不会留下"写了一半"的中间态。
+    plan = []  # [(key, filename, content)]
     for key, content in payload.items():
         if key == "section_memory":
             if not isinstance(content, dict) or "section" not in content:
-                print("Warning: section_memory payload must be {'section': 'results_3.1', 'content': '...'}")
+                problems.append("section_memory 必须是 {'section': 'results_3.1', 'content': '...'}")
                 continue
             section = sanitize_section_id(str(content.get("section", "")).strip())
-            section_text = str(content.get("content", ""))
             if not section:
-                print("Warning: section_memory.section is empty. Skipping.")
+                problems.append("section_memory.section 为空")
                 continue
-            memory_dir = "section_memory"
-            os.makedirs(memory_dir, exist_ok=True)
-            section_file = os.path.join(memory_dir, f"{section}.md")
-            try:
-                with open(section_file, "w", encoding="utf-8") as f:
-                    f.write(section_text)
-                updated_files.append(section_file)
-            except Exception as e:
-                print(f"Error writing section memory {section_file}: {e}")
+            plan.append((key, os.path.join("section_memory", f"{section}.md"),
+                         str(content.get("content", ""))))
             continue
 
         if key not in STATE_FILES:
-            print(f"Warning: Unknown key '{key}' in payload. Skipping.")
+            problems.append(
+                f"无法识别的字段 '{key}'（可用: {', '.join(sorted(STATE_FILES))}, section_memory）")
             continue
-        
+
         filename = STATE_FILES[key]
-        
+        # `update` 是整文件覆盖不是合并：条目数变少 = 静默丢数据，直接拦。
+        shrink = _shrink_warning(filename, content)
+        if shrink:
+            old_n, new_n = shrink
+            problems.append(
+                f"{filename}: 覆盖会把 {old_n} 条变成 {new_n} 条（update 是整文件覆盖不是合并），"
+                f"已阻断。要增改条目请用专用命令（figures→add-figure、文献→sync-literature）；"
+                f"确实要删就先 snapshot 再手工改文件。")
+            continue
+        plan.append((key, filename, content))
+
+    if problems:  # 校验不过 → 一个字都不写
+        return
+
+    # 整文件覆盖前先做一次全量快照（复用 /snapshot 的同一实现），万一覆盖错了
+    # 可以直接 /rollback 找回来。只在确有已存在的目标文件时才拍，空项目不拍。
+    if any(os.path.exists(f) for _, f, _ in plan):
+        try:
+            backup_project_state()
+        except OSError as e:  # 备份失败不该顶掉正常写入，但必须让用户看见
+            print(f"Warning: 覆盖前快照失败({e})，本次写入没有回退点。")
+
+    for key, filename, content in plan:
         try:
             # Bug ③ 修复:STATE_FILES 路径含子目录(如 reviews/revision_plan.json)时先建目录
             parent_dir = os.path.dirname(filename)
@@ -2939,17 +3015,9 @@ def update_state(payload_path):
                     f.write(str(content))
             
             updated_files.append(filename)
-            
-        except Exception as e:
-            print(f"Error writing to {filename}: {e}")
 
-    print(f"Successfully updated: {', '.join(updated_files)}")
-    
-    # Auto-delete payload file to keep directory clean
-    try:
-        os.remove(payload_path)
-    except:
-        pass
+        except OSError as e:
+            problems.append(f"写 {filename} 失败: {e}")
 
 def add_figure_state(payload_path):
     """Safely merge ONE figure entry into figures_database.json.
