@@ -67,6 +67,7 @@
    - **Prewrite（必须先跑）**：`python scripts/state_manager.py write-cycle --section [section_id] --token-budget 6000 --tail-lines 80`
    - 若需续写/改写已存在章节正文，再显式追加 `--include-draft`。
    - **Postwrite 收口（落盘前必须跑，缺 `--refs-confirmed` 则 exit 2 硬阻断）**：`python scripts/state_manager.py write-cycle --section [section_id] --finalize --refs-confirmed --sync-literature --sync-apply --strict-references --summary "[本节一句话摘要]"`
+     - `--finalize` 的 `--status` 默认 `done`（= 本节收口），下一节 `prewrite_gate` 的"上一节完成"才会放行。本节其实**没写完**时才显式传 `--status draft`，那样下一节会被正确拦住。
 2. 若用户未明确要求，禁止读取其他章节正文文件。
 3. 输出中必须包含 `loaded_files`，作为"只读当前章节"的审计证据。
 4. **隔离**：校验内容仅用于内部校验与必要的用户审计，**严禁**写入生成的 Markdown 稿件文件中。

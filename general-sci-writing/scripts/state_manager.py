@@ -3704,7 +3704,10 @@ def main():
     cycle_parser.add_argument("--token-budget", type=int, default=DEFAULT_TOKEN_BUDGET, help="Approx token budget for section-local load")
     cycle_parser.add_argument("--tail-lines", type=int, default=DEFAULT_TAIL_LINES, help="Tail lines kept when auto-trimming text")
     cycle_parser.add_argument("--finalize", action="store_true", help="Also execute postwrite at the end")
-    cycle_parser.add_argument("--status", default="updated", help="Postwrite status when --finalize is used")
+    # --finalize 就是"本节收口"，落盘状态必须是 prewrite_gate 认的 done/completed/finalized
+    # 之一；默认 "updated" 时，照文档抄（文档从不带 --status）的人下一节永远开不了写。
+    # 想标"还没写完"仍可显式 --status draft，对照组照样被拦。
+    cycle_parser.add_argument("--status", default="done", help="Postwrite status when --finalize is used (done/draft/reviewed; 默认 done = 本节收口，prewrite_gate 才放行下一节)")
     cycle_parser.add_argument("--summary", default="", help="Postwrite summary when --finalize is used")
     cycle_parser.add_argument("--sync-literature", action="store_true", help="Run postwrite sync-literature when --finalize")
     cycle_parser.add_argument("--sync-apply", action="store_true", help="Apply sync changes when --finalize --sync-literature")
