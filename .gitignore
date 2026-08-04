@@ -31,9 +31,12 @@ social-clip/OPTIMIZATION_PLAN.md
 # 内容形如 {"skill":"review-writing","file":"drafts/section_1.md",...}，
 # 即用户正在写哪份稿的运行时记录——既不该入库，也不该随 rsync 进分发镜像。
 # 只列具体路径是"每来一个新落点补一条"的散弹写法，通配才是根因修法。
-*/scripts/hook_heartbeat.json
-academic-gate/scripts/hook_heartbeat.json
-_shared/hook_heartbeat.json
+hook_heartbeat.json
 
-# 环境自检运行时产物（env_preflight.py 每跑一次重写），不入库也不该随技能分发
-*/env_status.json
+# 环境自检运行时产物（env_preflight.py 每跑一次重写），不入库也不该随技能分发。
+# 🔴 2026-08-04 改为裸文件名：原先写 `*/env_status.json` 只匹配**一层**目录，而实际
+# 落点是 `<技能>/scripts/env_status.json`（两层），于是 gsw 那份一直漏在外面、随时会被
+# git add 误收。这和心跳文件是同一个坑的第二次发作（那次是"只列具体路径"，这次是
+# "通配层级不够"）。裸文件名在 gitignore 里匹配任意深度，一次到位。
+# 同理，心跳那几条也一并收敛成裸名，别再按层级写。
+env_status.json
