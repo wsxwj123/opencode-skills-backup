@@ -92,10 +92,10 @@ meta_analysis | systematic_review | clinical_trial | preprint | book_chapter | g
 
 ### Three Additional AI-Marker Bans
 
-**1. Decorative em-dashes (—): discouraged; hard gate only when overused**
-- **Discouraged:** Using — or —— as a pause, supplement, or emphasis device (e.g., "The result was clear, cells died"). A single em-dash is legitimate academic punctuation; what marks AI prose is **density**. style_checker allows a budget of 2 per 1,000 words (minimum 2 per file): within budget it reports an `info` note only (no score penalty, no gate failure); **above budget** it raises a `high` issue and sets hard_fail, failing the gate regardless of score.
-- **计数口径（三种形态各算一个）：** `—`（em dash）、`——`（中文双破折号，GB/T 15834 里它是**一个**标点，不按两个记进配额）、`␣–␣`（两侧带空格的 en dash，英式停顿破折号）。配额语义不变，只是把实际会出现的形态数全。
-- **Allowed（不进配额）:** Hyphens in compound modifiers (dose-dependent), numeric ranges (1990–2005), and en-dashes in compound terms / structured labels (Michaelis–Menten, structure–activity)——这些 en dash 没有空格包夹，脚本不计。
+**1. Decorative em-dashes (—): hard gate, banned**
+- **Banned:** Using — or —— as a pause, supplement, or emphasis device (e.g., "The result was clear, cells died"). Em-dashes are prohibited; style_checker flags **any** decorative dash as a `high` issue and sets hard_fail, failing the gate regardless of score. One is one too many.
+- **计数口径（三种形态各算一个）：** `—`（em dash）、`——`（中文双破折号，GB/T 15834 里它是**一个**标点，不按两个记）、`␣–␣`（两侧带空格、当停顿用的 en dash）。
+- **Allowed（不是破折号，不计）:** Hyphens in compound modifiers (dose-dependent), numeric ranges with or without spaces (1990–2005, 5–50 mM, 5 – 50 mM, 25 – 45 °C), and en-dashes in compound terms / structured labels (Michaelis–Menten, structure–activity)——这些是复合词与数字区间，连坐它们就是误伤，脚本不计。
 - **Fix:** Recast as a comma, period, or separate sentence. "The result was clear—cells died" → "The result was clear: cells died at 48 h."
 
 **2. Scare quotes on ordinary phrases**

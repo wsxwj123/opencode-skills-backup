@@ -107,37 +107,27 @@ def forbidden_penalty(hit_count: int) -> int:
         0, hit_count - FORBIDDEN_FREE_HITS)
 
 # ── Anti-AI: em-dash, scare quotes, explanatory colon ────────────────────────
-# Em-dash (U+2014 —) used decoratively in prose (not in code/URLs/math).
+# 破折号是**硬禁**：当停顿 / 插入语 / 补充说明用的破折号一个都不许有，命中即
+# hard_fail 一票否决。用户已定死这条规矩，别改成配额/密度制。
 # 覆盖三种实际会出现的形态，各算**一个**破折号：
 #   —    单个 em dash（英文常见）
-#   ——   中文双破折号（GB/T 15834 里它是一个标点，`—+` 保证不按两个记进配额）
+#   ——   中文双破折号（GB/T 15834 里它是一个标点，`—+` 保证不按两个记）
 #   ␣–␣  空格包夹的 en dash（英式排版的停顿破折号）
 # en dash **只在两侧有空格、且不是数字区间时**才算：复合词与数字区间里的 en dash
-# 是合法用法（Michaelis–Menten、structure–activity、1990–2005、5–50 mM），把它们
-# 算进配额会让化学/生物稿凭空超配额——那正是上一轮修掉的那类误伤。
-# 「不是数字区间」这半条是补丁：期刊常见 `5 – 50 mM`、`25 – 45 °C` 这种**带空格**
-# 的区间（带单位时尤其常见），原先只按"有空格"判，一段正常方法学英文的 7 个区间
-# 全落进装饰性 → 超配额 → 误判不合格。判据是**左右紧邻都得是数字**才算区间；
+# 根本不是破折号（Michaelis–Menten、structure–activity、1990–2005、5–50 mM），
+# 连坐它们就是误伤，化学/生物稿会凭空判死。
+# 「不是数字区间」这半条：期刊常见 `5 – 50 mM`、`25 – 45 °C` 这种**带空格**的区间
+# （带单位时尤其常见），若只按"有空格"判，一段正常方法学英文的 7 个区间会全被当成
+# 装饰性 → 误判不合格。判据是**左右紧邻都得是数字**才算区间；
 # 一侧数字一侧文字（`in 2020 – a landmark year – the field shifted`）是同位插入语，
 # 仍按装饰性计——那正是 AI 腔要抓的形态。
-# ponytail: 单位写在两侧的 `5 mM – 50 mM` 仍会被算进配额（Python 定宽 lookbehind
+# ponytail: 单位写在两侧的 `5 mM – 50 mM` 仍会被当成装饰性（Python 定宽 lookbehind
 #   看不到"左窗口里有数字"）。真稿撞上再改成"先抹区间再计数"的两步式。
 EM_DASH_RE = re.compile(
     r"(?<!\d)—+(?!\d)"            # em dash（—/中文 —— 按一个记）；1990—2005 不算
     r"|(?<!\d\s)(?<=\s)–+(?=\s)"  # ␣–␣ 且左侧紧邻不是数字
     r"|(?<=\s)–+(?=\s(?!\d))"     # ␣–␣ 且右侧紧邻不是数字
 )
-# 破折号配额：正常学术散文每千词 0–2 个 em dash，AI 生成文本显著更高。按密度而非
-# 绝对数，否则 Polish Mode 导入的整篇长稿（8000 词）必然误伤。短文件给 2 个底线。
-# ponytail: 阈值是启发式(每千词 2 个 + 底线 2)，真稿反馈说误报/漏报再调这两个数。
-EM_DASH_PER_1K_WORDS = 2
-EM_DASH_MIN_ALLOWANCE = 2
-
-
-def em_dash_allowance(total_words: int) -> int:
-    """本文件允许的 em dash 个数（超出即判密集滥用）。"""
-    return max(EM_DASH_MIN_ALLOWANCE,
-               int(max(0, total_words) / 1000 * EM_DASH_PER_1K_WORDS))
 # Scare quotes: double-quoted phrase of 1-4 words not preceded by numeric citation
 # context, to catch "synergistic", "perfect storm", etc.
 SCARE_QUOTE_RE = re.compile(r'(?<!\[)(?<!\d)"([A-Za-z][^"]{1,40})"(?!\s*:)')
@@ -475,29 +465,18 @@ def check_file(filepath: str, passive_max: float = 0.30) -> dict[str, Any]:
             "detail": f"{bullet_count} bullet/numbered list lines detected in prose body.",
         })
 
-    # ── 7. Decorative em-dash (按密度判，不再一个就毙) ────────────────────────
-    # em dash 在英文学术写作里是合法标点（插入语/同位补充），单个出现不是 AI 腔；
-    # 判 AI 腔的是**密度**。原实现 >=1 即 hard_fail，把正常稿判成不合格，用户只能
-    # 删掉合法标点来讨好检查。改为超出配额才算问题、配额内只提示。
+    # ── 7. Decorative em-dash (硬门禁, 禁止使用: 一个都不许有) ─────────────────
+    # 去AI必禁三项之一。命中即 hard_fail 一票否决，不放行。
+    # 计数口径见 EM_DASH_RE：复合词与数字区间里的 en dash 不是破折号，不计。
     em_dash_count = len(EM_DASH_RE.findall(prose))
-    em_dash_budget = em_dash_allowance(total_words)
-    if em_dash_count > em_dash_budget:
+    if em_dash_count >= 1:
         result["issues"].append({
             "type": "decorative_em_dash",
-            "severity": "high",  # 超配额 = 密集滥用，计入 score 并置 hard_fail
-            "detail": (f"{em_dash_count} dash(es) (—/——/ – ) in {total_words} words "
-                       f"(配额 {em_dash_budget}). 破折号密集滥用是 AI 腔特征，"
-                       f"删到配额内：用逗号/句号/重构替代。"),
+            "severity": "high",
+            "detail": (f"{em_dash_count} decorative dash(es) (—/——/ – ) detected. "
+                       f"禁止使用破折号(硬门禁，一个都不许有)：用逗号/句号/重构替代。"),
         })
         result["hard_fail"] = True
-    elif em_dash_count:
-        result["issues"].append({
-            "type": "decorative_em_dash",
-            "severity": "info",  # 配额内：只提示，不扣分、不阻断
-            "detail": (f"{em_dash_count} dash(es) (—/——/ – ) in {total_words} words "
-                       f"(配额 {em_dash_budget}，未超)。合法用法无需处理；"
-                       f"若是当停顿/强调用的装饰性破折号，建议改写。"),
-        })
 
     # ── 8. Scare quotes (硬门禁, 禁止使用: 引号暗示新概念) ─────────────────────
     # 去AI必禁三项之一。与破折号同级：命中即 hard_fail 一票否决，不放行。

@@ -1,6 +1,6 @@
 ---
 name: review-writing
-version: 2.35.1
+version: 2.35.2
 description: "Universal assistant for writing high-impact academic literature reviews (Nature/Cell/Lancet level). Supports real-time Zotero integration, outline persistence, and multi-mode reference management. Use when writing a comprehensive review article requiring systematic search, synthesis, and citation management. 触发词：写综述、文献综述、综述写作、literature review、review article、改综述、完善综述、继续写综述、improve review。"
 triggers:
   - "写综述"
@@ -377,7 +377,7 @@ Format: `[review] Phase X.Step: <description>`. 📖 消息表 + Rollback 命令
 - **Step 3.5 🧭 引文核证：** 备料子代理起草（`delegate_write.py pack-prep` → `.claim_evidence_draft`）→ 主会话跑 `CITATION_CHECK_CMD`（`citation_claim_check.py`，承重句 contradict/unknown/缺 abstract/未 `user_confirmed` → fail-closed exit 2）→ AskUserQuestion 逐条确认承重句。
 - **Step 4 撰写子代理盲写：** `delegate_write.py pack-write` → 派子代理（`references/section_writer_prompt.md`）→ `verify-write` 机械校验 → 落盘 `drafts/section_XX_XX.md` + new_refs 走 `citation_guard.py --require-mcp` → `resolve-keys` 认键翻号 → new_claims 复核（`citation_claim_check.py`）。子代理派不出时主会话亲写、门禁不变。
 - **Step 5** `validate_citations.py --fail-on-orphan`（孤儿 `[N]` 即修）。
-- **Step 6 轻量自查：** 先跑 `style_checker.py`（high/medium 必改；破折号按密度配额，超配额才 hard_fail）再对照 `references/reviewer_checklist.md` D1-D5 自读。**🔴 硬约束：这是本技能内部的轻量质量 checklist，不是 reviewer-simulator 技能。禁止调用或进入 reviewer-simulator 技能，禁止逐节生成任何 HTML 审稿报告（report_*.html 或其他报告文件）。**
+- **Step 6 轻量自查：** 先跑 `style_checker.py`（high/medium 必改；破折号禁止使用，命中一个即 hard_fail）再对照 `references/reviewer_checklist.md` D1-D5 自读。**🔴 硬约束：这是本技能内部的轻量质量 checklist，不是 reviewer-simulator 技能。禁止调用或进入 reviewer-simulator 技能，禁止逐节生成任何 HTML 审稿报告（report_*.html 或其他报告文件）。**
 - **Step 7** `word_counter.py` 字数检查（用户自定短篇则尊重用户）。
 - **Step 8** `state_manager.py complete-section`（MANDATORY）。
 - **Step 9** Git Checkpoint。
