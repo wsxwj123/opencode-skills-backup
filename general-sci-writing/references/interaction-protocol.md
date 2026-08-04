@@ -114,6 +114,6 @@
 
 项目 init 后 scripts/ 是该时点 skill 的快照副本；skill 后续更新（如新增 `add-figure` / `add-abbreviation` / `add-stat-method` / `rename-figure` / `proofread` 等命令）后，旧项目用不到新功能。触发：用户说"升级脚本"/"项目脚本是旧的"。流程：
 1. 提示用户备份：`cp -r scripts scripts.bak.$(date +%Y%m%d)`
-2. 从 skill 源拷贝最新版：`cp ~/.claude/skills/general-sci-writing/scripts/*.py ./scripts/`（路径按用户实际 skill 安装位置调整）
-3. 验证：`python scripts/state_manager.py --help` 看是否含 `add-figure` / `add-abbreviation` / `add-stat-method` / `rename-figure` 等新子命令；`ls scripts/` 看是否含 `proofread.py`。
+2. 从 skill 源拷贝最新版：`cp ~/.claude/skills/general-sci-writing/scripts/*.py ./scripts/` 与 `cp ~/.claude/skills/general-sci-writing/references/* ./references/`（`references/` 同样会漂：`dod_checklist.json` 的核查项会随 skill 增补；`mkdir -p references` 后再拷，老项目本来没有这个目录。路径按用户实际 skill 安装位置调整）
+3. 验证：`python scripts/state_manager.py --help` 看是否含 `add-figure` / `add-abbreviation` / `add-stat-method` / `rename-figure` 等新子命令；`ls scripts/` 看是否含 `proofread.py`；`ls references/` 看是否含 `dod_checklist.json`。
 4. 若有不兼容的 STATE_FILES 字段（如旧项目缺新 key），新版脚本会自动按 `get(..., default)` 兼容，无需手动迁移。

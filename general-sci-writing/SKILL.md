@@ -53,7 +53,7 @@ license: Proprietary
 
 ## 📁 references/ 参考文件地图（按需 Read，不要靠记忆复述其内容）
 
-> 🔴 **`references/` 只在技能安装目录里，`/init` 不拷进项目**（§1 只拷 scripts/templates/configs）。本表路径一律相对**技能目录**。凡要**传给 shell 命令或交给子代理**的，必须用 Phase 0 `env_preflight.py` 打印的绝对路径：`DOD_CHECKLIST` / `PREP_PROMPT` / `WRITER_PROMPT`。在项目根写 `references/xxx` 一定找不到文件。
+> 🔴 **`references/` 必须在 `/init` 时拷进项目**（§1 Command Logic 第 5 步；项目自包含）。凡要**传给 shell 命令或交给子代理**的，一律用 Phase 0 `env_preflight.py` 打印的绝对路径 `DOD_CHECKLIST` / `PREP_PROMPT` / `WRITER_PROMPT`，别写相对路径——cwd 不在项目根就找不到文件。老项目（init 时没拷 references/）会看到 preflight 打 `⚠️ 缺少 references/...`，补拷一次即可。
 
 | 文件 | 必须 Read 的时机 |
 |---|---|
@@ -85,12 +85,13 @@ license: Proprietary
 **项目必须自包含，严禁依赖 Skill 安装路径**（便于 Windows/Mac 迁移）。
 - **路径询问（Mandatory）**：`/init` 前必须先问用户保存路径。建议 Mac `~/Desktop/Manuscripts`，Windows `C:\Users\[User]\Desktop\Manuscripts`。
 - **Command Logic**（便携部署：把运行所需文件拷进项目根，换机也能用）：
-  1. `mkdir -p [Target_Path]/scripts [Target_Path]/configs [Target_Path]/manuscripts [Target_Path]/section_memory [Target_Path]/figures [Target_Path]/figure_analysis [Target_Path]/reviews [Target_Path]/submission`
+  1. `mkdir -p [Target_Path]/scripts [Target_Path]/configs [Target_Path]/references [Target_Path]/manuscripts [Target_Path]/section_memory [Target_Path]/figures [Target_Path]/figure_analysis [Target_Path]/reviews [Target_Path]/submission`
   2. `cp [Skill_Path]/scripts/*.py [Skill_Path]/scripts/*.json [Target_Path]/scripts/`（同时拷入 gate_registry.json 等 json；测试文件 test_*.py 属技能自测、不进项目,拷完即删:`rm -f [Target_Path]/scripts/test_*.py`,保证项目 scripts/ 有 gate_registry.json、无 test_*.py）
   3. `cp [Skill_Path]/templates/*.json [Target_Path]/`
   4. `cp [Skill_Path]/configs/*.json [Target_Path]/configs/`
+  5. `cp [Skill_Path]/references/* [Target_Path]/references/`（**不能省**：`dod_checklist.json` 是盲检门 `delegate_review.py` 的运行时输入，不拷则盲检 pack/verify 在项目根 exit 2 → `.review_pass/` 落不下 → 下一节被 `prewrite_gate` 硬拦；其余 `references/*.md` 是写作时按需 `Read` 的口径真源，拷进来才符合"项目自包含"）
 
-  > **Windows (PowerShell)**：以上 4 步是 POSIX 写法。`mkdir -p` 用 `New-Item -ItemType Directory -Force -Path ...`；`cp ...*.py` 用 `Copy-Item ...\scripts\*.py -Destination ...\scripts\`。或让 AI 按"把 scripts/templates/configs 拷进项目根、项目自包含不依赖 Skill 安装路径"的语义,用等价 PowerShell/Python 命令完成。
+  > **Windows (PowerShell)**：以上 5 步是 POSIX 写法。`mkdir -p` 用 `New-Item -ItemType Directory -Force -Path ...`；`cp ...*.py` 用 `Copy-Item ...\scripts\*.py -Destination ...\scripts\`。或让 AI 按"把 scripts/templates/configs/references 拷进项目根、项目自包含不依赖 Skill 安装路径"的语义,用等价 PowerShell/Python 命令完成。
 
 ### 2. 数据依赖熔断机制 (Data Dependency Hard Stop)
 **Scope**: 此机制仅适用于 **Phase 8 (/write)** 的 Results/Discussion 章节。**严禁**在 Phase 1 (/preview) 或 Phase 2 (/storyline) 阶段因缺失具体实验数据而阻断流程。
@@ -186,11 +187,12 @@ license: Proprietary
 
 ### Phase 0: 项目初始化 (`/init`) - 跨平台便携模式
 1. **Ask Path**: 询问用户保存路径 (默认 Desktop)。
-2. **Create Dir**: 创建项目根目录及子目录 `scripts/`、`configs/`、`manuscripts/`、`section_memory/`、`figures/`、`figure_analysis/`、`reviews/`、`submission/`。
+2. **Create Dir**: 创建项目根目录及子目录 `scripts/`、`configs/`、`references/`、`manuscripts/`、`section_memory/`、`figures/`、`figure_analysis/`、`reviews/`、`submission/`。
 3. **Copy Resources**: 将 Skill 中的文件拷贝到项目（参见 §1 Command Logic）：
    - `scripts/*.py` → `[Project_Root]/scripts/`
    - `templates/*.json` → `[Project_Root]/`
    - `configs/*.json` → `[Project_Root]/configs/`
+   - `references/*` → `[Project_Root]/references/`（`dod_checklist.json` 是盲检门的运行时输入，漏拷 = 下一节开不了写）
 4. **Init Config**: 基于 `project_init.json` 中的模板生成独立状态文件：
    - `writing_progress.json` ← `writing_progress_template`
    - `context_memory.md` ← `context_memory_template`（填入当前日期和研究方向）
