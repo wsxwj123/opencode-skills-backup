@@ -117,7 +117,12 @@ def _is_mcp_fresh(record: dict[str, Any], ttl_days: int, now_utc: datetime) -> t
 
 
 def entry_is_fresh_verified(
-    raw_entry: dict[str, Any], ttl_days: int, now_utc: datetime | None = None
+    raw_entry: dict[str, Any],
+    ttl_days: int,
+    now_utc: datetime | None = None,
+    *,
+    require_mcp: bool = False,
+    require_online: bool = False,
 ) -> bool:
     """True when a RAW index entry is already verified within the freshness window.
 
@@ -126,9 +131,18 @@ def entry_is_fresh_verified(
     The timestamp may live at the entry top level (``verified_at``/``checked_at``)
     or inside ``verification_details.checked_at`` (adapter-dependent).
 
-    Fail-safe by construction: verified is not True, ttl_days<=0, or a
-    missing/unparseable timestamp all return False, so the caller falls through to
-    a full re-verification. A stale (out-of-TTL) entry also returns False and is
+    ``require_mcp`` / ``require_online`` say how strict THIS run is. A cached
+    result may only be reused when the run that produced it was at least as
+    strict, i.e. ``verification_details.sources.mcp`` / ``.online_check`` are
+    True. Without this, one ``--offline`` verification (which happily marks a
+    fabricated entry verified) short-circuits every ``--require-mcp`` run for the
+    next TTL window — the MCP evidence gate becomes a no-op. Both default to
+    False, so a plain run still reuses the cache and does NOT re-hit the network.
+
+    Fail-safe by construction: verified is not True, ttl_days<=0, a
+    missing/unparseable timestamp, or a details/sources block that is missing or
+    not shaped as expected all return False, so the caller falls through to a
+    full re-verification. A stale (out-of-TTL) entry also returns False and is
     re-verified — retraction/freshness safety is preserved.
     """
     if ttl_days <= 0:
@@ -138,6 +152,16 @@ def entry_is_fresh_verified(
     if now_utc is None:
         now_utc = datetime.now(timezone.utc)
     details = raw_entry.get("verification_details")
+    if require_mcp or require_online:
+        sources = details.get("sources") if isinstance(details, dict) else None
+        if not isinstance(sources, dict):
+            return False
+        # `is not True` (not falsiness): a stringy "true" / 1 is an unknown shape,
+        # and an unknown shape must tighten, never pass.
+        if require_mcp and sources.get("mcp") is not True:
+            return False
+        if require_online and sources.get("online_check") is not True:
+            return False
     ts_raw = (
         raw_entry.get("verified_at")
         or raw_entry.get("checked_at")

@@ -350,12 +350,15 @@ def main() -> int:
     t0 = time.perf_counter()
     now_utc = datetime.now(timezone.utc)
     ttl_days = max(0, int(args.mcp_ttl_days))
+    # 本轮的核验强度：缓存只有在"当初至少这么严"时才准短路（否则一条 --offline
+    # 验过的编造文献能一路顶掉 --require-mcp / 联网核验，硬门禁形同虚设）。
+    strictness = {"require_mcp": bool(args.require_mcp), "require_online": not args.offline}
     # 批量取 PubMed 记录（100 条/请求）：核验用 + article_type 用共一份，避免 N 条发 N 次。
     # 需要取的两类：① 本轮要真核验的；② 短路复用但 article_type 还空着的。
     need_pmids = [
         e.get("pmid")
         for e in entries
-        if not entry_is_fresh_verified(e, ttl_days, now_utc)
+        if not entry_is_fresh_verified(e, ttl_days, now_utc, **strictness)
         or str(e.get("article_type") or "unknown").strip().lower() in ("", "unknown")
     ]
     pubmed_batch = {} if args.offline else fetch_pubmed_records(need_pmids)
@@ -368,8 +371,9 @@ def main() -> int:
         # comes from validate_core on the prior --write-back run) instead of
         # re-hitting Crossref/PubMed. Seeds (verified=false), stale, and
         # unverified entries all return False here and fall through to a full
-        # online re-check, so retraction/freshness safety is unchanged.
-        if entry_is_fresh_verified(ent, ttl_days, now_utc):
+        # online re-check, so retraction/freshness safety is unchanged. Ditto for
+        # a cached run that was weaker than this one (offline / no MCP evidence).
+        if entry_is_fresh_verified(ent, ttl_days, now_utc, **strictness):
             reused_count += 1
             checked.append(ent)
             continue
