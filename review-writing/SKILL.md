@@ -292,6 +292,9 @@ Before any **writing / search / import / Zotero-mutating** action, ask exactly *
 
 All sections complete → Phase 4 (export + compile).
 
+**HALT 点（4 个）：** ① Step 0 格式依赖探测失败（缺 python-docx / pdf 提取器 → 停下给用户装法，不许绕过）；② Step 1 抽取后长度体检异常（<200 字符判源文件损坏、字符数明显偏少 → 停下与用户核实是不是完整稿）；③ Step 2 两层反向核验皆绿后**仍须等用户确认**才写 `drafts/`；④ Step 4 逐节优先级分配（**Hard Block**，每节必须有 keep/polish/rewrite/missing 明确标签才能往下走）。
+**必跑门禁：** `extract_headings.py`（标题真值）→ `split_headings.py` 或 LLM 拆分 → `split_audit.py`（Layer1 逐分区比对，exit 0 才进）→ `delegate_review.py` 的 `split_boundary` gate（Layer2 LLM 核验，**恒跑，不因 Layer1 绿而跳过**）。
+
 ---
 
 
