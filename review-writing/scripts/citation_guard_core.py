@@ -30,6 +30,21 @@ ALLOWED_PROVIDER_FAMILIES = {"pubmed-cli", "paper-search"}
 FORBIDDEN_PROVIDER_FAMILIES = {"websearch", "openalex-cli", "tavily"}
 TITLE_VERIFY_THRESHOLD = 0.8
 
+# metadata 是 citation_guard --write-back 自己写的账本头；不排除的话，第一次写回
+# 之后它会被当成一条文献参与核验（缺标题 → 必 fail），跑第二次就红。
+_INDEX_RESERVED_KEYS = frozenset({"metadata"})
+
+
+def _dict_entry_keys(raw: dict[str, Any]) -> list[str]:
+    """dict_values 形状（{"1": {...}, "2": {...}}）下"哪些键是文献条目"的唯一判据。
+
+    三个消费方共用这一份：citation_guard 的读取（_normalize_index）、它的 --write-back
+    （按原键落回原位），以及 citation_claim_check 的账本装载。任何一方另写一份，
+    挑出的条目就会按位错开 → 写回串行 / 纪律读空。
+    """
+    return [k for k, v in raw.items()
+            if isinstance(v, dict) and k not in _INDEX_RESERVED_KEYS]
+
 
 def _http_get_json(
     url: str, timeout_sec: float = 8.0, *, retries: int = 2, backoff_sec: float = 1.5

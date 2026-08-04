@@ -24,6 +24,7 @@ from citation_guard_core import (  # noqa: E402
     ALLOWED_PROVIDER_FAMILIES,
     FORBIDDEN_PROVIDER_FAMILIES,
     TITLE_VERIFY_THRESHOLD,
+    _dict_entry_keys,
     _provider_family,
     backfill_article_types,
     check_bidirectional,
@@ -160,21 +161,6 @@ def save_json(path: Path, data: Any) -> None:
 
 
 # dict_values 形状（{"1": {...}, "2": {...}}）里不算文献条目的保留键。
-# metadata 是本脚本 --write-back 自己写的账本头；不排除的话，第一次写回之后
-# 它会被当成一条文献参与核验（缺标题 → 必 fail），跑第二次就红。
-_INDEX_RESERVED_KEYS = frozenset({"metadata"})
-
-
-def _dict_entry_keys(raw: dict[str, Any]) -> list[str]:
-    """dict_values 形状下"哪些键是文献条目"的唯一判据。
-
-    读取（_normalize_index）与写回共用同一份判据，保证两边挑出的条目按位一一对应
-    —— 写回要按原键落回原位，两边挑法一旦分叉就会串行。
-    """
-    return [k for k, v in raw.items()
-            if isinstance(v, dict) and k not in _INDEX_RESERVED_KEYS]
-
-
 def _normalize_index(raw: Any) -> tuple[list[dict[str, Any]], str]:
     if isinstance(raw, list):
         return [x for x in raw if isinstance(x, dict)], "list"
