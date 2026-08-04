@@ -1,6 +1,6 @@
 ---
 name: review-writing
-version: 2.32.0
+version: 2.33.0
 description: "Universal assistant for writing high-impact academic literature reviews (Nature/Cell/Lancet level). Supports real-time Zotero integration, outline persistence, and multi-mode reference management. Use when writing a comprehensive review article requiring systematic search, synthesis, and citation management. 触发词：写综述、文献综述、综述写作、literature review、review article、改综述、完善综述、继续写综述、improve review。"
 triggers:
   - "写综述"
@@ -177,6 +177,7 @@ http_proxy=http://127.0.0.1:PORT esearch -db pubmed -query "QUERY" < /dev/null |
 > 📖 Full ban lists (EN/CN), Deep Rewriting protocol, and Abbreviation/Acronym Management rules live in `references/writing_guidelines.md` §4. **Read it before writing/polishing any section.** Quick reminders:
 > - EN ban examples: Moreover, Crucial, Landscape, Delve into, "It is worth noting", "Not only…but also", trailing "-ing" clauses.
 > - CN ban examples: 值得注意的是、此外、综上所述、深入探讨、至关重要、一方面……另一方面.
+> - **中文稿同样受 `style_checker.py` 机器检查**：10 条中文套话（真源 `FORBIDDEN_CN`，命中即 high 扣 15 分）+ 按「。！？」断句后的句长方差/连续等长句/长句/段首重复。此前中文稿因切不出句子恒判满分放行。
 > - Rhythm: never 3+ consecutive similar-length sentences. Active voice preferred.
 > - Abbreviation first-use: `Full Name (ABBR)` (EN) / `中文全称（英文全称, ABBR）` (CN); reuse ABBR after first definition; never abbreviate in the title.
 
