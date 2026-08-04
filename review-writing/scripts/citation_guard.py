@@ -207,12 +207,15 @@ def main() -> int:
     t0 = time.perf_counter()
     now_utc = datetime.now(timezone.utc)
     mcp_ttl_days = max(0, int(args.mcp_ttl_days))
+    # 本轮的核验强度：缓存只有在"当初至少这么严"时才准短路（否则一条 --offline
+    # 验过的编造文献能一路顶掉 --require-mcp / 联网核验，硬门禁形同虚设）。
+    strictness = {"require_mcp": bool(args.require_mcp), "require_online": not args.offline}
     # 批量取 PubMed 记录（100 条/请求）：核验用 + article_type 用共一份，避免 N 条发 N 次。
     # 需要取的两类：① 本轮要真核验的；② 短路复用但 article_type 还空着的。
     need_pmids = [
         e.get("pmid")
         for e in entries
-        if not entry_is_fresh_verified(e, mcp_ttl_days, now_utc)
+        if not entry_is_fresh_verified(e, mcp_ttl_days, now_utc, **strictness)
         or str(e.get("article_type") or "unknown").strip().lower() in ("", "unknown")
     ]
     pubmed_batch = {} if args.offline else fetch_pubmed_records(need_pmids)
@@ -220,8 +223,8 @@ def main() -> int:
     for e in entries:
         # L1 短路：本条已在 TTL 内被脚本核验过（verified:true + 新鲜 checked_at）→
         # 复用已存 verified/verification_details，跳过在线 DOI/PMID 核验，避免重复联网。
-        # entry_is_fresh_verified 是 fail-safe：未验/过期/无时间戳一律回落全量核验。
-        if entry_is_fresh_verified(e, mcp_ttl_days, now_utc):
+        # entry_is_fresh_verified 是 fail-safe：未验/过期/无时间戳/当初比本轮松，一律回落全量核验。
+        if entry_is_fresh_verified(e, mcp_ttl_days, now_utc, **strictness):
             checked.append(dict(e))
             continue
         res = validate_entry(
