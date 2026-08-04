@@ -31,10 +31,18 @@ High-impact reviews are not summaries; they are arguments.
 ### Evidence Type Discipline（`article_type`，决策15）
 每条 `data/literature_index.json` 条目带 `article_type` 字段（枚举 `original_research | review |
 meta_analysis | systematic_review | clinical_trial | preprint | book_chapter | guideline | other | unknown`）。
-入表时默认 `unknown`，真值由 `citation_guard.py --write-back` 从 PubMed pubtype 优先级解析回填（缺=unknown）。
+入表时默认 `unknown`，真值由 `citation_guard.py` 从 PubMed pubtype 优先级解析回填（缺=unknown）：
+- 常规核验 `--write-back` 顺带落库（批量取 pubtype，100 条/请求，272 条约 6 秒）；
+- **存量项目补类型：`python3 scripts/citation_guard.py --index data/literature_index.json
+  --backfill-article-type`**——只改 `article_type` 一个字段，不做核验、不动其它字段。
+- 无网 / PubMed 不可达 / 该条无 PMID → 落 `unknown`，并在 stderr 报"N 条没取到文献类型…
+  这些引用不会走检查"。**看到这行就说明纪律对那些条目没生效**，别当成检查通过了。
+
 纪律（DoD R9 已覆盖，机械联动在共享 `citation_claim_check.py`）：
 - **承重的机制断言 / 疗效因果结论**（`claim_kind∈{mechanism,efficacy}`）**不得以综述（review /
   systematic_review）代替原著撑腰**——引 `original_research`，或疗效可引 `meta_analysis` / `clinical_trial`。
+- **机制断言另禁挂 `meta_analysis`**：Meta 分析汇总的是别人试验的效应量，不含一手机制实验，
+  对**疗效**是合法上位证据、对**机制**不是。疗效挂 Meta 仍放行，两者不混。
 - 综述里"承重**背景**引用综述"是合法的（`claim_kind=background` 引 review 放行）——靠 `claim_kind` 精确区分，
   不一刀切。`article_type`/`claim_kind` 任一缺失/`unknown` → 机械纪律只 warning 不拦（向后兼容存量项目）。
 - `preprint` 在正文该处须标 `[Preprint]`。
