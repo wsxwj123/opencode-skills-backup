@@ -75,9 +75,12 @@ meta_analysis | systematic_review | clinical_trial | preprint | book_chapter | g
 
 ### Chinese Mode
 - **Ban List（写作纪律）:** 值得注意的是、不仅如此、此外、综上所述、总而言之、深入探讨、至关重要、在此背景下、显而易见、越来越多的证据表明、发挥关键作用
-- **🔒 其中被 `style_checker.py` 机器强制的 10 条**（命中即 `severity=high`、扣 15 分，与英文禁词同级）：值得注意的是、综上所述、总而言之、不仅如此、显而易见、在此背景下、深入探讨、至关重要、越来越多的证据表明、发挥关键作用。
-  - 真源是 `scripts/style_checker.py` 的 `FORBIDDEN_CN`（`grep -n FORBIDDEN_CN scripts/style_checker.py` 可查全）。**要加/删一条套话就改那个 set，并同步本行**；general-sci-writing 的 style_checker.py 是独立分叉副本，两家都要改。
-  - **「此外」「然而」「近年来」刻意不进机器表**：它们在真中文稿里高频且合法，机器一刀切会把正常稿判死。写作时仍按上面的 Ban List 自律避免，机器只兜住几乎没有正当用法的那批。
+- **🔒 其中被 `style_checker.py` 机器强制的 19 条**（命中即 `severity=high`，与英文禁词同级）：值得注意的是、值得一提的是、众所周知、不言而喻、综上所述、总而言之、总的来说、毋庸置疑、显而易见、至关重要、举足轻重、深入探讨、近年来、发挥着重要作用、扮演着重要角色、不仅如此、在此背景下、越来越多的证据表明、发挥关键作用。
+  - 前 15 条与 polish-sci / revise-sci 的 `AI_CLICHE_TERMS_ZH` 逐条对齐（那份表是人工 curated 的口径真源），后 4 条是本家原有。
+  - 真源是 `scripts/style_checker.py` 的 `FORBIDDEN_CN`（`grep -n FORBIDDEN_CN scripts/style_checker.py` 可查全）。**要加/删一条套话就改那个 set，并同步本行**。同一份口径目前散在四处、互为分叉副本：rw / gsw 各一份 `style_checker.py` + polish-sci / revise-sci 各一份 `common.py`，四处都要改。
+  - **「此外」「然而」刻意不进机器表**：它们在真中文稿里高频且合法，机器一刀切会把正常稿判死。写作时仍按上面的 Ban List 自律避免。
+  - **`随着……的发展`、`在……的背景下`、`为……奠定了基础` 不收**：这三条在 polish-sci 里带「……」占位符、字面永远匹配不上，是**有意**留着不生效的——这几种表述不算 AI 感。别把它们改成能命中的形态。
+  - **扣分随命中条数升级**：命中 1–3 条扣 15 分（老口径不变），第 4 条起每条再加 5 分。一节里堆 7 条套话就是 −35 分，不会再出现"稿子越长、命中越多、分数却不动"的稀释——935 字通篇套话的中文稿此前拿 77 分放行，就是这么漏的。**正常稿实测命中 0–2 条，落在免加成区间内，分数与改动前逐分相同。**
 - **Structure Ban:** 一方面……另一方面……; 随着……的不断发展; 日益受到关注; 禁任何比喻（明喻/暗喻/借喻，如"如同/犹如/像…一样"及"…的桥梁/基石/催化剂"类比喻名词——直接陈述事实）
 - **Rhythm:** Short sentences ≤15 characters, long sentences 30–60 characters. Avoid 3+ consecutive same-pattern sentences.
 - **机器检查在中文稿上同样生效**：style_checker 按「。！？」断句、按 2 字 = 1 词折算词数，句长方差/连续等长句/长句/段首重复这些检查在中文稿上真的会算（此前中文稿恒判满分）。

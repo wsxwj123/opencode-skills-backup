@@ -71,6 +71,31 @@ FORBIDDEN_PATTERNS = [
     re.compile(r"from\s+\w+\s+to\s+\w+", re.IGNORECASE),  # "from X to Y" pattern
 ]
 
+# ── 扣分档位与「套话扣分随证据量升级」 ────────────────────────────────────────
+# 每档只扣一次是原口径；问题在于套话这一项**与命中条数无关**：一节里命中 1 条和命中
+# 8 条同扣 15 分。中文稿越长命中越多、分数却纹丝不动，而按句子算的检查（句长方差）
+# 在句子多了以后反而不触发 → **越长越容易过**。实测 935 字通篇套话的中文稿拿 77 分
+# 放行（100-15 套话-8 连续等长），就是这么漏的。
+#
+# 修法：前 FORBIDDEN_FREE_HITS 条按老口径扣满 high(15)，之后每多一条再加
+# FORBIDDEN_EXTRA_PENALTY。**命中 ≤3 条的文件分数与改动前逐分相同**，正常稿不受影响。
+# 对本家尤其要紧：上面那条 "from X to Y" pattern 在正常英文里高频（rw 已因误报删掉），
+# 留 3 条余量正好把它这类单条误报挡在加成之外。
+#
+# ponytail: 3 条免加成 + 每条 5 分是启发式，定这两个数的依据是实测——正常英文学术散文
+# 最多命中 2 条（notably + in recent years 那种），正常中文散文 0 条；通篇 AI 腔的稿子
+# 命中 5–24 条。已知天花板：只命中 3 条套话、其余检查全过的稿子仍会放行（85 分）。
+# 真稿反馈说误报/漏报再调这两个数。口径与 review-writing/scripts/style_checker.py 一致。
+SEVERITY_PENALTY = {"high": 15, "medium": 8, "low": 3}
+FORBIDDEN_FREE_HITS = 3
+FORBIDDEN_EXTRA_PENALTY = 5
+
+
+def forbidden_penalty(hit_count: int) -> int:
+    """套话项扣分：前 FORBIDDEN_FREE_HITS 条 = high 档 15 分，之后每条 +5。"""
+    return SEVERITY_PENALTY["high"] + FORBIDDEN_EXTRA_PENALTY * max(
+        0, hit_count - FORBIDDEN_FREE_HITS)
+
 # ── Anti-AI: em-dash, scare quotes, explanatory colon ────────────────────────
 # Em-dash (U+2014 —) used decoratively in prose (not in code/URLs/math).
 # 覆盖三种实际会出现的形态，各算**一个**破折号（口径与 rw 一致）：
@@ -405,6 +430,8 @@ def check_file(filepath: str, journal: str = "") -> dict[str, Any]:
         result["issues"].append({
             "type": "forbidden_ai_phrases",
             "severity": "high",
+            # 扣分随命中条数升级（长稿不再被稀释），见 forbidden_penalty
+            "penalty": forbidden_penalty(len(forbidden_hits)),
             "detail": f"{len(forbidden_hits)} AI-typical phrases detected: {', '.join(h['phrase'] for h in forbidden_hits[:5])}",
         })
 
@@ -519,12 +546,8 @@ def check_file(filepath: str, journal: str = "") -> dict[str, Any]:
         sev = issue["severity"]
         if sev == "info":
             continue  # info 软项（如配额内破折号）：只提示，不扣分（与 rw 同口径）
-        if sev == "high":
-            score -= 15
-        elif sev == "medium":
-            score -= 8
-        else:
-            score -= 3
+        # 缺省按 severity 档位扣；带 "penalty" 的项自报扣分（套话项按命中条数升级）
+        score -= issue.get("penalty", SEVERITY_PENALTY.get(sev, SEVERITY_PENALTY["low"]))
     result["score"] = max(0, score)
 
     return result
