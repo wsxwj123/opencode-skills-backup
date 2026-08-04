@@ -42,6 +42,10 @@ from pathlib import Path
 VALID_VERDICTS = {"support", "weak", "contradict", "unknown"}
 REVIEW_TYPES = {"review", "systematic_review"}
 EFFICACY_OK_TYPES = {"meta_analysis", "clinical_trial"}
+# 机制断言的禁挂集合 = 全部二次文献。Meta 分析对**疗效**是合法上位证据
+# （汇总同类试验的效应量），但它同样不含一手机制实验，拿它撑"A 通过 B 调控 C"
+# 是错的——这条此前漏在 REVIEW_TYPES 之外，机制挂 Meta 一直放行。
+MECHANISM_FORBIDDEN_TYPES = REVIEW_TYPES | {"meta_analysis"}
 
 
 def _norm(s) -> str:
@@ -370,6 +374,8 @@ def main() -> int:
             discipline_checked += 1
             if ckind in ("mechanism", "efficacy") and atype in REVIEW_TYPES:
                 blockers.append(f"承重机制/疗效声明不得挂综述: {ref}")
+            elif ckind == "mechanism" and atype in MECHANISM_FORBIDDEN_TYPES:
+                blockers.append(f"承重机制声明不得挂二次文献（{atype}）: {ref}")
             # efficacy 挂 meta_analysis/clinical_trial → 合法上位证据，放行（no-op）
 
         # preprint 标注：正文引了该 ref 但缺 [Preprint] 标记 → soft fail(exit1)
