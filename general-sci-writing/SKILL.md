@@ -1,7 +1,7 @@
 ---
 name: general-sci-writing
 version: 2.34.0
-description: 用于从零撰写或润色符合Nature/Science/Cell标准的SCI研究论文（Article类型），适用于多学科。触发词：写论文、SCI论文、学术写作、科研写作、论文润色、研究论文、学术投稿、投稿、润色论文、polish paper、write SCI paper、academic writing、draft paper、manuscript writing。路由说明：退稿/返修改主稿→用revise-sci；只写审稿意见回复→用reviewer-response-sci；独立成稿的纯语言润色（拿到别人写好的整稿只改语言、不进本管道）→用polish-sci，本技能的润色仅指管道内 Phase 10 对自写稿的润色；综述/文献综述→用review-writing。本技能侧重写新稿与自写稿润色，Phase 13B含内部初步退稿自查但不出回复包也不出修订稿docx。
+description: 用于从零撰写或润色符合Nature/Science/Cell标准的SCI研究论文（Article类型），适用于多学科。触发词：写论文、SCI论文、学术写作、科研写作、论文润色、研究论文、学术投稿、投稿、润色论文、polish paper、write SCI paper、academic writing、draft paper、manuscript writing。路由说明：退稿/返修改主稿→用revise-sci；只写审稿意见回复→用reviewer-response-sci；独立成稿的纯语言润色（拿到别人写好的整稿只改语言、不进本管道）→用polish-sci，本技能的润色仅指管道内 Phase 10 对自写稿的润色；综述/文献综述→用review-writing。本技能侧重写新稿与自写稿润色；Phase 13B 做退稿后的逐条 gap 分析与改稿，并出一份内部 response letter（reviews/response_letter.md），但不出正式投稿用的完整回复包、也不单独出修订稿docx——要正式回复包走reviewer-response-sci。
 license: Proprietary
 ---
 
@@ -336,7 +336,7 @@ license: Proprietary
 **收口命令（执行必需，每完成一个大 Figure 跑一次）**：
 - `python scripts/state_manager.py add-figure <one_figure.json>`：传**单个** figure 对象（`figure_id` 必需、`section` = storyline 的 section_id），锁内去重合并进 figures_database 并顺带同步 writing_progress/context_memory/storyline；核心定量读不到的项 `data_status="pending"`，对接 §2 熔断。**字段与条目示例见 figure-protocol.md。**
 - 缩略词扫描：对本 figure_{N}.md 新引入且未在 `abbreviations.json` 的 `Full Name (ABBR)`，逐个 `add-abbreviation`（否则 `/write` 写正文会重复展开）。
-- `python scripts/state_manager.py snapshot` 备份。**勿用 `postwrite`**，它有 prewrite gate（state_manager.py:2403），识图阶段没跑 write-cycle 会 `sys.exit(2)`。
+- `python scripts/state_manager.py snapshot` 备份。**勿用 `postwrite`**，它有 prewrite gate（`state_manager.py` 的 `postwrite_state()`），识图阶段没跑 write-cycle 会 `sys.exit(2)`。
 
 **落盘模板**：`figure_analysis/figure_{N}.md` 模板与 `figures_database.json` 条目示例见 `references/figure-protocol.md`，收口落盘 / `add-figure` 时 `Read` 取用。（`data_status`：核心定量齐全=`ready`，缺核心项=`pending`；`section` 值必须 = storyline 的 section_id。）
 
@@ -466,7 +466,7 @@ python scripts/state_manager.py add-abbreviation <one.json>
 1. `python scripts/state_manager.py stats`：字数检查。**字数预算分类**：手动汇总 `01_Abstract*.md + 02_Introduction*.md + 04_Results*.md + 05_Discussion*.md` 为"正文字数"（`03_Methods*.md`/`07_References*.md`/Legends 多数期刊不计入），对比 `project_config.word_limits`。**阻断**：超 10% 必砍；超 5% 警告。
 2. `python scripts/state_manager.py sync-literature --dry-run --strict-references`：引用号一致性。**阻断**：dry-run 报冲突 → 跑 `--apply` 后重检。
 3. `python scripts/citation_guard.py --index literature_index.json --report citation_guard_report.json`：文献完整性（**联网核验，绝不加 `--offline`**——离线跳过联网核验，编造的 DOI+PMID 只要字段齐全照样过，这道阻断门就成了给假文献发证）。**阻断**：`ok=false` → 处理 `manual_review_queue.json` 后重跑；报 `source_unreachable` 是「网络不通、没验成」，同样按阻断处理，别改回 `--offline` 绕过去。
-4. `python scripts/style_checker.py --manuscript-dir manuscripts --report style_check_report.json --threshold 70 --journal <target_journal>`：去 AI 风格检测（`--journal` 用 `storyline.json` 的 target_journal，切换语态软提示策略）。**阻断**：avg_score<70 → 列具体段落修改后重跑。**注意**：avg_score 不含语态项（被动比只进 `warnings`，不阻断）；PASS 只代表形式层过关，科学创新度/配不配目标刊未自动核验，须作者与通讯作者判断。
+4. `python scripts/style_checker.py --manuscript-dir manuscripts --report style_check_report.json --threshold 70 --journal <target_journal>`：去 AI 风格检测（`--journal` 取 `project_config.json` 的 `target_journal`——storyline.json 里没有这个字段，切换语态软提示策略）。**阻断**：avg_score<70 → 列具体段落修改后重跑。**注意**：avg_score 不含语态项（被动比只进 `warnings`，不阻断）；PASS 只代表形式层过关，科学创新度/配不配目标刊未自动核验，须作者与通讯作者判断。
 4b. `python scripts/style_checker.py --manuscript-dir figure_analysis --report figure_analysis_style.json --threshold 70`：识图阶段写入的英文草稿也检测。**阻断**同 4。
 4c. `python scripts/proofread.py --manuscript-dir manuscripts --report proofread_report.json --threshold 70`：机械错误。**阻断**：avg_score<70 → 按 report 中 `issues` 字段逐条修后重跑。
 5. `grep -rn "CITE_PENDING\|DATA_PENDING\|REF_DROPPED" manuscripts/ figure_analysis/ 2>/dev/null`：占位扫描。**阻断**：非空 → 必须按 §REF_DROPPED 三种处置补齐。
@@ -509,13 +509,13 @@ python scripts/state_manager.py add-abbreviation <one.json>
 
 **期刊语言调性对齐（改到末尾 polish-sci）**：本阶段只做 `/check` 的去 AI/校对；**期刊语言风格深度对齐不在此做**，留到全文定稿后用 `polish-sci` 技能统一处理（不改科学内容，仅调语言风格/结构呈现）。`/journal-study` 已停用，不再产 `journal_study/target_journal_study.json`。
 
-**step8–11 全部通过 → 进 Phase 10.5 合规门禁**；任一阻断 → 修复后重跑该步及之后步骤。
+**步骤 1–11 全部通过 → 进 Phase 10.5 合规门禁**；任一阻断 → 修复后重跑该步及之后步骤。
 
 ### Phase 10.5: 投稿前合规门禁 (`/compliance-check`)
 
 **触发时机**：`/check` 全部通过后、`/submission-pack` 执行前强制触发。用户说"准备投稿"时 AI 自动先跑此 phase。
 
-**执行前必须 `Read references/compliance-gate.md`**：六项判定细则与阻断条件完整定义在那里。
+**执行前必须 `Read references/compliance-gate.md`**：七项判定细则与阻断条件完整定义在那里。
 
 **七项合规检查（缺一阻断，逐项输出 ✅/❌ + 缺失说明）**：
 
@@ -666,7 +666,7 @@ python scripts/state_manager.py add-abbreviation <one.json>
 
 ## 🛡️ 写作禁忌
 1. **严禁割裂**：不要在Results里只罗列数字，然后在Discussion里才解释意思。
-2. **严禁简略**：对于Key Findings，如果只写了一两句话，视为**失败**。
+2. **严禁简略**：Key Findings 只写一两句话就是没讲透，属**质量不合格、必须补写**——但这是写作要求，**不是落盘阻断**（字数/深度的门禁口径以 §融合写作策略"深度控制（软提示，非硬门）"为准：不足不拦落盘）。
 3. **严禁遗忘**：每次写作前执行“预加载”（write-cycle 完整命令与白名单见 §13）。全局历史与进度必须读取；正文草稿默认不读取（续写/改写时才加 `--include-draft`），避免无稿场景污染上下文。
 
 ### ❌ 反例黑名单（Anti-Patterns）
