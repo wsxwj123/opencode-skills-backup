@@ -8,6 +8,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from ref_section import is_reference_heading  # noqa: E402
+
 # Default pandoc reference template bundled with this skill: locks body to
 # Times New Roman 12pt and headings to TNR bold (see make_reference_docx.py).
 # Resolved relative to this script's skill directory so it works regardless of cwd.
@@ -145,11 +148,13 @@ def split_out_references_section(content):
     refs = []
     in_refs = False
     current = None
-    ref_heading = re.compile(r"^\s{0,3}#{1,6}\s*(references|参考文献)\s*$", re.IGNORECASE)
+    # 参考文献段标题口径统一在 ref_section.py：此前这里的正则认不得
+    # Bibliography / **References** / 参考文献：，那三种写法下各节的参考列表
+    # 会被当成正文原样并进合并稿。
     next_heading = re.compile(r"^\s{0,3}#{1,6}\s+")
     numbered = re.compile(r"^\s*(\d+)\.\s+(.*)\s*$")
     for line in lines:
-        if not in_refs and ref_heading.match(line):
+        if not in_refs and is_reference_heading(line):
             in_refs = True
             current = None
             continue

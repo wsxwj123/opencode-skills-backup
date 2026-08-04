@@ -20,6 +20,9 @@ from pathlib import Path
 from collections import OrderedDict
 from datetime import datetime
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from ref_section import is_reference_heading, strip_reference_section  # noqa: E402
+
 # Define state files map
 STATE_FILES = {
     "project_config": "project_config.json",
@@ -337,12 +340,12 @@ def safe_json_load(path):
     return json.loads(raw)
 
 def strip_references_markdown(content):
-    """Remove References/参考文献 section from markdown body for word counting."""
-    heading_re = re.compile(r"^\s{0,3}#{1,6}\s*(references|参考文献)\s*$", re.IGNORECASE | re.MULTILINE)
-    match = heading_re.search(content or "")
-    if not match:
-        return content or ""
-    return (content or "")[:match.start()]
+    """Remove References/参考文献 section from markdown body for word counting.
+
+    识别口径统一在 ref_section.py（此前这里的正则认不得 Bibliography /
+    **References** / 参考文献：，word-count 就把整段参考文献算进正文词数）。
+    """
+    return strip_reference_section(content)
 
 
 def calculate_word_counts(exclude_references=True, section=None):
@@ -1955,13 +1958,12 @@ def rewrite_reference_sections(
     changed = False
     i = 0
 
-    heading_re = re.compile(r"^\s{0,3}#{1,6}\s*(references|参考文献)\s*$", re.IGNORECASE)
     next_heading_re = re.compile(r"^\s{0,3}#{1,6}\s+\S+")
     ref_item_re = re.compile(r"^(\s*)(\d+)\.\s+(.*)$")
 
     while i < len(lines):
         line = lines[i]
-        if not heading_re.match(line):
+        if not is_reference_heading(line):  # 口径统一在 ref_section.py
             out.append(line)
             i += 1
             continue
