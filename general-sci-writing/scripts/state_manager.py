@@ -2871,35 +2871,49 @@ def write_cycle(
         tx_path = write_transaction_log("write_cycle", tx)
         update_gate_state(last_write_cycle_log=tx_path)
 
-def _record_count(payload):
-    """条目型状态文件的"记录条数"；不是条目型就返回 None。
+def _lost_items(old, new, path=""):
+    """整文件覆盖会丢东西 → 返回一句人话的说明，否则 None。
 
-    literature_index 等既可能是裸 list，也可能是 {"entries": [...]} 这类包装
-    （见 SKILL.md 的 list/dict 双形支持），两种都要能数出来，否则缩表防护形同虚设。"""
-    if isinstance(payload, list):
-        return len(payload)
-    if isinstance(payload, dict):
-        for k in ("entries", "items", "references", "data"):
-            if isinstance(payload.get(k), list):
-                return len(payload[k])
+    判据与键名无关（枚举 entries/items/... 是散弹补丁，figures/sections/rounds
+    这些键就全漏了，下一个新键还会漏）：**新旧同为容器、元素变少即算丢**，
+    dict 按 len() 计数；dict 里原有的键在新内容中消失同样算丢——rounds 从
+    {"1":…} 变成 {"2":…} 时 len 没变，但第一轮确实没了。
+    只沿"两边同名的 dict 键"往下走，不进 list 元素内部：改某一条的字段是正常
+    编辑，不该被当成丢数据。
+    ponytail: 递归深度跟着 JSON 结构走，不另设上限（json.load 本身已有嵌套上限）。
+    """
+    where = path or "整个文件"
+    if isinstance(old, list) and isinstance(new, list):
+        if len(new) < len(old):
+            return f"{where} 由 {len(old)} 条变成 {len(new)} 条"
+        return None
+    if isinstance(old, dict) and isinstance(new, dict):
+        missing = [k for k in old if k not in new]
+        if missing:
+            head = "、".join(str(k) for k in missing[:3])
+            more = f" 等 {len(missing)} 个" if len(missing) > 3 else ""
+            return f"{where} 里原有的键 {head}{more} 在新内容里没了"
+        if len(new) < len(old):
+            return f"{where} 由 {len(old)} 项变成 {len(new)} 项"
+        for k, v in old.items():
+            hit = _lost_items(v, new[k], f"{where if path else ''}.{k}".lstrip("."))
+            if hit:
+                return hit
     return None
 
 
 def _shrink_warning(filename, content):
-    """整文件覆盖会把条目数改少 → 返回 (旧条数, 新条数)，否则 None。
+    """整文件覆盖会丢条目 → 返回说明字符串，否则 None。
 
     `update` 是整文件覆盖不是合并，传 1 条进去原有 N 条就没了。旧文件读不出来
     （本来就坏）时不拦，免得把用户困在坏文件里。"""
     if not filename.endswith(".json") or not os.path.exists(filename):
         return None
     try:
-        old_n = _record_count(read_json_file(filename))
+        old = read_json_file(filename)
     except (OSError, json.JSONDecodeError):
         return None
-    new_n = _record_count(content)
-    if old_n is not None and new_n is not None and new_n < old_n:
-        return (old_n, new_n)
-    return None
+    return _lost_items(old, content)
 
 
 def update_state(payload_path):
@@ -2969,11 +2983,10 @@ def _update_state_locked(payload, updated_files, problems):
         # `update` 是整文件覆盖不是合并：条目数变少 = 静默丢数据，直接拦。
         shrink = _shrink_warning(filename, content)
         if shrink:
-            old_n, new_n = shrink
             problems.append(
-                f"{filename}: 覆盖会把 {old_n} 条变成 {new_n} 条（update 是整文件覆盖不是合并），"
+                f"{filename}: 覆盖会丢数据——{shrink}（update 是整文件覆盖不是合并），"
                 f"已阻断。要增改条目请用专用命令（figures→add-figure、文献→sync-literature）；"
-                f"确实要删就先 snapshot 再手工改文件。")
+                f"要保留旧内容就把它一起写进 payload；确实要删就先 snapshot 再手工改文件。")
             continue
         plan.append((key, filename, content))
 
