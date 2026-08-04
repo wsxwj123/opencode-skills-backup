@@ -85,11 +85,11 @@
 - **传统 SCI 刊**：实验描述仍以被动为主流，参考被动 50–70%。Methods / Results → 优先被动（"Cells were treated with..."）；Discussion 表达推断可主动。< 40% 或 > 70% 仅软提示，不扣分。
 - 拿不准目标刊语言风格（被动比例/句式）→ 不在写作阶段前置学习；留到**末尾用 polish-sci 润色时**按目标刊调性对齐（`/journal-study` 已停用，见 SKILL.md Phase 8.6）。写作期照本协议通用规则即可。
 
-## 🔴 装饰性破折号按密度判 (Decorative Em-dashes: discouraged; hard gate only when overused)
+## 🔴 禁装饰性破折号 (Ban Decorative Em-dashes，硬门禁，禁止使用)
 
-**不鼓励**用 em-dash（—、——）做停顿、补充说明或强调，优先改用逗号、句号或拆句处理。单个 em dash 是合法学术标点（插入语/同位补充），判 AI 腔的是**密度**：`style_checker.py` 给配额 = 每千词 2 个（单文件底线 2 个），配额内只出 `info` 提示（不扣分、不阻断）；**超配额**即密集滥用，置 high + hard_fail 一票否决（无论总分高低），须删到配额内。口径与 review-writing 一致。
+**禁止**用 em-dash（—、——）做停顿、补充说明或强调，一律改用逗号、句号或拆句处理。破折号是硬门禁：`style_checker.py` 命中**一个**即置 high + hard_fail 一票否决（无论总分高低），不放行。口径与 review-writing 一致。
 
-**计数口径（三种形态各算一个）**：`—`（em dash）、`——`（中文双破折号，GB/T 15834 里它是**一个**标点，不按两个记进配额）、`␣–␣`（两侧带空格的 en dash，英式停顿破折号）。**不进配额**：复合词与数字区间里的 en dash（Michaelis–Menten、structure–activity、1990–2005、5–50 mM）——它们没有空格包夹，是合法用法，计进去会让化学/生物稿凭空超配额。配额语义不变，只是把实际会出现的形态数全。
+**计数口径（三种形态各算一个）**：`—`（em dash）、`——`（中文双破折号，GB/T 15834 里它是**一个**标点，不按两个记）、`␣–␣`（两侧带空格、当停顿用的 en dash）。**不计（根本不是破折号）**：复合词与数字区间里的 en dash（Michaelis–Menten、structure–activity、1990–2005、5–50 mM，以及带空格的区间 5 – 50 mM、25 – 45 °C）——连坐它们就是误伤，会把正常的化学/生物方法学稿凭空判死。
 
 **合法保留的连字符/横线用途（不属于本条禁止范围）**：
 - 连字符（hyphen `-`）：复合词 / 术语（如 dose-response, T-cell, non-significant）。
