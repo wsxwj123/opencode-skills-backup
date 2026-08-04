@@ -299,7 +299,10 @@ def main() -> int:
     p = argparse.ArgumentParser(description="Unified anti-hallucination citation guard")
     p.add_argument("--index", required=True, help="Path to literature index JSON")
     p.add_argument("--mcp-cache", default="", help="Path to MCP cache JSON")
-    p.add_argument("--offline", action="store_true", help="Disable online check")
+    p.add_argument("--offline", action="store_true",
+                   help="跳过联网核验，本次结果一律记为未核验（条目 verified 恒 false、"
+                        "报告 status=unverified）。只用于测试或网络故障应急，"
+                        "不是交付口径，交付前必须不带它重跑")
     p.add_argument("--mcp-ttl-days", type=int, default=30)
     p.add_argument("--require-mcp", action="store_true", help="Require MCP evidence; unresolved/stale MCP is blocking")
     p.add_argument("--manual-review", default="data/manual_review_queue.json")
@@ -440,10 +443,18 @@ def main() -> int:
 
     verified_count = sum(1 for e in checked if e.get("verified"))
     duration_ms = int((time.perf_counter() - t0) * 1000)
-    status = "verified" if (checked and verified_count == len(checked)) else ("failed" if checked else "empty")
+    if args.offline:
+        # 离线这一轮一次联网核验都没做 → 状态只能是 unverified，绝不许出现 verified 字样。
+        # 但"没验"不等于"失败"：格式合规的条目照旧不阻断（退出码维持 0，命令做了它被
+        # 要求做的事），是否阻断只看条目自己有没有真的硬失败。
+        blocked = any((e.get("verification_details") or {}).get("failure_reasons") for e in checked)
+        status = ("failed" if blocked else "unverified") if checked else "empty"
+    else:
+        status = "verified" if (checked and verified_count == len(checked)) else ("failed" if checked else "empty")
 
     report = {
-        "ok": status == "verified",
+        # ok 是"本次没查出问题"（=退出码 0），不是"文献已核实"；后者只看 status。
+        "ok": status in ("verified", "unverified"),
         "status": status,
         "shape": shape,
         "checked_entries": len(checked),
