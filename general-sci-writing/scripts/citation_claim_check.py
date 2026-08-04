@@ -260,6 +260,12 @@ def _row_blockers(row: dict) -> list[str]:
 
 VERDICT_CN = {"support": "✅支持", "weak": "🟡弱相关", "contradict": "❌不支持", "unknown": "❔无法判定"}
 
+# 200+ 条文献时 warnings/skipped_refs 逐条呈现会刷屏、淹没真正要处理的 blocker。
+# 只压缩呈现（stdout 与 summary JSON 都截断到此上限并给出总数），检查覆盖面一条不少：
+# 退出码与判定结论（ok/blockers/counts）与截断完全无关；全量明细加 --full-warnings 取。
+WARN_DISPLAY_LIMIT = 10
+
+
 def _render_table(rows: list[dict]) -> str:
     lines = ["## 引文核证矩阵（观点 ↔ 引文 ↔ 是否真支持）", "",
              "| 承重 | 章节 | 论点句 | 引文 | 判定 | 摘要证据句 | 已确认 |",
@@ -286,6 +292,9 @@ def main() -> int:
                     help="禁用缓存 backfill/回写（仅校验当前 claim_evidence，不跨批复用）")
     ap.add_argument("--check-quote-substring", action="store_true",
                     help="防伪：承重行 evidence_quote 必须是账本 abstract 子串，否则 fail-closed(exit2)")
+    ap.add_argument("--full-warnings", action="store_true",
+                    help="不截断警告/跳过明细的呈现（默认超过 %d 条截断；退出码与判定结论不受截断影响）"
+                         % WARN_DISPLAY_LIMIT)
     args = ap.parse_args()
 
     if args.evidence:
@@ -376,11 +385,17 @@ def main() -> int:
 
     load_bearing = sum(1 for r in rows if r.get("is_load_bearing"))
     contradict = sum(1 for r in rows if r.get("verdict") == "contradict")
+    # 呈现层截断（B 段防刷屏）：只截 warnings / skipped_refs 明细，blocker 是要处理的
+    # 问题本身、逐条保留。判定（ok/blockers/counts/退出码）全部按全量算，与截断无关。
+    limit = None if args.full_warnings else WARN_DISPLAY_LIMIT
+    shown_warnings = warnings if limit is None else warnings[:limit]
+    shown_skipped_refs = discipline_skipped_refs if limit is None else discipline_skipped_refs[:limit]
     summary = {
         "ok": not blockers and not soft_blockers,
         "blockers": blockers,
         "soft_blockers": soft_blockers,
-        "warnings": warnings,
+        "warnings": shown_warnings,
+        "warnings_total": len(warnings),
         "counts": {"total": len(rows), "load_bearing": load_bearing, "contradict": contradict,
                    "discipline_checked": discipline_checked,
                    "discipline_skipped": discipline_skipped,
@@ -388,8 +403,9 @@ def main() -> int:
         # 实际读到的文献索引路径（None=候选路径都不存在）；配合 ledger_entries 区分
         # "没索引可依据" 和 "索引在、个别条目字段缺"
         "ledger_path": ledger_path,
-        # 哪些 ref 因 claim_kind/article_type 未就绪而没走机械纪律（去重、保序）
-        "discipline_skipped_refs": discipline_skipped_refs,
+        # 哪些 ref 因 claim_kind/article_type 未就绪而没走机械纪律（去重、保序；
+        # 呈现截断到 WARN_DISPLAY_LIMIT，全量总数看 counts.discipline_skipped）
+        "discipline_skipped_refs": shown_skipped_refs,
         "cache_reuse": reuse,
     }
     if blockers:
@@ -423,8 +439,11 @@ def main() -> int:
         print("🟠 预印本标注缺失（需在正文引用处补 [Preprint] 标记）：")
         for s in soft_blockers:
             print(f"  - {s}")
-    for w in warnings:
+    for w in shown_warnings:
         print(f"⚠️ {w}")
+    hidden = len(warnings) - len(shown_warnings)
+    if hidden > 0:
+        print(f"⚠️ ……同类警告另有 {hidden} 条未展示（加 --full-warnings 看全部；退出码与判定结论不受截断影响）")
     print(json.dumps(summary, ensure_ascii=False))
     if blockers:
         return 2
