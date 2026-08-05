@@ -139,7 +139,11 @@ def section_status_from_progress(root, section):
     last = None
     if isinstance(history, list):
         for entry in history:
-            if isinstance(entry, dict) and str(entry.get("section")) == str(section):
+            # 无 status 键的条目（figure_analyzed 等事件）不是状态记录，跳过——
+            # 否则事件会把该节已读到的 done 盖成 None，硬拦下一节开写。
+            if not isinstance(entry, dict) or "status" not in entry:
+                continue
+            if str(entry.get("section")) == str(section):
                 last = entry.get("status")
     # 兜底：last_section 直读
     if last is None and str(payload.get("last_section")) == str(section):
