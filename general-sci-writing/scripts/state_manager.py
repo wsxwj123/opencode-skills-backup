@@ -3110,7 +3110,7 @@ def add_figure_state(payload_path):
         if not isinstance(hist, list):
             hist = []
         hist.append({"ts": ts, "event": "figure_analyzed", "figure_id": fid,
-                     "section": sec, "panels": len(panels), "data_status": entry.get("data_status")})
+                     "figure_section": sec, "panels": len(panels), "data_status": entry.get("data_status")})
         prog["update_history"] = hist[-50:]
         prog["last_figure_analyzed"] = fid
         prog["last_figure_ts"] = ts
