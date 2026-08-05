@@ -162,6 +162,12 @@ class FileLock:
                     f"lock '{self.name}' is held by pid={existing_pid} "
                     f"since {existing.get('created_at')}"
                 )
+        # 两轮都撞上"刚删掉又出现"的陈旧锁竞态：必须 fail-closed。
+        # 此前循环自然退出、带 acquired=False 正常返回，调用方无锁进临界区。
+        raise RuntimeError(
+            f"lock '{self.name}' could not be acquired after {attempts} attempts "
+            "(stale lock kept reappearing; possible race)"
+        )
 
     def release(self):
         if not self.acquired:
