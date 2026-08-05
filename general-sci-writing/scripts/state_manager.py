@@ -2901,7 +2901,8 @@ def _shrink_warning(filename, content):
         return None
     try:
         old = read_json_file(filename)
-    except (OSError, json.JSONDecodeError):
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+        # GBK 等旧编码文件也走"读不出就不拦"（UnicodeDecodeError 不是 OSError 子类）。
         return None
     return _lost_items(old, content)
 
