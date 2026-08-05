@@ -1,5 +1,19 @@
 # Changelog - General SCI Writing Skill
 
+## [2.36.1] - 2026-08-05
+
+第十一轮：文档失配修正 + 死重清除（SPEC-round11-docs，分支 fix/round11-docs）。
+
+- 文档与现实对齐：素材就位步骤标明"信息性探查不阻断"（≠硬检查）；/rename-figure
+  写成真实子命令；citation_guard 两处命令显式带 --report/--manual-review；
+  删掉不存在的具名代理写法；/resume 两套口径统一；submission-guide Phase 引用
+  8→11；compliance-gate 六项→七项；references 地图补 5 行；§1 拷贝步加
+  env_status 残留清理。
+- 死重删除：templates/search_rules.json（零消费者）、writing-templates 里
+  figures/figure_index.md 断头注册流程、dod_checklist 的 journal-study-dod
+  死 gate、reporting_checklists 的 STROBE/TRIPOD/ClinPK 悬空映射（同步修正
+  submission-guide 的虚假承诺）。
+
 ## [2.36.0] - 2026-08-05
 
 第十轮：外部审计 46 条经四路独立验证（35 真/6 部分/5 假）后修复 20 条脚本 bug
