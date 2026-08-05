@@ -171,7 +171,8 @@ def scan_placeholders(files):
     hits = []
     for fp in files:
         try:
-            with open(fp, "r", encoding="utf-8") as f:
+            # errors="replace"：GBK 稿混入不崩（except OSError 接不住 UnicodeDecodeError）。
+            with open(fp, "r", encoding="utf-8", errors="replace") as f:
                 content = f.read()
         except OSError:
             continue
@@ -330,7 +331,7 @@ def main():
         residual = []
         for fp in all_md:
             try:
-                with open(fp, "r", encoding="utf-8") as f:
+                with open(fp, "r", encoding="utf-8", errors="replace") as f:
                     residual += [k for k in NEW_KEY_RE.findall(f.read()) if k not in keymap]
             except OSError:
                 continue
