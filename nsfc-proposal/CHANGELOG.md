@@ -1,5 +1,11 @@
 # Changelog - NSFC Proposal Skill
 
+## [2.33.2] - 2026-08-05
+
+第十轮共享件修复同步（SPEC-round10）：delegate_review 重复 id 往严处倒 +
+--section 路径消毒（#14/#15）；citation_claim_check 非 str 摘要防崩（#16）；
+citation_guard_core 连接重置/IncompleteRead fail-closed（#6）。
+
 ## [2.33.1] - 2026-08-05
 
 参考文献章节标题识别收敛到共享件（SPEC-round9 缺陷 E2d，分支 fix/round9）。
