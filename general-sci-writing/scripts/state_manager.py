@@ -422,9 +422,13 @@ def extract_numeric_section(section):
     # Examples:
     # - results_3.1 -> 3.1
     # - intro_2 -> 2
-    # - 04_results_3.2 -> 3.2
-    match = re.search(r"(\d+(?:\.\d+)*)", section)
-    return match.group(1) if match else None
+    # - 04_results_3.2 -> 3.2（优先带小数的节号；前导文件名序号 04 不是节号，
+    #   此前返回 "04"，下游拿 \b04\b 扫正文会命中 "p value was 0.04" 这类无关内容）
+    dotted = re.search(r"\d+\.\d+", section)
+    if dotted:
+        return dotted.group(0)
+    match = re.search(r"\d+", section)
+    return match.group(0) if match else None
 
 def filename_matches_section(filename, section):
     # Prefer strict-ish boundary matches to avoid false positives.
