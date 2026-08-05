@@ -23,6 +23,9 @@ import sys
 from pathlib import Path
 from typing import Any
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from ref_section import is_reference_heading  # noqa: E402
+
 
 def is_merged_derivative(path: str) -> bool:
     """True for merge_manuscript.py outputs (Full_Manuscript.md / Draft_Round*_Manuscript.md).
@@ -200,51 +203,16 @@ CJK_CHARS_PER_WORD = 2
 # positive source (bullets / explanatory colons read out of bibliography
 # entries). Once we know we are inside a reference block we drop every line
 # until the block is closed; see _extract_prose.
-HEADING_RE = re.compile(r"^#+\s+", re.MULTILINE)
-# Heading text (after stripping leading #/space) that marks a reference section.
-REF_HEADING_RE = re.compile(r"^(?:References|参考文献|Bibliography)", re.IGNORECASE)
-# A standalone reference label line that is not a markdown heading
-# ("References" / "**References**" / "参考文献：" / "Bibliography").
-# Anchored at both ends on purpose: a prose sentence that merely starts with
-# "References were formatted per…" must NOT open the block, otherwise the
-# whole rest of the file would be swallowed.
 #
-# ReDoS fix (2026-08-03) — do NOT turn this back into a regex. It used to be
-#   ^\**\s*(?:References|参考文献|Bibliography)\s*\**\s*[:：]?\s*$
-# where the adjacent optional quantifiers (\s* \** \s*) all compete for the
-# same whitespace run: cubic backtracking on near-miss lines. Measured with a
-# single .match() call:
-#   "References" + " "*400  + "x"  →  0.067 s
-#   "References" + " "*800  + "x"  →  0.512 s
-#   "References" + " "*1600 + "x"  →  4.035 s   (≈×8 per doubling)
-# The trigger shape is real: PDF/HTML-to-text TOC lines are exactly
-# "References" + <long space run> + <page number>, and a few dozen of them
-# hang the checker for minutes → users skip the check → silent failure.
-# Merging segments into character classes ([\s*]*[:：]?[\s*]*$) is NOT a fix
-# either: still O(n²), 29 s measured. Hence a plain left-to-right consumer —
-# each greedy strip below is equivalent to the regex because no later segment
-# can accept the characters an earlier segment consumes.
-_REF_LABEL_KEYWORDS = ("references", "参考文献", "bibliography")
-
-
-def _is_reference_label_line(stripped: str) -> bool:
-    """Linear-time, semantics-preserving replacement for the retired regex."""
-    s = stripped.lstrip("*")            # ^\**
-    s = s.lstrip()                      # \s*
-    for kw in _REF_LABEL_KEYWORDS:      # (?:References|参考文献|Bibliography), re.I
-        # Compare a fixed-length slice, lowercased: indices stay in the
-        # original string even for rare chars whose lower() changes length.
-        if s[: len(kw)].lower() == kw:
-            s = s[len(kw):]
-            break
-    else:
-        return False
-    s = s.lstrip()                      # \s*
-    s = s.lstrip("*")                   # \**
-    s = s.lstrip()                      # \s*
-    if s[:1] in (":", "："):            # [:：]?
-        s = s[1:]
-    return not s.lstrip()               # \s*$
+# 段标题识别唯一口径在 ref_section.py（模块级 import，函数对象同一性）。
+# 这里曾放着同技能的第五份独立实现（REF_HEADING_RE + _is_reference_label_line，
+# 词表只有 References/参考文献/Bibliography 三条），与 ref_section 对同一份稿
+# 判定不一致：`## Reference List` / `#References` / `## 7. References` /
+# `## 引用文献` / 裸行 `Reference` / `References and Notes` 全认不得（条目泄进
+# prose 误报），`####### References` 反而误开块（整段被误剥漏报）。已删除收敛。
+# 那份实现里的 ReDoS 事故记录与线性消费要求一并由 ref_section.py 继承，
+# 识别路径不许回到正则。
+HEADING_RE = re.compile(r"^#+\s+", re.MULTILINE)
 FIGURE_LEGEND_RE = re.compile(r"^(?:Figure|Fig\.?|Table)\s+\d", re.IGNORECASE | re.MULTILINE)
 CODE_BLOCK_RE = re.compile(r"```.*?```", re.DOTALL)
 CITATION_RE = re.compile(r"\[\d+(?:[,\-\s]*\d+)*\]")
@@ -265,16 +233,15 @@ def _extract_prose(text: str) -> str:
             # blank line meant the block never survived past its own label.
             prose_lines.append("")
             continue
-        if HEADING_RE.match(stripped):
-            # A "## References"/"参考文献"/"Bibliography" heading opens the ref
-            # block; any other heading closes it. Without this, the heading
-            # branch swallowed "## References" first and unconditionally reset
-            # in_ref_block, so the block could never open at all.
-            heading_text = HEADING_RE.sub("", stripped, count=1).strip()
-            in_ref_block = bool(REF_HEADING_RE.match(heading_text))
-            continue
-        if _is_reference_label_line(stripped):
+        if is_reference_heading(line):
+            # 参考文献段标题开块（markdown 标题与裸标签行两类都由这一个函数认）。
             in_ref_block = True
+            continue
+        if HEADING_RE.match(stripped):
+            # 任何非参考文献标题关块：`## References` 之后若还有 `## Appendix`
+            # 这类带自己标题的正文节，该节正文必须继续被检查，不许一个参考
+            # 文献标题截断全文。
+            in_ref_block = False
             continue
         if in_ref_block:
             # Inside a reference block every line is bibliography, whatever its
