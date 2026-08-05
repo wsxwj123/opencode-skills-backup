@@ -2151,9 +2151,9 @@ def rewrite_manuscript_citations_strict(
     }
 
 
-def prune_old_literature_backups(backup_root="backups", keep=DEFAULT_BACKUP_KEEP, max_age_days=None):
+def prune_old_literature_backups(backup_root="backups", keep=DEFAULT_BACKUP_KEEP, max_age_days=None, protect=None):
     return prune_backup_dirs(os.path.join(backup_root, "literature_sync"), "lit_sync_*",
-                             keep=keep, max_age_days=max_age_days)
+                             keep=keep, max_age_days=max_age_days, protect=protect)
 
 def backup_literature_sync_assets(
     index_file="literature_index.json",
@@ -2195,7 +2195,8 @@ def backup_literature_sync_assets(
     prune = prune_old_literature_backups(
         backup_root=backup_root,
         keep=backup_keep,
-        max_age_days=backup_max_days
+        max_age_days=backup_max_days,
+        protect=backup_dir  # mtime 打平时排序可能把刚建的这份排到 keep 之后，必须免删
     )
     with open(os.path.join(backup_dir, "prune_report.json"), "w", encoding="utf-8") as f:
         json.dump(prune, f, indent=2, ensure_ascii=False)
@@ -3501,10 +3502,13 @@ def prune_backup_dirs(root, prefix_glob, keep=DEFAULT_BACKUP_KEEP, max_age_days=
     dirs.sort(key=lambda p: os.path.getmtime(p), reverse=True)
     removed = []
     now_ts = datetime.now().timestamp()
-    for idx, d in enumerate(dirs):
-        if protected and os.path.normpath(d) == protected:
-            continue
-        remove_by_count = idx >= max(1, int(keep))
+    # protect 不占用 keep 名额（它本就是那个名额里的最新一份）：打平场景下若让
+    # protect 白占一个槽位，旧备份会清不动，等于 keep 悄悄 +1。总量仍恒等于 keep。
+    prunable = [d for d in dirs
+                if not (protected and os.path.normpath(d) == protected)]
+    keep_slots = max(1, int(keep)) - (1 if len(prunable) != len(dirs) else 0)
+    for idx, d in enumerate(prunable):
+        remove_by_count = idx >= keep_slots
         remove_by_age = False
         if max_age_days is not None:
             age_days = (now_ts - os.path.getmtime(d)) / 86400.0
