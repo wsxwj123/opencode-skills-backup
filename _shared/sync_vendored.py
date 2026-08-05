@@ -98,6 +98,9 @@ MANIFEST: dict[str, list[str]] = {
         "general-sci-writing", "sci2doc", "revise-sci", "reviewer-simulator",
         "polish-sci", "review-writing", "nsfc-proposal",
     ],
+    # 参考文献段标题识别（线性消费，禁正则）: gsw 第六轮真源收编进 _shared，
+    # rw/nsfc 第九轮收敛（SPEC-round9 E2）。三家用逐字节一致的同一份。
+    "ref_section.py": ["general-sci-writing", "review-writing", "nsfc-proposal"],
 }
 
 
