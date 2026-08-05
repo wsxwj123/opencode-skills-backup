@@ -3625,6 +3625,32 @@ def _restore_partial_snapshot(snapshot_dir, manifest_path):
     }
 
 
+def _restore_tree(src, dst):
+    """先完整拷到临时目录、再原子换入：copytree 中途失败时现目录一个字节都不动。
+
+    此前是 rmtree(现目录) 再 copytree —— copytree 半途死掉（盘满/中断）现稿已没，
+    回退操作本身成了数据销毁入口。
+    """
+    tmp = f"{dst}.restore_tmp_{os.getpid()}"
+    old = f"{dst}.restore_old_{os.getpid()}"
+    shutil.rmtree(tmp, ignore_errors=True)
+    try:
+        shutil.copytree(src, tmp)
+    except Exception:
+        shutil.rmtree(tmp, ignore_errors=True)
+        raise
+    if os.path.exists(dst):
+        os.rename(dst, old)
+    try:
+        os.rename(tmp, dst)
+    except Exception:
+        if os.path.exists(old):
+            os.rename(old, dst)  # 换入失败把现稿换回来
+        raise
+    if os.path.exists(old):
+        shutil.rmtree(old, ignore_errors=True)
+
+
 def restore_project_snapshot(snapshot_dir):
     if not snapshot_dir or not os.path.exists(snapshot_dir):
         return {"restored": False, "reason": "snapshot_not_found", "snapshot_dir": snapshot_dir}
@@ -3645,34 +3671,25 @@ def restore_project_snapshot(snapshot_dir):
             shutil.copy2(src, filename)
             restored_files.append(filename)
 
-    # Restore manuscripts (rmtree+copytree:完全还原到快照时点,清除快照后新建文件,与 figure_analysis 对齐).
-    src_manuscripts = os.path.join(snapshot_dir, "manuscripts")
-    if os.path.exists(src_manuscripts):
-        if os.path.exists(DEFAULT_MANUSCRIPT_DIR):
-            shutil.rmtree(DEFAULT_MANUSCRIPT_DIR)
-        shutil.copytree(src_manuscripts, DEFAULT_MANUSCRIPT_DIR)
-        for root, _, files in os.walk(DEFAULT_MANUSCRIPT_DIR):
-            for fn in files:
-                restored_files.append(os.path.join(root, fn))
-
-    # Restore section memory (rmtree+copytree:同上,完全还原).
-    src_memory = os.path.join(snapshot_dir, "section_memory")
-    if os.path.exists(src_memory):
-        if os.path.exists("section_memory"):
-            shutil.rmtree("section_memory")
-        shutil.copytree(src_memory, "section_memory")
-        for root, _, files in os.walk("section_memory"):
-            for fn in files:
-                restored_files.append(os.path.join(root, fn))
-
-    # Restore figure analysis (对称于 backup 用 copytree —— 递归恢复含子目录).
-    src_figs = os.path.join(snapshot_dir, "figure_analysis")
-    if os.path.exists(src_figs):
-        dst_figs = "figure_analysis"
-        if os.path.exists(dst_figs):
-            shutil.rmtree(dst_figs)  # 避免 copytree 报 FileExistsError
-        shutil.copytree(src_figs, dst_figs)
-        for root, _, files in os.walk(dst_figs):
+    # Restore manuscripts / section_memory / figure_analysis：
+    # 全部走 _restore_tree（先拷后换），任一目录恢复失败现稿原样保留、如实上报。
+    for src_name, dst_name in (("manuscripts", DEFAULT_MANUSCRIPT_DIR),
+                               ("section_memory", "section_memory"),
+                               ("figure_analysis", "figure_analysis")):
+        src_dir = os.path.join(snapshot_dir, src_name)
+        if not os.path.exists(src_dir):
+            continue
+        try:
+            _restore_tree(src_dir, dst_name)
+        except Exception as e:
+            return {
+                "restored": False,
+                "reason": f"restore of '{dst_name}' failed, current files kept in place: {e}",
+                "snapshot_dir": snapshot_dir,
+                "restored_files_count": len(restored_files),
+                "restored_files": restored_files,
+            }
+        for root, _, files in os.walk(dst_name):
             for fn in files:
                 restored_files.append(os.path.join(root, fn))
 
