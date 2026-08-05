@@ -1,5 +1,29 @@
 # Changelog - General SCI Writing Skill
 
+## [2.35.1] - 2026-08-05
+
+参考文献识别收敛 + docx 模板口径改正（SPEC-gsw-refconverge，分支 fix/gsw-refconverge）。
+
+### style_checker 参考文献段识别收敛到 ref_section 单一口径
+
+- style_checker 里原有一份独立的段标题识别（`REF_HEADING_RE` + `_is_reference_label_line`，
+  词表只有 References/参考文献/Bibliography 三条），与同目录 `ref_section.py`
+  对同一份稿判定不一致：`## Reference List` / `#References` / `## 7. References` /
+  `## 引用文献` / 裸行 `Reference` / `References and Notes` 全认不得（条目泄进 prose
+  被当正文扫，误报），`####### References` 反而误开块（整段被误剥，漏报）。
+- 删除旧实现，`_extract_prose` 直接调 `ref_section.is_reference_heading`
+  （函数对象同一性）；非参考文献标题关块语义不变（`## Appendix` 后的正文仍被检查）。
+- 有意的行为变化：`####### References`（7 个 # 在 markdown 里不是标题）其后条目
+  此后被当正文扫。识别路径保持线性消费，未回正则。
+- 复现/验收测试：`scripts/test_style_ref_converge.py`（gitignore 排除，不分发）。
+
+### SKILL.md Phase 16 docx 模板口径改正
+
+- 原文「缺失=安装损坏」与现行事实不符：`/init` 不把 `templates/` 拷进项目，
+  项目里缺模板是常态；`make_reference_docx.py` 能在裸目录用 pandoc 兜底自产模板，
+  merge 自动认出 `./reference.docx`。改为「缺失是常态、docx 步骤失败但 md 照常落盘、
+  一条命令自愈」，三条命令已在裸目录实测走通。
+
 ## [2.35.0] - 2026-08-04
 
 收尾批·文档层。这一批的重点不是"把写错的字改对"，是**把会反复写错的结构拆掉**。
