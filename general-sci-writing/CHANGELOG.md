@@ -1,5 +1,29 @@
 # Changelog - General SCI Writing Skill
 
+## [2.35.2] - 2026-08-05
+
+/init 把 docx 字体模板拷进项目（SPEC-gsw-init-template，分支 fix/gsw-init-template）。
+
+### §1 Command Logic 第 3 步补上 reference.docx
+
+- 缺陷：`/init` 只把 `templates/*.json` 扁平拷到项目根，`templates/reference.docx`
+  从不进项目 → 每个新项目第一次 `/merge` 导 docx 必撞一次硬失败
+  （exit 2、`reason: reference_doc_missing`），用户要多跑一条
+  `python scripts/make_reference_docx.py` 自愈命令才能继续。
+- 修法：第 3 步改为 `cp [Skill_Path]/templates/*.json [Skill_Path]/templates/reference.docx [Target_Path]/`，
+  模板与 json 一样扁平落到项目根（`merge_manuscript.py` 候选位第 3 位
+  `cwd/reference.docx` 自动认出，与 `make_reference_docx.py` 默认落点一致）。
+  不建 `templates/` 目录，其余 4 步一字不变。
+- 覆盖语义：与 §1 现有步骤一致——全部用裸 `cp`，目标已存在即覆盖，
+  无"跳过已存在"保护（如实登记，未发明新语义）。改字体的正规路径
+  （重跑 `make_reference_docx.py` 覆盖项目根 `reference.docx`）不受影响。
+- 文档口径同步三处：§1 第 3 步、Phase 0 Copy Resources 清单、
+  Phase 16 docx 段（删"项目目录里模板缺失是常态（/init 不把 templates/ 拷进项目）"
+  这句已过时的话，改为"init 已拷、老项目或被删时才缺、硬失败与自愈语义不变"）。
+- 复现/验收测试：`scripts/test_init_reference_docx.py`（gitignore 排除，不分发）。
+  守两层：SKILL.md 第 3 步拷贝指令被删即红；裸临时目录照指令初始化后
+  首次 merge exit 0 且 docx 产出、项目模板与技能仓模板 md5 一致。
+
 ## [2.35.1] - 2026-08-05
 
 参考文献识别收敛 + docx 模板口径改正（SPEC-gsw-refconverge，分支 fix/gsw-refconverge）。
