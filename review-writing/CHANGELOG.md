@@ -1,5 +1,12 @@
 # Changelog - Review Writing Skill
 
+## [2.36.4] - 2026-08-05
+
+第十轮共享件修复同步（SPEC-round10）：delegate_review 重复 id 往严处倒 +
+--section 路径消毒（#14/#15）；citation_claim_check 非 str 摘要防崩（#16）；
+citation_guard_core 连接重置/IncompleteRead fail-closed（#6）；
+proofread 4 位年份不再误报数字格式不一致（#9）。
+
 ## [2.36.3] - 2026-08-05
 
 citation_guard 离线时 report `ok` 压 false（SPEC-round9 缺陷 E1，分支 fix/round9）。

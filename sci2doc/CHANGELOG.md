@@ -1,5 +1,11 @@
 # Changelog - sci2doc Skill
 
+## [2.31.3] - 2026-08-05
+
+第十轮共享件修复同步（SPEC-round10）：delegate_review 重复 id 往严处倒 +
+--section 路径消毒（#14/#15）；citation_claim_check 非 str 摘要防崩（#16）；
+citation_guard_core 连接重置/IncompleteRead fail-closed（#6）。
+
 ## [2.31.2] - 2026-08-05
 
 citation_guard 离线时 report `ok` 压 false（SPEC-round9 缺陷 E1，分支 fix/round9）。

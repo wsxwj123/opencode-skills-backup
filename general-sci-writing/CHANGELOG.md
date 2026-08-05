@@ -1,5 +1,25 @@
 # Changelog - General SCI Writing Skill
 
+## [2.36.0] - 2026-08-05
+
+第十轮：外部审计 46 条经四路独立验证（35 真/6 部分/5 假）后修复 20 条脚本 bug
+（SPEC-round10，分支 fix/round10，盲检首判 #2 不合格返工后复检合格）。
+
+- 数据安全：FileLock 重试耗尽 fail-closed raise（#1）；restore 改先拷后换，
+  copytree 中途失败现稿原样保留（#21）；账本写回原子化 + .bak + list 形状
+  非 dict 条目不丢（#5-①）；prune 透传 protect，mtime 打平刚建备份必留（#20）。
+- 门禁/判定：figure_analyzed 事件写侧改名 + 读侧跳过无 status 条目，
+  不再吃掉节的 done 状态（#2）；merge 排除 Draft_Round 旧中间稿（#3）；
+  delegate_review 重复 id 往严处倒 + --section 路径消毒（#14/#15，三向同修）；
+  extract_numeric_section 优先带小数节号（#13）。
+- 健壮性：GBK 混入不裸崩（#8/#12，errors="replace" / except 补 UnicodeDecodeError）；
+  _http_get_json 对连接重置/IncompleteRead fail-closed（#6，共享件）；
+  citation_claim_check 非 str 摘要防崩（#16，共享件）；env_preflight argv
+  越界防护（#17）；引文区间展开 500 上限（#22 两处）。
+- 误报消除：proofread 4 位年份不再误报数字格式不一致（#9，共享件铺 6 家）；
+  export_bibtex 缺年份不再静默编 2024（#10）；中文全称（ABBR）定义认得出（#11）；
+  跨节聚类数值归一化（"45%" vs "45.0%" 不再误报漂移）（#19）。
+
 ## [2.35.4] - 2026-08-05
 
 citation_guard 离线时 report `ok` 压 false（SPEC-round9 缺陷 E1，分支 fix/round9）。
