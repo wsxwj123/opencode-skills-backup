@@ -1,5 +1,61 @@
 # Changelog - General SCI Writing Skill
 
+## [2.35.3] - 2026-08-05
+
+行首特征误判三连修复（SPEC-gsw-block-recognition，分支 fix/gsw-block-recognition）。
+三个缺陷同族：脚本按"行首特征"判断文字块性质，判错了就多报（假报警）或漏查（假阴性）。
+
+⚠️ 版本号未 bump：SPEC D6 要求 frontmatter 2.35.2→2.35.3，但同一份 SPEC 与任务书
+的文件边界都写明"明确不许碰 SKILL.md"，两条指令冲突。按"指令矛盾停下上报"处理，
+SKILL.md frontmatter 仍是 2.35.2，待主会话裁决后补 bump。
+
+### D1 ref_section 认得"编号包在加粗里"的参考文献标题
+
+- 缺陷：`## **8. References**`（编号被 `**` 包住，两份真稿同位置复发）被
+  `is_reference_heading` 判 False——先剥编号后剥装饰符号，顺序对不上。
+  相邻形态（`## **References**` / `## 8. References` / `## References`）全部正常。
+  后果：116 条文献泄进 prose，score 19（剥掉后 49）、115 条 bullet 假报警、
+  字数统计把 116 条算进正文词数；该函数是五处调用的唯一口径。
+- 修法：装饰符号剥掉之后再吃一次编号前缀（仍只在带 # 的标题里吃，裸行口径不变）。
+  识别路径保持线性，无正则、无回溯；`__main__` 自检原有 YES/NO 一字未动，
+  新增夹心 YES×3（`## **8. References**` 等）与 NO×4（`## **8. References** extra` /
+  `## **7. Competing Interests**` / `## **8. Reference genome**` / 裸 `**8. References**`）。
+
+### D2 硬换行的正文续行不再被当图注整行剥掉
+
+- 缺陷：pandoc 硬换行让正文句子的续行以 `Figure <数字>` 开头，被
+  `FIGURE_LEGEND_RE` 无条件当图注剥掉（真稿 3 处），同性质的 `Figure S4C` 续行
+  因 S 前缀不匹配正则反而幸存——主图被剥、附图留下，漏查方向。
+- 修法（`_extract_prose`）：结构性判据"图注是独立段落、续行在段落中间"——
+  行首匹配 `Figure/Fig./Table + 编号` 的行仅在**段落起点**（前一行空行/块边界/
+  文件开头）才剥；上一行非空（未完句与完句两种都测）一律留下被检查。
+  独立成段的 `Figure 5: caption` / `Table 2: ...` 照样剥，力度与续行侧相同。
+
+### D3 CRediT 作者贡献块与通讯作者行不再当正文扫
+
+- 缺陷：`## **5. Author Contributions**` 下的 CRediT 角色行
+  （`Wenjie Xu: Conceptualization, Methodology, ...`）与
+  `Corresponding authors:` 邮箱行，每行稳定命中一条 explanatory_colon_in_prose
+  （真稿 10 条假阳性）。这是期刊模板 boilerplate，不是正文 prose。
+- 修法（`_extract_prose`，单函数内，未动架构）：新增两个行级判据——
+  ① CRediT 行：冒号后整段按逗号/分号切开后**每一项**都落在 CRediT 14 角色
+  封闭标准词表内（归一化破折号三态、&/and、大小写），不枚举人名；
+  ② 通讯作者行：冒号前头部整体落在封闭标签集（corresponding author(s) /
+  correspondence (to)）内。命中的行整行剥出 prose。
+  不误伤：正文解释性冒号（`The mechanism is simple: Drug X inhibits Y.`）照样报
+  （hard_fail）；统计方法 `Correspondence analysis showed: ...` 头部不在标签集，不剥。
+
+### 复现/验收
+
+- `scripts/test_block_recognition.py`（gitignore 排除，不分发）：10 条用例，
+  修前 7 红（exit 1）修后全绿（exit 0）；三条缺陷各自"拦得住 + 不误伤"两侧同力度。
+- 已知边界（登记，不处理）：`Key contribution: Validation.` 这种整段恰好只有一个
+  CRediT 角色词的电报句会被剥——它本就撞解释性冒号硬门禁，同方向；
+  作者忘空行的真图注（紧贴上一正文行）此后会被当续行留下，漏查方向，与 SPEC 口径一致。
+- style_checker md5 锁（tests/acceptance/test_style_checker_guard.py）按预期撞锁：
+  登记 771606659667f12024aa92650b6e93f1 → 实得 d916c339990b4eae0f98876a76d2cf97，
+  开发代理未改锁，待主会话确认后刷新。
+
 ## [2.35.2] - 2026-08-05
 
 /init 把 docx 字体模板拷进项目（SPEC-gsw-init-template，分支 fix/gsw-init-template）。
