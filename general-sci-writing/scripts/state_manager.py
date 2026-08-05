@@ -547,6 +547,12 @@ def expand_citation_numbers(text):
             if a.strip().isdigit() and b.strip().isdigit():
                 start, end = int(a.strip()), int(b.strip())
                 if start <= end:
+                    # 区间上限与 manuscript_index.expand_citation_group 同口径(hi-lo<500)：
+                    # 超限拒绝展开并留痕，否则 [1-10000000] 这种能吃掉几个 GB 内存。
+                    if end - start >= 500:
+                        print(f"warning: citation range {start}-{end} exceeds limit "
+                              f"(hi-lo<500), expansion skipped", file=sys.stderr)
+                        continue
                     numbers.extend(list(range(start, end + 1)))
                 else:
                     numbers.extend([start, end])
