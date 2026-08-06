@@ -42,8 +42,11 @@ def hint(tool: str, osname: str) -> str:
 
 def parse_list(flag: str, argv) -> list:
     if flag in argv:
-        raw = argv[argv.index(flag) + 1]
-        return [x.strip() for x in raw.split(",") if x.strip()]
+        i = argv.index(flag) + 1
+        # 值漏写（flag 在末尾）或紧跟另一个 flag：按空列表处理，不裸崩 IndexError。
+        if i >= len(argv) or argv[i].startswith("--"):
+            return []
+        return [x.strip() for x in argv[i].split(",") if x.strip()]
     return []
 
 
