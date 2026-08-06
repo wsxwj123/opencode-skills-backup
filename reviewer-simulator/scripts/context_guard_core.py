@@ -570,6 +570,10 @@ def _gsw_left(root: Path) -> list:
     for entry in hist:
         if not isinstance(entry, dict):
             continue
+        # 老格式事件（如 figure_analyzed）有 section 无 status：不是状态更新，跳过。
+        # 不跳的话它会把该节已记的 done 盖成空串 → 左集少一节、F10 少拦一次。
+        if "status" not in entry:
+            continue
         sid = None
         for key in ("section", "section_id", "id", "name"):
             v = entry.get(key)
