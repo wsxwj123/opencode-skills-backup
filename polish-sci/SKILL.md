@@ -86,7 +86,7 @@ not_for(以下情况不要用本技能):
 
 **硬拦项(strict_gate 阻断交付,exit 1)**:
 - AI 套话禁词表(delve into、pivotal role、underscore、testament、It is worth noting that、值得注意的是、综上所述、至关重要 等,中英双语,见 common.py 的 `AI_STYLE_BANNED_PATTERNS` 与 `AI_CLICHE_TERMS_EN/ZH`)。这些是 AI 腔的硬指纹,润色后一律清零。
-- **去AI必禁三项——修辞性破折号(`—` / `——` / em-dash)、scare quotes(普通短语裹双引号)、解释性冒号(概念冒号后接句子片段)——三者禁止使用,硬拦阻断交付**。strict_gate 对这三项 fail-close,命中即 exit 1,不放行、不交作者取舍。
+- **去AI必禁三项(修辞性破折号(`—` / `——` / em-dash)、scare quotes(普通短语裹双引号)、解释性冒号(概念冒号后接句子片段)),三者禁止使用,硬拦阻断交付**。strict_gate 对这三项 fail-close,命中即 exit 1,不放行、不交作者取舍。
 
 📖 软提示分级与非散文豁免 → 每段改写前先 Read [references/anti-ai-protocol.md](references/anti-ai-protocol.md)。
 
