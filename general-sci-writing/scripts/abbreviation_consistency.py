@@ -24,6 +24,19 @@ import os
 import re
 import sys
 
+# 复用 style_checker 的散文提取（剥离参考文献块 / 图注 / 代码块 / CRediT 行）。
+# 参考文献区充斥作者姓名首字母缩写（"Zhang YW"、"Cao MM"），不剥离会被误判为
+# "未定义缩略语"，是真稿最大误报源（rw 同款文件已先行，本文件跟进同一口径）。
+# fail-soft：import 失败则退回原文。
+try:
+    _sc_dir = os.path.dirname(os.path.abspath(__file__))
+    if _sc_dir not in sys.path:
+        sys.path.insert(0, _sc_dir)
+    from style_checker import _extract_prose as _strip_nonprose
+except Exception:  # pragma: no cover
+    def _strip_nonprose(text: str) -> str:
+        return text
+
 # 同步自 state_manager.py:UNIVERSAL_ABBREVIATIONS（2.20.0），改一处需同步另一处。
 UNIVERSAL_ABBREVIATIONS = {
     "DNA", "RNA", "PCR", "HIV", "WHO", "FDA", "NIH", "USA", "UK", "EU",
@@ -127,7 +140,7 @@ def scan_definitions(files: list[str]) -> dict:
     for fp in files:
         try:
             with open(fp, "r", encoding="utf-8", errors="replace") as f:
-                content = f.read()
+                content = _strip_nonprose(f.read())
         except OSError:
             continue
         for match in DEFINITION_PATTERN.finditer(content):
@@ -145,7 +158,7 @@ def scan_bare_uses(files: list[str], defined: set) -> dict:
     for fp in files:
         try:
             with open(fp, "r", encoding="utf-8", errors="replace") as f:
-                content = f.read()
+                content = _strip_nonprose(f.read())
         except OSError:
             continue
         # 先剥离定义模式，避免把定义处也算作裸用
