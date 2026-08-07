@@ -100,7 +100,11 @@ MANIFEST: dict[str, list[str]] = {
     ],
     # 参考文献段标题识别（线性消费，禁正则）: gsw 第六轮真源收编进 _shared，
     # rw/nsfc 第九轮收敛（SPEC-round9 E2）。三家用逐字节一致的同一份。
-    "ref_section.py": ["general-sci-writing", "review-writing", "nsfc-proposal"],
+    # round15 B1 起 proofread 硬 import 它剥参考文献段 → 铺到 proofread 在而
+    # 它缺的 4 家（polish/rr/rs/revise），否则那 4 家 proofread 一 import 就炸。
+    "ref_section.py": ["general-sci-writing", "review-writing", "nsfc-proposal",
+                       "polish-sci", "reviewer-response-sci", "reviewer-simulator",
+                       "revise-sci"],
 }
 
 
