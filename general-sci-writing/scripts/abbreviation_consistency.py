@@ -68,8 +68,14 @@ DEFINITION_PATTERN = re.compile(
     r"|((?:[一-鿿][\w\-]*){1,6})[（(](" + _ABBR_TOKEN + r")[）)]"
 )
 
-# 匹配裸用缩写（独立词，全大写/数字，可含 -希腊字母后缀；不产生悬空尾 "-"）
-BARE_ABBR_PATTERN = re.compile(r"\b(" + _ABBR_TOKEN + r")\b")
+# 匹配裸用缩写（独立 token：两侧不得是 ASCII 词符 [A-Za-z0-9_] 或希腊字母）。
+# 此前用 \b：Python 的 \w 含 CJK，"ROS可诱导" 里 S 与 可 都是词符、边界不成立，
+# 缩写后紧跟汉字的裸用永远扫不出。改用 ASCII 词符环视后，纯英文文本行为不变
+# （英文语境 \b 与这组环视等价），CJK 相邻按非词符处理。
+# "PROS可" 这类整 token 按整体匹配，不会从里面抠出伪缩写 ROS。
+BARE_ABBR_PATTERN = re.compile(
+    r"(?<![A-Za-z0-9_Α-Ωα-ω])(" + _ABBR_TOKEN + r")(?![A-Za-z0-9_Α-Ωα-ω])"
+)
 
 
 def load_defined(root: str) -> dict:
