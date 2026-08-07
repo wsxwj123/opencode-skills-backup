@@ -3613,7 +3613,9 @@ def _restore_partial_snapshot(snapshot_dir, manifest_path):
             files = json.load(f).get("files") or []
     except (OSError, ValueError, AttributeError):
         files = []
-    restored_files = []
+    # 先全量核对再动手：半截快照（manifest 列了 N 个、盘里缺件）若边拷边报，
+    # 会把现盘盖成半新半旧的混合态还谎称 restored:true。缺一件就一件都不盖，
+    # 如实报缺件名单，现盘保持原样。
     missing = []
     for filename in files:
         # 快照里的相对路径直接对应项目里的相对路径；不接受绝对路径/越级路径。
@@ -3623,7 +3625,19 @@ def _restore_partial_snapshot(snapshot_dir, manifest_path):
         src = os.path.join(snapshot_dir, filename)
         if not os.path.isfile(src):
             missing.append(filename)
-            continue
+    if missing:
+        return {
+            "restored": False,
+            "reason": "snapshot_incomplete",
+            "partial": True,
+            "snapshot_dir": snapshot_dir,
+            "restored_files_count": 0,
+            "restored_files": [],
+            "missing_in_snapshot": missing,
+        }
+    restored_files = []
+    for filename in files:
+        src = os.path.join(snapshot_dir, filename)
         parent = os.path.dirname(filename)
         if parent:
             os.makedirs(parent, exist_ok=True)
@@ -3635,7 +3649,7 @@ def _restore_partial_snapshot(snapshot_dir, manifest_path):
         "snapshot_dir": snapshot_dir,
         "restored_files_count": len(restored_files),
         "restored_files": restored_files,
-        "missing_in_snapshot": missing,
+        "missing_in_snapshot": [],
     }
 
 
