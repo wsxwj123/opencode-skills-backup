@@ -100,7 +100,11 @@ MANIFEST: dict[str, list[str]] = {
     ],
     # 参考文献段标题识别（线性消费，禁正则）: gsw 第六轮真源收编进 _shared，
     # rw/nsfc 第九轮收敛（SPEC-round9 E2）。三家用逐字节一致的同一份。
-    "ref_section.py": ["general-sci-writing", "review-writing", "nsfc-proposal"],
+    # round15 B1 起 proofread 硬 import 它剥参考文献段 → 铺到 proofread 在而
+    # 它缺的 4 家（polish/rr/rs/revise），否则那 4 家 proofread 一 import 就炸。
+    "ref_section.py": ["general-sci-writing", "review-writing", "nsfc-proposal",
+                       "polish-sci", "reviewer-response-sci", "reviewer-simulator",
+                       "revise-sci"],
 }
 
 
@@ -147,9 +151,11 @@ def do_check() -> int:
     return 0
 
 
-def do_sync() -> int:
+def do_sync(only: str | None = None) -> int:
     copied = 0
     for src, dst, skill in iter_targets():
+        if only is not None and src.name != only:
+            continue
         if not src.is_file():
             print(f"跳过(真源缺失): _shared/{src.name}", file=sys.stderr)
             continue
@@ -168,8 +174,17 @@ def main() -> int:
     g = ap.add_mutually_exclusive_group(required=True)
     g.add_argument("--check", action="store_true", help="md5 校验,不一致 exit 1")
     g.add_argument("--sync", action="store_true", help="从 _shared 铺开覆盖")
+    ap.add_argument("--only", default=None, metavar="FILE",
+                    help="只铺指定文件(须已登记在 MANIFEST;配 --sync 用)。并行改共享文件时"
+                         "避免把别人改一半的文件铺出去。不带则全量,行为不变")
     args = ap.parse_args()
-    return do_check() if args.check else do_sync()
+    if args.only is not None:
+        if not args.sync:
+            ap.error("--only 只能配 --sync 用")
+        if args.only not in MANIFEST:
+            print(f"--only 文件不在 MANIFEST: {args.only}(先登记再铺)", file=sys.stderr)
+            return 2
+    return do_check() if args.check else do_sync(args.only)
 
 
 if __name__ == "__main__":
