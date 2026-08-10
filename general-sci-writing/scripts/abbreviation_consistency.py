@@ -77,13 +77,19 @@ DEFINITION_PATTERN = re.compile(
     r"|((?:[一-鿿][\w\-]*){1,6})[（(](" + _ABBR_TOKEN + r")[）)]"
 )
 
-# 匹配裸用缩写（独立 token：两侧不得是 ASCII 词符 [A-Za-z0-9_] 或希腊字母）。
+# 匹配裸用缩写（独立 token：两侧不得是词字符）。
 # 此前用 \b：Python 的 \w 含 CJK，"ROS可诱导" 里 S 与 可 都是词符、边界不成立，
-# 缩写后紧跟汉字的裸用永远扫不出。改用 ASCII 词符环视后，纯英文文本行为不变
-# （英文语境 \b 与这组环视等价），CJK 相邻按非词符处理。
+# 缩写后紧跟汉字的裸用永远扫不出。这里的词字符 = `\w` 减 CJK 类脚本
+# （`[^\W…]` 即"是 \w 且不在这些区段"）：不用空格分词的 CJK/假名/谚文相黏即边界，
+# 其余 \w 一律留在词字符侧——包括 µ(U+00B5)、希腊字母这类非 ASCII 字母，
+# 所以 "µCT"/"µMRI" 这种合法复合写法不会被拆出裸 "CT"（round16 T4-gsw；
+# 旧版枚举 [A-Za-z0-9_Α-Ωα-ω] 只兜住希腊字母，µ 漏网直接判死门）。
+# 纯英文文本行为与旧 \b 逐条一致（test_a4_cjk_bare_abbr.py 对照锁死）。
 # "PROS可" 这类整 token 按整体匹配，不会从里面抠出伪缩写 ROS。
+_CJK_SCRIPTS = r"぀-ヿ㐀-䶿一-鿿가-힯豈-﫿"
+_WORD_CHAR = r"[^\W" + _CJK_SCRIPTS + r"]"
 BARE_ABBR_PATTERN = re.compile(
-    r"(?<![A-Za-z0-9_Α-Ωα-ω])(" + _ABBR_TOKEN + r")(?![A-Za-z0-9_Α-Ωα-ω])"
+    r"(?<!" + _WORD_CHAR + r")(" + _ABBR_TOKEN + r")(?!" + _WORD_CHAR + r")"
 )
 
 
