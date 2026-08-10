@@ -2892,6 +2892,13 @@ def _lost_items(old, new, path=""):
         if len(new) < len(old):
             return f"{where} 由 {len(old)} 条/项变成 {len(new)} 条/项（连数据结构都变了）"
         return None
+    # 容器被整个标量顶掉（3 条文献 → "gone"）：上面那条与下面两条同型分支都要求
+    # new 也是容器，一个都不命中，整张表直接放行。标量按 0 项计，与"元素变少即算丢"
+    # 同一把尺子——所以空容器换成标量不算丢，反向的标量→容器（字段升格）也不算。
+    if isinstance(old, (list, dict)) and not isinstance(new, (list, dict)):
+        if len(old) > 0:
+            return f"{where} 由 {len(old)} 条/项整个变成了单个值 {new!r}"
+        return None
     if isinstance(old, list) and isinstance(new, list):
         if len(new) < len(old):
             return f"{where} 由 {len(old)} 条变成 {len(new)} 条"
