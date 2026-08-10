@@ -39,14 +39,32 @@ GATE_SECTION = "P1"
 
 
 def _argv_value(argv, flag):
-    """从原始 argv 取 --flag 的值（支持 `--flag v` 与 `--flag=v`）。取不到返回 None。"""
-    prefix = flag + "="
-    for i, a in enumerate(argv):
-        if a == flag and i + 1 < len(argv):
-            return argv[i + 1]
-        if a.startswith(prefix):
-            return a[len(prefix):]
-    return None
+    """取 --flag 的值，口径与 argparse 对齐。取不到返回 None。
+
+    🔴 不许改回「按完整参数名逐字比对」：共享核心的解析走 argparse，它**默认接受
+    无歧义的长选项前缀缩写**，`--sec P1` 照样被解析成 `--section P1`。闸口按字面量
+    比就会被一条缩写整个绕过（round19 首版实测：`--sec` 让未确认的大纲 rc=0 出包，
+    连 fail-closed 那道保险一起废掉）。写命令行的正是本闸口要约束的 AI 自己，
+    缩写一个参数比伪造签名便宜得多。
+
+    三条对齐：① 长选项前缀匹配；② `--flag=value` 形式；③ 重复传参取**最后一个**。
+    宁可多认：真有歧义时 argparse 自己会报错退出，不会放行。
+    """
+    name = flag[2:]
+    found = None
+    for i, arg in enumerate(argv):
+        if not arg.startswith("--"):
+            continue
+        head, sep, tail = arg.partition("=")
+        abbrev = head[2:]
+        # abbrev 为空＝裸 `--`（argparse 的选项终止符），不是本 flag
+        if not abbrev or not name.startswith(abbrev):
+            continue
+        if sep:
+            found = tail
+        elif i + 1 < len(argv):
+            found = argv[i + 1]
+    return found
 
 
 def _gate_die(reason, detail=""):
