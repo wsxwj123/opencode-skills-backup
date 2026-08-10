@@ -101,3 +101,14 @@ timestamp	commit	skill	old_score	new_score	status	dimension	note	eval_mode
 2026-06-25T16:23	390ea13	nsfc-proposal	-	86.5	blind-eval	全维	独立子代理盲评(不知优化史);dim8=dry_run	dry_run
 2026-06-25T17:49	-	batch-dim7	-	-	planned	dim7精简	逐技能只删真冗余(纯重复整表/整段),保留安全冗余(关键门禁多处重申);子代理核实+删,主会话复检git diff	planned
 2026-06-25T17:55	-	batch-dim7	-	-	keep	dim7精简	gsw删2处真冗余(P0底线复述→指针);其余5技能核实后无真冗余(安全冗余/主子/不同用途保留),只修改必要的	structural
+2026-08-05T21:00	darwin-eval-v2.35.4	general-sci-writing	86.0	77.4	reeval	9维全审full_test	2judge盲评(A7.3/B6.7);p3退稿场景带skill净值负(5/4分);P1bug3个;dim7体积冗余106KB	full_test
+2026-08-06T17:30	baseline	sci2doc	-	93.8	baseline	-	用户点名的纯评审（不改文件），dim8 多数为 dry_run	full_test
+2026-08-06T17:30	baseline	revise-sci	-	91.9	baseline	-	用户点名的纯评审（不改文件），dim8 多数为 dry_run	full_test
+2026-08-06T17:30	baseline	review-writing	-	90.7	baseline	-	用户点名的纯评审（不改文件），dim8 多数为 dry_run	full_test
+2026-08-06T17:30	baseline	general-sci-writing	-	90.7	baseline	-	用户点名的纯评审（不改文件），dim8 多数为 dry_run	full_test
+2026-08-06T17:30	baseline	reviewer-simulator	-	90.7	baseline	-	用户点名的纯评审（不改文件），dim8 多数为 dry_run	full_test
+2026-08-06T17:30	baseline	academic-gate	-	89.7	baseline	-	用户点名的纯评审（不改文件），dim8 多数为 dry_run	full_test
+2026-08-06T17:30	baseline	polish-sci	-	89.5	baseline	-	用户点名的纯评审（不改文件），dim8 多数为 dry_run	full_test
+2026-08-06T17:30	baseline	nsfc-proposal	-	88.5	baseline	-	用户点名的纯评审（不改文件），dim8 多数为 dry_run	full_test
+2026-08-06T17:30	baseline	reviewer-response-sci	-	88.4	baseline	-	用户点名的纯评审（不改文件），dim8 多数为 dry_run	full_test
+2026-08-06T17:30	baseline	idea-bomb	-	80.2	baseline	-	用户点名的纯评审（不改文件），dim8 多数为 dry_run	full_test
