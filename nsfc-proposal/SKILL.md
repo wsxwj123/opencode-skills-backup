@@ -191,9 +191,13 @@ Follow phased gates in order:
    - `<section>`/`--root` 仅对门控下游 prewrite 的 Phase（P1/P2/P3/P7）给出；P4/P5/P6 不 gate 下游，verify 只带 `--return`，省略 `--section`/`--root`。
 
 3. Phase 1: write P1 with full citation pipeline and verification.
-   - **🔴 Step 1.1.5 先出大纲、经用户点头才能动笔（Mandatory，P1 专属）**：文献检索之后、撰写之前，AI 先出**段落级**大纲草稿 `tmp/outline_draft.json`（一段一条，每段必须写清 `gist`「这段讲什么」+ `conclusion`「要得出什么结论」；决定成败的关键论断标 `is_load_bearing: true` 并在 `refs` 里挂上打算用的文献 id，纯背景段不挂）。摆给用户逐条改 → 派**独立子代理**按「大纲级论点核证」（见下方 pack-prep 那条）去找权威文献核证承重论断，有出入就改大纲 → 用户最终确认后，由**用户**授意运行：
+   - **🔴 Step 1.1.5 先出大纲、经用户点头才能动笔（Mandatory，P1 专属）**：文献检索之后、撰写之前，AI 先出**段落级**大纲草稿 `tmp/outline_draft.json`（一段一条，每段必须写清 `gist`「这段讲什么」+ `conclusion`「要得出什么结论」；决定成败的关键论断标 `is_load_bearing: true` 并在 `refs` 里挂上打算用的文献 id，纯背景段不挂）。摆给用户逐条改 → 用户认可后由**用户**授意运行：
      `python3 scripts/outline_manager.py confirm --from tmp/outline_draft.json --root . --note "<用户确认的原话摘录>"`
-     落盘唯一真源 `data/outline.json`（含 `confirmed`/`content_hash`，`load_bearing_claims` 由承重段的 `conclusion` **派生**，草稿里手写它会被直接拒绝）。⚠️ **AI 不得替用户跑这条 confirm**，也不得自己往 `data/outline.json` 里写 `confirmed`/`content_hash`。大纲改动后必须重新经用户确认并重跑 confirm，否则 `prewrite_gate` 与 `pack-write`/`pack-prep` 一律拦下（`OUTLINE_GATE: outline_stale`）。**只有 P1 有这一步**，P2–P7 的计划仍由 `consistency_map` 四维表承担。
+     落盘唯一真源 `data/outline.json`（含 `confirmed`/`content_hash`，`load_bearing_claims` 由承重段的 `conclusion` **派生**，草稿里手写它会被直接拒绝）。
+     **落盘之后**再派**独立子代理**做「大纲级论点核证」（`pack-prep`，见下方那条）：`pack-prep` 读的正是 `data/outline.json`，所以必须先 confirm，否则它报 `outline has no section: P1`。核证有出入 → 改草稿 → **重跑 confirm**（confirm 允许覆盖，旧版自动存成 `data/outline.json.prev`）→ 用户最终确认。🔴 顺序不能颠倒，这与 BRIEF A.5「P1 大纲**完成后**必须派独立子代理…有出入就重写大纲…最后由用户确认」一致。
+     用户直接手改 `data/outline.json` 也是正当操作：改完拿它自己重跑 `confirm --from data/outline.json`，修改会原样保留；**别改用 `--from tmp/outline_draft.json`**，那是 AI 的旧草稿，会覆盖掉手改。
+     ⚠️ **AI 不得替用户跑这条 confirm**，也不得自己往 `data/outline.json` 里写 `confirmed`/`content_hash`。大纲改动后必须重新经用户确认并重跑 confirm，否则 `prewrite_gate` 与 `pack-write`/`pack-prep` 一律拦下（`OUTLINE_GATE: outline_stale`）。**只有 P1 有这一步**，P2–P7 的计划仍由 `consistency_map` 四维表承担。
+     **这道闸口的强度，如实说**：它拦得住**无意的忘记**——忘出大纲、忘让用户过目、改完忘重新确认，都会被拦下。**故意的绕过它拦不住**：`content_hash` 的算法就写在被约束方读得到的文件里、没有秘密；比伪造更省事的是直接敲一条 `confirm --note "用户说可以"`，而 `--note` 只校验非空、命令行又是 AI 自己写的。所以「AI 不得替用户 confirm」是**纪律约束，没有任何机制在执行它**。🔴 不许在任何文档里把它写成"强制""AI 关不掉""AI 无法绕过"。且这类绕法走的是完全正常的命令与文件，**日志上看不出异样、留痕很淡**。
    - **🔴 开写前置闸门 (Mandatory，脚本硬拦截)**：开写前先跑 `python3 scripts/prewrite_gate.py --section P1 --root .`，exit≠0 禁止开写（硬检查上一节完成/`consistency_map` 就位/占位符清零/**P1 大纲已确认且未被改动（`outline_fresh`；存量项目 `sections/P1_*.md` 已非空时自动跳过，不要求补大纲）**；上一节盲检结果（`.review_pass/<上一节>.json`）缺失即 prewrite_gate 硬拦 exit 1，禁止开写；必须先跑 delegate_review verify --section <上一节> 落盘通过标记，此校验仅跨 Phase 边界生效，同 Phase 子节 N/A）。P1 为首节，上一节检查自动放行。
    - 每节先跑 `python scripts/state_manager.py --root . write-cycle --section P1`（逐节预算/上下文注入的预写门控，完整参数见 references/08）；不得跳过直接硬写。
 
