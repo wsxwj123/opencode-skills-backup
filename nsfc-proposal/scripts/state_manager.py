@@ -65,18 +65,30 @@ SCIENCE_PROBLEM_ATTRIBUTES = (
     "共性导向、交叉融通",
 )
 
-# 离线 gate 的"未核验"标注（SPEC-round17 P4）。措辞与 references/04_文献管理.md
-# 离线段同口径：本轮实际核验的条目一律 verified=false，unverified 只是"没验"，
-# 按第九轮裁定不阻断，但绝不能被读成"验过了"。
+# 离线 gate 的两句标注（SPEC-round17 P4-rev）。措辞与 references/04_文献管理.md
+# 离线段同口径：离线不发新证（聚合状态如实保留 unverified），过门禁靠的是全部
+# 条目都持 TTL 内已完成的联网核验记录；没过就把"怎么才算过、怎么销账"说清楚。
 OFFLINE_UNVERIFIED_NOTE = (
-    "离线未核验：本轮一次联网核验都没做，unverified 不算通过核验，"
-    "仅按“没验≠失败”不阻断。"
+    "离线未核验，已阻断：本轮以 offline 运行，一次新的联网核验都没做，"
+    "unverified 不算通过核验。本维度放行的唯一条件是全部条目都持 TTL 内可信的"
+    "联网核验记录；本轮存在未核验/过期/核验失败的条目。"
 )
 OFFLINE_UNVERIFIED_WARNING = (
-    "[CITATION-UNVERIFIED] 本轮以 --offline 运行，文献一次联网核验都没做"
-    "（verification_status=unverified）：unverified 不等于通过核验，"
-    "本项仅按“没验≠失败”不阻断交付。要真正销账，需去掉 --offline 重跑 gate-check；"
-    "TTL 内已有可信核验记录的条目保持原状、不被这轮刷掉。"
+    "[CITATION-UNVERIFIED] 本轮以 --offline 运行，文献一次新的联网核验都没做"
+    "（verification_status=unverified）：unverified 不等于通过核验，本维度因此阻断。"
+    "放行的唯一条件＝全部条目都持 TTL 内已完成的联网核验记录（短路保真，不受本轮影响）；"
+    "销账＝去掉 --offline 重跑 gate-check（或 citation-guard）。"
+)
+OFFLINE_CERTIFIED_NOTE = (
+    "离线放行（凭旧证）：本轮未做任何新的联网核验，全部条目均持 TTL 内已完成的"
+    "联网核验记录，故不阻断；聚合 verification_status 如实保留 unverified —— "
+    "本轮没发新证，只是承认旧证。"
+)
+OFFLINE_CERTIFIED_WARNING = (
+    "[CITATION-OFFLINE-CERTIFIED] 本轮以 --offline 运行，未做任何新的联网核验。"
+    "本维度放行的依据是全部条目都持 TTL 内已完成的联网核验记录（短路保真），"
+    "不是「这轮验过了」：聚合 verification_status 仍如实为 unverified。"
+    "旧证过 TTL 后必须去掉 --offline 重跑 gate-check 才能继续放行。"
 )
 
 SECTION_ALIASES = {
@@ -411,16 +423,27 @@ def gate_check(
         },
     )
 
-    # 离线跑一次联网核验都没做，状态只可能是 unverified / failed（citation_validator
-    # 的 offline 分支）。"没验"不等于"失败"——口径同 gsw citation_guard：unverified
-    # 不阻断、退出码不变。所以 offline 时接受 unverified；联网判据一字不变，仍必须
-    # verified（联网态出现 unverified 是异常形态，照拦）。
+    # 离线的判定落在**条目级**，不看聚合状态（SPEC-round17 P4-rev，用户二次拍板
+    # "离线记录的未核验也要阻断"）。两件事分开看：
+    #   发证：离线一次联网核验都没做，聚合 verification_status 永远只会是
+    #         unverified / failed，绝不写 verified（第十六轮 T9-c，此处一字不碰）。
+    #   放行：全部条目都持 TTL 内可信的旧证（entry_is_fresh_verified 短路保真，
+    #         中毒条目会被第十六轮 T8 判别式打回 verified:false）才算过门禁。
+    # 任何一条本轮没验过 / 过期 / 无可信记录 → 拦（此前是"离线 unverified 一律
+    # 放行"，等于离线成了绕行道）。联网判据一字不变，仍必须聚合 verified。
     citation_status = idx.get("metadata", {}).get("verification_status")
-    citation_ok = citation_status == "verified" or (offline and citation_status == "unverified")
-    # 靠"没验≠失败"放行的这一格必须自报家门：不标注的话，报告只剩 ok:true，
-    # 调用方（和人）会把"这轮压根没联网核验"读成"验过了"。加法式——只加字段，
-    # 阻断语义与联网路径输出一字不动（SPEC-round17 P4，先例 rs 2.29.7 / sci2doc 2.31.2）。
-    offline_unverified = bool(offline) and citation_status == "unverified"
+    if offline:
+        entries_checked = idx.get("entries") or []
+        citation_ok = (
+            bool(entries_checked)
+            and citation_status != "failed"
+            and all(e.get("verified") is True for e in entries_checked)
+        )
+    else:
+        citation_ok = citation_status == "verified"
+    # 离线这一格无论过不过都要自报家门：过了要说清"放行靠的是旧证、本轮没发新证"，
+    # 没过要说清"怎么才算过、怎么销账"。用户两次拍板都要求离线状态看得见。
+    offline_certified = bool(offline) and citation_ok
     matrix = citation_validator.matrix_check(p1_text, idx, ref_text)
     matrix_ok = bool(matrix.get("ok"))
 
@@ -503,8 +526,9 @@ def gate_check(
             "verification_status": idx.get("metadata", {}).get("verification_status"),
             "stats": run_stats,
             "manual_review_count": len(manual_queue),
-            # 只在"靠离线 unverified 放行"这一格出现；联网路径键集逐字不变。
-            **({"note": OFFLINE_UNVERIFIED_NOTE} if offline_unverified else {}),
+            # 只在离线出现（过/不过各一句）；联网路径键集逐字不变。
+            **({"note": OFFLINE_CERTIFIED_NOTE if offline_certified
+                else OFFLINE_UNVERIFIED_NOTE} if offline else {}),
         },
         "literature": {
             "ok": literature_ok,
@@ -527,8 +551,9 @@ def gate_check(
         },
         # §6.3 出口 1：review["skipped_checks"] 原样搬，恒存在（没关任何项时为 []）
         "skipped_checks": skipped_checks,
-        # 顶层提示，同样只在离线放行时出现（联网路径无此键）。
-        **({"warnings": [OFFLINE_UNVERIFIED_WARNING]} if offline_unverified else {}),
+        # 顶层提示，同样只在离线出现（联网路径无此键）。
+        **({"warnings": [OFFLINE_CERTIFIED_WARNING if offline_certified
+                         else OFFLINE_UNVERIFIED_WARNING]} if offline else {}),
     }
 
 
