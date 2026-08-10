@@ -66,6 +66,17 @@ def _gate_args(argv):
     return ns.section, ns.root
 
 
+def _in_gate_scope(section):
+    """P1 及其子节都归大纲管。
+
+    section_regex 允许 `P1.1`（`^P\\d+(\\.\\d+)*$`），只认恰等于 "P1" 就会漏
+    `--section P1.1` —— 与 outline_files 那条 fallthrough 是同一类「作用域判小了」
+    的洞。当前流程不用子节号，先把口子按住。P2 起一律不介入（D1：大纲只做 P1）。
+    """
+    return isinstance(section, str) and (
+        section == GATE_SECTION or section.startswith(GATE_SECTION + "."))
+
+
 def _gate_die(reason, detail=""):
     sys.stderr.write("OUTLINE_GATE: %s%s\n" % (reason, (" " + detail) if detail else ""))
     sys.exit(2)
@@ -84,7 +95,7 @@ def outline_gate(argv):
     if not argv or argv[0] not in GATE_SUBCOMMANDS:
         return
     section, root = _gate_args(argv)
-    if section != GATE_SECTION:
+    if not _in_gate_scope(section):
         return
     if not root:
         return
