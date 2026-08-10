@@ -207,14 +207,50 @@ def check_new_refs_merged(root, prev_section, prev_fp):
     return failures
 
 
-def p1_legacy_written(root):
-    """§4.2 存量豁免（按节，不是按项目）：sections/P1_*.md 存在且去空白后非空。
+# 去掉标题行后的正文字符数下限。低于它就不算"这一节写过了"。
+# 依据：sync-all --auto-fix 写的占位稿正文是「待补充。」4 个字；而一节真立项依据是
+# 数千字。中间那点差距不存在真实稿件。
+# ⚠️ 这是启发式，天花板照实说：正文比阈值稍长的真·短稿会被当成新项目、要求补大纲。
+# 方向是安全的（多要一次大纲，不是少拦一次），撞上了再调。
+LEGACY_MIN_BODY_CHARS = 8
 
-    判据故意收窄到 P1 这一个节 —— 放宽成「任一非空 .md」会让"先写了别的节的
-    新项目"整体哑火，等于本轮改造白做。
+
+def _has_substantive_body(path):
+    """有实质正文？去掉 markdown 标题行与空白后按字符数判。"""
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            lines = f.read().splitlines()
+    except OSError:
+        return False
+    body = "".join(ln.strip() for ln in lines if not ln.lstrip().startswith("#"))
+    return len(body.strip()) >= LEGACY_MIN_BODY_CHARS
+
+
+def _outline_json_readable(root):
+    """data/outline.json 存在且能读成 JSON？坏到读不出来时返回 False。"""
+    return _load_json(os.path.join(root, "data", "outline.json")) is not None
+
+
+def p1_legacy_written(root):
+    """§4.2 存量豁免（按节，不是按项目）：这一节是"改造前就写过"的老稿。
+
+    三条判据，缺一不可：
+    1. **项目里没有一份读得懂的 data/outline.json**。有大纲＝这个项目走过大纲流程，
+       就该按正常判定走。少了这条会出两个毛病：① 项目第一次写完 P1 就永远算"存量"，
+       此后返工改稿大纲检查全失效；② delegate_write 那道闸口没有存量豁免，
+       同一状态下它报 outline_stale，两道闸口对同一项目给出相反结论。
+       文件坏到读不出来时仍按存量走 —— 读不出来就断定不了它是不是大纲，
+       此时以"P1 已经写过"为准（考卷 test_豁免优先于大纲判定 锁的也是这个行为）。
+    2. sections/P1_*.md 存在。判据故意收窄到 P1 这一个节 —— 放宽成「任一非空 .md」
+       会让"先写了别的节的新项目"整体哑火，等于本轮改造白做。
+    3. 里面有**实质正文**，不只是占位。sync-all --auto-fix 会写出
+       `# P1_立项依据\n\n待补充。\n`，而那条命令正是 SKILL.md 推荐给用户的修复动作
+       —— 跑一次就把全新项目伪装成存量项目、本轮拦截当场失效。
     """
-    return any(file_nonempty(p)
-               for p in glob.glob(os.path.join(root, "sections", "P1_*.md")))
+    if _outline_json_readable(root):
+        return False
+    return any(_has_substantive_body(p)
+               for p in glob.glob(os.path.join(glob.escape(root), "sections", "P1_*.md")))
 
 
 def outline_fresh_state(root):
