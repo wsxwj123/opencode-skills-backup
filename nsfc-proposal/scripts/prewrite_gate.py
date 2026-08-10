@@ -226,28 +226,31 @@ def _has_substantive_body(path):
     return len(body.strip()) >= LEGACY_MIN_BODY_CHARS
 
 
-def _outline_json_readable(root):
-    """data/outline.json 存在且能读成 JSON？坏到读不出来时返回 False。"""
-    return _load_json(os.path.join(root, "data", "outline.json")) is not None
+def _outline_json_present(root):
+    """项目里有没有 data/outline.json。
+
+    判"在不在"而不是"读不读得出来"：坏 JSON 也算有 —— 文件坏了正该报
+    outline_malformed 让人去修，而不是悄悄退化成"这是个老项目、不用管大纲"。
+    """
+    return os.path.exists(os.path.join(root, "data", "outline.json"))
 
 
 def p1_legacy_written(root):
     """§4.2 存量豁免（按节，不是按项目）：这一节是"改造前就写过"的老稿。
 
     三条判据，缺一不可：
-    1. **项目里没有一份读得懂的 data/outline.json**。有大纲＝这个项目走过大纲流程，
-       就该按正常判定走。少了这条会出两个毛病：① 项目第一次写完 P1 就永远算"存量"，
-       此后返工改稿大纲检查全失效；② delegate_write 那道闸口没有存量豁免，
-       同一状态下它报 outline_stale，两道闸口对同一项目给出相反结论。
-       文件坏到读不出来时仍按存量走 —— 读不出来就断定不了它是不是大纲，
-       此时以"P1 已经写过"为准（考卷 test_豁免优先于大纲判定 锁的也是这个行为）。
+    1. **项目里没有 data/outline.json**。有大纲＝这个项目走过大纲流程，就该按正常
+       判定走（坏 JSON 也算有：文件坏了正该报 outline_malformed 让人去修，不该悄悄
+       退化成"这是老项目、不用管大纲"）。少了这条会出两个毛病：① 项目第一次写完 P1
+       就永远算"存量"，此后返工改稿大纲检查全失效；② delegate_write 那道闸口没有
+       存量豁免，同一状态下它报 outline_stale，两道闸口对同一项目给出相反结论。
     2. sections/P1_*.md 存在。判据故意收窄到 P1 这一个节 —— 放宽成「任一非空 .md」
        会让"先写了别的节的新项目"整体哑火，等于本轮改造白做。
     3. 里面有**实质正文**，不只是占位。sync-all --auto-fix 会写出
        `# P1_立项依据\n\n待补充。\n`，而那条命令正是 SKILL.md 推荐给用户的修复动作
        —— 跑一次就把全新项目伪装成存量项目、本轮拦截当场失效。
     """
-    if _outline_json_readable(root):
+    if _outline_json_present(root):
         return False
     return any(_has_substantive_body(p)
                for p in glob.glob(os.path.join(glob.escape(root), "sections", "P1_*.md")))
