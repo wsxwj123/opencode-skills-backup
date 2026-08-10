@@ -153,13 +153,26 @@ def entry_is_fresh_verified(
     The timestamp may live at the entry top level (``verified_at``/``checked_at``)
     or inside ``verification_details.checked_at`` (adapter-dependent).
 
-    ``require_mcp`` / ``require_online`` say how strict THIS run is. A cached
-    result may only be reused when the run that produced it was at least as
-    strict, i.e. ``verification_details.sources.mcp`` / ``.online_check`` are
-    True. Without this, one ``--offline`` verification (which happily marks a
-    fabricated entry verified) short-circuits every ``--require-mcp`` run for the
-    next TTL window — the MCP evidence gate becomes a no-op. Both default to
-    False, so a plain run still reuses the cache and does NOT re-hit the network.
+    Online evidence (``verification_details.sources.online_check is True``) is an
+    UNCONDITIONAL precondition for reuse — round16 T8. Rationale: ``validate_core``
+    computes ``verified = online and ...``, so every entry this pipeline ever
+    marked verified necessarily carries ``online_check: True``. An entry that says
+    ``verified: True`` while its sources block is missing or says
+    ``online_check: false`` can therefore only be historical poison (the early
+    offline bug, or a hand-edited index). Before T8 that poison short-circuited
+    every ``--offline`` run — reused verbatim, written back verbatim,
+    indistinguishable from a real verification: it could neither be washed out nor
+    detected. It now falls through to a full re-verification (online run re-checks
+    it; offline run records it honestly as unverified). Genuinely verified,
+    in-TTL entries are unaffected and still short-circuit without hitting the
+    network. ``require_online`` is kept for call-site compatibility but is now
+    subsumed: the check runs whatever this run's strictness is.
+
+    ``require_mcp`` says how strict THIS run is and stays run-conditional: MCP
+    evidence is an extra dimension, not the trust floor. A cached result may only
+    be reused by a ``--require-mcp`` run when ``sources.mcp`` is True; without
+    this, one weaker verification short-circuits every strict run for the next TTL
+    window and the MCP evidence gate becomes a no-op.
 
     Fail-safe by construction: verified is not True, ttl_days<=0, a
     missing/unparseable timestamp, or a details/sources block that is missing or
@@ -174,16 +187,13 @@ def entry_is_fresh_verified(
     if now_utc is None:
         now_utc = datetime.now(timezone.utc)
     details = raw_entry.get("verification_details")
-    if require_mcp or require_online:
-        sources = details.get("sources") if isinstance(details, dict) else None
-        if not isinstance(sources, dict):
-            return False
-        # `is not True` (not falsiness): a stringy "true" / 1 is an unknown shape,
-        # and an unknown shape must tighten, never pass.
-        if require_mcp and sources.get("mcp") is not True:
-            return False
-        if require_online and sources.get("online_check") is not True:
-            return False
+    sources = details.get("sources") if isinstance(details, dict) else None
+    # `is not True` (not falsiness): a stringy "true" / 1 is an unknown shape,
+    # and an unknown shape must tighten, never pass.
+    if not isinstance(sources, dict) or sources.get("online_check") is not True:
+        return False  # round16 T8: no trustworthy online evidence -> never reuse
+    if require_mcp and sources.get("mcp") is not True:
+        return False
     ts_raw = (
         raw_entry.get("verified_at")
         or raw_entry.get("checked_at")
