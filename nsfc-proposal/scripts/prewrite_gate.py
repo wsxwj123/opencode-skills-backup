@@ -207,6 +207,32 @@ def check_new_refs_merged(root, prev_section, prev_fp):
     return failures
 
 
+def p1_legacy_written(root):
+    """§4.2 存量豁免（按节，不是按项目）：sections/P1_*.md 存在且去空白后非空。
+
+    判据故意收窄到 P1 这一个节 —— 放宽成「任一非空 .md」会让"先写了别的节的
+    新项目"整体哑火，等于本轮改造白做。
+    """
+    return any(file_nonempty(p)
+               for p in glob.glob(os.path.join(root, "sections", "P1_*.md")))
+
+
+def outline_fresh_state(root):
+    """(ok, reason)：P1 大纲是否已确认且未被改动。
+
+    🔴 fail-closed：outline_manager 缺失 / import 炸 / 返回值形态不对，一律判不通过，
+    不许 try/except 放行 —— 检查器坏了却放行就是新的假绿点。
+    """
+    try:
+        import outline_manager
+        ok, reason = outline_manager.check(root)
+        if not isinstance(ok, bool):
+            raise TypeError("check() 第一个返回值不是布尔: %r" % (ok,))
+    except Exception:
+        return False, "outline_checker_unavailable"
+    return ok, reason
+
+
 def scan_placeholders(files):
     hits = []
     for fp in files:
@@ -278,6 +304,21 @@ def main():
     else:
         failures.append("data/consistency_map.json missing or empty (H/O/RC/KSQ not registered)")
         checks.append({"name": "consistency_map", "ok": False})
+
+    # ---- check: P1 大纲已确认且未被改动（round19，仅 P1；不读 v_rules_off） ----
+    if section == "P1":
+        if p1_legacy_written(root):
+            checks.append({"name": "outline_fresh", "ok": None, "note": "legacy section, skip"})
+        else:
+            outline_ok, outline_reason = outline_fresh_state(root)
+            if outline_ok:
+                checks.append({"name": "outline_fresh", "ok": True})
+            else:
+                failures.append(
+                    f"P1 大纲未就绪（{outline_reason}）：先出段落级大纲给用户过目，"
+                    f"用户点头后跑 outline_manager.py confirm --from tmp/outline_draft.json "
+                    f"--root <项目根> --note \"<用户原话>\"")
+                checks.append({"name": "outline_fresh", "ok": False, "reason": outline_reason})
 
     # ---- check 3: 素材就位（适配 section） ----
     # P2 / P3_1 需要 experimental_design.json
