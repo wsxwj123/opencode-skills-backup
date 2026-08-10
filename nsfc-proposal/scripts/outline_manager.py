@@ -27,6 +27,7 @@ import datetime
 import hashlib
 import json
 import os
+import shutil
 import sys
 
 # 本轮唯一受管的节标识。注意它是字面量 "P1"，不是 sections/ 的文件名前缀 P1_立项依据。
@@ -200,8 +201,29 @@ def _check_granularity(section):
                        "第 %d 段是承重段，refs 必须是非空的字符串数组（文献 id）" % i)
 
 
-def build_outline(draft, note: str):
+def _strip_generated(draft):
+    """剥掉由 confirm 生成的字段（签名 + 派生），返回新对象，不改入参。
+
+    只在「--from 指的就是 data/outline.json 本身」时用：用户直接编辑那份被文档称作
+    「唯一真源」的文件是完全正当的操作，剥完之后它就是一份普通草稿，走同一套校验。
+    用户改过的内容原样保留 —— 这里只删生成物，不碰任何用户写的键。
+    """
+    out = {k: v for k, v in draft.items() if k not in SIGNATURE_FIELDS}
+    sections = out.get("sections")
+    if isinstance(sections, list):
+        out["sections"] = [
+            {k: v for k, v in s.items()
+             if k not in SIGNATURE_FIELDS and k != DERIVED_FIELD}
+            if isinstance(s, dict) else s
+            for s in sections
+        ]
+    return out
+
+
+def build_outline(draft, note: str, from_truth_source: bool = False):
     """草稿 → 落盘文档。任一校验不过抛 DraftError（此时调用方一个字节都不许写）。"""
+    if from_truth_source and isinstance(draft, dict):
+        draft = _strip_generated(draft)
     section = _check_structure(draft)
     _check_anti_forge(draft, section)
     _check_granularity(section)
@@ -222,12 +244,21 @@ def build_outline(draft, note: str):
 
 
 def _atomic_write_json(path: str, payload) -> None:
-    """tmp + os.replace：中途中断也不会留半份 JSON 被后续判成「坏文件」。"""
+    """tmp + fsync + os.replace；覆盖前把旧版留成 <path>.prev。
+
+    fsync：这份文件是用户逐条确认出来的成果，断电丢了要重走一遍确认流程。
+    .prev：防手滑覆盖（只在旧文件真的存在时留，第一次 confirm 不产生它）。
+    """
     os.makedirs(os.path.dirname(path), exist_ok=True)
     tmp = "%s.tmp%d" % (path, os.getpid())
     try:
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(payload, f, ensure_ascii=False, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        # 备份放在 tmp 写成功之后：写不出来时不该动用户已有的文件
+        if os.path.isfile(path):
+            shutil.copy2(path, path + ".prev")
         os.replace(tmp, path)
     except Exception:
         try:
@@ -247,6 +278,14 @@ def _die_usage(msg: str) -> int:
     return EX_USAGE
 
 
+def _same_file(a: str, b: str) -> bool:
+    """两个路径是不是同一个文件。用 realpath 比，软链接 / 相对路径 / ./ 前缀都算同一个。"""
+    try:
+        return os.path.realpath(a) == os.path.realpath(b)
+    except OSError:
+        return False
+
+
 def cmd_confirm(args) -> int:
     root = os.path.abspath(args.root)
     if not os.path.isdir(root):
@@ -261,13 +300,19 @@ def cmd_confirm(args) -> int:
     except OSError as exc:
         return _die_usage("OUTLINE_DRAFT_MISSING 草稿读不出来: %s (%s)" % (args.draft, exc))
 
+    path = outline_path(root)
     try:
-        doc = build_outline(draft, args.note or "")
+        doc = build_outline(draft, args.note or "",
+                            from_truth_source=_same_file(args.draft, path))
     except DraftError as exc:
         return _die_usage(str(exc))
 
-    path = outline_path(root)
-    _atomic_write_json(path, doc)
+    try:
+        _atomic_write_json(path, doc)
+    except OSError as exc:
+        # 目录只读 / 文件被编辑器或网盘占用（Windows 上 os.replace 的常态失败）：
+        # 报人话 + 用法错那条退出码，不要甩 traceback。
+        return _die_usage("OUTLINE_WRITE_FAILED 写不进 %s：%s" % (path, exc))
     print(json.dumps({
         "ok": True,
         "outline": os.path.abspath(path),
@@ -301,8 +346,14 @@ def _remedy(reason: str) -> str:
                              "outline_manager.py confirm 覆盖它",
         "outline_not_confirmed": "大纲没经用户确认：跑 outline_manager.py confirm "
                                  "（AI 不得代用户确认）",
-        "outline_stale": "大纲被改过：请用户重新过目并重新确认（重跑 "
-                         "outline_manager.py confirm）",
+        # 🔴 这条文案必须点明「拿 data/outline.json 自己重跑」：改成的用户手改了真源，
+        # 若照着去跑 --from tmp/outline_draft.json，他刚改的东西会被 AI 那份旧草稿盖掉。
+        "outline_stale": "大纲被改过，需用户重新确认。改的就是 data/outline.json 本身时，"
+                         "直接拿它重跑：outline_manager.py confirm "
+                         "--from data/outline.json --root <项目根> --note \"<用户原话>\""
+                         "（会保留你的修改，旧版自动存成 data/outline.json.prev）。"
+                         "⚠️ 若改用 --from tmp/outline_draft.json，那份是 AI 的草稿，"
+                         "会覆盖掉你在真源上的手改",
         "outline_section_missing": "大纲里没有 P1 这一节：确认草稿的 section_id 是 P1",
     }.get(reason, "跑 outline_manager.py check --root <项目根> 看详情")
 
