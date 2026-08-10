@@ -21,9 +21,13 @@ __all__ = ["BARE_NUM_RE", "KEY_RE", "SECTION_RE", "CONFIG", "main"]
 CONFIG = {
     "family": "nsfc-proposal",
     "section_regex": r"^P\d+(\.\d+)*$",  # P1 / P2.3 等
-    # data/outline.json 是 outline_manager.py confirm 落的 P1 大纲真源（round19）。
-    # 后两项原样保留只为不改 fallthrough；storyline.json 是 gsw 产物，nsfc 永不产出（遗留项）。
-    "outline_files": ["data/outline.json", "project_state.json", "storyline.json"],
+    # 🔴 只能有这一个候选。共享核心的 load_outline 会**依次试**候选表，任一候选里有
+    # sections[] 就正常返回、核心不报错 —— 而本地闸口只看 data/outline.json 在不在。
+    # 多留一个候选＝多一条绕过路径：实测在项目根手写三行 project_state.json
+    # （{"sections":[{"section_id":"P1"}]}）就能让未经确认的"大纲"rc=0 出包，
+    # 连承重核证那道拦截一起空过。project_state.json 是本轮之前"主会话临时投影"
+    # 那套的残留、已被真大纲取代；storyline.json 是 gsw 产物、nsfc 永不产出。
+    "outline_files": ["data/outline.json"],
     "outline_id_field": "section_id",
     "index_path": "data/literature_index.json",   # dict {metadata, entries:[...]}
     "index_shape": "data_dict",
