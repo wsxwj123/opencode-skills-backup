@@ -138,6 +138,35 @@ def _is_mcp_fresh(record: dict[str, Any], ttl_days: int, now_utc: datetime) -> t
     return True, None
 
 
+def _has_verification_evidence(details: dict[str, Any], sources: dict[str, Any]) -> bool:
+    """True when a persisted record carries SOME trustworthy verification trail.
+
+    Two structurally different trails exist and both are legitimate:
+
+    * ``sources.online_check is True`` — the Crossref/PubMed HTTP verifier ran.
+    * ``details.has_traceability is True`` — the entry came in through a NAMED
+      provider that returned a traceable source id (``validate_core`` computes it
+      as ``bool(provider_family and source_id)``). Callers only consult this for
+      ``verified is True`` entries, and ``validate_core`` refuses to verify a
+      forbidden / unknown provider family, so a verified entry with traceability
+      necessarily passed the provider policy.
+
+    🔴 The second trail is not optional. Real 2026-07 batches retrieved via
+    pubmed-cli / paper-search look exactly like
+    ``{"online_check": false, ..., "source_provider": "pubmed-cli",
+    "provider_family": "paper-search"}`` — genuine verifications whose
+    ``online_check`` is False simply because no HTTP verifier was in that path.
+    Treating ``online_check is not True`` as poison wiped 271 real records in a
+    user project (round16 T8 first attempt, rolled back).
+
+    No provider names are enumerated here on purpose: the allow / forbid policy
+    lives in ``validate_core`` and duplicating it would fork the policy.
+    """
+    if sources.get("online_check") is True:
+        return True
+    return details.get("has_traceability") is True
+
+
 def entry_is_fresh_verified(
     raw_entry: dict[str, Any],
     ttl_days: int,
@@ -153,26 +182,27 @@ def entry_is_fresh_verified(
     The timestamp may live at the entry top level (``verified_at``/``checked_at``)
     or inside ``verification_details.checked_at`` (adapter-dependent).
 
-    Online evidence (``verification_details.sources.online_check is True``) is an
-    UNCONDITIONAL precondition for reuse — round16 T8. Rationale: ``validate_core``
-    computes ``verified = online and ...``, so every entry this pipeline ever
-    marked verified necessarily carries ``online_check: True``. An entry that says
-    ``verified: True`` while its sources block is missing or says
-    ``online_check: false`` can therefore only be historical poison (the early
-    offline bug, or a hand-edited index). Before T8 that poison short-circuited
+    Reuse now has a FLOOR plus the pre-existing strictness dimensions.
+
+    Floor (round16 T8, applies at every strictness): the record must carry SOME
+    verification trail — see ``_has_verification_evidence``. An entry claiming
+    ``verified: True`` with no trail at all (sources block missing, or neither an
+    online check nor a provider record) can only be historical poison: the early
+    offline bug, or a hand-edited index. Before T8 that poison short-circuited
     every ``--offline`` run — reused verbatim, written back verbatim,
     indistinguishable from a real verification: it could neither be washed out nor
-    detected. It now falls through to a full re-verification (online run re-checks
-    it; offline run records it honestly as unverified). Genuinely verified,
-    in-TTL entries are unaffected and still short-circuit without hitting the
-    network. ``require_online`` is kept for call-site compatibility but is now
-    subsumed: the check runs whatever this run's strictness is.
+    detected. It now falls through to a full re-verification (an online run
+    re-checks it; an offline run records it honestly as unverified).
 
-    ``require_mcp`` says how strict THIS run is and stays run-conditional: MCP
-    evidence is an extra dimension, not the trust floor. A cached result may only
-    be reused by a ``--require-mcp`` run when ``sources.mcp`` is True; without
-    this, one weaker verification short-circuits every strict run for the next TTL
-    window and the MCP evidence gate becomes a no-op.
+    Strictness dimensions (``require_mcp`` / ``require_online``, both unchanged by
+    T8): they say how strict THIS run is, and a cached result may only be reused
+    when the run that produced it was at least as strict — ``sources.mcp`` /
+    ``sources.online_check`` must be True respectively. Without this, one weaker
+    verification short-circuits every strict run for the next TTL window and the
+    evidence gates become no-ops. T8 deliberately did NOT fold ``require_online``
+    into the floor: doing so would let a provider-trail record short-circuit an
+    online run that used to re-verify it, i.e. loosen a gate nobody asked to
+    loosen. The floor only ever tightens.
 
     Fail-safe by construction: verified is not True, ttl_days<=0, a
     missing/unparseable timestamp, or a details/sources block that is missing or
@@ -188,11 +218,15 @@ def entry_is_fresh_verified(
         now_utc = datetime.now(timezone.utc)
     details = raw_entry.get("verification_details")
     sources = details.get("sources") if isinstance(details, dict) else None
-    # `is not True` (not falsiness): a stringy "true" / 1 is an unknown shape,
+    # `is True` (not truthiness): a stringy "true" / 1 is an unknown shape,
     # and an unknown shape must tighten, never pass.
-    if not isinstance(sources, dict) or sources.get("online_check") is not True:
-        return False  # round16 T8: no trustworthy online evidence -> never reuse
+    if not isinstance(sources, dict) or not _has_verification_evidence(details, sources):
+        return False  # round16 T8 floor: no verification trail at all -> never reuse
+    # Run-strictness dimensions, unchanged from before T8: a cached result may only
+    # be reused when the run that produced it was at least as strict as this one.
     if require_mcp and sources.get("mcp") is not True:
+        return False
+    if require_online and sources.get("online_check") is not True:
         return False
     ts_raw = (
         raw_entry.get("verified_at")
