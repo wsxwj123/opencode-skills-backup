@@ -27,15 +27,24 @@ import sys
 # 复用 style_checker 的散文提取（剥离参考文献块 / 图注 / 代码块 / CRediT 行）。
 # 参考文献区充斥作者姓名首字母缩写（"Zhang YW"、"Cao MM"），不剥离会被误判为
 # "未定义缩略语"，是真稿最大误报源（rw 同款文件已先行，本文件跟进同一口径）。
-# fail-soft：import 失败则退回原文。
+# fail-closed：import 失败就不出判定（round16 T3）。此前是 fail-soft 退回原文——
+# 剥离静默失效，参考文献区重新进扫描，用户看到的是"YW/MM 未定义"这种假报警，
+# 只会照着去改 abbreviations.json，反而污染自己的数据，而且永远不知道剥离已经没了。
+# 依赖全在本技能 scripts/ 内（style_checker 只 import 标准库 + 同目录 ref_section），
+# import 失败＝安装坏了，不是"环境缺可选件"，所以拒判比降级正确。
+_STRIP_IMPORT_ERROR = None
 try:
     _sc_dir = os.path.dirname(os.path.abspath(__file__))
     if _sc_dir not in sys.path:
         sys.path.insert(0, _sc_dir)
     from style_checker import _extract_prose as _strip_nonprose
-except Exception:  # pragma: no cover
+except Exception as _exc:  # pragma: no cover
+    _STRIP_IMPORT_ERROR = _exc
+
     def _strip_nonprose(text: str) -> str:
-        return text
+        # 库级调用者也别想拿到静默降级的结果。
+        raise RuntimeError(
+            f"style_checker._extract_prose 不可用，无法剥离非正文: {_STRIP_IMPORT_ERROR}")
 
 # 同步自 state_manager.py:UNIVERSAL_ABBREVIATIONS（2.20.0），改一处需同步另一处。
 UNIVERSAL_ABBREVIATIONS = {
@@ -200,6 +209,16 @@ def main() -> int:
     parser.add_argument("--root", required=True,
                         help="project root，含 abbreviations.json 与 manuscripts/")
     args = parser.parse_args()
+
+    # 剥离非正文这一层拿不到就不许出判定：带着失效的剥离扫，参考文献区的作者
+    # 首字母会全变成"未定义缩略语"。exit 2 与"稿子有问题"的 exit 1 分开，
+    # 一眼能分出是环境坏了还是稿子该改。
+    if _STRIP_IMPORT_ERROR is not None:
+        print(f"ABBR_CHECK_ERROR: 依赖 style_checker._extract_prose 导入失败"
+              f"（{_STRIP_IMPORT_ERROR}），无法剥离参考文献/图注/代码块，"
+              f"判定不可信，已中止。请检查本技能 scripts/ 目录是否完整"
+              f"（style_checker.py、ref_section.py）。")
+        return 2
 
     root = os.path.abspath(args.root)
     if not os.path.isdir(root):
