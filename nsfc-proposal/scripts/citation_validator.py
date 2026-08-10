@@ -729,8 +729,9 @@ def _append_verification_log(path: Path, record: dict[str, Any]) -> None:
 
 
 _OFFLINE_HELP = (
-    "跳过联网核验，本次结果一律记为未核验（条目 verified 恒 false、"
-    "verification_status=unverified、ok=false；无硬失败时退出码仍为 0）。"
+    "跳过联网核验，本轮不发证：本轮实际核验的条目一律 verified=false、"
+    "verification_status=unverified、ok=false（无硬失败时退出码仍为 0）；"
+    "TTL 内已有可信核验记录的条目短路保持原状、不被刷掉。"
     "只用于测试或网络故障应急，不是交付口径，销账前必须不带它重跑。"
 )
 
