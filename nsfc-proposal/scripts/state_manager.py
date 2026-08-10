@@ -65,6 +65,20 @@ SCIENCE_PROBLEM_ATTRIBUTES = (
     "共性导向、交叉融通",
 )
 
+# 离线 gate 的"未核验"标注（SPEC-round17 P4）。措辞与 references/04_文献管理.md
+# 离线段同口径：本轮实际核验的条目一律 verified=false，unverified 只是"没验"，
+# 按第九轮裁定不阻断，但绝不能被读成"验过了"。
+OFFLINE_UNVERIFIED_NOTE = (
+    "离线未核验：本轮一次联网核验都没做，unverified 不算通过核验，"
+    "仅按“没验≠失败”不阻断。"
+)
+OFFLINE_UNVERIFIED_WARNING = (
+    "[CITATION-UNVERIFIED] 本轮以 --offline 运行，文献一次联网核验都没做"
+    "（verification_status=unverified）：unverified 不等于通过核验，"
+    "本项仅按“没验≠失败”不阻断交付。要真正销账，需去掉 --offline 重跑 gate-check；"
+    "TTL 内已有可信核验记录的条目保持原状、不被这轮刷掉。"
+)
+
 SECTION_ALIASES = {
     "P1": "P1_立项依据.md",
     "P2": "P2_研究内容.md",
@@ -403,6 +417,10 @@ def gate_check(
     # verified（联网态出现 unverified 是异常形态，照拦）。
     citation_status = idx.get("metadata", {}).get("verification_status")
     citation_ok = citation_status == "verified" or (offline and citation_status == "unverified")
+    # 靠"没验≠失败"放行的这一格必须自报家门：不标注的话，报告只剩 ok:true，
+    # 调用方（和人）会把"这轮压根没联网核验"读成"验过了"。加法式——只加字段，
+    # 阻断语义与联网路径输出一字不动（SPEC-round17 P4，先例 rs 2.29.7 / sci2doc 2.31.2）。
+    offline_unverified = bool(offline) and citation_status == "unverified"
     matrix = citation_validator.matrix_check(p1_text, idx, ref_text)
     matrix_ok = bool(matrix.get("ok"))
 
@@ -485,6 +503,8 @@ def gate_check(
             "verification_status": idx.get("metadata", {}).get("verification_status"),
             "stats": run_stats,
             "manual_review_count": len(manual_queue),
+            # 只在"靠离线 unverified 放行"这一格出现；联网路径键集逐字不变。
+            **({"note": OFFLINE_UNVERIFIED_NOTE} if offline_unverified else {}),
         },
         "literature": {
             "ok": literature_ok,
@@ -507,6 +527,8 @@ def gate_check(
         },
         # §6.3 出口 1：review["skipped_checks"] 原样搬，恒存在（没关任何项时为 []）
         "skipped_checks": skipped_checks,
+        # 顶层提示，同样只在离线放行时出现（联网路径无此键）。
+        **({"warnings": [OFFLINE_UNVERIFIED_WARNING]} if offline_unverified else {}),
     }
 
 
