@@ -128,14 +128,22 @@ def outline_gate(argv):
     except Exception:
         return
 
+    # 形态错与指纹错分开报：把「键名写错」诊断成「论点变了」，会把人指向重跑核证、
+    # 重取摘要那条昂贵又无效的路，而实际只要改一个键名。
     expected = _claim_set_hash(_load_bearing_claims(outline_file))
+    if isinstance(evidence, dict) and not isinstance(evidence.get("rows"), list):
+        _gate_die("claim_evidence_bad_shape",
+                  "claim_evidence.json 形态不对：顶层需为对象，承载证据行的数组键"
+                  '必须叫 rows —— {"outline_claim_set_hash": ..., "rows": [...]}。'
+                  "（写成 claims 会让共享的 citation_claim_check.py 硬报 bad_evidence。"
+                  "这是键名问题，不用重跑核证。）")
     got = evidence.get("outline_claim_set_hash") if isinstance(evidence, dict) else None
-    rows_ok = isinstance(evidence, dict) and isinstance(evidence.get("rows"), list)
-    if not rows_ok or not isinstance(got, str) or got != expected:
+    if not isinstance(got, str) or got != expected:
         _gate_die("claim_evidence_stale",
-                  "大纲论点已变更，需重跑核证：claim_evidence.json 顶层需为 "
-                  '{"outline_claim_set_hash": ..., "rows": [...]}，'
-                  "指纹原样抄自 .prep_task_P1.json（重跑 pack-prep）")
+                  "大纲论点已变更，需重跑核证：指纹原样抄自 .prep_task_P1.json"
+                  "（重跑 pack-prep 拿新指纹）。"
+                  "若顶层还是老的裸 list 形态，它没有承载指纹的位置，"
+                  '先改成 {"outline_claim_set_hash": ..., "rows": [...]}。')
 
 
 def _load_bearing_claims(outline_file):
