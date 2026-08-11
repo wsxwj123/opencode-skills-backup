@@ -216,9 +216,11 @@ Follow phased gates in order:
      3. **组撰写任务包**：`python scripts/delegate_write.py pack-write --section P1 --root .` → `.write_task_P1.json`（本节 H/O/RC/KSQ + 承重方向 + 已核证 `certified_claims` + `used_in_sections 含 P1` 切给本节的文献全条 + 缩写表 + 风格禁项**嵌入**；全篇大纲/全库文献只给 `refs` 路径）。承重句未完成人工核证 → 脚本 exit 2 拒绝出包。
      4. **派撰写子代理**：`references/section_writer_prompt.md`（角色 prompt + 数据/指令隔离声明）+ 任务包路径交给全新一次性子代理盲写。它只写 `.write_return_P1.json`，**P1 正文引用只写 `[@key]`（绝不写裸数字 `[5]`）**，承重句只准挂内嵌 `certified_claims` 里的 `ref_key`，禁写任何账本。
      5. **机械校验返回**：`python scripts/delegate_write.py verify-write --section P1 --root .`（无裸数字引用 / `[@key]` 可解析 / `new_refs` 带 DOI 或 PMID / `section_id` 一致），exit≠0 打回子代理重写、不落盘。
-     6. **new_refs 先核验再并表**（账本零污染）：对返回 `new_refs` **先** `citation_validator.py verify-entry`/`citation_guard --require-mcp` 核真伪，**通过的才** `python scripts/citation_renumber.py merge-refs --root . --return .write_return_P1.json` 去重并表（DOI→PMID→归一标题三档，灰区标疑似交人工），新条目挂 `used_in_sections=["P1_立项依据"]`，记 `new:slug→真id` 映射。核验失败的直接丢弃、打回子代理改写该处引用。
+     6. **new_refs 先核验再并表**（账本零污染）：对返回 `new_refs` **先** `citation_validator.py verify-entry`/`citation_guard --require-mcp` 核真伪，**通过的才** `python scripts/citation_renumber.py merge-refs --root . --return .write_return_P1.json` 去重并表（DOI→PMID→归一标题三档，灰区标疑似交人工），新条目挂 `used_in_sections=["P1"]`（裸节标识；2026-08-11 前的旧值 `"P1_立项依据"` 只读兼容、不再写出），记 `new:slug→真id` 映射。核验失败的直接丢弃、打回子代理改写该处引用。
      7. **落盘 P1 + 认键翻号**：主会话（已签字）把返回 `markdown` 落盘 `sections/P1_立项依据.md`；正文 `[@key]` 是长期真源，`[N]` 是合并派生——merge 前跑 `python scripts/citation_renumber.py renumber --root . --check`（exit≠0 若未并表 `new:` 键 / id 冲突 / 未知键）通过后再 `--in-place` 把 `[@key]` 统一翻成连续 `[N]`（**按 P1 正文首现序**分配，对齐 04 §4.4 矩阵「REF 顺序=P1 首次引用顺序」），随后 `citation_validator.py matrix-check` 校验三向一致。
      > **nsfc 适配说明（读前必看）**：`delegate_write.py`（薄封装 import 共享 `delegate_write_core.py`）的 pack/verify 走本家 CONFIG 读原生 `data/` 布局：文献库 `data/literature_index.json`（dict 形态已由 `index_shape=data_dict` 声明），节级大纲读 `data/outline.json`（Step 1.1.5 由 `outline_manager.py confirm` 落盘）。**主会话不再需要临时投影，也不许手写 `data/outline.json`**——那份文件只能由 confirm 产生。**认键翻号 `citation_renumber.py`（本家 local）与 prewrite 并表核验同样直接读 `data/` 布局。**
+>
+> **老项目排障（round21 T2）**：`pack-write` 切片为 0 而账本明明有 P1 文献 → 多半是存量条目还挂着旧节标识 `"P1_立项依据"`（**切片链只认新值 `"P1"`**）。跑一次 `python scripts/citation_validator.py normalize-sections --index data/literature_index.json`（可先加 `--dry-run` 预览、幂等）归一后即恢复；检查链（`matrix-check`/`find-orphans`/`stats`/`gate-check` 的 P1 计数）新旧两值都认，不受影响。`check-gates` 发现旧值条目会给 WARN 并附这条命令。
 
    - Input: confirmed project profile (title, discipline, H/O/RC/KSQ mapping counts).
    - Output: `sections/P1_立项依据.md` + `data/literature_index.json` (all P1 citations verified) + updated `context_memory.md`.
@@ -416,7 +418,7 @@ The following fields are silently required by scripts. Missing them causes hard 
 
 **`data/literature_index.json`：文献索引条目必填字段：**
 
-凡 `"P1_立项依据"` 在 `used_in_sections` 中的条目，若 `key_finding` 字段为空或缺失，`_context_check` 直接返回 `False`，触发 `context_mismatch` 软失败并降低 `confidence_score`。
+凡 `used_in_sections` 含 `"P1"`（或旧值 `"P1_立项依据"`，只读兼容）的条目，若 `key_finding` 字段为空或缺失，`_context_check` 直接返回 `False`，触发 `context_mismatch` 软失败并降低 `confidence_score`。
 
 最小合规条目：
 ```json
@@ -425,7 +427,7 @@ The following fields are silently required by scripts. Missing them causes hard 
   "title": "Example Paper Title",
   "doi": "10.1234/example",
   "pmid": "12345678",
-  "used_in_sections": ["P1_立项依据"],
+  "used_in_sections": ["P1"],
   "key_finding": "该研究发现X蛋白通过Y通路调控Z过程（主要数据点）",
   "is_recent_5yr": true,
   "is_cn_journal": false
