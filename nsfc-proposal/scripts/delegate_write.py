@@ -13,9 +13,30 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import delegate_write_core as _dwc  # noqa: E402
 from delegate_write_core import (  # noqa: E402
     BARE_NUM_RE, KEY_RE, SECTION_RE, _claim_set_hash, main,
 )
+
+# round21 T2：nsfc 账本语义——used_in_sections 不是数组时一律当「没有分配」（INTERFACE 2.4）。
+# 共享核心的切片过滤 `section in (e.get("used_in_sections") or [])` 不做类型检查：
+# 值是数字会 TypeError 裸崩、值是字符串 "P1_立项依据" 会被 "P1" 子串假阳命中。
+# 核心是四家逐字节一致的共享件（L4 md5 守卫），本轮不动它；在本家读入口把坏形态
+# 字段从条目**浅拷贝**里剥掉（语义等价「没分配」），绝不写回账本。
+_core_load_lit = _dwc._load_lit
+
+
+def _load_lit_sanitized(root, config=None):
+    out = []
+    for e in _core_load_lit(root, config):
+        if (isinstance(e, dict) and "used_in_sections" in e
+                and not isinstance(e.get("used_in_sections"), list)):
+            e = {k: v for k, v in e.items() if k != "used_in_sections"}
+        out.append(e)
+    return out
+
+
+_dwc._load_lit = _load_lit_sanitized
 
 __all__ = ["BARE_NUM_RE", "KEY_RE", "SECTION_RE", "CONFIG", "main"]
 
