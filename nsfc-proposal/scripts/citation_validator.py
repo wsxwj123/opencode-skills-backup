@@ -389,8 +389,12 @@ class IndexCorruptError(ValueError):
 
     这是索引读入口唯一的 fail-closed 出口：调用方据此结构化拒绝，绝不让
     `e.get(...)` 在下游各消费点裸崩成 traceback。
+    round21 起是三态家族的基类：本类=结构坏（corruption="entries"），
+    IndexSyntaxError=语法坏（"syntax"），IndexUnreadableError=读不出（"unreadable"）。
+    调用方一个 `except IndexCorruptError` 兜住三态。
     """
 
+    corruption = "entries"
     _MAX_LISTED = 10  # 整份文件都是垃圾时别刷屏，只点名前 10 个
 
     def __init__(self, path: Any, bad_positions: list[int], bad_kinds: list[str]) -> None:
@@ -407,15 +411,79 @@ class IndexCorruptError(ValueError):
         )
 
 
+class IndexSyntaxError(IndexCorruptError):
+    """索引文件本身不是合法 JSON（语法层，含 0 字节/纯空白）。round21 T5 新增。"""
+
+    corruption = "syntax"
+
+    def __init__(self, path: Any, exc: json.JSONDecodeError) -> None:
+        self.path = str(path)
+        self.lineno, self.colno, self.pos = exc.lineno, exc.colno, exc.pos
+        self.bad_positions: list[int] = []
+        self.bad_kinds: list[str] = []
+        ValueError.__init__(
+            self,
+            f"文献索引损坏：{self.path} 不是合法 JSON —— "
+            f"第 {exc.lineno} 行第 {exc.colno} 列：{exc.msg}。"
+            f"索引文件一字未动，请人工修好后重跑。")
+
+
+class IndexUnreadableError(IndexCorruptError):
+    """索引文件读不出来：路径是目录、读权限不足等。round21 T5 新增。
+
+    文案里刻意不写 Python 异常类名（IsADirectoryError 等不许甩给用户）。
+    """
+
+    corruption = "unreadable"
+
+    def __init__(self, path: Any, exc: OSError) -> None:
+        self.path = str(path)
+        self.bad_positions: list[int] = []
+        self.bad_kinds: list[str] = []
+        ValueError.__init__(
+            self,
+            f"文献索引损坏：{self.path} 读不出来（路径是目录或没有读权限）。"
+            f"索引文件一字未动，请修好路径/权限后重跑。")
+
+
+def _index_reject_report(exc: IndexCorruptError) -> dict[str, Any]:
+    """三态统一的结构化拒绝报告（四个子命令逐字一致，键集合固定）。"""
+    return {
+        "ok": False,
+        "failed_at": "literature_index",
+        "literature_index": {
+            "ok": False,
+            "path": exc.path,
+            "error": str(exc),
+            "corruption": exc.corruption,
+            # 与 error 文案同口径：只点名前 10 个（_MAX_LISTED），整份垃圾文件不刷屏
+            "bad_entry_indexes": list(exc.bad_positions)[:IndexCorruptError._MAX_LISTED],
+            "line": getattr(exc, "lineno", None),
+            "column": getattr(exc, "colno", None),
+            "position": getattr(exc, "pos", None),
+        },
+    }
+
+
 def load_index(path: Path, default: Any = None) -> dict[str, Any]:
-    """读文献索引的唯一入口：读盘 + 规范化 + entries 元素类型校验（fail-closed）。
+    """读文献索引的唯一入口。内部顺序写死四步（round21 T5，一步不许调换/省略）：
+    ① 读盘 load_json（文件不存在 → default，宽松语义保留）
+    ② 语法层：JSONDecodeError → IndexSyntaxError；OSError → IndexUnreadableError
+    ③ 宽松归一 _normalize_index（顶层数组/字符串、entries 缺失/非数组 → 不拒，行为不变）
+    ④ entries 结构层：非 dict 元素 → IndexCorruptError（第十八轮既有）
 
     与 `_normalize_index`（宽松归一，容忍任何元素）的分工：凡是要拿 entries 里的
     元素当对象用的调用方（gate-check 链上的每一处），都必须走本函数，元素不是
     对象就抛 `IndexCorruptError`——绝不静默丢弃坏条目（丢了等于替用户删文献），
     也绝不放它进下游让 `.get()` 裸崩。
     """
-    idx = _normalize_index(load_json(path, default if default is not None else {"metadata": {}, "entries": []}))
+    try:
+        raw = load_json(path, default if default is not None else {"metadata": {}, "entries": []})
+    except json.JSONDecodeError as exc:
+        raise IndexSyntaxError(path, exc) from None
+    except OSError as exc:
+        raise IndexUnreadableError(path, exc) from None
+    idx = _normalize_index(raw)
     bad_positions = [i for i, e in enumerate(idx["entries"]) if not isinstance(e, dict)]
     if bad_positions:
         raise IndexCorruptError(path, bad_positions,
@@ -823,20 +891,39 @@ def main() -> int:
 
     args = parser.parse_args()
 
+    # round21 T5：唯一的顶层捕获——三态索引损坏在一个地方接，四个子命令自动一致。
+    try:
+        return _dispatch(args)
+    except IndexCorruptError as exc:
+        print(json.dumps(_index_reject_report(exc), ensure_ascii=False))
+        _sys.stderr.write("CITATION_VALIDATOR: FAIL literature_index\n")
+        return 2
+
+
+def _dispatch(args) -> int:
     mcp_index: dict[str, dict[str, Any]] = {}
     mcp_schema_version = CACHE_SCHEMA_VERSION
     if args.cmd in {"verify-all", "verify-entry"}:
         mcp_cache_path = Path(getattr(args, "mcp_cache", "data/mcp_literature_cache.json"))
-        mcp_cache_raw = load_json(mcp_cache_path, {"metadata": {"schema_version": CACHE_SCHEMA_VERSION}, "entries": []})
-        mcp_cache = _normalize_mcp_cache(mcp_cache_raw)
-        save_json(mcp_cache_path, mcp_cache)
-        mcp_index = _build_mcp_index(mcp_cache)
-        mcp_schema_version = str((mcp_cache.get("metadata") or {}).get("schema_version") or CACHE_SCHEMA_VERSION)
+        try:
+            mcp_cache_raw = load_json(mcp_cache_path, {"metadata": {"schema_version": CACHE_SCHEMA_VERSION}, "entries": []})
+        except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+            # 缓存文件坏了/读不出来 ≠ 索引坏了：既定语义（SKILL.md:226）是当空处理、
+            # 回落全量核验，不硬拦；也绝不 save_json 回写——那会把用户的坏缓存覆盖成
+            # 空缓存（= 替用户删数据）。只在 stderr 留一行 WARN（不是 FAIL）。
+            _sys.stderr.write(
+                "CITATION_VALIDATOR: WARN mcp_cache 损坏或读不出来，按空缓存处理、"
+                "回落全量核验（缓存文件一字未动）: %s\n" % mcp_cache_path)
+            mcp_cache_raw = None
+        if mcp_cache_raw is not None:
+            mcp_cache = _normalize_mcp_cache(mcp_cache_raw)
+            save_json(mcp_cache_path, mcp_cache)
+            mcp_index = _build_mcp_index(mcp_cache)
+            mcp_schema_version = str((mcp_cache.get("metadata") or {}).get("schema_version") or CACHE_SCHEMA_VERSION)
 
     if args.cmd == "verify-all":
         index_path = Path(args.index)
-        raw = load_json(index_path, {"metadata": {}, "entries": []})
-        idx = _normalize_index(raw)
+        idx = load_index(index_path)
         p1_text = Path(args.p1).read_text(encoding="utf-8") if Path(args.p1).exists() else None
 
         idx, run_stats, queue = verify_all(
@@ -904,16 +991,14 @@ def main() -> int:
         return 0
 
     if args.cmd == "matrix-check":
-        raw = load_json(Path(args.index), {"metadata": {}, "entries": []})
-        idx = _normalize_index(raw)
+        idx = load_index(Path(args.index))
         p1_text = Path(args.p1).read_text(encoding="utf-8") if Path(args.p1).exists() else ""
         ref_text = Path(args.ref).read_text(encoding="utf-8") if Path(args.ref).exists() else ""
         print(json.dumps(matrix_check(p1_text, idx, ref_text), ensure_ascii=False, indent=2))
         return 0
 
     if args.cmd == "find-orphans":
-        raw = load_json(Path(args.index), {"metadata": {}, "entries": []})
-        idx = _normalize_index(raw)
+        idx = load_index(Path(args.index))
         p1_text = Path(args.p1).read_text(encoding="utf-8") if Path(args.p1).exists() else ""
         print(json.dumps(find_orphans(p1_text, idx), ensure_ascii=False, indent=2))
         return 0
@@ -929,8 +1014,7 @@ def main() -> int:
         return 0
 
     if args.cmd == "stats":
-        raw = load_json(Path(args.index), {"metadata": {}, "entries": []})
-        idx = _normalize_index(raw)
+        idx = load_index(Path(args.index))
         print(json.dumps(stats(idx), ensure_ascii=False, indent=2))
         return 0
 
