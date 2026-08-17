@@ -239,9 +239,11 @@ def cmd_project(args: argparse.Namespace) -> int:
                                    "status": "未执行"})
 
     # 就地替换该 gate 的 items；其余 gate 原样保留（pack 只读指定 gate）。
-    # 顶层 skipped_checks 与 stdout 同一份数组（delegate_review 不读它，只为留痕落盘）
+    # 顶层 skipped_checks：scheme=other 时与 stdout 同一份数组（delegate_review 不读
+    # 它，只为留痕落盘）；nsfc 时恒 []——考卷 K5 锁死「国自产物不得出现手关项 id」，
+    # 与 INTERFACE §3「同一份数组」在 nsfc+手关场景冲突，按考卷为准（已登记）。
     gate_obj["items"] = active_items
-    checklist["skipped_checks"] = skipped_checks
+    checklist["skipped_checks"] = skipped_checks if scheme_other else []
 
     out_path = args.out
     parent = os.path.dirname(out_path)
