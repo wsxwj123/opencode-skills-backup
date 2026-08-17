@@ -318,15 +318,30 @@ def v_rules_disabled(root):
     return "HRCK-V-RULES" in {e.get("id") for e in skipped}
 
 
+def _funding_scheme_is_other(root):
+    """P2 大纲门的项目类型判据（round22 T3）：只认「合法已确认 structure profile 的
+    funding_scheme=other」。缺文件/坏 JSON/字段非法/未确认/读不出（含非法编码）一律
+    按 nsfc 口径返回 False——绝不从 v_rules_disabled 的 skipped 来源（可能是用户
+    DoD 关项）反推项目类型。"""
+    try:
+        status, data, _ = _inspect(root)
+    except (OSError, UnicodeDecodeError):
+        return False          # 坏真源 fail-safe：不启用 P2 大纲门，也不 traceback
+    if status != "ok" or not isinstance(data, dict):
+        return False
+    return data.get("funding_scheme", "nsfc") == "other"
+
+
 def is_managed(section, root):
     """(节号, 是否受大纲闸口管)。P1 全体受管（round19 现状不变）；
-    P2 只在四维表被关掉（= 非国自然口径生效）时受管；其余节号一律不受管。
-    读口坏掉时 safe_resolve_scope 收敛成空 scope → P2 判不受管（国自然零影响）。"""
+    P2 只在合法已确认 funding_scheme=other 的项目受管（round22 T3：不再由
+    HRCK-V-RULES 的 skipped 来源反推——用户 DoD 关项只影响 DoD，不改项目类型）；
+    其余节号一律不受管。读口坏掉时 P2 判不受管（国自然零影响）。"""
     num = section_number_of(section)
     if num == "P1":
         return num, True
     if num == "P2":
-        return num, v_rules_disabled(root)
+        return num, _funding_scheme_is_other(root)
     return num, False
 
 
