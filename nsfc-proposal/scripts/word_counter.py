@@ -12,27 +12,27 @@ import sys
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
-# \u5b57\u6570/\u9875\u6570\u786c\u4e0a\u9650\u2014\u2014\u5168\u4ed3\u552f\u4e00\u5b9a\u4e49\u5904\uff08INTERFACE-round24 \u00a71\uff09\u3002
-# \u952e\u662f sections/ \u4e0b\u7684 basename\uff0c\u4e0e structure_profile.chapters[].filename \u540c\u4e00\u628a\u5c3a\u3002
-# \u6d88\u8d39\u65b9\u4e00\u5f8b\u7ecf resolve_word_limit / resolve_page_limit \u53d6\u503c\uff0c\u4e0d\u8bb8\u53e6\u6284\u6570\u5b57\u3002
+# 字数/页数硬上限——全仓唯一定义处（INTERFACE-round24 §1）。
+# 键是 sections/ 下的 basename，与 structure_profile.chapters[].filename 同一把尺。
+# 消费方一律经 resolve_word_limit / resolve_page_limit 取值，不许另抄数字。
 # ---------------------------------------------------------------------------
 NSFC_WORD_MAX = {
-    "00_\u6458\u8981_\u4e2d\u6587.md": 400,
-    "00_\u6458\u8981_\u82f1\u6587.md": 300,
-    "P3_4_\u5b8c\u6210\u57fa\u91d1\u9879\u76ee\u60c5\u51b5.md": 500,
-    "P4_\u5176\u4ed6\u9700\u8981\u8bf4\u660e\u7684\u60c5\u51b5.md": 500,
+    "00_摘要_中文.md": 400,
+    "00_摘要_英文.md": 300,
+    "P3_4_完成基金项目情况.md": 500,
+    "P4_其他需要说明的情况.md": 500,
 }
 NSFC_PAGE_MAX = 30
 
-_WARN_LINE = "WORD_LIMIT: WARN structure_profile \u4e0d\u53ef\u7528\uff0c\u672c\u6b21\u6309\u56fd\u81ea\u7136\u9ed8\u8ba4\u4e0a\u9650"
+_WARN_LINE = "WORD_LIMIT: WARN structure_profile 不可用，本次按国自然默认上限"
 
 
 def resolve_word_limit(root, filename):
-    """\u5b57\u6570\u4e0a\u9650\u89e3\u6790\uff08INTERFACE-round24 \u00a72 \u4e5d\u884c\u5224\u5b9a\u8868\uff09\u3002
+    """字数上限解析（INTERFACE-round24 §2 九行判定表）。
 
-    \u7eaf\u51fd\u6570\uff1a\u7edd\u4e0d\u629b\u5f02\u5e38\u3001\u7edd\u4e0d sys.exit\u3001\u7edd\u4e0d\u5199\u6587\u4ef6\u3002filename \u662f sections/ \u4e0b\u7684
-    basename\uff08\u4f20\u5168\u8def\u5f84\u4e0d\u505a\u5f52\u4e00\u5316\uff0c\u6309\u300c\u8868\u91cc\u67e5\u4e0d\u5230\u300d\u5904\u7406\uff09\u3002
-    \u8fd4\u56de (limit, source)\uff0csource \u2208 {"structure_profile", "nsfc_default", "unset"}\u3002
+    纯函数：绝不抛异常、绝不 sys.exit、绝不写文件。filename 是 sections/ 下的
+    basename（传全路径不做归一化，按「表里查不到」处理）。
+    返回 (limit, source)，source ∈ {"structure_profile", "nsfc_default", "unset"}。
     """
     try:
         here = os.path.dirname(os.path.abspath(__file__))
@@ -41,29 +41,29 @@ def resolve_word_limit(root, filename):
         import structure_profile
         prof = structure_profile.load(root)
     except Exception:
-        # \u884c 9\uff1a\u8bfb\u53e3\u4e0d\u53ef\u7528 \u2192 \u6309\u56fd\u81ea\u7136\u9ed8\u8ba4\u5168\u91cf\u6267\u884c\uff0c\u4e0d\u9759\u9ed8\u3001\u4e0d\u5d29\uff08\u540c r23 WARN \u65b9\u5411\uff09
+        # 行 9：读口不可用 → 按国自然默认全量执行，不静默、不崩（同 r23 WARN 方向）
         print(_WARN_LINE, file=sys.stderr)
         return NSFC_WORD_MAX.get(filename), "nsfc_default"
     chapters = prof.get("chapters") if isinstance(prof, dict) else None
     if not isinstance(chapters, list) or not chapters:
-        # \u884c 1-3\uff1a\u65e0\u771f\u6e90/\u574f/\u672a\u786e\u8ba4/\u65e0 chapters \u952e\uff08\u7ae0\u8282\u8868\u4e0d\u53d7\u7ba1\uff09\u2192 \u56fd\u81ea\u7136\u9ed8\u8ba4
+        # 行 1-3：无真源/坏/未确认/无 chapters 键（章节表不受管）→ 国自然默认
         if filename in NSFC_WORD_MAX:
             return NSFC_WORD_MAX[filename], "nsfc_default"
-        return None, "unset"      # \u884c 8\uff1a\u8868\u5916\u6587\u4ef6\u65e0\u9ed8\u8ba4\u53ef\u7528
+        return None, "unset"      # 行 8：表外文件无默认可用
     for ch in chapters:
         if isinstance(ch, dict) and ch.get("filename") == filename:
             wm = ch.get("word_max")
             if isinstance(wm, int) and not isinstance(wm, bool) and wm >= 0:
-                return wm, "structure_profile"   # \u884c 4\uff1aword_max == 0 \u5408\u6cd5
-            return None, "unset"  # \u884c 5/6\uff1a\u7f3a\u6216\u975e\u6cd5 \u2192 \u4e0d\u5224\u3001\u4ea4\u4eba\u5de5\uff0c\u7edd\u4e0d\u56de\u843d\u9ed8\u8ba4
-    return None, "unset"          # \u884c 7\uff1a\u53d7\u7ba1\u4f46\u6ca1\u5217\u8be5\u7ae0
+                return wm, "structure_profile"   # 行 4：word_max == 0 合法
+            return None, "unset"  # 行 5/6：缺或非法 → 不判、交人工，绝不回落默认
+    return None, "unset"          # 行 7：受管但没列该章
 
 
 def resolve_page_limit(root):
-    """\u9875\u6570\u4e0a\u9650\u89e3\u6790\uff08INTERFACE-round24 \u00a73\uff09\u3002\u6052\u8fd4\u56de (int, source)\uff0c\u6c38\u4e0d\u4e3a None\u3002
+    """页数上限解析（INTERFACE-round24 §3）。恒返回 (int, source)，永不为 None。
 
-    \u8003\u5377\u53e3\u5f84\uff08\u4f18\u5148\u4e8e INTERFACE \u00a73 \u7b2c 1 \u884c\u5b57\u9762\uff09\uff1a\u58f0\u660e\u503c\u7b49\u4e8e NSFC_PAGE_MAX \u65f6
-    \u62a5 nsfc_default\u2014\u2014DEFAULT_PROFILE \u81ea\u5e26 page_limit=30\uff0c\u56fd\u81ea\u7136\u9ed8\u8ba4\u9879\u76ee\u4e0d\u7b97\u300c\u58f0\u660e\u8fc7\u300d\u3002
+    考卷口径（优先于 INTERFACE §3 第 1 行字面）：声明值等于 NSFC_PAGE_MAX 时
+    报 nsfc_default——DEFAULT_PROFILE 自带 page_limit=30，国自然默认项目不算「声明过」。
     """
     try:
         with open(os.path.join(str(root), "proposal_profile.json"), encoding="utf-8") as f:
@@ -74,7 +74,7 @@ def resolve_page_limit(root):
     if isinstance(pl, int) and not isinstance(pl, bool) and pl >= 0:
         if pl == NSFC_PAGE_MAX:
             return NSFC_PAGE_MAX, "nsfc_default"
-        return pl, "proposal_profile"   # 0 \u662f\u5408\u6cd5\u58f0\u660e\uff08\u9875\u6570\u5fc5\u8d85\u53cd\u4f8b\u4f9d\u8d56\u5b83\uff09\uff0c\u4e0d\u56de\u843d
+        return pl, "proposal_profile"   # 0 是合法声明（页数必超反例依赖它），不回落
     return NSFC_PAGE_MAX, "nsfc_default"
 
 
