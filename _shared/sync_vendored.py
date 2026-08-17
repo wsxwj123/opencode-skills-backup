@@ -105,6 +105,13 @@ MANIFEST: dict[str, list[str]] = {
     "ref_section.py": ["general-sci-writing", "review-writing", "nsfc-proposal",
                        "polish-sci", "reviewer-response-sci", "reviewer-simulator",
                        "revise-sci"],
+    # 去 AI 套话词表单一真源（round25）：纯数据、零 import。
+    # 消费 6 家；sci2doc / reviewer-response-sci 的词表是正则+严重度形态，
+    # 收编会改判定，本轮有意不进（见 .devflow/PLAN-round25.md §5）。
+    "ai_cliche_terms.py": [
+        "general-sci-writing", "review-writing", "nsfc-proposal",
+        "polish-sci", "revise-sci", "reviewer-simulator",
+    ],
 }
 
 
