@@ -176,6 +176,59 @@ def _strip_block_header(text: str) -> str:
     )
 
 
+# round22 高置信无编号拆分：只认两个确定性分支，模糊语义不猜（保持编号 "0" 交
+# 既有 Step 1.5 用户核对）。已编号意见不二次语义拆分；含统一 Reply: 的块不拆。
+_ROMAN_SEQ = ("i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x")
+_REQUEST_START_RE = re.compile(
+    r"^(?:please\b(?!\s+note\b)|could\s+the\s+authors?\b|the\s+authors?\s+should\b)",
+    re.IGNORECASE,
+)
+
+
+def _split_by_inline_markers(body: str) -> list[str] | None:
+    """同段至少两个一致 inline marker，如 (i)/(ii)/(iii)。marker 必须独立成枚举
+    （块首或空白之后），并从 (i) 起连续——Figure 2(a)/(b)、缩写、小数不触发。"""
+    matches = [
+        m for m in re.finditer(r"\(([ivx]{1,4})\)\s+", body)
+        if m.start() == 0 or body[m.start() - 1].isspace()
+    ]
+    if len(matches) < 2:
+        return None
+    labels = [m.group(1).lower() for m in matches]
+    if tuple(labels) != _ROMAN_SEQ[: len(labels)]:
+        return None
+    segments: list[str] = []
+    for idx, m in enumerate(matches):
+        end = matches[idx + 1].start() if idx + 1 < len(matches) else len(body)
+        seg = simplify_ws(body[m.end():end])
+        if not seg:
+            return None
+        segments.append(seg)
+    prefix = simplify_ws(body[: matches[0].start()])
+    if prefix:
+        segments[0] = simplify_ws(prefix + " " + segments[0])
+    return segments
+
+
+def _split_by_request_sentences(body: str) -> list[str] | None:
+    """至少两个完整句分别以独立请求句式起始（Please... / Could the authors... /
+    The authors should...）。解释句附着前一请求；Please note... 视为解释；
+    单句复合请求（and 连接）不拆。"""
+    sentences = split_sentences(body)
+    if len(sentences) < 2:
+        return None
+    request_flags = [bool(_REQUEST_START_RE.match(s)) for s in sentences]
+    if sum(request_flags) < 2:
+        return None
+    first_request = request_flags.index(True)
+    boundaries = [i for i, flag in enumerate(request_flags) if flag and i > first_request]
+    points = [0] + boundaries + [len(sentences)]
+    return [
+        " ".join(sentences[points[i]:points[i + 1]])
+        for i in range(len(points) - 1)
+    ]
+
+
 def collect_comment_pairs(text: str) -> list[CommentPair]:
     out: list[CommentPair] = []
     for reviewer, rb in split_reviewer_blocks(text).items():
@@ -196,7 +249,15 @@ def collect_comment_pairs(text: str) -> list[CommentPair]:
                 if " Reply:" in body:
                     left, right = body.split(" Reply:", 1)
                     comment, reply = simplify_ws(left), simplify_ws(right)
-                if comment:
+                if not comment:
+                    continue
+                pieces = None
+                if not reply:  # 含统一 Reply: 的无编号段不自动拆
+                    pieces = _split_by_inline_markers(comment) or _split_by_request_sentences(comment)
+                if pieces:
+                    for k, piece in enumerate(pieces, 1):
+                        out.append(CommentPair(reviewer, section, f"0.{k}", piece, ""))
+                else:
                     out.append(CommentPair(reviewer, section, "0", comment, reply))
     return out
 
