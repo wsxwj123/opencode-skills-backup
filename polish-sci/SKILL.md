@@ -107,6 +107,8 @@ not_for(以下情况不要用本技能):
 ## DoD 自检清单(润色收口)
 机器可读真源,`references/dod_checklist.json` 的 `polish-dod` gate。strict_gate 运行前,必须委托独立subagent盲检。
 
+**DoD pack 里的 strict_gate 命令带 `--unit-checks-only`(round22 解自引用)**:该模式只跑逐 unit 机械检查、完全不读 `.review_return_polish-dod.json`,成功输出 `STRICT_UNIT_CHECKS: PASS`——它只是盲检期的机械预检,**绝不等价最终交付**。最终交付仍必须跑无 flag 的 bare strict_gate(会强制核独立 PL-G11),唯一成功字面量仍是 `STRICT_GATE: PASS`。
+
 📖 **主 agent 不得自评 DoD**;PL-G1~PL-G14 判据、委托四步细则、【P4·降级告警】(派不出独立subagent时绝不自评自过) → **第 5 步盲检前先 Read [references/dod-protocol.md](references/dod-protocol.md)**。
 
 **PL-G11 科学内容零改动 = 语义等价的唯一权威**:改写方在 polished/<idx>.json 里自填 `meaning_changed=false` 只是自证、不足信;strict_gate 交付前会读独立subagent写回的 `<root>/.review_return_polish-dod.json`,要求 PL-G11 verdict==pass 且证据非空,缺独立裁决/非 pass/空证据一律 fail-closed。即"没有独立盲检 = meaning 未核 = 拦",自填 false 不能替代。
