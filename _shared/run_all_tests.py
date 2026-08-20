@@ -59,6 +59,7 @@ def run_one(test: Path, timeout: int = 120) -> tuple[bool, str]:
         proc = subprocess.run(
             [sys.executable or "python3", str(test)],
             capture_output=True, text=True, timeout=timeout,
+            encoding="utf-8", errors="replace",
             cwd=str(test.parent),
         )
     except subprocess.TimeoutExpired:
