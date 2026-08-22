@@ -176,7 +176,11 @@ def apply_active_style(config: dict[str, Any], agent_name: str | None = None) ->
       novelai_parameters），非法值丢弃并退回全局默认，见 apply_style_params
     - active 找不到对应 style 时，原样返回 config，不报错
     """
-    styles_path = skill_root() / "assets" / "styles.json"
+    # styles.json 的位置可用 NOVELAI_SKILL_ROOT 覆盖（与 moments/styles_routes.py 同一个接缝）：
+    # 验收测试要在临时副本上改绑定，共用生产文件跑一次就会把真实 bot 画风绑定改乱。
+    # .env.local 仍固定读真实 skill 根目录——令牌不该跟着测试副本走。
+    styles_root = Path(os.environ.get("NOVELAI_SKILL_ROOT") or skill_root())
+    styles_path = styles_root / "assets" / "styles.json"
     if not styles_path.exists():
         return config
     try:
