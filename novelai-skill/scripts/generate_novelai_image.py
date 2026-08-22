@@ -446,6 +446,7 @@ def request_image(
         return response.getcode(), response.read()
 
 
+
 def format_http_error(code: int, detail: str) -> str:
     if code == 400:
         return f"NovelAI 没认出请求内容：HTTP 400 {detail}"
@@ -460,6 +461,47 @@ def describe_http_error(exc: error.HTTPError) -> str:
     detail = exc.read().decode("utf-8", errors="ignore").strip() or str(exc.reason)
     return format_http_error(exc.code, detail)
 
+
+_RETRY_DELAYS = (3, 5, 8)
+
+
+def _is_retryable(code: int, detail: str) -> bool:
+    """值得重试的只有两类：5xx 是 NovelAI 侧偶发故障（V5 Full 实测约一半概率 500），
+    429 + 并发锁是排队信号。其余 4xx 是请求本身不合法，重试只是等量重复同一个错误。"""
+    return code >= 500 or (code == 429 and "Concurrent generation is locked" in detail)
+
+
+def request_with_retry(
+    endpoint: str,
+    headers: dict[str, str],
+    payload: dict[str, Any],
+    delays: tuple[int, ...] = _RETRY_DELAYS,
+) -> tuple[bytes | None, str | None, bool]:
+    """发一次请求，可重试的错误按 delays 退避重发。
+
+    返回 (响应体, 错误说明, 是否属于可重试类错误)；响应体非 None 即成功。
+    """
+    last_error: str | None = None
+    retryable = False
+    for attempt in range(len(delays) + 1):
+        try:
+            status_code, body = request_image(endpoint, headers, payload)
+            if status_code < 400 and body:
+                return body, None, False
+            # 走到这里是 2xx 空响应（服务端异常），或 urlopen 没抛异常的 4xx/5xx
+            last_error = f"NovelAI 请求失败：HTTP {status_code}"
+            retryable = status_code >= 500 or status_code < 400
+        except error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="ignore").strip() or str(exc.reason)
+            last_error = format_http_error(exc.code, detail)
+            retryable = _is_retryable(exc.code, detail)
+        except error.URLError as exc:
+            # 网络没通：换个请求体也一样不通，不值得再退避空转
+            return None, f"NovelAI 请求失败，网络没通：{exc.reason}", False
+        if not retryable or attempt >= len(delays):
+            break
+        time.sleep(delays[attempt])
+    return None, last_error, retryable
 
 def load_previous_state(output_dir: Path) -> dict[str, Any] | None:
     last_request_path = output_dir / "last_request.json"
@@ -524,42 +566,17 @@ def generate_image(
         "NOVELAI_IMAGE_ENDPOINT", "https://image.novelai.net/ai/generate-image"
     )
     headers = build_browser_headers(token)
-    payloads = [
-        build_payload(config, prompts),
-        build_fallback_payload(config, prompts),
-    ]
-
-    last_error: str | None = None
-    status_code = 0
-    response_body = b""
-    retry_delays = (3, 5, 8)
-    for payload in payloads:
-        for attempt in range(len(retry_delays) + 1):
-            try:
-                status_code, response_body = request_image(endpoint, headers, payload)
-                if status_code < 400:
-                    break
-                last_error = f"NovelAI 请求失败：HTTP {status_code}"
-            except error.HTTPError as exc:
-                detail = exc.read().decode("utf-8", errors="ignore").strip() or str(
-                    exc.reason
-                )
-                if (
-                    exc.code == 429
-                    and "Concurrent generation is locked" in detail
-                    and attempt < len(retry_delays)
-                ):
-                    time.sleep(retry_delays[attempt])
-                    continue
-                last_error = format_http_error(exc.code, detail)
-            except error.URLError as exc:
-                last_error = f"NovelAI 请求失败，网络没通：{exc.reason}"
-            break
-        else:
-            continue
-        if status_code < 400 and response_body:
-            break
-    else:
+    payload = build_payload(config, prompts)
+    response_body, last_error, retryable = request_with_retry(endpoint, headers, payload)
+    if response_body is None and retryable:
+        # 主请求体是 5xx / 并发锁挂的，换精简请求体再试一次（只一次，别把偶发 500 放大成限流）。
+        # 4xx 不走这里：请求本身不合法，再发一次只会等量重复同一个错误。
+        payload = build_fallback_payload(config, prompts)
+        response_body, fallback_error, _ = request_with_retry(
+            endpoint, headers, payload, delays=()
+        )
+        last_error = fallback_error or last_error
+    if response_body is None:
         raise RuntimeError(last_error or "NovelAI 请求失败。")
 
     output_dir.mkdir(parents=True, exist_ok=True)
