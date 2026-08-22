@@ -211,9 +211,31 @@ def apply_active_style(config: dict[str, Any], agent_name: str | None = None) ->
     return apply_style_params(config, style.get("params") or {})
 
 
-# 镜头角度强制:worker 常漏写具体镜头(只写景别如 closer shot），导致构图雷同。
-# 这里兜底——最终 prompt 里若一个具体角度词都没有，随机补一个（增加多样、避免单调）。
-# 尊重 worker 已写的角度（含 POV/first-person，POV 图专用），有就不动。
+# 三个守卫（景别 / 角度 / 动感）都只在"当轮正文漏写"时补，写了就尊重、一个字不动。
+#
+# 判定域是 prompt_body_used（当轮正文），不是 final_positive_prompt：后者含 style 的
+# positive_prefix，画师串里本来就常有 portrait / from above 这类词，拿它判定会让守卫
+# 永远认为"已经有了"而一次都不注入，且毫无报错。代价是 prefix 写了 close-up 而正文没写
+# 景别时，最终会同时出现两个景别词——接受：注入词在最前、权重更高，且看图就能发现，
+# 比静默失效强。（动感守卫仍看最终串：任何动感词都算数，没有"必须是某个词"的要求。）
+_SHOT_WORDS = (
+    "full body", "full-body", "fullbody", "head to toe", "full shot",
+    "close-up", "closeup", "close up", "face focus", "portrait",
+    "upper body", "upper_body", "lower body", "lower_body", "between_legs",
+    "cowboy shot", "medium shot", "wide shot", "long shot", "bust shot",
+    "waist up", "knee shot", "from far away",
+)
+# 默认景别锁死为全身（呆板出在平视/站定/居中，不出在全身，那三维交给角度与动感守卫）。
+# detailed face：竖版全身叠极端广角容易糊脸，这是"全身"的真实代价，一并写死。
+_DEFAULT_SHOT = "full body, head to toe visible, detailed face"
+
+
+def ensure_shot_size(prompts: dict[str, str]) -> dict[str, str]:
+    body = prompts.get("prompt_body_used", "")
+    if any(w in body.lower() for w in _SHOT_WORDS):
+        return prompts  # 当轮正文已指定景别（特写/中景都算），尊重不动
+    prompts["final_positive_prompt"] = f"{_DEFAULT_SHOT}, {prompts.get('final_positive_prompt', '')}"
+    return prompts
 _CAMERA_WORDS = (
     "pov", "first-person", "first person", "high angle", "low angle",
     "from above", "from below", "from side", "over-the-shoulder", "over the shoulder",
@@ -223,15 +245,16 @@ _CAMERA_WORDS = (
 _CAMERA_POOL = [
     "from above, high angle shot", "from below, low angle shot",
     "from side, profile view", "over-the-shoulder shot",
-    "dutch angle, tilted frame", "eye-level shot, straight-on view",
+    # 不留 eye-level：全身 + 平视 = 用户抱怨的呆板立绘，中性基线在这里是稳定产出最差结果
+    "dutch angle, tilted frame", "worm's-eye view, extreme low angle looking up",
     "bird's-eye view, top-down",
 ]
 
 
 def ensure_camera_angle(prompts: dict[str, str]) -> dict[str, str]:
     fp = prompts.get("final_positive_prompt", "")
-    if any(w in fp.lower() for w in _CAMERA_WORDS):
-        return prompts  # worker 已指定镜头（含 POV），尊重不动
+    if any(w in prompts.get("prompt_body_used", "").lower() for w in _CAMERA_WORDS):
+        return prompts  # 当轮正文已指定镜头（含 POV），尊重不动
     angle = random.SystemRandom().choice(_CAMERA_POOL)
     prompts["final_positive_prompt"] = f"{angle}, {fp}"
     return prompts
@@ -493,6 +516,7 @@ def generate_image(
     previous_state = load_previous_state(actual_state_dir)
     config = apply_active_style(config, agent_name)
     prompts = build_prompts(config, intermediate, previous_state=previous_state)
+    prompts = ensure_shot_size(prompts)     # 强制每张有景别，默认全身（漏写才补，尊重特写）
     prompts = ensure_camera_angle(prompts)  # 强制每张有具体镜头角度（漏写才补，尊重 POV）
     prompts = ensure_dynamic_feel(prompts)  # 强制每张有动态感（漏写才补，治僵硬静态图）
     token = read_token()
