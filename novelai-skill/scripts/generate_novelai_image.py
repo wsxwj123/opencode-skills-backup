@@ -750,17 +750,23 @@ def main() -> None:
         output_dir = Path(args.output_dir).expanduser() / agent_name / session_name
     else:
         output_dir = default_output_dir(agent_name, session_name)
-    result = generate_image(
-        config,
-        intermediate,
-        output_dir,
-        source_request_path=str(intermediate_path),
-        output_image_path=Path(args.output_image_path).expanduser()
-        if args.output_image_path
-        else None,
-        state_dir=Path(args.state_dir).expanduser() if args.state_dir else None,
-        agent_name=agent_name,
-    )
+    try:
+        result = generate_image(
+            config,
+            intermediate,
+            output_dir,
+            source_request_path=str(intermediate_path),
+            output_image_path=Path(args.output_image_path).expanduser()
+            if args.output_image_path
+            else None,
+            state_dir=Path(args.state_dir).expanduser() if args.state_dir else None,
+            agent_name=agent_name,
+        )
+    except (ValueError, RuntimeError) as exc:
+        # 可预期的失败（提示词为空、缺令牌、NovelAI 返回错误）给一行中文说明就够了。
+        # 红栈对上游 worker 只是噪声，还会把请求头/令牌一类内容带进日志。
+        sys.stderr.write(f"[novelai] 生图失败：{exc}\n")
+        sys.exit(1)
 
     serialized = json.dumps(result, ensure_ascii=False, indent=2)
     if args.output_json:
