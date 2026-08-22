@@ -112,16 +112,68 @@ def build_browser_headers(token: str) -> dict[str, str]:
     }
 
 
+# style params 白名单（读取端第二道防线）。写入端在 moments/styles_routes.py 已经拦过一次，
+# 但 styles.json 还会被手工编辑、被旧版本写过（存量的 cfg_scale: 0 就是这么来的），非法值直接
+# 进 payload 只换来 NovelAI 的英文 400，与 style 页面毫无关联线索。所以这里未知键/类型错/越界
+# 一律丢弃、退回全局默认，只留一行 stderr 当排查线索——生图本身照常，不中断。
+_STYLE_TOP_KEYS = ("model", "steps", "cfg_scale", "sampler")  # 落在 config 顶层
+_STYLE_SUB_KEYS = ("ucPreset",)                               # 落在 config["novelai_parameters"]
+_STYLE_MODELS = ("nai-diffusion-5-full", "nai-diffusion-5-curated", "nai-diffusion-4-5-full")
+_STYLE_SAMPLERS = ("k_euler_ancestral", "k_euler", "k_dpmpp_2s_ancestral",
+                   "k_dpmpp_2m_sde", "k_dpmpp_sde", "ddim_v3")
+
+
+def _reject_style_param(key: str, value: Any) -> str | None:
+    """合法返回 None，非法返回一句中文原因。bool 不算数字：JSON 的 true 在 Python 里 == 1。"""
+    is_int = isinstance(value, int) and not isinstance(value, bool)
+    is_num = isinstance(value, (int, float)) and not isinstance(value, bool)
+    if key == "model":
+        return None if value in _STYLE_MODELS else "不在可用模型清单内"
+    if key == "sampler":
+        return None if value in _STYLE_SAMPLERS else "不在可用采样器清单内"
+    if key == "steps":
+        return None if is_int and 1 <= value <= 50 else "不是 1–50 的整数"
+    if key == "cfg_scale":
+        # 0 是非法值不是"未设置"：CFG=0 扩散几乎不看提示词，出图必废且不报错
+        return None if is_num and 1 <= value <= 10 else "不是 1–10 的数字"
+    if key == "ucPreset":
+        return None if is_int and value in (0, 1, 2, 3) else "不是 0、1、2、3 之一"
+    return "不是本脚本支持的参数"
+
+
+def apply_style_params(config: dict[str, Any], params: Any) -> dict[str, Any]:
+    """把预设 params 叠加到 config：留空 = 跟随全局默认，非法 = 丢弃并退回全局默认。"""
+    if not isinstance(params, dict):
+        return config
+    for key, value in params.items():
+        if value is None or value == "":
+            continue  # 留空 = 跟随全局默认，不是错误
+        reason = _reject_style_param(key, value)
+        if reason:
+            sys.stderr.write("[novelai] style 参数被忽略：%s=%r %s，已退回全局默认\n"
+                             % (key, value, reason))
+            continue
+        if key in _STYLE_TOP_KEYS:
+            config[key] = value
+        else:
+            sub = dict(config.get("novelai_parameters") or {})
+            sub[key] = value
+            config["novelai_parameters"] = sub
+    return config
+
+
 def apply_active_style(config: dict[str, Any], agent_name: str | None = None) -> dict[str, Any]:
     """把激活的画风预设叠加到 config 上（可靠性优先，不依赖 LLM）。
 
     - 选哪个预设：env NOVELAI_ACTIVE_STYLE_ID（styles 页"生成示例图"预览用）> 该 bot 的
       active_by_bot[agent_name]（每个 bot 各自画风）> 全局 active（兜底/兼容）
+      没指定 bot 时不套任何预设，见下面的注释
     - positive_prefix：**整体替换** config 原有 positive_prefix（预设本身就是完整画风串，
       像 SillyTavern 那样选哪个用哪个；若叠加到默认画师串上，默认串会盖过预设画风）
       空 positive_prefix（如"default"预设）不替换，保留 default_config 原有画师串
     - negative_prefix：非空才整体覆盖，避免空值把原有负面提示词清空
-    - params 里的 steps/cfg_scale/sampler：非空才覆盖
+    - params：按白名单流转（model/steps/cfg_scale/sampler 落 config 顶层，ucPreset 落
+      novelai_parameters），非法值丢弃并退回全局默认，见 apply_style_params
     - active 找不到对应 style 时，原样返回 config，不报错
     """
     styles_path = skill_root() / "assets" / "styles.json"
@@ -135,11 +187,13 @@ def apply_active_style(config: dict[str, Any], agent_name: str | None = None) ->
     explicit = os.getenv("NOVELAI_ACTIVE_STYLE_ID", "").strip()
     if explicit:
         active_id = explicit
-    elif agent_name:
+    elif agent_name and agent_name != "default":
         active_id = (styles_data.get("active_by_bot", {}).get(agent_name)
                      or styles_data.get("active", ""))
     else:
-        active_id = styles_data.get("active", "")
+        # 没指定 bot（--agent-name 缺省时 resolve_agent_name 给的就是 "default"）：不套任何预设。
+        # 这种调用是手工/调试跑，--config 给什么就该出什么；套上全局预设会让画风与参数都无法解释。
+        active_id = ""
     style = next(
         (s for s in styles_data.get("styles", []) if s.get("id") == active_id), None
     )
@@ -154,15 +208,7 @@ def apply_active_style(config: dict[str, Any], agent_name: str | None = None) ->
     if negative_prefix:
         config["negative_prefix"] = negative_prefix
 
-    params = style.get("params") or {}
-    if params.get("steps"):
-        config["steps"] = params["steps"]
-    if params.get("cfg_scale"):
-        config["cfg_scale"] = params["cfg_scale"]
-    if params.get("sampler"):
-        config["sampler"] = params["sampler"]
-
-    return config
+    return apply_style_params(config, style.get("params") or {})
 
 
 # 镜头角度强制:worker 常漏写具体镜头(只写景别如 closer shot），导致构图雷同。
