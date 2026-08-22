@@ -707,10 +707,16 @@ def main() -> None:
         config["width"] = int(args.width)
     if args.height is not None:
         config["height"] = int(args.height)
-    # NovelAI 要求宽高都是 64 的倍数；catch 早 fail 早
-    if int(config["width"]) % 64 != 0 or int(config["height"]) % 64 != 0:
+    # NovelAI 要求宽高都是正整数且是 64 的倍数；catch 早 fail 早。
+    # 下限判断是真需要的：-64 和 0 都能过 %64，透传下去只会换来 NovelAI 的英文 400。
+    try:
+        width, height = int(config["width"]), int(config["height"])
+    except (KeyError, TypeError, ValueError):
+        width = height = -1  # 配置里根本没有/不是数字，一并按非法尺寸报
+    if width <= 0 or height <= 0 or width % 64 or height % 64:
         raise SystemExit(
-            f"width/height must be multiples of 64; got {config['width']}x{config['height']}"
+            "width/height must be multiples of 64 (positive); got "
+            f"{config.get('width')}x{config.get('height')}"
         )
     # ─── 应用 --reuse-seed：从 last_request 拉上一次的 seed ──────────────
     # last_request.json 结构：{ "request_payload": { "parameters": { "seed": N, ... } } }
