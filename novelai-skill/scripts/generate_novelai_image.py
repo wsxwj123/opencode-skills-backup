@@ -215,31 +215,117 @@ def apply_active_style(config: dict[str, Any], agent_name: str | None = None) ->
     return apply_style_params(config, style.get("params") or {})
 
 
-# 三个守卫（景别 / 角度 / 动感）都只在"当轮正文漏写"时补，写了就尊重、一个字不动。
+# 三个守卫（景别 / 角度 / 动感）都只在"当轮正文漏写"时补；其中景别守卫按用户拍板
+# 默认强制全身，只有"明确局部词"才放行。非全身词（medium shot / upper body 等）不再
+# 视为"用户已指定景别"，必须从最终提示词中剥离并强制注入全身。
 #
 # 判定域是 prompt_body_used（当轮正文），不是 final_positive_prompt：后者含 style 的
 # positive_prefix，画师串里本来就常有 portrait / from above 这类词，拿它判定会让守卫
 # 永远认为"已经有了"而一次都不注入，且毫无报错。代价是 prefix 写了 close-up 而正文没写
 # 景别时，最终会同时出现两个景别词——接受：注入词在最前、权重更高，且看图就能发现，
 # 比静默失效强。（动感守卫仍看最终串：任何动感词都算数，没有"必须是某个词"的要求。）
-_SHOT_WORDS = (
+_FULL_BODY_WORDS = (
     "full body", "full-body", "fullbody", "head to toe", "full shot",
-    "close-up", "closeup", "close up", "face focus", "portrait",
-    "upper body", "upper_body", "lower body", "lower_body", "between_legs",
-    "cowboy shot", "medium shot", "wide shot", "long shot", "bust shot",
-    "waist up", "knee shot", "from far away",
+    "wide shot", "long shot",
 )
+_EXPLICIT_LOCAL_WORDS = (
+    "close-up", "closeup", "close up", "extreme close-up", "extreme closeup",
+    "extreme close up", "face focus", "headshot", "portrait",
+    "特写", "脸部特写", "拍脸", "大头照",
+)
+_NON_FULL_BODY_WORDS = (
+    "medium shot", "upper body", "upper-body", "upper_body", "cowboy shot",
+    "waist up", "bust shot", "knee shot", "between_legs", "lower body",
+    "lower_body", "low body", "中景", "近景", "半身", "上半身",
+)
+# 兼容旧名：仍表示"景别/镜头词"并集，供历史引用方使用。
+_SHOT_WORDS = tuple(dict.fromkeys(
+    _FULL_BODY_WORDS + _EXPLICIT_LOCAL_WORDS + _NON_FULL_BODY_WORDS + ("from far away",)
+))
+
+
+def _phrase_pattern(term: str) -> str:
+    """把可能带空格/连字符/下划线的英文短语变成宽松匹配，覆盖 Upper-body / upper_body 等写法。"""
+    parts = re.split(r"[\s_-]+", term.strip().lower())
+    if len(parts) == 1:
+        return re.escape(parts[0])
+    return r"[\s_-]+".join(re.escape(part) for part in parts)
+
+
+def _compile_word_pattern(words: tuple[str, ...]) -> re.Pattern[str]:
+    # 长词优先，避免"上半身"被"半身"先吃掉；英文短语的连字符/下划线由 _phrase_pattern 统一覆盖。
+    unique = tuple(dict.fromkeys(words))
+    pattern = "|".join(_phrase_pattern(w) for w in sorted(unique, key=len, reverse=True))
+    return re.compile(pattern, re.IGNORECASE)
+
+
+_FULL_BODY_PATTERN = _compile_word_pattern(_FULL_BODY_WORDS)
+_EXPLICIT_LOCAL_PATTERN = _compile_word_pattern(_EXPLICIT_LOCAL_WORDS)
+_NON_FULL_BODY_PATTERN = _compile_word_pattern(_NON_FULL_BODY_WORDS)
+
 # 默认景别锁死为全身（呆板出在平视/站定/居中，不出在全身，那三维交给角度与动感守卫）。
 # detailed face：竖版全身叠极端广角容易糊脸，这是"全身"的真实代价，一并写死。
 _DEFAULT_SHOT = "full body, head to toe visible, detailed face"
 
 
+def _clean_prompt_text(value: str) -> str:
+    """清理剥离非全身词后可能留下的双逗号/多余空格，不把普通空白改成逗号。"""
+    value = value.replace("，", ",")
+    value = re.sub(r"(?:\s*,\s*)+", ", ", value)
+    value = re.sub(r"\s+", " ", value)
+    return value.strip(" ,")
+
+
+def _find_body_segment(final: str, body: str) -> str | None:
+    """在 final_positive_prompt 里定位"当轮正文"片段。
+
+    build_prompts 会把正文中的中文逗号规范化为英文逗号，因此不能只用 prompt_body_used
+    原文做子串查找；这里同时准备一个已按同样规则轻量规范化的候选。
+    """
+    if not body:
+        return None
+    candidates = [body]
+    normalized_body = re.sub(r"\s*，\s*", ", ", body)
+    normalized_body = re.sub(r"\s+", " ", normalized_body)
+    normalized_body = normalized_body.strip(" ,")
+    if normalized_body and normalized_body != body:
+        candidates.append(normalized_body)
+    for candidate in candidates:
+        if candidate and candidate in final:
+            return candidate
+    return None
+
+
 def ensure_shot_size(prompts: dict[str, str]) -> dict[str, str]:
-    body = prompts.get("prompt_body_used", "")
-    if any(w in body.lower() for w in _SHOT_WORDS):
-        return prompts  # 当轮正文已指定景别（特写/中景都算），尊重不动
-    prompts["final_positive_prompt"] = f"{_DEFAULT_SHOT}, {prompts.get('final_positive_prompt', '')}"
+    body = prompts.get("prompt_body_used", "") or ""
+    final = prompts.get("final_positive_prompt", "") or ""
+
+    # 1. 正文命中明确局部词：尊重原样，不注入全身、不剥离。
+    if _EXPLICIT_LOCAL_PATTERN.search(body):
+        return prompts
+
+    # 2. 正文命中全身词：已经达标，不重复堆叠。
+    if _FULL_BODY_PATTERN.search(body):
+        return prompts
+
+    # 3. 其他情况（无景别词，或只出现非全身词）：从最终提示词中剥离"正文里出现"的
+    #    非全身词，再在最前面注入默认全身。prompt_body_used 保留原文供排查。
+    body_segment = _find_body_segment(final, body)
+    if body_segment is not None:
+        cleaned_body = _NON_FULL_BODY_PATTERN.sub("", body_segment)
+        cleaned_body = _clean_prompt_text(cleaned_body)
+        final = final.replace(body_segment, cleaned_body)
+    else:
+        # 极端兜底：定位不到正文片段时也只在最后手段整体清理，避免漏掉非全身词。
+        final = _NON_FULL_BODY_PATTERN.sub("", final)
+    final = _clean_prompt_text(final)
+
+    # 若剥离后 final 已空（正文仅是非全身词），只保留默认全身即可，不出现前导逗号。
+    injected = f"{_DEFAULT_SHOT}, {final}" if final else _DEFAULT_SHOT
+    prompts["final_positive_prompt"] = injected
     return prompts
+
+
 _CAMERA_WORDS = (
     "pov", "first-person", "first person", "high angle", "low angle",
     "from above", "from below", "from side", "over-the-shoulder", "over the shoulder",
