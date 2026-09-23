@@ -298,7 +298,7 @@ def extract_new_prompt(intermediate: dict[str, Any]) -> str:
     """修改模式下判断"本次有没有写新提示词"（INTERFACE-imagegen-nsfw §1.2 r2）：写了返回新提示词，没写返回空串。
 
     候选 = prompt / prompt_body / positive_prompt_body 中第一个去空白后非空的字符串；含触发词时去掉
-    第一处触发词和开头标点（保留原大小写）。剩下的至少有一个英文标签才算写了（r2.4：正权重、
+    第一处触发词和开头标点（保留原大小写）作为新提示词。候选里至少有一个英文标签才算写了（r2.4：正权重、
     去掉权重/括号记号后不含中日韩文字且至少含一个英文字母）：只剩中文指令（"再来一张，换个角度"）、
     夹着英文词的中文指令（"换个pose"）、标点、数字、压制写法都不算，照旧沿用上一张。
     """
@@ -307,13 +307,16 @@ def extract_new_prompt(intermediate: dict[str, Any]) -> str:
          if isinstance(value, str) and value.strip()),
         "",
     )
-    remainder = normalize_text(candidate)
+    candidate = normalize_text(candidate)
+    remainder = candidate
     for phrase in load_chat_mappings().get("revision_triggers", []):
         if phrase and phrase in remainder:
             remainder = normalize_text(remainder.replace(phrase, "", 1))
             remainder = remainder.lstrip(REVISION_LEADING_PUNCTUATION)
             break
-    tags, _blocks = parse_prompt_tags(remainder)
+    # 在去掉触发词之前切标签（契约 r2.4）：与触发词同在一个标签里的英文词（"再来一张pose"、
+    # "再来一张 pose"）属于中文指令，不算英文标签；有标点隔开的（"再来一张, pose"）不受影响。
+    tags, _blocks = parse_prompt_tags(candidate)
     written = any(
         _has_positive_weight(tag)
         and ASCII_LETTER_PATTERN.search(tag["name"])
