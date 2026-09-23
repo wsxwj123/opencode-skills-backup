@@ -1,0 +1,260 @@
+{
+  "version": 1,
+  "note": "测试夹具：从真实迁移地图抽的 schema1 老格子样本，覆盖占位裁决变体、已有真实裁决、缺新必填字段、非常规键、合法的『未检索到先例』。只供 tests 使用，不是用户的活数据。",
+  "cells": [
+    {
+      "source_domain": "环境电微生物学 / 生物电子学",
+      "source_mechanism": "胞外电子传递(EET) + 导电菌毛，且细菌电流可被外部电极双向寻址（electrogenetics 用电位控基因表达）",
+      "seed_paper": {
+        "key": "SV2XKKJ9",
+        "title": "Inhibition of Tumor Progression through the Coupling of Bacterial Respiration with Tumor Metabolism",
+        "note": "Bac@MnO2, Nat Nanotech 2018；用EET烧乳酸杀伤"
+      },
+      "platform": "工程化细菌",
+      "disease": "实体瘤",
+      "idea": "让肿瘤定植工程菌表达EET模块(如MtrCAB)在瘤内自组织成导电网，外部施加电位→电控开关产物释放/杀伤，把'活菌疗法最难的时空可控性'用电信号解决。从'EET当杀伤引擎'升级为'EET当可寻址的控制总线'。",
+      "novelty": "高",
+      "closest_work": "Bac@MnO2 (Nat Nanotech 2018)、TiO2@MIL 仿EET放射动力 (Nat Nanotech 2023) —— 均为'EET产ROS杀伤'；electrogenetics(电控细菌基因表达)为已有领域但多体外/体表。paper-search未直接命中'瘤内活菌电位寻址'。",
+      "diff": "从'EET=杀伤引擎'转为'EET=可外部寻址的控制总线'；且落在瘤内深部活菌网络，而非体外/体表。",
+      "feasibility": "中",
+      "feasibility_layers": {
+        "biology": "中-高：MtrCAB已可移植到E. coli(合成生物学先例)；electrogenetics体外成立",
+        "delivery_signal": "低-中(主坑)：电信号/电极如何触达瘤深部并寻址稀疏菌群——'信号版的递送五关'",
+        "executability": "需电化学+合成生物学跨装备，课题组可能缺电化学端"
+      },
+      "feasibility_blockers": [
+        "深部组织的电信号递送与寻址",
+        "跨电化学装备"
+      ],
+      "flip_evidence": "先体外证明'外部电位能开关模拟瘤环境下工程菌产物'→再解决深部信号递送(或换红光/磁场远程驱动介体绕开插电极)",
+      "quadrant": "创新高×可行中（甜区与野但玄之间）",
+      "status": "untried",
+      "user_verdict": "待定",
+      "date": "2026-07-08"
+    },
+    {
+      "source_domain": "氧化还原生物学 / 肿瘤免疫学",
+      "source_mechanism": "胞外催化型抗氧化屏障：肿瘤释放 PRDX1 + TRX1/TRXR1 再生机器进间质，清除 T 细胞近膜 H2O2，保住 SHP-1/2 磷酸酶活性，掐断 TCR 下游信号放大（Science 2026, 10.1126/science.adz8203）",
+      "platform": "工程化细菌",
+      "disease": "三阴性乳腺癌（实体瘤）",
+      "method": "重组合 + 换角度：不打主酶打辅因子供应链",
+      "idea": "瘤内 PRDX1 约 43 μM，化学计量中和不可行；但它每循环一次都要 TRX1 还原回来，还不上就过氧化成 sulfinic/sulfonic 永久失活。用 FNR 缺氧启动子驱动工程菌持续分泌 TXNIP 的 TRX 结合结构域（或抗 TRX1 VHH），在瘤内局部瘫痪再生系统，把催化型屏障变成一次性耗材；再用菌自身 OxyR 感受 H2O2 回升做负反馈反相器，把胞外 H2O2 钳在'够激活免疫、不到促转移'的治疗窗内。",
+      "novelty": "高",
+      "closest_work": "PRDX1 抑制剂（腺花素 adenanthin、conoidin A）全部针对胞内池与肿瘤细胞凋亡；工程菌分泌纳米抗体（Danino 组 PD-L1/CTLA-4, Nat Med 2020）为已有形式但靶点不同；PubMed 未检到胞外 TRX-PRDX 再生系统作为免疫治疗靶点，也未检到工程菌用于恢复 T 细胞 ROS 信号（检索 n=12，无一相关）",
+      "diff": "现有全是'抑制酶本身'且作用于胞内；本想法是'断供还原力让酶自我氧化报废'，且分泌型效应子天然只作用胞外——正是原论文讨论里点名要而未做的 sparing cancer cell-intrinsic activity",
+      "feasibility": "中高",
+      "feasibility_blockers": [
+        "TXNIP-TBD 在瘤内蛋白酶环境的稳定性半衰期未知",
+        "胞外还原力(NADPH)来源与浓度是假说的软地基",
+        "菌在乏氧核、T 细胞在瘤缘的空间耦合需实测（靠蛋白扩散而非 H2O2 扩散，比产 H2O2 方案有利）",
+        "促氧化的促转移反向风险(Piskounova Nature 2015)"
+      ],
+      "quadrant": "创新高×可行中高",
+      "status": "untried",
+      "user_verdict": "待定：拟作 2027 青基主线方案 A",
+      "date": "2026-09-07"
+    },
+    {
+      "source_domain": "细菌学（细菌素/套索肽的生态功能）",
+      "source_mechanism": "套索肽天然身份是细菌素——细菌用于菌群内竞争的窄谱抗菌肽，靶谱因分子而异（MccJ25打沙门氏菌、claocinanin打ESKAPE）",
+      "platform": "工程化细菌（瘤内定植+分泌）",
+      "disease": "实体瘤/TNBC",
+      "method": "transfer",
+      "idea": "工程菌瘤内定植后原位分泌窄谱套索肽，精准清除有促癌证据的瘤内菌种、保留其余菌群，替代现有化学抗生素的广谱清场；持续供给以对抗瘤内菌群从肠道易位的再定植",
+      "novelty": "中高",
+      "closest_work": "检索未见『细菌素/工程菌分泌抗菌肽编辑瘤内菌群』先例（PubMed bacteriocin+engineered bacteria+tumor 零命中）；邻近赛道已拥挤：Wang 2026 Biomaterials PMID 41106321（PEG化甲硝唑纳米抗生素清瘤内菌，逆转化疗/免疫/靶向耐药）、Zhang 2021 Angew PMID 33768682（双门控纳米储库载吉西他滨+环丙沙星）",
+      "diff": "外源广谱化学抗生素 → 原位窄谱细菌素；一次性清场 → 常驻持续过滤。窄谱与持续性是两个真实的差异化优势",
+      "feasibility": "中",
+      "feasibility_blockers": [
+        "TNBC瘤内菌群中是否存在有硬促癌证据、且能被单一细菌素靶向的菌种——F. nucleatum在CRC证据硬但在乳腺癌弱，这是承重变量",
+        "套索肽异源表达对宿主有自毒（文中明确），必须做诱导型/时序门控",
+        "工程菌瘤内定植量能否支撑有效的局部抑菌浓度"
+      ],
+      "quadrant": "甜区",
+      "status": "untried",
+      "user_verdict": "待柚子确认",
+      "date": "2026-09-15"
+    },
+    {
+      "source_domain": "肿瘤代谢免疫（Wang 2024 EMBO J）",
+      "source_mechanism": "ROS → RIPK3 → IRF1 → IRG1 → 衣康酸 → TFEB → MHC-I（肿瘤细胞内源性）",
+      "platform": "工程化细菌（双响应自杀式PPE菌）",
+      "disease": "实体瘤",
+      "method": "combine",
+      "idea": "细菌自杀裂解→胞内容物释放 Fenton 反应底物→ ROS 脉冲→邻近肿瘤细胞 RIPK3 激活（肿瘤基线 ROS 高，更敏感）→ IRF1→IRG1→衣康酸→TFEB→MHC-I 上调→T 细胞识别增强。自杀机制本身提供 ROS 触发器，无需额外工程化。",
+      "novelty": "高",
+      "closest_work": "Zhang 2023 Front Immunol (L. lactis → DC ROS → 交叉呈递)；但那是作用于 DC，而非肿瘤细胞自身 IRG1 轴。未见细菌裂解 ROS → 肿瘤细胞 RIPK3-IRF1-IRG1 的直接先例。",
+      "diff": "首次将工程菌死亡 ROS 与肿瘤内源性衣康酸/TFEB/MHC-I 轴相连；IRG1 KO 肿瘤模型可在菌疗设定中验证因果",
+      "feasibility": "中高",
+      "feasibility_blockers": [
+        "需证明菌体裂解产生的 ROS 局部浓度足以激活 RIPK3（而非只激活 NF-κB）",
+        "肿瘤细胞必须与菌体裂解位点物理相邻，不适用于散在转移灶"
+      ],
+      "quadrant": "甜区",
+      "status": "untried",
+      "user_verdict": "pending",
+      "date": "2026-09-15"
+    },
+    {
+      "source_domain": "",
+      "source_mechanism": "",
+      "platform": "工程化细菌/肽类药物",
+      "disease": "实体瘤",
+      "method": "angle",
+      "idea": "填补原文点名的空白『长序列表位嫁接未验证』——把长于6残基的功能肽嫁接到套索支架。但查新后判断该方向已被占且空白可能事出有因（loop区容量受环化酶识别与穿线几何限制）",
+      "novelty": "低",
+      "closest_work": "Saito & Bode 2017 Chem Sci PMID 28553526（线性肽表位嫁接到轮烷支架，蛋白酶稳定性显著提升）、Martin-Gómez 2018 Chem Eur J PMID 30255960（仿sungsanpin双环肽，明确指向epitope grafting）、Schiefelbein 2024 JACS PMID 38759637（化学酶法引入D-氨基酸，文中直接指向grafting）",
+      "diff": "仅剩『长序列』这一处未被占，但空白可能有硬原因",
+      "feasibility": "低",
+      "feasibility_blockers": [
+        "loop区可容纳序列长度受环化酶识别与穿线几何限制，长序列可能直接破坏折叠",
+        "环肽/knottin/白蛋白融合等成熟方案对长肽稳定化更有优势，套索支架无比较优势"
+      ],
+      "quadrant": "稳但旧",
+      "status": "untried",
+      "user_verdict": "不建议作主课题",
+      "date": "2026-09-15"
+    },
+    {
+      "source_domain": "细菌学（细菌素介导的菌群编辑）",
+      "source_mechanism": "细菌素=窄谱抗菌肽，产生菌用它做菌群内竞争；工程化产生菌可原位编辑菌群组成",
+      "platform": "工程化细菌（瘤内定植+分泌套索肽+自杀裂解）",
+      "disease": "实体瘤/TNBC",
+      "method": "combine",
+      "idea": "柚子提案：工程菌瘤内分泌套索肽杀灭靶瘤内菌，同时引入自杀基因定期裂解。裂解的双重目的：释放胞内蓄积的效应分子 + 释放细菌佐剂（CpG/鞭毛蛋白/肽聚糖）激活免疫，同时控制菌量保安全",
+      "novelty": "中",
+      "closest_work": "【关键阴性先例】Rosenkilde 2024 Gut Microbes PMID 38899682：75种class II细菌素在E.coli异源表达，体外筛出22种有选择性抑制谱，离体小鼠粪便16S证实Actifencin/Bacteroidetocin A分别选择性抑制Lactobacillus/Bacteroides；但把益生菌EcN工程化表达这两个细菌素打进小鼠后，体外和离体的选择性抑制模式在体内完全观察不到。另：自杀裂解菌（裂解基因/细菌幽灵）用于肿瘤治疗已是成熟技术",
+      "diff": "肿瘤场景（非肠道）+ 套索肽这一特定高稳定亚类 + 与自杀裂解耦合出佐剂释放功能",
+      "feasibility": "中低",
+      "feasibility_blockers": [
+        "承重墙：体外窄谱选择性在体内失效已有直接阴性先例（PMID 38899682），必须先证明肿瘤内环境不重复这个失败",
+        "自体毒性：宿主菌与靶菌革兰属性若重叠，分泌的套索肽会杀死工程菌自己；天然产生菌靠免疫蛋白自保，需一并克隆",
+        "时间尺度矛盾：定期裂解=脉冲供给，抵消『持续过滤』这一相对纳米抗生素的唯一优势",
+        "基因负载：一个套索肽BGC约4-5kb（前体+肽酶B1/B2+环化酶C+转运蛋白D），覆盖多靶菌时质粒容量吃紧",
+        "靶菌未定：TNBC瘤内是否有硬促癌证据、且可被单一细菌素靶向的菌种"
+      ],
+      "quadrant": "野但玄",
+      "status": "untried",
+      "user_verdict": "已否决（2026-09-15）：套索肽+活菌组合打不过纯肽方案，不做",
+      "date": "2026-09-15"
+    },
+    {
+      "source_domain": "B细胞基因组编辑（隐性剪接供体踩坑）",
+      "source_mechanism": "新插入的蛋白编码序列末端藏有隐性剪接供体（SpliceAI提前预测出），被剪接机器误认→GFP被错误拼进BCR；解法是同义突变钝化该元件",
+      "seed_paper": {
+        "doi": "10.1038/s41467-026-72991-8",
+        "title": "Engineering B cells to express fully customizable antibodies with enhanced Fc functions"
+      },
+      "platform": "工程化细菌（染色体整合路线）",
+      "disease": "通用",
+      "method": "transfer",
+      "idea": "把『隐性元件扫描+同义钝化』做成染色体整合前的强制步骤。细菌的功能等价物：隐性启动子/隐性RBS/隐性Rho终止子/反向重复。人细胞有剪接、细菌没有，但这三类元件是同一个问题的不同版本：藏在序列里、被宿主机器误认、造成非预期产物。",
+      "novelty": "低（这是SOP不是科学发现，刻意标低避免被当课题）",
+      "closest_work": "SpliceAI等剪接预测工具在基因治疗领域已是标准步骤；细菌启动子/RBS预测工具现成",
+      "diff": "把『事后救火』改为『事前制度化检查』；强调染色体整合型（单拷贝、无抗生素后手）比质粒型容错度低得多",
+      "feasibility": "很高",
+      "feasibility_layers": {
+        "biology": "高：有现成工具",
+        "delivery": "n/a",
+        "executability": "高：零湿实验成本，几小时序列工作"
+      },
+      "feasibility_blockers": [
+        "无技术卡点；风险是不做"
+      ],
+      "flip_evidence": "n/a（流程改进，效果体现在减少返工）",
+      "quadrant": "稳但旧——但这是地基不是课题，定位为工作流强制项",
+      "status": "untried",
+      "user_verdict": "建议立即纳入工作流",
+      "date": "2026-09-16"
+    },
+    {
+      "source_domain": "昼夜节律免疫学 / 中性粒细胞生物学",
+      "source_mechanism": "中性粒细胞杀菌活性被光/钟门控，光期（活动期）Per2↑→压住Cry1a→CLOCK:BMAL1 预置 hmgb1a 的 CNS4→感染时 NF-κB 点火→HMGB1 自激 NOX2 产 ROS。宿主抗菌火力有昼高夜低的相位。",
+      "seed_paper": {
+        "doi": "10.1126/sciimmunol.adn3080",
+        "title": "A light-regulated circadian timer optimizes neutrophil bactericidal activity to boost daytime immunity",
+        "note": "Sci Immunol 2025, Hall 组, 斑马鱼；光期感染存活显著优于暗期"
+      },
+      "platform": "工程化细菌",
+      "disease": "实体瘤",
+      "method": "angle",
+      "idea": "把宿主免疫的昼夜相位当成工程菌治疗的隐藏变量，而且是反向的：中性粒细胞是清除瘤内细菌的主力，它火力最旺的时段接种/加热，工程菌反而被清得更快、定植量更低。同一时段它对肿瘤的杀伤又更强——两个方向相反，净效应未知。推论：菌量和疗效可能随接种时间点漂移，现有实验的批次差异里可能混着这个。做法零成本：固定其他条件，只在动物房光周期的不同 ZT 接种/加热，读肿瘤菌量和疗效。",
+      "novelty": "中-高",
+      "closest_work": "检索未见'宿主昼夜相位影响工程菌肿瘤定植'的直接先例。邻近的有：Adrover 2019 Immunity 中性粒细胞计时器(引文27)、Rev-Erbα-蓝光增强肺炎克雷伯菌清除(PMID 31746474)、Directly Evolved Nanovaccines Modulate Disrupted Circadian Rhythm(纳米疫苗，非活菌)。Q1 检索 circadian×engineering bacteria×tumor 无命中。",
+      "diff": "别人做的是'增强宿主免疫来杀菌'，这里反过来问'宿主免疫太强会不会把治疗菌清掉'；且落在活菌疗法的定植效率这个没人量的环节上。",
+      "feasibility": "高",
+      "feasibility_layers": {
+        "biology": "高：中性粒细胞是清除瘤内/血行细菌的主力，其活性有昼夜相位，两条都成立",
+        "measure": "高：只要控制接种/加热的 ZT 时点 + 测肿瘤匀浆 CFU，现有装备全够",
+        "caveat": "相位方向必须自己测：斑马鱼/人是昼行性，小鼠是夜行性，不能照搬论文的相位；小鼠的免疫节律峰值在暗期还是光期要本实验室确认"
+      },
+      "feasibility_blockers": [
+        "小鼠节律相位与斑马鱼相反，需本地标定",
+        "净效应方向未知（菌量降 vs 抗瘤免疫升 相抵），可能测不出差异",
+        "动物房光照是否真的稳定（换笼、清洁、人员进出都会扰动 ZT）"
+      ],
+      "flip_evidence": "先做最小实验：同一批小鼠、同一肿瘤模型、同一剂量，只在 ZT4 vs ZT16 接种，48h 后测肿瘤 CFU。若无差异→想法死。若有差异→再测疗效是否随之改变。",
+      "quadrant": "甜区（创新中-高 × 可行高）",
+      "status": "untried",
+      "user_verdict": "待定",
+      "date": "2026-09-12",
+      "intervention_2026-09-12": {
+        "upgrade": "从'看见变量'升级为'操纵变量'：选在宿主中性粒细胞杀菌活性低谷的时段接种/加热，压低第一段（入体到到瘤前）的清除率。零成本。",
+        "limit_realized": "重要限定——论文的 BMAL1-HMGB1-NOX2 机制作用在组织内（瘤内）中性粒细胞上，管不了静脉给药后肝脾网状内皮系统那几分钟的快速清除。两段要分开对付。",
+        "blocker": "小鼠相位无现成数据：Q2 检索（mouse×neutrophil×circadian×ROS/bactericidal）未见直接报道，只有 'Modulatory factors of circadian phagocytic activity' 这类老综述和 NOX2 昼夜节律的肺内皮研究。必须本实验室先标定。"
+      }
+    },
+    {
+      "source_domain": "细菌致病机制 / 材料免疫学",
+      "source_mechanism": "降低表面免疫可见度以躲避清除（自然界的分子模拟伪装：PMID 31801066 A组链球菌 S 蛋白捕获裂解红细胞包被菌表面）",
+      "platform": "工程化细菌",
+      "disease": "实体瘤",
+      "method": "angle",
+      "idea": "给工程菌穿一件分子级光滑、致密、低免疫原性的外套，减少补体沉积与抗体调理、躲肝脾巨噬细胞清除，延长静脉给药后的血循环半衰期，从而提高到达肿瘤的菌量。是甜区一『两阶段切换』中定植期那一半的极端版本。",
+      "novelty": "中高",
+      "closest_work": "PMID 31801066（致病菌天然伪装机制）；未见把『给工程菌穿光滑衣躲免疫』当设计工具的报道",
+      "feasibility": "低",
+      "feasibility_blockers": [
+        "与甜区一共用同一批涂层卡点（分裂稀释、对菌活力的影响）",
+        "血循环久≠到得了肿瘤，递送五关相乘"
+      ],
+      "quadrant": "野但玄（创新性中高×可行性低）",
+      "status": "untried",
+      "user_verdict": "待柚子确认",
+      "date": "2026-09-15",
+      "falsification": "对照=未涂层同株菌；读出=静脉给药后不同时间点血中 CFU + 瘤内 CFU/g。两者任一无改善则废"
+    },
+    {
+      "source_domain": "纳米疫苗 / 材料免疫学",
+      "source_mechanism": "表面拓扑（尖刺 vs 光滑）作为独立于化学成分的免疫输入变量，走 caveolae+F-actin 机械转导与 TLR4 放大",
+      "platform": "工程化细菌",
+      "disease": "实体瘤",
+      "method": "transfer",
+      "idea": "把细菌表面免疫可见度从基因回路里解耦出来，做成可切换的物理旋钮：定植期光滑致密涂层（躲补体/抗体调理，提高瘤内 CFU），激活期涂层脱落或重组为粗糙拓扑（机械激活 DC + 暴露 MAMPs），收尾期自杀裂解。",
+      "novelty": "高",
+      "closest_work": "PMID 40476548（Nano Lett 2025，全细胞肿瘤疫苗双矿化长出尖刺 MnO2 激活 NLRP3+cGAS-STING，但为死细胞、方向相反）；PMID 41388424（活菌表面工程综述，全为化学屏蔽思路，未把拓扑当变量）。拥挤区警示：尖刺+锰+免疫激活本身已不新（PMID 40886603 / 41345640 / 29270238）",
+      "diff": "差异必须落在『活菌』和『可切换』，不能落在『尖刺』本身",
+      "feasibility": "低-中",
+      "feasibility_blockers": [
+        "活菌耐受的组装条件窗口远窄于 pH 8.5/45°C",
+        "涂层在菌分裂时被稀释",
+        "按需切换缺体内可用触发信号",
+        "最大风险：工程菌瘤内定植量本已够高，提高定植收益有限，故事第一半塌"
+      ],
+      "quadrant": "甜区（创新性高×可行性低-中）",
+      "status": "untried",
+      "user_verdict": "待柚子确认",
+      "date": "2026-09-15",
+      "falsification": "承重变量=光滑涂层确实提高瘤内定植量；对照=未涂层同株菌；读出=24h/72h/7d 的 CFU/g 肿瘤。无差异则前提崩"
+    }
+  ],
+  "rejected_or_downgraded": [
+    {
+      "idea": "让定植菌持续分泌信号维持 VE-cadherin 连接半开，把本文的'一次性爆发'变成'常开窗口'，让 CD8 T 细胞持续进入冷肿瘤",
+      "reason": "踩反面清单：内核与地图第 3 格（把蛋白酶从'降解 ECM 结构蛋白'升级为'编辑 TME 可溶蛋白组'）完全相同，只是把靶蛋白换成 VE-cadherin，属于'换个靶点'的排列组合。除非能论证 VE-cadherin 与其他 TME 靶蛋白有本质不同的调控逻辑，否则不做。另有一笔绕不过去的安全账：VE-cadherin 降解+actin 收缩是血管渗漏综合征的分子定义，在脑内对应脑出血；本文只在正常鼠看了'爆发不频繁'，没做微出血成像，也没测 VE-cadherin 何时长回来。",
+      "revisit_condition": "若能论证 VE-cadherin 连接具有'可逆、自恢复'特性（即有明确修复窗口，渗漏不持续），且能给出微出血定量数据，则可重新评估",
+      "date": "2026-09-16",
+      "source": "读 Peng 2026 Nat Commun 后评估"
+    }
+  ]
+}
