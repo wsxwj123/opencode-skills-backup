@@ -27,6 +27,11 @@ SD_WEIGHT_PATTERN = re.compile(r":(-?(?:\d+(?:\.\d*)?|\.\d+))$")
 TAG_BRACKETS = "()[]{}"
 # 这两个键以前能强制色图；用户裁定后只看正文里的 nsfw 标签，出现时 stderr 留一行线索。
 RETIRED_NSFW_KEYS = ("nsfw", "rating")
+# 去掉触发词后再去掉的开头标点与空白（检出修改指令、判断新提示词共用一份）。
+REVISION_LEADING_PUNCTUATION = "，,。.!！?？:： "
+# 修改模式下"本次写了新提示词"只看这三个字段，结构化字段不算（INTERFACE-imagegen-nsfw §1.2 r2）。
+NEW_PROMPT_FIELDS = ("prompt", "prompt_body", "positive_prompt_body")
+ASCII_LETTER_PATTERN = re.compile(r"[A-Za-z]")
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -144,10 +149,14 @@ def parse_prompt_tags(text: str) -> tuple[list[dict[str, Any]], list[dict[str, A
     return tags, blocks
 
 
-def _is_effective_nsfw(tag: dict[str, Any]) -> bool:
-    # 权重 ≤ 0（块权重或 SD 写法）表达的是"压制"，不是"要色图"。
+def _has_positive_weight(tag: dict[str, Any]) -> bool:
+    # 权重 ≤ 0（块权重或 SD 写法）表达的是"压制"，不算"写了"这个标签。
     sd_weight = tag["sd_weight"]
-    return tag["name"] == "nsfw" and tag["weight"] > 0 and (sd_weight is None or sd_weight > 0)
+    return tag["weight"] > 0 and (sd_weight is None or sd_weight > 0)
+
+
+def _is_effective_nsfw(tag: dict[str, Any]) -> bool:
+    return tag["name"] == "nsfw" and _has_positive_weight(tag)
 
 
 def count_nsfw_tags(text: str) -> int:
@@ -256,7 +265,7 @@ def detect_revision_intent(text: str) -> tuple[bool, str, str]:
     for phrase in revision_patterns:
         if phrase in lowered:
             remainder = normalize_text(lowered.replace(phrase, "", 1))
-            remainder = remainder.lstrip("，,。.!！?？:： ")
+            remainder = remainder.lstrip(REVISION_LEADING_PUNCTUATION)
             return True, phrase, remainder
     return False, "", normalized
 
@@ -279,10 +288,36 @@ def infer_mode_and_revision(intermediate: dict[str, Any]) -> tuple[str, str, str
     return "new", "", explicit_revision
 
 
+def extract_new_prompt(intermediate: dict[str, Any]) -> str:
+    """修改模式下判断"本次有没有写新提示词"（INTERFACE-imagegen-nsfw §1.2 r2）：写了返回新提示词，没写返回空串。
+
+    候选 = prompt / prompt_body / positive_prompt_body 中第一个去空白后非空的字符串；含触发词时去掉
+    第一处触发词和开头标点（保留原大小写）。剩下的至少有一个正权重、含英文字母的标签才算写了：
+    只剩中文指令（"再来一张，换个角度"）、标点、数字、压制写法都不算，照旧沿用上一张。
+    """
+    candidate = next(
+        (value for value in (intermediate.get(field) for field in NEW_PROMPT_FIELDS)
+         if isinstance(value, str) and value.strip()),
+        "",
+    )
+    remainder = normalize_text(candidate)
+    for phrase in load_chat_mappings().get("revision_triggers", []):
+        if phrase and phrase in remainder:
+            remainder = normalize_text(remainder.replace(phrase, "", 1))
+            remainder = remainder.lstrip(REVISION_LEADING_PUNCTUATION)
+            break
+    tags, _blocks = parse_prompt_tags(remainder)
+    written = any(
+        _has_positive_weight(tag) and ASCII_LETTER_PATTERN.search(tag["name"]) for tag in tags
+    )
+    return remainder if written else ""
+
+
 def normalize_intermediate(intermediate: dict[str, Any] | str) -> dict[str, Any]:
     if isinstance(intermediate, str):
         mode, phrase, revision = infer_mode_and_revision({"prompt": intermediate})
-        prompt_text = normalize_text(intermediate if mode == "new" else "")
+        new_prompt = extract_new_prompt({"prompt": intermediate}) if mode == "revise" else ""
+        prompt_text = normalize_text(intermediate if mode == "new" else new_prompt)
         return {
             "prompt": prompt_text,
             "reply_text": "",
@@ -290,6 +325,7 @@ def normalize_intermediate(intermediate: dict[str, Any] | str) -> dict[str, Any]
             "revision_trigger": phrase,
             "revision_instruction": revision,
             "override_full_prompt": False,
+            "new_prompt_written": bool(new_prompt),
         }
 
     normalized = dict(intermediate)
@@ -303,7 +339,11 @@ def normalize_intermediate(intermediate: dict[str, Any] | str) -> dict[str, Any]
         prompt = build_prompt_from_parts(intermediate)
 
     mode, phrase, revision = infer_mode_and_revision(intermediate)
-    if mode == "revise" and not normalize_text(str(intermediate.get("prompt", ""))):
+    # 修改模式下 AI 写了新提示词就只用新提示词（不沿用上一张，见 build_prompts）；没写才走原来的沿用逻辑。
+    new_prompt = extract_new_prompt(intermediate) if mode == "revise" else ""
+    if new_prompt:
+        prompt = new_prompt
+    elif mode == "revise" and not normalize_text(str(intermediate.get("prompt", ""))):
         prompt = ""
 
     normalized["prompt"] = normalize_text(str(prompt))
@@ -313,6 +353,7 @@ def normalize_intermediate(intermediate: dict[str, Any] | str) -> dict[str, Any]
     normalized["revision_instruction"] = revision
     normalized["override_full_prompt"] = bool(intermediate.get("override_full_prompt", False))
     normalized["intent"] = normalize_text(str(intermediate.get("intent", "")))
+    normalized["new_prompt_written"] = bool(new_prompt)
     return normalized
 
 
@@ -339,6 +380,14 @@ def build_prompts(
                     "是否色图只看 prompt 里有没有 nsfw 标签\n"
                 )
     normalized = normalize_intermediate(intermediate)
+    # 写了新提示词时 revision_instruction 不拼进正文（否则它也参与色图判定，违背"只看新提示词"），
+    # 留一行线索免得静默丢内容。触发词在 reply_text 里剩下的文字同样不用，但不提示。
+    revision_field = intermediate.get("revision_instruction") if isinstance(intermediate, dict) else None
+    if normalized.get("new_prompt_written") and isinstance(revision_field, str) and revision_field.strip():
+        sys.stderr.write(
+            "[novelai] 提示：本次写了新提示词，revision_instruction 未使用，"
+            "修改模式下写了新提示词只按新提示词出图\n"
+        )
     previous_state = previous_state or {}
 
     positive_prefix = normalize_text(str(config.get("positive_prefix", "")))
@@ -349,7 +398,8 @@ def build_prompts(
     previous_prompt_body = normalize_text(str(previous_state.get("prompt_body_used", "")))
     prompt_body_used = ""
 
-    if normalized.get("mode") == "revise":
+    # 只有没写新提示词才沿用上一张（+ 修改指令）；写了就只用新提示词，上一张的内容一概不带。
+    if normalized.get("mode") == "revise" and not normalized.get("new_prompt_written"):
         revision_instruction = normalize_text(str(normalized.get("revision_instruction", "")))
         if previous_prompt_body and revision_instruction:
             prompt_body = ", ".join(
