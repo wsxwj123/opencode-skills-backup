@@ -32,6 +32,12 @@ REVISION_LEADING_PUNCTUATION = "，,。.!！?？:： "
 # 修改模式下"本次写了新提示词"只看这三个字段，结构化字段不算（INTERFACE-imagegen-nsfw §1.2 r2）。
 NEW_PROMPT_FIELDS = ("prompt", "prompt_body", "positive_prompt_body")
 ASCII_LETTER_PATTERN = re.compile(r"[A-Za-z]")
+# 中日韩文字：汉字（含扩展区、部首、〇々）、日文假名（含半角）、韩文字母与音节、注音。标点不算文字。
+CJK_CHAR_PATTERN = re.compile(
+    "[ᄀ-ᇿ⺀-⿟々-〇぀-ヿ㄀-㆏ㆠ-ㇿ"
+    "㐀-䶿一-鿿ꥠ-꥿가-퟿豈-﫿ｦ-ￜ"
+    "\U00020000-\U0003134f]"
+)
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -292,8 +298,9 @@ def extract_new_prompt(intermediate: dict[str, Any]) -> str:
     """修改模式下判断"本次有没有写新提示词"（INTERFACE-imagegen-nsfw §1.2 r2）：写了返回新提示词，没写返回空串。
 
     候选 = prompt / prompt_body / positive_prompt_body 中第一个去空白后非空的字符串；含触发词时去掉
-    第一处触发词和开头标点（保留原大小写）。剩下的至少有一个正权重、含英文字母的标签才算写了：
-    只剩中文指令（"再来一张，换个角度"）、标点、数字、压制写法都不算，照旧沿用上一张。
+    第一处触发词和开头标点（保留原大小写）。剩下的至少有一个英文标签才算写了（r2.4：正权重、
+    去掉权重/括号记号后不含中日韩文字且至少含一个英文字母）：只剩中文指令（"再来一张，换个角度"）、
+    夹着英文词的中文指令（"换个pose"）、标点、数字、压制写法都不算，照旧沿用上一张。
     """
     candidate = next(
         (value for value in (intermediate.get(field) for field in NEW_PROMPT_FIELDS)
@@ -308,7 +315,10 @@ def extract_new_prompt(intermediate: dict[str, Any]) -> str:
             break
     tags, _blocks = parse_prompt_tags(remainder)
     written = any(
-        _has_positive_weight(tag) and ASCII_LETTER_PATTERN.search(tag["name"]) for tag in tags
+        _has_positive_weight(tag)
+        and ASCII_LETTER_PATTERN.search(tag["name"])
+        and not CJK_CHAR_PATTERN.search(tag["name"])
+        for tag in tags
     )
     return remainder if written else ""
 
