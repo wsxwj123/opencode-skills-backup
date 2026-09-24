@@ -1,7 +1,7 @@
 ---
 name: revise-sci
-version: 2.30.2
-description: 退稿/返修全管道，同时出逐条回复信+修改后正文docx+Patch修订。触发词：改稿、修改稿子、修订正文、退稿改进、返修、revise manuscript、major revision、minor revision、revise and resubmit、point-by-point response、revised manuscript。路由说明：与reviewer-response-sci区分，本技能同时改主稿+出回复包，后者只出回复不改稿；与gsw区分，gsw写新稿，本技能专处理已有稿子的审稿意见驱动修改。
+version: 2.30.4
+description: 用于退稿或返修阶段的完整改稿管道，由审稿意见驱动修改既有稿件。技能将审稿信拆解为逐条意见，据此修改主稿并同步产出三项交付物：逐条回复信、修改后的正文 docx，以及基于内容哈希校验的 Patch 修订记录。可选启用词级修订痕迹，在 Word 中以增删痕迹形式呈现改动。禁止杜撰实验、数据、统计结果与参考文献，证据不足处标记为需作者确认。触发词：改稿、修改稿子、修订正文、退稿改进、返修、revise manuscript、major revision、minor revision、revise and resubmit、point-by-point response、revised manuscript。路由说明：本技能同时修改主稿并产出回复包，若仅需回复而不修改主稿，应使用 reviewer-response-sci；撰写新稿应使用 general-sci-writing，本技能仅处理审稿意见驱动的既有稿件修改。
 ---
 
 # Revise-Sci
@@ -13,32 +13,32 @@ The workflow is script-gated. Do not skip steps. Do not fabricate experiments, d
 The comment parser accepts both atomic `comment-unit` HTML and reviewer-simulator style report HTML with critique lists.
 The manuscript atomizer recognizes numbered section headings such as `1`, `1.1`, and `2.3.4` even when the source Word paragraph style is not a formal heading style.
 
-## 开场监工卡（每次启动必打印，逐字给用户）
+## 开场监工卡（每次启动须原样输出给用户）
 
-> 返修改稿最容易在这几处翻车，AI 会做但**只有你能核对是不是真做到了**。启动本技能时必须原样打印这张卡：
+> 返修改稿最易在以下环节出错，AI 可执行但**结果是否正确只有用户能核对**。启动本技能时须原样输出此卡：
 >
-> 1. **拆意见别信 AI 说全了**：拆完 AI 应给你一份意见清单，你拿原始审稿信**数条数**：有没有被合并成一条、有没有整条漏掉。数目对不上就是漏了。
-> 2. **改原意要逐处盯**：每一处改动，AI 应贴「原句 → 改后句」，你确认意思没变、没夹带你没同意的新结论。看不到对照就别放行。
-> 3. **覆盖看对照表**：交付前 AI 应给「意见 × 是否回复 × 是否改稿 × 结局」对照表。「改稿」列为空**但结局标 `push_back`（有意驳回不改）**的是正常的，不是漏；真正的漏是：某条既没回复、结局又不是 `completed`/`push_back`/`需作者确认`。分清「有意不改」和「漏改」。
-> 4. **缺证据写"需作者确认"是正常的**：AI 没有你的数据/实验时应写「需作者确认」等你补，这不是 bug，请你补齐，别当故障报错。
-> 5. **门禁 PASS 只保形式**：门禁只查格式/覆盖/红线这类机械项，**改得对不对、说理通不通，得你自己核**，别把 PASS 当"改对了"。
+> 1. **意见拆解须用户核对完整性**：拆解完成后 AI 会输出意见清单，须对照原始审稿信**逐条核对**：是否存在被合并或整条遗漏的情况。条数不一致即存在遗漏。
+> 2. **改动须逐处核对**：每处改动 AI 应提供「原句 → 改后句」对照，用户须确认语义未变、未夹带未经同意的新结论。未见对照不应放行。
+> 3. **覆盖须查对照表**：交付前 AI 应提供「意见 × 是否回复 × 是否改稿 × 结局」对照表。「改稿」列为空**但结局标 `push_back`（有意驳回不改）**的属于正常，非遗漏；真正的遗漏是：某条既无回复、结局又不属于 `completed`/`push_back`/`需作者确认`。须区分「有意不改」与「遗漏」。
+> 4. **标注"需作者确认"属于正常行为**：AI 无法获取用户的数据/实验时应标注「需作者确认」等待补充，此为设计行为而非故障，须由用户逐项补齐。
+> 5. **门禁通过仅保证形式合规**：门禁仅检查格式、覆盖率与红线等机械项，**改动是否正确、说理是否通顺须用户自行核对**，不应将门禁通过等同于"改对了"。
 
-**【Python 解释器探测·开工第一件事，一次探测全程沿用】** 本文命令里写的 `python3` / `python` 只是 macOS/Linux 的习惯写法，不是硬性要求。动手前先跑一次 `python3 --version`：
-- 打印出正常版本号 → 本次会话所有命令照抄用 `python3`。
-- 报 command not found、没有任何输出、或弹出应用商店 → 改跑 `python --version`，能出版本号就把后续所有命令里的解释器统一换成 `python`。注意 Windows 自带一个 0 字节的 `python3` 占位程序，`python3 --version` 弹商店或无输出就是撞上了它，**不算有 python3**，按"没有"处理（用户也可在 设置 → 应用 → 应用执行别名 里关掉 `python3.exe`）。
-- 反过来 `python` 出不了版本号就换 `python3`（macOS 12.3 起系统不再自带 `python`）。
-- 两个都出不了版本号 = 这台机器没装 Python，停下来告诉用户先安装，不要硬跑。
-- 探测只做这一次，之后所有命令沿用同一个名字，不要每条命令都再试。
+**【Python 解释器探测：启动前置，一次探测全程沿用】** 本文档中的 `python3` / `python` 仅为 macOS/Linux 的习惯写法，并非硬性要求。启动前执行一次 `python3 --version`：
+- 输出正常版本号 → 本次会话所有命令统一使用 `python3`。
+- 报 command not found、无任何输出、或弹出应用商店 → 改为执行 `python --version`，能输出版本号则将后续所有命令中的解释器统一替换为 `python`。注意 Windows 自带一个 0 字节的 `python3` 占位程序，`python3 --version` 弹出商店或无输出即表示命中该占位程序，**不视为已安装 python3**，按"未安装"处理（用户也可在 设置 → 应用 → 应用执行别名 中关闭 `python3.exe`）。
+- 反之 `python` 无法输出版本号则改用 `python3`（macOS 12.3 起系统不再预装 `python`）。
+- 两者均无法输出版本号，表明该机器未安装 Python，须停止并告知用户先行安装，不得强行执行。
+- 探测仅执行一次，后续所有命令沿用同一解释器名称，无需每条命令重复探测。
 
-## 跨会话接续（每次开局先跑，与监工卡是两件事）
+## 跨会话接续（每次开局前置，与监工卡是两件事）
 
-监工卡是「启动提醒」，接续报告是「续上上一会话的进度」。**每次进入本技能、且 `project_root` 已存在时，先跑接续命令再动手**：
+监工卡是「启动提醒」，接续报告是「恢复上一会话的进度」。**每次进入本技能、且 `project_root` 已存在时，须先执行接续命令后方可继续**：
 
 ```bash
 python "<技能>/scripts/session_journal.py" resume --root <project_root>
 ```
 
-`env_preflight.py` 会把这条打印为 `RESUME_CMD`（连同 `LOG_CMD` / `CITATION_CHECK_CMD`，均为解析好的绝对路径）。读完接续报告后，**据它跟用户打接续握手**：复述当前 phase、已处理的 comment、以及 `decisions_log.md` 里用户历次要求，问「我接着做 <下一步>，对吗？还是先插新要求？」**等用户确认再继续**。
+`env_preflight.py` 会将此命令输出为 `RESUME_CMD`（连同 `LOG_CMD` / `CITATION_CHECK_CMD`，均为解析好的绝对路径）。读取接续报告后，**据其与用户进行接续确认**：复述当前 phase、已处理的 comment、以及 `decisions_log.md` 中用户历次要求，询问「继续执行 <下一步>，是否正确？如有新要求请先提出」**等待用户确认后方可继续**。
 
 用户在会话中途**插入任何临时要求**（改哪节、换策略、加/撤某条意见的处理方式）时，**当场 log**，后续会话必读必守：
 
@@ -231,7 +231,7 @@ python scripts/run_pipeline.py --comments <comments_path> --manuscript <manuscri
 
 ## [通读定策略·前置阶段]（清单核对通过后、逐条改写前）
 
-真人返修的第一件事不是逐条动手，而是**先把所有意见通读一遍、定下每条的应对策略**。这里也一样：意见清单核对通过后、`revise_units.py` 开始逐条改写之前，**先做一轮 triage**，不要从 atomize 直接跳到逐条改。
+实际返修的第一步不是逐条修改，而是**先将所有意见通读一遍、确定每条的应对策略**。本流程同理：意见清单核对通过后、`revise_units.py` 开始逐条改写之前，**须先做一轮 triage**，不得从 atomize 直接跳至逐条改写。
 
 对每条 comment 定四选一的策略，并**写进该 unit 的 `revision_strategy` 字段**（`units/*.json`）：
 
@@ -510,9 +510,9 @@ These inline markers are load-bearing and carry the same status as citation mark
 
 终稿交付前，对照 `references/presubmission_checklist.md` 过一遍（数字一致性、英美拼写统一、图像无不当处理、Source Data、查重、临床注册号、报告规范附件、投稿材料齐全等）。这些项多需作者掌握原始数据/图像/外部工具，机器无法可靠裁决，故**只提醒、不阻断**；与本技能既有 hard 门禁（引用一一对应、去AI、跨节一致、字符级体检 RV-R11 等）不重复。
 
-## 发现 AI 跳步/漏做了怎么办（用户自救）
+## 流程跳步的用户干预方法
 
-如果你怀疑 AI 拆意见拆漏了、改稿改跑了、或直接把半成品当成品交付，下面几句话可直接复制发给它，逼它回到正轨：
+发现 AI 遗漏意见、改稿偏离原意或将半成品作为成品交付时，可将以下指令直接发送给 AI：
 
 - 「审稿信里 Reviewer X 第 N 点你没拆出来，回去把它作为独立 comment 加进 `units/`，重新原子化再重跑 `revise_units.py`。」
 - 「把第 X 条对应的**原句**和你**改后的句子**并排贴给我，我要确认意思没变、没夹带我没同意的新结论。」
