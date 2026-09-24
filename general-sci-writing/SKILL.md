@@ -1,15 +1,15 @@
 ---
 name: general-sci-writing
-version: 2.36.11
-description: 用于从零撰写或润色符合Nature/Science/Cell标准的SCI研究论文（Article类型），适用于多学科。触发词：写论文、SCI论文、学术写作、科研写作、论文润色、研究论文、学术投稿、投稿、润色论文、polish paper、write SCI paper、academic writing、draft paper、manuscript writing。路由说明：退稿/返修改主稿→用revise-sci；只写审稿意见回复→用reviewer-response-sci；独立成稿的纯语言润色（拿到别人写好的整稿只改语言、不进本管道）→用polish-sci，本技能的润色仅指管道内 Phase 10 对自写稿的润色；综述/文献综述→用review-writing。本技能侧重写新稿与自写稿润色；Phase 13B 做退稿后的逐条 gap 分析与改稿，并出一份内部 response letter（reviews/response_letter.md），但不出正式投稿用的完整回复包、也不单独出修订稿docx——要正式回复包走reviewer-response-sci。
+version: 2.36.13
+description: 用于从零撰写或润色符合 Nature/Science/Cell 标准的 SCI 研究论文（Article 类型），适用于多学科。用户提供研究数据、实验结果或已有初稿，本技能以分阶段管道推进：故事脉络构建、主图集规划、文献检索、逐节撰写、摘要凝练、质量控制与投稿包准备，最终产出可直接投稿的完整稿件。全程执行反 AI 腔约束与文献真实性核验，不杜撰数据与参考文献。触发词：写论文、SCI论文、学术写作、科研写作、论文润色、研究论文、学术投稿、投稿、润色论文、polish paper、write SCI paper、academic writing、draft paper、manuscript writing。路由说明：退稿或返修需修改主稿的，使用 revise-sci；仅撰写审稿意见回复的，使用 reviewer-response-sci；对他人已完成的整稿执行纯语言润色、不进入本管道的，使用 polish-sci，本技能所称润色仅指管道内 Phase 10 对自写稿的润色；撰写综述或文献综述的，使用 review-writing。本技能侧重新稿撰写与自写稿润色。Phase 13B 提供退稿后的逐条 gap 分析与改稿，并生成内部 response letter（reviews/response_letter.md），但不产出正式投稿用的完整回复包，亦不单独输出修订稿 docx；需要正式回复包应使用 reviewer-response-sci。
 license: Proprietary
 ---
 
-# General SCI Writing Skill - 通用SCI论文写作系统
+# General SCI Writing Skill — 通用 SCI 论文写作系统
 
-## 🎯 Skill概述
+## 功能概述
 
-本skill用于通用SCI学术论文写作与润色，目标对齐 Nature/Science/Cell 等高水平期刊标准，适用于多学科研究。
+本技能用于通用 SCI 学术论文写作与润色，对标 Nature/Science/Cell 等高水平期刊规范，适用于多学科研究。
 
 **研究方向配置系统**：
 - **多领域支持**：内置药物递送、临床药学与大模型、计算机科学、定量药理学等研究方向配置
@@ -18,20 +18,20 @@ license: Proprietary
 
 ---
 
-**【Python 解释器探测·开工第一件事，一次探测全程沿用】** 本文命令里写的 `python3` / `python` 只是 macOS/Linux 的习惯写法，不是硬性要求。动手前先跑一次 `python3 --version`：
-- 打印出正常版本号 → 本次会话所有命令照抄用 `python3`。
-- 报 command not found、没有任何输出、或弹出应用商店 → 改跑 `python --version`，能出版本号就把后续所有命令里的解释器统一换成 `python`。注意 Windows 自带一个 0 字节的 `python3` 占位程序，`python3 --version` 弹商店或无输出就是撞上了它，**不算有 python3**，按"没有"处理（用户也可在 设置 → 应用 → 应用执行别名 里关掉 `python3.exe`）。
-- 反过来 `python` 出不了版本号就换 `python3`（macOS 12.3 起系统不再自带 `python`）。
-- 两个都出不了版本号 = 这台机器没装 Python，停下来告诉用户先安装，不要硬跑。
-- 探测只做这一次，之后所有命令沿用同一个名字，不要每条命令都再试。
+**【Python 解释器探测：启动前置，一次探测全程沿用】** 本文档中的 `python3` / `python` 仅为 macOS/Linux 默认写法，非硬性指定。启动前执行一次 `python3 --version`：
+- 正常返回版本号 → 本次会话所有命令统一使用 `python3`。
+- 返回 command not found、无输出或弹出应用商店 → 改为执行 `python --version`，若返回版本号则将后续所有命令的解释器统一替换为 `python`。Windows 系统自带一个 0 字节的 `python3` 占位程序，`python3 --version` 弹出商店或无输出即为命中该占位程序，**视为不可用**，按无 python3 处理（用户亦可在「设置 → 应用 → 应用执行别名」中关闭 `python3.exe`）。
+- 若 `python` 亦无法返回版本号则回退至 `python3`（macOS 12.3 起系统不再内置 `python`）。
+- 二者均无法返回版本号，表明当前环境未安装 Python，应停止流程并提示用户安装，不得强行执行。
+- 探测仅执行一次，后续所有命令沿用同一解释器名称，无需逐条重试。
 
-## 🔁 每次进入/续写：先接续再动手（Mandatory）
+## 会话接续协议（Mandatory）
 
-**每次进入本技能、或续写一个已存在的项目，第一步先跑接续报告，把状态贴给用户并握手确认，再开始写。**
+**每次进入本技能或续写已有项目，第一步须执行接续报告，将状态呈现给用户并等待确认，确认后方可开始写作。**
 
-1. **跑 RESUME_CMD**：运行 Phase 0 `env_preflight.py` 末尾打印的那条 `RESUME_CMD`（已含解析好的绝对路径），即 `python "<项目内 scripts 绝对路径>/session_journal.py" resume --root <project_root>`——`<项目内 scripts 绝对路径>` 就是 RESUME_CMD 里打印的那段（指向 `/init` 拷进项目的 scripts 副本，不是技能安装目录）。它汇总上次进度、last_section、outline、历次用户决定（`decisions_log.md`），产出一份接续报告。
-2. **贴报告 + 握手**：把接续报告原样贴给用户，说明"我准备从 __ 接着写，对吗？"，**等用户确认后再动手**；用户纠正口径以用户当前会话为准（磁盘旧文件不得反驳用户）。
-3. **用户临时插要求 → 立即 log**：写作过程中用户提出任何临时要求/口径变更，**立即**用 `LOG_CMD` 记进 `decisions_log.md`，即 `python "<项目内 scripts 绝对路径>/session_journal.py" log --root <project_root> --note "<用户原话>"`（路径口径同 RESUME_CMD：Phase 0 打印的项目内 scripts 绝对路径），供后续会话必读遵守。
+1. **执行 RESUME_CMD**：运行 Phase 0 `env_preflight.py` 末尾输出的 `RESUME_CMD`（已含解析好的绝对路径），即 `python "<项目内 scripts 绝对路径>/session_journal.py" resume --root <project_root>`——`<项目内 scripts 绝对路径>` 就是 RESUME_CMD 里打印的那段（指向 `/init` 拷进项目的 scripts 副本，不是技能安装目录）。它汇总上次进度、last_section、outline、历次用户决定（`decisions_log.md`），产出接续报告。
+2. **展示报告并确认**：将接续报告完整呈现给用户，说明"准备从 __ 处继续，是否正确？"，**等用户确认后方可继续**；用户当前会话中的口径修正优先于磁盘中的历史记录。
+3. **用户临时要求须即时记录**：写作过程中用户提出的任何临时要求或口径变更，须**立即**通过 `LOG_CMD` 记入 `decisions_log.md`，即 `python "<项目内 scripts 绝对路径>/session_journal.py" log --root <project_root> --note "<用户原话>"`（路径口径同 RESUME_CMD：Phase 0 打印的项目内 scripts 绝对路径），供后续会话必读遵守。
 4. 首次 `/init` 新项目无历史时 resume 会提示为空，直接进入 Phase 0 即可。
 5. **握手确认后的续写动作**：用户确认接续点后，执行命令表 `/resume` 那条链路——`state_manager.py load` 加载全局状态 → 读 `writing_progress.json` 的 `last_section` → `write-cycle --section [last_section]`。即：**先 session_journal resume 贴报告握手，确认后再 load → write-cycle**，两步不互相替代。
 
@@ -221,12 +221,12 @@ license: Proprietary
 **决策门**：用户阅读报告后确认继续，或调整研究设计再回到 Phase 0。
 
 ### Phase 1.9: 体裁前置确认（Mandatory，提示级闸门）
-构建 storyline 前必须先向用户确认稿件体裁，体裁错了后面全白做（本闸脚本无法判定体裁，靠提示级把关）：
+构建 storyline 前须先向用户确认稿件体裁，体裁误判将导致后续全部流程失效（本闸口脚本无法自动判定体裁，依赖提示级把关）：
 - **研究论文（Article / IMRaD，有原始数据与结果）** → 留在本技能，进入 Phase 2。
 - **综述 / 文献综述（无原始实验，梳理与综合已有文献）** → 停下，转 **review-writing** 技能。
 - **学位论文 / 毕业论文（博士 / 硕士，中文，SCI 转学位论文）** → 停下，转 **sci2doc** 技能。
 
-拿不准就问用户一句"这是投期刊的研究论文、综述、还是学位论文？"，得到明确答复再继续；**严禁默认当研究论文直接开写 storyline**。
+无法判定时应直接询问用户"本稿件为投期刊的研究论文、综述还是学位论文？"，获得明确答复后方可继续；**严禁默认按研究论文处理并直接构建 storyline**。
 
 ### Phase 2: 故事脉络构建 (`/storyline`)
 构建融合Results与Discussion的提纲。
@@ -241,7 +241,7 @@ license: Proprietary
 | NEJM / Lancet / JAMA | 250 词 **structured**（Background/Methods/Results/Conclusions）| 3000-3500 词 | 5 主图 + 5 表 | 文中（Methods 在 Results 前） |
 | BMC / PLOS ONE / Scientific Reports | 350 词 structured | 不限 | 不限 | 文中 |
 
-不在表内的期刊由 AI 上 journal 官网查 author guideline 后告知用户、写入 `project_config.word_limits`。Storyline 必须在期刊上限内编排，**严禁先写超 30% 再砍**。
+未列入上表的期刊，须查阅该刊官网 Author Guidelines 获取相应限制后告知用户，并写入 `project_config.word_limits`。Storyline 必须在期刊上限内编排，**严禁先写超 30% 再砍**。
 
 **`/change-journal` 中途转投流程**：五步流程（查新刊限制→改 config→/check 字数→重跑 submission-pack→重组 Methods）见 `references/interaction-protocol.md`（`/change-journal` 节）。
 
@@ -318,7 +318,7 @@ license: Proprietary
 
 ### Phase 5: 统计方法选择助手 (`/stat-helper`)
 
-**触发场景**：用户有 raw data、不确定该用什么统计检验（博士生最高频卡点，选错一篇文章基本报废）。
+**触发场景**：用户持有原始数据但无法确定适用的统计检验方法（统计方法选择错误将直接导致论文审稿不通过）。
 
 **执行**：`Read references/stat-decision-tree.md`，含完整决策树（按数据类型/分组数/配对/分布）、5 条强制询问（正态性/方差齐性/样本量/配对/outlier）、报告模板与 4 条红线。输出的检验用 `add-stat-method` 落地到 `figures_database` 各 panel 的 `stat_test` 字段。
 
@@ -326,7 +326,7 @@ license: Proprietary
 
 ### Phase 6: Figure 识图与讨论 (`/figure`)
 
-**定位**：把"用户逐张发实验图 → AI 读图产出结果与讨论草稿 → 存为写作依据"这一步固定下来。产物 `figure_analysis/figure_{N}.md` 是 Phase 8 撰写对应 Results/Discussion 小节的**上游素材**，非正文，不参与 `/merge` 合并。
+**定位**：将用户逐张提供实验图、AI 读图产出结果与讨论草稿、存为写作依据这一流程标准化。产物 `figure_analysis/figure_{N}.md` 是 Phase 8 撰写对应 Results/Discussion 小节的**上游素材**，非正文，不参与 `/merge` 合并。
 
 **前置**：必须在 `/figure-plan`（Phase 2.5）完成图集规划、且文献检索（Phase 3）基本完成后才运行。此时每张图的 section_id 与 main/SI 分配已确定（来自 Phase 2.5 的 `figures_database.json` 草版条目），本阶段用真实图文件填充该条目，不再重新规划图序。结构由 storyline 决定（融合式 / Results 与 Discussion 分离 / 方法学后置均可），本阶段只产素材、不假设结构。**本阶段不检索文献**。**与 Phase 8 逐节交替**：不是先识完所有 figure 再统一写，而是每写一个 Results 小节前先对该节对应 figure 跑 `/figure`，再 `/write` 该节。
 
@@ -354,7 +354,7 @@ license: Proprietary
 **配图代码生成（opt-in，默认关）**：本阶段默认只做识别用户已有实验图（上述读图红线），**不**生成新图，基础实验用户自行作图。生成新图代码是与识图**并列的另一项可选能力**，二者互不混淆：仅当用户**明确要求**"生成配图/画图代码"（如生信、统计图场景）时启用。启用后：① 调用本地 matplotlib/seaborn skill 生成**可运行代码**（产出代码非图片，不替代识图、不写入 `figure_analysis/`）；② 遵循学术规范：按数据选图型（bar/boxplot/line/scatter+回归/**forest plot**/**funnel plot**（meta 分析用）/**volcano plot**·**MA plot**（差异表达用）/heatmap/network/concept map），APA 7.0 caption，色盲安全配色（viridis/cividis/Tol），300 DPI，轴标签带单位，**禁 3D 图与饼图**；③ 生成后由用户运行得图。
 
 ### Phase 7: 缩略词表管理 (`add-abbreviation`)
-**定位**：跨小节维护缩略词一致性，防止同一缩写 ROS 在 5 个章节各定义一次、或后半段直接用未定义缩写。
+**定位**：跨小节维护缩略词一致性，避免同一缩写在多个章节重复定义或在后文中使用未经定义的缩写。
 
 **首次出现规则（Mandatory）**：
 - **EN**：`Full Name (ABBR)`，例：`reactive oxygen species (ROS)`
@@ -441,7 +441,7 @@ python scripts/state_manager.py add-abbreviation <one.json>
 
 ### Phase 8.6: 目标期刊风格深度学习 (`/journal-study`)：🚫 已停用（DEPRECATED，不在写作流程中执行）
 
-> **🚫 本 Phase 已从写作流程移除，不要在写作中/写作后触发 `/journal-study`。** 期刊**语言风格适配**（被动比例、句式、摘要调性、图序惯例）**改到全文完成后的最后一步、用 `polish-sci` 技能做**。语言风格属于润色期，不该在写作阶段提前学，更不该卡在 abstract 前面。
+> **🚫 本 Phase 已从写作流程移除，不要在写作中/写作后触发 `/journal-study`。** 期刊**语言风格适配**（被动比例、句式、摘要调性、图序惯例）**已调整至全文完成后的最后一步，由 `polish-sci` 技能执行**。语言风格属于润色阶段的工作，不应在写作阶段提前引入，更不应阻塞摘要撰写流程。
 > 
 > **结构目标不受影响、仍然保留**：字数上限、主图张数、Abstract 结构/词数、Methods 形式（Online vs STAR）等**结构约束**由 **Phase 2 `/storyline` 的 `target_journal` 早已捕获并写入 `project_config.word_limits`**，全流程沿用，不依赖本 Phase。停用的只是"写完再回头学期刊语言风格"这一步，不动 Phase 2 的早期结构约束。
 > 
@@ -459,7 +459,7 @@ python scripts/state_manager.py add-abbreviation <one.json>
 
 ### Phase 10: 质量控制 (`/check`)
 
-**为什么前置**：投稿包要从已质检的稿子里取材（cover letter 的 key findings 必须是已校对版、Source Data 必须与已校对的图表对应）。先 /check → 通过 → 再 /submission-pack。
+**前置理由**：投稿包须基于已通过质检的稿件生成（cover letter 的 key findings 必须取自校对版、Source Data 必须与校对后的图表对应）。流程顺序为 /check 通过后方可执行 /submission-pack。
 
 **执行命令（有序，每步阻断条件明确）**：
 1. `python scripts/state_manager.py stats`：字数检查。**字数预算分类**：手动汇总 `01_Abstract*.md + 02_Introduction*.md + 04_Results*.md + 05_Discussion*.md` 为"正文字数"（`03_Methods*.md`/`07_References*.md`/Legends 多数期刊不计入），对比 `project_config.word_limits`。**阻断**：超 10% 必砍；超 5% 警告。
@@ -531,7 +531,7 @@ python scripts/state_manager.py add-abbreviation <one.json>
 **全部 ✅ → 进 Phase 11**；任一 ❌ → 补充后重跑，不得跳过。
 
 ### Phase 11: 投稿包准备 (`/submission-pack`)
-**时机**：`/check` **全部通过**后；投稿包内容必须基于已质检的稿子。投稿包不全 → 编辑桌面拒（desk reject），白写。
+**时机**：`/check` **全部通过**后；投稿包内容必须基于已通过质检的稿件。投稿包不完整将直接导致编辑桌面拒稿（desk reject）。
 
 **结构化持久化**：所有问答结果（cover letter 编辑名 / 建议 reviewer / CRediT 分配 / funding / COI / highlights / one-sentence summary）都写入 `submission/submission_state.json`（已加入 STATE_FILES，snapshot 备份+rollback 恢复）。重跑 `/submission-pack`（如改投另一家期刊）时先 Read 该文件，仅问"变化项"，不重新问全部。写入命令：`python scripts/state_manager.py update <payload.json>` payload 形如 `{"submission_state": {"target_journal":"...", "cover_letter_data":{...}, "credit_data":{...}, ...}}`。
 
@@ -552,7 +552,7 @@ python scripts/state_manager.py add-abbreviation <one.json>
 
 ### Phase 12: Presubmission Inquiry（仅 Nature/Cell/Science 系列，可选但强烈建议）
 
-**为什么做**：Nature 系列 desk reject 率 60-80%，编辑预审一次 inquiry 通常 1-2 周内回复"是否感兴趣"，若不感兴趣可省 4-6 周等审稿。Cell 系列同理。
+**必要性**：Nature 系列桌面拒稿率达 60%-80%，编辑预审 inquiry 通常于 1-2 周内回复是否有兴趣，若无兴趣可避免 4-6 周的审稿等待周期。Cell 系列同理。
 
 **何时触发**：用户表态"投 Nature/Cell/Science 子刊"且 `/submission-pack` 完成后、正式提交前。
 
@@ -583,7 +583,7 @@ python scripts/state_manager.py add-abbreviation <one.json>
 
 ### Phase 14: 导师批注循环 (`/mentor-review`)
 
-**触发场景**：博士生写作真实工作流。写一节 → 给导师看 → 批注 → 改 → 再给 → 再改，循环 5-10 轮。本 phase 把这个循环结构化。
+**触发场景**：对应博士生写作的实际工作流程——逐节撰写、提交导师审阅、接收批注、修改、再审、再改，通常循环 5-10 轮。本阶段将该循环流程结构化管理。
 
 **输入形式**：
 - **形式 A**：导师在 Word 上开 track changes 标注 → 用户导出 `.docx` 或截图 → 你需要 `Read` 后转 `reviews/mentor_comments_round{N}.md`
@@ -664,9 +664,9 @@ python scripts/state_manager.py add-abbreviation <one.json>
 ---
 
 ## 🛡️ 写作禁忌
-1. **严禁割裂**：不要在Results里只罗列数字，然后在Discussion里才解释意思。
-2. **严禁简略**：Key Findings 只写一两句话就是没讲透，属**质量不合格、必须补写**——但这是写作要求，**不是落盘阻断**（字数/深度的门禁口径以 §融合写作策略"深度控制（软提示，非硬门）"为准：不足不拦落盘）。
-3. **严禁遗忘**：每次写作前执行“预加载”（write-cycle 完整命令与白名单见 §13）。全局历史与进度必须读取；正文草稿默认不读取（续写/改写时才加 `--include-draft`），避免无稿场景污染上下文。
+1. **严禁割裂**：不得在 Results 中仅罗列数值而将解释全部推迟至 Discussion。
+2. **严禁简略**：Key Findings 仅以一两句话带过属于深度不足，**须补充展开**——但这是写作要求，**不是落盘阻断**（字数/深度的门禁口径以 §融合写作策略"深度控制（软提示，非硬门）"为准：不足不拦落盘）。
+3. **严禁遗忘**：每次写作前须执行预加载（write-cycle 完整命令与白名单见 §13）。全局历史与进度必须读取；正文草稿默认不读取（续写/改写时才加 `--include-draft`），避免无稿场景污染上下文。
 
 ### ❌ 反例黑名单（Anti-Patterns）
 - ❌ 跳过图集先行：故事线未确认就启动图集规划，或图集未规划就直接识图、写正文（流程必须 storyline → figure-plan → figure → write）。
@@ -731,9 +731,9 @@ python scripts/state_manager.py add-abbreviation <one.json>
 
 ---
 
-## 发现 AI 跳步/漏做了怎么办（用户自救）
+## 流程跳步的用户干预方法
 
-以下话术可直接复制发给 AI，用于把跳过的流程关卡拽回来：
+以下指令可直接复制发送给 AI，用于将跳过的流程关卡拉回正轨：
 
 - 「停，你跳过了每节结束的确认。回到刚写完那节，把字数、引用条数、用到的 figure、新增缩写、残留占位符列给我看，我确认后再往下」
 - 「把正文里引的文献逐条列出来，每条给我 source_provider 和 PMID/DOI，对每条重跑 citation_guard.py，把脚本原始输出和退出码贴我，别只说'已通过'」
