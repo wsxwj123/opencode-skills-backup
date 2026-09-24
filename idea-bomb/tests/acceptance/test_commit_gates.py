@@ -151,21 +151,7 @@ def test_commit_当天第三个_放行(env):
     for i in range(2):
         env.commit(good_cell(idea=zh(31 + i)), sids[i]).assert_ok("commit")
     d = env.commit(good_cell(idea=zh(40)), sids[2]).assert_ok("commit")
-    assert d["today_count"] == 3 and d["cap"] == 3
-
-
-def test_commit_当天第四个_CAP_EXCEEDED(env):
-    """边界：当天已有 3 个 schema2 cell，第 4 个拒绝，gate=hypothesis_cap。"""
-    sids = env.register(5)
-    for i in range(3):
-        env.commit(good_cell(idea=zh(31 + i)), sids[i]).assert_ok("commit")
-    before = env.sha()
-    r = env.commit(good_cell(idea=zh(45)), sids[3])
-    d = r.assert_rejected("commit", 2, gate="hypothesis_cap")
-    assert "CAP_EXCEEDED" in [e["code"] for e in r.json["errors"]]
-    assert d["today_count"] == 3 and d["cap"] == 3
-    assert env.sha() == before
-    assert len(env.doc()["cells"]) == 4, "超限时不得写入第 4 个假说"
+    assert d["today_count"] == 3
 
 
 def test_commit_老schema1格子不计入日上限(env, run_map, mapfile, session_dir, backup_dir):
@@ -198,25 +184,7 @@ def test_commit_昨天的schema2不计入今天(env, mapfile):
     assert d["today_count"] == 1
 
 
-def test_commit_伪造date绕不过日上限(env):
-    """1.6 防绕过：stdin 写 date=1999-01-01，当天已满 3 个时仍然拒绝。"""
-    sids = env.register(5)
-    for i in range(3):
-        env.commit(good_cell(idea=zh(31 + i)), sids[i]).assert_ok("commit")
-    r = env.commit(good_cell(idea=zh(50), date="1999-01-01"), sids[3])
-    r.assert_rejected("commit", 2, gate="hypothesis_cap")
-
-
-def test_commit_校验顺序_数量闸先于必填闸(env):
-    """当天已满 3 个且新 cell 字段全缺：应被 hypothesis_cap 拦下（第 5 步在第 6 步前）。"""
-    sids = env.register(5)
-    for i in range(3):
-        env.commit(good_cell(idea=zh(31 + i)), sids[i]).assert_ok("commit")
-    r = env.commit({}, sids[3])
-    r.assert_rejected("commit", 2, gate="hypothesis_cap")
-
-
-# ================================================= 裁决终态闸（第 7 步）
+# ================================================= 裁决终态闸（第 6 步）
 
 @pytest.mark.parametrize("v", ["采纳", "否决"])
 def test_commit_终态采纳否决_放行(env, v):

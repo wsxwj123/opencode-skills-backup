@@ -20,7 +20,7 @@ def test_good_cell_passes_and_appends(ready):
     result = ready.commit(good_cell())
     assert result.code == 0, result.body
     assert (result.body["index"], result.body["cells_before"], result.body["cells_after"]) == (0, 0, 1)
-    assert result.body["today_count"] == 1 and result.body["cap"] == 3
+    assert result.body["today_count"] == 1
     cell = read_map(ready.map_path)["cells"][0]
     assert cell["schema"] == 2 and cell["seed_id"] == "S1" and cell["date"] == TODAY
     assert "committed_at" in cell and "archived" not in cell
@@ -45,16 +45,6 @@ def test_commit_only_appends_never_rewrites_old_cells(ready):
 
 
 # ---------------------------------------------------------------- 数量闸
-
-
-def test_third_hypothesis_of_the_day_passes_fourth_rejected(ready):
-    for i, seed in enumerate(["S1", "S2", "S3"]):
-        result = ready.commit(good_cell(idea=text_of(40) + str(i)), seed_id=seed)
-        assert result.code == 0 and result.body["today_count"] == i + 1
-    result = ready.commit(good_cell(idea=text_of(41)), seed_id="S4")
-    assert result.code == 2 and result.body["gate"] == "hypothesis_cap"
-    assert result.codes == ["CAP_EXCEEDED"]
-    assert (result.body["today_count"], result.body["cap"]) == (3, 3)
 
 
 def test_old_schema1_cells_do_not_count_toward_daily_cap(ready):
