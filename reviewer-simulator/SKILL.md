@@ -1,7 +1,7 @@
 ---
 name: reviewer-simulator
-version: 2.29.16
-description: 用于模拟高标准学术同行评审，对医学、生物、药学等领域稿件进行法医式检查、目标期刊契合度评估和证据锚定批评，输出结构化中文审稿报告。当用户提到模拟审稿、帮我审稿、预审、审稿报告、做reviewer、审一下这篇文章、投稿前自查、审稿人会怎么挑刺、这篇能不能中、peer review、simulate reviewer、review manuscript 时优先调用。注意与 reviewer-response-sci（用于回复审稿意见）区分：本技能是模拟审稿人写审稿意见，后者是针对已收到的审稿意见撰写回复。
+version: 2.29.18
+description: 用于模拟高标准学术同行评审，对医学、生物、药学等领域的稿件执行法医式核查、目标期刊契合度评估与证据锚定式批评，输出结构化中文审稿报告（HTML 格式，写入用户当前工作目录）。每项批评须锚定稿件中的具体位置与证据，不作泛泛评述。触发词：模拟审稿、帮我审稿、预审、审稿报告、做reviewer、审一下这篇文章、投稿前自查、审稿人会怎么挑刺、这篇能不能中、peer review、simulate reviewer、review manuscript。路由说明：本技能模拟审稿人撰写审稿意见，针对已收到的审稿意见撰写回复应使用 reviewer-response-sci。
 ---
 
 # Reviewer Simulator
@@ -13,16 +13,16 @@ description: 用于模拟高标准学术同行评审，对医学、生物、药�
 - 模板来源（只读）：`assets/report_template.html`（技能安装目录，**禁止写入**）
 - 输出路径（每次运行新建）：写到**用户当前工作目录**（CWD），文件名 `report_YYYYMMDD_[稿件题目关键词].html`；如用户指定了输出目录则用其指定路径。绝不写进技能安装目录下的 `assets/`。
 
-**【Python 解释器探测·开工第一件事，一次探测全程沿用】** 本文命令里写的 `python3` / `python` 只是 macOS/Linux 的习惯写法，不是硬性要求。动手前先跑一次 `python3 --version`：
-- 打印出正常版本号 → 本次会话所有命令照抄用 `python3`。
-- 报 command not found、没有任何输出、或弹出应用商店 → 改跑 `python --version`，能出版本号就把后续所有命令里的解释器统一换成 `python`。注意 Windows 自带一个 0 字节的 `python3` 占位程序，`python3 --version` 弹商店或无输出就是撞上了它，**不算有 python3**，按"没有"处理（用户也可在 设置 → 应用 → 应用执行别名 里关掉 `python3.exe`）。
-- 反过来 `python` 出不了版本号就换 `python3`（macOS 12.3 起系统不再自带 `python`）。
-- 两个都出不了版本号 = 这台机器没装 Python，停下来告诉用户先安装，不要硬跑。
-- 探测只做这一次，之后所有命令沿用同一个名字，不要每条命令都再试。
+**【Python 解释器探测：启动前置，一次探测全程沿用】** 本文档中的 `python3` / `python` 仅为 macOS/Linux 的习惯写法，并非硬性要求。启动前执行一次 `python3 --version`：
+- 输出正常版本号 → 本次会话所有命令统一使用 `python3`。
+- 报 command not found、无任何输出、或弹出应用商店 → 改为执行 `python --version`，能输出版本号则将后续所有命令中的解释器统一替换为 `python`。注意 Windows 自带一个 0 字节的 `python3` 占位程序，`python3 --version` 弹出商店或无输出即表示命中该占位程序，**不视为已安装 python3**，按"未安装"处理（用户也可在 设置 → 应用 → 应用执行别名 中关闭 `python3.exe`）。
+- 反之 `python` 无法输出版本号则改用 `python3`（macOS 12.3 起系统不再预装 `python`）。
+- 两者均无法输出版本号，表明该机器未安装 Python，须停止并告知用户先行安装，不得强行执行。
+- 探测仅执行一次，后续所有命令沿用同一解释器名称，无需每条命令重复探测。
 
 **【技能安装目录解析·与 Python 探测同次，一次解析全程沿用】** 本文所有 `$SKILL_DIR` 指代**本 SKILL.md 所在目录**（即技能安装目录；脚本从该目录直接调用、不拷进项目）。按本文件实际加载位置解析一次（Claude Code 安装位为 `~/.claude/skills/reviewer-simulator`，Codex 为 `~/.codex/skills/reviewer-simulator`，OpenCode 为 `~/.config/opencode/skills/reviewer-simulator`），之后所有命令沿用同一个值。
 
-**【接续与握手·每次进入/续写先做】** 每次进入本技能或续写既有审稿任务，**先跑 `RESUME_CMD`**（`python "$SKILL_DIR/scripts/session_journal.py" resume --root <项目根>`；环境预检 `env_preflight.py` 跑完也会打印解析好绝对路径的 RESUME_CMD/LOG_CMD，可照抄）读回上次进度与用户历次要求，把接续报告原样贴给用户完成握手，再动手。**用户中途插入任何临时要求，立即用 `LOG_CMD`**（`python "$SKILL_DIR/scripts/session_journal.py" log --root <项目根> --note "<用户原话>"`）记一条，避免跨 session 丢失。首次全新任务无接续记录时，resume 会提示"暂无"，照常开工即可。
+**【接续确认：每次进入/续写前置】** 每次进入本技能或续写既有审稿任务，**须先执行 `RESUME_CMD`**（`python "$SKILL_DIR/scripts/session_journal.py" resume --root <项目根>`；环境预检 `env_preflight.py` 执行后也会输出解析好绝对路径的 RESUME_CMD/LOG_CMD，可直接复制）读回上次进度与用户历次要求，将接续报告完整呈现给用户并完成确认，等待确认后方可继续。**用户中途提出任何临时要求，须立即通过 `LOG_CMD`**（`python "$SKILL_DIR/scripts/session_journal.py" log --root <项目根> --note "<用户原话>"`）记录一条，避免跨 session 丢失。首次全新任务无接续记录时，resume 会提示"暂无"，照常开始即可。
 </CRITICAL_INSTRUCTIONS>
 
 审稿人模拟系统 - 完整执行手册
@@ -672,9 +672,9 @@ AIGC率过高或涉嫌造假
 请提供待审稿件及投稿目标。
 
 
-## 发现 AI 跳步/编造了怎么办（用户自救）
+## 流程跳步的用户干预方法
 
-若怀疑 AI 跳过关卡或凭空编批评，直接把下面话术贴给它：
+发现 AI 跳过关卡或杜撰批评内容时，可将以下指令直接发送给 AI：
 
 - 「你列的每条核心问题，把你引的原文片段贴出来，我要回稿子里一句句核对是不是真的」
 - 「问题 X 你说缺同型对照，那段在稿子第几处？把原文那句给我」
