@@ -72,36 +72,14 @@
 
 `closest_work` 填最接近的真实检索结果。未检索到先例时写"检索未见直接先例"，此时 `diff` 可留空。填写了具体工作则 `diff` 必填且 ≥10 字。禁止编造文献。
 
-## 提交 JSON 结构
+## 入库
 
-```json
-{
-  "idea": "一句话说清这个课题是什么（≥30 字）",
-  "hypothesis": {
-    "background": "……", "gap": "……", "design": "……", "innovation": "……"
-  },
-  "feasibility_layers": {
-    "机制": "外域机制搬过来在本领域讲不讲得通",
-    "体系实现": "在用户的体系里能不能真做出来，关卡看 profile",
-    "三年立项": "三年内的条件够不够"
-  },
-  "falsification": "承重变量 + 非同义反复的阴性对照",
-  "novelty_queries": ["目标领域检索式", "源领域原名检索式"],
-  "closest_work": "PMID 38123456（……）",
-  "diff": "和最接近的那篇差在哪（≥10 字；无先例时可留空）",
-  "novelty": "中-高",
-  "feasibility": "高",
-  "quadrant": "甜区（创新中-高×可行高）",
-  "source_domain": "时间生物学",
-  "source_mechanism": "免疫细胞丰度的昼夜相位",
-  "platform": "工程化细菌",
-  "disease": "实体瘤",
-  "method": "transfer",
-  "status": "untried",
-  "user_verdict": "采纳"
-}
-```
+课题经裁决后存为一个 Markdown 文件。文件命名、frontmatter 字段、正文章节结构均见 `library-format.md`，本文件不重复定义存储格式，只规定四要素与证伪点的写法。
 
-`feasibility_layers` 键名自定，须 ≥3 层、每层 ≥10 字。`source_domain` / `source_mechanism` 为跨界迁移专用，其他方法可不填。`method` 取值：`transfer` / `combine` / `angle` / `contradiction` / `problem` / `tech_mismatch` / `data_driven` / `failure`。`schema`、`date`、`committed_at`、`seed_id`、`archived` 由脚本自动填充。
+字段语义补充三条：
 
-JSON 为入库数据结构。呈现给用户时须按立项依据体写为连贯段落，口头讲解采用平实中文，二者文体不可混淆。
+- `方法` 取 `transfer` / `combine` / `angle` / `contradiction` / `problem` / `tech_mismatch` / `data_driven` / `failure` 之一，在写入课题库时回溯标注。
+- `源领域` 与 `源机制` 为跨界迁移专用，其他方法留空。
+- 可行性三层固定为机制、体系实现、三年立项，每层不少于 10 字。三层的判定口径见 SKILL.md「两轴评估体系」一节。
+
+假说正文须按立项依据体写为连贯段落，与用户口头讲解取舍时采用平实中文，二者文体不可混淆。
