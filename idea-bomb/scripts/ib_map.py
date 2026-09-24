@@ -30,14 +30,15 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import ib_common as ib  # noqa: E402
 
-HYPOTHESIS_CAP_PER_DAY = ib.HYPOTHESIS_CAP_PER_DAY  # 常量只在 ib_common 存一份
 LOCK_TIMEOUT_SECONDS = 10
 
 DEFAULT_MAP = os.path.expanduser("~/.idea-bomb/migration_map.json")
 DEFAULT_SESSION_DIR = os.path.expanduser("~/.idea-bomb/session")
 KNOWN_COMMANDS = ("status", "gate", "commit", "verdict")
 
-ALLOWED_METHODS = ("transfer", "combine", "angle")
+ALLOWED_METHODS = ("transfer", "combine", "angle",
+                    "contradiction", "problem", "tech_mismatch",
+                    "data_driven", "failure")
 ALLOWED_STATUS = ("untried", "done", "failed")
 HYPOTHESIS_KEYS = ("background", "gap", "design", "innovation")
 
@@ -568,14 +569,6 @@ def cmd_commit(args):
                                "种子 %s 今天已经展开过一次了" % args.seed_id)],
                        integrity=integrity)
 
-    if len(today_cells) >= HYPOTHESIS_CAP_PER_DAY:
-        ib.emit_reject(command, "hypothesis_cap",
-                       [ib.err("-", ib.CODE_CAP_EXCEEDED,
-                               "今天已经写进 %d 个深度假说，到顶了。宁可给 1 个尖的。"
-                               % len(today_cells))],
-                       today_count=len(today_cells), cap=HYPOTHESIS_CAP_PER_DAY,
-                       integrity=integrity)
-
     field_errors = validate_cell_fields(cell)
     if field_errors:
         ib.emit_reject(command, "required_fields", field_errors, integrity=integrity)
@@ -602,7 +595,7 @@ def cmd_commit(args):
 
     ib.emit_ok(command, index=before_count, seed_id=args.seed_id, date=today,
                user_verdict=cell["user_verdict"],
-               today_count=len(today_cells) + 1, cap=HYPOTHESIS_CAP_PER_DAY,
+               today_count=len(today_cells) + 1,
                backup=backup_path, cells_before=before_count, cells_after=len(cells),
                integrity=integrity)
 
