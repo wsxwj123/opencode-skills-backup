@@ -70,9 +70,8 @@ stderr 用于人类可读的提示与警告（如完整性警告），不参与�
 
 ### 0.5 `gate` 字段取值
 
-`backlog`（零积压闸）、`seed_cap`（种子数量闸）、`hypothesis_cap`（假说数量闸）、
-`required_fields`（写回必填闸）、`verdict`（裁决终态闸）、`addressing`（寻址校验）、
-`seed_link`（种子引用校验）、`input`（输入格式）、`storage`（存储与写入）。
+`backlog`（零积压闸）、`required_fields`（写回必填闸）、`verdict`（裁决终态闸）、
+`addressing`（寻址校验）、`seed_link`（种子引用校验）、`input`（输入格式）、`storage`（存储与写入）。
 
 ### 0.6 错误码 `code` 全表
 
@@ -85,7 +84,6 @@ stderr 用于人类可读的提示与警告（如完整性警告），不参与�
 | `WRONG_TYPE` | 类型不符（例如 `feasibility_layers` 传了字符串） |
 | `TOO_FEW` | 元素个数不足（例如 `feasibility_layers` 不足 3 层、`novelty_queries` 条目不够） |
 | `NOT_ALLOWED` | 取值不在允许集合内（例如 `user_verdict` 不是三终态） |
-| `CAP_EXCEEDED` | 超出日上限 |
 | `BACKLOG_NOT_EMPTY` | 库中存在未裁决项 |
 | `UNKNOWN_SEED` | 引用的 `seed_id` 在当天会话中不存在 |
 | `SEED_ALREADY_USED` | 该 `seed_id` 当天已被展开过 |
@@ -248,8 +246,6 @@ stdin：JSON 数组，每个元素是一个对象，必含 `text` 键（字符�
    `code=MISSING` 或 `WRONG_TYPE`，`field="[i].text"`（i 为 0 起下标）。
 4. 任一 `text` 占位或 `strip()` 后长度 <8 → 退出码 `2`，`gate=input`，
    `code=PLACEHOLDER` 或 `TOO_SHORT`，`field="[i].text"`。
-5. **数量闸**：当天已登记数 + 本批数量 > 8 → 退出码 `2`，`gate=seed_cap`，
-   `code=CAP_EXCEEDED`，`field="-"`；响应体额外带 `{"already": n, "incoming": m, "cap": 8}`。
 
 成功（退出码 `0`）：
 ```json
@@ -359,15 +355,13 @@ stdin：**单个** JSON 对象，即待写入的 cell（字段见 1.3）。
    `gate=seed_link`，`code=UNKNOWN_SEED`。
 4. **种子复用校验**：地图中已存在 `schema==2 且 date==当天 且 seed_id==该值` 的 cell →
    退出码 `2`，`gate=seed_link`，`code=SEED_ALREADY_USED`。
-5. **假说数量闸**：地图中 `schema==2 且 date==当天` 的 cell 数已 **≥3** → 退出码 `2`，
-   `gate=hypothesis_cap`，`code=CAP_EXCEEDED`，响应体带 `{"today_count": 3, "cap": 3}`。
-6. **必填字段闸**：按 1.3/1.4/1.5 逐项校验。**收集全部错误后一次性返回**，不是遇到第一个
+5. **必填字段闸**：按 1.3/1.4/1.5 逐项校验。**收集全部错误后一次性返回**，不是遇到第一个
    就退出——否则用户要来回补七八次。退出码 `2`，`gate=required_fields`，
    `errors` 含所有不合格项。
-7. **裁决终态闸**：`user_verdict` 不精确等于 采纳/否决/归档 之一 → 退出码 `2`，
+6. **裁决终态闸**：`user_verdict` 不精确等于 采纳/否决/归档 之一 → 退出码 `2`，
    `gate=verdict`，`code=NOT_ALLOWED`。归档缺 `restart_condition` → 同样拒绝，
    `gate=verdict`，`field="restart_condition"`。
-8. 全部通过 → 按 1.6 覆写受控字段 → 走 4.1 的安全写入流程 → 退出码 `0`。
+7. 全部通过 → 按 1.6 覆写受控字段 → 走 4.1 的安全写入流程 → 退出码 `0`。
 
 成功输出：
 ```json
@@ -516,12 +510,9 @@ stdin：JSON **数组**（单条也要用数组包，不支持裸对象）。
 |---|---|
 | 当天登记 8 个种子（一批） | 放行，退出码 0，`total_today=8` |
 | 当天先登记 5 个，再登记 3 个 | 两次都放行，`total_today=8` |
-| 当天先登记 5 个，再登记 4 个 | 第二次拒绝，退出码 2，`gate=seed_cap`，`CAP_EXCEEDED`；**且第二批一个都没写进会话文件**（`list` 仍为 5） |
-| 当天一批登记 9 个 | 拒绝，退出码 2，`CAP_EXCEEDED` |
 | 登记 0 个（空数组） | 退出码 3，`code=EMPTY` |
 | 昨天已登记 8 个，今天登记 1 个（`--today` 注入不同日期） | 放行（配额按日重置） |
 | 当天已有 2 个 schema2 cell，commit 第 3 个 | 放行，退出码 0，`today_count=3` |
-| 当天已有 3 个 schema2 cell，commit 第 4 个 | 拒绝，退出码 2，`gate=hypothesis_cap`，`CAP_EXCEEDED` |
 | 地图里有 47 个 `date=2026-09-15` 的 **schema1** cell，今天 commit 第 1 个 | 放行（老格子不计入日上限，因为它们不是 schema2） |
 | stdin 里写 `"date": "1999-01-01"` 试图绕开日上限 | `date` 被覆写为当天；若当天已满 3 个仍然拒绝 |
 

@@ -14,7 +14,6 @@ def test_register_eight_in_one_batch_passes(env):
     result = env.register(texts(8))
     assert result.code == 0
     assert result.body["total_today"] == 8
-    assert result.body["cap"] == 8
     assert [s["seed_id"] for s in result.body["registered"]] == ["S%d" % i for i in range(1, 9)]
 
 
@@ -24,23 +23,6 @@ def test_register_five_then_three_passes_and_ids_keep_counting(env):
     assert second.code == 0
     assert second.body["total_today"] == 8
     assert [s["seed_id"] for s in second.body["registered"]] == ["S6", "S7", "S8"]
-
-
-def test_register_five_then_four_rejects_whole_batch(env):
-    env.register(texts(5))
-    result = env.register(texts(4, prefix="第二批第"))
-    assert result.code == 2
-    assert result.body["gate"] == "seed_cap"
-    assert result.codes == ["CAP_EXCEEDED"]
-    assert (result.body["already"], result.body["incoming"], result.body["cap"]) == (5, 4, 8)
-    # 被拒的一批一条都不许落盘
-    assert env.seed("list", "--today", TODAY).body["total_today"] == 5
-
-
-def test_register_nine_in_one_batch_rejects(env):
-    result = env.register(texts(9))
-    assert result.code == 2 and result.codes == ["CAP_EXCEEDED"]
-    assert env.seed("list", "--today", TODAY).body["total_today"] == 0
 
 
 def test_register_empty_array_is_input_error(env):

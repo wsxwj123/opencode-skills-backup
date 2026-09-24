@@ -43,7 +43,7 @@ def test_commit_完整合格cell_放行(commit):
     d = r.assert_ok("commit")
     assert d["cells_before"] == 1 and d["cells_after"] == 2
     assert d["index"] == 1
-    assert d["today_count"] == 1 and d["cap"] == 3
+    assert d["today_count"] == 1
     assert d["user_verdict"] == "采纳"
     assert d["date"] == TODAY
 

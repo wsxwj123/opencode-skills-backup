@@ -89,11 +89,11 @@ class Result(object):
                 field, code, self.json.get("errors"))
 
 
-GATES = {"backlog", "seed_cap", "hypothesis_cap", "required_fields", "verdict",
+GATES = {"backlog", "required_fields", "verdict",
          "addressing", "seed_link", "input", "storage"}
 
 CODES = {"MISSING", "EMPTY", "PLACEHOLDER", "TOO_SHORT", "WRONG_TYPE", "TOO_FEW",
-         "NOT_ALLOWED", "CAP_EXCEEDED", "BACKLOG_NOT_EMPTY", "UNKNOWN_SEED",
+         "NOT_ALLOWED", "BACKLOG_NOT_EMPTY", "UNKNOWN_SEED",
          "SEED_ALREADY_USED", "INDEX_OUT_OF_RANGE", "PREFIX_MISMATCH",
          "ALREADY_DECIDED", "BAD_JSON", "IO_FAILED"}
 
