@@ -40,3 +40,4 @@ hook_heartbeat.json
 # "通配层级不够"）。裸文件名在 gitignore 里匹配任意深度，一次到位。
 # 同理，心跳那几条也一并收敛成裸名，别再按层级写。
 env_status.json
+idea-bomb/.devflow/
