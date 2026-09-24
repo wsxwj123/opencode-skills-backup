@@ -21,7 +21,6 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import ib_common as ib  # noqa: E402
 
-SEED_CAP_PER_DAY = ib.SEED_CAP_PER_DAY   # 常量只在 ib_common 存一份，避免改一处漏一处
 SEED_TEXT_MIN_LEN = 8
 
 DEFAULT_SESSION_DIR = os.path.expanduser("~/.idea-bomb/session")
@@ -111,13 +110,6 @@ def cmd_register(args):
     path = session_path(args.session_dir, today)
     session = load_session(path, today, command)
     already = len(session["seeds"])
-    if already + len(items) > SEED_CAP_PER_DAY:
-        ib.emit_reject(command, "seed_cap",
-                       [ib.err("-", ib.CODE_CAP_EXCEEDED,
-                               "今天已登记 %d 个种子，这批 %d 个会超过上限 %d。"
-                               "发散归发散，进库的种子每天只留 %d 个。"
-                               % (already, len(items), SEED_CAP_PER_DAY, SEED_CAP_PER_DAY))],
-                       already=already, incoming=len(items), cap=SEED_CAP_PER_DAY)
 
     registered = []
     stamp = ib.now_iso()
@@ -130,7 +122,7 @@ def cmd_register(args):
     save_session(path, session, command)
 
     ib.emit_ok(command, date=today, registered=registered,
-               total_today=len(session["seeds"]), cap=SEED_CAP_PER_DAY)
+               total_today=len(session["seeds"]))
 
 
 def cmd_list(args):
@@ -139,7 +131,7 @@ def cmd_list(args):
     path = session_path(args.session_dir, today)
     session = load_session(path, today, command)
     ib.emit_ok(command, date=today, seeds=session["seeds"],
-               total_today=len(session["seeds"]), cap=SEED_CAP_PER_DAY)
+               total_today=len(session["seeds"]))
 
 
 def main():
