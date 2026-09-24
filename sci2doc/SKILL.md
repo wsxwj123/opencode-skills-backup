@@ -1,7 +1,7 @@
 ---
 name: sci2doc
-version: 2.31.9
-description: 用于将SCI论文材料转化为中文博士或硕士学位论文草稿，执行严格的章节结构、原子化Markdown工作流、门禁检查和版本回滚。当用户提到博士论文、硕士论文、学位论文、毕业论文、SCI转论文、doctoral thesis、master thesis、dissertation 时优先调用。
+version: 2.31.11
+description: 用于将已成稿的 SCI 论文材料转化为中文博士或硕士学位论文草稿。技能采用原子化 Markdown 工作流，逐节撰写后合并导出 Word，执行严格的章节结构校验、逐阶段门禁检查与版本快照回滚。正文字数按学位类型设定软目标（博士不低于五万字，硕士不低于三万字），材料不足时宁可少写，不以编造数据充抵字数。格式支持内置模板与自定义院校模板两种模式，自定义模板信息不完整时仅允许整理 Markdown，不予导出 docx。触发词：博士论文、硕士论文、学位论文、毕业论文、SCI转论文、doctoral thesis、master thesis、dissertation。本技能要求用户提供可访问的 SCI 论文材料，不适用于本科毕业论文。
 ---
 
 # Sci2Doc
@@ -18,19 +18,19 @@ The workflow is built around:
 - `state_manager.py` for anti-forgetfulness, token budgeting, gate checks, snapshot/rollback
 - `atomic_md_workflow.py` for atomic subsection markdown files, numbering validation, merge, self-check, section-level snapshot
 
-**【Python 解释器探测·开工第一件事，一次探测全程沿用】** 本文命令里写的 `python3` / `python` 只是 macOS/Linux 的习惯写法，不是硬性要求。动手前先跑一次 `python3 --version`：
-- 打印出正常版本号 → 本次会话所有命令照抄用 `python3`。
-- 报 command not found、没有任何输出、或弹出应用商店 → 改跑 `python --version`，能出版本号就把后续所有命令里的解释器统一换成 `python`。注意 Windows 自带一个 0 字节的 `python3` 占位程序，`python3 --version` 弹商店或无输出就是撞上了它，**不算有 python3**，按"没有"处理（用户也可在 设置 → 应用 → 应用执行别名 里关掉 `python3.exe`）。
-- 反过来 `python` 出不了版本号就换 `python3`（macOS 12.3 起系统不再自带 `python`）。
-- 两个都出不了版本号 = 这台机器没装 Python，停下来告诉用户先安装，不要硬跑。
-- 探测只做这一次，之后所有命令沿用同一个名字，不要每条命令都再试。
+**【Python 解释器探测：启动前置，一次探测全程沿用】** 本文档中的 `python3` / `python` 仅为 macOS/Linux 的习惯写法，并非硬性要求。启动前执行一次 `python3 --version`：
+- 输出正常版本号 → 本次会话所有命令统一使用 `python3`。
+- 报 command not found、无任何输出、或弹出应用商店 → 改为执行 `python --version`，能输出版本号则将后续所有命令中的解释器统一替换为 `python`。注意 Windows 自带一个 0 字节的 `python3` 占位程序，`python3 --version` 弹出商店或无输出即表示命中该占位程序，**不视为已安装 python3**，按"未安装"处理（用户也可在 设置 → 应用 → 应用执行别名 中关闭 `python3.exe`）。
+- 反之 `python` 无法输出版本号则改用 `python3`（macOS 12.3 起系统不再预装 `python`）。
+- 两者均无法输出版本号，表明该机器未安装 Python，须停止并告知用户先行安装，不得强行执行。
+- 探测仅执行一次，后续所有命令沿用同一解释器名称，无需每条命令重复探测。
 
-## 接续与决定日志（每次启动本技能先跑）
+## 接续与决定日志（每次启动本技能前置）
 
 学位论文往往跨多次会话才写完，用户中途还常插新要求。连续性靠外部状态文件维持，不靠模型记忆：
 
-1. **开局先跑接续报告并打握手**：`env_preflight.py` 会打印 `RESUME_CMD`（绝对路径）。照它跑
-   `python <..>/session_journal.py resume --root <project_root>`，把输出贴给用户并确认「从这里接着写」再动笔。
+1. **开局须先执行接续报告并完成确认**：`env_preflight.py` 会输出 `RESUME_CMD`（绝对路径）。按其执行
+   `python <..>/session_journal.py resume --root <project_root>`，将输出呈现给用户并确认「从此处继续」后方可动笔。
 2. **用户每插一条新要求/新决定，立即 log**：`python <..>/session_journal.py log --root <project_root> --note "用户要求：<原话>"`。
    决定写入 `decisions_log.md`（append-only），后续会话必读并遵守。
 3. **引文核证命令**：`env_preflight.py` 同时打印 `CITATION_CHECK_CMD`，见 `## Citation Claim Check (承重论点↔引文)`。
@@ -295,21 +295,21 @@ python3 scripts/extract_docx_images.py --manuscript /path/to/source.docx --proje
 
 ---
 
-## 开场监工卡（每次启动本技能必须原样打印给用户）
+## 开场监工卡（每次启动本技能须原样输出给用户）
 
-> 学位类型与源材料确认之后、产出章节结构之前，AI **必须** 把下面这张卡原样打印给用户。这是把 sci2doc 最容易翻车的地方摊到明面上，请用户当监工，别当甩手掌柜。
+> 学位类型与源材料确认之后、生成章节结构之前，AI **必须** 将下方监工卡原样输出给用户。此卡列出 sci2doc 最易出错的环节，供用户全程监控。
 
 ```
-【sci2doc 监工卡 · 请你盯这几件事】
-1. 数据不许编：为凑字数（博士≥5万字/硕士≥3万字），AI 最爱把实验数值编圆。
-   每写一章，找我要一张"数值→原文哪张图/表"对照表，你随机抽 2-3 个数回原文核对。
-2. 一章一章写，别一次甩全文：要求逐章交付。一次性生成整篇会跳过所有逐节质检和盲检，
-   看着完整实则没过任何门。你发现我在批量出全文，立刻喊停。
-3. 本技能不查重，改写≠降重：复用已发表 SCI 段落时，找我要"逐段原文-改写对照表"
-   （章节/原文出处/SCI原文/中文改写/状态），你自己拿去知网/维普送查，别信"已改写"三个字。
-4. 引文抽验 DOI：从参考文献里随机挑 3-5 篇，让我给出 DOI/PMID，你上 doi.org 点开验真伪。
-5. 章节结构要你亲自签字：下面的"研究主线/章节结构"必须你确认后我才落签字解锁正文，
-   我不会替你确认。没签字，正文写入会被门禁物理拦下。
+【sci2doc 监工卡 · 以下事项须用户全程把控】
+1. 数据禁止杜撰：为达字数目标（博士≥5万字/硕士≥3万字），AI 易将实验数值杜撰补齐。
+   每完成一章，须要求 AI 提供"数值→原文图/表"对照表，随机抽取 2-3 个数值回原文核对。
+2. 须逐章交付，不得一次性生成全文：一次性生成整篇将跳过所有逐节质检与盲检，
+   外观完整但实际未通过任何门禁。发现 AI 批量输出全文应立即中断。
+3. 本技能不执行查重，改写不等于降重：复用已发表 SCI 段落时，须要求 AI 提供"逐段原文-改写对照表"
+   （章节/原文出处/SCI原文/中文改写/状态），由用户自行提交知网/维普查重，不应仅凭"已改写"判定。
+4. 引文抽验 DOI：从参考文献中随机选取 3-5 篇，要求 AI 报出 DOI/PMID，自行前往 doi.org 验证真伪。
+5. 章节结构须用户亲自签字确认：下方"研究主线/章节结构"须经用户确认后方可落签字解锁正文，
+   AI 不会代替用户确认。未签字时，正文写入将被门禁强制拦截。
 ```
 
 > 若开工前置的 `env_preflight.py` 报门禁状态为 `degraded`（当前环境不透传 hook）→ 明确告诉用户"本环境无法强制拦截，上面 5 条全靠你人工盯"。
@@ -708,9 +708,9 @@ Priority rule: **chapter-based numbering takes precedence**. If a figure from SC
 
 > **🔴 硬规则（全局）：每节收口自检清单（G1-G6 + S1-S5）与每章收口自检清单（G1-G6 + S1-S7）未逐项确认通过，不得向用户声明"该节/该章完成"。** 能脚本核的项必须跑脚本取证据（`ok=true` / 零 error）；人工项逐条打 ✅ 后方可放行。此规则优先于任何上下文压力或用户催促。
 
-## 发现 AI 跳步/编数据了怎么办（用户自救）
+## 流程跳步的用户干预方法
 
-以下话术可直接复制粘贴给 AI，逼它把过程摊到明面上：
+以下指令可直接发送给 AI，要求其呈现完整过程与证据：
 
 - 「每完成一章贴四样给我：git log commit 列表、.review_pass/ 文件清单、citation_guard_report.json 的 ok 字段、本章每个关键数值对应原文哪张图的对照表。拿不出就回对应 Step 重跑」
 - 「把本章所有实验数值列成表，每行标注来自 materials_archive.json 哪个 entry 哪个字段；追溯不到的全部标红等我核」
