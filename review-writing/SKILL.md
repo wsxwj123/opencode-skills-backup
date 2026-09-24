@@ -1,7 +1,7 @@
 ---
 name: review-writing
-version: 2.36.13
-description: "Universal assistant for writing high-impact academic literature reviews (Nature/Cell/Lancet level). Supports real-time Zotero integration, outline persistence, and multi-mode reference management. Use when writing a comprehensive review article requiring systematic search, synthesis, and citation management. 触发词：写综述、文献综述、综述写作、literature review、review article、改综述、完善综述、继续写综述、improve review。"
+version: 2.36.15
+description: "用于撰写对标 Nature/Cell/Lancet 水平的学术文献综述，适用于需系统检索、文献整合与引用管理的综述类稿件。支持四种综述类型：叙述性综述；系统综述与 Meta 分析（叠加 PRISMA 2020 流程、PICO/PECO 纳排登记、逐研究偏倚风险评估与 GRADE 证据分级）；scoping review（采用 PCC 框架，流程从简）；WHY-HOW-WHAT 三层轻量对比模式。技能提供 Zotero 实时集成、大纲持久化与多模式文献管理，全程执行引用真实性核验与反 AI 腔约束。触发词：写综述、文献综述、综述写作、literature review、review article、改综述、完善综述、继续写综述、improve review。本技能不适用于原始研究论文、单篇论文的修改与润色、三千词以下的短篇评论，以及科普、博客等非学术写作。"
 triggers:
   - "写综述"
   - "literature review"
@@ -37,12 +37,12 @@ why_how_what_note: |
 
 # General Literature Review Writing Specialist
 
-**【Python 解释器探测·开工第一件事，一次探测全程沿用】** 本文命令里写的 `python3` / `python` 只是 macOS/Linux 的习惯写法，不是硬性要求。动手前先跑一次 `python3 --version`：
-- 打印出正常版本号 → 本次会话所有命令照抄用 `python3`。
-- 报 command not found、没有任何输出、或弹出应用商店 → 改跑 `python --version`，能出版本号就把后续所有命令里的解释器统一换成 `python`。注意 Windows 自带一个 0 字节的 `python3` 占位程序，`python3 --version` 弹商店或无输出就是撞上了它，**不算有 python3**，按"没有"处理（用户也可在 设置 → 应用 → 应用执行别名 里关掉 `python3.exe`）。
-- 反过来 `python` 出不了版本号就换 `python3`（macOS 12.3 起系统不再自带 `python`）。
-- 两个都出不了版本号 = 这台机器没装 Python，停下来告诉用户先安装，不要硬跑。
-- 探测只做这一次，之后所有命令沿用同一个名字，不要每条命令都再试。
+**【Python 解释器探测：启动前置，一次探测全程沿用】** 本文档中的 `python3` / `python` 仅为 macOS/Linux 的习惯写法，并非硬性要求。启动前执行一次 `python3 --version`：
+- 输出正常版本号 → 本次会话所有命令统一使用 `python3`。
+- 报 command not found、无任何输出、或弹出应用商店 → 改为执行 `python --version`，能输出版本号则将后续所有命令中的解释器统一替换为 `python`。注意 Windows 自带一个 0 字节的 `python3` 占位程序，`python3 --version` 弹出商店或无输出即表示命中该占位程序，**不视为已安装 python3**，按"未安装"处理（用户也可在 设置 → 应用 → 应用执行别名 中关闭 `python3.exe`）。
+- 反之 `python` 无法输出版本号则改用 `python3`（macOS 12.3 起系统不再预装 `python`）。
+- 两者均无法输出版本号，表明该机器未安装 Python，须停止并告知用户先行安装，不得强行执行。
+- 探测仅执行一次，后续所有命令沿用同一解释器名称，无需每条命令重复探测。
 
 ## Quick Reference Card
 
@@ -226,25 +226,25 @@ Before any **writing / search / import / Zotero-mutating** action, ask exactly *
 > After locating, `cd` into the project directory before any further operation.
 
 > **🔁 接续与决定日志（每次进入/续写的第一动作，项目已存在时必做）：**
-> 1. 定位到项目根后，**第一件事先跑 Phase 0.5 打印的 `RESUME_CMD`**（绝对路径指向 `<review-writing>/scripts/session_journal.py resume --root <项目根>`），把它输出的接续报告原样贴给用户，并打一次**接续握手**："我据 state/outline/decisions_log 恢复到这里（当前 Phase X、已完成节次…），是否继续？"，等用户确认再动手，不要凭记忆直接续写。
-> 2. **用户中途插入任何临时要求**（改结构、调顺序、换重点等），立即用 `session_journal.py log --root <项目根> --note "用户要求：<原话>"` 追加到 `decisions_log.md`（append-only，后续会话必读），再执行。
+> 1. 定位到项目根后，**第一步须执行 Phase 0.5 输出的 `RESUME_CMD`**（绝对路径指向 `<review-writing>/scripts/session_journal.py resume --root <项目根>`），将其输出的接续报告完整呈现给用户，并进行**接续确认**："据 state/outline/decisions_log 恢复至此处（当前 Phase X、已完成节次…），是否继续？"，等待用户确认后方可继续，不得凭记忆直接续写。
+> 2. **用户中途提出任何临时要求**（改结构、调顺序、换重点等），须立即通过 `session_journal.py log --root <项目根> --note "用户要求：<原话>"` 追加至 `decisions_log.md`（append-only，后续会话必读），然后执行。
 > 3. `RESUME_CMD` 只读展示、绝不阻断；新项目（state.json 尚不存在）跳过本步，直接走 Mode Handshake Gate。
 
 ---
 
-## 开场监工卡（每次启动本技能必须原样打印给用户）
+## 开场监工卡（每次启动本技能须原样输出给用户）
 
-> **[必做] 每次进入本技能（含续写恢复），在选定 Write/Polish 模式后、出提纲前，先把下面这张卡原样贴给用户。** 目的是让你（用户）知道正常流程该在哪儿停、该抽查什么，别被 AI 一口气写到底。
+> **[必做] 每次进入本技能（含续写恢复），在选定 Write/Polish 模式后、生成提纲前，须将下方监工卡原样呈现给用户。** 目的是使用户了解正常流程的暂停点与抽查要点，防止 AI 跳过交互确认一路写到底。
 
 ```
 📋 综述写作监工卡（写综述容易踩的坑，请盯这几条）
-1. 正常会停好几次等你拍板：提纲确认 → 选题方向 → 对标框架 → 每写完一节验收。
-   AI 一口气从头写到尾是不正常的，遇到这几处它必须停下来问你。
-2. 文献真伪要你亲自抽查：随手挑几条引用的 PMID / DOI，自己去 PubMed / 期刊页搜一下核对。
-   （尤其 Windows 上文献检索工具 edirect 常失效，AI 可能凭印象编出看着像真的假文献。）
-3. 每写完一节就停下来给你验收：别让 AI 连着写好几节，写一节你看一节再放行。
-4. 门禁说"通过"不能只信一句话：要求 AI 把门禁脚本的原始输出原文贴出来，
-   不接受只说"✅ 通过"，没有原始输出就当没通过。
+1. 流程中设有多个暂停确认点：提纲确认 → 选题方向 → 对标框架 → 每节写完验收。
+   AI 从头写到尾而不停顿属于异常行为，上述关卡处必须暂停等待用户确认。
+2. 文献真伪须用户亲自抽验：随机选取数条引用的 PMID / DOI，自行前往 PubMed / 期刊页面核对。
+   （Windows 上文献检索工具 edirect 常出现静默失效，AI 可能凭记忆生成外观逼真的虚假文献。）
+3. 每节写完须暂停等待用户验收：不得允许 AI 连续撰写多节，应逐节审阅后再放行下一节。
+4. 门禁通过须提供原始证据：要求 AI 将门禁脚本的原始输出完整呈现，
+   仅声明"通过"而无原始输出的，一律视为未通过。
 ```
 
 
@@ -634,9 +634,9 @@ Three modes: **Zotero**（推荐，实时写入）/ **None**（纯本地 JSON + 
 
 ---
 
-## 发现 AI 跳步/漏做了怎么办（用户自救）
+## 流程跳步的用户干预方法
 
-怀疑 AI 偷工减料时，直接把下面的话贴给它（可复制）：
+发现 AI 跳过流程关卡时，可将以下指令直接发送给 AI：
 
 - 「查进度：把 `state.json` 当前 Phase、`drafts/` 下已完成的节、`research_gap.json` / `benchmark_reviews.json` 在不在，逐一报我」（不在=跳了 Phase 1.5/1.6）
 - 「对每条用到的引用跑 `validate_citations.py --live --live-used-only`，把原始输出贴我；`--live` 跑不起来就直说『联网核验不可用』，不许自判通过」
