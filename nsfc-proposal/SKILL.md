@@ -1,7 +1,7 @@
 ---
 name: nsfc-proposal
-version: 2.37.2
-description: Use when drafting, restructuring, or polishing Chinese NSFC proposals (2026 template), especially when strict section-by-section gating, hypothesis-objective-content-problem consistency, literature verification via paper-search MCP, and anti-AI Chinese academic writing constraints are required. 触发词：国自然、国家自然科学基金、基金申请书、科研申请、NSFC、标书、本子、面上项目、青年基金。
+version: 2.37.4
+description: 用于国家自然科学基金申请书（2026 版模板）的撰写、结构重组与润色。提供两种工作模式：写作模式从零分阶段构建，润色模式导入既有稿件后先行诊断再逐节修订。技能执行逐节签字门禁，强制维持科学假说、研究目标、研究内容与关键科学问题四者的一致性，通过 paper-search MCP 核验文献真实性，并施加反 AI 腔的中文学术写作约束。字数与页数上限以脚本核算结果为准。触发词：国自然、国家自然科学基金、基金申请书、科研申请、NSFC、标书、本子、面上项目、青年基金。
 ---
 
 # NSFC Proposal Skill
@@ -13,15 +13,15 @@ Use two modes:
 - Write Mode: build from zero in phased gates.
 - Polish Mode: import an existing draft, diagnose first, then revise section by section.
 
-**【Python 解释器探测·开工第一件事，一次探测全程沿用】** 本文命令里写的 `python3` / `python` 只是 macOS/Linux 的习惯写法，不是硬性要求。动手前先跑一次 `python3 --version`：
-- 打印出正常版本号 → 本次会话所有命令照抄用 `python3`。
-- 报 command not found、没有任何输出、或弹出应用商店 → 改跑 `python --version`，能出版本号就把后续所有命令里的解释器统一换成 `python`。注意 Windows 自带一个 0 字节的 `python3` 占位程序，`python3 --version` 弹商店或无输出就是撞上了它，**不算有 python3**，按"没有"处理（用户也可在 设置 → 应用 → 应用执行别名 里关掉 `python3.exe`）。
-- 反过来 `python` 出不了版本号就换 `python3`（macOS 12.3 起系统不再自带 `python`）。
-- 两个都出不了版本号 = 这台机器没装 Python，停下来告诉用户先安装，不要硬跑。
-- 探测只做这一次，之后所有命令沿用同一个名字，不要每条命令都再试。
+**【Python 解释器探测：启动前置，一次探测全程沿用】** 本文档中的 `python3` / `python` 仅为 macOS/Linux 的习惯写法，并非硬性要求。启动前执行一次 `python3 --version`：
+- 输出正常版本号 → 本次会话所有命令统一使用 `python3`。
+- 报 command not found、无任何输出、或弹出应用商店 → 改为执行 `python --version`，能输出版本号则将后续所有命令中的解释器统一替换为 `python`。注意 Windows 自带一个 0 字节的 `python3` 占位程序，`python3 --version` 弹出商店或无输出即表示命中该占位程序，**不视为已安装 python3**，按"未安装"处理（用户也可在 设置 → 应用 → 应用执行别名 中关闭 `python3.exe`）。
+- 反之 `python` 无法输出版本号则改用 `python3`（macOS 12.3 起系统不再预装 `python`）。
+- 两者均无法输出版本号，表明该机器未安装 Python，须停止并告知用户先行安装，不得强行执行。
+- 探测仅执行一次，后续所有命令沿用同一解释器名称，无需每条命令重复探测。
 
 ## 跨会话接续（每次进入/续写必做，Mandatory）
-每次进入本技能或续写一个已存在的项目时，**先跑 Phase 0 env_preflight 打印的那条 `RESUME_CMD`**（`python "<本技能>/scripts/session_journal.py" resume --root <project_root>`），把输出的接续报告原样贴给用户，按报告末尾的握手话术跟用户对齐进度，然后再动手。用户**中途插入任何临时要求，立即用 `JOURNAL_LOG_CMD`**（`<本技能>/scripts/session_journal.py log --root <R> --note "<原话>"`）落进 `decisions_log.md`，后续会话开局的 resume 会重新读出、必须遵守。新项目（无 state）resume 会提示未初始化，照常走 Phase 0。
+每次进入本技能或续写已有项目时，**须先执行 Phase 0 env_preflight 输出的 `RESUME_CMD`**（`python "<本技能>/scripts/session_journal.py" resume --root <project_root>`），将接续报告完整呈现给用户，按报告末尾的确认话术与用户对齐进度，等待确认后方可继续。用户**中途提出任何临时要求，须立即通过 `JOURNAL_LOG_CMD`**（`<本技能>/scripts/session_journal.py log --root <R> --note "<原话>"`）追加至 `decisions_log.md`，后续会话开局的 resume 会重新读出、必须遵守。新项目（无 state）resume 会提示未初始化，照常走 Phase 0。
 
 ## Mode Handshake Gate (Mandatory)
 Before any drafting/revision action, the assistant must ask exactly one mode-selection question and wait for the user answer:
@@ -35,16 +35,16 @@ Hard rules:
 - After user confirms mode, record it in project state/profile and continue with that mode workflow only.
 
 ## 开场监工卡（每次启动必打印，Mandatory；国自然 / 其他基金通用）
-确认 Mode 后、开始出章节结构前，必须原样向用户打印下面这张卡（这是给非专家看的"AI 会在哪骗你"清单，每次启动都打，别省）：
+确认 Mode 后、生成章节结构前，须将下方监工卡原样输出给用户（此为面向非专家的 AI 风险提示清单，每次启动均须输出，不得省略）：
 
-> **【开场监工卡 · 国自然标书 / 其他基金】看住这几条，AI 最会在这翻车：**
-> 1. **立意 / 创新 / 可行性是中标命门，也正是 AI 最会灌水的地方**，脚本只数字数条目、管不住"有没有真东西"。这三块的每一句你都要自己读，觉得空就打回，别信"看起来很专业"。
-> 2. **诊断引擎报的字数、条目数、通过项，只代表"格式齐了"，不代表"写得好"**。绿灯 ≠ 能中，别把跑分当质量。
-> 3. **引用别全信**：我给出的每篇文献，你随手挑几篇让我把 PMID / DOI 报给你，你自己去 PubMed / 期刊官网核一遍（防我编造、防引到已撤稿的文章）。
-> 4. **每写完一章我都会停下等你确认**再往下写；我要是没停就自己连写好几章，你直接喊停，那就是跳步。
-> 5. **"研究假说 → 研究目标 → 研究内容 → 关键科学问题"这条链必须对齐**，我会用表格把它们逐条摆给你看，你负责检查有没有对不上、有没有断链。
-> 6. **科学问题、章节结构没经你点头，我不会开写正文**，这一条有硬门禁兜底（见"结构签字落锁"），不是靠我自觉。
-> 7. **默认按国自然 2026 模板走**。你要写的是省基金、校基金、企业课题或别的其他基金 / 自定义模板，**现在就说**——我会先读你的模板走结构提取，把章节结构提出来给你逐条核对，之后的章节、顺序、字数上限都按你的模板走。不说的话，我会按国自然的结构和「科学问题属性四选一」要求你。
+> **【开场监工卡 · 国自然标书 / 其他基金】以下各项为 AI 最易出错的环节：**
+> 1. **立意、创新与可行性是中标核心，也是 AI 最易空泛填充的部分**。脚本仅核查字数与条目数，无法判断内容是否有实质。这三部分的每一句均须用户亲自审阅，发现空泛内容应退回修改，不应仅凭"看上去专业"而通过。
+> 2. **诊断引擎报告的字数、条目数与通过项仅代表"格式合规"，不代表"内容过关"**。门禁通过不等于能中标，不应将指标达标等同于写作质量。
+> 3. **引用须用户亲自抽验**：随机选取数条文献，要求 AI 报出 PMID / DOI，自行前往 PubMed / 期刊官网核对（防止杜撰文献或引用已撤稿论文）。
+> 4. **每写完一章须暂停等待用户确认**后再继续；若 AI 未停顿而连续撰写多章，应立即中断，此属流程跳步。
+> 5. **"研究假说 → 研究目标 → 研究内容 → 关键科学问题"链条须保持对齐**，AI 会以表格形式逐条呈现，用户须检查是否存在脱节或断链。
+> 6. **科学问题与章节结构须经用户确认后方可开写正文**，此项有硬门禁强制执行（见"结构签字落锁"），非依赖 AI 自律。
+> 7. **默认按国自然 2026 模板执行**。若需撰写省基金、校基金、企业课题或其他基金/自定义模板，**请在此时说明**。AI 会先读取模板进行结构提取，将章节结构逐条呈现供核对，后续的章节顺序与字数上限均按用户模板执行。未说明则按国自然结构及「科学问题属性四选一」要求执行。
 
 ## 基金归属确认（Mandatory，仅全新项目问一次）
 打完上面那张卡后，先做基金归属判定。两个条件**同时**成立才问，缺一不问：项目根**不存在** `project_state.json`，且项目根**不存在** `structure_profile.json`（文件在但内容坏了也算"有"，交由结构真源三态处理去报，不许退化成重新问一遍）。满足则问一次，二选一：
@@ -550,9 +550,9 @@ Phase 7 引用的 `consistency_mapper.py validate` 完整形式：`python script
 
 ---
 
-## 发现 AI 跳步/灌水了怎么办（用户自救）
+## 流程跳步的用户干预方法
 
-怀疑 AI 偷跑门禁、编文献或盲检掺水时，直接复制下面的话术让它把证据摊开：
+发现 AI 跳过门禁、杜撰文献或盲检失真时，可将以下指令直接发送给 AI 以要求呈现证据：
 
 - 「把刚才那章的 DoD 盲检重跑：真正派一个独立subagent、不给它写作上下文，跑 delegate_review verify，把返回的 JSON 原文和退出码贴我，不许你自己扮演盲检」
 - 「Phase 1 所有文献逐条跑 citation_validator verify-all，把每条 verified 值和反查证据贴我，我挑 3 条去 PubMed 核」
