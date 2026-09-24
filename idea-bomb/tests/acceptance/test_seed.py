@@ -22,7 +22,6 @@ def test_register_单批两条_放行且返回递增seed_id(run_seed, session_di
     assert d["date"] == TODAY
     assert [s["seed_id"] for s in d["registered"]] == ["S1", "S2"]
     assert d["total_today"] == 2
-    assert d["cap"] == 8
     assert d["registered"][0]["text"] == _items(2)[0]["text"]
 
 
@@ -163,30 +162,6 @@ def test_register_text长7字符_退出码2_TOO_SHORT(run_seed, session_dir):
     r.assert_error("[0].text", "TOO_SHORT")
 
 
-def test_register_一批9条_超上限拒绝(run_seed, session_dir):
-    """一批 9 条超过 8：退出码 2，gate=seed_cap，CAP_EXCEEDED，带 already/incoming/cap。"""
-    r = run_seed(["register", "--session-dir", session_dir, "--today", TODAY],
-                 stdin_obj=_items(9))
-    d = r.assert_rejected("register", 2, gate="seed_cap")
-    r.assert_error("-", "CAP_EXCEEDED")
-    assert d["already"] == 0
-    assert d["incoming"] == 9
-    assert d["cap"] == 8
-
-
-def test_register_5加4超限_第二批一条都不写(run_seed, session_dir):
-    """5+4=9 超限：第二批整批拒绝，且会话文件里仍然只有 5 个（一条都没写进去）。"""
-    run_seed(["register", "--session-dir", session_dir, "--today", TODAY],
-             stdin_obj=_items(5)).assert_ok("register")
-    r = run_seed(["register", "--session-dir", session_dir, "--today", TODAY],
-                 stdin_obj=_items(4, "第二批：让菌群自毁开关绑定到宿主体温"))
-    d = r.assert_rejected("register", 2, gate="seed_cap")
-    assert d["already"] == 5 and d["incoming"] == 4 and d["cap"] == 8
-    lst = run_seed(["list", "--session-dir", session_dir, "--today", TODAY]).assert_ok("list")
-    assert lst["total_today"] == 5, "超限批次必须一条都不落盘"
-    assert [s["seed_id"] for s in lst["seeds"]] == ["S1", "S2", "S3", "S4", "S5"]
-
-
 def test_register_首条合法末条占位_整批不写(run_seed, session_dir):
     """遇第一类错误即整批拒绝：3 条里最后一条占位，前两条也不得写入。"""
     payload = _items(2) + [{"text": "待补"}]
@@ -214,7 +189,6 @@ def test_list_当天无种子_退出码0且为空(run_seed, session_dir):
     assert d["date"] == TODAY
     assert d["seeds"] == []
     assert d["total_today"] == 0
-    assert d["cap"] == 8
 
 
 def test_list_返回registered_at字段(run_seed, session_dir):

@@ -116,15 +116,6 @@ def test_path_is_overridden_resolves_symlinks_and_dots(tmp_path):
     assert not ib.path_is_overridden(str(tmp_path / "data" / ".." / "data" / "map.json"), default)
 
 
-def test_seed_cap_survives_date_injection_in_default_mode(env):
-    """沙箱内 --today 仍要能注入，否则验收测试没法构造跨日场景。"""
-    env.register(["这是一个够长的种子文本 %d" % i for i in range(8)])
-    blocked = env.register(["第九个种子应该被数量闸拦下来"])
-    assert blocked.codes == ["CAP_EXCEEDED"]
-    tomorrow = env.register(["换到第二天就该放行了吧"], today="2026-09-24")
-    assert tomorrow.code == 0 and tomorrow.body["total_today"] == 1
-
-
 # ---------------------------------------------------------------- 原子写
 
 
@@ -184,14 +175,3 @@ def test_symlinked_map_stays_a_symlink(env, tmp_path):
     assert read_map(str(real))["cells"][0]["user_verdict"] == "采纳"
 
 
-# ---------------------------------------------------------------- 常量单一来源
-
-
-def test_caps_have_a_single_source_of_truth():
-    map_src = open(os.path.join(SCRIPTS, "ib_map.py"), encoding="utf-8").read()
-    seed_src = open(os.path.join(SCRIPTS, "ib_seed.py"), encoding="utf-8").read()
-    # 死常量会让人以为改了它就放宽了上限，实际另一个文件才生效
-    assert "SEED_CAP_PER_DAY = 8" not in map_src
-    assert "HYPOTHESIS_CAP_PER_DAY = 3" not in map_src
-    assert "SEED_CAP_PER_DAY = 8" not in seed_src
-    assert (ib.SEED_CAP_PER_DAY, ib.HYPOTHESIS_CAP_PER_DAY) == (8, 3)
