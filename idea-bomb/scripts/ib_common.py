@@ -12,12 +12,6 @@ import os
 import sys
 from datetime import date as date_cls, datetime
 
-# ---------------------------------------------------------------- 日上限
-
-# 两个入口脚本都要看这两个数，只在这里存一份。要放宽就改这里，改完自己知道自己放宽了。
-SEED_CAP_PER_DAY = 8        # 第一段：一天最多登记几个种子
-HYPOTHESIS_CAP_PER_DAY = 3  # 第二段：一天最多写进几个深度假说
-
 # ---------------------------------------------------------------- 退出码
 
 EXIT_OK = 0            # 成功 / 放行
@@ -35,7 +29,7 @@ CODE_TOO_SHORT = "TOO_SHORT"
 CODE_WRONG_TYPE = "WRONG_TYPE"
 CODE_TOO_FEW = "TOO_FEW"
 CODE_NOT_ALLOWED = "NOT_ALLOWED"
-CODE_CAP_EXCEEDED = "CAP_EXCEEDED"
+
 CODE_BACKLOG_NOT_EMPTY = "BACKLOG_NOT_EMPTY"
 CODE_UNKNOWN_SEED = "UNKNOWN_SEED"
 CODE_SEED_ALREADY_USED = "SEED_ALREADY_USED"
@@ -196,7 +190,7 @@ def resolve_today(raw, command, sandboxed):
     但 `--today` 只在沙箱里生效——`sandboxed` 为真表示数据路径被显式指到了默认位置
     之外（测试就是这么跑的）。对真实数据文件动手时一律用系统时钟：契约说这个参数
     仅供测试注入，而脚本分不清谁在调用，只能看它碰的是不是真数据。否则改个日期就
-    能把日上限重置一遍，闸门 1 等于白做。
+    能把种子唯一性校验重置一遍，闸门 1 等于白做。
     """
     system_today = date_cls.today().isoformat()
     if raw is None:
