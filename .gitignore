@@ -46,3 +46,14 @@ idea-bomb/PROJECT.md
 # novelai-skill 只保留在 euphoriaaaaaa1/claude-tgbot 的 skills/ 下（脱敏版）
 # 本仓是公开备份仓，此技能含 NSFW 内容且带个人绝对路径，不入本仓
 novelai-skill/
+
+# ── 2026-09-30 明确排除：这几个不是技能，不该进备份 ──────────────
+# agently-mail 是指向仓外的符号链接；data/ 与 synced/ 是运行时缓存；
+# lieflat-charts / vivid-figures-skill 是别人 GitHub 上的仓（不是本库的技能）；
+# _shared/test_r25_cliche.py 是散落的测试文件。
+agently-mail
+data/
+synced/
+lieflat-charts/
+vivid-figures-skill/
+_shared/test_r25_cliche.py

@@ -156,3 +156,14 @@
 - `clinical-reports` — 临床报告撰写
 - `medical-imaging-review` — 医学影像审阅
 - `seaborn` — 统计可视化
+
+---
+
+## 维护约定（2026-09-30）
+
+**本仓是备份仓**——本地 `~/.claude/skills/` 的内容与 GitHub 上的**允许不一致**。
+
+- **工作区里那批 `D`（约 1009 个）不要提交**。那是用户在本地精简技能的结果；**GitHub 要保留全量备份**，本地只需要常用的那部分。
+- **严禁 `git add -A` / `git add .`**：会把那批删除和缓存一把梭收进去，等于**把备份删了**。提交时用 `git add <具体路径>`。
+- **不入库**（已在 `.gitignore` 排除）：`data/`、`synced/`（运行时缓存）、`agently-mail`（指向仓外的符号链接）、`lieflat-charts/`、`vivid-figures-skill/`（别人 GitHub 上的仓，不是本库技能）、`novelai-skill/`（含 NSFW 内容与个人绝对路径，只保留在 `euphoriaaaaaa1/claude-tgbot` 的 `skills/` 脱敏版里）。
+- 本仓历史里曾有 `novelai-skill`（2026-05-23 起），已于 2026-09-30 从 `main` 与 `feature/birthday-grade` 两个分支的最新提交移除。
