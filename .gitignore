@@ -41,3 +41,7 @@ hook_heartbeat.json
 # 同理，心跳那几条也一并收敛成裸名，别再按层级写。
 env_status.json
 idea-bomb/.devflow/
+
+# novelai-skill 只保留在 euphoriaaaaaa1/claude-tgbot 的 skills/ 下（脱敏版）
+# 本仓是公开备份仓，此技能含 NSFW 内容且带个人绝对路径，不入本仓
+novelai-skill/
