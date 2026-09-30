@@ -112,3 +112,4 @@ timestamp	commit	skill	old_score	new_score	status	dimension	note	eval_mode
 2026-08-06T17:30	baseline	nsfc-proposal	-	88.5	baseline	-	用户点名的纯评审（不改文件），dim8 多数为 dry_run	full_test
 2026-08-06T17:30	baseline	reviewer-response-sci	-	88.4	baseline	-	用户点名的纯评审（不改文件），dim8 多数为 dry_run	full_test
 2026-08-06T17:30	baseline	idea-bomb	-	80.2	baseline	-	用户点名的纯评审（不改文件），dim8 多数为 dry_run	full_test
+2026-09-01T17:49	76239a8	dev-flow	-	84.9	baseline	-	3评委opus盲评(80.6/84.2/89.8,跨评委±9属正常噪音);专项审计新机制vs角色隔离:3条全票缺口(03可达代码地图/二轮审查未定新开/05补测试通道),runtime红灯0命中	dry_run
