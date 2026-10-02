@@ -55,6 +55,12 @@ const RULES = [
   { id: 'X-B4',  plat: 'both', sev: 'hint', re: /startsWith\(\s*(?:HOME|home|homedir\(\))\s*\)/, hint: '前缀检查不带分隔符会放行同级目录(/Users/x2):核对是否 === 或 startsWith(HOME+sep)' },
   { id: 'W-B13', plat: 'win',  sev: 'hint', re: /setPermissions|getWindowsAttributes/, hint: '核对 win32 权限位语义:只映射读/写两档,去掉写位=置 FILE_ATTRIBUTE_READONLY(后续追加/unlink+rename 全失败);0o600 只是清只读、拿不到「同机不可读」' },
   { id: 'X-B6',  plat: 'win',  sev: 'hint', re: /\.isWritable\(\)/, hint: '核对这个值是不是被当成「能不能写」:win32 上 nsIFile.isWritable() 对目录恒为 true(只读属性,不读 ACL),mac 上才是真 access(W_OK)' },
+  // ── C 原生模块与运行时:平台专属执行层(W-C5)──
+  { id: 'W-C5',  plat: 'both', sev: 'must', re: /if\s*\(\s*!\s*(?:IS_[A-Z_]*(?:MAC|OSX|DARWIN|WIN|LINUX)[A-Z_]*|(?:process\.platform|platform\(\)|os\.platform\(\))\s*!==?\s*['"][\w]+['"])\s*\)/, hint: '硬平台门(门卫):按 W-C5 三问核实——①这个能力是被门关掉的吗;②另一平台有没有已声明的替代实现(另一实现/降级路径/文档里的能力边界);③没有替代实现且用户可见处没告知不可用 → 判缺陷,不写「不可达=无问题」' },
+  { id: 'W-C5',  plat: 'both', sev: 'hint', re: /\b(?:IS_MAC|IS_OSX|IS_DARWIN|IS_WIN|IS_WINDOWS|IS_LINUX)\s*=/, hint: '出现平台常量:核对它的全部消费点是不是都在「关掉某能力」的路径上(W-C5 三问);常量本身不算问题,被它 gate 掉且无替代实现的能力才算' },
+  { id: 'W-C5',  plat: 'both', sev: 'hint', re: /(?:process\.platform|platform\(\)|os\.platform\(\))\s*!==?\s*['"](?:darwin|win32|linux)['"][^\n]{0,80}(?:throw\s+(?!err\b|e\b|ex\b|error\b)|return)/, hint: '平台不等分支(带 throw/return):核对这是「平台门」(另一侧没有)还是「对称的另一半实现」;被关掉的是用户可见能力时按 W-C5 三问回答(裸 `throw err` 重抛已排除)' },
+  { id: 'W-C5',  plat: 'both', sev: 'hint', re: /(?:supported|available|capabilit\w*|enabled)\s*[:=]\s*(?:process\.platform|platform\(\)|os\.platform\(\)|IS_[A-Z_]+)/, hint: '能力声明/健康检查按平台硬编码:核对缺能力的平台上有没有替代实现或明确的不可用告知(给用户的错误文案、UI 提示、文档条目);`supported:false` 静默隐藏用户可见能力按 W-C5 判' },
+  { id: 'W-C5',  plat: 'both', sev: 'hint', re: /\b(?:pyobjc|pywin32|win32gui|win32con|win32api|AppKit|ApplicationServices|CoreGraphics|SendInput|uiautomation)\b/, hint: '平台专属依赖/执行层:核对这份依赖或这段代码在另一平台会不会被装/被走到;只有单侧依赖表 + 门卫、且无另一平台实现 = W-C5 的典型形态' },
   // ── D 渲染引擎 ──
   { id: 'D-1',   plat: 'both', sev: 'must', re: /\bwindow\.(?:confirm|alert)\(|(?<![\w.])(?:confirm|alert)\(/, hint: '原生 confirm/alert 在 Tauri 两个 webview 都不可用:核对是否真会执行到' },
   { id: 'D-2',   plat: 'both', sev: 'hint', re: /navigator\.platform/, hint: '核对前端自判平台的用途与准确性' },

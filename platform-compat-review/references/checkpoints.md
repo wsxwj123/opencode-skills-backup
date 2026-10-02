@@ -280,6 +280,18 @@
 - 判据:前端改动"修了没生效"、health 报新版本但行为旧 = 旧 bundle;升级没完全退出旧后端进程(界面新、后端旧)。
 - 事故:claude-gui 0.2.263(vite 缓存);stale backend(6677 旧进程)。
 
+### W-C5 [Both] 平台专属执行层:能力是被平台门关掉的,还是有已声明的替代实现
+- 排查:全仓找"某能力只在一个平台存在"的全部形态,五类都要列:①平台常量(`const IS_MAC = platform() === 'darwin'`、`IS_WIN` 等);②门卫(`if (!IS_MAC) throw …`、`if (process.platform !== 'win32') return …`、平台分支直接 return 空值);③能力声明面(路由/健康检查/UI 里的 `supported: process.platform === 'darwin'`、`capabilities.*`、`available`;找到声明后**要顺着消费者看它在界面上怎么表现**——静默隐藏 / 置灰 / 文案,只看到声明不算看完);④平台专属依赖表与运行时资产(`PY_DEPS` 里的 pyobjc/pywin32、`venv` 布局、`.exe`/`.app`/helper 脚本名);⑤文档与注释里的"仅 macOS""Windows 未实现"。起手式:`rg -n "IS_MAC|IS_WIN|process\.platform|os\.platform|platform\(\)|darwin|win32|pyobjc|pywin32|\.exe\b"`。注意:命中平台分支**不等于**问题(双平台实现里遍地都是),要用下面的三问筛;**本条必须每轮至少跑一次全树(不带 `--base`)**——平台门多半留在旧文件里,"能力缺席"不会产生 diff 的 + 行,只扫本轮 diff 会稳定地看不到它。
+- 判据:遇到"某功能 A 平台有、B 平台没有",必须逐个回答**三问**,答案写进报告;答不全不算审过:
+  - ①**是平台门吗?** 该能力在 B 平台是被门主动关掉的(常量门 / 门卫抛错 / 平台分支 return 空值 / `supported:false` 隐藏入口),还是压根没有这条代码路径?
+  - ②**有已声明的替代实现吗?** 三种都算数:同类 API 的另一平台实现(独立执行层、另一份 helper、另一份依赖表)、明确的降级路径(降级到只读 / 让用户手动做 / 返回可行动的错误)、文档里写明的能力边界(用户文档、接口契约、发版说明)。
+  - ③**用户被告知了吗?** 既无替代实现、又没有在**用户可见处**(UI 文案、接口返回给用户的话、README/用户文档、发版说明)写明"此平台不可用"——判**缺陷**;反之才写"无问题"。
+  - 三点纪律:代码注释里的"仅 macOS"**不算**告知(用户看不到);审查记录里的"Windows 不可达"只是复述了门本身,**不是**判定;"另一平台以后再做"是待办,**不是**替代实现。
+  - 与 F-3 的分工:F-3 管"没在那个平台跑过就别断言它好使",本条管"那条路根本没实现时,别把'没实现'判成'无问题'"。
+- 机制:平台门证明的是**实现缺席**,不是**行为正确**;平台的"不可达"是审查者最容易拿来结案的理由,因为它免掉了推演——而用户拿到的是少一块能力的成品。所以判定权不在门的形态上,而在"替代实现 / 用户告知"这两个外部事实上。
+- 事故:claude-gui 2026-09-09 三功能批次审查(`docs/validation/windows-compat-batch.md`):`server/computer-use/mcp-server.js:63` 是 `if (!IS_MAC) throw new Error('computer use v1 仅支持 macOS(Windows 执行层未实现)')`,文件头注释写着"macOS v1",`server/routes/computer-use.js:107` 声明 `supported: process.platform === 'darwin'`,前端 `client/src/components/MCPPanel.jsx:35` 用 `if (!st || !st.supported) return null` 把整张卡**静默隐藏**;当轮把 W-A6/W-A10/W-B5 三条命中全判成"**Windows 不可达 = 无问题**",真机清单第 3 条还把"computer-use 卡在 Windows 上不出现"写成**设计意图**,报告结论"本轮无新增排查点"。发版后 Windows 用户拿不到该能力,直到用户报障才被发现。**判例(错误判定):[硬门 `IS_MAC` + 注释写"仅 macOS" + 审查记录写"Windows 不可达=无问题"] 这个组合本身就是缺陷,不是结论。**
+- 真机:在缺能力的那个平台装同一版,三件事都要做,任一件落空按缺陷记:①打开相关 UI / 调相关接口,看是**明确告知不可用**(说明性文案、可行动的指引),还是静默消失、或者只糊一句内部异常/英文原文;②翻用户文档有没有对应条目;③若产品对外称"两个平台同一功能",确认该平台的实现入口真的存在(不是靠 `supported:false` 把入口藏掉)。mac 侧同理:反向(只在 Windows 有)也要走一遍。
+
 ---
 
 ## D 渲染引擎(dev Chromium / WebView2 / WKWebView / iOS Safari)
