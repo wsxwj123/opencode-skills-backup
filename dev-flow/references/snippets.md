@@ -29,7 +29,7 @@
 内置 security-review 靠 `git diff origin/HEAD...` 找改动，这个引用只有 clone 来的仓自带，本地起家的仓没有，技能会报"有歧义的参数 origin/HEAD"。跑之前先执行：
 
 ```bash
-git rev-parse -q --verify origin/HEAD >/dev/null || { git remote get-url origin >/dev/null 2>&1 && git fetch -q origin && git remote set-head origin -a; } || git symbolic-ref refs/remotes/origin/HEAD refs/heads/master
+git rev-parse -q --verify origin/HEAD >/dev/null || { git remote get-url origin >/dev/null 2>&1 && git fetch -q origin && git remote set-head origin -a; } || git symbolic-ref refs/remotes/origin/HEAD refs/heads/<主分支名>
 ```
 
 有远端就 fetch 后建真引用（一次永久）；没远端或网络被拦，造一个指向本地主分支的替身（`master` / `main` 按实际填）。造过替身的，06 建仓 push 后跑 `git remote set-head origin -a` 归正。
@@ -42,14 +42,14 @@ git rev-parse -q --verify origin/HEAD >/dev/null || { git remote get-url origin 
 # pytest
 pytest tests/acceptance -q --junitxml=.devflow/junit-<任务名>.xml 2>&1 | tee .devflow/test-output-<任务名>.txt
 # jest
-npx jest --json --outputFile=.devflow/jest-<任务名>.json 2>&1 | tee .devflow/test-output-<任务名>.txt
+npx jest tests/acceptance --json --outputFile=.devflow/jest-<任务名>.json 2>&1 | tee .devflow/test-output-<任务名>.txt
 # playwright（用环境变量指定 json 落点，别用重定向，stderr 会混进 json）
 PLAYWRIGHT_JSON_OUTPUT_NAME=.devflow/pw-<任务名>.json npx playwright test --reporter=json 2>&1 | tee .devflow/test-output-<任务名>.txt
 # 全量回归（含单测）：同样的命令把目录换成整个测试目录，报告文件加 -full 后缀，例如
 pytest -q --junitxml=.devflow/junit-<任务名>-full.xml 2>&1 | tee .devflow/test-output-<任务名>-full.txt
 ```
 
-其他框架（node test、go test、cargo test）用它们的 `-json` 或 `-v` 输出落盘，计数从落盘文件 grep，不凭记忆估。
+其他框架没有 junit 输出的（go test、cargo test）用它们的 `-json` 或 `-v` 输出落盘；node:test 用 `node --test --test-reporter=junit --test-reporter-destination=.devflow/junit-<任务名>.xml tests/acceptance`。计数从落盘文件 grep，不凭记忆估。
 
 从报告文件抄数。junit 的总数在文件头：
 
