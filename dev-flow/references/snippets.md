@@ -1,13 +1,13 @@
 # snippets：派子代理时照抄的片段（跨阶段共用）
 
-只放多个阶段都要用的三样：预算块、security-review 前置命令、测试摘要怎么出。各阶段自己的逐字禁令和报告格式仍在各阶段文件里，不搬过来。
+只放多个阶段共用的三样：预算块、security-review 前置命令、测试摘要怎么出。各阶段的逐字禁令和报告格式在各阶段文件里。
 
 ## 1. 预算块（派任何子代理都贴进 prompt，按角色填数）
 
-照抄这段，把 N / K 换成下表的数；M 那句只给开发和测试设计代理贴，其他角色整句不贴：
+照抄这段，N / K 换成下表的数；M 那句只给测试设计代理，其他角色不贴：
 
 > 预算：工具调用不超过 N 次；最终报告不超过 K 字，报告格式按派工说明里的要求。只做本 prompt 列出的几处；派工清单里的文件必须读完，不通读和任务无关的文件；不为了验证测试本身去搭假服务。快到上限还没做完，就停下来交中间报告，说清做到哪、还差什么。
-> （开发、测试设计代理加这句）测试用例不超过 M 条，超出要在报告里写理由。
+> （测试设计代理加这句）测试用例不超过 M 条，超出要在报告里写理由。
 
 | 角色 | 工具调用上限 N | 测试条数上限 M | 报告上限 K |
 |---|---|---|---|
@@ -18,21 +18,21 @@
 | 裁判 | 60；skill 项目按测试 prompt 条数乘 10 | 不贴 | 3000 字 |
 | 安全审计 | 60 | 不贴 | 4000 字 |
 
-用完了怎么办：代理交了中间报告之后，同一轮续用它再给一份同样的预算，不算跨轮；连续两次用完还没做完，停下向用户汇报。续用同一个开发代理做下一项任务时，预算重新给一份，禁令重贴一遍。
+用完了：代理交中间报告后，同一轮续用再给一份同样的预算，不算跨轮；连续两次用完还没做完，停下向用户汇报。续用开发代理做下一项时预算重新给一份，禁令重贴。
 
-为什么限的是工具调用次数不是 token：代理自己数不准用了多少 token，但每次调用都数得清。这条没有机械保证，靠代理自觉，所以 token 由主会话在每个代理返回时按工具报回来的用量记一行进 `.devflow/HISTORY.md`，事后能对账。
+限工具调用次数不限 token（代理数不准 token，数得清调用）。没有机械保证，靠代理自觉；主会话在每个代理返回时把工具报回的用量记进 `.devflow/HISTORY.md`，事后对账。
 
-**整个任务的总闸**（主会话记账）：所有代理合计，轻档超过 300 次调用或 60 万 token、中档超过 600 次或 150 万、标准档超过 1500 次或 400 万，就停下向用户汇报，再决定继续还是收手。以上全是初始值（维护 dev-flow 的人：记账两周后按 HISTORY.md 的实际用量校准这张表）。
+**任务总闸**（主会话记账）：所有代理合计，轻档超 300 次调用或 60 万 token、中档超 600 次或 150 万、标准档超 1500 次或 400 万，停下向用户汇报再决定。都是初始值，记账两周后按 HISTORY.md 校准。
 
 ## 2. 跑内置 security-review 之前，先补 origin/HEAD
 
-内置 security-review 靠 `git diff origin/HEAD...` 找改动。这个引用只有 clone 来的仓库自带，本地起家的仓没有，缺了它技能一行 diff 都拿不到，直接报"有歧义的参数 origin/HEAD"。跑之前先执行：
+内置 security-review 靠 `git diff origin/HEAD...` 找改动，这个引用只有 clone 来的仓自带，本地起家的仓没有，技能会报"有歧义的参数 origin/HEAD"。跑之前先执行：
 
 ```bash
 git rev-parse -q --verify origin/HEAD >/dev/null || { git remote get-url origin >/dev/null 2>&1 && git fetch -q origin && git remote set-head origin -a; } || git symbolic-ref refs/remotes/origin/HEAD refs/heads/master
 ```
 
-有远端就 fetch 后建真引用（一次永久）；没远端或网络被拦，就造一个指向本地主分支的替身（`master` / `main` 按实际填），diff 基线一样正确。造过替身的，06 建仓 push 后跑一次 `git remote set-head origin -a` 归正。
+有远端就 fetch 后建真引用（一次永久）；没远端或网络被拦，造一个指向本地主分支的替身（`master` / `main` 按实际填）。造过替身的，06 建仓 push 后跑 `git remote set-head origin -a` 归正。
 
 ## 3. 测试摘要怎么出（裁判只看摘要，不看几千行原始输出）
 
@@ -49,9 +49,9 @@ PLAYWRIGHT_JSON_OUTPUT_NAME=.devflow/pw-<任务名>.json npx playwright test --r
 pytest -q --junitxml=.devflow/junit-<任务名>-full.xml 2>&1 | tee .devflow/test-output-<任务名>-full.txt
 ```
 
-其他框架（node test、go test、cargo test）没有 junit 输出的，用它们的 `-json` 或 `-v` 输出落盘，计数从落盘文件里 grep，口径一样：不凭记忆、不凭屏幕上滚过的内容估。
+其他框架（node test、go test、cargo test）用它们的 `-json` 或 `-v` 输出落盘，计数从落盘文件 grep，不凭记忆估。
 
-然后从报告文件里抄数，不凭 stdout 估。junit 的总数在文件头：
+从报告文件抄数。junit 的总数在文件头：
 
 ```bash
 grep -oE '(tests|failures|errors|skipped)="[0-9]+"' .devflow/junit-<任务名>.xml | head -4   # 计数
@@ -63,8 +63,8 @@ jest 的 json 看 `numPassedTests / numFailedTests / numPendingTests` 和 `testR
 摘要文件 `.devflow/test-summary-<任务名>.md` 固定五段：
 1. 通过 / 失败 / 跳过各几条
 2. 失败用例清单：用例名 + 断言信息各一行
-3. 每条跳过的用例和它的跳过原因（一条都不许省，跳过是最容易藏问题的地方）
-4. 全量回归结果（从 -full 报告抄：通过 / 失败 / 跳过计数）和锁定核查结果（轻档：锁 tag 等于账本值；标准档：LOCK 文件值等于 git 推导值和账本值；锁在当前 HEAD 的历史里，`tests/acceptance/` 的 diff 为空，测试运行环境没被改）
+3. 每条跳过的用例和原因（一条不省，跳过最容易藏问题）
+4. 全量回归结果（从 -full 报告抄计数）和锁定核查结果（轻档：锁 tag 等于账本值；标准档：LOCK 文件值等于 git 推导值和账本值；锁在当前 HEAD 历史里，`tests/acceptance/` diff 为空，测试运行环境没被改）
 5. 实点 / 真调结果
 
-末尾列出原始输出文件和报告文件的路径，裁判只许 grep 对照，并抽一处计数和原始输出对一对。
+末尾列原始输出和报告文件路径，裁判只许 grep 对照，并抽一处计数核对。
