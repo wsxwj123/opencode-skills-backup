@@ -6,7 +6,7 @@
 
 照抄这段，N / K 换成下表的数；M 那句只给测试设计代理，其他角色不贴：
 
-> 预算：工具调用不超过 N 次；最终报告不超过 K 字，报告格式按派工说明里的要求。只做本 prompt 列出的几处；派工清单里的文件必须读完，不通读和任务无关的文件；不为了验证测试本身去搭假服务。快到上限还没做完，就停下来交中间报告，说清做到哪、还差什么。
+> 预算：工具调用不超过 N 次；最终报告不超过 K 字，报告格式按派工说明里的要求。只做本 prompt 列出的几处；派工清单里的文件必须读完，不通读和任务无关的文件；不为了验证测试本身去搭假服务。快到上限还没做完，就停下来交中间报告，说清做到哪、还差什么。要装新依赖或碰到 rules.md 红线，停下交中间报告说明要做什么，等主会话带回授权再继续。
 > （测试设计代理加这句）测试用例不超过 M 条，超出要在报告里写理由。
 
 | 角色 | 工具调用上限 N | 测试条数上限 M | 报告上限 K |
@@ -49,7 +49,7 @@ PLAYWRIGHT_JSON_OUTPUT_NAME=.devflow/pw-<任务名>.json npx playwright test --r
 pytest -q --junitxml=.devflow/junit-<任务名>-full.xml 2>&1 | tee .devflow/test-output-<任务名>-full.txt
 ```
 
-其他框架没有 junit 输出的（go test、cargo test）用它们的 `-json` 或 `-v` 输出落盘；node:test 用 `node --test --test-reporter=junit --test-reporter-destination=.devflow/junit-<任务名>.xml tests/acceptance`。计数从落盘文件 grep，不凭记忆估。
+其他框架没有 junit 输出的（go test、cargo test）用它们的 `-json` 或 `-v` 输出落盘。node:test 用 `node --test --test-reporter=junit --test-reporter-destination=.devflow/junit-<任务名>.xml 'tests/acceptance/**/*.test.js'`（Node 21 起只认文件和 glob，传目录会变成一条假失败；它的计数在文件末尾的 `<!-- tests N -->` 注释里，用 `grep -E '<!-- (tests|pass|fail|skipped) '` 抄数）。计数从落盘文件 grep，不凭记忆估。
 
 从报告文件抄数。junit 的总数在文件头：
 

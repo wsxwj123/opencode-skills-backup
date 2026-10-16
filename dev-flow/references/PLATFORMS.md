@@ -66,7 +66,7 @@ dev-flow 的流程骨架平台无关，只有怎么派子代理、用哪个模�
 
 | 平台 | 做法 | 强度 |
 |---|---|---|
-| Claude Code | settings.json 的 `UserPromptSubmit` hook（本仓库 hooks/dev-flow-reminder.sh） | 硬（不经模型记忆） |
+| Claude Code | settings.json 的 `UserPromptSubmit` hook（GitHub 仓根目录 hooks/dev-flow-reminder.sh） | 硬（不经模型记忆） |
 | OpenCode | 全局 `AGENTS.md` 写"开发任务先调 dev-flow"（它也兼容读 `~/.claude/CLAUDE.md`，现有指令自动生效） | 软（靠模型自觉），插件系统能否每次注入未确认 |
 | Codex | config.toml `[hooks]` 或 `~/.codex/hooks.json` 配 `UserPromptSubmit` **命令型** hook（跑脚本打印提醒）；`AGENTS.md` 作后备 | 硬（注意：Codex 只有命令型 hook 真执行，prompt 型会被跳过） |
 
