@@ -31,7 +31,8 @@ ALL8 = [
     "revise-sci", "reviewer-response-sci", "reviewer-simulator", "polish-sci",
 ]
 
-# 源文件(_shared/ 下) → 消费技能列表(拷到 <skill>/scripts/ 同名)
+# 源文件(_shared/ 下) → 消费技能列表。键不含 "/" 时拷到 <skill>/scripts/ 同名;
+# 键含 "/"(如 references/x.md)时按同一相对路径拷到 <skill>/ 下。
 MANIFEST: dict[str, list[str]] = {
     # 跨会话接续:全部 8 家(env_preflight 打印 RESUME/LOG_CMD)
     "session_journal.py": ALL8,
@@ -70,9 +71,11 @@ MANIFEST: dict[str, list[str]] = {
         "general-sci-writing", "nsfc-proposal", "review-writing", "sci2doc",
         "revise-sci", "reviewer-response-sci", "reviewer-simulator",
     ],
-    # 撰写编排核心:撰写四家
+    # 撰写编排核心:撰写四家;revise-sci 只用其中的 load_prose_rules()
+    # (polish_revisions.py 同目录导入,读句法与节奏规则),故也铺一份。
     "delegate_write_core.py": [
         "general-sci-writing", "review-writing", "nsfc-proposal", "sci2doc",
+        "revise-sci",
     ],
     # 原子化拆分三件:review + nsfc 两家
     "extract_headings.py": ["review-writing", "nsfc-proposal"],
@@ -112,6 +115,13 @@ MANIFEST: dict[str, list[str]] = {
         "general-sci-writing", "review-writing", "nsfc-proposal",
         "polish-sci", "revise-sci", "reviewer-simulator",
     ],
+    # 句法与节奏规则共享真源(anti-ai-prose 轮):非脚本,键带相对路径,
+    # 铺到 <skill>/references/ 而不是 scripts/。四家撰写由 pack-write 嵌入任务包,
+    # revise-sci 嵌入润色 prompt,polish-sci 由 SKILL.md 指针读取。
+    "references/anti_ai_prose_rules.md": [
+        "general-sci-writing", "review-writing", "nsfc-proposal", "sci2doc",
+        "revise-sci", "polish-sci",
+    ],
 }
 
 
@@ -124,7 +134,8 @@ def iter_targets():
     for src_name, skills in MANIFEST.items():
         src = SHARED / src_name
         for skill in skills:
-            yield src, SKILLS_ROOT / skill / "scripts" / src_name, skill
+            rel = src_name if "/" in src_name else f"scripts/{src_name}"
+            yield src, SKILLS_ROOT / skill / rel, skill
 
 
 def do_check() -> int:
@@ -132,14 +143,15 @@ def do_check() -> int:
     missing_src: set[str] = set()
     for src, dst, skill in iter_targets():
         if not src.is_file():
-            if src.name not in missing_src:
-                missing_src.add(src.name)
-                problems.append(f"真源缺失: _shared/{src.name}")
+            key = src.relative_to(SHARED).as_posix()
+            if key not in missing_src:
+                missing_src.add(key)
+                problems.append(f"真源缺失: _shared/{key}")
             continue
         if not dst.is_file():
-            problems.append(f"缺失: {skill}/scripts/{src.name}")
+            problems.append(f"缺失: {dst.relative_to(SKILLS_ROOT).as_posix()}")
         elif _md5(src) != _md5(dst):
-            problems.append(f"漂移: {skill}/scripts/{src.name} (md5 != _shared)")
+            problems.append(f"漂移: {dst.relative_to(SKILLS_ROOT).as_posix()} (md5 != _shared)")
     # 漏登记:文件已 vendored 进某技能、_shared 里也有真源,却不在 MANIFEST。
     # 这类副本无人守漂——本检查存在的意义就是不让清单落后于现实。
     for skill in ALL8:
@@ -161,16 +173,16 @@ def do_check() -> int:
 def do_sync(only: str | None = None) -> int:
     copied = 0
     for src, dst, skill in iter_targets():
-        if only is not None and src.name != only:
+        if only is not None and src.relative_to(SHARED).as_posix() != only:
             continue
         if not src.is_file():
-            print(f"跳过(真源缺失): _shared/{src.name}", file=sys.stderr)
+            print(f"跳过(真源缺失): _shared/{src.relative_to(SHARED).as_posix()}", file=sys.stderr)
             continue
         if dst.is_file() and _md5(src) == _md5(dst):
             continue
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(src, dst)
-        print(f"铺: {skill}/scripts/{src.name}")
+        print(f"铺: {dst.relative_to(SKILLS_ROOT).as_posix()}")
         copied += 1
     print(f"同步完成,更新 {copied} 份")
     return 0
