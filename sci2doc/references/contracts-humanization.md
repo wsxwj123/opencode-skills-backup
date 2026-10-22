@@ -2,6 +2,8 @@
 
 ## Humanization Contract
 
+写作前先 Read `references/anti_ai_prose_rules.md`，执行其中全部条目。
+
 Before finalizing each chapter:
 
 1. Run technical self-check（命令见 `QUICK_START.md` § 7）。

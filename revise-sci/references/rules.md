@@ -84,6 +84,7 @@
 - The polishing stage must emit `revision_polish_manifest.json`, `revision_polish_prompt.md`, and `revision_polish_execution.json` so the anti-AI prompt, driver mode, and candidate coverage remain auditable.
 - `strict_gate.py` must verify that completed revised fragments with a non-empty `revision_plan.scope` have polish state, a valid `polish_driver_mode`, and no residual banned AI-style markers.
 - The polishing prompt must be layered, not flat. It must include: role definition, non-negotiable edit/evidence/citation/length constraints, deep anti-AI rewriting protocol, and a JSON-only output contract.
+- 写作前先 Read `references/anti_ai_prose_rules.md`，执行其中全部条目。
 - **Polish anti-AI 去AI五项（适用于中英文改稿正文）。硬/软分层：写作时五项都要守；门禁对「主干」硬失败，套话禁词、scare quotes、解释性冒号、-ing 假分析从句、**装饰性破折号**这类真正的 AI 味硬拦（fail-close）；只把「句长 >30 词」降为软提示（`strict_gate.py` 响亮上报、不 fail-close）。装饰性破折号禁止使用，命中即 FAIL。**
   1. **禁装饰性破折号（🔴 硬门禁，禁止使用，命中即 FAIL）**：禁用 —/——/em-dash 充当停顿、补充或强调（如"该结果——尽管样本量小——表明…"）；改用逗号、句号或拆为两句。连字符（"dose-response"）与数值范围不受限。中英文均适用。`strict_gate.py`/`polish_guard` 对破折号 fail-close，不放行。
   2. **禁 scare quotes**：禁用双引号包裹自造词或普通短语以暗示"新概念/反讽"；保留：术语首次定义、原始审稿人评论直接引用、已固化的术语隐喻。**HTML/代码结构引号豁免**：本条只管正文散文；HTML 标签、属性、内联样式与代码里的结构性双引号（如 `id="sec-1"`、`class="panel"`、`<a href="...">`）是代码语法、不是 scare quotes，**一律不得删除、改写、转全角或转弯引号**——动了会破坏 HTML 渲染，去 scare quotes 绝不触碰 markup 与代码。

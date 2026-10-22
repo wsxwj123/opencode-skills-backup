@@ -3,6 +3,7 @@
 > 被 SKILL.md 的 Role 区与 **Phase 8 (`/write`)、Phase 10 (`/check`)** 引用。
 > **每次撰写或润色英文正文段落前必须 `Read` 本文件**；`/check` 跑 `style_checker.py` 作为客观兜底。
 > 本协议自包含；`humanizer-zh` skill 若已装可作辅助参考但非强制依赖。
+> 写作前先 Read `references/anti_ai_prose_rules.md`，执行其中全部条目。
 
 ## 目标读者画像
 
