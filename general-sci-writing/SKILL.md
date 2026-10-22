@@ -1,6 +1,6 @@
 ---
 name: general-sci-writing
-version: 2.36.13
+version: 2.37.0
 description: 用于从零撰写或润色符合 Nature/Science/Cell 标准的 SCI 研究论文（Article 类型），适用于多学科。用户提供研究数据、实验结果或已有初稿，本技能以分阶段管道推进：故事脉络构建、主图集规划、文献检索、逐节撰写、摘要凝练、质量控制与投稿包准备，最终产出可直接投稿的完整稿件。全程执行反 AI 腔约束与文献真实性核验，不杜撰数据与参考文献。触发词：写论文、SCI论文、学术写作、科研写作、论文润色、研究论文、学术投稿、投稿、润色论文、polish paper、write SCI paper、academic writing、draft paper、manuscript writing。路由说明：退稿或返修需修改主稿的，使用 revise-sci；仅撰写审稿意见回复的，使用 reviewer-response-sci；对他人已完成的整稿执行纯语言润色、不进入本管道的，使用 polish-sci，本技能所称润色仅指管道内 Phase 10 对自写稿的润色；撰写综述或文献综述的，使用 review-writing。本技能侧重新稿撰写与自写稿润色。Phase 13B 提供退稿后的逐条 gap 分析与改稿，并生成内部 response letter（reviews/response_letter.md），但不产出正式投稿用的完整回复包，亦不单独输出修订稿 docx；需要正式回复包应使用 reviewer-response-sci。
 license: Proprietary
 ---

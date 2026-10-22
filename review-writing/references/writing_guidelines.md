@@ -63,6 +63,8 @@ meta_analysis | systematic_review | clinical_trial | preprint | book_chapter | g
 
 ## 4. Anti-AI Writing Style
 
+写作前先 Read `references/anti_ai_prose_rules.md`，执行其中全部条目。
+
 ### English Mode
 - **Ban List:** Moreover, Crucial, Landscape, Tapestry, Realm, Pivot, Foster, Underscore, Delve into, Spearhead
 - **Phrases to Avoid:** It is worth noting, In conclusion, As mentioned above, Serves as, Acts as

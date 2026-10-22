@@ -1,6 +1,6 @@
 ---
 name: polish-sci
-version: 2.26.4
+version: 2.27.0
 description: 用于对已完稿论文执行纯语言润色，输入为完整稿件（Markdown 或 docx），不需审稿意见。技能逐段提升语言表达，覆盖全文每一段，产出润色稿及一份逐段改动报告。默认采用交互式逐段模式，每段先呈现原文、润色结果与逐处改动，经用户确认后写回。核心约束为仅改语言表达，绝不改动内容、数据与结论。润色后若残留 AI 套话禁词，或装饰性破折号、scare quotes、解释性冒号三项禁用标点，一律硬性拦截。触发词：润色、polish、语言润色、润色论文、polish paper、language polish、proofread manuscript、母语化、润色稿子。路由说明：本技能不需审稿意见且逐段覆盖全文，由审稿意见驱动、仅修改被点名片段的情形应使用 revise-sci；从零撰写新稿应使用 general-sci-writing。
 ---
 
@@ -32,6 +32,7 @@ not_for(以下情况不要用本技能):
 | 必须 Read 的时机 | 文件 |
 |---|---|
 | 每段改写前 | `references/anti-ai-protocol.md` |
+| 每段改写前 | `references/anti_ai_prose_rules.md`(句法与节奏规则,执行其中全部条目) |
 | 第 3 步逐段润色前 | `references/interaction-protocol.md` |
 | 第 5 步委托盲检前 | `references/dod-protocol.md` |
 | 第 7 步 merge/导出前 | `references/output-contract.md` |
@@ -143,6 +144,7 @@ python scripts/polish_units.py pack --project-root <root> --intensity standard
 # 3. 主 agent 逐段润色:读 polish_manifest.json 的每个 task,按下方 Polish Prompt 改写。
 #    📖 动手前必须 Read references/interaction-protocol.md + references/anti-ai-protocol.md,
 #       不许凭记忆跑。自查:我这轮真的读过这两个文件吗?没有就先读。
+#    📖 另须先 Read references/anti_ai_prose_rules.md(句法与节奏规则),执行其中全部条目。
 
 # 4. 校验红线(逐段写回 polish_risk_flags)
 python scripts/polish_units.py verify --project-root <root>
@@ -170,6 +172,8 @@ python scripts/polish_report.py --project-root <root>
 ```
 
 ## Polish Prompt(主 agent 逐段改写时遵守)
+写作前先 Read `references/anti_ai_prose_rules.md`，执行其中全部条目。
+
 对 `polish_manifest.json` 里的每个 task,产出 `polished_text`:
 1. **去AI**,清除 AI 套话与五项装饰(见 Anti-AI 规则),改写后自检不得残留。
 2. **句长**,英文单句≤30词、中文单句≤50字,长短句交替,避免连续长句。
