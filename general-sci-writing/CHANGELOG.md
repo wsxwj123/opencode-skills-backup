@@ -1,5 +1,9 @@
 # Changelog - General SCI Writing Skill
 
+## [2.38.0] - 2026-10-22
+
+第二十八轮（anti-ai-dedupe，去 AI 文档瘦身，版本 2.38.0）：`references/anti-ai-protocol.md` 删掉已由 `references/anti_ai_prose_rules.md` 接管的规则句。合并同段保持一致称谓与禁生僻词两节为术语统一与常用词一节，规则句换成指向真源第一节第 4 条、第 5 条与第四节第 3 条的指针，nanoparticles 链、平实词对照、apoptosis 例外三处举例保留。删 exosomes 互换例外、连续 3 句句长相近、同概念同义替换三条。传统刊段落与句法层两处语态说法与真源第二节第 3 条冲突，改为 Methods/Results 被动比例按目标刊、其余段落用主动语态。脚本不动。
+
 ## [2.37.0] - 2026-10-22
 
 第二十七轮（anti-ai-prose，句法与节奏规则统一真源）：pack-write 任务包 `embed.style_rules` 新增 `prose` 键，嵌入 `references/anti_ai_prose_rules.md` 的句法与节奏规则；规则文件缺失或标记畸形时 exit 2，不写任务包。撰写 prompt 风格硬禁条与去 AI 文档加指针句。新增 `references/anti_ai_prose_rules.md` 副本；pack-write stderr 多一行 `PROSE_RULES=<路径>`。
