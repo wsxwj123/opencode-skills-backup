@@ -1,6 +1,6 @@
 > 本文件由 SKILL.md 拆分而来，仅在主文件指示时读取。
 
-# Phase 4: Export & Finalization（Step 1–3 与 Step 5b–8；Step 4 / 4a–4d / 5 原文留在 SKILL.md）
+# Phase 4: Export & Finalization（Step 1–5、5b–8 全部步骤）
 
 **Start: Read `outline.md` + `state.json`. If state.json shows phase=4 and completed=true, skip.**
 
