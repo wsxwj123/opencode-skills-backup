@@ -2,7 +2,7 @@
 
 ## [2.27.0] - 2026-10-22
 
-第二十七轮（anti-ai-prose，句法与节奏规则统一真源）：新增 `references/anti_ai_prose_rules.md`（句法与节奏规则）；SKILL.md 参考文件地图表、第 3 步必读注释、Polish Prompt 节三处指向该文件；`anti-ai-protocol.md` 开头加指针句。
+第二十七轮（anti-ai-prose，句法与节奏规则统一真源）：新增 `references/anti_ai_prose_rules.md`（句法与节奏规则）；SKILL.md 参考文件地图表、第 3 步必读注释、Polish Prompt 节三处指向该文件；`anti-ai-protocol.md` 开头加指针句。`anti-ai-protocol.md` 开头来源说明句同步修订。
 
 ## [2.26.2] - 2026-08-20
 

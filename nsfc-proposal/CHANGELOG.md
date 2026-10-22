@@ -2,7 +2,7 @@
 
 ## [2.38.0] - 2026-10-22
 
-第二十七轮（anti-ai-prose，句法与节奏规则统一真源）：pack-write 任务包 `embed.style_rules` 新增 `prose` 键，嵌入 `references/anti_ai_prose_rules.md` 的句法与节奏规则；规则文件缺失或标记畸形时 exit 2，不写任务包。撰写 prompt 风格硬禁条与去 AI 文档加指针句。
+第二十七轮（anti-ai-prose，句法与节奏规则统一真源）：pack-write 任务包 `embed.style_rules` 新增 `prose` 键，嵌入 `references/anti_ai_prose_rules.md` 的句法与节奏规则；规则文件缺失或标记畸形时 exit 2，不写任务包。撰写 prompt 风格硬禁条与去 AI 文档加指针句。新增 `references/anti_ai_prose_rules.md` 副本；pack-write stderr 多一行 `PROSE_RULES=<路径>`。
 
 ## [2.37.2] - 2026-08-20
 
