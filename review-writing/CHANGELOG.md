@@ -1,5 +1,9 @@
 # Changelog - Review Writing Skill
 
+## [2.38.0] - 2026-10-22
+
+第二十八轮（anti-ai-dedupe，去 AI 文档瘦身，版本 2.38.0）：`references/writing_guidelines.md` 删掉已由 `references/anti_ai_prose_rules.md` 接管的规则句。英文与中文 Structure Ban 的比喻规则句换成指向真源第一节第 6 条的指针，比喻举例保留；英文与中文 Rhythm 删去连续 3 句同长或同式的半句，数值保留；Synonym cycling 整行改写为 Terminology 指针行，指向第一节第 4 条与第四节第 3 条，TME 例保留。Deep Rewriting 的 Lexical 与 Syntactic 两行与真源冲突，改为术语固定、非术语用常用词，以及用主动语态并把被动控制在 Voice 目标内。脚本不动。
+
 ## [2.37.0] - 2026-10-22
 
 第二十七轮（anti-ai-prose，句法与节奏规则统一真源）：pack-write 任务包 `embed.style_rules` 新增 `prose` 键，嵌入 `references/anti_ai_prose_rules.md` 的句法与节奏规则；规则文件缺失或标记畸形时 exit 2，不写任务包。撰写 prompt 风格硬禁条与去 AI 文档加指针句。新增 `references/anti_ai_prose_rules.md` 副本；pack-write stderr 多一行 `PROSE_RULES=<路径>`。

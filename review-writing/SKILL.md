@@ -1,6 +1,6 @@
 ---
 name: review-writing
-version: 2.37.0
+version: 2.38.0
 description: "用于撰写对标 Nature/Cell/Lancet 水平的学术文献综述，适用于需系统检索、文献整合与引用管理的综述类稿件。支持四种综述类型：叙述性综述；系统综述与 Meta 分析（叠加 PRISMA 2020 流程、PICO/PECO 纳排登记、逐研究偏倚风险评估与 GRADE 证据分级）；scoping review（采用 PCC 框架，流程从简）；WHY-HOW-WHAT 三层轻量对比模式。技能提供 Zotero 实时集成、大纲持久化与多模式文献管理，全程执行引用真实性核验与反 AI 腔约束。触发词：写综述、文献综述、综述写作、literature review、review article、改综述、完善综述、继续写综述、improve review。本技能不适用于原始研究论文、单篇论文的修改与润色、三千词以下的短篇评论，以及科普、博客等非学术写作。"
 triggers:
   - "写综述"
