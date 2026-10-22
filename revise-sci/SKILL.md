@@ -1,6 +1,6 @@
 ---
 name: revise-sci
-version: 2.30.4
+version: 2.31.0
 description: 用于退稿或返修阶段的完整改稿管道，由审稿意见驱动修改既有稿件。技能将审稿信拆解为逐条意见，据此修改主稿并同步产出三项交付物：逐条回复信、修改后的正文 docx，以及基于内容哈希校验的 Patch 修订记录。可选启用词级修订痕迹，在 Word 中以增删痕迹形式呈现改动。禁止杜撰实验、数据、统计结果与参考文献，证据不足处标记为需作者确认。触发词：改稿、修改稿子、修订正文、退稿改进、返修、revise manuscript、major revision、minor revision、revise and resubmit、point-by-point response、revised manuscript。路由说明：本技能同时修改主稿并产出回复包，若仅需回复而不修改主稿，应使用 reviewer-response-sci；撰写新稿应使用 general-sci-writing，本技能仅处理审稿意见驱动的既有稿件修改。
 ---
 

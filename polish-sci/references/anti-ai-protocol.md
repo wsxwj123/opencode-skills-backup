@@ -1,6 +1,6 @@
 # Anti-AI 规则（软提示分级与非散文豁免·细则）
 
-> 本文件是 polish-sci SKILL.md 的下沉细则，内容与拆分前逐字一致，未作任何改写。
+> 本文件是 polish-sci SKILL.md 的下沉细则，除开头新增的指针行外与拆分前逐字一致。
 > 何时读：每段改写前，与 Polish Prompt 同时；判断某个 flag 该不该改时。硬拦三项已留在 SKILL.md，此处是不阻断的软提示分级与豁免范围。
 > 写作前先 Read `references/anti_ai_prose_rules.md`，执行其中全部条目。
 

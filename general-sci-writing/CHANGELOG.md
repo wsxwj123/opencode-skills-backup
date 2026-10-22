@@ -1,5 +1,9 @@
 # Changelog - General SCI Writing Skill
 
+## [2.37.0] - 2026-10-22
+
+第二十七轮（anti-ai-prose，句法与节奏规则统一真源）：pack-write 任务包 `embed.style_rules` 新增 `prose` 键，嵌入 `references/anti_ai_prose_rules.md` 的句法与节奏规则；规则文件缺失或标记畸形时 exit 2，不写任务包。撰写 prompt 风格硬禁条与去 AI 文档加指针句。
+
 ## [2.36.11] - 2026-08-20
 
 第二十六轮（中文 Windows 兼容，两条外部用户实证的上游 bug）：① `install_gate_hook.py` 选解释器由"只判在不在 PATH"改成"先实跑一次再定"——Windows 商店那个 0 字节 `python3.exe` 占位程序在 PATH 里存在、实跑 rc=9009，此前会被选中，导致门禁三个钩子静默失效且不报错；② `git_checkpoint.py` / `env_preflight.py` / `install_gate_hook.py`的 subprocess 文本调用补 `encoding="utf-8", errors="replace"`——`text=True` 缺 `encoding=` 时按 locale 解码，cp936 中文 Windows 下遇 UTF-8 输出即 `UnicodeDecodeError`。🔴 `git_checkpoint.py` 是回滚安全网，技能自己写的中文 commit message 就会触发它崩，中文 Windows 用户开始写稿后第一次调检查点即挂。判定逻辑与输出格式零改动。

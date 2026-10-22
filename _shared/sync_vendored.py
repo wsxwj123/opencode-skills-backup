@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""vendored 纯库同步器:_shared/ 为唯一真源,按 MANIFEST 铺进各技能 scripts/。
+"""vendored 纯库同步器:_shared/ 为唯一真源,按 MANIFEST 清单键铺进各技能 scripts/ 或相对路径目录。
 
 背景:8 个学术技能要能被单独分发(GUI/ZIP 只拉单个技能目录,不带同级 _shared/),
 故纯库(stdlib-only、零互 import)vendored 进各技能 scripts/ 同目录使用;_shared/

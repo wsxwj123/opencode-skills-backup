@@ -1,6 +1,6 @@
 ---
 name: polish-sci
-version: 2.26.4
+version: 2.27.0
 description: 用于对已完稿论文执行纯语言润色，输入为完整稿件（Markdown 或 docx），不需审稿意见。技能逐段提升语言表达，覆盖全文每一段，产出润色稿及一份逐段改动报告。默认采用交互式逐段模式，每段先呈现原文、润色结果与逐处改动，经用户确认后写回。核心约束为仅改语言表达，绝不改动内容、数据与结论。润色后若残留 AI 套话禁词，或装饰性破折号、scare quotes、解释性冒号三项禁用标点，一律硬性拦截。触发词：润色、polish、语言润色、润色论文、polish paper、language polish、proofread manuscript、母语化、润色稿子。路由说明：本技能不需审稿意见且逐段覆盖全文，由审稿意见驱动、仅修改被点名片段的情形应使用 revise-sci；从零撰写新稿应使用 general-sci-writing。
 ---
 
