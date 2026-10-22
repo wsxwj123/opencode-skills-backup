@@ -73,7 +73,7 @@ why_how_what_note: |
 | Phase 1.7 | `docs/phase_1_7_outline_signoff.md` |
 | Phase 2 | `docs/phase_2_search.md` |
 | Phase 3 | `docs/phase_3_writing.md` |
-| Phase 4 | 正文就在本文件 `## Phase 4`（未外移） |
+| Phase 4 | Step 1–3、5b–8 在 `docs/phase_4_export.md`；Step 4 / 4a–4d / 5 正文仍在本文件 `## Phase 4`（验收考卷逐字锁定，未外移） |
 | Phase 5 | `docs/phase_5_submission_pack.md` |
 
 ### 每 Phase 关键动作
@@ -272,30 +272,6 @@ Before any **writing / search / import / Zotero-mutating** action, ask exactly *
 
 > 📖 **完整步骤详见 `docs/phase_0p_polish_mode.md`**，进入 Polish Mode 时必须读取该文件。
 
-**前置条件：** Phase 0.1–0.5 已完成（outline.md + state.json + scripts 已就位）。
-
-**步骤概要：**
-1. **Step 0:** 验证参数（不重复收集）+ 格式依赖检测（.docx / .pdf）
-2. **Step 1:** 接收草稿 → `extract_headings.py` 一趟同产 `tmp/draft_import.md` + `tmp/heading_manifest.json`（标题真值）
-3. **Step 2:** 原子拆分（两路 + 两层反向核验必跑）：路径判定 → 有标题路 `split_headings.py` 机械切 / 无标题路 LLM 拆分子代理 → **Layer1** `split_audit.py` 逐分区比对(exit0 才进) → **Layer2** `split_boundary` gate（LLM 核验，`delegate_review.py` pack/verify，恒跑）→ **两层皆绿 + 用户确认后才写** `drafts/section_XX_XX.md`
-4. **Step 3:** 诊断报告（字数 / 引用密度 / AI 特征）→ keep / polish / rewrite / missing
-5. **Step 4:** 用户分配优先级（**Hard Block，每节必须有明确标签**）
-6. **Step 5:** 引文导入 → `data/literature_index.json`（保留原始 [N] 编号）
-7. **Step 6:** 初始化 state.json → 路由到 Phase 3
-
-**路由表：**
-| Section type | Path |
-|---|---|
-| `missing` | Phase 3 内部处理：先搜索再写（不回退 Phase 2） |
-| `rewrite` | Phase 3（可选 Round 2 搜索） |
-| `polish` | Phase 3（跳过搜索，直接修订） |
-| `keep` | 跳过（已在 completed_sections） |
-
-All sections complete → Phase 4 (export + compile).
-
-**HALT 点（4 个）：** ① Step 0 格式依赖探测失败（缺 python-docx / pdf 提取器 → 停下给用户装法，不许绕过）；② Step 1 抽取后长度体检异常（<200 字符判源文件损坏、字符数明显偏少 → 停下与用户核实是不是完整稿）；③ Step 2 两层反向核验皆绿后**仍须等用户确认**才写 `drafts/`；④ Step 4 逐节优先级分配（**Hard Block**，每节必须有 keep/polish/rewrite/missing 明确标签才能往下走）。
-**必跑门禁：** `extract_headings.py`（标题真值）→ `split_headings.py` 或 LLM 拆分 → `split_audit.py`（Layer1 逐分区比对，exit 0 才进）→ `delegate_review.py` 的 `split_boundary` gate（Layer2 LLM 核验，**恒跑，不因 Layer1 绿而跳过**）。
-
 ---
 
 
@@ -316,25 +292,11 @@ Format: `[review] Phase X.Step: <description>`. 📖 消息表 + Rollback 命令
 
 > 📖 **完整步骤详见 `docs/phase_1_5_research_gap.md`，进入本阶段必须读取该文件执行。**（Write Mode only；Polish Mode 跳过。）
 
-**Entry:** Read `outline.md` + `state.json`；`phase ≥ 1.6` → 已完成，skip。**Phase gate：`state.json` 不存在 → HALT**，先完成 Phase 0。
-
-**步骤概要：** 0 定 RQ/PICO（写入 outline.md）→ 1 `state_manager.py init-index` + 探索性检索（串行 ≥1s，逐篇 `citation_guard.py`，gap 只能由 verified 文献推出、禁脑补）→ 2 识别四类信号写 `data/research_gap.json`（candidate_topics/hotspots/controversies/gaps + novelty_risk）→ 3 DoD 盲检 → 4 `set-phase 1.5` + Git Checkpoint → HALT → 5 选定主线落盘（`selected` 标记 + outline.md 主线锚点 + 再补 Checkpoint）。
-
-**HALT 点（2 个）：** ① phase gate（state.json 不存在）；② 展示 candidate_topics/gaps/novelty_risk 等用户确认选题方向，确认后必做主线落盘。
-**必跑门禁：** `citation_guard.py`（逐篇 verified）；gate `research-gap-dod` 独立subagent盲检（`delegate_review.py pack/verify --checklist "[DOD_CHECKLIST]"`，fail-closed，未过不得声明完成）。
-
 ---
 
 ## Phase 1.6: Benchmark Review Library + Framing Guide（Write Mode only）
 
 > 📖 **完整步骤详见 `docs/phase_1_6_benchmark_framing.md`，进入本阶段必须读取该文件执行。**（Write Mode only；Polish Mode 跳过。）
-
-**Entry:** Read `outline.md` + `state.json`；`phase ≥ 1.7` → 已完成，skip。**Phase gate：`phase < 1.5` → HALT**，先完成 Phase 1.5。
-
-**步骤概要：** 1 检索 5–10 篇近年同领域对标综述（串行 ≥1s，每篇走 `citation_guard.py` 验证、禁编造）→ 2 建 `data/benchmark_reviews.json` → 3 提炼 `data/framing_guide.md`（可复用章节框架/论证思路/图文关系/对本综述的具体建议）→ 4 DoD 盲检 → 5 `set-phase 1.6` + Git Checkpoint → HALT。产出在 Phase 1.7 建提纲与 Phase 3 搭框架时由 Framing hook 强制复用。
-
-**HALT 点（2 个）：** ① phase gate（phase < 1.5）；② 展示对标库与 framing_guide 要点等用户确认，确认后进 Phase 1.7。
-**必跑门禁：** `citation_guard.py`（对标综述真实性）；gate `benchmark-reviews-dod` 独立subagent盲检（`delegate_review.py pack/verify`，fail-closed）。
 
 ---
 
@@ -342,25 +304,11 @@ Format: `[review] Phase X.Step: <description>`. 📖 消息表 + Rollback 命令
 
 > 📖 **完整步骤详见 `docs/phase_1_7_outline_signoff.md`，进入本阶段必须读取该文件执行。**（Write Mode only；Polish Mode 直接去 Phase 3。）
 
-**Entry:** Read `outline.md` + `state.json` + `data/research_gap.json`（selected 主线）+ `data/framing_guide.md` + `data/benchmark_reviews.json`；`phase ≥ 2` → skip。**Phase gate：`phase < 1.6` → HALT**，回去先做 Phase 1.5 / 1.6。
-
-**步骤概要：** 1 据调研建提纲（selected gap 为骨架 + framing_guide 框架，Funnel Introduction + Thematic Body ≤2 层）→ 2 显式对齐对标框架 → 3 用户确认提纲、更新 outline.md（含迭代闸：Phase 2 后可回修）→ **结构签字落锁（用户在对话里明确确认提纲后，跑 Phase 0.5 打印的 `SIGNOFF_CMD`，即 `structure_signoff_gate.py` 的 confirm 子命令；未落签字则 PreToolUse hook deny 一切 `drafts/section_*.md` 写入；⚠️ 严禁在用户未确认时自行 confirm，那等于伪造用户签字）** → 4 注册 Figure 0 概念框架图 → 6 Zotero 集合树 `--init`（幂等；`--find-root-title` exit 4 多根时停下问用户）或 7 `init-index`（None/EndNote 模式）→ 8 `set-phase 1.7` + `set-root-key` → 9 Git Checkpoint → HALT。
-
-**HALT 点（3 个）：** ① phase gate（phase < 1.6）；② 提纲确认（Confirm outline with user，确认后才许落签字）；③ 节末 HALT 等用户确认后进 Phase 2。（Zotero 多同名根集合 exit 4 时另需停下问用户。）
-**必跑门禁：** 结构签字落锁（`structure_signoff_gate.py`，签字绑定大纲指纹，节号/标题/层级/顺序变化须用户重新确认后重签）。
-
 ---
 
 ## Phase 2: 系统主检索（Systematic Main Search）+ Real-Time Write
 
 > 📖 **完整步骤详见 `docs/phase_2_search.md`（含 Per-Section Search Loop 全部命令、密度地板、Phase 2.5 去重），进入本阶段必须读取该文件执行。**（探索性检索已在 Phase 1.5 完成，本阶段是系统化主检索。）
-
-**Entry:** Read `outline.md` + `state.json`，跳过已在 `searched_sections` 的节（检索完成标记，与写作完成的 `completed_sections` 独立）。开写前 Read `data/research_gap.json` 取 `selected` 主线。**Phase gate：`state.json` 不存在或 `phase < 1.7`（未落结构签字）→ HALT**，先完成 1.5→1.6→1.7。
-
-**步骤概要（逐节循环，工具优先级见 § Search Tool Priority，串行 ≥1s）：** 每节 ≥10 篇 → `append-search-log` 记检索日志 → 入库前相关性筛选（不得"搜到即入库"）→ 写库（Zotero `--add-batch` / None `append-literature`，字段含 `related_sections` 数组）→ matrix bootstrap（None/EndNote）→ **`citation_guard.py --write-back`（exit 非 0 不得进下一节；🔴 绝不加 `--offline`、绝不省 `--write-back`，这是 Phase 3 盲检 R2b 的唯一证据来源）** → `complete-search`（🔴 绝不能用 complete-section）→ Git Checkpoint。全局目标 ≥100 篇；密度硬地板（三级叶子 ≥6 / 四级叶子 ≥3 / 容器父节 ≥1）由 Phase 3 prewrite_gate check3 硬拦。**Phase 2.5 去重：⚠️ HALT before dedup**，用户明确 "Continue" 后 [Zotero] 跳过（写入时已去重）/ [None] `reindex`，然后 `set-phase 2` + Checkpoint。
-
-**HALT 点（2 个）：** ① phase gate（无 state.json 或 phase < 1.7）；② Phase 2.5 去重前（展示总数/预估重复/覆盖节次，等明确 "Continue"）。
-**必跑门禁：** `citation_guard.py --write-back`（逐节，fail 即停）；`state_manager.py append-search-log`（可复现性台账）。
 
 ---
 
@@ -392,63 +340,8 @@ Format: `[review] Phase X.Step: <description>`. 📖 消息表 + Rollback 命令
 
 ## Phase 4: Export & Finalization
 
-**Start: Read `outline.md` + `state.json`. If state.json shows phase=4 and completed=true, skip.**
+> 📖 **Step 1–3（entry gate `check-pending`、Round 3 补搜 HALT、引用一致性 + 联网核验、导出 bibliography）与 Step 5b–8（未来方向段、元数据块、docx 导出、state.json / Git Checkpoint / outline.md 收尾）已外置到 `docs/phase_4_export.md`，进入本阶段必须先读取该文件执行。** Step 4 / 4a / 4b / 4c / 4d / 5 的原文留在下方（被验收考卷逐字锁定，未外移）。
 
-**⚠️ MANDATORY entry gate: block Phase 4 when pending sections remain (Polish Mode):**
-```bash
-python3 scripts/state_manager.py check-pending
-```
-Write Mode has no `pending_sections` field so this gate is a no-op (no key → empty dict → pass).
-
-> **⚠️ HALT before Round 3 sweep.** Show user:
-> - Sections to search: [list from outline.md]
-> - Estimated: ~5–10 new preprints per section
->
-> Ask: "Proceed with Round 3 preprint sweep? (yes / skip)"
-> **Do not proceed until explicit user answer.** If "skip" → record `"round3_papers": 0` in state.json and jump to Step 2.
-
-1. **Round 3 search:** Scan arXiv/preprints (last 6 months) for each section topic → add to relevant sections.
-2. **Citation consistency + online validation:**
-
-   **Polish Mode guard** (skip Steps 2a–2b when EITHER condition below holds; on hit, append `Citations not validated — manual review required.` to outline.md Current Status):
-   ```bash
-   # Empty index — no citations to validate
-   python3 -c "import json,pathlib; p=pathlib.Path('data/literature_index.json'); exit(0 if (not p.exists() or len(json.loads(p.read_text(encoding='utf-8') or '[]'))==0) else 1)" && echo "GUARD: empty index → skip 2a-2b"
-   # OR state.json marks citations as not imported
-   python3 -c "import json,pathlib; s=json.loads(pathlib.Path('state.json').read_text(encoding='utf-8')); exit(0 if s.get('citations_imported') is False else 1)" && echo "GUARD: citations_imported=false → skip 2a-2b"
-   ```
-   **引用总量校验（警告性，不阻断；尊重用户自定的短篇长度）:**
-   ```bash
-   python3 scripts/state_manager.py count-citations --drafts-dir drafts --threshold 150
-   ```
-   > **类型分布（人工核对）：** literature_index.json 未记录 Original/Review/Preprint 类型字段，无法机器统计。AI 对照 Constraints §2 的**软目标**（按学科浮动、类型配比按论点性质、预印本按需）人工抽查 index，明显失衡时提示用户；不按固定配额卡数。
-
-   ```bash
-   python3 scripts/check_global_citation_sequence.py
-   python3 scripts/validate_citations.py --live --live-used-only --fail-on-orphan --fail-on-live --fail-on-trace --retries 2
-   # 🔴 --fail-on-live / --fail-on-trace 必带：不带时联网核验失败（编造 DOI 打 404）
-   #    只打 [LIVE-FAIL] 行而退出码仍为 0，会被误读成通过。
-   # Final citation guard pass: write verification results back to index
-   python3 scripts/citation_guard.py \
-     --index data/literature_index.json \
-     --log data/citation_guard_report.json \
-     --write-back \
-     --manual-review data/manual_review_queue.json
-   ```
-   If non-zero exit → list all gaps; block compilation until resolved.
-   `--write-back`: persists `verified:true/false` fields into literature_index.json for traceability.
-   `--manual-review`: writes unverifiable entries to `data/manual_review_queue.json` for human check; does NOT block compilation unless `--require-mcp` is also set.
-
-   > **【P4·文献抽验·用户必做】** 综述的命是引文。文献进正文前用户应抽 2-3 篇让 AI 报 PMID/DOI 自己去 PubMed 核对。⚠️ 你在 Windows 上 edirect 联网核验常跑不起来（本 SKILL 已注明 edirect 在 PowerShell/CMD 不可用），**一旦不能真的联网查，AI 必须停下告诉用户，绝不许硬着头皮编 DOI/年份**。`validate_citations.py --live` 跑不起来时明说「联网核验不可用」，不许自判通过。
-3. **Export bibliography:**
-   ```
-   [Zotero] python3 scripts/zotero_manager.py --export-bibtex \
-              --output exports/references.bib --root-key ROOT_KEY
-   [None/EndNote]   python3 scripts/export_bibtex.py \
-              --input data/literature_index.json \
-              --output exports/references.bib \
-              --clean
-   ```
 4. **Compile:** Merge all section drafts in correct order（**跑这条，跨平台**）:
    ```bash
    python3 scripts/compile_manuscript.py merge --drafts-dir drafts --out exports/Final_Review.md
@@ -551,44 +444,13 @@ Write Mode has no `pending_sections` field so this gate is a no-op (no key → e
    - **⑥ HALT 与清理**：命中 confirmed → **HALT 交用户裁决**：打印全部 confirmed（`cited_target` + 引用处原文切片 + evidence），暂停 Phase 4、交用户逐条裁决，就地改 `exports/Final_Review.md` **并反向同步回** `drafts/section_XX_XX.md`（与 4b/4c 同节拍），重跑 4d 至无 confirmed 再进 Step 5。**不 auto-block 硬拦、不静默放过。** 清理两态：**本步无 confirmed、放行下一步时 `rm -f tmp/xref_corpus.md`**（`tmp/` 未进项目 `.gitignore`，不删会被 Step 7 的 git checkpoint 收进去）；**命中 HALT 时保留语料**（用户要照着它核对），处置后重跑本步会重建再删。`outline.json` 保留供诊断。
 5. **Final word count:** Verify total ≥ target in `outline.md`.
 
-5b. **结构化"未来方向/开放问题"段（强制，Phase 4 交付前）：**
-   若结论节不含独立 Future Directions 段，在此强制补写并插入 `exports/Final_Review.md` + 反向同步到最后一节 `drafts/section_XX_XX.md`。
-   规则：≥3 条具体可操作方向，每条含 gap 原因 + 突破路径，不引入正文未建立的概念。
-   📖 格式模板详见 `references/writing_guidelines.md` §6。
-
-5c. **元数据块（导出前补全）：** 在 `exports/Final_Review.md` 末尾追加 Manuscript Metadata 块（search cutoff / databases / COI / funding）。
-   📖 字段模板详见 `references/writing_guidelines.md` §7。
-
-5d. **导出 docx（最终交付物）：** 所有 md 修复（4b/4c/5/5b/5c）完成后，将 `exports/Final_Review.md` 编译为 `exports/Final_Review.docx`：
-   ```bash
-   python3 scripts/export_docx.py --md exports/Final_Review.md --out exports/Final_Review.docx
-   # 若使用 BibTeX/CSL 渲染参考文献，追加：--bib exports/references.bib [--csl style.csl]
-   ```
-   样式由 `templates/reference.docx` 锁定（正文 Times New Roman 12pt、标题 TNR 加粗），上下标 `^...^`/`~...~` 经 pandoc `+superscript+subscript` 转为真实上下标。pandoc 缺失时脚本会报清晰错误并退出。
-
-6. **Update state.json (merge, do NOT overwrite):**
-   ```bash
-   python3 scripts/state_manager.py set-phase --phase 4 --completed true
-   ```
-   Only `phase` and `completed` are mutated; `completed_sections`, `mode`, `pending_sections`, `zotero_root_key`, `citations_imported` are preserved untouched.
-7. **Git Checkpoint** (见复用块, msg: `[review] Phase 4: export finalized`)
-8. **Update outline.md** current status section (human-readable summary).
-
-**进入 Phase 5（投稿包）。** Phase 4 导出完成后不直接结束，继续生成投稿材料。
+> 📖 Step 5 之后的 5b（未来方向段）/ 5c（元数据块）/ 5d（导出 docx）/ 6（set-phase 4）/ 7（Git Checkpoint）/ 8（更新 outline.md）见 `docs/phase_4_export.md` 后半，**做完 Step 5 后先 Read 它再收尾**；收尾后进入 Phase 5。
 
 ---
 
 ## Phase 5: Submission Pack
 
 > 📖 **完整步骤详见 `docs/phase_5_submission_pack.md`（强制/询问分级表、投稿包各件写法与产出路径），进入本阶段必须读取该文件执行。**（Write 与 Polish 两模式都执行。）
-
-**Entry:** Phase 4 导出完成后（`phase=4, completed=true`）。Read `outline.md` + `state.json`；`phase=5, completed=true` → skip。**Phase gate：`phase < 4` 或 Phase 4 未 completed → HALT**，先完成 Phase 4。
-**进入本阶段必读：** `references/submission_checklist.md`、`references/cover-letter-guide.md`（写 cover letter 前必读）、`references/presubmission_checklist.md`（soft 提醒不阻断）。
-
-**步骤概要：** 1 逐项询问（通讯作者/ORCID/CRediT/COI/Funding/致谢/是否要 Highlights·Suggested Reviewers，不静默留白）→ 2 生成投稿包写入 `exports/`（cover_letter/title_page/author_contributions/coi_statement/funding/data_availability/keywords/acknowledgements 等；**🔴 cover letter 的 scope 契合段强制：用户未给目标刊 Aims & Scope 原文则停下索取、不编造**；Suggested Reviewers 严禁伪造邮箱）→ 3 合规核对（ICMJE 署名、COI 回避；narrative 综述伦理/注册号标 N/A）→ 4 DoD 盲检 → 5 `set-phase 5 --completed true` + Git Checkpoint → 交付清单。
-
-**HALT 点（2 个）：** ① phase gate（phase < 4 或未 completed）；② scope 原文缺失时停下向用户索取。
-**必跑门禁：** gate `submission-pack-dod` 独立subagent盲检（`delegate_review.py pack/verify --checklist "[DOD_CHECKLIST]"`，fail-closed，未过不得声明完成）。
 
 ---
 
