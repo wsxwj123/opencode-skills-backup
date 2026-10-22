@@ -32,6 +32,7 @@ not_for(以下情况不要用本技能):
 | 必须 Read 的时机 | 文件 |
 |---|---|
 | 每段改写前 | `references/anti-ai-protocol.md` |
+| 每段改写前 | `references/anti_ai_prose_rules.md`(句法与节奏规则,执行其中全部条目) |
 | 第 3 步逐段润色前 | `references/interaction-protocol.md` |
 | 第 5 步委托盲检前 | `references/dod-protocol.md` |
 | 第 7 步 merge/导出前 | `references/output-contract.md` |
@@ -143,6 +144,7 @@ python scripts/polish_units.py pack --project-root <root> --intensity standard
 # 3. 主 agent 逐段润色:读 polish_manifest.json 的每个 task,按下方 Polish Prompt 改写。
 #    📖 动手前必须 Read references/interaction-protocol.md + references/anti-ai-protocol.md,
 #       不许凭记忆跑。自查:我这轮真的读过这两个文件吗?没有就先读。
+#    📖 另须先 Read references/anti_ai_prose_rules.md(句法与节奏规则),执行其中全部条目。
 
 # 4. 校验红线(逐段写回 polish_risk_flags)
 python scripts/polish_units.py verify --project-root <root>
@@ -170,6 +172,8 @@ python scripts/polish_report.py --project-root <root>
 ```
 
 ## Polish Prompt(主 agent 逐段改写时遵守)
+写作前先 Read `references/anti_ai_prose_rules.md`，执行其中全部条目。
+
 对 `polish_manifest.json` 里的每个 task,产出 `polished_text`:
 1. **去AI**,清除 AI 套话与五项装饰(见 Anti-AI 规则),改写后自检不得残留。
 2. **句长**,英文单句≤30词、中文单句≤50字,长短句交替,避免连续长句。
