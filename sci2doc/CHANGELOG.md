@@ -1,5 +1,9 @@
 # Changelog - sci2doc Skill
 
+## [2.32.1] - 2026-10-22
+
+第二十八轮（anti-ai-dedupe，去 AI 文档瘦身，版本 2.32.1）：`references/contracts-humanization.md` 删掉已由 `references/anti_ai_prose_rules.md` 接管的规则句。删无重复排比、无修辞疑问/反问两个勾选项；无比喻/排比勾选项改写为句法与节奏指针行，指向真源第一节第 2 条与第 6 条，如同、犹如、桥梁举例保留。C 降软说明与短长句交替两处的软提示强度与真源冲突，改为写作按真源第一节第 2 条执行，脚本 info 级只是阈值，不放宽写作要求。脚本不动。
+
 ## [2.32.0] - 2026-10-22
 
 第二十七轮（anti-ai-prose，句法与节奏规则统一真源）：pack-write 任务包 `embed.style_rules` 新增 `prose` 键，嵌入 `references/anti_ai_prose_rules.md` 的句法与节奏规则；规则文件缺失或标记畸形时 exit 2，不写任务包。撰写 prompt 风格硬禁条与去 AI 文档加指针句。新增 `references/anti_ai_prose_rules.md` 副本；pack-write stderr 多一行 `PROSE_RULES=<路径>`。
