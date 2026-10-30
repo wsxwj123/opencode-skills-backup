@@ -88,7 +88,7 @@ Follow phased gates in order:
 >
 > **老项目排障（round21 T2）**：`pack-write` 切片为 0 而账本明明有 P1 文献 → 多半是存量条目还挂着旧节标识 `"P1_立项依据"`（**切片链只认新值 `"P1"`**）。跑一次 `python scripts/citation_validator.py normalize-sections --index data/literature_index.json`（可先加 `--dry-run` 预览、幂等）归一后即恢复；检查链（`matrix-check`/`find-orphans`/`stats`/`gate-check` 的 P1 计数）新旧两值都认，不受影响。`check-gates` 发现旧值条目会给 WARN 并附这条命令。
 
-   - **🔴 科学假说写在 P1 末段**：P1 最后一段写科学假说，由前文的研究现状与研究空白推演出 H-1 到 H-n，n 等于 `hypothesis_objective_mapping.count`，每条与 P2 的同号研究目标对应。P2 不再设研究假说节。H 条目在 Phase 1 Step 1.3 登记进 `data/consistency_map.json`，`source_section` 写 `P1_立项依据`。
+   - **🔴 科学假说写在 P1 末段**：P1 最后一段写科学假说，由前文的研究现状与研究空白推演出 H-1 到 H-n，n 等于 `hypothesis_objective_mapping.count`，每条与 P2 的同号研究目标对应。P2 不再设研究假说节。H 条目在 Phase 1 登记进 `data/consistency_map.json`，`source_section` 写 `P1_立项依据`，登记步骤见 `references/05_Write_Mode流程.md` 的 Step 1.3。
    - Input: confirmed project profile (title, discipline, H/O/RC/KSQ mapping counts).
    - Output: `sections/P1_立项依据.md` + `data/literature_index.json` (all P1 citations verified) + updated `context_memory.md`.
    **Citation Type by Context for P1 (立项依据，MANDATORY):** specific mechanistic/experimental claims (具体科学论点) must cite Original Articles as primary evidence; clinical evidence cites Clinical Trials at the same priority; preprints are last-resort, labeled `[Preprint]`, used only when no peer-reviewed equivalent exists. Full context-to-type mapping and the `role` taxonomy (gap_evidence / method_support / prior_work / comparison / background) live in `references/04_文献管理.md`.
@@ -126,17 +126,17 @@ Follow phased gates in order:
    - consistency_map 条目结构（mapped_from_sq / mapped_to_objective / supports_method 等字段名）见 `references/02_核心机制.md` §2.2，按其字段名产出避免 validate 报错。
    - Output: `sections/P2_研究内容.md` + updated `data/consistency_map.json` (H→O→RC→KSQ→M→IN all links validated) + `sections/figure_prompts.md`.
    - **V 规则分层说明（机制级防假通过）：** Phase 2 门控统一用 `python scripts/consistency_mapper.py --path data/consistency_map.json validate --phase 2`，该参数只计算且只报 V-01/V-02/V-03/V-04/V-05/V-08（H/O/RC/KSQ/IN 结构链路），从机制上不输出 V-06/V-12 的结论，无需靠自觉跳读全量。V-10（无孤立条目，含 M 被 F 覆盖检查）同 V-06/V-07 依赖 F 字段，Phase 2 时 F 尚空必假阳，故延迟至 Phase 7。V-06（M→F）、V-07（F来源）、V-09（预算追溯）、V-11（代表作匹配）依赖 F/预算字段，分别在 Phase 3/Phase 5 填齐后才有意义，强制点在 Phase 7 `gate-check`；V-12 只依赖 M 的 alternative_plan 字段，该字段在 Phase 3 Step 3.1 撰写，自 Phase 3 起进入 `--phase 3` 集合并为 ERROR 硬门控（gate-check 也会复验）。
-   - **🔴 P2 子结构真源（全技能只在这里写全格式细则，其它文件只展示顺序、不复述细则）**：P2 按下列顺序写八块，标题逐字照用。
+   - **🔴 P2 子结构真源（全技能只在这里写全格式细则，其它文件只展示顺序、不复述细则）**：P2 按下列顺序写八块，标题逐字照用；用户在 Phase 0 改过子结构的，以 `p2_sub_structure` 为准。
      1. 研究目标段。不编号，排在 2.1 标题之前，一段内连写，不分行、不分点。目标条数等于 `proposal_profile.json` 的 `hypothesis_objective_mapping.count`，每条一句话，与 P1 末段的科学假说逐条对应。
      2. `2.1 研究内容`。下设 2.1.1 到 2.1.n，n 等于研究内容条数。每个 2.1.x 用（1）（2）（3）分项。
      3. `2.2 研究方案`。下设 2.2.1 到 2.2.n，编号与标题与 2.1.x 逐字相同。每个 2.2.x 的分项与 2.1.x 的同号分项一一对应，写实验操作、对照设置、样本量与判读指标。
      4. `2.3 技术路线`。放技术路线图（图 1）与一段文字说明。技术路线在新结构里是独立小节，不再并进 M。
      5. `2.4 本项目的特色与创新之处`。下设 2.4.1 到 2.4.n，n 等于创新点条数，小节内可用（1）（2）分项。每条追溯到具体 RC 与 M。
-     6. `2.5 拟解决的关键科学问题`。下设 2.5.1 到 2.5.n，n 等于 `hypothesis_objective_mapping.count`，小节内可用（1）（2）分项。写法见下一条。
+     6. `2.5 拟解决的关键科学问题`。下设 2.5.1 到 2.5.n，n 等于 `hypothesis_objective_mapping.count`，小节内可用（1）（2）分项。写法见下方关键科学问题写法一条。
      7. `2.6 年度研究计划`。格式见下方年度计划固定格式。每条研究内容同时在 `data/consistency_map.json` 里填 `annual_plan_year`，V-04 校验它。
      8. `2.7 预期成果`。格式见下方预期成果固定格式。可选把本节登记到 `consistency_map` 的 `keywords_trace` 预期成果条目，行为与改版前一致。
      研究内容与研究方案分成两个独立大节，不交叉放置。2.2.x 缺条、或标题与 2.1.x 不一致，退回重写。
-   - **🔴 分项写法（2.1、2.2 共用）**：每个分项以一个简短主题词开头，主题词后接逗号或句号，不用冒号，再写一句含具体检测或分析方法名称的话。下面这行是通用占位的示例。
+   - **🔴 分项写法（2.1、2.2 共用）**：每个分项以一个简短主题词开头，主题词后接逗号或句号，不用冒号，再写一句含具体检测或分析方法名称的话。2.2 的分项首句点出方法名，后面可以接多句，写对照设置、样本量与判读指标。下面这行是通用占位的示例。
      `（2）目标蛋白表达水平测定，用免疫印迹与荧光定量PCR测定不同诱导时间的表达量，确定最佳诱导时间。`
      主题词后用冒号会被 `humanizer_zh.py` 判 ERROR 级 `explanatory_colon`，所以统一用逗号或句号。
    - **🔴 关键科学问题写法（全技能只在这里写全）**：每条写成疑问句，推荐句式为含能否或是什么的问句，写成陈述句退回重写。KSQ 列的是待回答的问题，不属于 03 文档禁止的设问与反问。三条按下列递进排列，条数不是 3 时仍按先构建、再功能、后机制的顺序裁剪或扩展。
@@ -144,18 +144,18 @@ Follow phased gates in order:
      2. 第二条问构建出的对象能否发挥预期功能，例如靶向性、转化效率、治疗效果。
      3. 第三条问功能背后的分子机制是什么，能否得到新的规律。
      4. 每条对应一条研究内容，粒度写到整条研究内容能回答的层级。只覆盖单个实验步骤的问法退回重写。
-     下面这句是正例。某载体能否靶向目标组织并在组织内完成底物转化，从而发挥预期药效。
-     下面这句是反例。某目标酶催化反应的效率与产物构型受何种因素制约。它的毛病是粒度停在单个实验，不是科学问题。
+     下面这句是正例。某载体能否靶向目标组织并在组织内完成底物转化，从而发挥预期药效？
+     下面这句是反例。某目标酶催化反应的效率与产物构型受何种因素制约？它的毛病是粒度停在单个实验，不是科学问题。
    - **🔴 年度计划固定格式（全技能只在这里写全）**：2.6 每年写一行。
      1. 行首写日期区间，格式为 `2028.01.01—2028.12.31`，起止年份按项目执行期填。
-     2. 日期区间后空一格写本年度小标题，小标题后接逗号或句号，再写 1 到 2 句具体内容，小标题后不用冒号。
+     2. 日期区间后空一格写本年度小标题，小标题后接逗号或句号，再写 1 到 2 句具体内容，小标题后不用冒号，原因同分项写法。
      3. 行数等于 `proposal_profile.json` 的 `duration_years`，青年基金填 3，面上项目填 4。
    - **🔴 预期成果固定格式（全技能只在这里写全）**：2.7 用（1）（2）（3）（4）分项。
      1. 前 n 条逐条对应 n 个研究目标，第 k 条写第 k 个研究目标达成后拿到的产出，n 等于研究目标条数。
      2. 末条写四类数字目标，依次为拟发表论文篇数（含 SCI 收录篇数）、申请发明专利项数、培养研究生名数、参加学术会议次数。
      3. 某一类确实不适用时写 0 并在同句注明理由，不许编一个数字充数。
    - **🔴 分项的列表例外**：2.1、2.2、2.4、2.5、2.7 允许用（1）（2）（3）分项，其余段落仍用段落式叙事。放行范围只含中文括号编号，不含 `-` `*` 项目符号与 `1.` 数字点。
-   - **🔴 旧结构项目的过渡口径**：已经通过 p2-dod 盲检的项目按旧结构继续写，不强制迁移。用户回修 P2 时，先问他保留旧结构还是迁到新结构；选保留的，按 05 Step 0.4b 用 `data/dod_selection.json` 关掉 N53，并在报告「未执行的检查」留痕。新建项目一律按本节的新结构写。
+   - **🔴 旧结构项目的过渡口径**：已经通过 p2-dod 盲检的项目按旧结构继续写，不强制迁移。用户回修时，先问他保留旧结构还是迁到新结构。选保留的，按 `data/dod_selection.json` 的写法关掉 N17、N52、N53（写法见 05 Step 0.4b 的自检项协商，国自然旧结构项目同样适用），并在报告「未执行的检查」留痕。N67 不用关，它的假说对照以 P2 的研究假说节为准。国自然新建项目一律按本节的新结构写。
    - No literature numbers anywhere in P2. Paragraph narrative outside the list exception above; 2.6 annual plan uses one line per year.
    - Every M must trace back to a specific RC; every IN must trace to RC and M.
    - **Figure Prompt Generation（AI绘图提示词）：** Phase 2 完成后，为技术路线图等必要图表生成绘图提示词，保存至 `sections/figure_prompts.md`。模板与生成规则见 `references/10_Figure_Prompt规范.md`。
