@@ -192,7 +192,7 @@ python3 scripts/structure_signoff_gate.py confirm --root . --note "<用户确认
 
 ```json
 {
-  "section": "P2_2.1.1_某载体的构建与表征.md",
+  "section": "P2_2.2.1_某载体的构建与表征.md",
   "issues": [
     {
       "severity": "ERROR",
