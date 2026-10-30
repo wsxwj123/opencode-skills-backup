@@ -47,6 +47,10 @@ idea-bomb/PROJECT.md
 # 本仓是公开备份仓，此技能含 NSFW 内容且带个人绝对路径，不入本仓
 novelai-skill/
 
+# comfyui-skill 同理：含 NSFW 内容，不入本公开仓（2026-10-30 用户定：不放公开副本，只在本机单独建版本库管理）
+comfyui-skill/
+comfyui-skill.bak-*/
+
 # ── 2026-09-30 明确排除：这几个不是技能，不该进备份 ──────────────
 # agently-mail 是指向仓外的符号链接；data/ 与 synced/ 是运行时缓存；
 # lieflat-charts / vivid-figures-skill 是别人 GitHub 上的仓（不是本库的技能）；
