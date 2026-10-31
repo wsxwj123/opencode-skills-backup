@@ -135,7 +135,7 @@ Follow phased gates in order:
      6. `2.5 拟解决的关键科学问题`。下设 2.5.1 到 2.5.n，n 等于 `hypothesis_objective_mapping.count`，小节内可用（1）（2）分项。写法见下方关键科学问题写法一条。
      7. `2.6 年度研究计划`。格式见下方年度计划固定格式。每条研究内容同时在 `data/consistency_map.json` 里填 `annual_plan_year`，V-04 校验它。
      8. `2.7 预期成果`。格式见下方预期成果固定格式。可选把本节登记到 `consistency_map` 的 `keywords_trace` 预期成果条目，行为与改版前一致。
-     研究内容与研究方案分成两个独立大节，不交叉放置。2.2.x 缺条、或标题与 2.1.x 不一致，退回重写。
+     研究内容与研究方案分成两个独立大节，不交叉放置。2.2.x 缺条、或标题与 2.1.x 不一致，退回重写。正文交叉引用写编号，不只写标题，因为 2.1.x 与 2.2.x 的标题相同。
    - **🔴 分项写法（2.1、2.2 共用）**：每个分项以一个简短主题词开头，主题词后接逗号或句号，不用冒号，再写一句含具体检测或分析方法名称的话。2.2 的分项首句点出方法名，后面可以接多句，写对照设置、样本量与判读指标。下面这行是通用占位的示例。
      `（2）目标蛋白表达水平测定，用免疫印迹测定不同诱导时间的表达量，确定最佳诱导时间。`
      主题词后用冒号会被 `humanizer_zh.py` 判 ERROR 级 `explanatory_colon`，所以统一用逗号或句号。
@@ -154,15 +154,15 @@ Follow phased gates in order:
      1. 前 n 条逐条对应 n 个研究目标，第 k 条写第 k 个研究目标达成后拿到的产出，n 等于研究目标条数。
      2. 末条写四类数字目标，依次为拟发表论文篇数（含 SCI 收录篇数）、申请发明专利项数、培养研究生名数、参加学术会议次数。
      3. 某一类确实不适用时写 0 并在同句注明理由，不许编一个数字充数。
-   - **🔴 分项的列表例外**：2.1、2.2、2.4、2.5、2.7 允许用（1）（2）（3）分项，其余段落仍用段落式叙事。放行范围只含中文括号编号，不含 `-` `*` 项目符号与 `1.` 数字点。
-   - **🔴 旧结构项目的过渡口径**：已经通过 p2-dod 盲检的项目按旧结构继续写，不强制迁移。P1 已按旧版写完而 P2 还没过 p2-dod 的项目，同样先问用户。迁到新结构的，在 P1 末段补写科学假说，把 H 条目的 `source_section` 改成 `P1_立项依据`，重跑 p1-dod 后再写 P2。保留旧结构的，P2 照旧设研究假说节，H 条目的 `source_section` 保持 `P2_研究内容`。用户回修时也先问他保留旧结构还是迁到新结构。选保留的，按 `data/dod_selection.json` 的写法关掉 N17、N52、N53（N52 属 p1-dod，N17、N53 属 p2-dod；写法见 05 Step 0.4b 的自检项协商，国自然旧结构项目同样适用），并在报告「未执行的检查」留痕。N67 不用关，它的假说对照以 P2 的研究假说节为准。国自然新建项目一律按本节的新结构写。
+   - **🔴 分项的列表例外**：2.1、2.2、2.4、2.5、2.7 允许用（1）（2）（3）分项，其余段落仍用段落式叙事。放行范围只含中文括号编号，不含 `-` `*` 项目符号与 `1.` 数字点。终检的写作风格评级（`diagnosis_engine.py`）和 `humanizer_zh.py scan-all` 对 P2 的中文括号编号同样不计，`-`、`*`、`1.` 照计。
+   - **🔴 旧结构项目的过渡口径**：已经通过 p2-dod 盲检的项目按旧结构继续写，不强制迁移。P1 已按旧版写完而 P2 还没过 p2-dod 的项目，同样先问用户。迁到新结构的，在 P1 末段补写科学假说，把 H 条目的 `source_section` 改成 `P1_立项依据`，重跑 p1-dod 后再写 P2。同时用 `state_manager.py profile --json` 把 `p2_sub_structure` 换成新的八项（没有这个键就不用换），并核对 `duration_years`（青年基金 3，面上 4）。升级前已建档、P1 还没写完的国自然项目也照此处理。保留旧结构的，P2 照旧设研究假说节，H 条目的 `source_section` 保持 `P2_研究内容`。用户回修时也先问他保留旧结构还是迁到新结构。选保留的，按 `data/dod_selection.json` 的写法关掉 N17、N52、N53（N52 属 p1-dod，N17、N53 属 p2-dod；写法见 05 Step 0.4b 的自检项协商，国自然旧结构项目同样适用），并在报告「未执行的检查」留痕。N67 不用关，它的假说对照以 P2 的研究假说节为准。国自然新建项目一律按本节的新结构写。
    - No literature numbers anywhere in P2. Paragraph narrative outside the list exception above; 2.6 annual plan uses one line per year.
    - Every M must trace back to a specific RC; every IN must trace to RC and M.
    - **Figure Prompt Generation（AI绘图提示词）：** Phase 2 完成后，为技术路线图等必要图表生成绘图提示词，保存至 `sections/figure_prompts.md`。模板与生成规则见 `references/10_Figure_Prompt规范.md`。
 
    **Phase 2 DoD（收口自检）：未逐项确认通过，不得向用户声明 P2 完成**
 
-   **🔴 委托盲检（遵上方总则的三步命令模板，主 agent 不得自评）**：`<gate>`=`p2-dod`，`<files>`=`sections/P2_研究内容.md sections/P1_立项依据.md proposal_profile.json`（P1 只作假说对照，proposal_profile.json 只作子结构对照，都不判它们的内容），`<section>`=`P2`。
+   **🔴 委托盲检（遵上方总则的三步命令模板，主 agent 不得自评）**：`<gate>`=`p2-dod`，`<files>`=`sections/P2_研究内容.md sections/P1_立项依据.md proposal_profile.json`（P1 只作假说对照，proposal_profile.json 只作子结构对照，都不判它们的内容；项目根存在 `structure_profile.json` 时也一并交给盲检，只作基金类型对照），`<section>`=`P2`。
 
    **本 Phase 完整 DoD 判据（全部核查项 + 脚本命令）以 `references/dod_checklist.json` gate=`p2-dod` 为默认真源；项目根有 `data/dod_selection.json`（用户协商关项）或 `structure_profile.json`（结构真源，非国自减免/改判）时，实际执行的是三步模板第 0 步经 `dod_project.py` 投影后的清单，被关/被减免的项不进盲检、已进报告「未执行的检查」留痕**：盲检subagent据此逐项核、能脚本核的先跑脚本，退出码非 0 即 fail-closed。该 gate 含 H/O/RC/KSQ 1:1 映射、M/IN 可追溯、P2 无文献编号、占位符清零、去AI、字数、V 规则分层、预期成果小节、figure_prompts 等，及 N53 结构完整性、N67 四要素一致性盲检、N65 常识合理性（🟡软报告不阻断）。此处不再内联清单，避免与真源 drift。
 
