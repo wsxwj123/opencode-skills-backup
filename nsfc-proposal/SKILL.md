@@ -182,7 +182,7 @@ Any missing sync blocks phase progression.
 脚本静默必填字段（`mcp_literature_cache.json` 的 `verified_at`/`checked_at`、`literature_index.json` 的 `key_finding` 与 `search_source`）及最小合规样例：**写入或修复 `data/*.json`、跑 `citation_validator.py` 前，先 Read `references/field-contracts.md`**。
 
 ## Quality Gates
-阻断条件、`gate-check` 完整命令、反例黑名单（17 条）、`failed_at=*` 失败处置手册与已知限制均在 `references/quality-gates.md`：**跑 `gate-check` 前、任一 Phase 收口前、以及 gate-check 报 `failed_at` 时，先 Read 它**。
+阻断条件、`gate-check` 完整命令、反例黑名单（18 条）、`failed_at=*` 失败处置手册与已知限制均在 `references/quality-gates.md`：**跑 `gate-check` 前、任一 Phase 收口前、以及 gate-check 报 `failed_at` 时，先 Read 它**。
 
 ## References
 Load only what is needed:
