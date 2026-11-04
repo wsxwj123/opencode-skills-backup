@@ -218,7 +218,9 @@ def read_parts(sections_dir):
     unlisted = [n for n in sorted(present) if n.endswith(".md") and n not in parts
                 and os.path.isfile(os.path.join(sections_dir, n))]
     if unlisted:
-        lines.append(PREFIX + "UNLISTED %d" % len(unlisted))
+        shown = "、".join(unlisted[:5]) + ("等" if len(unlisted) > 5 else "")
+        lines.append(PREFIX + "UNLISTED %d %s 这些文件没有归属记录，按没有归属处理，照文件名规则检查。"
+                     % (len(unlisted), shown))
     confirmed_at = doc.get("confirmed_at")
     if released:
         lines.append(PREFIX + "按 section_parts.json 放行 %d 个文件（confirmed_at %s）" % (len(released), confirmed_at))
