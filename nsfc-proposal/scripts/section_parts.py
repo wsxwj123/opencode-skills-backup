@@ -249,14 +249,22 @@ def _load_json(path, what):
         raise Fail(2)
 
 
-def _inside_root(path, root):
+def _inside_root(path, root, base=None):
+    """base 为 None 时相对路径按命令行语义从当前目录起算（--manifest、--out，即实际读写的路径）；
+    传 root 时相对 --root 解析（atoms[].file，按 INTERFACE 1.3、2.2）。"""
     root_real = os.path.realpath(root)
-    real = os.path.realpath(path if os.path.isabs(path) else os.path.join(root, path))
+    if os.path.isabs(path):
+        full = path
+    elif base is None:
+        full = os.path.abspath(path)
+    else:
+        full = os.path.join(base, path)
+    real = os.path.realpath(full)
     return real == root_real or real.startswith(root_real + os.sep), real
 
 
-def _check_escape(path, root, what):
-    ok, real = _inside_root(path, root)
+def _check_escape(path, root, what, base=None):
+    ok, real = _inside_root(path, root, base)
     if not ok:
         _err("%s escapes --root: %s" % (what, path))
         raise Fail(2)
@@ -277,7 +285,7 @@ def load_inputs(manifest_path, draft_path, root):
         if not isinstance(fp, str) or not fp:
             _err("--manifest 第 %d 项（序号从 0 起）缺 file。" % i)
             raise Fail(2)
-        paths.append(_check_escape(fp, root, "manifest atom 'file'"))
+        paths.append(_check_escape(fp, root, "manifest atom 'file'", base=root))
     draft = _load_json(draft_path, "--draft")
     parts = draft.get("parts") if isinstance(draft, dict) else None
     if not isinstance(draft, dict) or not isinstance(parts, dict):
