@@ -524,6 +524,8 @@ def section_parts_release(sections_dir) -> tuple:
         lines = []
         if os.path.exists(parts_file):
             lines.append("SECTION_PARTS: READER_UNAVAILABLE " + type(exc).__name__)
+            lines.append("SECTION_PARTS: 读取模块不可用，归属文件没有生效。先检查 scripts/section_parts.py 是否完整"
+                         "（同步镜像时可能漏了这个文件），补齐后重跑；确认归属的命令是 section_parts.py confirm。")
         return (lambda name: False), lines
     result = section_parts.read_parts(sections_dir)
     return (lambda name: section_parts.should_release(result, name)), list(result.get("stderr") or [])
