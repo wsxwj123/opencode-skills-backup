@@ -1,0 +1,490 @@
+#!/usr/bin/env python3
+"""section_parts.py —— 拆分后小文件的归属（P1 到 P4、其他）：拆分表、用户确认、读取（2.42.0 新增）.
+
+三个子命令：
+  table    读 split_manifest.json 与主会话写的归属草稿 tmp/parts_draft.json，校验后写出按连续
+           同归属分组的拆分表（Markdown）。stdout 一行 JSON。
+  confirm  只能由用户在自己的终端运行。按组（缺省）或逐行把每个小文件的归属过一遍，输入 确认 后
+           原子写归属文件。stdout 是给人看的交互文字。
+  show     判定归属文件的状态。stdout 一行 JSON。
+人读的报错行走 stderr，以 "SECTION_PARTS: " 开头。
+
+归属文件位置（唯一规则）：小文件目录的父目录下的 section_parts.json。
+
+================ 读取接口（humanizer_zh.py 与 diagnosis_engine.py 按这里接线） ================
+
+  result = read_parts(sections_dir)
+      参数：小文件目录（scan-all 的位置参数，diagnose-all 的 --sections-dir）。
+      不抛异常、不退出、不读 tmp/ 下任何文件；只看归属文件本身与小文件目录里现有的文件名。
+      返回 dict：
+        "status"        "absent" / "corrupt" / "invalid" / "dir_mismatch" / "ok"
+        "path"          归属文件的绝对路径
+        "parts"         {小文件名: 归属} 的完整映射（ok 时为归属文件 rows 里的全部行，含
+                        不认识的归属；其余状态为空 dict）
+        "stderr"        要打到 stderr 的行（已带 SECTION_PARTS: 前缀；absent 时为空列表），
+                        调用方整段写到 stderr 一次即可
+        "confirmed_at"  记录值（ok 时），否则 None
+        "released"      ok 时生效且归属会放行、文件又存在的小文件名列表，否则空列表
+        "detail"        一句中文说明
+      调用方在 import 本模块失败时自行打一行
+        SECTION_PARTS: READER_UNAVAILABLE <异常类型名>
+      并视为不放行（只在归属文件存在时打；归属文件存在与否可用 parts_path(sections_dir) 判断）。
+
+  checks = releases(result, filename)
+      返回该文件按归属文件应放行的检查名集合（frozenset），本轮只有 "cn_numbered"
+      （即 --allow-cn-numbered 的口径）。不生效的行、不认识的归属、不存在的文件返回空集。
+      放行小表 RELEASE_BY_PART 在本模块里，将来扩到 P3、P4 只改这张表。
+
+  should_release(result, filename, check="cn_numbered") -> bool
+      两个检查脚本只调用这个函数，不自己判断归属取值。三种放行来源取并集、只加不撤，
+      并集由调用方做：文件名以 P2 开头、--allow-cn-numbered、本函数。
+
+退出码：table 0 / 1（草稿与清单不符）/ 2（文件缺失或畸形、越根、写失败）；
+confirm 0 / 1（校验不过、用户中止、EOF、SIGINT）/ 2（同 table，另加小文件目录不对）/ 3（不是终端）；
+show：absent 与 ok 为 0，其余 1。
+"""
+from __future__ import annotations
+
+import sys as _sys
+try:  # Windows GBK 控制台下中文防 UnicodeEncodeError
+    _sys.stdout.reconfigure(encoding="utf-8")
+    _sys.stderr.reconfigure(encoding="utf-8")
+    _sys.stdin.reconfigure(encoding="utf-8")
+except Exception:
+    pass
+
+import argparse
+import datetime
+import json
+import os
+import re
+import sys
+import tempfile
+import unicodedata
+
+PREFIX = "SECTION_PARTS: "
+PARTS_FILE = "section_parts.json"
+SCHEMA_VERSION = "1.0"
+PARTS = ("P1", "P2", "P3", "P4", "其他")
+DEFAULT_CONFIRM_MODE = "by-group"       # 确认粒度缺省值，换缺省只改这里（by-group / each-row）
+CHECK_CN_NUMBERED = "cn_numbered"       # 即 --allow-cn-numbered 的口径
+RELEASE_BY_PART = {                      # 归属对应放行哪些检查；本轮只有 P2
+    "P2": frozenset({CHECK_CN_NUMBERED}),
+}
+BASIS_LINE = "比较基准是抽取后的 draft_import.md，原件里的表格文字、自动编号、加粗不在其中。"
+COPY_HINT = "把以上文字整段复制回聊天窗口。"
+FRONT_LABEL = "（首段）"
+TITLE_MAX = 40
+FRONT_LONG = 300
+TABLE_HEADER = ["| 序号 | 文件名 | 级别 | 标题 | 字数 | 归属 | 提示 |", "|---|---|---|---|---|---|---|"]
+SENTENCE_ENDS = ("。", "！", "？", "；")
+ROW_PART_RE = re.compile(r"^(\d+)\s+(\S+)$")
+VERSION_RE = re.compile(r"^(\d+)\.(\d+)$")
+
+
+def _err(msg):
+    sys.stderr.write(PREFIX + msg.rstrip() + "\n")
+
+
+def _emit(obj):
+    sys.stdout.write(json.dumps(obj, ensure_ascii=False) + "\n")
+
+
+def _say(text=""):
+    sys.stdout.write(text + "\n")
+    sys.stdout.flush()
+
+
+class Fail(Exception):
+    """带退出码的失败；信息已经打到 stderr。"""
+
+    def __init__(self, code):
+        super().__init__(code)
+        self.code = code
+
+
+# ============================================================ 读取接口
+
+def parts_path(sections_dir):
+    """归属文件的绝对路径：小文件目录的父目录下的 section_parts.json。"""
+    return os.path.join(os.path.dirname(os.path.abspath(sections_dir)), PARTS_FILE)
+
+
+def normalize_part(value):
+    """P1 到 P4 大小写都认，其他原样；不认识的返回 None。"""
+    if not isinstance(value, str):
+        return None
+    v = value.strip()
+    if v == "其他":
+        return v
+    u = v.upper()
+    if u in PARTS:
+        return u
+    return None
+
+
+def _result(status, path, detail, stderr=None, parts=None, confirmed_at=None, released=None):
+    return {"status": status, "path": path, "parts": parts or {}, "stderr": stderr or [],
+            "confirmed_at": confirmed_at, "released": released or [], "detail": detail}
+
+
+def _bad_sections_dir(value):
+    if not isinstance(value, str) or not value.strip():
+        return True
+    if os.path.isabs(value) or value.startswith(("/", "\\")):
+        return True
+    return any(seg == ".." for seg in re.split(r"[\\/]+", value))
+
+
+def _invalid_reason(doc):
+    """返回 (原因, 是否更高版本)；合法时返回 (None, False)。"""
+    if not isinstance(doc, dict):
+        return "顶层不是对象", False
+    ver = doc.get("schema_version")
+    if ver != SCHEMA_VERSION:
+        higher = False
+        m = VERSION_RE.match(ver) if isinstance(ver, str) else None
+        if m and (int(m.group(1)), int(m.group(2))) > (1, 0):
+            higher = True
+        return "schema_version 不是 %s" % SCHEMA_VERSION, higher
+    if doc.get("confirmed") is not True:
+        return "confirmed 不是 true", False
+    if _bad_sections_dir(doc.get("sections_dir")):
+        return "sections_dir 不是非空相对路径或含 ..", False
+    rows = doc.get("rows")
+    if not isinstance(rows, list) or not rows:
+        return "rows 不是非空列表", False
+    seen = set()
+    for i, row in enumerate(rows):
+        if not isinstance(row, dict):
+            return "第 %d 行不是对象" % i, False
+        f = row.get("file")
+        if not isinstance(f, str) or not f.endswith(".md") or "/" in f or "\\" in f:
+            return "第 %d 行的 file 不是以 .md 结尾的文件名" % i, False
+        if f in seen:
+            return "file 重复 %s" % f, False
+        seen.add(f)
+    return None, False
+
+
+def read_parts(sections_dir):
+    """按模块头注释的读取接口判定归属文件状态。不抛异常、不退出。"""
+    path = parts_path(sections_dir)
+    fix = PREFIX + "归属文件不生效，全部文件不按归属放行。重新在你自己的终端运行 section_parts.py confirm 生成它。"
+    if not os.path.exists(path):
+        return _result("absent", path, "归属文件不存在。")
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            doc = json.load(f)
+    except (OSError, ValueError, UnicodeDecodeError):
+        return _result("corrupt", path, "归属文件读不出或不是合法 UTF-8 JSON。",
+                       [PREFIX + "CORRUPT " + path, fix])
+    reason, higher = _invalid_reason(doc)
+    if reason is not None:
+        lines = [PREFIX + "INVALID %s %s" % (path, reason)]
+        if higher:
+            lines.append(PREFIX + "归属文件的 schema_version 比本技能认识的高，先升级技能再用。")
+        lines.append(fix)
+        return _result("invalid", path, "归属文件字段非法，" + reason + "。", lines)
+    recorded = os.path.normpath(doc["sections_dir"]).replace("\\", "/").rstrip("/")
+    actual = os.path.basename(os.path.normpath(os.path.abspath(sections_dir)))
+    if recorded != actual:
+        return _result("dir_mismatch", path,
+                       "归属文件记录的小文件目录是 %s，本次是 %s。" % (recorded, actual),
+                       [PREFIX + "DIR_MISMATCH " + path, fix])
+
+    try:
+        present = set(os.listdir(sections_dir))
+    except OSError:
+        present = set()
+    parts = {}
+    lines = []
+    released = []
+    for row in doc["rows"]:
+        name = row["file"]
+        part = row.get("part")
+        parts[name] = part
+        if part not in PARTS:
+            lines.append(PREFIX + "UNKNOWN_PART " + name)
+            continue
+        if name not in present:
+            lines.append(PREFIX + "MISSING_FILE " + name)
+            continue
+        if RELEASE_BY_PART.get(part):
+            released.append(name)
+    unlisted = [n for n in sorted(present) if n.endswith(".md") and n not in parts
+                and os.path.isfile(os.path.join(sections_dir, n))]
+    if unlisted:
+        lines.append(PREFIX + "UNLISTED %d" % len(unlisted))
+    confirmed_at = doc.get("confirmed_at")
+    if released:
+        lines.append(PREFIX + "按 section_parts.json 放行 %d 个文件（confirmed_at %s）" % (len(released), confirmed_at))
+    return _result("ok", path, "归属文件有效。", lines, parts, confirmed_at, released)
+
+
+def releases(result, filename):
+    """该文件按归属文件应放行的检查名集合。"""
+    if not isinstance(result, dict) or result.get("status") != "ok":
+        return frozenset()
+    if filename not in (result.get("released") or []):
+        return frozenset()
+    return RELEASE_BY_PART.get(result["parts"].get(filename), frozenset())
+
+
+def should_release(result, filename, check=CHECK_CN_NUMBERED):
+    return check in releases(result, filename)
+
+
+# ============================================================ 公共校验（table 与 confirm）
+
+def _load_json(path, what):
+    if not os.path.isfile(path):
+        _err("%s 不存在，检查路径后重跑：%s" % (what, path))
+        raise Fail(2)
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError, UnicodeDecodeError) as e:
+        _err("%s 读不出或不是合法 UTF-8 JSON：%s（%s）" % (what, path, e))
+        raise Fail(2)
+
+
+def _inside_root(path, root):
+    root_real = os.path.realpath(root)
+    real = os.path.realpath(path if os.path.isabs(path) else os.path.join(root, path))
+    return real == root_real or real.startswith(root_real + os.sep), real
+
+
+def _check_escape(path, root, what):
+    ok, real = _inside_root(path, root)
+    if not ok:
+        _err("%s escapes --root: %s" % (what, path))
+        raise Fail(2)
+    return real
+
+
+def load_inputs(manifest_path, draft_path, root):
+    """2.2 第 1 条的退出码 2 校验。返回 (atoms 列表, 草稿 parts 对象, 每个小文件的实际路径)。"""
+    _check_escape(manifest_path, root, "--manifest")
+    mf = _load_json(manifest_path, "--manifest")
+    atoms = mf.get("atoms") if isinstance(mf, dict) else None
+    if not isinstance(atoms, list) or not atoms:
+        _err("--manifest 的 atoms 要是非空列表：%s" % manifest_path)
+        raise Fail(2)
+    paths = []
+    for i, atom in enumerate(atoms):
+        fp = atom.get("file") if isinstance(atom, dict) else None
+        if not isinstance(fp, str) or not fp:
+            _err("--manifest 第 %d 项（序号从 0 起）缺 file。" % i)
+            raise Fail(2)
+        paths.append(_check_escape(fp, root, "manifest atom 'file'"))
+    draft = _load_json(draft_path, "--draft")
+    parts = draft.get("parts") if isinstance(draft, dict) else None
+    if not isinstance(draft, dict) or not isinstance(parts, dict):
+        _err("--draft 顶层要是对象且 parts 是对象，形如 {\"parts\": {\"文件名\": \"P2\"}}：%s" % draft_path)
+        raise Fail(2)
+    return atoms, parts, paths
+
+
+def validate_draft(atoms, parts, paths):
+    """2.2 第 2 条：全部检查完一次报出。返回 errors 列表（空表示通过）。"""
+    errors = []
+    names = []
+    for atom, real in zip(atoms, paths):
+        name = os.path.basename(atom["file"])
+        names.append(name)
+        if name not in parts:
+            errors.append({"code": "MISSING_PART", "file": name,
+                           "detail": "草稿里没有这个文件，给它补一个归属。"})
+        elif parts[name] not in PARTS:
+            errors.append({"code": "BAD_PART", "file": name,
+                           "detail": "归属 %r 不在 P1、P2、P3、P4、其他 之中。" % (parts[name],)})
+        if not os.path.isfile(real):
+            errors.append({"code": "ATOM_MISSING", "file": name,
+                           "detail": "清单里的小文件不存在：%s" % atom["file"]})
+    for key in parts:
+        if key not in names:
+            errors.append({"code": "UNKNOWN_FILE", "file": key,
+                           "detail": "草稿里这个文件名不在清单里，删掉它或改成清单里的文件名。"})
+    return errors
+
+
+def _report_errors(errors):
+    for e in errors:
+        _err("%s %s %s" % (e["code"], e["file"], e["detail"]))
+
+
+# ============================================================ 行与分组
+
+def _nonblank_count(text):
+    return sum(1 for ch in text if not ch.isspace())
+
+
+def build_rows(atoms, parts, paths):
+    """每个小文件一行：file、title、level、part、draft_part、count、container、table_like。"""
+    rows = []
+    for atom, real in zip(atoms, paths):
+        name = os.path.basename(atom["file"])
+        try:
+            with open(real, "r", encoding="utf-8", newline="") as f:
+                content = f.read()
+        except (OSError, UnicodeDecodeError):
+            content = ""
+        title = atom.get("title")
+        title = title if isinstance(title, str) else ""
+        level = atom.get("heading_level")
+        level = level if isinstance(level, int) and not isinstance(level, bool) else 0
+        rest = content.split("\n", 1)[1] if "\n" in content else ""
+        rows.append({"file": name, "title": title, "level": level, "part": parts[name],
+                     "draft_part": parts[name], "count": _nonblank_count(content),
+                     "container": level >= 1 and rest.strip() == "",
+                     "table_like": ("|" in title) or ("\t" in title)})
+    return rows
+
+
+def group_rows(rows):
+    """按清单顺序，把连续且归属相同的行合成一组。返回 [(part, [行序号（0 起）])]。"""
+    groups = []
+    for i, row in enumerate(rows):
+        if groups and groups[-1][0] == row["part"]:
+            groups[-1][1].append(i)
+        else:
+            groups.append((row["part"], [i]))
+    return groups
+
+
+def display_title(title):
+    t = title.strip()
+    if t == "frontmatter":
+        return FRONT_LABEL
+    t = t.replace("|", "｜")
+    if len(t) > TITLE_MAX:
+        t = t[:TITLE_MAX] + "…"
+    return t
+
+
+def hints_for(rows, groups, index):
+    row = rows[index]
+    shown = display_title(row["title"])
+    hints = []
+    if row["container"]:
+        hints.append("容器")
+    gi = next(k for k, (_p, members) in enumerate(groups) if index in members)
+    if len(groups[gi][1]) == 1 and 0 < gi < len(groups) - 1:
+        if groups[gi - 1][0] == groups[gi + 1][0] != groups[gi][0]:
+            hints.append("前后同属他组")
+    if row["title"].strip().endswith(SENTENCE_ENDS):
+        hints.append("疑似正文句")
+    if row["table_like"]:
+        hints.append("疑似表格行")
+    if shown == FRONT_LABEL and row["count"] > FRONT_LONG:
+        hints.append("首段较长")
+    return "、".join(hints)
+
+
+def _data_line(rows, groups, index):
+    row = rows[index]
+    return "| %d | %s | %d | %s | %d | %s | %s |" % (
+        index + 1, row["file"], row["level"], display_title(row["title"]), row["count"],
+        row["part"], hints_for(rows, groups, index))
+
+
+def render_table(rows):
+    groups = group_rows(rows)
+    out = ["# 拆分表",
+           "共 %d 行，分 %d 组。" % (len(rows), len(groups)),
+           BASIS_LINE,
+           "一行是一个小文件，按原稿顺序排列，连续且归属相同的行合成一组。",
+           "归属取值：P1 立项依据，P2 研究内容，P3 研究基础与工作条件，P4 其他需要说明的情况，其他。",
+           "提示列只给人看：容器表示只有标题没有正文；前后同属他组表示这一行夹在两个同归属的组之间，多半要改；"
+           "疑似正文句、疑似表格行、首段较长提示这一行可能切错了。",
+           "看完表后在你自己的终端运行 section_parts.py confirm 逐组确认，要改的行在终端里写序号和归属。",
+           ""]
+    for k, (part, members) in enumerate(groups, start=1):
+        out.append("### 第 %d 组 归属 %s，%d 行" % (k, part, len(members)))
+        out.extend(TABLE_HEADER)
+        for index in members:
+            out.append(_data_line(rows, groups, index))
+        out.append("")
+    return "\n".join(out), groups
+
+
+# ============================================================ 原子写
+
+def atomic_write(path, data, what="输出文件"):
+    target = os.path.abspath(path)
+    parent = os.path.dirname(target)
+    tmp_name = None
+    try:
+        os.makedirs(parent, exist_ok=True)
+        fd, tmp_name = tempfile.mkstemp(prefix=".section_parts_", suffix=".tmp", dir=parent)
+        with os.fdopen(fd, "w", encoding="utf-8", newline="") as f:
+            f.write(data)
+        os.replace(tmp_name, target)
+        tmp_name = None
+    except OSError as e:
+        if tmp_name is not None:
+            try:
+                os.unlink(tmp_name)
+            except OSError:
+                pass
+        _err("无法写入%s，检查目标路径是否可写、是否被目录占用：%s（%s）" % (what, path, e))
+        raise Fail(2)
+
+
+# ============================================================ table
+
+def cmd_table(args):
+    _check_escape(args.out, args.root, "--out")
+    atoms, parts, paths = load_inputs(args.manifest, args.draft, args.root)
+    errors = validate_draft(atoms, parts, paths)
+    if errors:
+        _report_errors(errors)
+        _emit({"ok": False, "exit": 1, "errors": errors})
+        return 1
+    rows = build_rows(atoms, parts, paths)
+    text, groups = render_table(rows)
+    atomic_write(args.out, text, "拆分表")
+    _emit({"ok": True, "exit": 0, "rows": len(rows), "groups": len(groups),
+           "p2_files": [r["file"] for r in rows if r["part"] == "P2"], "out": args.out})
+    return 0
+
+
+# ============================================================ show
+
+def cmd_show(args):
+    result = read_parts(args.sections_dir)
+    p2 = []
+    if result["status"] == "ok":
+        p2 = [n for n in result["released"] if result["parts"].get(n) == "P2"]
+    _emit({"status": result["status"], "path": result["path"], "p2_files": p2, "detail": result["detail"]})
+    return 0 if result["status"] in ("absent", "ok") else 1
+
+
+# ============================================================ main
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(description="拆分后小文件的归属：拆分表、用户在自己终端确认、读取状态")
+    sub = ap.add_subparsers(dest="command")
+    p_table = sub.add_parser("table", help="写出按连续同归属分组的拆分表")
+    p_table.add_argument("--manifest", required=True)
+    p_table.add_argument("--draft", required=True)
+    p_table.add_argument("--out", required=True)
+    p_table.add_argument("--root", default=".")
+    p_show = sub.add_parser("show", help="判定归属文件的状态")
+    p_show.add_argument("--sections-dir", default="sections")
+    args = ap.parse_args(argv)
+    try:
+        if args.command == "table":
+            return cmd_table(args)
+        if args.command == "show":
+            return cmd_show(args)
+    except Fail as e:
+        return e.code
+    ap.print_usage(sys.stderr)
+    _err("缺少子命令，写 table、confirm 或 show。")
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())
