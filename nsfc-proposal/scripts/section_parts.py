@@ -45,14 +45,6 @@ show：absent 与 ok 为 0，其余 1。
 """
 from __future__ import annotations
 
-import sys as _sys
-try:  # Windows GBK 控制台下中文防 UnicodeEncodeError
-    _sys.stdout.reconfigure(encoding="utf-8")
-    _sys.stderr.reconfigure(encoding="utf-8")
-    _sys.stdin.reconfigure(encoding="utf-8")
-except Exception:
-    pass
-
 import argparse
 import datetime
 import json
@@ -664,7 +656,18 @@ def cmd_show(args):
 
 # ============================================================ main
 
+def _configure_streams():
+    """只在命令行入口做：Windows GBK 控制台下中文防 UnicodeEncodeError，confirm 读标准输入也按 UTF-8。
+    被 humanizer_zh.py、diagnosis_engine.py 导入时不改它们的输出编码。"""
+    for stream in (sys.stdout, sys.stderr, sys.stdin):
+        try:
+            stream.reconfigure(encoding="utf-8")
+        except Exception:
+            pass
+
+
 def main(argv=None):
+    _configure_streams()
     ap = argparse.ArgumentParser(description="拆分后小文件的归属：拆分表、用户在自己终端确认、读取状态")
     sub = ap.add_subparsers(dest="command")
     p_table = sub.add_parser("table", help="写出按连续同归属分组的拆分表")
