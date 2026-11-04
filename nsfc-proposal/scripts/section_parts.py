@@ -171,14 +171,17 @@ def read_parts(sections_dir):
     """按模块头注释的读取接口判定归属文件状态。不抛异常、不退出。"""
     path = parts_path(sections_dir)
     fix = PREFIX + "归属文件不生效，全部文件不按归属放行。重新在你自己的终端运行 section_parts.py confirm 生成它。"
-    if not os.path.exists(path):
+    if not os.path.lexists(path):
         return _result("absent", path, "归属文件不存在。")
+    corrupt = _result("corrupt", path, "归属文件读不出或不是合法 UTF-8 JSON。",
+                      [PREFIX + "CORRUPT " + path, fix])
+    if not os.path.isfile(path):  # 目录、命名管道、设备一律不去 open，否则会卡死或报错
+        return corrupt
     try:
         with open(path, "r", encoding="utf-8") as f:
             doc = json.load(f)
-    except (OSError, ValueError, UnicodeDecodeError):
-        return _result("corrupt", path, "归属文件读不出或不是合法 UTF-8 JSON。",
-                       [PREFIX + "CORRUPT " + path, fix])
+    except Exception:  # 含极深嵌套 JSON 抛的 RecursionError；本函数承诺不抛异常
+        return corrupt
     reason, higher = _invalid_reason(doc)
     if reason is not None:
         lines = [PREFIX + "INVALID %s %s" % (path, reason)]
