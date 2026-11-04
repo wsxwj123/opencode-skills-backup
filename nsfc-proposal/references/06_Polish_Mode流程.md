@@ -130,7 +130,7 @@ python3 scripts/split_audit.py --text tmp/draft_import.md --headings tmp/heading
 python3 scripts/split_concat_check.py --text tmp/draft_import.md --manifest tmp/split_manifest.json --root .
 ```
 
-退出码 0 才进 0.3.5。退出码 1 报 `BYTES_DIFFER`、`LENGTH_DIFFER`、`ATOM_MISSING` 或 `STRAY_FILE`，定位成功后不该出现，出现了停下说明，不重试、不手改；`STRAY_FILE` 多半是上次拆分的残留，处置见 0.3.6。退出码 2 是文件缺失或清单畸形。
+退出码 0 才进 0.3.5。`draft_import.md` 由 `extract_headings.py` 产出，抽取时换行已统一成 LF；自行放进来的回车加换行稿，先把换行转成 LF 再拆，否则小文件按 LF 写出而拼接核对比较原始字节，会报 `BYTES_DIFFER`。退出码 1 报 `BYTES_DIFFER`、`LENGTH_DIFFER`、`ATOM_MISSING` 或 `STRAY_FILE`，定位成功后不该出现，出现了停下说明，不重试、不手改；`STRAY_FILE` 多半是上次拆分的残留，处置见 0.3.6。退出码 2 是文件缺失或清单畸形。
 
 #### 0.3.5 Layer 2（LLM 边界反向核验，Layer 1 两道都过后恒跑）
 
@@ -140,7 +140,7 @@ python3 scripts/split_concat_check.py --text tmp/draft_import.md --manifest tmp/
 
 拆出的小文件名不以 P1 到 P4 开头，终检对 P2 的放行（中文括号编号的列表提示与节奏剔除，分项行与年度计划行的第一个冒号）靠归属文件 `section_parts.json` 认出它们。归属由用户确认，确认前不生效。
 
-**第一步，主会话写归属草稿 `tmp/parts_draft.json`。** 键只写小文件名，不带 `sections/` 目录（清单里的 `file` 字段带目录，照抄会被 `table` 以 `UNKNOWN_FILE` 打回）；值取 `P1`、`P2`、`P3`、`P4`、`其他` 五个之一：
+**第一步，主会话写归属草稿 `tmp/parts_draft.json`。** 键只写小文件名，不带 `sections/` 目录（清单里的 `file` 字段带目录，照抄会被 `table` 以 `MISSING_PART` 与 `UNKNOWN_FILE` 打回）；值取 `P1`、`P2`、`P3`、`P4`、`其他` 五个之一：
 
 ```json
 {"parts": {"section_00_frontmatter.md": "其他", "section_02_（一）立项依据.md": "P1", "section_05_2.1研究内容.md": "P2"}}
@@ -169,7 +169,7 @@ python3 scripts/section_parts.py table --manifest tmp/split_manifest.json \
 
 把 `tmp/split_table.md` 展示给用户，提示列要逐条解释。容器表示只有标题没有正文；前后同属他组表示这一行夹在两个同归属的组之间，多半要改；疑似正文句、疑似表格行、首段较长提示这一行可能切错了。用户要改的行，改 `tmp/parts_draft.json` 后重跑 table，也可以留到第三步在终端里改。
 
-**第三步，用户在自己的终端运行 `section_parts.py confirm` 确认。** 这条命令只能由用户本人运行，AI 不得代跑，不是终端时它会退出码 3 拒绝。这道检查的强度，如实说。它拦得住无意的忘记，AI 在工具环境里顺手代跑会被退出码 3 拦下。故意的绕过它拦不住。归属文件是普通文件，AI 技术上能用写文件工具直接写它，也能用伪终端驱动 `confirm`，脚本分辨不出；`confirmed_via` 是脚本自己写的，不能当证据。所以 AI 不得代跑是纪律约束，没有机制在执行它，真正的把关是用户本人看拆分表。不许在任何文档里把它写成强制、AI 关不掉、AI 无法绕过。AI 把技能脚本和项目根的绝对路径填好，整条命令给用户：
+**第三步，用户在自己的终端运行 `section_parts.py confirm` 确认。** 这条命令只能由用户本人运行，AI 不得代跑，不是终端时它会退出码 3 拒绝。它拦得住无意的忘记，在不分配终端的工具环境里，AI 顺手代跑会被退出码 3 拦下。故意的绕过它拦不住。归属文件是普通文件，AI 技术上能用写文件工具直接写它，也能用伪终端驱动 `confirm`，脚本分辨不出；`confirmed_via` 是脚本自己写的，不能当证据。所以 AI 不得代跑是纪律约束，没有机制在执行它，真正的把关是用户本人看拆分表。AI 把技能脚本和项目根的绝对路径填好，整条命令给用户：
 
 ```bash
 python3 "<技能目录绝对路径>/scripts/section_parts.py" confirm \
