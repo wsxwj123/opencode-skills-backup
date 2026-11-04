@@ -450,6 +450,184 @@ def cmd_table(args):
     return 0
 
 
+# ============================================================ confirm
+
+def normalize_input(line):
+    """NFKC 归一（全角字母数字转半角），再去首尾空白。"""
+    return unicodedata.normalize("NFKC", line).strip()
+
+
+def parse_row_part(text):
+    """序号归属，例如 7 P2。返回 (序号, 归属) 或 None。"""
+    m = ROW_PART_RE.match(text)
+    if not m:
+        return None
+    part = normalize_part(m.group(2))
+    if part is None:
+        return None
+    return int(m.group(1)), part
+
+
+def _read_line(prompt):
+    """返回归一后的一行；EOF 抛 EOFError。"""
+    sys.stdout.write(prompt)
+    sys.stdout.flush()
+    line = sys.stdin.readline()
+    if line == "":
+        raise EOFError
+    return normalize_input(line)
+
+
+def _print_group(rows, groups, gi):
+    part, members = groups[gi]
+    _say("第 %d 组，归属 %s，共 %d 行：" % (gi + 1, part, len(members)))
+    for index in members:
+        _print_row(rows, groups, index)
+
+
+def _print_row(rows, groups, index):
+    row = rows[index]
+    hint = hints_for(rows, groups, index)
+    _say("  %d. %s  级别 %d  标题 %s  当前归属 %s%s" % (
+        index + 1, row["file"], row["level"], display_title(row["title"]), row["part"],
+        ("  提示 " + hint) if hint else ""))
+
+
+def _unrecognized(extra):
+    _say("无法识别这一行输入。" + extra)
+
+
+def _apply_change(rows, index, part):
+    rows[index]["part"] = part
+
+
+def confirm_by_group(rows, groups):
+    for gi, (_part, members) in enumerate(groups):
+        _say()
+        _print_group(rows, groups, gi)
+        while True:
+            text = _read_line("这一组没问题就直接按回车；要改某一行就写序号、空格、归属（例如 7 P2）再回车：")
+            if text == "":
+                break
+            parsed = parse_row_part(text)
+            if parsed and (parsed[0] - 1) in members:
+                _apply_change(rows, parsed[0] - 1, parsed[1])
+                _say()
+                _print_group(rows, groups, gi)
+                continue
+            _unrecognized("本组的序号是 %d 到 %d，归属只能写 P1、P2、P3、P4 或 其他。" % (members[0] + 1, members[-1] + 1))
+
+
+def confirm_each_row(rows, groups):
+    last_gi = None
+    for gi, (_part, members) in enumerate(groups):
+        for index in members:
+            if gi != last_gi:
+                _say()
+                _say("第 %d 组，归属 %s，共 %d 行：" % (gi + 1, _part, len(members)))
+                last_gi = gi
+            _print_row(rows, groups, index)
+            while True:
+                text = _read_line("保留当前归属就直接按回车；要改就只写新的归属（P1、P2、P3、P4 或 其他）再回车：")
+                if text == "":
+                    break
+                part = normalize_part(text)
+                if part is not None:
+                    _apply_change(rows, index, part)
+                    break
+                _unrecognized("只写一个归属，P1、P2、P3、P4 或 其他。")
+
+
+def _print_summary(rows):
+    changed = [r for r in rows if r["part"] != r["draft_part"]]
+    p2 = [r["file"] for r in rows if r["part"] == "P2"]
+    _say()
+    _say("汇总：共 %d 行，你改动了 %d 行。" % (len(rows), len(changed)))
+    for r in changed:
+        _say("  %s 由 %s 改为 %s" % (r["file"], r["draft_part"], r["part"]))
+    _say("归属 P2 的文件共 %d 个：" % len(p2))
+    for name in p2:
+        _say("  " + name)
+
+
+def confirm_summary(rows):
+    """返回 True 表示用户输入了 确认。其它输入返回 False。"""
+    n = len(rows)
+    while True:
+        _print_summary(rows)
+        text = _read_line("没问题就输入 确认 两个字再回车；还要改某一行就写序号、空格、归属（例如 3 其他）再回车；输入别的内容会退出且不保存：")
+        if text == "确认":
+            return True
+        parsed = parse_row_part(text)
+        if parsed and 1 <= parsed[0] <= n:
+            _apply_change(rows, parsed[0] - 1, parsed[1])
+            continue
+        return False
+
+
+def _confirm_fail(code, *lines):
+    for line in lines:
+        _err(line)
+    sys.stderr.write(COPY_HINT + "\n")
+    sys.stderr.flush()
+    return code
+
+
+def cmd_confirm(args):
+    try:
+        atoms, parts, paths = load_inputs(args.manifest, args.draft, args.root)
+        dirs = {os.path.dirname(p) for p in paths}
+        root_real = os.path.realpath(args.root)
+        if len(dirs) != 1 or os.path.dirname(next(iter(dirs))) != root_real:
+            _err("小文件目录不对：所有小文件要在同一个目录里，且这个目录的父目录就是 --root。"
+                 "检查 --root 和清单里的 file 后重跑。")
+            raise Fail(2)
+        sections_real = next(iter(dirs))
+        errors = validate_draft(atoms, parts, paths)
+        if errors:
+            _report_errors(errors)
+            raise Fail(1)
+    except Fail as e:
+        return _confirm_fail(e.code)
+
+    if not sys.stdin.isatty():
+        return _confirm_fail(3, "NOT_A_TERMINAL 这个命令只能由你本人在终端里运行，不能由 AI 代跑。",
+                             "请在你自己的终端里运行：Mac 打开 终端，Windows 打开 PowerShell 或 cmd"
+                             "（Git Bash 里要写成 winpty python）。")
+
+    rows = build_rows(atoms, parts, paths)
+    groups = group_rows(rows)
+    mode = "each-row" if args.each_row else ("by-group" if args.by_group else DEFAULT_CONFIRM_MODE)
+    _say("逐个确认小文件的归属。共 %d 行，分 %d 组。" % (len(rows), len(groups)))
+    _say(BASIS_LINE)
+    try:
+        if mode == "each-row":
+            confirm_each_row(rows, groups)
+        else:
+            confirm_by_group(rows, groups)
+        if not confirm_summary(rows):
+            return _confirm_fail(1, "ABORTED 没有输入 确认，归属文件没有写入。重新运行本命令可以再来一次。")
+    except (EOFError, KeyboardInterrupt):
+        _say()
+        return _confirm_fail(1, "ABORTED 输入被中断，归属文件没有写入。重新运行本命令可以再来一次。")
+
+    target = os.path.join(root_real, PARTS_FILE)
+    doc = {"schema_version": SCHEMA_VERSION, "confirmed": True,
+           "confirmed_at": datetime.datetime.now().astimezone().isoformat(),
+           "confirmed_via": "terminal", "mode": mode, "note": args.note or "",
+           "sections_dir": os.path.basename(sections_real),
+           "rows": [{"file": r["file"], "title": r["title"], "level": r["level"], "part": r["part"],
+                     "draft_part": r["draft_part"], "changed_by_user": r["part"] != r["draft_part"]}
+                    for r in rows]}
+    try:
+        atomic_write(target, json.dumps(doc, ensure_ascii=False, indent=2) + "\n", "归属文件")
+    except Fail as e:
+        return _confirm_fail(e.code)
+    _say("已写入归属文件：%s" % target)
+    _say("下一步：回到聊天窗口告诉 AI 归属已确认。")
+    return 0
+
+
 # ============================================================ show
 
 def cmd_show(args):
@@ -471,12 +649,22 @@ def main(argv=None):
     p_table.add_argument("--draft", required=True)
     p_table.add_argument("--out", required=True)
     p_table.add_argument("--root", default=".")
+    p_confirm = sub.add_parser("confirm", help="只能由用户本人在自己的终端运行，确认后写归属文件")
+    p_confirm.add_argument("--manifest", required=True)
+    p_confirm.add_argument("--draft", required=True)
+    p_confirm.add_argument("--root", required=True)
+    mode = p_confirm.add_mutually_exclusive_group()
+    mode.add_argument("--by-group", action="store_true")
+    mode.add_argument("--each-row", action="store_true")
+    p_confirm.add_argument("--note", default="")
     p_show = sub.add_parser("show", help="判定归属文件的状态")
     p_show.add_argument("--sections-dir", default="sections")
     args = ap.parse_args(argv)
     try:
         if args.command == "table":
             return cmd_table(args)
+        if args.command == "confirm":
+            return cmd_confirm(args)
         if args.command == "show":
             return cmd_show(args)
     except Fail as e:
