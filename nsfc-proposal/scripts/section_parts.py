@@ -166,8 +166,9 @@ def read_parts(sections_dir):
     fix = PREFIX + "归属文件不生效，全部文件不按归属放行。重新在你自己的终端运行 section_parts.py confirm 生成它。"
     if not os.path.lexists(path):
         return _result("absent", path, "归属文件不存在。")
+    shown_path = display_safe(path)  # stderr 里的路径与文件名都过 display_safe，控制字符不直达终端
     corrupt = _result("corrupt", path, "归属文件读不出或不是合法 UTF-8 JSON。",
-                      [PREFIX + "CORRUPT " + path, fix])
+                      [PREFIX + "CORRUPT " + shown_path, fix])
     if not os.path.isfile(path):  # 目录、命名管道、设备一律不去 open，否则会卡死或报错
         return corrupt
     try:
@@ -177,7 +178,7 @@ def read_parts(sections_dir):
         return corrupt
     reason, higher = _invalid_reason(doc)
     if reason is not None:
-        lines = [PREFIX + "INVALID %s %s" % (path, reason)]
+        lines = [PREFIX + "INVALID %s %s" % (shown_path, display_safe(reason))]
         if higher:
             lines.append(PREFIX + "归属文件的 schema_version 比本技能认识的高，先升级技能再用。")
         lines.append(fix)
@@ -187,7 +188,7 @@ def read_parts(sections_dir):
     if recorded != actual:
         return _result("dir_mismatch", path,
                        "归属文件记录的小文件目录是 %s，本次是 %s。" % (recorded, actual),
-                       [PREFIX + "DIR_MISMATCH " + path, fix])
+                       [PREFIX + "DIR_MISMATCH " + shown_path, fix])
 
     try:
         present = set(os.listdir(sections_dir))
@@ -201,17 +202,17 @@ def read_parts(sections_dir):
         part = row.get("part")
         parts[name] = part
         if part not in PARTS:
-            lines.append(PREFIX + "UNKNOWN_PART " + name)
+            lines.append(PREFIX + "UNKNOWN_PART " + display_safe(name))
             continue
         if name not in present:
-            lines.append(PREFIX + "MISSING_FILE " + name)
+            lines.append(PREFIX + "MISSING_FILE " + display_safe(name))
             continue
         if RELEASE_BY_PART.get(part):
             released.append(name)
     unlisted = [n for n in sorted(present) if n.endswith(".md") and n not in parts
                 and os.path.isfile(os.path.join(sections_dir, n))]
     if unlisted:
-        shown = "、".join(unlisted[:5]) + ("等" if len(unlisted) > 5 else "")
+        shown = "、".join(display_safe(n) for n in unlisted[:5]) + ("等" if len(unlisted) > 5 else "")
         lines.append(PREFIX + "UNLISTED %d %s 这些文件没有归属记录，按没有归属处理，照文件名规则检查。"
                      % (len(unlisted), shown))
     confirmed_at = doc.get("confirmed_at")
