@@ -76,7 +76,8 @@ VERSION_RE = re.compile(r"^(\d+)\.(\d+)$")
 
 
 def _err(msg):
-    sys.stderr.write(PREFIX + msg.rstrip() + "\n")
+    """人读的报错行。文件名、路径、标题可能混在里面，整行过 display_safe，控制字符不直达终端。"""
+    sys.stderr.write(PREFIX + display_safe(msg.rstrip()) + "\n")
 
 
 def _emit(obj):
@@ -84,7 +85,8 @@ def _emit(obj):
 
 
 def _say(text=""):
-    sys.stdout.write(text + "\n")
+    """confirm 的终端输出。整行过 display_safe，与 _err 同一口径。"""
+    sys.stdout.write(display_safe(text) + "\n")
     sys.stdout.flush()
 
 
@@ -217,7 +219,8 @@ def read_parts(sections_dir):
                      % (len(unlisted), shown))
     confirmed_at = doc.get("confirmed_at")
     if released:
-        lines.append(PREFIX + "按 section_parts.json 放行 %d 个文件（confirmed_at %s）" % (len(released), confirmed_at))
+        lines.append(PREFIX + "按 section_parts.json 放行 %d 个文件（confirmed_at %s）"
+                     % (len(released), display_safe(str(confirmed_at))))
     return _result("ok", path, "归属文件有效。", lines, parts, confirmed_at, released)
 
 
@@ -649,7 +652,8 @@ def cmd_show(args):
     p2 = []
     if result["status"] == "ok":
         p2 = [n for n in result["released"] if result["parts"].get(n) == "P2"]
-    _emit({"status": result["status"], "path": result["path"], "p2_files": p2, "detail": result["detail"]})
+    _emit({"status": result["status"], "path": result["path"], "p2_files": p2,
+           "detail": display_safe(result["detail"])})
     return 0 if result["status"] in ("absent", "ok") else 1
 
 
