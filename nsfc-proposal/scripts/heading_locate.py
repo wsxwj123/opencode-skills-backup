@@ -7,8 +7,11 @@
           写出与 extract_headings.py 同格式的 heading_manifest.json，
           之后由 split_headings.py 与 split_audit.py 原样切分与核验。
 
-行的定义：按 U+000A 切开；文本以换行结尾时最后那个空段不算一行；行号从 1 起。
-字符偏移按 Python str 下标（码点），与 extract_headings.py 的 char_offset 同口径。
+行的定义：读入时按文本模式处理换行（回车加换行、单独的回车都换成换行），与 split_headings.py、
+split_audit.py 读同一个稿子的方式一致；然后按 U+000A 切开；文本以换行结尾时最后那个空段不算一行；
+行号从 1 起；行内容不含回车。字符偏移、text_len 都按处理后的文本计，按 Python str 下标（码点），
+与 extract_headings.py 的 char_offset 同口径。
+第 1 行开头的 U+FEFF（BOM）不算内容：比较原句时去掉，清单里该项的 text 不含它，char_offset 仍是 0。
 
 退出码：
   0  成功；stdout 一行 JSON
@@ -36,6 +39,7 @@ import tempfile
 PREFIX = "HEADING_LOCATE: "
 LEVEL_MIN = 1
 LEVEL_MAX = 6
+BOM = chr(0xFEFF)
 
 
 def _err(msg):
@@ -52,11 +56,18 @@ def _emit(obj):
 
 
 def split_lines(text):
-    """按 U+000A 切行；末尾换行后的空段不算一行。行内容不含换行，保留其它字符（含回车）。"""
+    """按 U+000A 切行；末尾换行后的空段不算一行。行内容不含换行（回车已在读入时换成换行）。"""
     parts = text.split("\n")
     if parts and parts[-1] == "":
         parts.pop()
     return parts
+
+
+def strip_bom_first(lines):
+    """比较与写清单用：第 1 行开头的 BOM 不算内容。偏移仍按原文算。"""
+    if lines and lines[0].startswith(BOM):
+        return [lines[0][1:]] + lines[1:]
+    return lines
 
 
 def line_offsets(lines):
@@ -70,11 +81,11 @@ def line_offsets(lines):
 
 
 def read_text(path, what):
-    """读 UTF-8 文本，不做换行转换。缺失、读不出、不是 UTF-8 一律退出码 2。"""
+    """读 UTF-8 文本，按文本模式处理换行（与 split_headings.py 一致）。缺失、读不出、不是 UTF-8 一律退出码 2。"""
     if not os.path.isfile(path):
         _die(2, "%s 不存在，检查路径后重跑：%s" % (what, path))
     try:
-        with open(path, "r", encoding="utf-8", newline="") as f:
+        with open(path, "r", encoding="utf-8") as f:
             return f.read()
     except UnicodeDecodeError as e:
         _die(2, "%s 不是合法 UTF-8，把文件转成 UTF-8 后重跑：%s（%s）" % (what, path, e))
@@ -233,7 +244,8 @@ def cmd_locate(args):
     if not isinstance(items, list):
         _die(2, "--headings-in 缺 headings 键或它不是列表：%s" % args.headings_in)
 
-    lines = split_lines(text)
+    raw_lines = split_lines(text)
+    lines = strip_bom_first(raw_lines)  # 比较与写清单不算 BOM
     errors, located = check_headings(items, lines)
     if errors:
         for e in errors:
@@ -241,7 +253,7 @@ def cmd_locate(args):
         _emit({"ok": False, "exit": 1, "errors": errors})
         return 1
 
-    offsets = line_offsets(lines)
+    offsets = line_offsets(raw_lines)  # 偏移按原文算，BOM 留在第一个小文件开头
     headings = []
     for index, line_no, level in located:
         headings.append({"text": lines[line_no - 1], "level": level,
