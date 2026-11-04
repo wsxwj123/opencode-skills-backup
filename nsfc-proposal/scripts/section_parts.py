@@ -74,6 +74,7 @@ RELEASE_BY_PART = {                      # 归属对应放行哪些检查；本�
 BASIS_LINE = "比较基准是抽取后的 draft_import.md，原件里的表格文字、自动编号、加粗不在其中。"
 COPY_HINT = "把以上文字整段复制回聊天窗口。"
 FRONT_LABEL = "（首段）"
+PLACEHOLDER = chr(0xFFFD)                # 显示控制字符时的占位符，全文一致
 TITLE_MAX = 40
 FRONT_LONG = 300
 TABLE_HEADER = ["| 序号 | 文件名 | 级别 | 标题 | 字数 | 归属 | 提示 |", "|---|---|---|---|---|---|---|"]
@@ -366,8 +367,14 @@ def group_rows(rows):
     return groups
 
 
+def display_safe(text):
+    """给拆分表与终端显示用：控制字符（Unicode 类别 Cc、Cf，含 ESC、BEL、NUL、C1、方向符）换成占位符，
+    其余照常。归属文件里存的 title 不经过这里，保持原样。"""
+    return "".join(PLACEHOLDER if unicodedata.category(ch) in ("Cc", "Cf") else ch for ch in text)
+
+
 def display_title(title):
-    t = title.strip()
+    t = display_safe(title).strip()
     if t == "frontmatter":
         return FRONT_LABEL
     t = t.replace("|", "｜")
@@ -398,7 +405,7 @@ def hints_for(rows, groups, index):
 def _data_line(rows, groups, index):
     row = rows[index]
     return "| %d | %s | %d | %s | %d | %s | %s |" % (
-        index + 1, row["file"], row["level"], display_title(row["title"]), row["count"],
+        index + 1, display_safe(row["file"]), row["level"], display_title(row["title"]), row["count"],
         row["part"], hints_for(rows, groups, index))
 
 
@@ -502,7 +509,7 @@ def _print_row(rows, groups, index):
     row = rows[index]
     hint = hints_for(rows, groups, index)
     _say("  %d. %s  级别 %d  标题 %s  当前归属 %s%s" % (
-        index + 1, row["file"], row["level"], display_title(row["title"]), row["part"],
+        index + 1, display_safe(row["file"]), row["level"], display_title(row["title"]), row["part"],
         ("  提示 " + hint) if hint else ""))
 
 
@@ -557,10 +564,10 @@ def _print_summary(rows):
     _say()
     _say("汇总：共 %d 行，你改动了 %d 行。" % (len(rows), len(changed)))
     for r in changed:
-        _say("  %s 由 %s 改为 %s" % (r["file"], r["draft_part"], r["part"]))
+        _say("  %s 由 %s 改为 %s" % (display_safe(r["file"]), r["draft_part"], r["part"]))
     _say("归属 P2 的文件共 %d 个：" % len(p2))
     for name in p2:
-        _say("  " + name)
+        _say("  " + display_safe(name))
 
 
 def confirm_summary(rows):
