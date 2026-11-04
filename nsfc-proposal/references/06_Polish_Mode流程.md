@@ -106,7 +106,7 @@ python3 scripts/split_headings.py --text tmp/draft_import.md --headings tmp/head
         --split-to-level <locate 输出的 split_to_level> --manifest-out tmp/split_manifest.json
 ```
 
-首个标题之前有非空文字时生成 `section_00_frontmatter.md`。标题里的 `\/:*?"<>|` 与空白会从文件名里去掉，标题简称取前 20 个字符。
+首个标题之前有非空文字时生成 `section_00_frontmatter.md`，这时第一个标题的小文件从 `02` 起，没有 `01` 不是漏文件，因为编号是共享拆分脚本的区间序号加 1，首段占了区间 0。标题里的 `\/:*?"<>|` 与空白会从文件名里去掉，标题简称取前 20 个字符。
 
 5. 之后与有标题路相同，走 0.3.4 的两道核验、0.3.5 的盲检、0.3.6 的拆分表与归属确认、0.3.7 的签字。
 
@@ -140,7 +140,7 @@ python3 scripts/split_concat_check.py --text tmp/draft_import.md --manifest tmp/
 
 拆出的小文件名不以 P1 到 P4 开头，终检对 P2 的放行（中文括号编号的列表提示与节奏剔除，分项行与年度计划行的第一个冒号）靠归属文件 `section_parts.json` 认出它们。归属由用户确认，确认前不生效。
 
-**第一步，主会话写归属草稿 `tmp/parts_draft.json`。** 键是小文件名，值取 `P1`、`P2`、`P3`、`P4`、`其他` 五个之一：
+**第一步，主会话写归属草稿 `tmp/parts_draft.json`。** 键只写小文件名，不带 `sections/` 目录（清单里的 `file` 字段带目录，照抄会被 `table` 以 `UNKNOWN_FILE` 打回）；值取 `P1`、`P2`、`P3`、`P4`、`其他` 五个之一：
 
 ```json
 {"parts": {"section_00_frontmatter.md": "其他", "section_02_（一）立项依据.md": "P1", "section_05_2.1研究内容.md": "P2"}}
@@ -169,7 +169,7 @@ python3 scripts/section_parts.py table --manifest tmp/split_manifest.json \
 
 把 `tmp/split_table.md` 展示给用户，提示列要逐条解释。容器表示只有标题没有正文；前后同属他组表示这一行夹在两个同归属的组之间，多半要改；疑似正文句、疑似表格行、首段较长提示这一行可能切错了。用户要改的行，改 `tmp/parts_draft.json` 后重跑 table，也可以留到第三步在终端里改。
 
-**第三步，用户在自己的终端运行 `section_parts.py confirm` 确认。** 这条命令只能由用户本人运行，AI 不得代跑，不是终端时它会退出码 3 拒绝。AI 把技能脚本和项目根的绝对路径填好，整条命令给用户：
+**第三步，用户在自己的终端运行 `section_parts.py confirm` 确认。** 这条命令只能由用户本人运行，AI 不得代跑，不是终端时它会退出码 3 拒绝。这道检查的强度，如实说。它拦得住无意的忘记，AI 在工具环境里顺手代跑会被退出码 3 拦下。故意的绕过它拦不住。归属文件是普通文件，AI 技术上能用写文件工具直接写它，也能用伪终端驱动 `confirm`，脚本分辨不出；`confirmed_via` 是脚本自己写的，不能当证据。所以 AI 不得代跑是纪律约束，没有机制在执行它，真正的把关是用户本人看拆分表。不许在任何文档里把它写成强制、AI 关不掉、AI 无法绕过。AI 把技能脚本和项目根的绝对路径填好，整条命令给用户：
 
 ```bash
 python3 "<技能目录绝对路径>/scripts/section_parts.py" confirm \
