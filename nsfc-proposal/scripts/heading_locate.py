@@ -113,7 +113,6 @@ def atomic_write(path, data, what="输出文件"):
                 os.unlink(tmp_name)
             except OSError:
                 pass
-        _die(2, "无法写入%s，检查目标路径是否可写、是否被目录占用：%s（%s）" % (what, path, e))
 
 
 def is_int(value):
