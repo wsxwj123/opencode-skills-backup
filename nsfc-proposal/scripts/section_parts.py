@@ -443,6 +443,9 @@ def atomic_write(path, data, what="输出文件"):
         os.replace(tmp_name, target)
         tmp_name = None
     except OSError as e:
+        _err("无法写入%s，检查目标路径是否可写、是否被目录占用：%s（%s）" % (what, path, e))
+        raise Fail(2)
+    finally:  # 写到一半被 Ctrl+C 打断也不留临时文件；KeyboardInterrupt 照常往外抛
         if tmp_name is not None:
             try:
                 os.unlink(tmp_name)
