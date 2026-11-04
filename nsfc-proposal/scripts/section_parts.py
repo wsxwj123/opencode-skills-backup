@@ -449,7 +449,7 @@ def atomic_write(path, data, what="输出文件"):
 # ============================================================ table
 
 def cmd_table(args):
-    _check_escape(args.out, args.root, "--out")
+    out_real = _check_escape(args.out, args.root, "--out")  # 写到解析后的真实路径，与越根检查的对象一致
     atoms, parts, paths = load_inputs(args.manifest, args.draft, args.root)
     errors = validate_draft(atoms, parts, paths)
     if errors:
@@ -458,7 +458,7 @@ def cmd_table(args):
         return 1
     rows = build_rows(atoms, parts, paths)
     text, groups = render_table(rows)
-    atomic_write(args.out, text, "拆分表")
+    atomic_write(out_real, text, "拆分表")
     _emit({"ok": True, "exit": 0, "rows": len(rows), "groups": len(groups),
            "p2_files": [r["file"] for r in rows if r["part"] == "P2"], "out": args.out})
     return 0
