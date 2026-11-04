@@ -154,12 +154,18 @@ def check_headings(items, lines):
         in_range = 1 <= line_no <= total
         text_ok = False
         if not in_range:
-            errors.append({"index": index, "code": "LINE_OUT_OF_RANGE", "line": line_no,
-                           "detail": "第 %d 项的 line 为 %d，整稿共 %d 行，把 line 改到 1 到 %d 之间。"
-                                     % (index, line_no, total, total)})
+            if total == 0:
+                detail = "第 %d 项的 line 为 %d，但稿子是空的，没有任何一行。先检查抽取结果。" % (index, line_no)
+            else:
+                detail = ("第 %d 项的 line 为 %d，整稿共 %d 行，把 line 改到 1 到 %d 之间。"
+                          % (index, line_no, total, total))
+            errors.append({"index": index, "code": "LINE_OUT_OF_RANGE", "line": line_no, "detail": detail})
         else:
             actual = lines[line_no - 1].strip()
-            if text.strip() != actual:
+            given = text.strip()
+            if line_no == 1 and given.startswith(BOM):  # 子代理把第 1 行的 BOM 抄进来也不算错
+                given = given[1:]
+            if given != actual:
                 errors.append({"index": index, "code": "TEXT_MISMATCH", "line": line_no,
                                "detail": "第 %d 项的 text 与第 %d 行的内容不同。清单写的是 %s，整稿该行是 %s。"
                                          "把 text 改成整稿原句，或改正 line。"
