@@ -409,7 +409,7 @@ def scan_text(text: str, allow_lists: bool = False, allow_cn_numbered: bool = Fa
         # 排除：标题行（以#开头）、纯列表/表格行、行尾冒号（列表引导）
         if stripped.startswith("#") or stripped.endswith("：") or stripped.endswith(":"):
             continue
-        # allow_cn_numbered 打开时，P2 分项行与年度计划行的第一个冒号放行，从它之后接着查，同一行里其后的冒号照报
+        # allow_cn_numbered 打开时，分项行与年度计划行的第一个冒号放行，从它之后接着查，同一行里其后的冒号照报
         scan_from = _p2_colon_scan_start(stripped) if allow_cn_numbered else 0
         for m in _EXPLANATORY_COLON_RE.finditer(stripped, scan_from):
             # 排除数字比例（如 3：1）和时间格式
@@ -573,7 +573,7 @@ def main() -> int:
             allow = args.allow_lists or p.name.startswith("P3_3") or p.name.startswith("P3_4") or p.name.startswith("P4_")
             # P2 的中文括号编号分项是合规写法：只放行 cn_numbered_list，项目符号与数字点照报，节奏检查也忽略这些行；
             # 分项行与年度计划行的第一个冒号也随这个开关放行（见 scan_text 的 B3）。
-            # 开关来源取并集、只加不撤：文件名以 P2 开头，或归属文件 section_parts.json 把它确认为 P2。
+            # 开关来源取并集、只加不撤：文件名以 P2 开头，或归属文件 section_parts.json 把它确认为放行部分。
             allow_cn = p.name.startswith("P2") or released_by_parts(p.name)
             out.append(scan_file(p, allow_lists=allow, allow_cn_numbered=allow_cn))
         print(json.dumps(out, ensure_ascii=False, indent=2))
